@@ -1,0 +1,147 @@
+{
+  "meta": "Cartographie du batiment H (issue de la conversation preparatoire, aucun fichier de salles officiel n'a ete fourni - a confirmer par l'utilisateur si un fichier dedie existe)",
+  "rooms": [
+    {
+      "code": "H.001",
+      "etage": "RDC",
+      "type": "reunion",
+      "capacite": 10,
+      "usage": "BDE",
+      "exclue_des_cours": true
+    },
+    {
+      "code": "H.005",
+      "etage": "RDC",
+      "type": "TP",
+      "equipement": "2 ilots + bar chaises hautes + televiseur"
+    },
+    {
+      "code": "H.006",
+      "etage": "RDC",
+      "type": "TP",
+      "equipement": "televiseur",
+      "communique_avec": [
+        "H.009"
+      ]
+    },
+    {
+      "code": "H.007",
+      "etage": "RDC",
+      "type": "TP_TD_communicante",
+      "communique_avec": [
+        "H.008"
+      ],
+      "note": "cloison retractable ouvrable -> 1 salle de TD, ou 2 TP simultanes (1 prof/salle)"
+    },
+    {
+      "code": "H.008",
+      "etage": "RDC",
+      "type": "TP_TD_communicante",
+      "communique_avec": [
+        "H.007"
+      ]
+    },
+    {
+      "code": "H.009",
+      "etage": "RDC",
+      "type": "TD_design",
+      "equipement": "evier, peinture, papier, televiseur",
+      "priorite_enseignants": [
+        "ALO",
+        "GLE"
+      ],
+      "debordement_vers": [
+        "H.006"
+      ]
+    },
+    {
+      "code": "H.016",
+      "etage": "RDC",
+      "type": "TP_informatique",
+      "equipement": "6 postes Apple, videoprojecteur",
+      "note": "pas de fenetres (plexiglas) -> salle de dernier recours, malus algorithmique fort"
+    },
+    {
+      "code": "H.017",
+      "etage": "RDC",
+      "type": "TD_TP_hybride_Studio",
+      "equipement": "studio audiovisuel",
+      "hack_celcat": "2 profs simultanes -> 1 en H.017, 1 en H.022 (local attenant, salle fantome)"
+    },
+    {
+      "code": "H.022",
+      "etage": "RDC",
+      "type": "local_rangement_utilise_comme_salle_fantome",
+      "usage": "uniquement en complement de H.017"
+    },
+    {
+      "code": "H.018",
+      "etage": "RDC",
+      "type": "amphi_CM",
+      "capacite": 140,
+      "note": "regle absolue : Type=CM -> Salle=H.018. Peut contenir 4 TD."
+    },
+    {
+      "code": "H.101",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.104",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.105",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.111",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.103",
+      "etage": "1er",
+      "type": "TP_ilots",
+      "equipement": "6 ilots",
+      "salle_attitree": {
+        "enseignant": "TPA",
+        "matiere": "Anglais",
+        "portee": "tous parcours, tous semestres, tous BUT"
+      }
+    },
+    {
+      "code": "H.201",
+      "etage": "2e",
+      "type": "TD_fusionnee",
+      "communique_avec": [
+        "H.203"
+      ],
+      "note": "cloison ouverte en permanence = 1 seule grande salle, mais peut accueillir 2 profs simultanement (1 en 201, 1 en 203)"
+    },
+    {
+      "code": "H.203",
+      "etage": "2e",
+      "type": "TD_fusionnee",
+      "communique_avec": [
+        "H.201"
+      ]
+    },
+    {
+      "code": "H.205",
+      "etage": "2e",
+      "type": "TP_reseaux_VR",
+      "equipement": "baie serveurs, imprimante 3D, 16 PC puissants (ecrans 21:9), casques VR",
+      "note": "sert aussi de debordement pour cours VR en tandem avec H.201/H.203"
+    },
+    {
+      "code": "A.018",
+      "batiment": "A",
+      "type": "salle_evaluation",
+      "usage": "CM qui est en realite une evaluation/examen"
+    }
+  ],
+  "rooms_hack_celcat_general": "Celcat n'autorise qu'1 enseignant par salle. Pour permettre 2 enseignants sur un meme module/creneau, on les place dans des salles physiquement collees ou communicantes (H.007+H.008, H.201+H.203, H.017+H.022) qui sont administrativement 2 salles Celcat mais physiquement une seule zone."
+}

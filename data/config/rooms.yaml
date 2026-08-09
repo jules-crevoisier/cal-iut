@@ -1,0 +1,274 @@
+# Salles IUT MMI Troyes — inventaire réel bâtiment H (+ A.018 pour évaluations)
+# Source : cahier des charges §11-12 (cartographie salles + règles par module S1).
+#
+# NB : H.001 (salle de réunion, 10 places) est explicitement exclue des cours
+# (usage BDE) -> volontairement absente de la liste ci-dessous.
+#
+# "Hack Celcat" : Celcat n'autorise qu'1 enseignant par salle. Pour synchroniser
+# 2 enseignants sur un même créneau/module, on les place dans 2 salles Celcat
+# distinctes mais physiquement collées/communicantes : H.007+H.008, H.201+H.203,
+# H.017+H.022 (H.022 = local de rangement attenant au Studio, sert de salle
+# fantôme). Elles sont donc modélisées ici comme des salles bookables séparées
+# (pas de salle "fusionnée" fictive, pour ne pas risquer un double-booking).
+rooms:
+  # --- RDC ---
+  - id: h005
+    label: H.005
+    capacity: 15
+    room_type: tp_standard
+    equipment: [ilots, bar_chaises_hautes, televiseur]
+
+  - id: h006
+    label: H.006
+    capacity: 30
+    room_type: tp_standard
+    equipment: [televiseur]  # communique avec H.009
+
+  - id: h007
+    label: H.007
+    capacity: 30
+    room_type: tp_standard
+    equipment: [cloison_amovible_h008]  # ouvrable -> 1 salle TD avec H.008
+
+  - id: h008
+    label: H.008
+    capacity: 30
+    room_type: tp_standard
+    equipment: [cloison_amovible_h007]
+
+  - id: h009
+    label: H.009 (Design)
+    capacity: 30
+    room_type: td_design
+    equipment: [evier, peinture, papier, televiseur]  # priorité ALO/GLE, débordement H.006
+
+  - id: h016
+    label: H.016 (Salle Mac)
+    capacity: 24
+    room_type: tp_mac
+    equipment: [postes_apple, videoprojecteur]  # pas de fenêtres -> dernier recours strict
+
+  - id: h017
+    label: H.017 (Studio)
+    capacity: 20
+    room_type: studio_av
+    equipment: [camera, micro, montage, regie_av]
+
+  - id: h022
+    label: H.022 (fantôme Studio)
+    capacity: 16
+    room_type: studio_av
+    equipment: [rangement]  # salle "hack Celcat" jumelée à H.017 pour 2e prof
+
+  - id: h018
+    label: H.018 (Amphi MMI)
+    capacity: 150
+    room_type: amphi
+    equipment: [videoprojecteur, sonorisation]  # CM uniquement, ~140 places, cap. 4 TD
+
+  # --- 1er étage ---
+  - id: h101
+    label: H.101
+    capacity: 35
+    room_type: standard
+    equipment: [televiseur]
+
+  - id: h103
+    label: H.103 (Anglais)
+    capacity: 36
+    room_type: tp_anglais
+    equipment: [ilots]  # 6 îlots, salle attitrée Thomas Pavie tous parcours/semestres
+
+  - id: h104
+    label: H.104
+    capacity: 35
+    room_type: standard
+    equipment: [videoprojecteur]
+
+  - id: h105
+    label: H.105
+    capacity: 35
+    room_type: standard
+    equipment: [videoprojecteur]
+
+  - id: h111
+    label: H.111
+    capacity: 35
+    room_type: standard
+    equipment: [videoprojecteur]
+
+  # --- 2e étage ---
+  - id: h201
+    label: H.201
+    capacity: 35
+    room_type: standard
+    equipment: [cloison_ouverte_h203]  # fusionnée en permanence avec H.203
+
+  - id: h203
+    label: H.203
+    capacity: 35
+    room_type: standard
+    equipment: [cloison_ouverte_h201]
+
+  - id: h205
+    label: H.205 (VR/Réseaux)
+    capacity: 16
+    room_type: tp_vr_reseaux
+    equipment: [baie_serveurs, imprimante_3d, pc_puissants, casques_vr]
+
+  # --- Bâtiment A ---
+  - id: a018
+    label: A.018 (Évaluation)
+    capacity: 150
+    room_type: evaluation
+    equipment: [salle_examen]  # ex. WR107 CM2 = évaluation
+
+# Règles d'affectation salle. `_find_matching_rule` retient la DERNIÈRE règle qui
+# matche (session_types + course_code_patterns) -> règles génériques d'abord,
+# règles spécifiques par module ensuite pour qu'elles priment.
+room_assignment_rules:
+  # -- Défauts génériques --
+  - session_types: [CM]
+    preferred_room_types: [amphi]
+    fallback_room_types: [standard]
+    same_room_for_course: true
+
+  - session_types: [TD]
+    preferred_room_types: [standard]
+    fallback_room_types: [tp_standard, tp_mac]
+
+  - session_types: [TP]
+    preferred_room_types: [tp_standard, standard]
+    fallback_room_types: [tp_mac]
+
+  # -- BUT3-DEV-FC : cohorte de 8-10, petites salles en priorité --
+  # Retour utilisateur (07/08/2026) : "pour les 3e année dev FC il faut les
+  # mettre dans la H.005 le plus souvent possible ou les petites salles car
+  # c'est uniquement un groupe de 8". Sans cette règle leurs séances (toutes
+  # émises en TD, cf. cohorte à groupe unique) viseraient les salles
+  # `standard` — toutes à 35 places, donc largement surdimensionnées.
+  # `tp_standard` en préféré + tri "best fit" (cf. `assign_rooms`) fait
+  # tomber H.005 (15 places) en premier choix, H.006/007/008 (30) ensuite.
+  # WRA501D (Anglais) volontairement EXCLU : il garde la salle attitrée
+  # d'anglais via la règle ci-dessous, qui matche après (dernière règle
+  # gagnante, cf. `_find_matching_rule`).
+  - course_code_patterns:
+      ["WRA502D", "WRA503D", "WRA504D", "WRA505D", "WRA506D", "WRA507D", "WRA508D", "WRA509D", "WRA510D"]
+    session_types: [TD, TP]
+    preferred_room_types: [tp_standard, standard]
+    fallback_room_types: [tp_mac, td_design]
+
+  # -- WR101/WR102 (Anglais / Renforcé) : H.103 systématique, tous parcours --
+  - course_code_patterns: ["WR101", "WR102", "WRA1*", "WR301D", "WR302D"]
+    session_types: [TD, TP]
+    preferred_room_types: [tp_anglais]
+    fallback_room_types: [standard]
+
+  # -- WR103 (Ergonomie) : TD en parallèle, salles couplées en priorité --
+  - course_code_patterns: ["WR103"]
+    session_types: [CM]
+    preferred_room_types: [amphi]
+    fallback_room_types: [standard]
+  - course_code_patterns: ["WR103"]
+    session_types: [TD]
+    preferred_room_types: [standard]
+    fallback_room_types: [studio_av, tp_mac]
+
+  # -- WR104 (Culture numérique) : Martial Martin seul, pool 1er étage --
+  - course_code_patterns: ["WR104"]
+    session_types: [TD]
+    preferred_room_types: [standard]
+    fallback_room_types: [tp_standard]
+
+  # -- WR105 (Stratégies com.) : pool 1er étage --
+  - course_code_patterns: ["WR105"]
+    session_types: [TD]
+    preferred_room_types: [standard]
+    fallback_room_types: [tp_standard]
+
+  # -- WR106 (Expression) : TP priorité vraies salles TP avant TD, H.009 basse
+  #    priorité, H.016 dernier recours strict --
+  - course_code_patterns: ["WR106"]
+    session_types: [TD]
+    preferred_room_types: [standard]
+    fallback_room_types: [tp_standard, td_design, tp_mac]
+  - course_code_patterns: ["WR106"]
+    session_types: [TP]
+    preferred_room_types: [tp_standard, tp_anglais]
+    fallback_room_types: [td_design, tp_mac]
+
+  # -- WR107 (Écriture multimédia) : TD Studio puis pool 1er étage,
+  #    TP H.103 (îlots), malus H.007/H.008 --
+  - course_code_patterns: ["WR107"]
+    session_types: [CM]
+    preferred_room_types: [amphi]
+    fallback_room_types: [standard]  # 2e CM = évaluation -> voir a018 en dur si besoin
+  - course_code_patterns: ["WR107"]
+    session_types: [TD]
+    preferred_room_types: [studio_av]
+    fallback_room_types: [standard]
+  - course_code_patterns: ["WR107"]
+    session_types: [TP]
+    preferred_room_types: [tp_anglais]
+    fallback_room_types: [tp_standard]
+
+  # -- WR108/WR109 (Production graphique / Culture artistique) : H.009 priorité,
+  #    repli H.006 --
+  - course_code_patterns: ["WR108", "WR109"]
+    session_types: [TD, TP]
+    preferred_room_types: [td_design]
+    fallback_room_types: [tp_standard]
+
+  # -- WR110 (Prod. audio/vidéo) : TD 4 salles en parallèle dont Studio,
+  #    TP duos synchronisés au Studio --
+  - course_code_patterns: ["WR110"]
+    session_types: [TD]
+    preferred_room_types: [studio_av, standard]
+    fallback_room_types: [tp_standard]
+  - course_code_patterns: ["WR110"]
+    session_types: [TP]
+    preferred_room_types: [studio_av]
+    fallback_room_types: [tp_standard]
+
+  # -- WR112/WR113 (Intégration / Dev Web) : duos synchronisés, salles couplées --
+  - course_code_patterns: ["WR112", "WR113"]
+    session_types: [TD, TP]
+    preferred_room_types: [tp_standard, standard]
+    fallback_room_types: [tp_vr_reseaux]
+
+  # -- WR115 (Hébergement) / WR116 (Repr. traitement info) : salles classiques,
+  #    malus H.016/H.017/H.009 (donc absentes des listes ci-dessous) --
+  - course_code_patterns: ["WR115", "WR116"]
+    session_types: [TD, TP]
+    preferred_room_types: [standard, tp_standard]
+    fallback_room_types: [tp_vr_reseaux]
+
+  # -- WR117 (Gestion de projet) : pas de parallélisme requis, salles classiques --
+  - course_code_patterns: ["WR117"]
+    session_types: [TD, TP]
+    preferred_room_types: [standard]
+    fallback_room_types: [tp_standard]
+
+  # -- WR118 (Éco/gestion/droit) / WR119 (PPP) : préférence 1er étage --
+  - course_code_patterns: ["WR118", "WR119"]
+    session_types: [TD]
+    preferred_room_types: [standard]
+    fallback_room_types: [tp_standard]
+
+  # -- WR120 (Soutien) : 4 enseignants en parallèle, salles classiques --
+  - course_code_patterns: ["WR120"]
+    session_types: [TD]
+    preferred_room_types: [standard]
+    fallback_room_types: [tp_standard]
+
+  # -- Développement (S3-DEV-FI et suivants, codes en *D) : labos --
+  - course_code_patterns: ["*D"]
+    session_types: [TP]
+    preferred_room_types: [tp_standard, tp_vr_reseaux]
+    fallback_room_types: [standard]
+
+  # -- Évaluations : A.018 obligatoire, quel que soit le module (règle dure,
+  #    priorité maximale car placée en dernier -> gagne sur toute autre règle) --
+  - is_eval: true
+    preferred_room_types: [evaluation]
+    fallback_room_types: [amphi, standard]

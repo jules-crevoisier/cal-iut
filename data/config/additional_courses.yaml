@@ -1,0 +1,54 @@
+# Cours absents de l'export maquette distant (code encore inconnu de
+# l'administration / ajout tardif) — même logique de survie à un re-fetch
+# que `course_corrections.yaml` : ces entrées sont injectées dans la liste
+# `maquette` AVANT `merge_exports` (cf. `ingestion/pipeline.py`), donc
+# traitées à l'identique d'une vraie ligne de l'export distant.
+#
+# Chaque entrée doit avoir la forme exacte d'une ligne `maquette.json`
+# (cf. `ingestion/merge.py::merge_exports` pour les champs consommés).
+courses:
+  - code_matiere: WR100BU
+    nom_matiere: "Jeu de piste BU"
+    semestre: S1
+    parcours: BUT1
+    lead: {code: VMA, nom: MARIOT, prenom: VALERIE}
+    total: {cm: 0, td: 3, tp: 0}
+    profs:
+      - block: block1
+        code: VMA
+        nom: MARIOT
+        prenom: VALERIE
+        cm: 0
+        td: 12
+        tp: 0
+        nbGpTd: 4
+        nbGpTp: 0
+    maquette:
+      groupes: {td: 4, tp: 0}
+      bloque: false
+      hors_service: false
+    note: >
+      Retour utilisateur (06/08/2026) : code "WR100BU" inventé par Kyllian
+      Bresson pour l'intervention de Valérie Mariot (BU), qui ne connaît
+      pas son code matière officiel — absent de l'export maquette distant,
+      donc jamais écrasé par un re-fetch. Volume par étudiant : 3 TD
+      (4h30). Volume enseignant : 12 TD (18h) = 3 séances x 4 groupes TD,
+      VMA seule sur les 4 groupes (nbGpTd=4).
+
+      Ligne source "DGA prend en charge tous les groupes A ; B" NON reprise
+      ici : "DGA" ne correspond à aucun enseignant connu du jeu de données,
+      et le volume donné pour VMA (12 TD = 4 groupes x 3 séances) ne laisse
+      structurellement aucune place à un second enseignant sur une partie
+      des groupes. Traité comme VMA solo sur les 4 groupes en attendant
+      clarification de Kyllian — À CONFIRMER, ne pas supposer résolu.
+
+      Préférences de semaine données par Kyllian (INFORMATIVES seulement,
+      "à prévoir plutôt" — non câblées dans le solveur, pas de mécanisme de
+      fenêtre par séance à ce jour, cf. docs/DATA.md §33) : TD n°1 (Visite
+      BU, salle A123) entre le 1er et le 15 septembre 2026 ; TD n°2 et TD
+      n°3 (salle Informatique) entre la 3e semaine de septembre et le 15
+      octobre 2026 (l'an dernier : semaines 39 et 42). Salles A123 et
+      "Salle Informatique" hors du parc géré par `rooms.yaml` (convention
+      "H.xxx" du bâtiment H) : le solveur assignera une salle générique du
+      bâtiment H par défaut, À CORRIGER MANUELLEMENT après résolution
+      (Vue Semaine) pour ces 3 séances précisément.

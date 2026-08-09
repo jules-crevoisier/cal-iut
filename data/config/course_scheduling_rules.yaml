@@ -1,0 +1,25 @@
+# Contraintes de démarrage minimum par cours (cf. modèle `CourseMinWeekRule`,
+# `solver/constraints.py::add_course_min_week_constraints`) — un cours ne peut
+# démarrer avant la semaine-index `min_week` du solveur (comptée depuis le
+# vrai démarrage des enseignements, semaine-index 1 pour S1, PAS depuis la
+# semaine d'intégration semaine-index 0).
+#
+# Donnée confirmée par l'utilisateur (jamais devinée, cf. règle "donnée
+# fraîche" du projet) : Kyllian Bresson, 04/08/2026 — "En voyant sur votre
+# outil que le PPP (WR119) commence dès la rentrée, je me dis que ce n'est
+# peut-être pas l'idéal. Je préfère qu'ils aient le temps de passer quelques
+# semaines à l'IUT avant que l'on aborde avec eux le PPP S1." "Quelques
+# semaines" n'étant pas un chiffre exact donné par Kyllian lui-même,
+# min_week=3 (2 semaines de battement) a été choisi comme compromis délai
+# réel / fiabilité du solveur — min_week=4 (3 semaines) testé empiriquement
+# concentre trop les 60 séances WR119 sur 15 semaines au lieu de 18 et
+# dégrade nettement la convergence du run BUT1-S1 complet (cf. docs/DATA.md).
+min_week_rules:
+  - course_code: WR119
+    semestre: S1
+    min_week: 3
+    note: >
+      Confirmé (retour utilisateur) : PPP S1 ne doit pas démarrer dès la
+      rentrée. Délai ramené à 2 semaines (min_week=3) plutôt que 3 (min_week=4)
+      pour préserver la fiabilité du solveur sur le run complet — Kyllian
+      n'avait pas donné de chiffre exact ("quelques semaines").

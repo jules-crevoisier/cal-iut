@@ -1,0 +1,137 @@
+# Groupes étudiants par parcours — effectifs à ajuster
+#
+# Structure de promo (cahier des charges §1) :
+#   - BUT1 (S1/S2, tronc commun) : 4 TD (AB, CD, EF, GH) x 8 TP (A..H)
+#   - BUT2/BUT3-DEV-FI (S3-S6)   : 2 TD (AB, CD) x 4 TP (A, B, C, D) — resserré vs S1/S2
+#   - BUT2/BUT3-*-FC (alternance): 1 TD x 1 TP par parcours (cohortes réduites)
+#
+# IMPORTANT : chaque parcours doit avoir un `promo_group` (groupe CM), sinon les
+# séances de CM sont taguées avec un id promo synthétique qui n'existe dans aucun
+# groupe réel -> `build_student_cohorts` ne les rattache à aucune cohorte étudiante
+# -> le solveur ne détecte plus les conflits CM/TD/TP pour ce parcours (bug corrigé ici).
+promotions:
+  BUT1:
+    # Effectifs confirmés par l'utilisateur : ~120 en promo, répartis
+    # équitablement sur les 4 TD (30 chacun) et les 8 TP (15 chacun) —
+    # remplace les anciens 240/60/30 (jamais confirmés, cf. docs/DATA.md §7.7,
+    # surdimensionnés vs les salles réelles du bâtiment H).
+    td_groups:
+      - id: but1-td-ab
+        label: TD AB
+        tp_groups: [A, B]
+        headcount: 30
+      - id: but1-td-cd
+        label: TD CD
+        tp_groups: [C, D]
+        headcount: 30
+      - id: but1-td-ef
+        label: TD EF
+        tp_groups: [E, F]
+        headcount: 30
+      - id: but1-td-gh
+        label: TD GH
+        tp_groups: [G, H]
+        headcount: 30
+    tp_groups:
+      - { id: but1-tp-a, label: TP A, headcount: 15 }
+      - { id: but1-tp-b, label: TP B, headcount: 15 }
+      - { id: but1-tp-c, label: TP C, headcount: 15 }
+      - { id: but1-tp-d, label: TP D, headcount: 15 }
+      - { id: but1-tp-e, label: TP E, headcount: 15 }
+      - { id: but1-tp-f, label: TP F, headcount: 15 }
+      - { id: but1-tp-g, label: TP G, headcount: 15 }
+      - { id: but1-tp-h, label: TP H, headcount: 15 }
+    promo_group:
+      id: but1-promo
+      label: Promo BUT1
+      headcount: 120
+
+  BUT2-DEV-FI:
+    td_groups:
+      - { id: but2-dev-fi-td-ab, label: TD AB, tp_groups: [A, B], headcount: 28 }
+      - { id: but2-dev-fi-td-cd, label: TD CD, tp_groups: [C, D], headcount: 28 }
+    tp_groups:
+      - { id: but2-dev-fi-tp-a, label: TP A, headcount: 14 }
+      - { id: but2-dev-fi-tp-b, label: TP B, headcount: 14 }
+      - { id: but2-dev-fi-tp-c, label: TP C, headcount: 14 }
+      - { id: but2-dev-fi-tp-d, label: TP D, headcount: 14 }
+    promo_group:
+      id: but2-dev-fi-promo
+      label: Promo BUT2 DEV-FI
+      headcount: 56
+
+  # Confirmé par l'utilisateur : groupe unique "TD GH" / "TP G" (nommage réel,
+  # cohérent avec la convention lettrée BUT1/BUT2-DEV-FI) — alternance (FC),
+  # promo en groupe unique, mode de répartition "Solo" (1 enseignant sur
+  # l'intégralité du TD+TP de chaque module, cf. profs nbGpTd=nbGpTp=1 dans la
+  # maquette).
+  # Effectif (07/08/2026) : pas encore connu précisément, mais confirmé > 15
+  # (capacité H.005) — 18 conservé (retour utilisateur : "on peut partir sur
+  # 18") pour exclure les petites salles.
+  BUT2-CREACOM-FC:
+    td_groups:
+      - { id: but2-creacom-fc-td-gh, label: TD GH, tp_groups: [G], headcount: 18 }
+    tp_groups:
+      - { id: but2-creacom-fc-tp-g, label: TP G, headcount: 18 }
+    promo_group:
+      id: but2-creacom-fc-promo
+      label: Promo BUT2 CREACOM-FC
+      headcount: 18
+
+  # BUT2-DEV-FC (Développement Web, alternance) : promotion EN VEILLE (gelée)
+  # pour l'année 2026-2027 — effectif d'alternants insuffisant pour l'ouvrir.
+  # Confirmé par l'utilisateur : aucun cours n'existe pour ce parcours dans la
+  # maquette source cette année (0 module BUT2-DEV-FC trouvé, vérifié) ; le
+  # solveur l'ignore donc déjà naturellement (aucune séance générée sans
+  # cours). Structure conservée ici en commentaire pour une réouverture
+  # future : TD = 1 groupe "EF", TP = 2 groupes "E" et "F" (pas "Solo" comme
+  # CREACOM-FC — répartition classique à 2 sous-groupes TP par TD).
+
+  # Structure alignée sur la maquette (retour utilisateur 07/08/2026 : "suis
+  # la maquette") : BUT3-DEV-FI y déclare 1 SEUL groupe TD et 2 groupes TP
+  # sur les 14 modules S5, sans exception. L'ancienne config déclarait 2 TD
+  # (AB/CD) et 4 TP (A..D) pour 50 étudiants — `_td_group_ids`/`_tp_group_ids`
+  # ne prenant que les `groupes_td`/`groupes_tp` PREMIERS groupes, TD CD et
+  # TP C/D ne recevaient donc jamais aucune séance (bug remonté par
+  # l'utilisateur : "le TD CD en 3e année FI n'a pas de cours"). Groupes
+  # orphelins supprimés ici plutôt que masqués côté interface.
+  # Effectif ramené à 25 (= 13 + 12, somme réelle des 2 TP conservés) au lieu
+  # de 50, pour rester cohérent : un groupe TD unique de 50 ne tiendrait dans
+  # aucune salle `standard` (35 places max) et basculerait tout en amphi.
+  BUT3-DEV-FI:
+    td_groups:
+      - { id: but3-dev-fi-td-ab, label: TD AB, tp_groups: [A, B], headcount: 25 }
+    tp_groups:
+      - { id: but3-dev-fi-tp-a, label: TP A, headcount: 13 }
+      - { id: but3-dev-fi-tp-b, label: TP B, headcount: 12 }
+    promo_group:
+      id: but3-dev-fi-promo
+      label: Promo BUT3 DEV-FI
+      headcount: 25
+
+  # Retour utilisateur (07/08/2026) : effectif réel 6, "8-10 si on prend
+  # large" — 10 retenu (marge haute de la fourchette donnée) pour que les
+  # petites salles (ex. H.005, capacité 15) restent PRIVILÉGIÉES sans être
+  # trop juste. Groupe unique même en TP (pas de sous-groupes).
+  BUT3-DEV-FC:
+    td_groups:
+      - { id: but3-dev-fc-td-1, label: TD DEV FC, tp_groups: [1], headcount: 10 }
+    tp_groups:
+      - { id: but3-dev-fc-tp-1, label: TP DEV FC, headcount: 10 }
+    promo_group:
+      id: but3-dev-fc-promo
+      label: Promo BUT3 DEV-FC
+      headcount: 10
+
+  # Retour utilisateur (07/08/2026) : effectif réel "18-20" — 19 retenu
+  # (milieu de la fourchette) — surtout : > 15 (capacité H.005) pour que
+  # les petites salles soient bien EXCLUES. Groupe unique même en TP.
+  BUT3-CREACOM-FC:
+    td_groups:
+      - { id: but3-creacom-fc-td-1, label: TD CREACOM FC, tp_groups: [1], headcount: 19 }
+    tp_groups:
+      - { id: but3-creacom-fc-tp-1, label: TP CREACOM FC, headcount: 19 }
+    promo_group:
+      id: but3-creacom-fc-promo
+      label: Promo BUT3 CREACOM-FC
+      headcount: 19

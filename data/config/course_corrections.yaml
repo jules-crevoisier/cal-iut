@@ -1,0 +1,20 @@
+# Corrections manuelles d'enseignant appliquées APRÈS la fusion
+# maquette+progression (cf. `ingestion/merge.py::apply_teacher_corrections`).
+#
+# `data/exports/maquette.json` est récupéré depuis une source distante
+# (https://mmi23x02.mmi-troyes.fr/export/maquette, cf. `ingestion/fetch.py`)
+# et donc ÉCRASÉ à chaque `cal-iut fetch` : une correction déclarée ici
+# survit à un re-fetch, contrairement à un edit direct du JSON récupéré.
+#
+# `correct_teacher_code` doit déjà exister ailleurs dans le jeu de données
+# (nom/prénom résolus par recoupement automatique, jamais ressaisis à la main).
+teacher_corrections:
+  - course_code: WRA304M
+    semestre: S3
+    parcours: BUT2-CREACOM-FC
+    wrong_teacher_code: ARA
+    correct_teacher_code: JTH
+    note: >
+      Confirmé (retour utilisateur) : WRA304M "Culture numérique" est
+      enseigné par Jérôme Thomas (JTH), pas Anthony Rageul (ARA) — la
+      maquette source distante a le mauvais enseignant sur ce module.

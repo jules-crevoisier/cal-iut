@@ -1,0 +1,114 @@
+{
+  "meta": "Points a verifier manuellement / conflits detectes automatiquement dans les donnees sources. Ne pas essayer de 'corriger' ces points sans validation humaine (regle de la donnee fraiche).",
+  "conflits_calendrier_alternance_vs_fermeture_iut": {
+    "BUT2_FC_S3_S4": [
+      {
+        "semaine_debut": "2027-03-29",
+        "semaine_fin": "2027-04-02",
+        "jours_en_conflit_avec_fermeture_iut": [
+          "2027-03-29"
+        ],
+        "notes_source": []
+      },
+      {
+        "semaine_debut": "2027-04-19",
+        "semaine_fin": "2027-04-23",
+        "jours_en_conflit_avec_fermeture_iut": [
+          "2027-04-19",
+          "2027-04-20",
+          "2027-04-21",
+          "2027-04-22",
+          "2027-04-23"
+        ],
+        "notes_source": [
+          "mais IUT en pause pédagogique",
+          "mais IUT en pause pédagogique",
+          "mais IUT en pause pédagogique",
+          "mais IUT en pause pédagogique",
+          "mais IUT en pause pédagogique"
+        ]
+      },
+      {
+        "semaine_debut": "2027-05-03",
+        "semaine_fin": "2027-05-07",
+        "jours_en_conflit_avec_fermeture_iut": [
+          "2027-05-06",
+          "2027-05-07"
+        ],
+        "notes_source": []
+      },
+      {
+        "semaine_debut": "2027-05-17",
+        "semaine_fin": "2027-05-21",
+        "jours_en_conflit_avec_fermeture_iut": [
+          "2027-05-17"
+        ],
+        "notes_source": [
+          "pourtant jour férié"
+        ]
+      }
+    ],
+    "BUT3_FC_S5_S6": [
+      {
+        "semaine_debut": "2027-04-26",
+        "semaine_fin": "2027-04-30",
+        "jours_en_conflit_avec_fermeture_iut": [
+          "2027-04-26",
+          "2027-04-27",
+          "2027-04-28",
+          "2027-04-29",
+          "2027-04-30"
+        ],
+        "notes_source": []
+      }
+    ]
+  },
+  "incoherences_nbGroupes_maquette": {
+    "regle_verifiee": "somme des nbGpTd/nbGpTp declares par les enseignants d'un module vs nombre total de groupes declare dans maquette.groupes",
+    "note": "Frequent sur les SAE/PTUT/modules a volumes cumules sur plusieurs semestres/plusieurs enseignants tournants : le champ nbGp peut compter autre chose que des groupes concurrents (ex: nb d'interventions). A verifier au cas par cas avant de bloquer le solveur dessus, ne pas corriger automatiquement.",
+    "liste": [
+      "WS104: somme nbGpTd des profs (12) != groupes.td declare (4)",
+      "WS104: somme nbGpTp des profs (24) != groupes.tp declare (8)",
+      "WR203: somme nbGpTd des profs (8) != groupes.td declare (4)",
+      "WR203: somme nbGpTp des profs (16) != groupes.tp declare (8)",
+      "WR312D: somme nbGpTd des profs (4) != groupes.td declare (2)",
+      "WR312D: somme nbGpTp des profs (8) != groupes.tp declare (4)",
+      "WS302D: somme nbGpTd des profs (4) != groupes.td declare (2)",
+      "WS302D: somme nbGpTp des profs (8) != groupes.tp declare (4)",
+      "WS3PJ: somme nbGpTd des profs (28) != groupes.td declare (2)",
+      "WS3PJ: somme nbGpTp des profs (56) != groupes.tp declare (4)",
+      "WSA402M: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WR504D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WR506D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WR507D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WRA505C: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WRA505C: somme nbGpTp des profs (2) != groupes.tp declare (1)",
+      "WRA506C: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WRA506C: somme nbGpTp des profs (2) != groupes.tp declare (1)",
+      "WRA508C: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WRA508C: somme nbGpTp des profs (2) != groupes.tp declare (1)",
+      "WS501D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WS501D: somme nbGpTp des profs (3) != groupes.tp declare (2)",
+      "WS502D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WS5PJ: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WS5PJ: somme nbGpTp des profs (3) != groupes.tp declare (2)",
+      "WSA501D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WSA501D: somme nbGpTp des profs (2) != groupes.tp declare (1)",
+      "WR602D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WS611D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WS611D: somme nbGpTp des profs (3) != groupes.tp declare (2)",
+      "WSA611C: somme nbGpTd des profs (14) != groupes.td declare (1)",
+      "WSA611C: somme nbGpTp des profs (14) != groupes.tp declare (1)",
+      "WSA666C: somme nbGpTd des profs (3) != groupes.td declare (1)",
+      "WSA666C: somme nbGpTp des profs (3) != groupes.tp declare (1)",
+      "WSA666D: somme nbGpTd des profs (3) != groupes.td declare (1)",
+      "WSA666D: somme nbGpTp des profs (3) != groupes.tp declare (1)"
+    ]
+  },
+  "points_ouverts_hors_fichiers_sources": [
+    "Le fichier CONTRAINTES_ENSEIGNANTS ne couvre que 20 enseignants ; le fichier maquette.json en reference 39 au total (via profs[].code). Les enseignants sans ligne de contrainte sont presumes sans contrainte particuliere connue, a confirmer plutot que suppose.",
+    "Le champ 'contraintes_pedagogiques_raw' de certains enseignants (ex: Ariane Loizon sur WS501D/WRA505C, Thomas Castellengo sur la parite de semaine) contient des regles complexes en texte libre qui n'ont pas ete traduites en regles machine strictes ici : elles doivent etre lues et encodees manuellement module par module au moment de traiter WS501D, WRA505C, WRA308C, etc.",
+    "La feuille 'Modele Sept-Jan' du fichier Plannings_MMI_2026_2027.xlsx est un gabarit avec des dates de 2025 (annee precedente) : elle a ete exclue du fichier 04, elle ne doit pas etre utilisee comme donnee 2026-2027.",
+    "Aucun fichier source fourni ne couvre les salles : la section 'rooms' du fichier 01_regles_generales.json vient de la conversation precedente (PDF), pas d'un fichier officiel dedie ; a reverifier si un fichier de salles existe."
+  ]
+}

@@ -1,0 +1,1523 @@
+<title>__TITLE__</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --surface-2: #f5f7fb;
+    --ink: #1c2333;
+    --ink-soft: #5b6478;
+    --border: #d9dee6;
+    --accent: #4d3fae;
+    --accent-soft: #eeeafc;
+    --accent2: #b9702a;
+    --accent2-soft: #faeee0;
+    --teal: #21807e;
+    --teal-soft: #e2f2f1;
+    --good: #2f8f5b;
+    --good-soft: #e4f5ec;
+    --bad: #c94a3f;
+    --bad-soft: #fbe7e5;
+    --warn: #a8781f;
+    --warn-soft: #faf1de;
+    --shadow: 0 1px 2px rgba(28,35,51,.06), 0 8px 24px -12px rgba(28,35,51,.12);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10131b; --surface: #171b26; --surface-2: #1e2330; --ink: #e7e9f0; --ink-soft: #9aa3ba;
+      --border: #2b3244; --accent: #9c8ff2; --accent-soft: #241f3d; --accent2: #e0a95c; --accent2-soft: #3a2e1a;
+      --teal: #5cc4c1; --teal-soft: #163330; --good: #57c98c; --good-soft: #16301f; --bad: #e2685b; --bad-soft: #3a231f;
+      --warn: #e0b45c; --warn-soft: #382e18; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10131b; --surface: #171b26; --surface-2: #1e2330; --ink: #e7e9f0; --ink-soft: #9aa3ba;
+    --border: #2b3244; --accent: #9c8ff2; --accent-soft: #241f3d; --accent2: #e0a95c; --accent2-soft: #3a2e1a;
+    --teal: #5cc4c1; --teal-soft: #163330; --good: #57c98c; --good-soft: #16301f; --bad: #e2685b; --bad-soft: #3a231f;
+    --warn: #e0b45c; --warn-soft: #382e18; color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f5; --surface: #ffffff; --surface-2: #f5f7fb; --ink: #1c2333; --ink-soft: #5b6478;
+    --border: #d9dee6; --accent: #4d3fae; --accent-soft: #eeeafc; --accent2: #b9702a; --accent2-soft: #faeee0;
+    --teal: #21807e; --teal-soft: #e2f2f1; --good: #2f8f5b; --good-soft: #e4f5ec; --bad: #c94a3f; --bad-soft: #fbe7e5;
+    --warn: #a8781f; --warn-soft: #faf1de; color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 28px clamp(16px, 4vw, 48px) 64px; }
+  h1, h2, h3 { font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif; text-wrap: balance; margin: 0; }
+  .mono { font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  a { color: var(--accent); }
+
+  .page { max-width: 1260px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  header.top .titles { display: flex; flex-direction: column; gap: 6px; max-width: 68ch; }
+  header.top h1 { font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.1rem); font-weight: 600; letter-spacing: -0.01em; }
+  header.top p { margin: 0; color: var(--ink-soft); font-size: 0.95rem; line-height: 1.5; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+    font-size: 0.78rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .pill.good { background: var(--good-soft); color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+  .pill.dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.mini { padding: 3px 9px; font-size: .68rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+    box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 600; }
+  .stat .value { font-size: 1.5rem; font-weight: 600; }
+  .stat .value small { font-size: .95rem; color: var(--ink-soft); font-weight: 500; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+
+  /* --- calendrier institutionnel --- */
+  .timeline { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .timeline-item {
+    flex: none; min-width: 190px; border-radius: 10px; padding: 8px 10px; border: 1px solid var(--border);
+    background: var(--surface-2); display: flex; flex-direction: column; gap: 3px;
+  }
+  .timeline-item .kind { font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+  .timeline-item .label { font-size: .82rem; font-weight: 600; line-height: 1.25; }
+  .timeline-item .dates { font-size: .74rem; color: var(--ink-soft); }
+  .timeline-item.vacances { border-left: 3px solid var(--ink-soft); }
+  .timeline-item.ferie { border-left: 3px solid var(--bad); }
+  .timeline-item.rentree { border-left: 3px solid var(--accent); }
+  .timeline-item.special { border-left: 3px solid var(--accent2); }
+
+  /* --- onglets --- */
+  .tabbar { display: flex; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tabbtn {
+    font: inherit; font-weight: 600; font-size: .88rem; padding: 9px 16px; border: none; background: none;
+    color: var(--ink-soft); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabbtn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tabpanel { display: none; flex-direction: column; gap: 18px; }
+  .tabpanel.active { display: flex; }
+
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 600; }
+  select {
+    font: inherit; font-size: 0.92rem; padding: 8px 34px 8px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface-2) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%235b6478"/></svg>') no-repeat right 12px center;
+    color: var(--ink); appearance: none; min-width: 220px; cursor: pointer;
+  }
+  select:focus-visible, button:focus-visible, .weekbar button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto; }
+  .legend .item { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--ink-soft); }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 3px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 880px) { .layout { grid-template-columns: 1fr; } }
+
+  .weekbar { display: flex; gap: 3px; align-items: flex-end; height: 46px; overflow-x: auto; padding-bottom: 2px; }
+  .weekbar button {
+    flex: 1 0 auto; min-width: 16px; border: none; border-radius: 4px 4px 2px 2px; cursor: pointer;
+    background: var(--accent-soft); position: relative; padding: 0; height: 100%;
+  }
+  .weekbar button .bar { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 4px 4px 2px 2px; background: var(--accent); opacity: .55; }
+  .weekbar button.active .bar { opacity: 1; }
+  .weekbar button.active { box-shadow: 0 0 0 2px var(--accent) inset; }
+  /* Semaine bloquée (vacances/fermeture) : hachures grises plutôt que masquée */
+  .weekbar button.blocked { background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 3px, var(--border) 3px, var(--border) 6px); }
+  .weekbar button.blocked .bar { background: transparent; }
+  /* Semaine passée/en cours (Vue Semaine) : non éditable, distincte du "blocked" (vacances) */
+  .weekbar button.frozen { opacity: .45; cursor: not-allowed; }
+  .weekbar-caption { display: flex; justify-content: space-between; font-size: .72rem; color: var(--ink-soft); margin-top: 4px; }
+
+  /* --- glisser-déposer (Vue Semaine) --- */
+  .session[draggable="true"] { cursor: grab; }
+  .session[draggable="true"]:active { cursor: grabbing; }
+  .session.dragging { opacity: .35; }
+  .session.locked-session { cursor: not-allowed; opacity: .7; }
+  .session .lockbadge { float: right; opacity: .7; }
+  td.slotcell.dropzone-hover { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  td.slotcell.dropzone-invalid { outline: 2px dashed var(--bad); outline-offset: -2px; background: var(--bad-soft); }
+
+  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+  table.grid th { font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); font-weight: 600; padding: 6px 8px; text-align: left; }
+  table.grid th.timecol { width: 78px; }
+  table.grid td.timecell { font-size: .74rem; color: var(--ink-soft); vertical-align: top; padding: 8px 8px 8px 0; white-space: nowrap; }
+  table.grid td.slotcell { border: 1px solid var(--border); border-radius: 10px; padding: 5px; vertical-align: top; height: 74px; background: var(--surface-2); }
+  table.grid tr.pause td { height: 6px; padding: 0; border: none; background: transparent; }
+  table.grid tr.pause td.timecell { color: var(--ink-soft); font-size: .68rem; text-align: center; padding-top: 2px; }
+  .td-subcols { display: grid; gap: 4px; height: 100%; }
+  .td-subcols.cols-2 { grid-template-columns: 1fr 1fr; }
+
+  .session {
+    border-radius: 8px; padding: 6px 8px; font-size: .78rem; line-height: 1.28; height: 100%;
+    display: flex; flex-direction: column; gap: 2px; border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  }
+  .session + .session { margin-top: 4px; }
+  .session.type-CM { border-left-color: var(--ink-soft); background: color-mix(in srgb, var(--ink-soft) 10%, var(--surface)); }
+  .session.type-TP { border-left-color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--surface)); }
+  .session.eval { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
+  .session.viol { outline: 2px solid var(--bad); outline-offset: -2px; }
+  .session .code { font-weight: 700; font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace; }
+  .session .meta { color: var(--ink-soft); font-size: .72rem; }
+
+  .pac-cell { display: flex; align-items: center; justify-content: center; height: 100%; border-radius: 8px;
+    border: 1px dashed var(--border); color: var(--ink-soft); font-size: .7rem; letter-spacing: .05em; text-transform: uppercase; }
+
+  .sae-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
+    border-radius: 8px; border: 1px dashed var(--accent2); background: var(--accent2-soft); color: var(--accent2);
+    font-size: .68rem; letter-spacing: .04em; text-align: center; gap: 2px; }
+  .sae-cell .sae-title { text-transform: uppercase; font-weight: 700; }
+  .sae-cell .sae-codes { font-size: .64rem; opacity: .85; }
+
+  .holiday-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--ink-soft);
+    font-size: .68rem; letter-spacing: .04em; text-align: center; gap: 2px; }
+  .holiday-cell .holiday-title { text-transform: uppercase; font-weight: 700; }
+  .holiday-cell .holiday-label { font-size: .64rem; opacity: .85; }
+
+  .event-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
+    border-radius: 8px; border: 1px dashed var(--teal); background: var(--teal-soft); color: var(--teal);
+    font-size: .66rem; letter-spacing: .02em; text-align: center; gap: 1px; padding: 2px; }
+  .event-cell .event-label { font-size: .64rem; }
+  .event-cell .event-label + .event-label { opacity: .8; }
+
+  .checks { display: flex; flex-direction: column; gap: 10px; }
+  .check { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+  .check .icon { width: 20px; height: 20px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; margin-top: 1px; }
+  .check.pass .icon { background: var(--good-soft); color: var(--good); }
+  .check.info .icon { background: var(--accent-soft); color: var(--accent); }
+  .check.fail .icon { background: var(--bad-soft); color: var(--bad); }
+  .check .txt { font-size: .84rem; line-height: 1.4; }
+  .check .txt b { font-weight: 600; }
+  .check .txt .sub { color: var(--ink-soft); font-size: .78rem; }
+
+  .callout { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+  .callout.pass { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); }
+  .callout.fail { border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }
+  .callout .icon { font-weight: 700; }
+
+  /* --- dashboard contraintes --- */
+  .teacher-list { display: flex; flex-direction: column; gap: 12px; }
+  .teacher-card { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
+  .teacher-card header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .teacher-card h4 { font-family: inherit; font-size: .95rem; font-weight: 700; }
+  .teacher-card .code { color: var(--ink-soft); font-weight: 500; }
+  .teacher-card .raw { font-size: .82rem; line-height: 1.5; white-space: pre-wrap; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .teacher-card .raw-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); font-weight: 700; margin-bottom: 3px; }
+  .teacher-card .violations { font-size: .8rem; color: var(--bad); }
+  .teacher-card .slotlist { display: flex; flex-wrap: wrap; gap: 6px; }
+  .slotchip { font-size: .72rem; background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 3px 8px; }
+
+  .rule-grid { display: flex; flex-direction: column; gap: 10px; }
+
+  /* --- vue promo --- */
+  .daybar { display: flex; gap: 6px; flex-wrap: wrap; }
+  .daybtn {
+    font: inherit; font-size: .84rem; font-weight: 600; padding: 7px 14px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-soft); cursor: pointer;
+  }
+  .daybtn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .daybtn.sae:not(.active) { border-color: var(--accent2); color: var(--accent2); }
+  .daybtn.holiday:not(.active) { border-color: var(--ink-soft); color: var(--ink-soft); }
+  .daybtn.event:not(.active) { border-color: var(--teal); color: var(--teal); }
+  table.promo-grid { border-collapse: separate; border-spacing: 0; width: 100%; }
+  table.promo-grid th { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-soft);
+    font-weight: 700; padding: 6px 6px; text-align: center; background: var(--surface-2); border-bottom: 2px solid var(--border); }
+  table.promo-grid th.timecol { text-align: left; width: 70px; }
+  table.promo-grid td.timecell { font-size: .72rem; color: var(--ink-soft); padding: 6px 8px 6px 0; white-space: nowrap; vertical-align: top; }
+  table.promo-grid td.promocell { border: 1px solid var(--border); padding: 4px; vertical-align: top; min-width: 92px; height: 62px; background: var(--surface-2); }
+  table.promo-grid tr.pause td { height: 4px; padding: 0; border: none; }
+
+  /* Séparation visuelle entre parcours (retour utilisateur : "toutes les
+     promo les 3 années" sur un même tableau rendait les 19 colonnes dures à
+     suivre) : chaque parcours a sa propre teinte (bande d'en-tête + léger
+     lavis sur toute la colonne), et un trait plus épais marque le début de
+     chaque nouveau parcours, sur toute la hauteur du tableau. */
+  table.promo-grid .pc0 { --pc: var(--accent); }
+  table.promo-grid .pc1 { --pc: var(--teal); }
+  table.promo-grid .pc2 { --pc: var(--accent2); }
+  table.promo-grid .pc3 { --pc: var(--good); }
+  table.promo-grid .pc4 { --pc: var(--warn); }
+  table.promo-grid .pc5 { --pc: var(--bad); }
+  table.promo-grid th.grp-band { background: color-mix(in srgb, var(--pc) 20%, var(--surface-2)); color: var(--pc); font-weight: 700; }
+  table.promo-grid td.promocell { background: color-mix(in srgb, var(--pc, var(--surface-2)) 6%, var(--surface-2)); }
+  table.promo-grid .grp-first { border-left: 3px solid var(--pc); }
+  .promo-chip { border-radius: 7px; padding: 4px 6px; font-size: .72rem; line-height: 1.25; border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .promo-chip.type-CM { border-left-color: var(--ink-soft); background: color-mix(in srgb, var(--ink-soft) 10%, var(--surface)); }
+  .promo-chip.type-TP { border-left-color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--surface)); }
+  .promo-chip.eval { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
+  .promo-chip .code { font-weight: 700; font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace; display: block; }
+  .promo-chip .ty { color: var(--ink-soft); display: block; font-size: .68rem; text-transform: uppercase; letter-spacing: .02em; }
+  .promo-chip .rm { color: var(--ink-soft); display: block; }
+  .promo-chip .te { color: var(--ink-soft); display: block; font-style: italic; }
+  /* Surbrillance enseignant : le sélecteur atténue les autres chips plutôt
+     que de les masquer (garde le contexte visible), et fait ressortir ceux
+     de l'enseignant choisi. */
+  table.promo-grid.teacher-filter .promo-chip { opacity: .3; filter: grayscale(.4); }
+  table.promo-grid.teacher-filter .promo-chip.chip-highlight {
+    opacity: 1; filter: none; box-shadow: 0 0 0 2px var(--accent2); border-left-color: var(--accent2);
+  }
+
+  /* --- référence --- */
+  .ref-table-wrap { overflow-x: auto; }
+  table.ref { border-collapse: collapse; width: 100%; font-size: .84rem; }
+  table.ref th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft);
+    font-weight: 700; padding: 8px 10px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+  table.ref td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.ref tr:hover td { background: var(--surface-2); }
+  .tag { display: inline-block; font-size: .68rem; background: var(--accent-soft); color: var(--accent); border-radius: 6px; padding: 2px 7px; margin: 1px 3px 1px 0; }
+  .subtabbar { display: flex; gap: 6px; margin-bottom: 12px; }
+  .subtabbtn { font: inherit; font-size: .82rem; font-weight: 600; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-soft); cursor: pointer; }
+  .subtabbtn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  footer.note { font-size: .78rem; color: var(--ink-soft); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+
+<div class="page">
+  <header class="top">
+    <div class="titles">
+      <h1>__HEADING__</h1>
+      <p>__SUBHEADING__</p>
+    </div>
+    <span class="pill mini" id="activeWeekPill" style="background:var(--surface-2); color:var(--ink-soft); border-color:var(--border);"></span>
+    <span class="pill warn dot" id="statusPill">—</span>
+  </header>
+
+  <section class="stats" id="stats"></section>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tabbtn active" data-tab="semaine" type="button">Vue Semaine</button>
+    <button class="tabbtn" data-tab="groupe" type="button">Vue Groupe</button>
+    <button class="tabbtn" data-tab="prof" type="button">Vue Enseignant</button>
+    <button class="tabbtn" data-tab="promo" type="button">Vue Promo</button>
+    <button class="tabbtn" data-tab="reference" type="button">Référence</button>
+    <button class="tabbtn" data-tab="contraintes" type="button">Contraintes</button>
+  </nav>
+
+  <!-- ============ ONGLET SEMAINE (édition manuelle) ============ -->
+  <section class="tabpanel active" id="tab-semaine">
+    <section class="panel controls">
+      <div class="field">
+        <label for="semaineGroupSelect">Groupe étudiant</label>
+        <select id="semaineGroupSelect"></select>
+      </div>
+      <div class="field" style="min-width:260px; flex:1 1 260px;">
+        <label for="semaineWeekLabel">Semaine</label>
+        <div class="weekbar" id="semaineWeekBar"></div>
+        <div class="weekbar-caption"><span id="semaineWeekFirst"></span><span id="semaineWeekCaption"></span><span id="semaineWeekLast"></span></div>
+      </div>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--border); border:1px dashed var(--ink-soft)"></span>Semaine passée/en cours — lecture seule</span>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="panel">
+        <h3 style="font-size:1rem; margin-bottom:4px;" id="semaineCalendarTitle">Emploi du temps — glisser-déposer pour déplacer</h3>
+        <p id="semaineFrozenNote" style="color:var(--ink-soft); font-size:.82rem; margin:0 0 12px; display:none;">
+          Semaine passée ou en cours — lecture seule, aucune modification possible.
+        </p>
+        <div style="overflow-x:auto;"><table class="grid" id="semaineCalendarTable"></table></div>
+      </div>
+      <div class="panel" style="display:flex; flex-direction:column; gap:18px;">
+        <div>
+          <h3 style="font-size:1rem; margin-bottom:10px;">Régénération ciblée</h3>
+          <p style="color:var(--ink-soft); font-size:.82rem; margin:0 0 10px;">
+            Recalcule uniquement la semaine affichée (ou + la suivante), en tenant compte des exceptions ci-dessous. Les autres semaines ne sont jamais touchées.
+          </p>
+          <label style="display:flex; align-items:center; gap:6px; font-size:.86rem; margin-bottom:10px;">
+            <input type="checkbox" id="extendNextCheck"> + semaine suivante (pour mieux réagencer)
+          </label>
+          <button type="button" class="subtabbtn active" id="regenBtn" style="width:100%;">Régénérer cette semaine</button>
+          <div id="regenStatus" style="margin-top:8px; font-size:.84rem; color:var(--ink-soft);"></div>
+        </div>
+        <div>
+          <h3 style="font-size:1rem; margin-bottom:10px;">Exceptions ponctuelles</h3>
+          <div id="exceptionList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
+          <form id="exceptionForm" style="display:flex; flex-direction:column; gap:8px;">
+            <select id="excKind">
+              <option value="teacher_absence">Enseignant absent</option>
+              <option value="room_unavailable">Salle indisponible</option>
+            </select>
+            <input type="date" id="excDate" required>
+            <select id="excTeacher"></select>
+            <select id="excRoom" style="display:none;"></select>
+            <input type="text" id="excReason" placeholder="Motif (optionnel)">
+            <button type="submit" class="subtabbtn">Ajouter l'exception</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ============ ONGLET GROUPE ============ -->
+  <section class="tabpanel" id="tab-groupe">
+    <section class="panel controls">
+      <div class="field">
+        <label for="groupSelect">Groupe étudiant</label>
+        <select id="groupSelect"></select>
+      </div>
+      <div class="field" style="min-width:260px; flex:1 1 260px;">
+        <label for="groupWeekLabel">Semaine</label>
+        <div class="weekbar" id="groupWeekBar"></div>
+        <div class="weekbar-caption"><span id="groupWeekFirst"></span><span id="groupWeekCaption"></span><span id="groupWeekLast"></span></div>
+      </div>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--ink-soft)"></span>CM</span>
+        <span class="item"><span class="swatch" style="background:var(--accent)"></span>TD</span>
+        <span class="item"><span class="swatch" style="background:var(--teal)"></span>TP</span>
+        <span class="item"><span class="swatch" style="background:var(--accent2)"></span>Évaluation (A.018)</span>
+        <span class="item"><span class="swatch" style="background:var(--border); border:1px dashed var(--ink-soft)"></span>PAC (jeudi PM)</span>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="panel">
+        <h3 style="font-size:1rem; margin-bottom:12px;" id="groupCalendarTitle">Emploi du temps</h3>
+        <div style="overflow-x:auto;"><table class="grid" id="groupCalendarTable"></table></div>
+      </div>
+      <div class="panel">
+        <h3 style="font-size:1rem; margin-bottom:12px;">Vérifications automatiques</h3>
+        <div class="checks" id="groupChecks"></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ============ ONGLET ENSEIGNANT ============ -->
+  <section class="tabpanel" id="tab-prof">
+    <section class="panel controls">
+      <div class="field">
+        <label for="teacherSelect">Enseignant</label>
+        <select id="teacherSelect"></select>
+      </div>
+      <div class="field" style="min-width:260px; flex:1 1 260px;">
+        <label for="teacherWeekLabel">Semaine</label>
+        <div class="weekbar" id="teacherWeekBar"></div>
+        <div class="weekbar-caption"><span id="teacherWeekFirst"></span><span id="teacherWeekCaption"></span><span id="teacherWeekLast"></span></div>
+      </div>
+    </section>
+
+    <div class="callout" id="teacherConstraintCallout"></div>
+
+    <section class="layout">
+      <div class="panel">
+        <h3 style="font-size:1rem; margin-bottom:12px;" id="teacherCalendarTitle">Emploi du temps enseignant</h3>
+        <div style="overflow-x:auto;"><table class="grid" id="teacherCalendarTable"></table></div>
+      </div>
+      <div class="panel">
+        <h3 style="font-size:1rem; margin-bottom:12px;">Sa contrainte, telle que déclarée</h3>
+        <div id="teacherRaw"></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ============ ONGLET PROMO (grille tous groupes, toutes années) ============ -->
+  <section class="tabpanel" id="tab-promo">
+    <section class="panel controls">
+      <div class="field" style="min-width:260px; flex:1 1 260px;">
+        <label for="promoWeekLabel">Semaine</label>
+        <div class="weekbar" id="promoWeekBar"></div>
+        <div class="weekbar-caption"><span id="promoWeekFirst"></span><span id="promoWeekCaption"></span><span id="promoWeekLast"></span></div>
+      </div>
+      <div class="field">
+        <label>Jour</label>
+        <div class="daybar" id="promoDayBar"></div>
+      </div>
+      <div class="field">
+        <label for="promoTeacherSelect">Surligner un enseignant</label>
+        <select id="promoTeacherSelect"><option value="">— Tous —</option></select>
+      </div>
+    </section>
+    <div class="panel">
+      <h3 style="font-size:1rem; margin-bottom:12px;" id="promoTitle">Vue promo</h3>
+      <div style="overflow-x:auto;"><table class="promo-grid" id="promoTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ ONGLET RÉFÉRENCE (salles, cours) ============ -->
+  <section class="tabpanel" id="tab-reference">
+    <section class="panel">
+      <div class="subtabbar" id="refSubtabbar">
+        <button class="subtabbtn active" data-subtab="salles" type="button">Salles</button>
+        <button class="subtabbtn" data-subtab="cours" type="button">Cours</button>
+        <button class="subtabbtn" data-subtab="calendrier" type="button">Calendrier</button>
+      </div>
+
+      <div id="refpanel-salles" class="ref-table-wrap">
+        <table class="ref" id="roomsTable"></table>
+      </div>
+      <div id="refpanel-cours" class="ref-table-wrap" style="display:none;">
+        <table class="ref" id="coursesTable"></table>
+      </div>
+      <div id="refpanel-calendrier" style="display:none;">
+        <div class="timeline" id="institutionalTimeline"></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ============ ONGLET CONTRAINTES ============ -->
+  <section class="tabpanel" id="tab-contraintes">
+    <section class="panel">
+      <h3 style="font-size:1rem; margin-bottom:12px;">Règles globales du solveur</h3>
+      <div class="rule-grid" id="globalRuleChecks"></div>
+    </section>
+
+    <section class="panel">
+      <h3 style="font-size:1rem; margin-bottom:4px;">Contraintes enseignants</h3>
+      <p style="color:var(--ink-soft); font-size:.84rem; margin:0 0 12px;">
+        Texte brut tel que déclaré dans le fichier CONTRAINTES ENSEIGNANTS, et verdict recalculé
+        depuis la sortie réelle du solveur (pas une affirmation — chaque créneau du planning est
+        vérifié contre le créneau/date interdit).
+      </p>
+      <div class="teacher-list" id="teacherConstraintList"></div>
+    </section>
+  </section>
+
+  <footer class="note">__FOOTER__</footer>
+
+  <!-- Modale de conflit (glisser-déposer) : liste les conflits détectés et
+       des créneaux alternatifs suggérés (retour utilisateur : "proposer des
+       solutions" plutôt qu'un refus sec) — cf. `showConflictModal`. -->
+  <div id="conflictModal" style="display:none; position:fixed; inset:0; background:rgba(20,20,30,.45); z-index:1000; align-items:center; justify-content:center;">
+    <div class="panel" style="max-width:440px; width:92%; max-height:80vh; overflow-y:auto;">
+      <h3 style="font-size:1rem; margin-bottom:10px;">Conflit détecté</h3>
+      <div id="conflictList" style="font-size:.84rem; color:var(--bad); display:flex; flex-direction:column; gap:4px; margin-bottom:14px;"></div>
+      <div class="field" style="margin-bottom:6px;"><label>Alternatives suggérées</label></div>
+      <div id="conflictSuggestions" style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="subtabbtn" id="conflictCancelBtn">Annuler</button>
+        <button type="button" class="subtabbtn" id="conflictForceBtn" style="background:var(--bad-soft); color:var(--bad); border-color:var(--bad);">Forcer quand même</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="data" type="application/json">__PAYLOAD__</script>
+<script>
+(function () {
+  const payload = JSON.parse(document.getElementById('data').textContent);
+  const DAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+  const SLOT_TIMES = [
+    ['08:00', '09:30'], ['09:30', '11:00'], ['11:00', '12:30'],
+    ['14:00', '15:30'], ['15:30', '17:00'], ['17:00', '18:30'],
+  ];
+  const KIND_ORDER = { promo: 0, td: 1, tp: 2 };
+  // "BUT2-CREACOM-FC" -> "2" ; "BUT1" -> "1". Sert à regrouper les select
+  // par année (retour utilisateur : à 6 parcours actifs, "TD AB" apparaît
+  // identique dans plusieurs parcours différents, plus assez pour s'y
+  // retrouver sans le repère année/parcours).
+  function yearPrefixOf(parcours) {
+    const m = (parcours || '').match(/^BUT(\d)/);
+    return m ? m[1] : '9';
+  }
+  // Retour utilisateur : les parcours FC (formation continue) de 2e/3e année
+  // doivent apparaître APRÈS les FI (formation initiale) de la même année,
+  // pas dans l'ordre alphabétique brut (qui mettait "CREACOM-FC" avant
+  // "DEV-FI" car C < D).
+  function isFcParcours(parcours) {
+    return (parcours || '').includes('FC');
+  }
+  function compareParcoursForDisplay(pa, pb) {
+    const ya = yearPrefixOf(pa), yb = yearPrefixOf(pb);
+    if (ya !== yb) return ya.localeCompare(yb);
+    const fa = isFcParcours(pa), fb = isFcParcours(pb);
+    if (fa !== fb) return fa ? 1 : -1;
+    return pa.localeCompare(pb);
+  }
+  const STATUS_MAP = {
+    OPTIMAL: ['good', 'Optimal'],
+    FEASIBLE: ['warn', 'Faisable (limite de temps atteinte)'],
+    INFEASIBLE: ['bad', 'Infaisable'],
+  };
+  const ICON = { pass: '✓', fail: '!', info: 'i' };
+
+  // `weekRows` = séquence CONTINUE de semaines "département" (y compris les
+  // semaines bloquées/vacances, sans index solveur) ; l'ancien `nWeeks` basé
+  // sur les séances placées sautait silencieusement ces semaines-là (rappel
+  // utilisateur : toutes les semaines doivent être visibles, même bloquées).
+  // Repli compatible si le backend n'a pas fourni `weekRows` (pas de calendrier).
+  const solverWeekCount = payload.rows.reduce((m, r) => Math.max(m, r.w), 0) + 1;
+  const weekRows = payload.weekRows && payload.weekRows.length
+    ? payload.weekRows
+    : (payload.weekLabels || []).map((l, i) => ({ label: l, blocked: false, weekIndex: i }))
+        .concat(Array.from({ length: Math.max(0, solverWeekCount - (payload.weekLabels || []).length) },
+          (_, i) => ({ label: `Semaine ${(payload.weekLabels || []).length + i + 1}`, blocked: false, weekIndex: (payload.weekLabels || []).length + i })));
+  const nWeeks = weekRows.length;
+  const blockedWeekCount = weekRows.filter(w => w.blocked).length;
+  const weekLabel = (w) => (weekRows[w] && weekRows[w].label) || `Semaine ${w + 1}`;
+  const isBlockedWeek = (w) => !!(weekRows[w] && weekRows[w].blocked);
+  const solverIndexForDisplay = (w) => (weekRows[w] ? weekRows[w].weekIndex : null);
+  const solverToDisplay = {};
+  weekRows.forEach((wr, i) => { if (wr.weekIndex !== null && wr.weekIndex !== undefined) solverToDisplay[wr.weekIndex] = i; });
+
+  // Jours SAE (sanctuarisés, cf. docs/DATA.md §15.1) : les séances SAE ne
+  // sont plus planifiées par l'algorithme (définies par les enseignants
+  // eux-mêmes) — `payload.saeRows` ne contient donc que leurs dates réelles
+  // (semaine/jour/parcours + codes), pour affichage informatif uniquement.
+  const saeByKey = new Map(); // "parcours-week-day" -> [codes]
+  for (const r of (payload.saeRows || [])) saeByKey.set(`${r.p}-${r.w}-${r.d}`, r.codes);
+  function saeByDayForWeek(parcours, week) {
+    if (!parcours) return null;
+    const out = {};
+    let any = false;
+    for (let d = 0; d < 5; d++) {
+      const codes = saeByKey.get(`${parcours}-${week}-${d}`);
+      if (codes) { out[d] = codes; any = true; }
+    }
+    return any ? out : null;
+  }
+
+  // Jours fériés / pauses pédagogiques (retour utilisateur : "affiche aussi
+  // dans l'interface les jours fériés") et repères/événements obligatoires du
+  // planning officiel (retour utilisateur : "tu a aussi des séance
+  // obligatoir met les") — globaux (pas de scope parcours, contrairement à la
+  // SAE), affichés uniquement dans les cases sinon vides.
+  //
+  // Deux catégories distinctes (retour utilisateur, 06/08/2026) : les
+  // événements avec horaire explicite ("9h30 Echange IA", "17h/18h30
+  // Présentation...") sont réellement bloquants côté solveur (cf.
+  // `planning_event_blocked_slots`) et ne doivent apparaître QUE sur leur(s)
+  // créneau(x) précis (`payload.eventSlotRows`, grain du créneau) ; les
+  // événements sans horaire ("Clés de Troyes", "Rattrapages"...) restent
+  // purement indicatifs — journée entière, jamais bloquants pour un dépôt en
+  // Vue Semaine (`payload.eventRows`, grain du jour).
+  const holidayByKey = new Map(); // "week-day" -> {kind, label}
+  for (const r of (payload.holidayRows || [])) if (!holidayByKey.has(`${r.w}-${r.d}`)) holidayByKey.set(`${r.w}-${r.d}`, r);
+  const eventByKey = new Map(); // "week-day" -> [labels] (SANS horaire, indicatif)
+  for (const r of (payload.eventRows || [])) eventByKey.set(`${r.w}-${r.d}`, r.labels);
+  const eventSlotByKey = new Map(); // "week-day-slot" -> [labels] (AVEC horaire, bloquant)
+  for (const r of (payload.eventSlotRows || [])) {
+    const key = `${r.w}-${r.d}-${r.s}`;
+    (eventSlotByKey.get(key) || eventSlotByKey.set(key, []).get(key)).push(r.label);
+  }
+  function dayBandsForWeek(week) {
+    const holidays = {}, events = {}, eventSlots = {};
+    let any = false;
+    for (let d = 0; d < 5; d++) {
+      const h = holidayByKey.get(`${week}-${d}`);
+      if (h) { holidays[d] = h; any = true; }
+      const e = eventByKey.get(`${week}-${d}`);
+      if (e) { events[d] = e; any = true; }
+      const slotsForDay = {};
+      let hasSlotEvent = false;
+      for (let s = 0; s < 6; s++) {
+        const se = eventSlotByKey.get(`${week}-${d}-${s}`);
+        if (se) { slotsForDay[s] = se; hasSlotEvent = true; }
+      }
+      if (hasSlotEvent) { eventSlots[d] = slotsForDay; any = true; }
+    }
+    return any ? { holidays, events, eventSlots } : { holidays: {}, events: {}, eventSlots: {} };
+  }
+
+  // ---------- en-tête / stats ----------
+  const statusPill = document.getElementById('statusPill');
+  const [cls, label] = STATUS_MAP[payload.status] || ['bad', payload.status];
+  statusPill.className = 'pill dot ' + cls;
+  statusPill.textContent = label;
+
+  // Repère temporel persistant (dashboard) : la 1ère semaine "future" est la
+  // prochaine modifiable — 0 si aucune (calendrier hors bornes connues).
+  const weekStatusByIndex = new Map((payload.weekStatus || []).map(w => [w.week, w.status]));
+  function statusOfWeek(w) { return weekStatusByIndex.get(w) || 'future'; }
+  const firstFutureWeek = (payload.weekStatus || []).find(w => w.status === 'future');
+  document.getElementById('activeWeekPill').textContent = firstFutureWeek
+    ? `Prochaine semaine modifiable : ${weekLabel(firstFutureWeek.week)}`
+    : '';
+
+  const q = payload.quality || {};
+  const stats = [
+    ['Séances placées', payload.rows.length.toLocaleString('fr-FR')],
+    ['Matières', new Set(payload.rows.map(r => r.c)).size],
+    ['Semaines affichées', nWeeks + (blockedWeekCount ? ` (dont ${blockedWeekCount} bloquée(s))` : '')],
+    ['Trous détectés', q.total_gaps ?? '—'],
+    ['Jours isolés', q.isolated_days ?? '—'],
+    ['Score objectif', (payload.objective ?? 0).toLocaleString('fr-FR') + ' ', 'plus bas = meilleur'],
+  ];
+  document.getElementById('stats').innerHTML = stats.map(([l, v, sub]) => `
+    <div class="stat">
+      <span class="label">${l}</span>
+      <span class="value mono">${v}${sub ? `<small> ${sub}</small>` : ''}</span>
+    </div>`).join('');
+
+  // ---------- calendrier institutionnel ----------
+  const KIND_LABELS_CAL = { vacances: 'Vacances', ferie: 'Férié', rentree: 'Rentrée', special: 'Repère' };
+  document.getElementById('institutionalTimeline').innerHTML = (payload.institutionalCalendar || []).map(ev => {
+    const range = ev.start === ev.end
+      ? new Date(ev.start).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+      : `${new Date(ev.start).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} – ${new Date(ev.end).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    return `<div class="timeline-item ${ev.kind}">
+      <span class="kind">${KIND_LABELS_CAL[ev.kind] || ev.kind}</span>
+      <span class="label">${ev.label}</span>
+      <span class="dates mono">${range}</span>
+    </div>`;
+  }).join('');
+
+  // ---------- onglets ----------
+  const tabbar = document.getElementById('tabbar');
+  tabbar.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tabbtn');
+    if (!btn) return;
+    for (const b of tabbar.querySelectorAll('.tabbtn')) b.classList.toggle('active', b === btn);
+    for (const panel of document.querySelectorAll('.tabpanel')) {
+      panel.classList.toggle('active', panel.id === 'tab-' + btn.dataset.tab);
+    }
+  });
+
+  // ---------- utilitaires cohortes / rendu calendrier générique ----------
+  function cohortSet(gid) {
+    return new Set(payload.groupCohort[gid] || [gid]);
+  }
+
+  function sessionBlockHtml(r, violCodes, editable) {
+    const viol = violCodes && violCodes.has(r.c + '@' + r.w + '-' + r.d + '-' + r.s);
+    const dur = r.dur || 1;
+    const durLabel = dur > 1 ? ` · ${(dur * 1.5).toFixed(1).replace('.0', '')}h` : '';
+    // Glisser-déposer (Vue Semaine uniquement, `editable`) : une séance
+    // verrouillée (`r.locked`) reste affichée mais non déplaçable — cadenas
+    // visuel plutôt que la masquer, pour comprendre pourquoi elle ne bouge pas.
+    const draggableAttr = editable && !r.locked ? ' draggable="true"' : '';
+    const cls = editable ? (r.locked ? ' locked-session' : '') : '';
+    const lockBadge = editable && r.locked ? '<span class="lockbadge" title="Verrouillée">🔒</span>' : '';
+    return `
+      <div class="session type-${r.t}${r.ev ? ' eval' : ''}${viol ? ' viol' : ''}${cls}"${draggableAttr} data-session-id="${r.id || ''}">
+        <span class="code">${r.c}${lockBadge}</span>
+        <span class="meta">${r.t}${r.ev ? ' · éval' : ''}${durLabel}</span>
+        <span class="meta">${r.r || '—'} · ${r.te.join(', ')}</span>
+      </div>`;
+  }
+
+  function renderGenericCalendar(tableEl, rowsForWeek, options) {
+    options = options || {};
+    const byCell = {};
+    const byCellLeft = {};
+    const byCellRight = {};
+
+    // Séance "double" (`dur`>1, ex. TP collé en bloc de 3h) : la MÊME séance
+    // est répétée dans chacune de ses `dur` cases plutôt qu'un <td rowspan>
+    // unique — le <div class="session"> ne s'étire pas à la hauteur d'une
+    // cellule fusionnée (hauteur fixe par contenu), ce qui laissait la 2e
+    // moitié du bloc visuellement vide/non colorée. Dupliquer directement
+    // dans `byCell` garantit que chaque case occupée est coloriée.
+    for (const r of rowsForWeek) {
+      const dur = Math.max(1, r.dur || 1);
+      for (let k = 0; k < dur; k++) {
+        const key = r.d + '-' + (r.s + k);
+        if (options.split && r.t === 'TP') {
+          if (r.g.includes(options.split[0])) { (byCellLeft[key] = byCellLeft[key] || []).push(r); continue; }
+          if (r.g.includes(options.split[1])) { (byCellRight[key] = byCellRight[key] || []).push(r); continue; }
+        }
+        (byCell[key] = byCell[key] || []).push(r);
+      }
+    }
+
+    let html = '<thead><tr><th class="timecol"></th>' +
+      DAY_LABELS.map(d => `<th>${d}</th>`).join('') + '</tr></thead><tbody>';
+
+    for (let s = 0; s < 6; s++) {
+      if (s === 3) {
+        html += `<tr class="pause"><td class="timecell">12h30<br>14h00</td>${DAY_LABELS.map(() => '<td></td>').join('')}</tr>`;
+      }
+      html += `<tr><td class="timecell mono">${SLOT_TIMES[s][0]}<br>${SLOT_TIMES[s][1]}</td>`;
+      for (let d = 0; d < 5; d++) {
+        const key = d + '-' + s;
+        const shared = byCell[key] || [];
+        const left = byCellLeft[key] || [];
+        const right = byCellRight[key] || [];
+        const isPacLock = options.showPac && d === 3 && s >= 3;
+        // Jour SAE (sanctuarisé, cf. docs/DATA.md §15.1) : la séance SAE
+        // elle-même n'est plus planifiée, seule sa date réelle est connue —
+        // sans ce marqueur, une journée SAE ressemblerait à du temps libre
+        // alors qu'elle est en réalité entièrement réservée au projet.
+        const saeCodes = options.saeByDay && options.saeByDay[d];
+        const holiday = options.dayBands && options.dayBands.holidays[d];
+        // Horaire précis (bloquant, cf. `planning_event_blocked_slots`) : ne
+        // s'affiche QUE sur son créneau réel — jamais indicatif (Vue Semaine :
+        // case non déposable, cohérent avec le solveur qui la refuse aussi).
+        const eventsAtSlot = options.dayBands && options.dayBands.eventSlots[d] && options.dayBands.eventSlots[d][s];
+        // Sans horaire (ex. "Clés de Troyes") : purement indicatif, journée
+        // entière — retour utilisateur : "ce ne sont pas des séances
+        // bloquées, c'est juste indicatif", donc reste déposable.
+        const dayEvent = options.dayBands && options.dayBands.events[d];
+
+        // Case "déposable" (Vue Semaine uniquement) : cases de contenu
+        // normal, vides, ou sous un repère indicatif sans horaire — jamais
+        // les cases PAC/SAE/férié/événement À HORAIRE, qui représentent un
+        // vrai blocage.
+        const dropAttr = options.editable ? ` data-day="${d}" data-slot="${s}"` : '';
+
+        if (shared.length) {
+          html += `<td class="slotcell"${dropAttr}>` + shared.map(r => sessionBlockHtml(r, options.violCodes, options.editable)).join('') + '</td>';
+        } else if (options.split && (left.length || right.length)) {
+          html += `<td class="slotcell"><div class="td-subcols cols-2">
+            <div>${left.map(r => sessionBlockHtml(r, options.violCodes, options.editable)).join('')}</div>
+            <div>${right.map(r => sessionBlockHtml(r, options.violCodes, options.editable)).join('')}</div>
+          </div></td>`;
+        } else if (holiday) {
+          const title = holiday.kind === 'vacances' ? 'Vacances' : 'Férié';
+          html += `<td class="slotcell"><div class="holiday-cell"><span class="holiday-title">${title}</span><span class="holiday-label">${holiday.label}</span></div></td>`;
+        } else if (isPacLock) {
+          html += '<td class="slotcell"><div class="pac-cell">PAC</div></td>';
+        } else if (saeCodes) {
+          html += `<td class="slotcell"><div class="sae-cell"><span class="sae-title">SAE</span><span class="sae-codes">${saeCodes.join(', ')}</span></div></td>`;
+        } else if (eventsAtSlot) {
+          html += `<td class="slotcell"><div class="event-cell">${eventsAtSlot.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+        } else if (dayEvent) {
+          html += `<td class="slotcell"${dropAttr}><div class="event-cell">${dayEvent.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+        } else {
+          html += `<td class="slotcell"${dropAttr}></td>`;
+        }
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    tableEl.innerHTML = html;
+    if (options.editable) wireEditableCalendar(tableEl, options.absWeek);
+  }
+
+  // ---------- glisser-déposer (Vue Semaine) ----------
+  function applyPlacementUpdates(newPlacements) {
+    // Fusionne des placements retournés par l'API (PATCH /placements/{id}
+    // unitaire OU résultat de /regen/week, même forme `PlacementResponse`)
+    // dans `payload.rows` en mémoire, par id — `dur` n'est pas renvoyé par
+    // l'API (propriété de la séance, pas du placement) donc repris de la
+    // ligne existante avant remplacement.
+    const byId = new Map(payload.rows.map(r => [r.id, r]));
+    for (const np of newPlacements) {
+      const old = byId.get(np.session_id);
+      byId.set(np.session_id, {
+        id: np.session_id, w: np.week, d: np.day, s: np.slot, c: np.course_code,
+        n: np.course_name, t: np.session_type, g: np.group_ids, te: np.teacher_codes,
+        r: np.room_label || '', ev: !!np.is_eval, dur: old ? old.dur : 1, locked: !!np.locked,
+      });
+    }
+    payload.rows = Array.from(byId.values());
+  }
+
+  function refreshAllViews() {
+    renderSemaineTab();
+    renderGroupTab();
+    if (teacherCodes.length) renderTeacherTab();
+    if (allParcoursList.length) renderPromoTab();
+  }
+
+  // Modale de conflit : affiche les conflits + jusqu'à 3 alternatives
+  // suggérées par l'API (`suggest_alternative_slots`, limites documentées
+  // côté serveur — pas une garantie complète comme une régénération réelle).
+  // Résout avec { force: true }, { week, day, slot } (alternative choisie),
+  // ou null (annulé).
+  function showConflictModal(hardConflicts, suggestions, note) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('conflictModal');
+      document.getElementById('conflictList').innerHTML = (hardConflicts || []).map((c) => `<div>• ${c}</div>`).join('');
+      const sugList = document.getElementById('conflictSuggestions');
+      if (suggestions && suggestions.length) {
+        sugList.innerHTML = suggestions.map((s, i) => `<button type="button" class="subtabbtn" data-idx="${i}">${s.label}</button>`).join('');
+      } else if (note) {
+        // Motif précis (ex. duo synchronisé) : prioritaire sur le message
+        // générique "aucune alternative trouvée".
+        sugList.innerHTML = `<span style="color:var(--warn); font-size:.82rem;">⚠ ${note}</span>`;
+      } else {
+        sugList.innerHTML = '<span style="color:var(--ink-soft); font-size:.82rem;">Aucune alternative trouvée automatiquement dans les 6 prochaines semaines — essayez une régénération de semaine.</span>';
+      }
+      modal.style.display = 'flex';
+
+      const cancelBtn = document.getElementById('conflictCancelBtn');
+      const forceBtn = document.getElementById('conflictForceBtn');
+      function cleanup(result) {
+        modal.style.display = 'none';
+        cancelBtn.onclick = null;
+        forceBtn.onclick = null;
+        sugList.querySelectorAll('button[data-idx]').forEach((b) => { b.onclick = null; });
+        resolve(result);
+      }
+      cancelBtn.onclick = () => cleanup(null);
+      forceBtn.onclick = () => cleanup({ force: true });
+      sugList.querySelectorAll('button[data-idx]').forEach((btn) => {
+        btn.onclick = () => {
+          const s = suggestions[Number(btn.dataset.idx)];
+          cleanup({ week: s.week, day: s.day, slot: s.slot });
+        };
+      });
+    });
+  }
+
+  async function performMove(sessionId, week, day, slot, force) {
+    const res = await fetch('/placements/' + encodeURIComponent(sessionId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ week, day, slot, force: !!force }),
+    });
+    if (res.status === 409) {
+      const body = await res.json().catch(() => ({}));
+      const detail = body.detail;
+      if (detail && typeof detail === 'object' && detail.hard_conflicts) {
+        const choice = await showConflictModal(detail.hard_conflicts, detail.suggestions || [], detail.suggestions_note);
+        if (!choice) return;
+        if (choice.force) return performMove(sessionId, week, day, slot, true);
+        return performMove(sessionId, choice.week, choice.day, choice.slot, false);
+      } else {
+        alert(typeof detail === 'string' ? detail : 'Ce déplacement est refusé.');
+      }
+      return;
+    }
+    if (!res.ok) { alert('Erreur lors du déplacement.'); return; }
+    const placement = await res.json();
+    applyPlacementUpdates([placement]);
+    refreshAllViews();
+  }
+
+  function wireEditableCalendar(tableEl, absWeek) {
+    tableEl.querySelectorAll('.session[draggable="true"]').forEach((el) => {
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', el.dataset.sessionId);
+        e.dataTransfer.effectAllowed = 'move';
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('dragging'));
+    });
+    tableEl.querySelectorAll('td.slotcell[data-day]').forEach((td) => {
+      td.addEventListener('dragover', (e) => { e.preventDefault(); td.classList.add('dropzone-hover'); });
+      td.addEventListener('dragleave', () => td.classList.remove('dropzone-hover'));
+      td.addEventListener('drop', (e) => {
+        e.preventDefault();
+        td.classList.remove('dropzone-hover');
+        const sessionId = e.dataTransfer.getData('text/plain');
+        if (!sessionId) return;
+        performMove(sessionId, absWeek, Number(td.dataset.day), Number(td.dataset.slot));
+      });
+    });
+  }
+
+  function renderWeekBar(barEl, counts, selectedWeek, onPick, frozenCheck) {
+    const max = Math.max(1, ...counts);
+    barEl.innerHTML = '';
+    counts.forEach((c, w) => {
+      const blocked = isBlockedWeek(w);
+      const frozen = frozenCheck ? frozenCheck(w) : false;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.title = frozen
+        ? `${weekLabel(w)} — ${statusOfWeek(w) === 'current' ? 'en cours' : 'passée'}, lecture seule`
+        : (blocked ? `${weekLabel(w)} — bloquée (vacances/fermeture)` : `${weekLabel(w)} — ${c} créneaux occupés`);
+      btn.className = (w === selectedWeek ? 'active' : '') + (blocked ? ' blocked' : '') + (frozen ? ' frozen' : '');
+      const bar = document.createElement('span');
+      bar.className = 'bar';
+      bar.style.height = blocked ? '100%' : Math.max(6, (c / max) * 100) + '%';
+      btn.appendChild(bar);
+      btn.addEventListener('click', () => onPick(w));
+      barEl.appendChild(btn);
+    });
+  }
+
+  // ============ ONGLET GROUPE ============
+  const groupSelect = document.getElementById('groupSelect');
+  let selectedWeekGroup = 0;
+
+  // Tri : année puis parcours (regroupement visuel principal désormais),
+  // puis promo/TD/TP, puis libellé — un <optgroup> par parcours (le nom du
+  // parcours inclut déjà l'année, ex. "BUT2-CREACOM-FC").
+  const groupIds = Object.keys(payload.groupLabels).sort((a, b) => {
+    const pa = payload.groupParcours[a] || '', pb = payload.groupParcours[b] || '';
+    if (pa !== pb) return compareParcoursForDisplay(pa, pb);
+    const ka = payload.groupKind[a], kb = payload.groupKind[b];
+    if (KIND_ORDER[ka] !== KIND_ORDER[kb]) return KIND_ORDER[ka] - KIND_ORDER[kb];
+    return payload.groupLabels[a].localeCompare(payload.groupLabels[b]);
+  });
+  let currentParcours = null, optgroup = null;
+  for (const gid of groupIds) {
+    const pc = payload.groupParcours[gid] || '—';
+    if (pc !== currentParcours) {
+      optgroup = document.createElement('optgroup');
+      optgroup.label = pc;
+      groupSelect.appendChild(optgroup);
+      currentParcours = pc;
+    }
+    const opt = document.createElement('option');
+    opt.value = gid;
+    opt.textContent = payload.groupLabels[gid];
+    optgroup.appendChild(opt);
+  }
+  groupSelect.value = payload.defaultGroup && groupIds.includes(payload.defaultGroup) ? payload.defaultGroup : groupIds[0];
+
+  function weeklyOccupancyForRows(rowsAll, filterFn) {
+    const counts = new Array(nWeeks).fill(0);
+    const seen = new Set();
+    for (const r of rowsAll) {
+      if (!filterFn(r)) continue;
+      const key = r.w + '-' + r.d + '-' + r.s;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const di = solverToDisplay[r.w];
+      if (di !== undefined) counts[di]++;
+    }
+    return counts;
+  }
+
+  function renderGroupTab() {
+    const gid = groupSelect.value;
+    const cohort = cohortSet(gid);
+    const kind = payload.groupKind[gid];
+    const tpPair = payload.groupTpPair ? payload.groupTpPair[gid] : null;
+    const useSplit = kind === 'td' && tpPair && tpPair.length === 2 && tpPair[0] !== tpPair[1];
+    const filterFn = (r) => r.g.some(id => cohort.has(id)) || (useSplit && r.t === 'TP' && (r.g.includes(tpPair[0]) || r.g.includes(tpPair[1])));
+
+    const counts = weeklyOccupancyForRows(payload.rows, filterFn);
+    renderWeekBar(document.getElementById('groupWeekBar'), counts, selectedWeekGroup, (w) => { selectedWeekGroup = w; renderGroupTab(); });
+    document.getElementById('groupWeekFirst').textContent = weekLabel(0);
+    document.getElementById('groupWeekLast').textContent = weekLabel(nWeeks - 1);
+    document.getElementById('groupWeekCaption').textContent = weekLabel(selectedWeekGroup);
+
+    const rowsForWeek = payload.rows.filter(r => r.w === solverIndexForDisplay(selectedWeekGroup) && filterFn(r));
+    const saeByDay = saeByDayForWeek(payload.groupParcours[gid], solverIndexForDisplay(selectedWeekGroup));
+    const dayBands = dayBandsForWeek(solverIndexForDisplay(selectedWeekGroup));
+    renderGenericCalendar(document.getElementById('groupCalendarTable'), rowsForWeek, { split: useSplit ? tpPair : null, showPac: true, saeByDay, dayBands });
+
+    let title = `${payload.groupLabels[gid]} — ${weekLabel(selectedWeekGroup)}`;
+    if (useSplit) {
+      title += ` · colonnes : ${payload.groupLabels[tpPair[0]] || tpPair[0]} | ${payload.groupLabels[tpPair[1]] || tpPair[1]}`;
+    }
+    document.getElementById('groupCalendarTitle').textContent = title;
+
+    renderGroupChecks(gid, cohort, kind);
+  }
+
+  function renderGroupChecks(gid, cohort, kind) {
+    const rows = payload.rows.filter(r => r.g.some(id => cohort.has(id)));
+    const perSlot = new Map();
+    for (const r of rows) {
+      const key = r.w + '-' + r.d + '-' + r.s;
+      (perSlot.get(key) || perSlot.set(key, []).get(key)).push(r);
+    }
+    const counts = weeklyOccupancyForRows(payload.rows, r => r.g.some(id => cohort.has(id)));
+    const maxWeek = Math.max(0, ...counts);
+    const capSlots = payload.groupIsFc && payload.groupIsFc[gid] ? 23 : 22;
+
+    let thursdayHits = 0, avoidHits = 0, overlaps = 0;
+    for (const [key, list] of perSlot) {
+      const [, d, s] = key.split('-').map(Number);
+      if (d === 3 && s >= 3) thursdayHits += list.length;
+      if ((d === 0 && s === 0) || (d === 4 && s === 5)) avoidHits += list.length;
+      if (list.length > 1) overlaps++;
+    }
+    const evalWeeks = new Set(rows.filter(r => r.ev).map(r => r.w));
+
+    const checks = [
+      { status: maxWeek <= capSlots ? 'pass' : 'fail',
+        html: `<b>Plafond horaire hebdo</b> — pic à ${maxWeek}/${capSlots} créneaux (${(maxWeek*1.5).toFixed(1)}h)
+          <div class="sub">33h/semaine max en formation initiale, ~35h en FC.</div>` },
+      { status: thursdayHits === 0 ? 'pass' : 'fail',
+        html: `<b>Jeudi après-midi</b> — ${thursdayHits} séance(s)
+          <div class="sub">Doit rester à 0 : réservé aux PAC.</div>` },
+      { status: rows.some(r => r.ev) ? (rows.filter(r => r.ev).every(r => (r.r || '').startsWith('A.018')) ? 'pass' : 'fail') : 'info',
+        html: `<b>Salle d'évaluation A.018</b> — ${rows.filter(r => r.ev).length} éval(s)
+          <div class="sub">Contrainte dure.</div>` },
+      { status: evalWeeks.size <= 1 ? 'pass' : 'info',
+        html: `<b>Regroupement des évaluations</b> — ${evalWeeks.size} semaine(s) distincte(s)
+          <div class="sub">Objectif molle.</div>` },
+      { status: avoidHits === 0 ? 'pass' : 'info',
+        html: `<b>Zones à éviter</b> — lundi 8h / vendredi 17h : ${avoidHits} fois
+          <div class="sub">Dernier recours, molle.</div>` },
+    ];
+    if (kind === 'td') {
+      checks.push({ status: 'info', html: `<b>Créneaux à occupation double</b> — ${overlaps}
+        <div class="sub">Normal pour une vue TD (2 sous-groupes TP différents).</div>` });
+    } else {
+      checks.push({ status: overlaps === 0 ? 'pass' : 'fail', html: `<b>Conflits d'emploi du temps</b> — ${overlaps}
+        <div class="sub">Doit rester à 0.</div>` });
+    }
+
+    document.getElementById('groupChecks').innerHTML = checks.map(c => `
+      <div class="check ${c.status}"><span class="icon">${ICON[c.status]}</span><span class="txt">${c.html}</span></div>`).join('');
+  }
+
+  groupSelect.addEventListener('change', () => { selectedWeekGroup = 0; renderGroupTab(); });
+  renderGroupTab();
+
+  // ============ ONGLET ENSEIGNANT ============
+  const teacherSelect = document.getElementById('teacherSelect');
+  let selectedWeekTeacher = 0;
+  const teacherByCode = new Map((payload.teachers || []).map(t => [t.code, t]));
+
+  const teacherCodes = Object.keys(payload.teacherLabels || {}).sort((a, b) =>
+    (payload.teacherLabels[a] || a).localeCompare(payload.teacherLabels[b] || b));
+  for (const code of teacherCodes) {
+    const opt = document.createElement('option');
+    opt.value = code;
+    const t = teacherByCode.get(code);
+    opt.textContent = (payload.teacherLabels[code] || code) + (t && t.hasConstraint ? ' •' : '');
+    teacherSelect.appendChild(opt);
+  }
+  if (teacherCodes.length) teacherSelect.value = teacherCodes[0];
+
+  function renderTeacherTab() {
+    if (!teacherCodes.length) return;
+    const code = teacherSelect.value;
+    const filterFn = (r) => r.te.includes(code);
+    const counts = weeklyOccupancyForRows(payload.rows, filterFn);
+    renderWeekBar(document.getElementById('teacherWeekBar'), counts, selectedWeekTeacher, (w) => { selectedWeekTeacher = w; renderTeacherTab(); });
+    document.getElementById('teacherWeekFirst').textContent = weekLabel(0);
+    document.getElementById('teacherWeekLast').textContent = weekLabel(nWeeks - 1);
+    document.getElementById('teacherWeekCaption').textContent = weekLabel(selectedWeekTeacher);
+
+    const t = teacherByCode.get(code);
+    const violCodes = new Set((t ? t.violations : []).map(v =>
+      v.course_code + '@' + v.week + '-' + v.day + '-' + v.slot));
+
+    const rowsForWeek = payload.rows.filter(r => r.w === solverIndexForDisplay(selectedWeekTeacher) && filterFn(r));
+    const dayBands = dayBandsForWeek(solverIndexForDisplay(selectedWeekTeacher));
+    renderGenericCalendar(document.getElementById('teacherCalendarTable'), rowsForWeek, { violCodes, dayBands });
+    document.getElementById('teacherCalendarTitle').textContent =
+      `${payload.teacherLabels[code] || code} — ${weekLabel(selectedWeekTeacher)}`;
+
+    const callout = document.getElementById('teacherConstraintCallout');
+    const rawBox = document.getElementById('teacherRaw');
+    if (!t || !t.hasConstraint) {
+      callout.className = 'callout';
+      callout.innerHTML = `<span class="icon">i</span><span>Aucune contrainte déclarée dans le fichier CONTRAINTES ENSEIGNANTS pour ${payload.teacherLabels[code] || code}.</span>`;
+      rawBox.innerHTML = '<p style="color:var(--ink-soft); font-size:.85rem;">—</p>';
+      return;
+    }
+    const ok = t.violations.length === 0;
+    callout.className = 'callout ' + (ok ? 'pass' : 'fail');
+    callout.innerHTML = `<span class="icon">${ok ? '✓' : '!'}</span><span>${
+      ok
+        ? `Contrainte respectée sur les ${t.nPlaced} séance(s) placée(s) pour ${t.name}.`
+        : `${t.violations.length} violation(s) détectée(s) sur les ${t.nPlaced} séance(s) placée(s) pour ${t.name}.`
+    }</span>`;
+
+    const parts = [];
+    if (t.rawIndisponibilites) parts.push(`<div class="raw-label">Indisponibilités déclarées</div><div class="raw">${t.rawIndisponibilites}</div>`);
+    if (t.rawDisponibilites) parts.push(`<div class="raw-label">Disponibilités déclarées</div><div class="raw">${t.rawDisponibilites}</div>`);
+    if (t.rawContraintes) parts.push(`<div class="raw-label">Contraintes / progression</div><div class="raw">${t.rawContraintes}</div>`);
+    if (t.violations.length) {
+      parts.push(`<div class="raw-label">Violations détectées</div><div class="slotlist">${
+        t.violations.map(v => `<span class="slotchip">${v.course_code} — ${v.date || ('sem.' + (v.week + 1) + ' ' + DAY_LABELS[v.day] + ' ' + SLOT_TIMES[v.slot][0])}</span>`).join('')
+      }</div>`);
+    }
+    rawBox.innerHTML = parts.join('');
+  }
+
+  teacherSelect.addEventListener('change', () => { selectedWeekTeacher = 0; renderTeacherTab(); });
+  if (teacherCodes.length) renderTeacherTab();
+
+  // ============ ONGLET PROMO (grille tous groupes, TOUTES années réunies) ============
+  // Retour utilisateur : "il faudrait que l'on voit sur le même tableau
+  // toutes les promo les 3 années" — plus de sélecteur de parcours/année,
+  // une seule grille avec toutes les colonnes de tous les parcours actifs,
+  // regroupées visuellement par un en-tête à 2 niveaux (parcours puis groupe).
+  const promoTeacherSelect = document.getElementById('promoTeacherSelect');
+  let selectedWeekPromo = 0;
+  let selectedDayPromo = 0;
+  let selectedTeacherPromo = '';
+
+  const allParcoursList = [...new Set(Object.values(payload.groupParcours || {}))]
+    .sort(compareParcoursForDisplay);
+
+  // Même liste que l'onglet Enseignant (`teacherCodes`, triée par nom affiché).
+  for (const code of teacherCodes) {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = payload.teacherLabels[code] || code;
+    promoTeacherSelect.appendChild(opt);
+  }
+  promoTeacherSelect.addEventListener('change', () => {
+    selectedTeacherPromo = promoTeacherSelect.value;
+    renderPromoTab();
+  });
+
+  function promoColumnGroups() {
+    // Un groupe de colonnes par parcours (triés année puis parcours) ; dans
+    // chaque groupe, les colonnes-feuilles (TP, ou TD sans TP) triées par libellé.
+    return allParcoursList.map(pc => {
+      const tpIds = groupIds.filter(gid => payload.groupParcours[gid] === pc && payload.groupKind[gid] === 'tp');
+      const leaf = tpIds.length ? tpIds
+        : groupIds.filter(gid => payload.groupParcours[gid] === pc && payload.groupKind[gid] !== 'promo');
+      return { parcours: pc, cols: leaf.sort((a, b) => payload.groupLabels[a].localeCompare(payload.groupLabels[b])) };
+    }).filter(g => g.cols.length);
+  }
+
+  function renderPromoDayBar(week) {
+    const bar = document.getElementById('promoDayBar');
+    bar.innerHTML = DAY_LABELS.map((label, d) => {
+      const saeCodesAny = allParcoursList.map(pc => saeByKey.get(`${pc}-${week}-${d}`)).find(Boolean);
+      const holiday = holidayByKey.get(`${week}-${d}`);
+      const hasEvent = eventByKey.get(`${week}-${d}`);
+      const cls = saeCodesAny ? ' sae' : holiday ? ' holiday' : hasEvent ? ' event' : '';
+      const title = holiday ? holiday.label : saeCodesAny ? 'Journée SAE (sanctuarisée, au moins un parcours)' : (hasEvent || []).join(', ');
+      return `<button type="button" class="daybtn${d === selectedDayPromo ? ' active' : ''}${cls}"
+        data-day="${d}" title="${title}">${label}${cls ? ' •' : ''}</button>`;
+    }).join('');
+    bar.querySelectorAll('.daybtn').forEach(btn => {
+      btn.addEventListener('click', () => { selectedDayPromo = Number(btn.dataset.day); renderPromoTab(); });
+    });
+  }
+
+  function renderPromoTab() {
+    const colGroups = promoColumnGroups();
+    const cols = colGroups.flatMap(g => g.cols);
+    // Cohorte réelle de CHAQUE colonne (TP + son TD + le CM promo) : c'est ce
+    // qu'un étudiant de cette colonne voit vraiment, CM partagés inclus.
+    const colCohorts = cols.map(c => cohortSet(c));
+    const colParcours = cols.map(c => payload.groupParcours[c]);
+
+    const counts = weeklyOccupancyForRows(payload.rows, r =>
+      cols.some((c, i) => r.g.some(id => colCohorts[i].has(id))));
+    renderWeekBar(document.getElementById('promoWeekBar'), counts, selectedWeekPromo, (w) => { selectedWeekPromo = w; renderPromoTab(); });
+    document.getElementById('promoWeekFirst').textContent = weekLabel(0);
+    document.getElementById('promoWeekLast').textContent = weekLabel(nWeeks - 1);
+    document.getElementById('promoWeekCaption').textContent = weekLabel(selectedWeekPromo);
+    renderPromoDayBar(solverIndexForDisplay(selectedWeekPromo));
+
+    const byColSlot = new Map(); // "col-slot" -> rows[]
+    for (const r of payload.rows) {
+      if (r.w !== solverIndexForDisplay(selectedWeekPromo) || r.d !== selectedDayPromo) continue;
+      const dur = Math.max(1, r.dur || 1);
+      cols.forEach((col, i) => {
+        if (!r.g.some(id => colCohorts[i].has(id))) return;
+        // Séance "double" : dupliquée dans chacune de ses cases (cf.
+        // commentaire détaillé dans `renderGenericCalendar`).
+        for (let k = 0; k < dur; k++) {
+          const key = col + '-' + (r.s + k);
+          (byColSlot.get(key) || byColSlot.set(key, []).get(key)).push(r);
+        }
+      });
+    }
+    // Férié/événement : globaux, identiques pour toutes les colonnes. SAE en
+    // revanche est scopé par PARCOURS (peut différer d'un parcours à l'autre) :
+    // lookup par colonne.
+    const holiday = holidayByKey.get(`${solverIndexForDisplay(selectedWeekPromo)}-${selectedDayPromo}`);
+    // Indicatif (sans horaire, journée entière) vs bloquant (avec horaire,
+    // grain du créneau) — même distinction que `renderGenericCalendar`.
+    const dayEvents = eventByKey.get(`${solverIndexForDisplay(selectedWeekPromo)}-${selectedDayPromo}`);
+
+    // En-tête à 2 niveaux : ligne 1 = parcours (colspan sur ses colonnes),
+    // ligne 2 = libellé du groupe — plus lisible que répéter le parcours
+    // dans chaque en-tête de colonne quand tout est affiché ensemble.
+    // Repère visuel par parcours : palette cyclique (6 teintes déjà définies
+    // par le thème) + trait épais sur la 1ère colonne de chaque parcours,
+    // appliqué à toute la hauteur du tableau (en-têtes + pause + cellules).
+    const colGroupIdx = [];
+    colGroups.forEach((g, gi) => g.cols.forEach(() => colGroupIdx.push(gi)));
+    const pcClass = (i) => 'pc' + (colGroupIdx[i] % 6);
+    const isGroupFirst = (i) => i === 0 || colGroupIdx[i] !== colGroupIdx[i - 1];
+    const colClass = (i) => pcClass(i) + (isGroupFirst(i) ? ' grp-first' : '');
+
+    let html = '<thead>';
+    html += '<tr><th class="timecol" rowspan="2"></th>' +
+      colGroups.map((g, gi) => `<th colspan="${g.cols.length}" class="grp-band pc${gi % 6}">${g.parcours}</th>`).join('') + '</tr>';
+    html += '<tr>' + cols.map((c, i) => `<th class="${colClass(i)}">${payload.groupLabels[c] || c}</th>`).join('') + '</tr>';
+    html += '</thead><tbody>';
+    for (let s = 0; s < 6; s++) {
+      if (s === 3) html += `<tr class="pause"><td class="timecell">Pause</td>${cols.map((c, i) => `<td class="${colClass(i)}"></td>`).join('')}</tr>`;
+      html += `<tr><td class="timecell mono">${SLOT_TIMES[s][0]}–${SLOT_TIMES[s][1]}</td>`;
+      for (let i = 0; i < cols.length; i++) {
+        const col = cols[i];
+        const entries = byColSlot.get(col + '-' + s) || [];
+        const saeCodes = saeByKey.get(`${colParcours[i]}-${solverIndexForDisplay(selectedWeekPromo)}-${selectedDayPromo}`);
+        const eventsAtSlot = eventSlotByKey.get(`${solverIndexForDisplay(selectedWeekPromo)}-${selectedDayPromo}-${s}`);
+        const cellClass = `promocell ${colClass(i)}`;
+
+        if (entries.length) {
+          html += `<td class="${cellClass}">` + entries.map(r => {
+            const highlighted = selectedTeacherPromo && r.te.includes(selectedTeacherPromo);
+            const teacherNames = r.te.map(tc => payload.teacherLabels[tc] || tc).join(', ');
+            const durLabel = (r.dur || 1) > 1 ? ` · ${((r.dur || 1) * 1.5).toFixed(1).replace('.0', '')}h` : '';
+            return `
+            <div class="promo-chip type-${r.t}${r.ev ? ' eval' : ''}${highlighted ? ' chip-highlight' : ''}">
+              <span class="code">${r.c}</span>
+              <span class="ty">${r.t}${r.ev ? ' · éval' : ''}${durLabel}</span>
+              <span class="rm">${r.r || '—'}</span>
+              <span class="te">${teacherNames || '—'}</span>
+            </div>`;
+          }).join('') + '</td>';
+        } else if (holiday) {
+          const title = holiday.kind === 'vacances' ? 'Vacances' : 'Férié';
+          html += `<td class="${cellClass}"><div class="holiday-cell"><span class="holiday-title">${title}</span><span class="holiday-label">${holiday.label}</span></div></td>`;
+        } else if (saeCodes) {
+          html += `<td class="${cellClass}"><div class="sae-cell"><span class="sae-title">SAE</span><span class="sae-codes">${saeCodes.join(', ')}</span></div></td>`;
+        } else if (eventsAtSlot) {
+          html += `<td class="${cellClass}"><div class="event-cell">${eventsAtSlot.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+        } else if (dayEvents) {
+          html += `<td class="${cellClass}"><div class="event-cell">${dayEvents.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+        } else {
+          html += `<td class="${cellClass}"></td>`;
+        }
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    const promoTable = document.getElementById('promoTable');
+    promoTable.innerHTML = html;
+    promoTable.classList.toggle('teacher-filter', !!selectedTeacherPromo);
+    document.getElementById('promoTitle').textContent = `Toutes promos — ${DAY_LABELS[selectedDayPromo]} — ${weekLabel(selectedWeekPromo)}`;
+  }
+
+  if (allParcoursList.length) renderPromoTab();
+
+  // ============ ONGLET RÉFÉRENCE (salles, cours) ============
+  const roomsTable = document.getElementById('roomsTable');
+  roomsTable.innerHTML = `<thead><tr><th>Salle</th><th>Capacité</th><th>Type</th><th>Équipement</th><th>Séances</th></tr></thead><tbody>` +
+    (payload.rooms || []).map(r => `<tr>
+      <td><b>${r.label}</b></td>
+      <td class="mono">${r.capacity}</td>
+      <td>${r.type}</td>
+      <td>${r.equipment.map(e => `<span class="tag">${e}</span>`).join('')}</td>
+      <td class="mono">${r.nSessions}</td>
+    </tr>`).join('') + '</tbody>';
+
+  const coursesTable = document.getElementById('coursesTable');
+  coursesTable.innerHTML = `<thead><tr><th>Code</th><th>Nom</th><th>Parcours</th><th>CM</th><th>TD</th><th>TP</th><th>Éval</th><th>Enseignant(s)</th><th>Ordonnancement</th></tr></thead><tbody>` +
+    (payload.courses || []).map(c => `<tr>
+      <td class="mono"><b>${c.code}</b></td>
+      <td>${c.name}</td>
+      <td>${c.parcours}</td>
+      <td class="mono">${c.nCM}</td>
+      <td class="mono">${c.nTD}</td>
+      <td class="mono">${c.nTP}</td>
+      <td class="mono">${c.nEval}</td>
+      <td>${c.teachers.map(t => `<span class="tag">${payload.teacherLabels[t] || t}</span>`).join('')}</td>
+      <td>${c.ordonnancement.map(o => `<span class="tag">${o.position} ${o.target}</span>`).join('') || '—'}</td>
+    </tr>`).join('') + '</tbody>';
+
+  document.getElementById('refSubtabbar').addEventListener('click', (e) => {
+    const btn = e.target.closest('.subtabbtn');
+    if (!btn) return;
+    for (const b of document.querySelectorAll('#refSubtabbar .subtabbtn')) b.classList.toggle('active', b === btn);
+    document.getElementById('refpanel-salles').style.display = btn.dataset.subtab === 'salles' ? '' : 'none';
+    document.getElementById('refpanel-cours').style.display = btn.dataset.subtab === 'cours' ? '' : 'none';
+    document.getElementById('refpanel-calendrier').style.display = btn.dataset.subtab === 'calendrier' ? '' : 'none';
+  });
+
+  // ============ ONGLET CONTRAINTES ============
+  document.getElementById('globalRuleChecks').innerHTML = (payload.ruleChecks || []).map(c => `
+    <div class="check ${c.status}"><span class="icon">${ICON[c.status]}</span>
+      <span class="txt"><b>${c.label}</b><div class="sub">${c.detail}</div></span></div>`).join('');
+
+  document.getElementById('teacherConstraintList').innerHTML = (payload.teachers || [])
+    .filter(t => t.hasConstraint)
+    .map(t => {
+      const ok = t.violations.length === 0;
+      return `<div class="teacher-card">
+        <header>
+          <h4>${t.name} <span class="code mono">${t.code}</span></h4>
+          <span class="pill mini ${ok ? 'good' : 'bad'}">${ok ? 'Respectée' : t.violations.length + ' violation(s)'}</span>
+        </header>
+        ${t.rawIndisponibilites ? `<div><div class="raw-label">Indisponibilités</div><div class="raw">${t.rawIndisponibilites}</div></div>` : ''}
+        ${t.rawDisponibilites ? `<div><div class="raw-label">Disponibilités</div><div class="raw">${t.rawDisponibilites}</div></div>` : ''}
+        ${t.rawContraintes ? `<div><div class="raw-label">Contraintes / progression</div><div class="raw">${t.rawContraintes}</div></div>` : ''}
+        ${!ok ? `<div class="violations">${t.violations.length} créneau(x) en conflit avec la contrainte déclarée, sur ${t.nPlaced} séances placées.</div>
+          <div class="slotlist">${t.violations.map(v => `<span class="slotchip">${v.course_code} — ${v.date || ('sem.' + (v.week + 1) + ' ' + DAY_LABELS[v.day])}</span>`).join('')}</div>` : ''}
+      </div>`;
+    }).join('') || '<p style="color:var(--ink-soft);">Aucune contrainte enseignant déclarée pour ce jeu de données.</p>';
+
+  // ============ ONGLET SEMAINE (édition manuelle) ============
+  // Placé en dernier dans le script (pas dans l'ordre d'affichage des
+  // onglets) : dépend de `teacherCodes`/`allParcoursList` définis par les
+  // sections Enseignant/Promo plus haut — les fonctions ne sont appelées
+  // qu'après interaction utilisateur, donc l'ordre de DÉFINITION n'a pas
+  // besoin de suivre l'ordre d'affichage (fermetures JS classiques).
+  const semaineGroupSelect = document.getElementById('semaineGroupSelect');
+  let selectedWeekSemaine = firstFutureWeek ? (solverToDisplay[firstFutureWeek.week] ?? 0) : 0;
+
+  // Promo/TP, plus les TD qui ne se scindent PAS en deux colonnes TP : un TD
+  // scindé n'a pas de sens pour un glisser-déposer par séance individuelle,
+  // mais une cohorte à groupe unique (BUT2-CREACOM-FC, BUT3-CREACOM-FC,
+  // BUT3-DEV-FC) porte TOUTES ses séances sur son unique groupe TD — l'exclure
+  // ne laissait que la promo, vide, donc aucun cours visible en Vue Semaine
+  // pour ces parcours (retour utilisateur 08/08/2026).
+  const semaineGroupIds = groupIds.filter(
+    gid => payload.groupKind[gid] !== 'td' || !payload.groupTpPair[gid],
+  );
+  let semaineCurrentParcours = null, semaineOptgroup = null;
+  for (const gid of semaineGroupIds) {
+    const pc = payload.groupParcours[gid] || '—';
+    if (pc !== semaineCurrentParcours) {
+      semaineOptgroup = document.createElement('optgroup');
+      semaineOptgroup.label = pc;
+      semaineGroupSelect.appendChild(semaineOptgroup);
+      semaineCurrentParcours = pc;
+    }
+    const opt = document.createElement('option');
+    opt.value = gid;
+    opt.textContent = payload.groupLabels[gid];
+    semaineOptgroup.appendChild(opt);
+  }
+  if (semaineGroupIds.length) {
+    semaineGroupSelect.value = payload.defaultGroup && semaineGroupIds.includes(payload.defaultGroup)
+      ? payload.defaultGroup : semaineGroupIds[0];
+  }
+
+  function renderSemaineTab() {
+    if (!semaineGroupIds.length) return;
+    const gid = semaineGroupSelect.value;
+    const cohort = cohortSet(gid);
+    const filterFn = (r) => r.g.some(id => cohort.has(id));
+
+    const counts = weeklyOccupancyForRows(payload.rows, filterFn);
+    renderWeekBar(
+      document.getElementById('semaineWeekBar'), counts, selectedWeekSemaine,
+      (w) => { selectedWeekSemaine = w; renderSemaineTab(); },
+      (w) => { const si = solverIndexForDisplay(w); return si === null || statusOfWeek(si) !== 'future'; },
+    );
+    document.getElementById('semaineWeekFirst').textContent = weekLabel(0);
+    document.getElementById('semaineWeekLast').textContent = weekLabel(nWeeks - 1);
+    document.getElementById('semaineWeekCaption').textContent = weekLabel(selectedWeekSemaine);
+
+    const absWeek = solverIndexForDisplay(selectedWeekSemaine);
+    const editable = absWeek !== null && statusOfWeek(absWeek) === 'future';
+    document.getElementById('semaineFrozenNote').style.display = editable ? 'none' : '';
+    const regenBtn = document.getElementById('regenBtn');
+    regenBtn.disabled = !editable;
+    regenBtn.style.opacity = editable ? '1' : '.5';
+
+    const rowsForWeek = absWeek === null ? [] : payload.rows.filter(r => r.w === absWeek && filterFn(r));
+    const saeByDay = saeByDayForWeek(payload.groupParcours[gid], absWeek);
+    const dayBands = absWeek === null ? { holidays: {}, events: {} } : dayBandsForWeek(absWeek);
+    renderGenericCalendar(document.getElementById('semaineCalendarTable'), rowsForWeek, {
+      showPac: true, saeByDay, dayBands, editable, absWeek,
+    });
+
+    document.getElementById('semaineCalendarTitle').textContent =
+      `${payload.groupLabels[gid]} — ${weekLabel(selectedWeekSemaine)}${editable ? ' · glisser-déposer pour déplacer' : ''}`;
+  }
+
+  semaineGroupSelect.addEventListener('change', () => renderSemaineTab());
+
+  // ---------- exceptions ponctuelles ----------
+  const excTeacherSelect = document.getElementById('excTeacher');
+  const excRoomSelect = document.getElementById('excRoom');
+  for (const code of teacherCodes) {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = payload.teacherLabels[code] || code;
+    excTeacherSelect.appendChild(opt);
+  }
+  for (const room of (payload.rooms || [])) {
+    const opt = document.createElement('option');
+    opt.value = room.id;
+    opt.textContent = room.label;
+    excRoomSelect.appendChild(opt);
+  }
+  document.getElementById('excKind').addEventListener('change', () => {
+    const kind = document.getElementById('excKind').value;
+    excTeacherSelect.style.display = kind === 'teacher_absence' ? '' : 'none';
+    excRoomSelect.style.display = kind === 'room_unavailable' ? '' : 'none';
+  });
+
+  function renderExceptionList() {
+    const list = document.getElementById('exceptionList');
+    const items = payload.exceptions || [];
+    list.innerHTML = items.length ? items.map(e => `
+      <div class="teacher-card">
+        <header>
+          <h4 style="font-size:.86rem;">${e.kind === 'teacher_absence' ? 'Absence' : 'Salle indispo'} — ${e.exception_date}</h4>
+          <button type="button" class="subtabbtn" data-del="${e.id}" style="padding:3px 9px; font-size:.72rem;">Supprimer</button>
+        </header>
+        <div style="font-size:.82rem; color:var(--ink-soft);">
+          ${e.kind === 'teacher_absence' ? (payload.teacherLabels[e.teacher_code] || e.teacher_code) : (e.room_id || '—')}${e.reason ? ' — ' + e.reason : ''}
+        </div>
+      </div>`).join('') : '<p style="color:var(--ink-soft); font-size:.84rem;">Aucune exception active.</p>';
+    list.querySelectorAll('[data-del]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await fetch('/exceptions/' + btn.dataset.del, { method: 'DELETE' });
+        payload.exceptions = (payload.exceptions || []).filter((e) => String(e.id) !== btn.dataset.del);
+        renderExceptionList();
+      });
+    });
+  }
+  renderExceptionList();
+
+  document.getElementById('exceptionForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const kind = document.getElementById('excKind').value;
+    const body = {
+      kind,
+      exception_date: document.getElementById('excDate').value,
+      teacher_code: kind === 'teacher_absence' ? excTeacherSelect.value : null,
+      room_id: kind === 'room_unavailable' ? excRoomSelect.value : null,
+      reason: document.getElementById('excReason').value || null,
+    };
+    const res = await fetch('/exceptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || 'Erreur lors de la création.'); return; }
+    const created = await res.json();
+    payload.exceptions = (payload.exceptions || []).concat([created]);
+    renderExceptionList();
+    e.target.reset();
+  });
+
+  // ---------- régénération ciblée ----------
+  let regenPolling = null;
+  document.getElementById('regenBtn').addEventListener('click', async () => {
+    const absWeek = solverIndexForDisplay(selectedWeekSemaine);
+    if (absWeek === null) return;
+    const extendNext = document.getElementById('extendNextCheck').checked;
+    const statusEl = document.getElementById('regenStatus');
+    const btn = document.getElementById('regenBtn');
+    btn.disabled = true;
+    statusEl.textContent = 'Lancement…';
+
+    let res;
+    try {
+      res = await fetch('/regen/week', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ week: absWeek, extend_next: extendNext }),
+      });
+    } catch (err) {
+      statusEl.textContent = 'Erreur réseau.';
+      btn.disabled = false;
+      return;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      statusEl.textContent = 'Erreur : ' + (err.detail || res.status);
+      btn.disabled = false;
+      return;
+    }
+    const { job_id } = await res.json();
+    statusEl.textContent = 'Régénération en cours…';
+    if (regenPolling) clearInterval(regenPolling);
+    regenPolling = setInterval(async () => {
+      let st;
+      try {
+        st = await fetch('/regen/status?job_id=' + job_id).then((r) => r.json());
+      } catch (err) {
+        return; // réessaiera au prochain sondage
+      }
+      if (st.status === 'running') return;
+      clearInterval(regenPolling);
+      regenPolling = null;
+      if (st.status === 'error') { statusEl.textContent = 'Échec : ' + st.error; btn.disabled = false; return; }
+      const result = st.result;
+      if (!result || (result.status !== 'OPTIMAL' && result.status !== 'FEASIBLE')) {
+        statusEl.textContent = `Échec (${result ? result.status : '?'}) — rien n'a été modifié.`;
+        btn.disabled = false;
+        return;
+      }
+      applyPlacementUpdates(result.placements);
+      refreshAllViews();
+      statusEl.textContent = `Terminé — ${result.placements.length} séance(s) mise(s) à jour.`;
+    }, 4000);
+  });
+
+  renderSemaineTab();
+})();
+</script>

@@ -1,0 +1,478 @@
+{
+  "meta": {
+    "title": "Regles generales et methodologiques - Generateur EDT BUT MMI IUT de Troyes",
+    "note": "Ce fichier contient les regles STABLES (horaires, volumes, logique de repartition, salles) qui ne changent pas d'une annee sur l'autre. Les donnees VARIABLES (calendrier precis, contraintes enseignants, modules/volumes de l'annee) sont dans les fichiers separes 02 a 07, construits directement a partir des fichiers sources officiels fournis par l'utilisateur (CSV/XLSX/JSON), qui font foi en cas de divergence avec d'anciennes notes."
+  },
+  "structure_promotion": {
+    "BUT1_S1_S2": {
+      "td_groups": [
+        "AB",
+        "CD",
+        "EF",
+        "GH"
+      ],
+      "tp_groups": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H"
+      ],
+      "td_to_tp_mapping": {
+        "AB": [
+          "A",
+          "B"
+        ],
+        "CD": [
+          "C",
+          "D"
+        ],
+        "EF": [
+          "E",
+          "F"
+        ],
+        "GH": [
+          "G",
+          "H"
+        ]
+      },
+      "effectif_approx": {
+        "par_td": 30,
+        "par_tp": 15
+      }
+    },
+    "BUT2_BUT3_S3_a_S6": {
+      "parcours": {
+        "DEV-FI": {
+          "td_groups": [
+            "AB",
+            "CD"
+          ],
+          "alternance": false,
+          "stage_fin_annee": true
+        },
+        "DEV-FC": {
+          "td_groups": [
+            "EF"
+          ],
+          "alternance": true
+        },
+        "CREACOM-FC": {
+          "td_groups": [
+            "GH"
+          ],
+          "alternance": true
+        }
+      },
+      "structure_par_parcours": {
+        "td_groups": [
+          "AB",
+          "CD"
+        ],
+        "tp_groups": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "note": "Structure resserree par rapport au S1/S2 : 2 groupes de TD et 4 groupes de TP par parcours (pas 4 TD/8 TP)."
+      },
+      "regroupement_FC_toutes_specialites": {
+        "S3_FC": "S3-DEV-FC (EF) + S3-CREACOM-FC (GH)",
+        "S4_FC": "S4-DEV-FC (EF) + S4-CREACOM-FC (GH)",
+        "S5_FC": "S5-DEV-FC (EF) + S5-CREACOM-FC (GH)",
+        "S6_FC": "S6-DEV-FC (EF) + S6-CREACOM-FC (GH)",
+        "usage": "utile pour modules transversaux communs a tous les alternants d'une meme annee (anglais, com, droit...)"
+      }
+    },
+    "parallelisme_semestres": {
+      "premiere_partie_annee": [
+        "S1",
+        "S3",
+        "S5"
+      ],
+      "seconde_partie_annee": [
+        "S2",
+        "S4",
+        "S6"
+      ],
+      "note": "S1 a cours en meme temps que S3 et S5, idem pour S2/S4/S6."
+    },
+    "trigramme_enseignant": {
+      "regle": "1ere lettre du prenom + 2 premieres lettres du nom de famille",
+      "exemple": {
+        "Kyllian Bresson": "KBR",
+        "Thomas Pavie": "TPA",
+        "Florent Libbrecht": "FLI"
+      },
+      "gestion_doublon": "ajouter une lettre supplementaire en cas de collision"
+    }
+  },
+  "time_rules": {
+    "session_duration_minutes": 90,
+    "session_duration_rule": "1 seance = 1h30 strictement. Toute donnee en nombre de seances doit etre multipliee par 1.5 pour obtenir des heures.",
+    "allowed_slots": [
+      {
+        "start": "08:00",
+        "end": "09:30"
+      },
+      {
+        "start": "09:30",
+        "end": "11:00"
+      },
+      {
+        "start": "11:00",
+        "end": "12:30"
+      },
+      {
+        "start": "14:00",
+        "end": "15:30"
+      },
+      {
+        "start": "15:30",
+        "end": "17:00"
+      },
+      {
+        "start": "17:00",
+        "end": "18:30"
+      }
+    ],
+    "lunch_break": {
+      "start": "12:30",
+      "end": "14:00",
+      "hard_constraint": true,
+      "applies_to": "tous"
+    },
+    "day_bounds": {
+      "start": "08:00",
+      "end": "18:30"
+    },
+    "no_weekend": true,
+    "monday_rule": {
+      "hard_start": "09:30",
+      "slot_08h00_09h30": "a eviter (dernier recours uniquement), pas interdit dans l'absolu",
+      "raison": "laisser le temps aux etudiants non-locaux d'arriver"
+    },
+    "friday_rule": {
+      "soft_end": "17:00",
+      "slot_17h00_18h30": "a eviter (dernier recours uniquement), pas interdit dans l'absolu",
+      "raison": "laisser le temps aux etudiants non-locaux de repartir"
+    },
+    "double_session_3h": {
+      "possible": true,
+      "definition": "2 seances de 1h30 consecutives, meme groupe/enseignant/salle",
+      "peut_enjamber_pause_dejeuner": true,
+      "exemple_horaire": "11h00-12h30 puis 14h00-15h30"
+    },
+    "no_overlap_rules": [
+      "Aucun groupe d'etudiants ne peut avoir 2 cours simultanes",
+      "Un enseignant ne peut etre dans 2 salles en meme temps",
+      "Une salle Celcat = 1 seul enseignant par creneau (contournement possible via salles couplees, voir 'rooms')"
+    ],
+    "jeudi_apres_midi_PAC": {
+      "hard_constraint": true,
+      "plage": {
+        "start": "14:00",
+        "end": "18:30"
+      },
+      "concerne": [
+        "S1",
+        "S2",
+        "S3-DEV-FI",
+        "S4-DEV-FI",
+        "S5-DEV-FI",
+        "S6-DEV-FI"
+      ],
+      "regle": "Aucun cours/SAE ne doit etre place sur ce creneau pour la Formation Initiale (reserve au PAC, place manuellement par l'utilisateur, hors perimetre de l'algorithme).",
+      "exception": "Les parcours FC (alternants) PEUVENT avoir cours le jeudi apres-midi ; c'est meme strategique (moins de concurrence sur salles/materiel)."
+    }
+  },
+  "weekly_volume_limits": {
+    "FC_alternants": {
+      "target_hours_per_week": 35,
+      "target_slots_approx": 23,
+      "constraint_type": "objectif a atteindre sans depasser",
+      "ajustement": "utiliser des seances PTUT (projet tutore, liees aux SAE) pour combler les heures manquantes"
+    },
+    "FI_formation_initiale": {
+      "max_hours_per_week": 33,
+      "max_slots": 22,
+      "constraint_type": "hard_max",
+      "regle": "Interdiction absolue de placer un 23e creneau (>33h) meme s'il reste de la place."
+    },
+    "priorite_FC": {
+      "regle": "Les cours des FC sont places en premier sur la grille vierge (bonification), pour minimiser les heures creuses et leur donner les meilleurs creneaux.",
+      "raison_metier": "Ils sont deja en entreprise en alternance ; on cherche a les avantager dans leur EDT."
+    }
+  },
+  "placement_priority_layers": [
+    {
+      "ordre": 1,
+      "nom": "SAE (intouchables)",
+      "regle": "Semaines/jours de SAE geles en tout premier, colonne vertebrale de l'annee, on construit autour."
+    },
+    {
+      "ordre": 2,
+      "nom": "Vacataires",
+      "regle": "Fenetres de tir tres reduites (dispos entreprise), places en priorite absolue."
+    },
+    {
+      "ordre": 3,
+      "nom": "Enseignants temps plein / gros volumes",
+      "regle": "Places pendant qu'il reste de larges espaces, pour eviter les EDT 'gruyere'."
+    },
+    {
+      "ordre": 4,
+      "nom": "Enseignants-chercheurs / petits volumes",
+      "regle": "Variables d'ajustement, glisses dans les espaces restants."
+    }
+  ],
+  "objective_function": {
+    "priorite_1": "Densifier au maximum S1, S3, S5 (semestres qui demarrent en septembre) pour qu'ils se terminent le plus tot possible.",
+    "priorite_2": "Permettre a S2, S4, S6 de demarrer le plus tot possible des que S1/S3/S5 sont finis pour un groupe donne.",
+    "methode": "remplissage front-load : remplir chaque semaine a ras bord (jusqu'aux plafonds 33h FI / 35h FC) des le debut, pas d'etalement sur 4 mois.",
+    "exception_notable": "jeudi apres-midi FI (PAC) reste toujours libre malgre le compactage."
+  },
+  "sae_sanctuarization_rule": {
+    "hard_constraint": true,
+    "regle": "Si un creneau/jour est alloue a une SAE pour un parcours donne, interdiction absolue de placer un cours 'Ressource' classique ce meme jour pour ce meme parcours.",
+    "granularite": "journee entiere (pas de saupoudrage d'heures)",
+    "responsabilite_salle": "Les SAE n'ont pas besoin de consigne de salle de la part du chef de departement : c'est l'enseignant referent de la SAE qui fournit sa propre progression et ses propres salles.",
+    "note_extraction_donnees": "Lors de la lecture d'un tableur de planification, seul le TEXTE dans les cellules journalieres est exploitable par un lecteur automatique, pas les couleurs de fond."
+  },
+  "distribution_modes": {
+    "solo": {
+      "definition": "Un seul enseignant sur le module -> il couvre l'integralite de la promotion (tous CM, tous TD, tous TP).",
+      "condition_declenchement": "profs[] contient un seul enseignant actif"
+    },
+    "symetrique": {
+      "definition": "Volumes identiques entre 2 (ou N) enseignants qui ne font pas la meme chose / n'ont pas besoin de se croiser -> chacun prend un bloc de groupes fixe et exclusif du debut a la fin.",
+      "exemple": "Prof1 = groupe AB (TD) + TP A,B ; Prof2 = groupe CD (TD) + TP C,D",
+      "condition_declenchement": "volumes profs identiques ET pas de necessite que chaque etudiant voie les 2 enseignants"
+    },
+    "tournant": {
+      "definition": "Enseignants aux competences complementaires devant voir TOUS les etudiants -> volume total divise pour que chaque groupe passe par tous les enseignants.",
+      "exemple": "WR311D Audiovisuel/Motion design : chaque groupe TD/TP voit les 2 enseignants a tour de role",
+      "condition_declenchement": "utilisateur precise explicitement que chaque enseignant doit voir tous les groupes (souvent quand ils enseignent des contenus differents)",
+      "attention": "Verifier que les volumes sont divisibles par le nombre de groupes (cas d'erreur detecte sur WR312D : 5 seances TD non divisibles par 2 groupes -> corrige a 6/4)."
+    },
+    "duo_synchronise_salle_rare": {
+      "definition": "Quand une salle est un goulot d'etranglement (ex Studio H.017), on forme des duos d'enseignants synchronises faisant cours en simultane sur 2 groupes a la fois, ce qui divise par 2 le nombre de creneaux necessaires dans la salle rare.",
+      "regle_exclusion": "Les duos ne doivent jamais se chevaucher dans la salle rare (sinon plus d'enseignants simultanes que de 'slots' disponibles dans la salle dedoublee).",
+      "exemple_module": "WR110 (Production audio/video), WR112 (Integration), WR113 (Developpement Web)"
+    },
+    "regle_defaut_parallelisme": {
+      "principe": "Tenter de placer les TD/TP de plusieurs enseignants sur un module en parallele (meme creneau, salles proches/communicantes).",
+      "si_impossible": "Etaler sur la semaine MAIS avec contrainte de synchronisation hebdomadaire stricte : aucun groupe ne doit prendre de l'avance/retard sur les autres (personne ne fait le TD n+1 tant que tous les groupes n'ont pas fini le TD n).",
+      "exception": "WR110 (Studio) : le parallelisme reste une obligation stricte (pas une simple preference), car cela optimise l'usage d'une salle rare."
+    }
+  },
+  "rooms": [
+    {
+      "code": "H.001",
+      "etage": "RDC",
+      "type": "reunion",
+      "capacite": 10,
+      "usage": "BDE",
+      "exclue_des_cours": true
+    },
+    {
+      "code": "H.005",
+      "etage": "RDC",
+      "type": "TP",
+      "equipement": "2 ilots + bar chaises hautes + televiseur"
+    },
+    {
+      "code": "H.006",
+      "etage": "RDC",
+      "type": "TP",
+      "equipement": "televiseur",
+      "communique_avec": [
+        "H.009"
+      ]
+    },
+    {
+      "code": "H.007",
+      "etage": "RDC",
+      "type": "TP_TD_communicante",
+      "communique_avec": [
+        "H.008"
+      ],
+      "note": "cloison retractable ouvrable -> 1 salle de TD, ou 2 TP simultanes (1 prof/salle)"
+    },
+    {
+      "code": "H.008",
+      "etage": "RDC",
+      "type": "TP_TD_communicante",
+      "communique_avec": [
+        "H.007"
+      ]
+    },
+    {
+      "code": "H.009",
+      "etage": "RDC",
+      "type": "TD_design",
+      "equipement": "evier, peinture, papier, televiseur",
+      "priorite_enseignants": [
+        "ALO",
+        "GLE"
+      ],
+      "debordement_vers": [
+        "H.006"
+      ]
+    },
+    {
+      "code": "H.016",
+      "etage": "RDC",
+      "type": "TP_informatique",
+      "equipement": "6 postes Apple, videoprojecteur",
+      "note": "pas de fenetres (plexiglas) -> salle de dernier recours, malus algorithmique fort"
+    },
+    {
+      "code": "H.017",
+      "etage": "RDC",
+      "type": "TD_TP_hybride_Studio",
+      "equipement": "studio audiovisuel",
+      "hack_celcat": "2 profs simultanes -> 1 en H.017, 1 en H.022 (local attenant, salle fantome)"
+    },
+    {
+      "code": "H.022",
+      "etage": "RDC",
+      "type": "local_rangement_utilise_comme_salle_fantome",
+      "usage": "uniquement en complement de H.017"
+    },
+    {
+      "code": "H.018",
+      "etage": "RDC",
+      "type": "amphi_CM",
+      "capacite": 140,
+      "note": "regle absolue : Type=CM -> Salle=H.018. Peut contenir 4 TD."
+    },
+    {
+      "code": "H.101",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.104",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.105",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.111",
+      "etage": "1er",
+      "type": "TD_classique"
+    },
+    {
+      "code": "H.103",
+      "etage": "1er",
+      "type": "TP_ilots",
+      "equipement": "6 ilots",
+      "salle_attitree": {
+        "enseignant": "TPA",
+        "matiere": "Anglais",
+        "portee": "tous parcours, tous semestres, tous BUT"
+      }
+    },
+    {
+      "code": "H.201",
+      "etage": "2e",
+      "type": "TD_fusionnee",
+      "communique_avec": [
+        "H.203"
+      ],
+      "note": "cloison ouverte en permanence = 1 seule grande salle, mais peut accueillir 2 profs simultanement (1 en 201, 1 en 203)"
+    },
+    {
+      "code": "H.203",
+      "etage": "2e",
+      "type": "TD_fusionnee",
+      "communique_avec": [
+        "H.201"
+      ]
+    },
+    {
+      "code": "H.205",
+      "etage": "2e",
+      "type": "TP_reseaux_VR",
+      "equipement": "baie serveurs, imprimante 3D, 16 PC puissants (ecrans 21:9), casques VR",
+      "note": "sert aussi de debordement pour cours VR en tandem avec H.201/H.203"
+    },
+    {
+      "code": "A.018",
+      "batiment": "A",
+      "type": "salle_evaluation",
+      "usage": "CM qui est en realite une evaluation/examen"
+    }
+  ],
+  "rooms_hack_celcat_general": "Celcat n'autorise qu'1 enseignant par salle. Pour permettre 2 enseignants sur un meme module/creneau, on les place dans des salles physiquement collees ou communicantes (H.007+H.008, H.201+H.203, H.017+H.022) qui sont administrativement 2 salles Celcat mais physiquement une seule zone.",
+  "maquette_json_schema_reference": {
+    "code_matiere_prefixes": {
+      "WR": "ressource classique",
+      "WRA": "ressource alternants",
+      "WS": "SAE",
+      "WSA": "SAE alternants"
+    },
+    "fields": {
+      "code_matiere": "code du module",
+      "nom_matiere": "nom de la matiere",
+      "semestre": "S1..S6",
+      "parcours": "BUT1 / BUT2-DEV-FI / BUT2-DEV-FC / etc, ou 'admin' pour les primes/decharges",
+      "total": {
+        "cm": "nb seances CM par etudiant",
+        "td": "nb seances TD par etudiant",
+        "tp": "nb seances TP par etudiant"
+      },
+      "lead": {
+        "code": "trigramme referent",
+        "nom": "...",
+        "prenom": "..."
+      },
+      "profs": [
+        {
+          "block": "block1 (lie/synchronise) | block2 (groupe distinct, ne fait pas la meme chose) | null (traiter comme block1)",
+          "cm": "seances CM pour cet enseignant",
+          "td": "seances TD pour cet enseignant (volume prof, pas etudiant)",
+          "tp": "seances TP pour cet enseignant",
+          "ptut": "seances projet tutore",
+          "nbGpTd": "nb groupes TD pris en charge",
+          "nbGpTp": "nb groupes TP pris en charge",
+          "code": "trigramme"
+        }
+      ],
+      "maquette": {
+        "codelement": "code Celcat",
+        "vet": "info Celcat",
+        "groupes": {
+          "td": "nb total groupes TD module",
+          "tp": "nb total groupes TP module"
+        },
+        "bloque": "bool",
+        "hors_service": "bool"
+      }
+    },
+    "data_cleaning_rules": [
+      "Toute valeur numerique null -> traiter comme 0 pour les calculs de charge.",
+      "Tout block: null -> traiter comme 'block1' par defaut sauf indication contraire explicite.",
+      "Modules assignes a un enseignant fantome ('MISTER NOBODY') ou volume 0 (ex 'Projet Ens.') -> exclus du placement automatique, a positionner manuellement.",
+      "Modules administratifs (COR, PCA, PRP, RC, RN, RRI...) = primes/decharges, ne sont PAS des enseignements a planifier.",
+      "Verifier coherence nbGpTd/nbGpTp vs (volume_prof / volume_etudiant) - exemple d'erreur corrigee : WR108 indiquait 3 groupes TD/enseignant pour seulement 4 groupes au total -> corrige a 2 chacun.",
+      "Nettoyer les scories de texte (retours a la ligne caches \\r\\n dans les noms, champs vides 'XX'/'X'/'XXX', profs: []).",
+      "Continuite TD->TP par enseignant : un enseignant qui a les groupes A/B en TD doit retrouver ces memes groupes en TP sur le meme module (jamais de croisement TD/TP deconnecte pour un meme enseignant sur un meme module)."
+    ],
+    "regle_conversion_temps": "1 unite de seance dans le JSON = 1h30 reelle. Erreur frequente a eviter : lire les valeurs comme des heures rondes."
+  },
+  "solver_reliability_rules": {
+    "regle_donnee_fraiche": "Ne jamais deviner/extrapoler un volume horaire ou une contrainte manquante. Toujours se baser sur la donnee brute la plus recente fournie ; si une donnee manque, la demander explicitement plutot que de supposer.",
+    "priorite_decision_humaine": "En cas de doute ou d'erreur detectee dans un export source (ex outil du chef de departement), la donnee confirmee par l'utilisateur en direct prevaut toujours sur le fichier source automatique.",
+    "risque_memoire_contexte": "Sur de tres longues sessions, des donnees anciennes peuvent etre perdues/ecrasees ; prevoir une source de verite externe unique (fichier) plutot que de tout garder en memoire de conversation."
+  }
+}

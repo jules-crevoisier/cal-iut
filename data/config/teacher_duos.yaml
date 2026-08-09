@@ -1,0 +1,53 @@
+# Duos d'enseignants synchronisés sur une salle rare (Studio H.017 + H.022,
+# "hack Celcat" — cf. contraintes/01_regles_generales.json > distribution_modes
+# > duo_synchronise_salle_rare). Les deux enseignants d'un duo animent leurs
+# groupes EN MÊME TEMPS (co-animation), un en H.017, l'autre en H.022 ; deux
+# duos différents ne peuvent jamais se chevaucher (une seule paire de salles).
+#
+# Donnée confirmée par l'utilisateur (jamais devinée, cf. règle "donnée
+# fraîche" du projet) — recoupée avec contraintes/07_modules_maquette_progression.json :
+# WR110 (Production audio/vidéo) a exactement 4 enseignants (KBR/KNG/FLI/VBU),
+# ce qui correspond aux 2 duos ci-dessous.
+duos:
+  - teacher_codes: [KBR, KNG]
+    course_codes: [WR110]
+    # Retour utilisateur (Kyllian Bresson, 04/08/2026) : préférer un épisode
+    # co-animé "A&B" (visuellement cohérent avec le regroupement TD AB) à
+    # l'affectation par défaut (KBR=A,B / KNG=C,D => épisodes A&C puis B&D).
+    group_overrides:
+      KBR: [A, C]
+      KNG: [B, D]
+    note: "Duo 1 (confirmé) : TP de KBR (Kyllian Bresson) verrouillées en simultané avec celles de KNG (Kévin Ngo)."
+
+  - teacher_codes: [FLI, VBU]
+    course_codes: [WR110]
+    group_overrides:
+      FLI: [E, G]
+      VBU: [F, H]
+    note: "Duo 2 (confirmé) : séances de FLI (Florent Libbrecht) verrouillées en simultané avec celles de VBU (Valentin Burette)."
+
+  # Confirmé par Kyllian Bresson (05/08/2026), en réponse à la question
+  # posée sur "leur TP peut être fait en même temps dans une salle collée"
+  # (WR112/WR113, cités comme exemples dans 01_regles_generales.json). Même
+  # duo 1 (RDE/FME) sur les deux cours ; le duo 2 diffère (FLI sur WR112,
+  # RHU sur WR113 — AHA commun aux deux).
+  - teacher_codes: [RDE, FME]
+    course_codes: [WR112, WR113]
+    group_overrides:
+      RDE: [A, C]
+      FME: [B, D]
+    note: "Duo 1 (confirmé, WR112+WR113) : TP de RDE (Romain Delon) verrouillées en simultané avec celles de FME."
+
+  - teacher_codes: [FLI, AHA]
+    course_codes: [WR112]
+    group_overrides:
+      FLI: [E, G]
+      AHA: [F, H]
+    note: "Duo 2 WR112 (confirmé) : TP de FLI (Florent Libbrecht) verrouillées en simultané avec celles de AHA."
+
+  - teacher_codes: [RHU, AHA]
+    course_codes: [WR113]
+    group_overrides:
+      RHU: [E, G]
+      AHA: [F, H]
+    note: "Duo 2 WR113 (confirmé) : TP de RHU (Régis Huez) verrouillées en simultané avec celles de AHA."

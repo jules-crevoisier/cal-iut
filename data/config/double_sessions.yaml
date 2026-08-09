@@ -1,0 +1,39 @@
+# Cours dont les séances doivent être fusionnées, par paires consécutives
+# (ordre pédagogique), en un seul bloc de plusieurs créneaux de 1h30 — cf.
+# modèle `DoubleSessionRule` et `ingestion/normalize.py::_merge_double_sessions`.
+# Le solveur ne voit alors plus qu'UNE séance par bloc (`duration_slots`
+# correspondant), jamais 2 créneaux indépendants pouvant être dispersés dans
+# la semaine.
+#
+# Donnée confirmée par l'utilisateur (jamais devinée, cf. règle "donnée
+# fraîche" du projet) : les TP de WR110 doivent être des blocs de 3h (2
+# séances de 1h30 collées). Mécanisme volontairement générique, annoncé
+# comme récurrent sur d'autres cours/TP à venir — ajouter une entrée ici
+# suffit, aucun changement de code nécessaire.
+rules:
+  - course_code: WR110
+    session_type: TP
+    slots_per_session: 2
+    note: "Confirmé (retour utilisateur) : TP WR110 = blocs de 3h (2x1h30 collées)."
+
+  # WR104 : pas de progression réelle définie -> séquence synthétique
+  # CM puis TD (déjà correcte pour l'ordre demandé : "placer d'abord tous les
+  # CM puis ensuite les TD"). Reste à coller les TD en blocs de 3h ("2 TD
+  # côte à côte") : 5 TD au volume -> 2 blocs de 3h + 1 séance seule de 1h30
+  # (reliquat impair, pas de donnée supplémentaire à inventer).
+  - course_code: WR104
+    session_type: TD
+    slots_per_session: 2
+    pair_from: start
+    note: "Confirmé (retour utilisateur) : TD WR104 = blocs de 3h (2x1h30 collées)."
+
+  # WR106 : progression réelle = TD1-4, TP1-4, CM1, TP5-7, CM2(éval), CM3(éval)
+  # — déjà exactement l'ordre demandé. Seuls CM2+CM3 (éval de fin de
+  # semestre) doivent être collés en un bloc de 3h pour une évaluation en
+  # amphi ; CM1 doit rester une séance seule en tête, d'où `pair_from: end`
+  # (apparie depuis la fin de la liste des CM, pas depuis le début).
+  - course_code: WR106
+    session_type: CM
+    slots_per_session: 2
+    pair_from: end
+    note: "Confirmé (retour utilisateur) : CM2+CM3 WR106 (éval fin de semestre) = bloc de 3h en amphi, CM1 reste seul."

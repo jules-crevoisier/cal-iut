@@ -1,0 +1,24 @@
+# Disponibilités enseignants — extraites manuellement des commentaire_edt en V1
+# Format slot: [jour (0=lundi), créneau (0=8h-9h30)]
+teachers:
+  - teacher_code: JUL  # Julie — WS301D, WS401D
+    max_afternoons_per_week: 3
+    notes: "2 à 3 après-midis selon durée SAE"
+
+  - teacher_code: ALO  # Ariane LOIZON
+    preferred_days: [3]  # jeudi
+    notes: "Préférence jeudi pour journées entières (WR403D)"
+
+  - teacher_code: KBR  # Kyllian Bresson
+    forbidden_slots: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]  # créneau 0 (8h-9h30), tous les jours
+    notes: "Retour utilisateur (06/08/2026) : ne débute ses cours qu'à partir de 9h30."
+
+# Poids objectif solveur — ajustables via boucle de feedback (étape 5)
+objective_weights:
+  gap_penalty: 100
+  day_balance: 20
+  isolated_day: 50
+  eval_clustering: 30
+  room_change: 15
+  pedagogical_order: 10
+  teacher_preference: 25
