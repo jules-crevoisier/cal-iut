@@ -240,6 +240,31 @@ def cmd_solve(args: argparse.Namespace) -> int:
     return 0 if result.status in ("OPTIMAL", "FEASIBLE") else 1
 
 
+def cmd_load_run(args: argparse.Namespace) -> int:
+    from cal_iut.db.load_run import load_run_from_json
+
+    timetable_path = Path(args.timetable)
+    if not timetable_path.exists():
+        print(f"Not found: {timetable_path}", file=sys.stderr)
+        print(
+            "Ce fichier n'est sur main que via feature/sync-laptop-run — "
+            "faites: git checkout feature/sync-laptop-run && git pull",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        run = load_run_from_json(
+            timetable_path,
+            semestre_group=args.semestre_group,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"Run #{run.id} chargé (semestre={run.semestre}, {run.weeks} semaines).")
+    print("Lancez: cal-iut serve")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -533,6 +558,22 @@ def main() -> int:
         ),
     )
     solve_parser.set_defaults(func=cmd_solve)
+
+    load_run_parser = sub.add_parser(
+        "load-run",
+        help="Importer un timetable.json déjà résolu en base (pour cal-iut serve)",
+    )
+    load_run_parser.add_argument(
+        "timetable",
+        nargs="?",
+        default=str(Path(__file__).resolve().parents[2] / "data" / "timetable_odd_fresh.json"),
+    )
+    load_run_parser.add_argument(
+        "--semestre-group",
+        choices=["odd", "even"],
+        default="odd",
+    )
+    load_run_parser.set_defaults(func=cmd_load_run)
 
     serve_parser = sub.add_parser("serve", help="Démarrer l'API FastAPI")
     serve_parser.add_argument("--host", default="127.0.0.1")

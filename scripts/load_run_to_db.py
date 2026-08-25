@@ -3,47 +3,23 @@
 from __future__ import annotations
 
 import argparse
-import json
+import sys
 from pathlib import Path
 
-from cal_iut.db.repository import PlanningRepository
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
 
-
-def load_run(timetable_path: Path, semestre_group: str | None = None) -> int:
-    raw = json.loads(timetable_path.read_text(encoding="utf-8"))
-    placements = raw.get("placements", raw)
-    if not placements:
-        print("Fichier vide ou sans placements.")
-        return 1
-
-    semestre = raw.get("semestre") or (semestre_group.upper() if semestre_group else "ODD")
-    parcours = raw.get("parcours") or "MMI"
-    weeks = int(raw.get("weeks") or (max(int(p["week"]) for p in placements) + 1))
-
-    repo = PlanningRepository()
-    run = repo.save_run(
-        parcours=parcours,
-        semestre=semestre,
-        status=str(raw.get("status") or "FEASIBLE"),
-        objective_value=raw.get("objective_value"),
-        gap_penalty=int(raw.get("gap_penalty") or 0),
-        weeks=weeks,
-        solver_placements=placements,
-        current_placements=placements,
-    )
-    print(f"Run #{run.id} chargé ({len(placements)} séances, semestre={semestre}).")
-    print("Lancez: cal-iut serve")
-    return 0
+from cal_iut.db.load_run import load_run_from_json  # noqa: E402
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description="Importe un timetable.json en base")
     parser.add_argument(
         "timetable",
         type=Path,
         nargs="?",
-        default=root / "data" / "timetable_odd_fresh.json",
+        default=ROOT / "data" / "timetable_odd_fresh.json",
     )
     parser.add_argument(
         "--semestre-group",
@@ -54,8 +30,16 @@ def main() -> int:
     args = parser.parse_args()
     if not args.timetable.exists():
         print(f"Introuvable: {args.timetable}")
+        print("Sur main ce fichier n'existe pas — faites: git checkout feature/sync-laptop-run")
         return 1
-    return load_run(args.timetable, semestre_group=args.semestre_group)
+    try:
+        run = load_run_from_json(args.timetable, semestre_group=args.semestre_group)
+    except ValueError as exc:
+        print(exc)
+        return 1
+    print(f"Run #{run.id} chargé ({run.weeks} semaines, semestre={run.semestre}).")
+    print("Lancez: cal-iut serve")
+    return 0
 
 
 if __name__ == "__main__":
