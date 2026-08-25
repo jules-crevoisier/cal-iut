@@ -9,22 +9,47 @@ export const SLOT_TIMES = [
   { start: "17:00:00", end: "18:30:00", label: "17h–18h30" },
 ] as const;
 
-/** Lundi de la semaine 0 du semestre (référence affichage). */
-export const SEMESTER_BASE = new Date(2026, 8, 7);
-
-const DAY_NAMES = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+export const DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 
 export function dayName(day: number): string {
-  return DAY_NAMES[day] ?? "?";
+  return DAY_LABELS[day] ?? "?";
 }
 
 export function slotLabel(slot: number): string {
   return SLOT_TIMES[slot]?.label ?? "?";
 }
 
-export function placementToDate(week: number, day: number, slot: number): { start: Date; end: Date } {
-  const base = new Date(SEMESTER_BASE);
-  base.setDate(base.getDate() + week * 7 + day);
+/**
+ * Lundi réel d'une semaine-solveur, depuis `payload.weekDates` (calculé côté
+ * serveur depuis le calendrier académique réel — `AcademicCalendar`).
+ *
+ * Remplace l'ancien `SEMESTER_BASE` codé en dur (`new Date(2026, 8, 7)`, qui
+ * supposait S1 et une progression de 7 jours en 7 jours) : faux dès qu'on
+ * affiche un autre semestre (S3/S5 démarrent à d'autres dates) ou une semaine
+ * après des vacances (le calendrier saute les semaines bloquées, il n'avance
+ * pas uniformément). `weekDates[w]` peut être vide (semaine hors horizon
+ * connu) : repli sur une estimation à 7 jours plutôt que planter, uniquement
+ * pour ne pas casser l'affichage — ce cas ne devrait pas survenir en usage
+ * normal (n_weeks dérivé des placements réels).
+ */
+function weekMonday(weekDates: string[], week: number): Date {
+  const iso = weekDates[week];
+  if (iso) return new Date(iso + "T00:00:00");
+  const known = weekDates.find(Boolean);
+  const knownIndex = known ? weekDates.indexOf(known) : 0;
+  const base = known ? new Date(known + "T00:00:00") : new Date(2026, 7, 31);
+  base.setDate(base.getDate() + (week - knownIndex) * 7);
+  return base;
+}
+
+export function placementToDate(
+  weekDates: string[],
+  week: number,
+  day: number,
+  slot: number,
+): { start: Date; end: Date } {
+  const base = weekMonday(weekDates, week);
+  base.setDate(base.getDate() + day);
 
   const [sh, sm] = SLOT_TIMES[slot].start.split(":").map(Number);
   const [eh, em] = SLOT_TIMES[slot].end.split(":").map(Number);
@@ -38,9 +63,12 @@ export function placementToDate(week: number, day: number, slot: number): { star
   return { start, end };
 }
 
-export function dateToPlacement(date: Date, displayWeek: number): { week: number; day: number; slot: number } {
-  const base = new Date(SEMESTER_BASE);
-  base.setDate(base.getDate() + displayWeek * 7);
+export function dateToPlacement(
+  weekDates: string[],
+  date: Date,
+  displayWeek: number,
+): { week: number; day: number; slot: number } {
+  const base = weekMonday(weekDates, displayWeek);
   base.setHours(0, 0, 0, 0);
 
   const target = new Date(date);
@@ -66,8 +94,6 @@ export function dateToPlacement(date: Date, displayWeek: number): { week: number
   return { week: displayWeek, day, slot };
 }
 
-export function weekStartDate(displayWeek: number): Date {
-  const d = new Date(SEMESTER_BASE);
-  d.setDate(d.getDate() + displayWeek * 7);
-  return d;
+export function weekStartDate(weekDates: string[], displayWeek: number): Date {
+  return weekMonday(weekDates, displayWeek);
 }

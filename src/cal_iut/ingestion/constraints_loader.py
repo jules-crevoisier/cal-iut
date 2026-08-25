@@ -15,13 +15,17 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from cal_iut.calendar.academic import (
-    AcademicCalendar,
     DAY_FR,
+    AcademicCalendar,
     parse_french_date,
     parse_iso_or_fr_date,
 )
-from cal_iut.ingestion.planning_loader import _EVENT_TIME_RE, _SLOT_BOUNDS_MIN, _slots_for_event_text
-from cal_iut.models.entities import TeacherAvailability
+from cal_iut.ingestion.planning_loader import (
+    _EVENT_TIME_RE,
+    _SLOT_BOUNDS_MIN,
+    _slots_for_event_text,
+)
+from cal_iut.models.entities import TeacherAvailability, TeacherWeekParityRule
 from cal_iut.models.timetable import SLOTS_PER_DAY
 
 MORNING_SLOTS = [0, 1, 2]
@@ -110,16 +114,21 @@ def _parse_period_fragment(fragment: str) -> list[tuple[int, int]]:
 
 def _slots_for_open_ended_time(text: str) -> list[int]:
     """
-    "après/apres HHhMM" (ex. "les jeudis après 17h00") : borne OUVERTE, pas
-    un point isolé — tout créneau qui déborde au-delà de l'heure citée est
-    concerné (pas seulement celui qui la contient), donc "créneau.fin >
-    heure_citée", contrairement à `_slots_for_event_text` (pensé pour des
-    plages BORNÉES). Ne s'applique que si une seule heure est trouvée et que
-    "après"/"apres" précède le texte — sinon laisse `_slots_for_event_text`
-    gérer le cas borné classique.
+    "après/à partir de HHhMM" (ex. "les jeudis après 17h00", "jeudi à partir
+    de 14h00") : borne OUVERTE, pas un point isolé — tout créneau qui déborde
+    au-delà de l'heure citée est concerné (pas seulement celui qui la
+    contient), donc "créneau.fin > heure_citée", contrairement à
+    `_slots_for_event_text` (pensé pour des plages BORNÉES). Ne s'applique que
+    si une seule heure est trouvée — sinon laisse `_slots_for_event_text` gérer
+    le cas borné classique.
+
+    Sert aussi bien à une INDISPONIBILITÉ ouverte ("indisponible après 17h" ->
+    créneaux interdits) qu'à une DISPONIBILITÉ ouverte ("disponible à partir de
+    14h" -> créneaux autorisés) : la fonction ne rend que l'ensemble de
+    créneaux, l'appelant décide du sens.
     """
-    text_norm = text.lower().replace("è", "e").replace("é", "e")
-    if "apres" not in text_norm:
+    text_norm = text.lower().replace("è", "e").replace("é", "e").replace("à", "a")
+    if "apres" not in text_norm and "a partir de" not in text_norm:
         return []
     times = _EVENT_TIME_RE.findall(text)
     if len(times) != 1:
@@ -195,7 +204,76 @@ def _slots_for_moment(moment: str) -> list[int]:
         return AFTERNOON_SLOTS
     if moment == "toute_la_journee":
         return ALL_SLOTS
+    if moment == "apres_17h":
+        # "max 17h" (règles de parité TCA) : seul le créneau 17h00-18h30 est
+        # concerné — l'enseignant doit avoir terminé à 17h.
+        return [SLOTS_PER_DAY - 1]
     return []  # "plage_horaire_precisee_dans_raw" ou inconnu : ne jamais deviner
+
+
+def _resolve_token_slots(token: dict) -> tuple[int | None, list[int]]:
+    """(jour, créneaux) d'un token `recurrent_hebdomadaire`.
+
+    Quand `moment` n'est pas catégorisé ("plage_horaire_precisee_dans_raw"),
+    l'horaire explicite est bien présent dans `raw` ("15h30 à 18h30", "à partir
+    de 14h00") : on l'extrait avec le même mécanisme que les événements du
+    calendrier officiel plutôt que de deviner.
+    """
+    jour = DAY_FR.get(str(token.get("jour", "")).lower())
+    raw_text = str(token.get("raw", ""))
+    slots = _slots_for_moment(str(token.get("moment", "")))
+    if not slots and jour is not None:
+        slots = _slots_for_open_ended_time(raw_text) or sorted(_slots_for_event_text(raw_text))
+    return jour, slots
+
+
+def _parse_availability_whitelist(entry: dict) -> tuple[set[tuple[int, int]], set[date], list[str]]:
+    """
+    Traduit `disponibilites_tokens` en liste blanche DURE quand l'entrée porte
+    `disponibilites_exclusives: true` (arbitrage utilisateur du 10/08/2026 :
+    « les jours non listés sont interdits »).
+
+    Deux axes indépendants, combinés en ET quand les deux sont présents :
+    - créneaux hebdomadaires récurrents -> `allowed_slots` ;
+    - dates ponctuelles -> `allowed_dates` (cas du vacataire qui ne donne que
+      ses dates de venue, ex. Marc Nino).
+    """
+    allowed_slots: set[tuple[int, int]] = set()
+    allowed_dates: set[date] = set()
+    unresolved: list[str] = []
+
+    for token in entry.get("disponibilites_tokens") or []:
+        ttype = token.get("type")
+        raw_text = str(token.get("raw", ""))
+        if ttype == "recurrent_hebdomadaire":
+            jour, slots = _resolve_token_slots(token)
+            if jour is None or not slots:
+                unresolved.append(raw_text)
+                continue
+            allowed_slots.update((jour, s) for s in slots)
+        elif ttype == "date_specifique":
+            dates = _parse_date_token(raw_text)
+            if not dates:
+                unresolved.append(raw_text)
+                continue
+            allowed_dates.update(dates)
+        else:
+            unresolved.append(raw_text)
+
+    return allowed_slots, allowed_dates, unresolved
+
+
+def _parse_parity_rules(entry: dict) -> list[TeacherWeekParityRule]:
+    """`regles_parite_semaine` -> règles machine (cf. `TeacherWeekParityRule`)."""
+    rules: list[TeacherWeekParityRule] = []
+    for raw in entry.get("regles_parite_semaine") or []:
+        jour = DAY_FR.get(str(raw.get("jour", "")).lower())
+        slots = _slots_for_moment(str(raw.get("moment", "")))
+        parity = str(raw.get("parite", ""))
+        if jour is None or not slots or parity not in {"paire", "impaire"}:
+            continue
+        rules.append(TeacherWeekParityRule(parity=parity, day=jour, slots=slots))
+    return rules
 
 
 def parse_teacher_constraints_json(path: Path) -> tuple[list[TeacherAvailability], dict[str, str]]:
@@ -219,17 +297,12 @@ def parse_teacher_constraints_json(path: Path) -> tuple[list[TeacherAvailability
             ttype = token.get("type")
             raw_text = str(token.get("raw", ""))
             if ttype == "recurrent_hebdomadaire":
-                jour = DAY_FR.get(str(token.get("jour", "")).lower())
-                slots = _slots_for_moment(str(token.get("moment", "")))
-                if not slots and jour is not None:
-                    # `moment` non catégorisé (ex. "plage_horaire_precisee_
-                    # dans_raw") : le jour est connu, seul l'horaire précis
-                    # n'a pas été rangé dans matin/après-midi/journée par la
-                    # source — pas une supposition, l'horaire explicite
-                    # ("15h30 à 18h30") est bien présent dans `raw`, extrait
-                    # avec le même mécanisme que les événements du planning
-                    # officiel (cf. `planning_loader.py::_slots_for_event_text`).
-                    slots = _slots_for_open_ended_time(raw_text) or sorted(_slots_for_event_text(raw_text))
+                # `moment` non catégorisé (ex. "plage_horaire_precisee_dans_raw")
+                # : le jour est connu, seul l'horaire précis n'a pas été rangé
+                # dans matin/après-midi/journée par la source — pas une
+                # supposition, l'horaire explicite ("15h30 à 18h30") est bien
+                # présent dans `raw` (cf. `_resolve_token_slots`).
+                jour, slots = _resolve_token_slots(token)
                 if jour is None or not slots:
                     unresolved.append(raw_text)
                     continue
@@ -261,6 +334,23 @@ def parse_teacher_constraints_json(path: Path) -> tuple[list[TeacherAvailability
                 if jour is not None:
                     preferred_days.append(jour)
 
+        allowed_slots: set[tuple[int, int]] = set()
+        allowed_dates: set[date] = set()
+        if entry.get("disponibilites_exclusives"):
+            allowed_slots, allowed_dates, dispo_unresolved = _parse_availability_whitelist(entry)
+            unresolved.extend(dispo_unresolved)
+            if not allowed_slots and not allowed_dates:
+                # Sécurité : une liste blanche vide interdirait TOUT créneau à
+                # l'enseignant. Mieux vaut ne rien restreindre et le signaler
+                # que produire un modèle silencieusement infaisable.
+                unresolved.append(
+                    "disponibilites_exclusives=true mais aucun créneau/date exploitable — "
+                    "liste blanche ignorée"
+                )
+
+        parity_rules = _parse_parity_rules(entry)
+        monthly_max = entry.get("regroupement_mensuel_max_semaines")
+
         note_parts = [
             str(entry.get("contraintes_pedagogiques_raw") or "").strip(),
             str(entry.get("explications_raw") or "").strip(),
@@ -275,6 +365,11 @@ def parse_teacher_constraints_json(path: Path) -> tuple[list[TeacherAvailability
                 teacher_code=code,
                 forbidden_slots=sorted(forbidden_slots),
                 preferred_days=sorted(set(preferred_days)),
+                allowed_slots=sorted(allowed_slots),
+                allowed_dates=sorted(d.isoformat() for d in allowed_dates),
+                week_parity_rules=parity_rules,
+                parity_reference=str(entry.get("parity_reference") or "departement"),
+                monthly_cluster_max_weeks=int(monthly_max) if monthly_max else None,
                 notes=note[:500] if note else None,
                 metadata={
                     "forbidden_dates": sorted(d.isoformat() for d in forbidden_dates),
@@ -392,13 +487,78 @@ def merge_teacher_availability(
         slots = sorted(set(existing.forbidden_slots) | set(teacher.forbidden_slots))
         days = sorted(set(existing.preferred_days) | set(teacher.preferred_days))
         meta = {**existing.metadata, **teacher.metadata}
+        # Liste blanche : INTERSECTION quand les deux sources en déclarent une
+        # (chacune restreint), sinon celle qui existe. Une source sans liste
+        # blanche ne doit jamais élargir celle de l'autre.
+        if existing.allowed_slots and teacher.allowed_slots:
+            allowed_slots = sorted(set(existing.allowed_slots) & set(teacher.allowed_slots))
+        else:
+            allowed_slots = sorted(set(existing.allowed_slots) | set(teacher.allowed_slots))
+        if existing.allowed_dates and teacher.allowed_dates:
+            allowed_dates = sorted(set(existing.allowed_dates) & set(teacher.allowed_dates))
+        else:
+            allowed_dates = sorted(set(existing.allowed_dates) | set(teacher.allowed_dates))
         by_code[teacher.teacher_code] = TeacherAvailability(
             teacher_code=teacher.teacher_code,
             forbidden_slots=slots,
             preferred_slots=existing.preferred_slots or teacher.preferred_slots,
             preferred_days=days,
+            allowed_slots=allowed_slots,
+            allowed_dates=allowed_dates,
+            week_parity_rules=teacher.week_parity_rules or existing.week_parity_rules,
+            parity_reference=teacher.parity_reference,
+            monthly_cluster_max_weeks=(
+                teacher.monthly_cluster_max_weeks or existing.monthly_cluster_max_weeks
+            ),
             max_afternoons_per_week=existing.max_afternoons_per_week,
             notes=teacher.notes or existing.notes,
             metadata=meta,
+        )
+    return list(by_code.values())
+
+
+def augment_teacher_availability_with_sae_supervision(
+    teachers: list[TeacherAvailability],
+    supervisor_dates: dict[str, set[date]],
+) -> list[TeacherAvailability]:
+    """
+    Ajoute les dates de supervision SAE (cf. `planning_loader.py::
+    sae_supervisor_dates_by_teacher`) aux `forbidden_dates` de chaque
+    enseignant — retour utilisateur du 11/08/2026 : « pendant une SAE les
+    profs qui sont assignés dessus ne sont que très peu disponibles [...] il
+    faut limiter leur nombre de cours voire pas en mettre en même temps ».
+
+    Réutilise volontairement le mécanisme `forbidden_dates` déjà câblé et
+    testé (`add_teacher_availability_constraints` pour l'étage dur,
+    `decomposed.py::_teacher_available_slots_by_week` pour la capacité de
+    l'étage 2) plutôt qu'un chemin de contrainte séparé — même granularité
+    (journée entière) que la sanctuarisation SAE par parcours, appliquée ici
+    au niveau ENSEIGNANT : un référent de SAE devient indisponible pour tout
+    cours classique ce jour-là, sur N'IMPORTE QUEL AUTRE parcours (une SAE
+    d'un parcours occupe l'enseignant, peu importe qui d'autre a cours ce
+    jour-là).
+
+    Certains référents (ex. FME, 28 jours cumulés sur 4 SAE) n'ont AUCUNE
+    ligne dans `CONTRAINTES ENSEIGNANTS` — une entrée minimale est créée pour
+    eux plutôt que de silencieusement les ignorer.
+    """
+    if not supervisor_dates:
+        return teachers
+
+    by_code = {t.teacher_code: t for t in teachers}
+    for code, dates in supervisor_dates.items():
+        if not dates:
+            continue
+        existing = by_code.get(code)
+        new_dates = {d.isoformat() for d in dates}
+        if existing is None:
+            by_code[code] = TeacherAvailability(
+                teacher_code=code,
+                metadata={"forbidden_dates": sorted(new_dates)},
+            )
+            continue
+        merged = sorted(set(existing.metadata.get("forbidden_dates") or ()) | new_dates)
+        by_code[code] = existing.model_copy(
+            update={"metadata": {**existing.metadata, "forbidden_dates": merged}}
         )
     return list(by_code.values())

@@ -6,6 +6,8 @@ from collections import defaultdict
 
 from ortools.sat.python import cp_model
 
+from cal_iut.calendar.academic import AcademicCalendar
+from cal_iut.models.entities import CourseTeacherOrderRule, TeacherAvailability
 from cal_iut.models.session import SessionToPlace
 from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY, TimeSlot, WeekDay
 
@@ -310,3 +312,239 @@ def _link_on_day(
 
     model.add(slot_var == start - day_base).only_enforce_if(on_day)
     model.add(slot_var == 0).only_enforce_if(on_day.Not())
+
+
+def add_teacher_monthly_clustering_penalties(
+    model: cp_model.CpModel,
+    sessions: list[SessionToPlace],
+    session_starts: dict[str, cp_model.IntVar],
+    availability: list[TeacherAvailability],
+    calendar: AcademicCalendar,
+    week_offset: int,
+    weeks: int,
+    weight: int,
+) -> list[cp_model.LinearExprT]:
+    """
+    Regroupe les interventions d'un enseignant sur peu de semaines par mois
+    civil — ex. Anthony Rageul (ARA) : « regrouper ses cours sur une ou deux
+    semaines successives par mois » (contrainte géographique), Justine Hussenet
+    (JHU) : « condenser les interventions » (elle n'est plus basée à Troyes).
+
+    Objectif MOU (arbitrage utilisateur du 10/08/2026, plutôt qu'une contrainte
+    dure « max 2 semaines/mois » qui risquerait l'infaisabilité : ARA porte à
+    lui seul les 34 TD de WRA507C). Deux termes pénalisés :
+
+    1. le nombre de semaines du mois où l'enseignant intervient, au-delà de
+       `monthly_cluster_max_weeks` — le cœur de la demande ;
+    2. l'écart entre la première et la dernière de ces semaines, au-delà de
+       `max_weeks - 1` — traduit le « successives » : deux semaines voisines
+       coûtent moins que deux semaines écartées d'un mois.
+
+    Le mois est celui du LUNDI de la semaine solveur, pour qu'une semaine à
+    cheval sur deux mois compte dans un seul et même mois.
+    """
+    if weight <= 0:
+        return []
+
+    wanted = {
+        a.teacher_code: a.monthly_cluster_max_weeks
+        for a in availability
+        if a.monthly_cluster_max_weeks
+    }
+    if not wanted:
+        return []
+
+    weeks_by_month: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for rel in range(weeks):
+        absolute = week_offset + rel
+        if not (0 <= absolute < len(calendar.teaching_mondays)):
+            continue
+        monday = calendar.teaching_mondays[absolute]
+        weeks_by_month[(monday.year, monday.month)].append(rel)
+
+    slots_per_week = DAYS_PER_WEEK * SLOTS_PER_DAY
+    max_week = max(0, weeks - 1)
+    penalties: list[cp_model.LinearExprT] = []
+    week_var_cache: dict[str, cp_model.IntVar] = {}
+
+    def week_var(session_id: str) -> cp_model.IntVar:
+        cached = week_var_cache.get(session_id)
+        if cached is None:
+            cached = model.new_int_var(0, max_week, f"clwk_{session_id}")
+            model.add_division_equality(cached, session_starts[session_id], slots_per_week)
+            week_var_cache[session_id] = cached
+        return cached
+
+    for teacher_code, max_weeks in sorted(wanted.items()):
+        teacher_sessions = [s for s in sessions if teacher_code in s.teacher_codes]
+        if len(teacher_sessions) <= max_weeks:
+            continue
+
+        for (year, month), month_weeks in sorted(weeks_by_month.items()):
+            if len(month_weeks) <= max_weeks:
+                continue
+            tag = f"{teacher_code}_{year}{month:02d}"
+            used_vars: list[cp_model.IntVar] = []
+            for rel in month_weeks:
+                used = model.new_bool_var(f"clused_{tag}_w{rel}")
+                # `used` est seulement borné PAR LE BAS (used >= chaque
+                # indicateur) : l'objectif le minimise, il vaut donc 0 dès
+                # qu'aucune séance n'est dans la semaine. Pas besoin de la
+                # réification complète, deux fois plus coûteuse.
+                for session in teacher_sessions:
+                    in_week = model.new_bool_var(f"clin_{tag}_{session.id}_w{rel}")
+                    model.add(week_var(session.id) == rel).only_enforce_if(in_week)
+                    model.add(week_var(session.id) != rel).only_enforce_if(in_week.Not())
+                    model.add(used >= in_week)
+                used_vars.append(used)
+
+            count = model.new_int_var(0, len(used_vars), f"clcount_{tag}")
+            model.add(count == sum(used_vars))
+            excess = model.new_int_var(0, len(used_vars), f"clexcess_{tag}")
+            model.add(excess >= count - max_weeks)
+            weighted = model.new_int_var(0, len(used_vars) * weight, f"clpen_{tag}")
+            model.add(weighted == excess * weight)
+            penalties.append(weighted)
+
+            # Terme "semaines successives" : écart entre la 1ère et la dernière
+            # semaine utilisée du mois, au-delà de max_weeks-1. Pondéré plus
+            # légèrement — c'est la nuance, pas la demande principale.
+            first = model.new_int_var(min(month_weeks), max(month_weeks), f"clfirst_{tag}")
+            last = model.new_int_var(min(month_weeks), max(month_weeks), f"cllast_{tag}")
+            for rel, used in zip(month_weeks, used_vars):
+                model.add(first <= rel).only_enforce_if(used)
+                model.add(last >= rel).only_enforce_if(used)
+            span_excess = model.new_int_var(0, len(month_weeks), f"clspan_{tag}")
+            model.add(span_excess >= last - first - (max_weeks - 1))
+            span_weighted = model.new_int_var(0, len(month_weeks) * weight, f"clspanpen_{tag}")
+            model.add(span_weighted == span_excess * max(1, weight // 4))
+            penalties.append(span_weighted)
+
+    return penalties
+
+
+def add_course_teacher_order_penalties(
+    model: cp_model.CpModel,
+    sessions: list[SessionToPlace],
+    session_starts: dict[str, cp_model.IntVar],
+    rules: list[CourseTeacherOrderRule],
+) -> list[cp_model.LinearExprT]:
+    """
+    Ordre SOUPLE entre les enseignants d'un même module — ex. WRA505C : « la
+    progression impose de commencer essentiellement avec les créneaux d'Ariane
+    Loizon au début de la ressource, pour basculer sur ceux d'Anthony Froli sur
+    la fin » (34 TD partagés 17/17).
+
+    Comparaison de la position MOYENNE des séances de chaque enseignant, par
+    produit croisé pour éviter la division — même technique que
+    `add_ordonnancement_constraints` en mode mou : `moyenne(A) < moyenne(B)`
+    <=> `somme(A) * len(B) < somme(B) * len(A)`.
+
+    Volontairement mou (arbitrage utilisateur du 10/08/2026) : une séparation
+    stricte « tous les TD d'ALO avant le premier d'AFR » entrerait en conflit
+    avec les indisponibilités propres d'AFR (mardi après-midi, jeudis après 17h)
+    sur un module qui occupe la quasi-totalité du semestre.
+    """
+    penalties: list[cp_model.LinearExprT] = []
+
+    for rule in rules:
+        by_teacher: dict[str, list[str]] = defaultdict(list)
+        for session in sessions:
+            if session.course_code != rule.course_code or session.semestre != rule.semestre:
+                continue
+            for code in session.teacher_codes:
+                if code in rule.teacher_order:
+                    by_teacher[code].append(session.id)
+
+        for earlier, later in zip(rule.teacher_order, rule.teacher_order[1:]):
+            ids_a, ids_b = by_teacher.get(earlier, []), by_teacher.get(later, [])
+            if not ids_a or not ids_b:
+                continue
+            lhs = cp_model.LinearExpr.sum([session_starts[i] for i in ids_a]) * len(ids_b)
+            rhs = cp_model.LinearExpr.sum([session_starts[i] for i in ids_b]) * len(ids_a)
+            safe = f"{rule.course_code}_{earlier}_{later}".replace("-", "_")
+            ok = model.new_bool_var(f"tord_ok_{safe}")
+            model.add(lhs < rhs).only_enforce_if(ok)
+            pen = model.new_int_var(0, rule.weight, f"tord_pen_{safe}")
+            model.add(pen == 0).only_enforce_if(ok)
+            model.add(pen == rule.weight).only_enforce_if(ok.Not())
+            penalties.append(pen)
+
+    return penalties
+
+
+def add_sae_supervisor_soft_penalties(
+    model: cp_model.CpModel,
+    sessions: list[SessionToPlace],
+    session_starts: dict[str, cp_model.IntVar],
+    supervisor_dates: dict[str, set],
+    calendar: AcademicCalendar,
+    week_offset: int,
+    weeks: int,
+    weight: int,
+) -> list[cp_model.LinearExprT]:
+    """
+    Repli MOU de `enforce_sae_supervisor_availability=False` : pénalise (sans
+    interdire) un cours classique placé pour un enseignant un jour où il
+    encadre une SAE — retour utilisateur du 11/08/2026, à activer seulement
+    si la version dure (`ingestion.constraints_loader.
+    augment_teacher_availability_with_sae_supervision`) s'avère infaisable sur
+    un cas réel, même patron de repli que `ordonnancement_hard=False`.
+
+    Grain du jour (comme la version dure), pas du créneau : un enseignant qui
+    encadre une SAE le matin reste considéré indisponible l'après-midi aussi
+    (cohérent avec la sanctuarisation SAE par parcours, "pas de saupoudrage
+    d'heures").
+    """
+    if weight <= 0 or not supervisor_dates:
+        return []
+
+    slots_per_week = DAYS_PER_WEEK * SLOTS_PER_DAY
+    horizon = weeks * slots_per_week
+
+    blocked_times_by_teacher: dict[str, set[int]] = {}
+    for teacher, dates in supervisor_dates.items():
+        times: set[int] = set()
+        for d in dates:
+            mapped = calendar.date_to_week_day(d)
+            if mapped is None:
+                continue
+            abs_week, day = mapped
+            rel = abs_week - week_offset
+            if 0 <= rel < weeks:
+                base = rel * slots_per_week + day * SLOTS_PER_DAY
+                times.update(range(base, base + SLOTS_PER_DAY))
+        if times:
+            blocked_times_by_teacher[teacher] = times
+
+    penalties: list[cp_model.LinearExprT] = []
+    for session in sessions:
+        if session.course_code.upper().startswith("WS"):
+            continue
+        for teacher_code in session.teacher_codes:
+            blocked_times = blocked_times_by_teacher.get(teacher_code)
+            if not blocked_times:
+                continue
+            duration = max(1, session.duration_slots)
+            start = session_starts[session.id]
+            hits = sorted(t for t in blocked_times if 0 <= t < horizon)
+            if not hits:
+                continue
+            # `hit` réifie "start tombe sur un créneau bloqué (compte tenu de
+            # la durée)" — reforbid direct par créneau plutôt qu'une liste
+            # d'autorisations sur tout l'horizon (bien moins coûteux à
+            # construire, même sémantique : hit=False force start hors de
+            # CHAQUE créneau bloqué, hit=True ne contraint rien mais coûte
+            # `weight`, donc jamais choisi par le minimiseur sauf nécessité).
+            hit = model.new_bool_var(f"saesup_hit_{session.id}_{teacher_code}")
+            for t in hits:
+                for k in range(duration):
+                    candidate = t - k
+                    if 0 <= candidate < horizon:
+                        model.add(start != candidate).only_enforce_if(hit.Not())
+            pen = model.new_int_var(0, weight, f"saesup_pen_{session.id}_{teacher_code}")
+            model.add(pen == weight).only_enforce_if(hit)
+            model.add(pen == 0).only_enforce_if(hit.Not())
+            penalties.append(pen)
+
+    return penalties

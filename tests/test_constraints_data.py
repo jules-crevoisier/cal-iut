@@ -8,8 +8,8 @@ from cal_iut.ingestion.constraints_loader import (
     load_all_constraints,
     parse_teacher_unavailability,
 )
-from cal_iut.models.session import SessionToPlace
 from cal_iut.models.entities import SessionType
+from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.cpsat import SolverConfig, TimetableSolver
 
 ROOT = Path(__file__).resolve().parents[1]

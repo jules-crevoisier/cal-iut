@@ -3,6 +3,7 @@
 import threading
 import uuid
 from dataclasses import dataclass
+from datetime import date as _date
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -10,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api.regen import RegenError, check_weeks_editable, regen_and_persist, resolve_semestre
+from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
     DiffResponse,
@@ -38,6 +39,7 @@ from cal_iut.api.validation import suggest_alternative_slots, validate_move
 from cal_iut.calendar.academic import semester_week_offset, week_status
 from cal_iut.db.models import CurrentPlacement
 from cal_iut.export.formatter import build_export_rows, to_csv, to_json
+from cal_iut.export.html_view import build_and_render
 from cal_iut.feedback.weights import analyze_corrections, apply_learned_weights
 from cal_iut.ingestion.config_loader import (
     load_groups,
@@ -49,14 +51,12 @@ from cal_iut.ingestion.config_loader import (
 )
 from cal_iut.ingestion.constraints_loader import load_all_constraints, merge_teacher_availability
 from cal_iut.ingestion.pipeline import SEMESTRE_GROUP_ANCHOR, run_ingestion
-from cal_iut.export.html_view import build_and_render
 from cal_iut.models.entities import Group
 from cal_iut.models.group_scope import expand_group_filter, related_group_ids
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.cpsat import PlacedSession, SolverConfig, TimetableSolver
 from cal_iut.solver.quality import compute_quality
 from cal_iut.solver.rooms import PlacedSessionWithRoom, assign_rooms, parse_room_rules
-from datetime import date as _date
 
 YEAR_DEFINITIONS: list[tuple[int, str, list[str]]] = [
     (1, "1re année (S1–S2)", ["S1", "S2"]),
@@ -133,6 +133,28 @@ def startup() -> None:
     state.student_presences = bundle.student_presences
     state.teacher_availability = merge_teacher_availability(yaml_teachers, bundle.teachers)
 
+    # Référent SAE = très peu disponible ces jours-là pour un cours classique
+    # (retour utilisateur 11/08/2026, cf. docs/DATA.md §48.2/§49) — augmenté
+    # ICI, une seule fois au démarrage, pour que le glisser-déposer manuel
+    # (`_teacher_availability_violations`) en tienne compte exactement comme
+    # le solveur (même fonction `augment_teacher_availability_with_sae_supervision`).
+    # Sur TOUS les semestres connus (pas seulement le groupe actuellement
+    # chargé) : l'état applicatif peut changer de scope via `/ingest` sans
+    # redémarrage, cette augmentation doit rester valable dans tous les cas.
+    from cal_iut.ingestion.constraints_loader import (
+        augment_teacher_availability_with_sae_supervision as _augment_sae,
+    )
+    from cal_iut.ingestion.pipeline import SEMESTRE_GROUPS
+    from cal_iut.ingestion.planning_loader import (
+        load_mmi_planning_for_semestres,
+        sae_supervisor_dates_by_teacher,
+    )
+
+    all_semestres = sorted({s for group in SEMESTRE_GROUPS.values() for s in group})
+    planning_all = load_mmi_planning_for_semestres(project_root, all_semestres)
+    supervisor_dates = sae_supervisor_dates_by_teacher(planning_all)
+    state.teacher_availability = _augment_sae(state.teacher_availability, supervisor_dates)
+
     repo = get_repo()
     db_weights = repo.weights_as_dict()
     yaml_weights = load_objective_weights(CONFIG_DIR)
@@ -198,20 +220,23 @@ def _try_restore_latest(state: object) -> None:
         pass
 
 
-if FRONTEND_DIST.exists():
-    app.mount("/app", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+
+@dataclass
+class _AppContext:
+    """Tout ce dont `build_payload` a besoin, calculé une seule fois et
+    partagé entre `/app-state` (JSON, consommé par le frontend React) et
+    `/legacy` (page HTML/JS historique) — même donnée, deux présentations."""
+
+    timetable_dict: dict[str, object]
+    semestre: str | None
+    sae_days_by_course: dict[str, set[tuple[int, int]]] | None
+    planning_events: list[dict[str, object]] | None
+    planning_event_slots: list[dict[str, object]] | None
+    exceptions: list[dict[str, object]]
+    sae_supervisor_dates: dict[str, set] | None = None
 
 
-@app.get("/", response_class=HTMLResponse)
-def timetable_view() -> HTMLResponse:
-    """
-    Interface web réelle (vue Groupe/Enseignant/Promo/Référence) — sert
-    EXACTEMENT le même rendu HTML/CSS/JS que `cal-iut export --format html`
-    (retour utilisateur : garder l'UI telle quelle, arrêter la publication
-    statique vers Claude Artifacts), généré en direct depuis l'état courant
-    du serveur (dernier `POST /solve`) plutôt qu'un fichier figé.
-    """
-    state = get_state()
+def _build_app_context(state: object) -> _AppContext:
     if not state.timetable:
         raise HTTPException(404, "Aucun planning résolu — lancez POST /ingest puis POST /solve d'abord")
 
@@ -238,6 +263,7 @@ def timetable_view() -> HTMLResponse:
     sae_days_by_course = None
     planning_events = None
     planning_event_slots = None
+    sae_supervisor_dates = None
     semestre = state.filter_semestre or (SEMESTRE_GROUP_ANCHOR.get(state.semestre_group) if state.semestre_group else None)
     if not semestre and state.sessions:
         semestre = state.sessions[0].semestre
@@ -247,6 +273,7 @@ def timetable_view() -> HTMLResponse:
             load_mmi_planning_for_semestres,
             planning_events_as_week_day_slots,
             planning_events_as_week_days,
+            sae_supervisor_dates_by_teacher,
             sae_windows_as_week_days,
         )
 
@@ -266,22 +293,85 @@ def timetable_view() -> HTMLResponse:
         planning_event_slots = planning_events_as_week_day_slots(
             planning, state.calendar.date_to_week_day_any, week_offset, n_weeks
         )
+        # Distingue, dans les violations enseignant affichées, un compromis
+        # MOU accepté (référent SAE ce jour-là) d'une vraie indisponibilité
+        # déclarée non respectée — cf. `_teacher_payload`, docs/DATA.md §59.
+        sae_supervisor_dates = sae_supervisor_dates_by_teacher(planning)
 
     repo = get_repo()
     exceptions = [_exception_to_response(r).model_dump() for r in repo.list_exceptions(active_only=True)]
 
-    html = build_and_render(
-        timetable_dict,
-        state.sessions,
-        state.groups,
-        calendar=state.calendar,
+    return _AppContext(
+        timetable_dict=timetable_dict,
         semestre=semestre,
-        teacher_availability=state.teacher_availability,
         sae_days_by_course=sae_days_by_course,
-        rooms=state.rooms,
         planning_events=planning_events,
         planning_event_slots=planning_event_slots,
         exceptions=exceptions,
+        sae_supervisor_dates=sae_supervisor_dates,
+    )
+
+
+@app.get("/app-state")
+def app_state() -> dict[str, object]:
+    """
+    Tout l'état applicatif en JSON — même calcul (`build_payload`) que celui
+    embarqué dans la page `/legacy`, exposé ici comme API pour le frontend
+    React (retour utilisateur 11/08/2026 : « je veux react en local, passe
+    toutes les fonctionnalités en local »). Source de vérité UNIQUE : les
+    vérifications (contraintes, SAE, violations enseignant) restent calculées
+    côté serveur, jamais redérivées côté client — cf. philosophie du projet
+    (« jamais une affirmation pré-écrite »).
+    """
+    state = get_state()
+    ctx = _build_app_context(state)
+    from cal_iut.export.html_view import build_payload
+    from cal_iut.ingestion.config_loader import load_teacher_contacts
+
+    return build_payload(
+        ctx.timetable_dict,
+        state.sessions,
+        state.groups,
+        calendar=state.calendar,
+        semestre=ctx.semestre,
+        teacher_availability=state.teacher_availability,
+        sae_days_by_course=ctx.sae_days_by_course,
+        rooms=state.rooms,
+        planning_events=ctx.planning_events,
+        planning_event_slots=ctx.planning_event_slots,
+        exceptions=ctx.exceptions,
+        teacher_contacts=load_teacher_contacts(state.config_dir),
+        sae_supervisor_dates=ctx.sae_supervisor_dates,
+    )
+
+
+@app.get("/legacy", response_class=HTMLResponse)
+def timetable_view() -> HTMLResponse:
+    """
+    Page HTML/JS historique (même rendu que `cal-iut export --format html`),
+    générée en direct depuis l'état courant du serveur. Conservée en accès
+    direct pour qui préfère cette présentation ou veut vérifier un rendu
+    identique à un fichier exporté ; l'interface par défaut est désormais le
+    frontend React servi à `/` (retour utilisateur 11/08/2026).
+    """
+    state = get_state()
+    ctx = _build_app_context(state)
+    from cal_iut.ingestion.config_loader import load_teacher_contacts
+
+    html = build_and_render(
+        ctx.timetable_dict,
+        state.sessions,
+        state.groups,
+        calendar=state.calendar,
+        semestre=ctx.semestre,
+        teacher_availability=state.teacher_availability,
+        sae_days_by_course=ctx.sae_days_by_course,
+        rooms=state.rooms,
+        planning_events=ctx.planning_events,
+        planning_event_slots=ctx.planning_event_slots,
+        exceptions=ctx.exceptions,
+        teacher_contacts=load_teacher_contacts(state.config_dir),
+        sae_supervisor_dates=ctx.sae_supervisor_dates,
     )
     return HTMLResponse(html)
 
@@ -774,11 +864,13 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
     """
     semestre = session.semestre
     from cal_iut.ingestion.planning_loader import (
+        ALL_PARCOURS,
         load_mmi_planning,
-        planning_event_blocked_slots,
+        planning_event_blocked_slots_by_parcours,
+        sae_group_labels_by_course,
         sae_windows_as_week_days,
     )
-    from cal_iut.solver.constraints import sae_blocked_days_by_parcours
+    from cal_iut.solver.constraints import sae_blocked_days_by_group, sae_blocked_days_by_parcours
     from cal_iut.solver.decomposed import _build_sequence_neighbors, _movable_bounds
 
     week_offset = semester_week_offset(state.calendar, semestre)
@@ -793,11 +885,27 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
                 extra_blocked.add((week, 3, slot))
 
     planning = load_mmi_planning(state.config_dir.parents[1], semestre)
-    extra_blocked |= planning_event_blocked_slots(planning, state.calendar.date_to_week_day_any, week_offset, n_weeks)
+    # Événements fixes : seuls ceux du parcours de la séance (ou sans parcours
+    # déclaré) la bloquent — la rentrée BUT1 ne doit pas geler un créneau BUT3.
+    event_blocked = planning_event_blocked_slots_by_parcours(
+        planning, state.calendar.date_to_week_day_any, week_offset, n_weeks
+    )
+    extra_blocked |= event_blocked.get(ALL_PARCOURS, set())
+    extra_blocked |= event_blocked.get(session.parcours, set())
 
     sae_days_by_course = sae_windows_as_week_days(planning, state.calendar.date_to_week_day, week_offset, n_weeks)
-    blocked_by_parcours = sae_blocked_days_by_parcours(state.sessions, sae_days_by_course)
-    for w, d in blocked_by_parcours.get(session.parcours, set()):
+    sae_group_labels = sae_group_labels_by_course(planning)
+    blocked_by_parcours = sae_blocked_days_by_parcours(
+        state.sessions, sae_days_by_course, sae_group_labels
+    )
+    blocked_days = set(blocked_by_parcours.get(session.parcours, set()))
+    if sae_group_labels:
+        blocked_by_group = sae_blocked_days_by_group(
+            state.sessions, sae_days_by_course, sae_group_labels, state.groups
+        )
+        for gid in session.group_ids:
+            blocked_days |= blocked_by_group.get(gid, set())
+    for w, d in blocked_days:
         for slot in range(6):
             extra_blocked.add((w, d, slot))
 
@@ -836,6 +944,38 @@ def _institutional_violations(
             "même cours (contenu attendu avant/après) — non modifiable, même en forçant."
         )
     return violations
+
+
+def _teacher_availability_violations(state: object, session: object, week: int, day: int, slot: int) -> list[str]:
+    """
+    Indisponibilité enseignant DÉCLARÉE — récurrente, dates précises, liste
+    blanche, parité de semaine, ET supervision SAE (`state.teacher_availability`
+    augmenté une fois au démarrage, cf. `startup()`) — jamais contournable via
+    `force`, au même titre que le verrou PAC/SAE/ordre pédagogique : un humain
+    n'a jamais de bonne raison de placer un cours chez un enseignant qui a
+    explicitement signalé son indisponibilité ce jour-là (retour utilisateur
+    11/08/2026 : "vérifie bien toutes les contraintes avant que ça
+    s'effectue"). Avant ce correctif, ces indisponibilités ne servaient qu'à
+    FILTRER les suggestions (`_teacher_free_at`, déjà appelé par
+    `_suggestions_for`) — un glisser-déposer direct sur une case arbitraire,
+    hors suggestion, pouvait les violer sans aucun garde-fou serveur.
+    """
+    from cal_iut.api.validation import _teacher_free_at
+
+    if not session.teacher_codes or not state.teacher_availability:
+        return []
+    semestre = session.semestre
+    week_offset = semester_week_offset(state.calendar, semestre)
+    d = state.calendar.week_day_to_date(week_offset + week, day)
+    if _teacher_free_at(
+        session.teacher_codes, week, day, slot, d, state.teacher_availability, state.calendar, week_offset
+    ):
+        return []
+    return [
+        f"Enseignant indisponible à ce créneau ({', '.join(session.teacher_codes)}) — "
+        "indisponibilité déclarée (contrainte enseignant ou encadrement SAE) — "
+        "non modifiable, même en forçant."
+    ]
 
 
 def _suggestions_for(state: object, session_id: str, match: object) -> tuple[list[SlotSuggestionResponse], str | None]:
@@ -903,6 +1043,7 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     if session:
         extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
         institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked, allowed_weeks)
+        institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if institutional:
             return ValidationResponse(valid=False, hard_conflicts=institutional, soft_warnings=[], suggestions=[], suggestions_note=None)
 
@@ -948,6 +1089,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
     if session:
         extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
         institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked, allowed_weeks)
+        institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if institutional:
             raise HTTPException(409, detail={
                 "message": "Conflit", "hard_conflicts": institutional,
@@ -1147,3 +1289,15 @@ def _to_placement(p: PlacedSessionWithRoom, sessions_by_id: dict[str, SessionToP
         is_eval=s.is_eval if s else False,
         locked=s.locked if s else False,
     )
+
+
+if FRONTEND_DIST.exists():
+    # Racine de l'app : le frontend React (retour utilisateur 11/08/2026,
+    # inverse la décision précédente qui servait la page HTML/JS ici — cf.
+    # `/legacy`, conservée). DOIT rester le DERNIER mount/route déclaré dans ce
+    # fichier : Starlette essaie les routes dans l'ORDRE D'AJOUT (donc l'ordre
+    # du fichier), et `Mount("/")` matche n'importe quel chemin — placé plus
+    # tôt, il aurait intercepté `/meta`, `/solve`, `/app-state`, etc. avant
+    # qu'elles n'atteignent leur handler Python (bug réel évité ici, pas
+    # théorique : c'était la position d'origine du mount avant ce correctif).
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")

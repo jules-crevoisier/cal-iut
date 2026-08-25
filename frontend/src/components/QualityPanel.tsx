@@ -2,41 +2,28 @@ import type { Quality } from "../types";
 
 interface QualityPanelProps {
   quality: Quality | null;
-  status: string;
   correctionsCount: number;
 }
 
-export function QualityPanel({ quality, status, correctionsCount }: QualityPanelProps) {
-  if (!quality) {
-    return (
-      <aside className="quality-panel empty">
-        <h2>Qualité</h2>
-        <p className="muted">Générez un planning pour voir les indicateurs.</p>
-      </aside>
-    );
-  }
+/**
+ * Détails de qualité qui n'ont PAS d'équivalent dans le nouveau `PageHeader`
+ * (§54) — statut solveur, trous et journées isolées y sont déjà affichés,
+ * les répéter ici avec des valeurs parfois différentes (deux sources de
+ * données distinctes : `appPayload.quality` pour l'en-tête, `quality`
+ * local — celui du dernier `/solve` de CETTE session — ici) était trompeur.
+ * Retour utilisateur 11/08/2026 : "je veux que celle du html enlève tout le
+ * superflu" — cf. docs/DATA.md §55.
+ */
+export function QualityPanel({ quality, correctionsCount }: QualityPanelProps) {
+  if (!quality) return null;
 
-  const gapLevel = quality.total_gaps === 0 ? "good" : quality.total_gaps < 50 ? "warn" : "bad";
+  const hasContent = quality.eval_days_with_multiple > 0 || correctionsCount > 0 || quality.unbalanced_groups.length > 0;
+  if (!hasContent) return null;
 
   return (
     <aside className="quality-panel">
-      <h2>Qualité du planning</h2>
-      <p className="status-line">
-        Statut solveur : <strong>{status}</strong>
-      </p>
-
+      <h2>Autres indicateurs</h2>
       <div className="metrics">
-        <Metric
-          label="Trous (priorité #1)"
-          value={quality.total_gaps}
-          level={gapLevel}
-          hint="Créneaux vides entre deux cours le même jour"
-        />
-        <Metric
-          label="Journées isolées"
-          value={quality.isolated_days}
-          level={quality.isolated_days === 0 ? "good" : "warn"}
-        />
         <Metric
           label="Évals empilées"
           value={quality.eval_days_with_multiple}

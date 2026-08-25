@@ -37,3 +37,16 @@ rules:
     slots_per_session: 2
     pair_from: end
     note: "Confirmé (retour utilisateur) : CM2+CM3 WR106 (éval fin de semestre) = bloc de 3h en amphi, CM1 reste seul."
+
+  # WRA308M (Écriture multimédia et narration, BUT2-CREACOM-FC) : 6 TD au
+  # total. Retour Marine Riguet : "prévoir les 3 derniers TD à la suite (sur
+  # une matinée ou une après-midi) pour que je puisse proposer une activité
+  # notée aux étudiants sur 4h30". `max_blocks: 1` est indispensable : sans
+  # lui, `pair_from: end` collerait AUSSI les TD 1-2-3 en un second bloc de
+  # 4h30, ce que personne n'a demandé.
+  - course_code: WRA308M
+    session_type: TD
+    slots_per_session: 3
+    pair_from: end
+    max_blocks: 1
+    note: "Confirmé (Marine Riguet) : les 3 derniers TD WRA308M = 1 bloc de 4h30 (activité notée)."

@@ -1,31 +1,81 @@
-# Package de données structurées — Générateur EDT BUT MMI 2026-2027
+# Contraintes structurées — Générateur EDT BUT MMI 2026-2027
 
-Ce package remplace et complète les extractions précédentes issues uniquement de la conversation PDF : il est construit **directement à partir des 6 fichiers sources officiels** que tu as fournis (CSV/XLSX/JSON), qui font foi. Les fichiers JSON numérotés sont conçus pour être chargés indépendamment par ton algorithme.
+**Ces fichiers sont GÉNÉRÉS. Ne jamais les éditer à la main.**
+
+Ils sont produits par `scripts/build_contraintes.py` à partir des fichiers
+sources officiels de `contraintes_update/` (CSV Google Sheets, `maquette.json`,
+`progression.json`, maquettes `.docx`). Après toute mise à jour d'un fichier
+source :
+
+```powershell
+python scripts/build_contraintes.py
+```
 
 ## Fichiers et provenance
 
 | Fichier | Contenu | Source |
 |---|---|---|
-| `01_regles_generales.json` | Règles stables : créneaux horaires, plafonds 33h/35h, couches de priorité, logique de compactage, 3 modes de répartition, cartographie des salles, règle de sanctuarisation SAE | Conversation préparatoire (aucun fichier officiel équivalent fourni) |
-| `02_calendrier_iut.json` | Vacances/pauses pédagogiques, jours fériés, jalons (rentrées, fin de semestre) | `INDISPONIBILITE_S_IUT_TROYES_-_2026-2027_-_Feuille_1.csv` |
-| `03_calendrier_alternance_officiel.json` | Semaines IUT vs entreprise pour BUT2-FC et BUT3-FC + conflits détectés automatiquement contre le calendrier IUT | `DISPONIBILITE_S_E_TUDIANTS_S3-FC___S4-FC...csv` + `...S5-FC___S6-FC...xlsx` |
-| `04_planning_hebdomadaire_par_promo.json` | Le planning officiel semaine par semaine (48 semaines) pour les 7 promotions/parcours (S1S2, S3S4-FI, S3S4DEV-FC, S3S4CREACOM-FC, S5S6-FI, S5S6DEV-FC, S5S6CREACOM-FC) : SAE actives, vacances, stages, rentrées, événements ponctuels | `Plannings_MMI_2026_2027.xlsx` (cellules fusionnées résolues) |
-| `05_enseignants_contraintes.json` | 20 enseignants avec contraintes brutes + une tentative de tokenisation (jour récurrent vs date précise) | `CONTRAINTES_ENSEIGNANTS_MMI_2026_2027_-_Feuille_1.csv` |
-| `06_salles.json` | Cartographie du bâtiment H | Conversation préparatoire (pas de fichier officiel dédié fourni) |
-| `07_modules_maquette_progression.json` | **182 modules** fusionnant la maquette (enseignants/volumes/blocs) et la progression pédagogique (ordre des séances CM/TD/TP, contraintes d'ordonnancement inter-modules) | `maquette.json` + `progression.json` (jointure sur `code_matiere`, unique) |
-| `08_alertes_qualite_donnees.json` | Conflits calendrier détectés, incohérences numériques dans la maquette, points restés flous | Calculé automatiquement + notes manuelles |
+| `01_regles_generales.json` | Règles stables : créneaux horaires, plafonds 33h/35h, couches de priorité, logique de compactage, modes de répartition, cartographie des salles, règle de sanctuarisation SAE | Conversation préparatoire (aucun fichier officiel équivalent) — **non généré** |
+| `02_calendrier_iut.json` | Vacances/pauses pédagogiques, jours fériés, jalons | `INDISPONIBILITÉS IUT TROYES - 2026-2027` |
+| `03_calendrier_alternance_officiel.json` | Semaines IUT vs entreprise pour BUT2-FC et BUT3-FC + conflits détectés contre le calendrier IUT | `DISPONIBILITÉS ÉTUDIANTS BUT2` + `BUT3` |
+| `05_enseignants_contraintes.json` | 22 enseignants : indisponibilités, **disponibilités en liste blanche**, règles de parité de semaine, regroupement mensuel | `CONTRAINTES ENSEIGNANTS MMI 2026_2027` |
+| `06_salles.json` | Cartographie du bâtiment H | Conversation préparatoire — **non généré** |
+| `07_modules_maquette_progression.json` | 182 modules fusionnant maquette (enseignants/volumes/blocs) et progression (ordre des séances, ordonnancement inter-modules) | `maquette.json` + `progression.json` |
+| `08_alertes_qualite_donnees.json` | Conflits calendrier, incohérences maquette, SAE sans dates, points ouverts | Calculé |
+| `09_dates_sae.json` | Dates de chaque SAE, **module par module**, avec restriction de groupe éventuelle | `DATES SAE 2026_2027` |
+| `10_dates_fixes.json` | Événements fixes horodatés (rentrées, interventions), **avec le parcours concerné** | `Dates MMI 26_27 - DATES OK` |
+| `maquette.json` / `progression.json` | Copies figées des exports officiels — `ingestion/fetch.py` les préfère au téléchargement distant | `contraintes_update/` |
 
-## Points critiques à connaître avant intégration
+`04_planning_hebdomadaire_par_promo.json` a été **supprimé** le 10/08/2026 :
+remplacé par `09` + `10`, qui nomment directement le module et le parcours là
+où l'ancienne feuille de tableur obligeait à deviner à quel code de cours
+correspondait un libellé « SAE103 » selon la piste.
 
-1. **Conflit non signalé par le fichier source lui-même** : la semaine du **26 au 30 avril 2027** est indiquée comme semaine IUT pour les **BUT3-FC (S5/S6)**, mais elle tombe entièrement dans la pause pédagogique de printemps de l'IUT. Contrairement au fichier BUT2-FC (qui auto-signale ses propres semaines en conflit avec la mention "mais IUT en pause pédagogique"), le fichier BUT3-FC ne signale rien pour cette semaine-là. Voir `08_alertes_qualite_donnees.json`.
-2. Le fichier `CONTRAINTES_ENSEIGNANTS` **confirme et clarifie** plusieurs points restés incertains dans l'extraction précédente issue du PDF :
-   - Barthélémy Tomasina (BTO) : disponible **mardi matin + mercredi**, indisponible mardi après-midi/jeudi après-midi/lundi/vendredi (résout l'incohérence signalée précédemment).
-   - Kévin Ngo (KNG) : en réalité indisponible le **vendredi** et la semaine du **2 au 6 novembre 2026** ; disponible lundi/mardi/mercredi toute la journée, jeudi à partir de 14h (pas "disponible le jeudi matin" comme indiqué dans une ancienne note).
-3. Le fichier `maquette.json` (182 modules) est **beaucoup plus complet** que ce qui avait été traité manuellement dans la conversation (qui ne couvrait en détail que S1 et une partie de S3-DEV-FI) : il couvre **tous les semestres S1 à S6** et les 3 parcours. C'est désormais la source de référence pour les volumes et enseignants.
-4. Le fichier `progression.json` apporte une donnée qui n'existait dans aucun document précédent : **l'ordre pédagogique des séances** (CM/TD/TP, quelles séances sont des évaluations) et des **contraintes d'enchaînement entre modules** (`ordonnancement`, ex. "WR103 après WR112, avant WS101"). 53 modules sur 182 ont une progression définie.
-5. `08_alertes_qualite_donnees.json` liste 36 incohérences numériques (nombre de groupes déclaré vs somme des groupes par enseignant) — fréquentes sur les SAE/PTUT où le champ ne compte pas forcément des groupes concurrents. À vérifier au cas par cas, ne pas corriger automatiquement.
+## Arbitrages utilisateur du 10/08/2026
 
-## Ce qui reste à apporter (non couvert par les fichiers fournis)
+Ces décisions ne se déduisent d'aucun fichier — elles ont été prises
+explicitement et sont câblées dans `scripts/build_contraintes.py`
+(cf. `_ARBITRAGES`) ou dans `data/config/*.yaml`.
 
-- Un fichier de salles officiel (la cartographie actuelle vient uniquement de la conversation préparatoire).
-- Les contraintes textuelles complexes de certains enseignants (Ariane Loizon sur WS501D/WRA505C, Thomas Castellengo sur la parité de semaine, Marine Riguet sur WR106/WRA308C) restent en texte libre dans `05_enseignants_contraintes.json` (`contraintes_pedagogiques_raw`) : elles nécessitent un encodage manuel dédié au moment de traiter ces modules précis, car leur logique est trop spécifique pour une règle générique.
+1. **`DATES SAE` fait foi, sans repli.** L'ancien planning n'est plus lu. En
+   conséquence, **S2/S4/S6 sont hors périmètre** pour 2026-2027 : le fichier ne
+   date que les SAE de S1/S3/S5. `pipeline.py::SEMESTRES_HORS_PERIMETRE`
+   avertit si on les demande quand même.
+2. **WS502D** : le découpage « 12/01 (AB) & 19/01 (CD) » vient d'une année
+   antérieure. BUT3-DEV-FI n'a plus qu'un TD (AB) : seules les dates du 12 et
+   13 janvier 2027 sont retenues, **pour le TD AB uniquement**.
+3. **Événements fixes = `Dates MMI` uniquement.** Les repères de l'ancien
+   planning (Intégration, Clés de Troyes, Conseil, Rattrapages, Stages,
+   Soutenances) disparaissent. Le S1 ne démarre pas avant le lundi 7 septembre
+   2026 (semaine 3) ; les dates de fin de semestre FI/FC restent inchangées.
+4. **Parité TCA** = numéro de semaine **département** (semaine 1 = ISO 35 2026),
+   basculable en ISO via `parity_reference` dans `05`, sans toucher au code.
+5. **Disponibilités = liste blanche DURE** (MNI, VBU, KNG, EHU) : les jours non
+   listés sont interdits. Sans ça, VBU — qui ne déclare aucune indisponibilité
+   mais n'est là que lundi/mardi/mercredi — restait plaçable les 5 jours.
+6. **RHU** indisponible du **lundi 19 au vendredi 23 octobre 2026** : le fichier
+   source écrit « du mardi 19 au vendredi 22 », or le 19 est un lundi et le 22
+   un jeudi — la semaine entière est bloquée pour couvrir les deux lectures.
+7. **ARA et JHU** : regroupement mensuel en objectif **mou** fortement pondéré
+   (ARA porte à lui seul les 34 TD de WRA507C ; en dur le problème risquerait
+   l'infaisabilité).
+8. **WS501D** : le plan enseignant détaillé d'ALO est ignoré (SAE non planifiée
+   par le solveur, et sa tranche « 26-30 octobre » tombe en pause pédagogique).
+   Seules les dates du CSV comptent.
+9. **WRA505C** : ALO avant AFR en objectif mou.
+10. **WRA308M** : bloc de 4h30 sur les **3 derniers TD uniquement**.
+11. **WR100BU** : fenêtres de dates **dures** par séance.
+
+## Points restés ouverts
+
+- **WSA501D** (S5 BUT3-DEV-FC, 34 TD) : dates « ??? » dans le fichier source →
+  aucune sanctuarisation possible. Signalé dans `08`.
+- **Dates de début de stages BUT2 et BUT3** : « à définir pour mi-avril ».
+  Listées dans `10_dates_fixes.json > a_fixer`.
+- **Salles** : aucun fichier source officiel. `01_regles_generales.json` et
+  `data/config/rooms.yaml` viennent de la conversation préparatoire.
+- **BUT2-DEV-FC gelé** cette année (effectif alternants insuffisant, cf.
+  `Maquette 2026 BUT2 S3-DEV-FC.docx`) : aucun module dans la maquette, le
+  solveur l'ignore naturellement. `Dates MMI` lui donne pourtant une rentrée le
+  14 septembre 2026 — sans effet, mais à retirer de la source si le gel se
+  confirme.

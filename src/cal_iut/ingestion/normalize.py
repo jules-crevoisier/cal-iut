@@ -1,6 +1,14 @@
 """Expansion des matières en séances atomiques à placer."""
 
-from cal_iut.models.entities import Course, DoubleSessionRule, Group, SessionType, Teacher, TeacherBlock, TeacherDuo
+from cal_iut.models.entities import (
+    Course,
+    DoubleSessionRule,
+    Group,
+    SessionType,
+    Teacher,
+    TeacherBlock,
+    TeacherDuo,
+)
 from cal_iut.models.session import SessionToPlace
 
 
@@ -215,6 +223,13 @@ def _merge_double_sessions(
     séances simples de 1h30 plutôt que d'inventer un créneau supplémentaire
     (règle "donnée fraîche" du projet : on ne fusionne que ce qui colle
     exactement).
+
+    `rule.max_blocks` limite le NOMBRE de blocs formés, les autres séances
+    restant simples — ex. WRA308M (Marine Riguet) : 6 TD au total, mais seuls
+    "les 3 derniers TD à la suite" doivent former un bloc de 4h30, les TD 1 à 3
+    gardant leur format 1h30 (`pair_from: end`, `slots_per_session: 3`,
+    `max_blocks: 1`). Sans cette borne, les 6 TD auraient formé 2 blocs de
+    4h30, ce que personne n'a demandé.
     """
     target_type = rule.session_type.value
     size = max(1, rule.slots_per_session)
@@ -231,19 +246,26 @@ def _merge_double_sessions(
         return head
 
     merged: list[dict[str, object]] = []
+    blocks_left = rule.max_blocks if rule.max_blocks is not None else len(targets)
+
     if rule.pair_from == "end":
-        remainder = len(targets) % size
-        merged.extend(targets[:remainder])
-        paired = targets[remainder:]
+        # Les blocs se forment depuis la FIN : on ne garde donc que les
+        # `blocks_left` derniers groupes de `size` séances, tout ce qui
+        # précède restant en séances simples.
+        keep = min(blocks_left, len(targets) // size)
+        split = len(targets) - keep * size
+        merged.extend(targets[:split])
+        paired = targets[split:]
         for i in range(0, len(paired), size):
             merged.append(_merge_chunk(paired[i : i + size]))
     else:
         for i in range(0, len(targets), size):
             chunk = targets[i : i + size]
-            if len(chunk) < size:
+            if len(chunk) < size or blocks_left <= 0:
                 merged.extend(chunk)
                 continue
             merged.append(_merge_chunk(chunk))
+            blocks_left -= 1
 
     return sorted(others + merged, key=lambda e: e.get("ordre", 0))
 

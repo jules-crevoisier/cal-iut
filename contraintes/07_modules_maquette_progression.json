@@ -122,10 +122,10 @@
       },
       {
         "block": "block1",
-        "cm": 0,
+        "cm": null,
         "td": 32,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "KBR",
@@ -898,7 +898,7 @@
         },
         {
           "ordre": 2,
-          "type": "TP",
+          "type": "TD",
           "eval": false
         },
         {
@@ -908,7 +908,7 @@
         },
         {
           "ordre": 4,
-          "type": "TD",
+          "type": "TP",
           "eval": false
         },
         {
@@ -948,6 +948,12 @@
         "position": "before",
         "code_matiere": "WS104",
         "nom_matiere": "Produire un contenu audio et vidéo",
+        "semestre": "S1"
+      },
+      {
+        "position": "before",
+        "code_matiere": "WR110",
+        "nom_matiere": "Production audio et vidéo",
         "semestre": "S1"
       }
     ],
@@ -1263,7 +1269,7 @@
         "cm": 0,
         "td": 3,
         "tp": 24,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 2,
         "code": "FLI",
@@ -1275,7 +1281,7 @@
         "cm": 0,
         "td": 3,
         "tp": 24,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 2,
         "code": "VBU",
@@ -1613,7 +1619,7 @@
         "cm": 0,
         "td": 2,
         "tp": 20,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 2,
         "code": "FME",
@@ -1937,7 +1943,7 @@
         "cm": 0,
         "td": 8,
         "tp": 16,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 2,
         "nbGpTp": 4,
         "code": "RDE",
@@ -2994,6 +3000,12 @@
         "code_matiere": "WR107",
         "nom_matiere": "Écriture multimédia et narration",
         "semestre": "S1"
+      },
+      {
+        "position": "before",
+        "code_matiere": "WS104",
+        "nom_matiere": "Produire un contenu audio et vidéo",
+        "semestre": "S1"
       }
     ],
     "commentaire_edt": null
@@ -3268,7 +3280,7 @@
         "cm": 5,
         "td": 20,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 4,
         "nbGpTp": 8,
         "code": "MRI",
@@ -3508,7 +3520,7 @@
         "cm": 2,
         "td": 8,
         "tp": 48,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 4,
         "nbGpTp": 8,
         "code": "AFR",
@@ -3907,7 +3919,7 @@
         "cm": 0,
         "td": 2,
         "tp": 24,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 2,
         "code": "FLI",
@@ -3919,7 +3931,7 @@
         "cm": 0,
         "td": 2,
         "tp": 24,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 2,
         "code": "VBU",
@@ -4071,7 +4083,7 @@
         "cm": 0,
         "td": 4,
         "tp": 12,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 2,
         "nbGpTp": 4,
         "code": "FLI",
@@ -4184,7 +4196,7 @@
         "cm": 0,
         "td": 2,
         "tp": 16,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 2,
         "code": "TCA",
@@ -4242,7 +4254,7 @@
         "cm": 0,
         "td": 6,
         "tp": 32,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 2,
         "nbGpTp": 4,
         "code": "FME",
@@ -5409,9 +5421,9 @@
     "parcours": "BUT2-DEV-FI",
     "is_admin_non_enseignement": false,
     "lead": {
-      "code": "ALO",
-      "nom": "LOIZON",
-      "prenom": "ARIANE"
+      "code": "JHU",
+      "nom": "HUSSENET",
+      "prenom": "JUSTINE"
     },
     "volumes_etudiant_seances": {
       "cm": 2,
@@ -5421,10 +5433,10 @@
     "profs": [
       {
         "block": "block1",
-        "cm": 2,
+        "cm": 0,
         "td": 6,
         "tp": 12,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 2,
         "nbGpTp": 4,
         "code": "JHU",
@@ -5613,7 +5625,7 @@
         "cm": 1,
         "td": 4,
         "tp": 28,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 2,
         "nbGpTp": 4,
         "code": "JLE",
@@ -6875,9 +6887,9 @@
     "parcours": "BUT2-CREACOM-FC",
     "is_admin_non_enseignement": false,
     "lead": {
-      "code": "ALO",
-      "nom": "LOIZON",
-      "prenom": "ARIANE"
+      "code": "JHU",
+      "nom": "HUSSENET",
+      "prenom": "JUSTINE"
     },
     "volumes_etudiant_seances": {
       "cm": 0,
@@ -6890,7 +6902,7 @@
         "cm": 0,
         "td": 4,
         "tp": 4,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "JHU",
@@ -7028,7 +7040,7 @@
         "cm": 0,
         "td": 10,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "JLE",
@@ -7151,9 +7163,9 @@
     "parcours": "BUT2-CREACOM-FC",
     "is_admin_non_enseignement": false,
     "lead": {
-      "code": "LBA",
-      "nom": "HENRIOT BARBELIN",
-      "prenom": "LAURIE"
+      "code": "JHU",
+      "nom": "HUSSENET",
+      "prenom": "JUSTINE"
     },
     "volumes_etudiant_seances": {
       "cm": 0,
@@ -7169,9 +7181,9 @@
         "ptut": 0,
         "nbGpTd": 1,
         "nbGpTp": 1,
-        "code": "LBA",
-        "nom": "HENRIOT BARBELIN",
-        "prenom": "LAURIE"
+        "code": "JHU",
+        "nom": "HUSSENET",
+        "prenom": "JUSTINE"
       }
     ],
     "mode_repartition_suggere": "solo",
@@ -7258,7 +7270,7 @@
         "cm": 0,
         "td": 0,
         "tp": 7,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "AFR",
@@ -7350,7 +7362,7 @@
         "cm": 0,
         "td": 0,
         "tp": 19,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "KBR",
@@ -7611,7 +7623,7 @@
         "cm": 0,
         "td": 5,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "AFR",
@@ -7657,7 +7669,7 @@
         "cm": 0,
         "td": 0,
         "tp": 16,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "GLE",
@@ -10866,10 +10878,10 @@
         "block": "block1",
         "cm": 0,
         "td": 14,
-        "tp": 8,
+        "tp": 6,
         "ptut": 0,
         "nbGpTd": 1,
-        "nbGpTp": 1,
+        "nbGpTp": 2,
         "code": "RDE",
         "nom": "DELON",
         "prenom": "ROMAIN"
@@ -10878,16 +10890,16 @@
         "block": "block1",
         "cm": 0,
         "td": 14,
-        "tp": 4,
-        "ptut": 0,
+        "tp": 6,
+        "ptut": null,
         "nbGpTd": 1,
-        "nbGpTp": 1,
+        "nbGpTp": 2,
         "code": "DAN",
         "nom": "ANNEBICQUE",
         "prenom": "DAVID"
       }
     ],
-    "mode_repartition_suggere": "repartition_inegale (a verifier manuellement)",
+    "mode_repartition_suggere": "symetrique_ou_tournant (volumes identiques, verifier si rotation ou blocs fixes)",
     "groupes_total_module": {
       "td": 1,
       "tp": 2
@@ -10923,7 +10935,7 @@
       {
         "block": "block1",
         "cm": 0,
-        "td": 15,
+        "td": 14,
         "tp": 5,
         "ptut": 0,
         "nbGpTd": 1,
@@ -11272,7 +11284,7 @@
         "cm": 0,
         "td": 12,
         "tp": 12,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 2,
         "code": "TCA",
@@ -11685,7 +11697,7 @@
         "cm": 0,
         "td": 4,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "AFR",
@@ -11731,7 +11743,7 @@
         "cm": 0,
         "td": 4,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "AFR",
@@ -12050,7 +12062,7 @@
         "cm": 0,
         "td": 34,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "BTO",
@@ -12986,7 +12998,7 @@
         "cm": 0,
         "td": 17,
         "tp": 0,
-        "ptut": 0,
+        "ptut": null,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "BTO",

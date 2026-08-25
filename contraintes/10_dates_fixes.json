@@ -1,0 +1,151 @@
+{
+  "source": "Dates MMI 26_27 - DATES OK.csv",
+  "genere_par": "scripts/build_contraintes.py",
+  "regle_lecture": "Evenement obligatoire a une date/heure fixe. Les creneaux couverts sont bloques pour les cours classiques des SEULS parcours listes dans `parcours` (liste vide = information seulement, aucun blocage).",
+  "evenements": [
+    {
+      "date": "2026-08-31",
+      "debut": "14h00",
+      "fin": "15h30",
+      "debut_minutes": 840,
+      "fin_minutes": 930,
+      "salle": "H.018",
+      "parcours": [
+        "BUT3-DEV-FC"
+      ],
+      "parcours_source": "S5-DEV-FC",
+      "motif": "Rentrée"
+    },
+    {
+      "date": "2026-08-31",
+      "debut": "14h00",
+      "fin": "15h30",
+      "debut_minutes": 840,
+      "fin_minutes": 930,
+      "salle": "H.018",
+      "parcours": [
+        "BUT3-CREACOM-FC"
+      ],
+      "parcours_source": "S5-CREACOM-FC",
+      "motif": "Rentrée"
+    },
+    {
+      "date": "2026-09-02",
+      "debut": "9h00",
+      "fin": "11h00",
+      "debut_minutes": 540,
+      "fin_minutes": 660,
+      "salle": "H.018",
+      "parcours": [
+        "BUT1"
+      ],
+      "parcours_source": "S1",
+      "motif": "Rentrée"
+    },
+    {
+      "date": "2026-09-02",
+      "debut": "14h00",
+      "fin": "15h30",
+      "debut_minutes": 840,
+      "fin_minutes": 930,
+      "salle": "H.018",
+      "parcours": [
+        "BUT2-DEV-FI"
+      ],
+      "parcours_source": "S3-DEV-FI",
+      "motif": "Rentrée"
+    },
+    {
+      "date": "2026-09-02",
+      "debut": "15h30",
+      "fin": "17h00",
+      "debut_minutes": 930,
+      "fin_minutes": 1020,
+      "salle": "H.018",
+      "parcours": [
+        "BUT3-DEV-FI"
+      ],
+      "parcours_source": "S5-DEV-FI",
+      "motif": "Rentrée"
+    },
+    {
+      "date": "2026-09-08",
+      "debut": "9h30",
+      "fin": "12h30",
+      "debut_minutes": 570,
+      "fin_minutes": 750,
+      "salle": "H.018",
+      "parcours": [
+        "BUT1"
+      ],
+      "parcours_source": "S1",
+      "motif": "Echange IA"
+    },
+    {
+      "date": "2026-09-08",
+      "debut": "17h00",
+      "fin": "18h30",
+      "debut_minutes": 1020,
+      "fin_minutes": 1110,
+      "salle": "A.018",
+      "parcours": [
+        "BUT1"
+      ],
+      "parcours_source": "S1",
+      "motif": "Présentation des services aux nouveaux étudiants"
+    },
+    {
+      "date": "2026-09-14",
+      "debut": "9h30",
+      "fin": "11h00",
+      "debut_minutes": 570,
+      "fin_minutes": 660,
+      "salle": "H.018",
+      "parcours": [
+        "BUT2-DEV-FC"
+      ],
+      "parcours_source": "S3-DEV-FC",
+      "motif": "Rentrée"
+    },
+    {
+      "date": "2026-09-14",
+      "debut": "9h30",
+      "fin": "11h00",
+      "debut_minutes": 570,
+      "fin_minutes": 660,
+      "salle": "H.018",
+      "parcours": [
+        "BUT2-CREACOM-FC"
+      ],
+      "parcours_source": "S3-CREACOM-FC",
+      "motif": "Rentrée"
+    },
+    {
+      "date": "2026-09-17",
+      "debut": "9h30",
+      "fin": "11h00",
+      "debut_minutes": 570,
+      "fin_minutes": 660,
+      "salle": "Amphi GMP/GEII",
+      "parcours": [
+        "BUT1"
+      ],
+      "parcours_source": "S1",
+      "motif": "VSS - Interventions"
+    }
+  ],
+  "a_fixer": [
+    {
+      "date_brute": "à définir pour mi-avril",
+      "motif": "Date de début de stages BUT3",
+      "parcours": [],
+      "statut": "A FIXER"
+    },
+    {
+      "date_brute": "à définir pour mi-avril",
+      "motif": "Date de début de stages BUT2",
+      "parcours": [],
+      "statut": "A FIXER"
+    }
+  ]
+}

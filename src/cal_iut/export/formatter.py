@@ -4,8 +4,7 @@ import csv
 import io
 from dataclasses import dataclass
 
-from cal_iut.models.timetable import TimeSlot, WeekDay
-
+from cal_iut.models.timetable import TimeSlot
 
 DAY_LABELS = ("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi")
 

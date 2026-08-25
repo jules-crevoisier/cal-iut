@@ -102,13 +102,19 @@
   .timeline-item.special { border-left: 3px solid var(--accent2); }
 
   /* --- onglets --- */
-  .tabbar { display: flex; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tabbar { display: flex; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 0; flex-wrap: wrap; }
   .tabbtn {
     font: inherit; font-weight: 600; font-size: .88rem; padding: 9px 16px; border: none; background: none;
     color: var(--ink-soft); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
   }
   .tabbtn.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tabbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .searchopenbtn {
+    font: inherit; font-weight: 600; font-size: .82rem; padding: 7px 14px; margin-left: auto; align-self: center;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2);
+    color: var(--ink-soft); cursor: pointer;
+  }
+  .searchopenbtn:hover { border-color: var(--accent); color: var(--accent); }
   .tabpanel { display: none; flex-direction: column; gap: 18px; }
   .tabpanel.active { display: flex; }
 
@@ -290,6 +296,98 @@
   .subtabbtn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 
   footer.note { font-size: .78rem; color: var(--ink-soft); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 14px; }
+
+  /* Lien personnel d'un enseignant (`#...&mode=prof`) : une seule vue, rien à
+     cliquer d'autre. La barre d'onglets réduite à un seul bouton n'apporte
+     plus rien, on la masque. */
+  body.teacher-mode .tabbar { display: none; }
+  body.teacher-mode #stats { display: none; }
+
+  /* Recherche globale (Ctrl+K) */
+  .searchoverlay {
+    position: fixed; inset: 0; z-index: 50; display: flex; justify-content: center;
+    padding-top: 12vh; background: rgba(0, 0, 0, .45);
+  }
+  .searchoverlay[hidden] { display: none; }
+  .searchbox {
+    width: min(620px, 92vw); max-height: 70vh; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .35); overflow: hidden;
+  }
+  .searchbox input {
+    padding: 15px 18px; border: 0; border-bottom: 1px solid var(--border);
+    background: transparent; color: var(--ink); font: inherit; font-size: 1rem; outline: none;
+  }
+  .searchresults { overflow-y: auto; }
+  .searchresults .hit {
+    display: flex; gap: 10px; align-items: baseline; width: 100%; padding: 10px 18px;
+    border: 0; background: transparent; color: var(--ink); font: inherit;
+    text-align: left; cursor: pointer;
+  }
+  .searchresults .hit:hover, .searchresults .hit.sel { background: var(--accent-soft); }
+  .searchresults .hit .kind {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-soft); min-width: 82px;
+  }
+  .searchresults .hit .sub { color: var(--ink-soft); font-size: .78rem; }
+  .searchhint { padding: 8px 18px; border-top: 1px solid var(--border); color: var(--ink-soft); font-size: .72rem; }
+  .searchempty { padding: 18px; color: var(--ink-soft); font-size: .85rem; }
+
+  /* Panneau « à traiter » */
+  .todo-item {
+    display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left;
+    padding: 11px 13px; margin-bottom: 8px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font: inherit;
+  }
+  .todo-item:hover { border-color: var(--accent); }
+  .todo-item .sev { font-size: .68rem; font-weight: 700; text-transform: uppercase; min-width: 74px; }
+  .todo-item.bad .sev { color: var(--bad); }
+  .todo-item.warn .sev { color: var(--warn); }
+  .todo-item .sub { color: var(--ink-soft); font-size: .79rem; margin-top: 2px; }
+
+  /* Barre de jours : masquée en affichage large (la grille montre déjà les 5
+     jours), affichée dès qu'on passe à la lecture jour par jour. */
+  .daystrip { display: none; gap: 6px; margin-bottom: 10px; }
+  .daystrip button {
+    flex: 1 1 0; padding: 9px 4px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--ink-soft); font: inherit; font-size: .82rem; font-weight: 600;
+  }
+  .daystrip button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .daystrip .dshort { display: none; }
+
+  /* Lecture sur téléphone : la semaine se lit jour par jour (retour
+     utilisateur 10/08/2026 — « rend le responsive en découpant les semaines en
+     jours »). Le seuil est le même que `narrowMq` côté script ; les deux
+     doivent rester alignés. */
+  @media (max-width: 760px) {
+    .page { padding: 12px; }
+    .daystrip { display: flex; }
+    .daystrip .dfull { display: none; }
+    .daystrip .dshort { display: inline; }
+    .layout { grid-template-columns: 1fr; }
+    .controls { flex-direction: column; align-items: stretch; }
+    .grid .timecol, .grid .timecell { width: 58px; font-size: .68rem; }
+    .grid td, .grid th { padding: 4px; }
+    .tabbar { overflow-x: auto; }
+    .tabbtn { white-space: nowrap; }
+    header.top { flex-direction: column; align-items: flex-start; gap: 8px; }
+  }
+
+  /* Impression : un enseignant imprime son planning pour l'afficher ou
+     l'emporter. Sans ça, la page sort avec ses contrôles, ses onglets inactifs
+     et un fond sombre illisible en noir et blanc. */
+  @media print {
+    :root { --surface: #fff; --surface-2: #fff; --ink: #000; --ink-soft: #444; --border: #999; }
+    body { background: #fff; color: #000; }
+    .tabbar, .controls, .no-print, .weekbar, .weekbar-caption, footer.note, #stats { display: none !important; }
+    .tabpanel { display: none !important; }
+    .tabpanel.active { display: block !important; }
+    .page { max-width: none; padding: 0; }
+    .panel { border: 1px solid #999; box-shadow: none; break-inside: avoid; }
+    .grid td, .grid th { border-color: #999; }
+    a[href]::after { content: ""; }
+  }
 </style>
 
 <div class="page">
@@ -311,7 +409,31 @@
     <button class="tabbtn" data-tab="promo" type="button">Vue Promo</button>
     <button class="tabbtn" data-tab="reference" type="button">Référence</button>
     <button class="tabbtn" data-tab="contraintes" type="button">Contraintes</button>
+    <button class="tabbtn" data-tab="apf" type="button">À traiter <span class="pill mini" id="todoCount" style="margin-left:6px;"></span></button>
+    <button class="searchopenbtn no-print" id="searchOpenBtn" type="button">Rechercher <span class="mono" style="opacity:.6;">Ctrl+K</span></button>
   </nav>
+
+  <!-- Recherche globale : évite de parcourir six onglets et autant de listes
+       déroulantes pour retrouver un enseignant, un cours, une salle ou un groupe. -->
+  <div class="searchoverlay no-print" id="searchOverlay" hidden>
+    <div class="searchbox">
+      <input type="search" id="searchInput" placeholder="Enseignant, cours, salle ou groupe…" autocomplete="off">
+      <div class="searchresults" id="searchResults"></div>
+      <div class="searchhint">↑↓ pour naviguer · Entrée pour ouvrir · Échap pour fermer</div>
+    </div>
+  </div>
+
+  <!-- ============ ONGLET À TRAITER ============ -->
+  <section class="tabpanel" id="tab-apf">
+    <section class="panel">
+      <h3 style="font-size:1rem; margin-bottom:4px;">Ce qui demande une décision</h3>
+      <p style="color:var(--ink-soft); font-size:.84rem; margin:0 0 12px;">
+        Agrégé depuis la sortie brute du solveur : contraintes enseignantes violées,
+        séances hors de leur fenêtre SAE, journées trouées. Chaque ligne ouvre le créneau concerné.
+      </p>
+      <div id="todoList"></div>
+    </section>
+  </section>
 
   <!-- ============ ONGLET SEMAINE (édition manuelle) ============ -->
   <section class="tabpanel active" id="tab-semaine">
@@ -376,6 +498,14 @@
         <label for="groupSelect">Groupe étudiant</label>
         <select id="groupSelect"></select>
       </div>
+      <div class="field no-print" style="flex:0 0 auto;">
+        <label>Partager / emporter</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="subtabbtn" id="groupLinkBtn">Copier son lien</button>
+          <button type="button" class="subtabbtn" id="groupIcsBtn">Agenda .ics</button>
+          <button type="button" class="subtabbtn" id="groupPrintBtn">Imprimer</button>
+        </div>
+      </div>
       <div class="field" style="min-width:260px; flex:1 1 260px;">
         <label for="groupWeekLabel">Semaine</label>
         <div class="weekbar" id="groupWeekBar"></div>
@@ -414,6 +544,14 @@
         <div class="weekbar" id="teacherWeekBar"></div>
         <div class="weekbar-caption"><span id="teacherWeekFirst"></span><span id="teacherWeekCaption"></span><span id="teacherWeekLast"></span></div>
       </div>
+      <div class="field no-print" style="flex:0 0 auto;">
+        <label>Partager / emporter</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="subtabbtn" id="teacherLinkBtn">Copier son lien</button>
+          <button type="button" class="subtabbtn" id="teacherIcsBtn">Agenda .ics</button>
+          <button type="button" class="subtabbtn" id="teacherPrintBtn">Imprimer</button>
+        </div>
+      </div>
     </section>
 
     <div class="callout" id="teacherConstraintCallout"></div>
@@ -427,6 +565,11 @@
         <h3 style="font-size:1rem; margin-bottom:12px;">Sa contrainte, telle que déclarée</h3>
         <div id="teacherRaw"></div>
       </div>
+    </section>
+
+    <section class="panel">
+      <h3 style="font-size:1rem; margin-bottom:12px;">Toutes ses interventions du semestre</h3>
+      <div id="teacherAgenda"></div>
     </section>
   </section>
 
@@ -460,6 +603,7 @@
         <button class="subtabbtn active" data-subtab="salles" type="button">Salles</button>
         <button class="subtabbtn" data-subtab="cours" type="button">Cours</button>
         <button class="subtabbtn" data-subtab="calendrier" type="button">Calendrier</button>
+        <button class="subtabbtn" data-subtab="liens" type="button">Liens enseignants</button>
       </div>
 
       <div id="refpanel-salles" class="ref-table-wrap">
@@ -470,6 +614,27 @@
       </div>
       <div id="refpanel-calendrier" style="display:none;">
         <div class="timeline" id="institutionalTimeline"></div>
+      </div>
+      <div id="refpanel-liens" style="display:none;">
+        <p style="color:var(--ink-soft); font-size:.84rem; margin:0 0 12px;">
+          Un lien par destinataire, à transmettre tel quel : il ouvre le fichier
+          directement sur SON planning, en lecture seule, sans les onglets d'édition.
+          Le lien fonctionne aussi bien sur ce fichier envoyé par mail que sur l'application servie.
+          Le bouton <span class="mono">.ics</span> produit un fichier à importer dans son propre agenda.
+        </p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+          <button type="button" class="subtabbtn" id="copyAllLinksBtn">Copier tous les liens</button>
+          <button type="button" class="subtabbtn" id="downloadLinksCsvBtn">Télécharger l'annuaire (.csv)</button>
+        </div>
+
+        <h4 style="font-size:.9rem; margin:0 0 8px;">Enseignants</h4>
+        <div class="ref-table-wrap" id="teacherLinksTable"></div>
+
+        <h4 style="font-size:.9rem; margin:18px 0 8px;">Groupes étudiants</h4>
+        <p style="color:var(--ink-soft); font-size:.8rem; margin:0 0 8px;">
+          À donner aux délégués : même principe, sur l'emploi du temps du groupe.
+        </p>
+        <div class="ref-table-wrap" id="groupLinksTable"></div>
       </div>
     </section>
   </section>
@@ -595,7 +760,7 @@
   // Deux catégories distinctes (retour utilisateur, 06/08/2026) : les
   // événements avec horaire explicite ("9h30 Echange IA", "17h/18h30
   // Présentation...") sont réellement bloquants côté solveur (cf.
-  // `planning_event_blocked_slots`) et ne doivent apparaître QUE sur leur(s)
+  // `planning_event_blocked_slots_by_parcours`) et ne doivent apparaître QUE sur leur(s)
   // créneau(x) précis (`payload.eventSlotRows`, grain du créneau) ; les
   // événements sans horaire ("Clés de Troyes", "Rattrapages"...) restent
   // purement indicatifs — journée entière, jamais bloquants pour un dépôt en
@@ -604,12 +769,28 @@
   for (const r of (payload.holidayRows || [])) if (!holidayByKey.has(`${r.w}-${r.d}`)) holidayByKey.set(`${r.w}-${r.d}`, r);
   const eventByKey = new Map(); // "week-day" -> [labels] (SANS horaire, indicatif)
   for (const r of (payload.eventRows || [])) eventByKey.set(`${r.w}-${r.d}`, r.labels);
-  const eventSlotByKey = new Map(); // "week-day-slot" -> [labels] (AVEC horaire, bloquant)
+  // Chaque entrée porte le PARCOURS concerné (`r.parcours`, liste vide = tous),
+  // depuis que le fichier officiel "Dates MMI" le nomme. Un événement à
+  // horaire ne bloque que ce parcours côté solveur
+  // (`planning_event_blocked_slots_by_parcours`) : l'affichage doit filtrer
+  // pareil, sinon la rentrée BUT1 du 2 septembre 9h-11h apparaîtrait comme un
+  // créneau bloqué dans le calendrier des BUT2/BUT3, qui ont leur propre
+  // rentrée le même jour à 14h et 15h30.
+  const eventSlotByKey = new Map(); // "week-day-slot" -> [{label, parcours}] (AVEC horaire, bloquant)
   for (const r of (payload.eventSlotRows || [])) {
     const key = `${r.w}-${r.d}-${r.s}`;
-    (eventSlotByKey.get(key) || eventSlotByKey.set(key, []).get(key)).push(r.label);
+    if (!eventSlotByKey.has(key)) eventSlotByKey.set(key, []);
+    eventSlotByKey.get(key).push({ label: r.label, parcours: r.parcours || [] });
   }
-  function dayBandsForWeek(week) {
+  function eventLabelsAt(key, parcours) {
+    const rows = eventSlotByKey.get(key);
+    if (!rows) return null;
+    const kept = rows
+      .filter(r => !r.parcours.length || !parcours || r.parcours.includes(parcours))
+      .map(r => r.label);
+    return kept.length ? kept : null;
+  }
+  function dayBandsForWeek(week, parcours) {
     const holidays = {}, events = {}, eventSlots = {};
     let any = false;
     for (let d = 0; d < 5; d++) {
@@ -620,7 +801,7 @@
       const slotsForDay = {};
       let hasSlotEvent = false;
       for (let s = 0; s < 6; s++) {
-        const se = eventSlotByKey.get(`${week}-${d}-${s}`);
+        const se = eventLabelsAt(`${week}-${d}-${s}`, parcours);
         if (se) { slotsForDay[s] = se; hasSlotEvent = true; }
       }
       if (hasSlotEvent) { eventSlots[d] = slotsForDay; any = true; }
@@ -671,15 +852,65 @@
     </div>`;
   }).join('');
 
+  // ---------- routage par URL (liens partageables) ----------
+  //
+  // L'état de navigation vit dans le fragment d'URL (`#vue=prof&prof=KBR`),
+  // pas seulement en mémoire : c'est ce qui rend une vue PARTAGEABLE. Le
+  // fragment n'est jamais envoyé au serveur, donc ça marche aussi bien sur un
+  // fichier ouvert en local (file://) que sur l'app servie — un enseignant
+  // peut recevoir le fichier par mail et son lien continue de l'amener sur SON
+  // planning.
+  //
+  // `mode=prof` bascule en lecture seule sur un seul enseignant : c'est le
+  // lien que l'on donne aux enseignants, sans les onglets d'édition qui ne les
+  // concernent pas et où ils risqueraient de casser le planning.
+  const route = {
+    read() {
+      const raw = (location.hash || '').replace(/^#/, '');
+      const params = new URLSearchParams(raw);
+      return {
+        vue: params.get('vue') || '',
+        prof: params.get('prof') || '',
+        groupe: params.get('groupe') || '',
+        sem: params.get('sem') ? Number(params.get('sem')) : null,
+        mode: params.get('mode') || '',
+      };
+    },
+    write(patch) {
+      const current = route.read();
+      const next = { ...current, ...patch };
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(next)) {
+        if (v !== '' && v !== null && v !== undefined) params.set(k, String(v));
+      }
+      const hash = '#' + params.toString();
+      if (hash !== location.hash) history.replaceState(null, '', hash);
+    },
+    link(patch) {
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(patch)) {
+        if (v !== '' && v !== null && v !== undefined) params.set(k, String(v));
+      }
+      return location.origin === 'null'
+        ? location.pathname + '#' + params.toString()
+        : location.origin + location.pathname + '#' + params.toString();
+    },
+  };
+  const teacherMode = route.read().mode === 'prof' && !!route.read().prof;
+
   // ---------- onglets ----------
   const tabbar = document.getElementById('tabbar');
+  function activateTab(name) {
+    for (const b of tabbar.querySelectorAll('.tabbtn')) b.classList.toggle('active', b.dataset.tab === name);
+    for (const panel of document.querySelectorAll('.tabpanel')) {
+      panel.classList.toggle('active', panel.id === 'tab-' + name);
+    }
+  }
   tabbar.addEventListener('click', (e) => {
     const btn = e.target.closest('.tabbtn');
     if (!btn) return;
-    for (const b of tabbar.querySelectorAll('.tabbtn')) b.classList.toggle('active', b === btn);
-    for (const panel of document.querySelectorAll('.tabpanel')) {
-      panel.classList.toggle('active', panel.id === 'tab-' + btn.dataset.tab);
-    }
+    activateTab(btn.dataset.tab);
+    route.write({ vue: btn.dataset.tab });
   });
 
   // ---------- utilitaires cohortes / rendu calendrier générique ----------
@@ -705,8 +936,54 @@
       </div>`;
   }
 
+  // ---------- affichage étroit : une semaine se lit jour par jour ----------
+  //
+  // Un enseignant ouvre son lien depuis son téléphone. Une grille de 5 jours ×
+  // 6 créneaux y impose de scroller horizontalement et de zoomer : illisible.
+  // En dessous de 760px, la même grille n'affiche donc qu'UN jour à la fois,
+  // choisi dans une barre de jours — le tableau garde sa structure (une colonne
+  // au lieu de cinq), donc tout le rendu de séance, les bandeaux SAE/férié/PAC
+  // et le glisser-déposer continuent de fonctionner sans code parallèle.
+  // Repli si `matchMedia` manque (webview ancienne, environnement de test) :
+  // sans lui, une seule fonction absente ferait planter TOUT le script et la
+  // page resterait blanche — pour un simple choix d'affichage.
+  const narrowMq = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(max-width: 760px)')
+    : { matches: false, addEventListener() {} };
+  const todayIndex = (() => {
+    const wd = new Date().getDay();          // 0 = dimanche
+    return wd >= 1 && wd <= 5 ? wd - 1 : 0;  // week-end -> lundi
+  })();
+  let mobileDay = todayIndex;
+
+  function ensureDayStrip(tableEl) {
+    let strip = tableEl.previousElementSibling;
+    if (!strip || !strip.classList.contains('daystrip')) {
+      strip = document.createElement('div');
+      strip.className = 'daystrip no-print';
+      tableEl.parentNode.insertBefore(strip, tableEl);
+      strip.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-mday]');
+        if (!btn) return;
+        mobileDay = Number(btn.dataset.mday);
+        refreshAllViews();
+      });
+    }
+    strip.innerHTML = DAY_LABELS.map((label, d) =>
+      `<button type="button" data-mday="${d}" class="${d === mobileDay ? 'active' : ''}">
+         <span class="dfull">${label}</span><span class="dshort">${label.slice(0, 3)}</span>
+       </button>`).join('');
+    return strip;
+  }
+
+  narrowMq.addEventListener('change', () => refreshAllViews());
+
   function renderGenericCalendar(tableEl, rowsForWeek, options) {
     options = options || {};
+    // `null` = les 5 jours (affichage large) ; sinon l'unique jour affiché.
+    const onlyDay = narrowMq.matches ? mobileDay : null;
+    const shownDays = onlyDay === null ? [0, 1, 2, 3, 4] : [onlyDay];
+    ensureDayStrip(tableEl);
     const byCell = {};
     const byCellLeft = {};
     const byCellRight = {};
@@ -730,14 +1007,14 @@
     }
 
     let html = '<thead><tr><th class="timecol"></th>' +
-      DAY_LABELS.map(d => `<th>${d}</th>`).join('') + '</tr></thead><tbody>';
+      shownDays.map(d => `<th>${DAY_LABELS[d]}</th>`).join('') + '</tr></thead><tbody>';
 
     for (let s = 0; s < 6; s++) {
       if (s === 3) {
-        html += `<tr class="pause"><td class="timecell">12h30<br>14h00</td>${DAY_LABELS.map(() => '<td></td>').join('')}</tr>`;
+        html += `<tr class="pause"><td class="timecell">12h30<br>14h00</td>${shownDays.map(() => '<td></td>').join('')}</tr>`;
       }
       html += `<tr><td class="timecell mono">${SLOT_TIMES[s][0]}<br>${SLOT_TIMES[s][1]}</td>`;
-      for (let d = 0; d < 5; d++) {
+      for (const d of shownDays) {
         const key = d + '-' + s;
         const shared = byCell[key] || [];
         const left = byCellLeft[key] || [];
@@ -749,7 +1026,7 @@
         // alors qu'elle est en réalité entièrement réservée au projet.
         const saeCodes = options.saeByDay && options.saeByDay[d];
         const holiday = options.dayBands && options.dayBands.holidays[d];
-        // Horaire précis (bloquant, cf. `planning_event_blocked_slots`) : ne
+        // Horaire précis (bloquant, cf. `planning_event_blocked_slots_by_parcours`) : ne
         // s'affiche QUE sur son créneau réel — jamais indicatif (Vue Semaine :
         // case non déposable, cohérent avec le solveur qui la refuse aussi).
         const eventsAtSlot = options.dayBands && options.dayBands.eventSlots[d] && options.dayBands.eventSlots[d][s];
@@ -988,7 +1265,7 @@
 
     const rowsForWeek = payload.rows.filter(r => r.w === solverIndexForDisplay(selectedWeekGroup) && filterFn(r));
     const saeByDay = saeByDayForWeek(payload.groupParcours[gid], solverIndexForDisplay(selectedWeekGroup));
-    const dayBands = dayBandsForWeek(solverIndexForDisplay(selectedWeekGroup));
+    const dayBands = dayBandsForWeek(solverIndexForDisplay(selectedWeekGroup), payload.groupParcours[gid]);
     renderGenericCalendar(document.getElementById('groupCalendarTable'), rowsForWeek, { split: useSplit ? tpPair : null, showPac: true, saeByDay, dayBands });
 
     let title = `${payload.groupLabels[gid]} — ${weekLabel(selectedWeekGroup)}`;
@@ -1049,7 +1326,11 @@
       <div class="check ${c.status}"><span class="icon">${ICON[c.status]}</span><span class="txt">${c.html}</span></div>`).join('');
   }
 
-  groupSelect.addEventListener('change', () => { selectedWeekGroup = 0; renderGroupTab(); });
+  groupSelect.addEventListener('change', () => {
+    selectedWeekGroup = 0;
+    route.write({ vue: 'groupe', groupe: groupSelect.value });
+    renderGroupTab();
+  });
   renderGroupTab();
 
   // ============ ONGLET ENSEIGNANT ============
@@ -1083,10 +1364,14 @@
       v.course_code + '@' + v.week + '-' + v.day + '-' + v.slot));
 
     const rowsForWeek = payload.rows.filter(r => r.w === solverIndexForDisplay(selectedWeekTeacher) && filterFn(r));
-    const dayBands = dayBandsForWeek(solverIndexForDisplay(selectedWeekTeacher));
+    // Vue Enseignant : un enseignant peut intervenir sur plusieurs parcours,
+    // aucun filtre possible — tous les événements restent affichés.
+    const dayBands = dayBandsForWeek(solverIndexForDisplay(selectedWeekTeacher), null);
     renderGenericCalendar(document.getElementById('teacherCalendarTable'), rowsForWeek, { violCodes, dayBands });
     document.getElementById('teacherCalendarTitle').textContent =
       `${payload.teacherLabels[code] || code} — ${weekLabel(selectedWeekTeacher)}`;
+
+    renderTeacherAgenda(code);
 
     const callout = document.getElementById('teacherConstraintCallout');
     const rawBox = document.getElementById('teacherRaw');
@@ -1116,7 +1401,293 @@
     rawBox.innerHTML = parts.join('');
   }
 
-  teacherSelect.addEventListener('change', () => { selectedWeekTeacher = 0; renderTeacherTab(); });
+  teacherSelect.addEventListener('change', () => {
+    selectedWeekTeacher = 0;
+    route.write({ vue: 'prof', prof: teacherSelect.value });
+    renderTeacherTab();
+  });
+  // Le premier rendu est déclenché à la FIN du bloc ci-dessous, pas ici :
+  // `renderTeacherTab` appelle désormais `renderTeacherAgenda`, qui dépend de
+  // `DATE_FMT` et de `sessionsForTeacher` déclarés plus bas. Un `const` reste
+  // dans sa zone morte temporelle tant que sa ligne n'est pas exécutée : rendre
+  // trop tôt levait un `ReferenceError` qui cassait TOUT le script (aucune vue
+  // ne s'affichait). Bug attrapé par le contrôle headless jsdom, invisible
+  // pour un test qui se contente de chercher des chaînes dans le HTML.
+
+  // ---------- agenda semestre d'un enseignant + export .ics ----------
+  //
+  // Cliquer semaine par semaine convient pour vérifier un planning, pas pour
+  // le RECEVOIR : un enseignant veut voir ses interventions d'un coup, avec
+  // les vraies dates. D'où cette liste chronologique, et un .ics qu'il importe
+  // dans son propre agenda — c'est ce qui évite qu'il ait à consulter un lien
+  // à chaque fois.
+  function sessionsForTeacher(code) {
+    return payload.rows
+      .filter(r => r.te.includes(code))
+      .map(r => ({ ...r, date: dateForWeekDay(r.w, r.d) }))
+      .sort((a, b) => (a.w - b.w) || (a.d - b.d) || (a.s - b.s));
+  }
+
+  function dateForWeekDay(week, day) {
+    const monday = (payload.weekDates || [])[week];
+    if (!monday) return null;
+    const d = new Date(monday + 'T00:00:00');
+    d.setDate(d.getDate() + day);
+    return d;
+  }
+
+  const DATE_FMT = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  function renderTeacherAgenda(code) {
+    const box = document.getElementById('teacherAgenda');
+    if (!box) return;
+    const items = sessionsForTeacher(code);
+    if (!items.length) {
+      box.innerHTML = '<p style="color:var(--ink-soft); font-size:.85rem;">Aucune séance placée.</p>';
+      return;
+    }
+    const byWeek = new Map();
+    for (const it of items) {
+      if (!byWeek.has(it.w)) byWeek.set(it.w, []);
+      byWeek.get(it.w).push(it);
+    }
+    const totalSlots = items.reduce((n, it) => n + (it.dur || 1), 0);
+    const hours = (totalSlots * 1.5).toLocaleString('fr-FR');
+    let html = `<p style="font-size:.82rem; color:var(--ink-soft); margin-bottom:10px;">
+      <strong>${items.length}</strong> séance(s) · <strong>${hours} h</strong> · sur <strong>${byWeek.size}</strong> semaine(s)</p>`;
+    for (const [w, list] of [...byWeek.entries()].sort((a, b) => a[0] - b[0])) {
+      // `weekLabel` attend un index d'AFFICHAGE (weekRows, semaines bloquées
+      // incluses) ; `r.w` est un index SOLVEUR — d'où la conversion, sinon les
+      // libellés glissent d'une ou deux semaines après chaque vacances.
+      html += `<div class="raw-label">${weekLabel(solverToDisplay[w] ?? w)}</div><div class="slotlist" style="margin-bottom:10px;">`;
+      html += list.map(it => {
+        const when = it.date ? DATE_FMT.format(it.date) : DAY_LABELS[it.d];
+        const end = SLOT_TIMES[Math.min(5, it.s + (it.dur || 1) - 1)][1];
+        const groups = (it.g || []).map(g => payload.groupLabels[g] || g).join(', ');
+        return `<span class="slotchip">${when} ${SLOT_TIMES[it.s][0]}–${end} · ${it.c}${groups ? ' · ' + groups : ''}${it.r ? ' · ' + it.r : ''}</span>`;
+      }).join('');
+      html += '</div>';
+    }
+    box.innerHTML = html;
+  }
+
+  function icsEscape(text) {
+    return String(text).replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
+  }
+
+  function icsStamp(date, hhmm) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const d = new Date(date);
+    d.setHours(h, m, 0, 0);
+    const p = (n) => String(n).padStart(2, '0');
+    // Heure LOCALE sans suffixe Z : les horaires de l'IUT sont des heures
+    // locales, les convertir en UTC les décalerait d'une heure selon la
+    // période de l'année.
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+  }
+
+  // Générique : sert aussi bien à un enseignant qu'à un groupe étudiant — seule
+  // la liste de séances change.
+  function buildIcs(items, calendarName, uidPrefix) {
+    const lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//cal-iut//planning MMI//FR',
+      'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      `X-WR-CALNAME:${icsEscape('Planning MMI — ' + calendarName)}`,
+    ];
+    for (const it of items) {
+      if (!it.date) continue;
+      const end = SLOT_TIMES[Math.min(5, it.s + (it.dur || 1) - 1)][1];
+      const groups = (it.g || []).map(g => payload.groupLabels[g] || g).join(', ');
+      const teachers = (it.te || []).map(t => payload.teacherLabels[t] || t).join(', ');
+      lines.push(
+        'BEGIN:VEVENT',
+        `UID:${uidPrefix}-${it.w}-${it.d}-${it.s}-${it.c}@cal-iut`,
+        `DTSTAMP:${icsStamp(new Date(), '00:00')}`,
+        `DTSTART:${icsStamp(it.date, SLOT_TIMES[it.s][0])}`,
+        `DTEND:${icsStamp(it.date, end)}`,
+        `SUMMARY:${icsEscape(it.c + (groups ? ' — ' + groups : ''))}`,
+        `LOCATION:${icsEscape(it.r || '')}`,
+        `DESCRIPTION:${icsEscape([it.n || it.c, groups && 'Groupes : ' + groups, teachers && 'Enseignant(s) : ' + teachers].filter(Boolean).join('\n'))}`,
+        'END:VEVENT',
+      );
+    }
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+  }
+
+  function downloadIcsFrom(items, calendarName, code) {
+    const blob = new Blob([buildIcs(items, calendarName, code)], { type: 'text/calendar;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `planning-${code}.ics`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function downloadIcs(code) {
+    downloadIcsFrom(sessionsForTeacher(code), payload.teacherLabels[code] || code, code);
+  }
+
+  async function copyToClipboard(text, btn) {
+    const done = () => {
+      const old = btn.textContent;
+      btn.textContent = 'Copié ✓';
+      setTimeout(() => { btn.textContent = old; }, 1400);
+    };
+    try {
+      await navigator.clipboard.writeText(text);
+      done();
+    } catch (err) {
+      // `navigator.clipboard` est refusé hors contexte sécurisé (file://) :
+      // repli sur la sélection manuelle plutôt que d'échouer en silence.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e2) { window.prompt('Copier ce lien :', text); }
+      ta.remove();
+    }
+  }
+
+  document.getElementById('teacherIcsBtn').addEventListener('click', () => downloadIcs(teacherSelect.value));
+  document.getElementById('teacherLinkBtn').addEventListener('click', (e) => {
+    copyToClipboard(route.link({ vue: 'prof', prof: teacherSelect.value, mode: 'prof' }), e.target);
+  });
+  document.getElementById('teacherPrintBtn').addEventListener('click', () => window.print());
+
+  // ---------- annuaire des liens (enseignants + groupes étudiants) ----------
+  //
+  // Même mécanisme pour les deux publics : un lien `mode=...` en lecture seule.
+  // Les groupes servent aux délégués, qui reçoivent ainsi l'emploi du temps de
+  // LEUR groupe sans avoir à naviguer dans les six onglets de l'outil complet.
+  const teacherLink = (code) => route.link({ vue: 'prof', prof: code, mode: 'prof' });
+  const groupLink = (gid) => route.link({ vue: 'groupe', groupe: gid, mode: 'groupe' });
+
+  function sessionsForGroup(gid) {
+    const cohort = cohortSet(gid);
+    return payload.rows
+      .filter(r => r.g.some(g => cohort.has(g)))
+      .map(r => ({ ...r, date: dateForWeekDay(r.w, r.d) }))
+      .sort((a, b) => (a.w - b.w) || (a.d - b.d) || (a.s - b.s));
+  }
+
+  function mailtoFor(code) {
+    const name = payload.teacherLabels[code] || code;
+    const mail = (payload.teacherEmails || {})[code] || '';
+    const items = sessionsForTeacher(code);
+    const hours = (items.reduce((n, it) => n + (it.dur || 1), 0) * 1.5).toLocaleString('fr-FR');
+    const body = [
+      `Bonjour ${name},`, '',
+      `Voici votre emploi du temps : ${teacherLink(code)}`, '',
+      `Il compte ${items.length} séance(s), soit ${hours} h.`,
+      "Le lien ouvre directement votre planning ; un bouton permet d'exporter",
+      'les séances vers votre agenda personnel (fichier .ics).', '',
+      'Cordialement,',
+    ].join('\r\n');
+    return `mailto:${encodeURIComponent(mail)}?subject=${encodeURIComponent('Votre emploi du temps MMI')}&body=${encodeURIComponent(body)}`;
+  }
+
+  function linkRow(label, code, items, link, extra) {
+    const slots = items.reduce((n, it) => n + (it.dur || 1), 0);
+    return `<tr>
+      <td style="text-align:left;"><strong>${label}</strong> <span class="mono" style="color:var(--ink-soft);">${code}</span></td>
+      <td>${items.length}</td>
+      <td>${(slots * 1.5).toLocaleString('fr-FR')} h</td>
+      <td><button type="button" class="subtabbtn" data-copy="${link}" style="padding:3px 9px; font-size:.72rem;">Copier le lien</button></td>
+      <td><button type="button" class="subtabbtn" data-ics="${code}" style="padding:3px 9px; font-size:.72rem;">.ics</button></td>
+      ${extra || ''}
+    </tr>`;
+  }
+
+  function wireLinkTable(box, icsFn) {
+    box.addEventListener('click', (e) => {
+      const copyBtn = e.target.closest('[data-copy]');
+      if (copyBtn) { copyToClipboard(copyBtn.dataset.copy, copyBtn); return; }
+      const icsBtn = e.target.closest('[data-ics]');
+      if (icsBtn) icsFn(icsBtn.dataset.ics);
+    });
+  }
+
+  function renderTeacherLinks() {
+    const box = document.getElementById('teacherLinksTable');
+    if (!box) return;
+    const emails = payload.teacherEmails || {};
+    box.innerHTML = `<table class="grid"><thead><tr>
+        <th style="text-align:left;">Enseignant</th><th>Séances</th><th>Heures</th>
+        <th>Lien personnel</th><th>Agenda</th><th>Mail</th>
+      </tr></thead><tbody>${
+      teacherCodes.map(code => {
+        // Sans adresse connue, le brouillon s'ouvre quand même (objet, corps et
+        // lien pré-remplis) avec le destinataire à compléter — plutôt que de
+        // masquer le bouton, ce qui ferait croire que la fonction ne marche pas.
+        const known = !!emails[code];
+        const mailCell = `<td><a class="subtabbtn" style="padding:3px 9px; font-size:.72rem; text-decoration:none; display:inline-block;"
+             href="${mailtoFor(code)}" title="${known ? emails[code] : 'Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml'}">
+             Écrire${known ? '' : ' ⚠'}</a></td>`;
+        return linkRow(payload.teacherLabels[code] || code, code, sessionsForTeacher(code), teacherLink(code), mailCell);
+      }).join('')
+    }</tbody></table>`;
+    wireLinkTable(box, downloadIcs);
+  }
+
+  function renderGroupLinks() {
+    const box = document.getElementById('groupLinksTable');
+    if (!box) return;
+    const gids = [...groupSelect.options].map(o => o.value);
+    box.innerHTML = `<table class="grid"><thead><tr>
+        <th style="text-align:left;">Groupe</th><th>Séances</th><th>Heures</th><th>Lien</th><th>Agenda</th>
+      </tr></thead><tbody>${
+      gids.map(gid => linkRow(payload.groupLabels[gid] || gid, gid, sessionsForGroup(gid), groupLink(gid))).join('')
+    }</tbody></table>`;
+    wireLinkTable(box, downloadGroupIcs);
+  }
+
+  function downloadGroupIcs(gid) { downloadIcsFrom(sessionsForGroup(gid), payload.groupLabels[gid] || gid, gid); }
+
+  function allLinkRows() {
+    const rows = teacherCodes.map(code => ({
+      type: 'Enseignant', label: payload.teacherLabels[code] || code, code,
+      items: sessionsForTeacher(code), link: teacherLink(code),
+      mail: (payload.teacherEmails || {})[code] || '',
+    }));
+    for (const gid of [...groupSelect.options].map(o => o.value)) {
+      rows.push({
+        type: 'Groupe', label: payload.groupLabels[gid] || gid, code: gid,
+        items: sessionsForGroup(gid), link: groupLink(gid), mail: '',
+      });
+    }
+    return rows;
+  }
+
+  document.getElementById('copyAllLinksBtn').addEventListener('click', (e) => {
+    copyToClipboard(allLinkRows().map(r => `${r.label}\t${r.link}`).join('\n'), e.target);
+  });
+
+  document.getElementById('downloadLinksCsvBtn').addEventListener('click', () => {
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const lines = [['Type', 'Nom', 'Code', 'Mail', 'Seances', 'Heures', 'Lien'].map(esc).join(';')];
+    for (const r of allLinkRows()) {
+      const slots = r.items.reduce((n, it) => n + (it.dur || 1), 0);
+      lines.push([r.type, r.label, r.code, r.mail, r.items.length, (slots * 1.5).toFixed(1), r.link].map(esc).join(';'));
+    }
+    // BOM UTF-8 : sans lui Excel lit le fichier en ANSI et casse les accents.
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'annuaire-plannings.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  document.getElementById('groupIcsBtn').addEventListener('click', () => downloadGroupIcs(groupSelect.value));
+  document.getElementById('groupLinkBtn').addEventListener('click', (e) => copyToClipboard(groupLink(groupSelect.value), e.target));
+  document.getElementById('groupPrintBtn').addEventListener('click', () => window.print());
+
+  renderTeacherLinks();
+  renderGroupLinks();
+
+  // Premier rendu de la vue Enseignant, maintenant que l'agenda et ses
+  // dépendances (`DATE_FMT`, `sessionsForTeacher`) sont initialisés.
   if (teacherCodes.length) renderTeacherTab();
 
   // ============ ONGLET PROMO (grille tous groupes, TOUTES années réunies) ============
@@ -1233,7 +1804,7 @@
         const col = cols[i];
         const entries = byColSlot.get(col + '-' + s) || [];
         const saeCodes = saeByKey.get(`${colParcours[i]}-${solverIndexForDisplay(selectedWeekPromo)}-${selectedDayPromo}`);
-        const eventsAtSlot = eventSlotByKey.get(`${solverIndexForDisplay(selectedWeekPromo)}-${selectedDayPromo}-${s}`);
+        const eventsAtSlot = eventLabelsAt(`${solverIndexForDisplay(selectedWeekPromo)}-${selectedDayPromo}-${s}`, colParcours[i]);
         const cellClass = `promocell ${colClass(i)}`;
 
         if (entries.length) {
@@ -1302,9 +1873,12 @@
     const btn = e.target.closest('.subtabbtn');
     if (!btn) return;
     for (const b of document.querySelectorAll('#refSubtabbar .subtabbtn')) b.classList.toggle('active', b === btn);
-    document.getElementById('refpanel-salles').style.display = btn.dataset.subtab === 'salles' ? '' : 'none';
-    document.getElementById('refpanel-cours').style.display = btn.dataset.subtab === 'cours' ? '' : 'none';
-    document.getElementById('refpanel-calendrier').style.display = btn.dataset.subtab === 'calendrier' ? '' : 'none';
+    // Piloté par la liste des boutons plutôt que panneau par panneau : ajouter
+    // un sous-onglet ne demande plus de penser à ajouter sa ligne ici.
+    for (const b of document.querySelectorAll('#refSubtabbar .subtabbtn')) {
+      const panel = document.getElementById('refpanel-' + b.dataset.subtab);
+      if (panel) panel.style.display = b === btn ? '' : 'none';
+    }
   });
 
   // ============ ONGLET CONTRAINTES ============
@@ -1391,7 +1965,7 @@
 
     const rowsForWeek = absWeek === null ? [] : payload.rows.filter(r => r.w === absWeek && filterFn(r));
     const saeByDay = saeByDayForWeek(payload.groupParcours[gid], absWeek);
-    const dayBands = absWeek === null ? { holidays: {}, events: {} } : dayBandsForWeek(absWeek);
+    const dayBands = absWeek === null ? { holidays: {}, events: {} } : dayBandsForWeek(absWeek, payload.groupParcours[gid]);
     renderGenericCalendar(document.getElementById('semaineCalendarTable'), rowsForWeek, {
       showPac: true, saeByDay, dayBands, editable, absWeek,
     });
@@ -1519,5 +2093,259 @@
   });
 
   renderSemaineTab();
+
+  // ============ RECHERCHE GLOBALE (Ctrl+K) ============
+  //
+  // Six onglets et autant de listes déroulantes : retrouver « la salle H.205 »
+  // ou « Marine Riguet » demandait de savoir dans quel onglet chercher. Ici on
+  // tape, et l'outil ouvre directement la bonne vue sur la bonne entité.
+  const searchOverlay = document.getElementById('searchOverlay');
+  const searchInput = document.getElementById('searchInput');
+  const searchResults = document.getElementById('searchResults');
+  let searchSel = 0;
+  let searchHits = [];
+
+  function searchIndex() {
+    const index = [];
+    for (const code of teacherCodes) {
+      index.push({
+        kind: 'Enseignant', label: payload.teacherLabels[code] || code, sub: code,
+        go: () => { activateTab('prof'); teacherSelect.value = code; renderTeacherTab(); route.write({ vue: 'prof', prof: code }); },
+      });
+    }
+    for (const opt of groupSelect.options) {
+      index.push({
+        kind: 'Groupe', label: payload.groupLabels[opt.value] || opt.value, sub: opt.value,
+        go: () => { activateTab('groupe'); groupSelect.value = opt.value; renderGroupTab(); route.write({ vue: 'groupe', groupe: opt.value }); },
+      });
+    }
+    const seenCourse = new Set();
+    for (const r of payload.rows) {
+      if (seenCourse.has(r.c)) continue;
+      seenCourse.add(r.c);
+      const first = r;
+      index.push({
+        kind: 'Cours', label: r.c, sub: r.n || '',
+        // Un cours n'a pas de vue dédiée : on ouvre la Vue Semaine sur la
+        // semaine et le groupe de sa PREMIÈRE occurrence, ce qui met de fait
+        // le créneau sous les yeux.
+        go: () => {
+          activateTab('semaine');
+          const gid = (first.g || [])[0];
+          if (gid && [...semaineGroupSelect.options].some(o => o.value === gid)) semaineGroupSelect.value = gid;
+          selectedWeekSemaine = solverToDisplay[first.w] ?? 0;
+          renderSemaineTab();
+        },
+      });
+    }
+    const seenRoom = new Set();
+    for (const r of payload.rows) {
+      if (!r.r || seenRoom.has(r.r)) continue;
+      seenRoom.add(r.r);
+      index.push({
+        kind: 'Salle', label: r.r, sub: 'voir son occupation',
+        go: () => { activateTab('reference'); document.querySelector('#refSubtabbar [data-subtab="salles"]').click(); },
+      });
+    }
+    return index;
+  }
+  const SEARCH_INDEX = searchIndex();
+
+  function normalizeSearch(text) {
+    // Sans dépliage des accents, taper « lefevre » ne trouverait pas
+    // « Lefèvre » — cas courant quand on tape vite.
+    return String(text).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  function runSearch(query) {
+    const q = normalizeSearch(query).trim();
+    searchHits = !q ? SEARCH_INDEX.slice(0, 12) : SEARCH_INDEX
+      .map(item => {
+        const hay = normalizeSearch(item.label + ' ' + item.sub);
+        const pos = hay.indexOf(q);
+        return pos < 0 ? null : { item, score: pos };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 12)
+      .map(h => h.item);
+    searchSel = 0;
+    searchResults.innerHTML = searchHits.length
+      ? searchHits.map((h, i) => `<button type="button" class="hit${i === 0 ? ' sel' : ''}" data-i="${i}">
+          <span class="kind">${h.kind}</span>
+          <span><strong>${h.label}</strong>${h.sub ? `<div class="sub">${h.sub}</div>` : ''}</span>
+        </button>`).join('')
+      : '<div class="searchempty">Aucun résultat.</div>';
+  }
+
+  function openSearch() {
+    searchOverlay.hidden = false;
+    searchInput.value = '';
+    runSearch('');
+    searchInput.focus();
+  }
+  function closeSearch() { searchOverlay.hidden = true; }
+  function activateHit(i) {
+    const hit = searchHits[i];
+    if (!hit) return;
+    closeSearch();
+    hit.go();
+  }
+
+  document.getElementById('searchOpenBtn').addEventListener('click', openSearch);
+  searchOverlay.addEventListener('click', (e) => { if (e.target === searchOverlay) closeSearch(); });
+  searchInput.addEventListener('input', () => runSearch(searchInput.value));
+  searchResults.addEventListener('click', (e) => {
+    const btn = e.target.closest('.hit');
+    if (btn) activateHit(Number(btn.dataset.i));
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      searchSel = Math.max(0, Math.min(searchHits.length - 1, searchSel + (e.key === 'ArrowDown' ? 1 : -1)));
+      for (const b of searchResults.querySelectorAll('.hit')) b.classList.toggle('sel', Number(b.dataset.i) === searchSel);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      activateHit(searchSel);
+    } else if (e.key === 'Escape') {
+      closeSearch();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSearch(); }
+    else if (e.key === 'Escape' && !searchOverlay.hidden) closeSearch();
+  });
+
+  // ============ ONGLET « À TRAITER » ============
+  //
+  // Les problèmes existaient déjà dans l'interface, mais dispersés : une
+  // violation enseignant se voyait dans l'onglet Contraintes, une séance hors
+  // fenêtre SAE nulle part, un trou en regardant la grille. Rassemblés ici et
+  // rendus CLIQUABLES, ils deviennent une liste de travail au lieu d'un
+  // constat.
+  function buildTodoList() {
+    const items = [];
+
+    for (const t of (payload.teachers || [])) {
+      for (const v of (t.violations || [])) {
+        const when = v.date
+          ? v.date
+          : `${weekLabel(solverToDisplay[v.week] ?? v.week)} · ${DAY_LABELS[v.day]} ${SLOT_TIMES[v.slot][0]}`;
+        items.push({
+          sev: 'bad', title: `${t.name} — contrainte non respectée`,
+          sub: `${v.course_code} · ${when}`,
+          go: () => { activateTab('prof'); teacherSelect.value = t.code; selectedWeekTeacher = solverToDisplay[v.week] ?? 0; renderTeacherTab(); },
+        });
+      }
+    }
+
+    // Journées « gruyère » : une cohorte présente le matin et le soir avec un
+    // trou au milieu. Le solveur les minimise sans pouvoir toujours les éviter ;
+    // ce sont elles qu'on veut corriger à la main en priorité.
+    const byGroupDay = new Map();
+    for (const r of payload.rows) {
+      for (const g of r.g) {
+        const key = `${g}|${r.w}|${r.d}`;
+        if (!byGroupDay.has(key)) byGroupDay.set(key, []);
+        byGroupDay.get(key).push(r.s);
+      }
+    }
+    for (const [key, slots] of byGroupDay) {
+      const [gid, w, d] = key.split('|');
+      if (payload.groupKind[gid] === 'promo') continue;
+      const used = new Set(slots);
+      const lo = Math.min(...slots), hi = Math.max(...slots);
+      let gap = 0;
+      for (let s = lo; s <= hi; s++) if (!used.has(s)) gap++;
+      if (gap >= 2) {
+        items.push({
+          sev: 'warn', title: `${payload.groupLabels[gid] || gid} — journée trouée`,
+          sub: `${weekLabel(solverToDisplay[Number(w)] ?? Number(w))} · ${DAY_LABELS[Number(d)]} · ${gap} créneaux vides entre deux cours`,
+          go: () => {
+            activateTab('semaine');
+            if ([...semaineGroupSelect.options].some(o => o.value === gid)) semaineGroupSelect.value = gid;
+            selectedWeekSemaine = solverToDisplay[Number(w)] ?? 0;
+            mobileDay = Number(d);
+            renderSemaineTab();
+          },
+        });
+      }
+    }
+
+    // Règles globales déjà évaluées côté serveur : on ne re-juge rien ici, on
+    // remonte simplement celles qui échouent.
+    for (const c of (payload.ruleChecks || [])) {
+      if (c.status === 'fail') {
+        items.push({ sev: 'bad', title: c.label, sub: c.detail, go: () => activateTab('contraintes') });
+      }
+    }
+
+    return items;
+  }
+
+  function renderTodo() {
+    const items = buildTodoList();
+    const box = document.getElementById('todoList');
+    const pill = document.getElementById('todoCount');
+    pill.textContent = items.length;
+    pill.className = 'pill mini ' + (items.some(i => i.sev === 'bad') ? 'bad' : (items.length ? 'warn' : 'good'));
+    box.innerHTML = items.length
+      ? items.map((it, i) => `<button type="button" class="todo-item ${it.sev}" data-i="${i}">
+          <span class="sev">${it.sev === 'bad' ? 'à corriger' : 'à revoir'}</span>
+          <span><strong>${it.title}</strong><div class="sub">${it.sub}</div></span>
+        </button>`).join('')
+      : '<p style="color:var(--ink-soft); font-size:.85rem;">Rien à signaler : aucune contrainte violée, aucune journée trouée.</p>';
+    box.onclick = (e) => {
+      const btn = e.target.closest('.todo-item');
+      if (btn) items[Number(btn.dataset.i)].go();
+    };
+  }
+  renderTodo();
+
+  // ---------- application du lien reçu ----------
+  //
+  // Fait en DERNIER : toutes les vues sont rendues au moins une fois avant,
+  // donc basculer sur l'une d'elles n'affiche jamais un panneau vide.
+  (function applyRoute() {
+    const r = route.read();
+
+    if (r.prof && teacherCodes.includes(r.prof)) {
+      teacherSelect.value = r.prof;
+      selectedWeekTeacher = 0;
+      renderTeacherTab();
+    }
+    if (r.groupe && payload.groupLabels[r.groupe]) {
+      if ([...groupSelect.options].some(o => o.value === r.groupe)) {
+        groupSelect.value = r.groupe;
+        renderGroupTab();
+      }
+      if ([...semaineGroupSelect.options].some(o => o.value === r.groupe)) {
+        semaineGroupSelect.value = r.groupe;
+        renderSemaineTab();
+      }
+    }
+
+    // Lien destiné à un enseignant ou à un groupe : on retire ce qui ne le
+    // concerne pas (édition, autres promotions) plutôt que de le laisser se
+    // perdre dans six onglets — et surtout on évite qu'il modifie le planning
+    // commun depuis la Vue Semaine.
+    const readOnly =
+      (teacherMode && { tab: 'prof', title: `Planning de ${payload.teacherLabels[r.prof] || r.prof}` }) ||
+      (r.mode === 'groupe' && r.groupe && { tab: 'groupe', title: `Planning — ${payload.groupLabels[r.groupe] || r.groupe}` });
+
+    if (readOnly) {
+      document.body.classList.add('teacher-mode');
+      for (const b of tabbar.querySelectorAll('.tabbtn')) {
+        if (b.dataset.tab !== readOnly.tab) b.remove();
+      }
+      activateTab(readOnly.tab);
+      document.querySelector('.titles h1').textContent = readOnly.title;
+      document.querySelector('.titles p').textContent =
+        "Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.";
+      return;
+    }
+
+    activateTab(r.vue && document.getElementById('tab-' + r.vue) ? r.vue : 'semaine');
+  })();
 })();
 </script>

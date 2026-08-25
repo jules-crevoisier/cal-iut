@@ -1,0 +1,18 @@
+# Adresses mail des enseignants — alimente le bouton « Écrire » de l'annuaire
+# de liens dans l'export HTML (`cal-iut export --format html`, onglet
+# Référence > Liens & partage).
+#
+# AUCUN fichier source officiel ne contient les adresses mail : ni
+# `CONTRAINTES ENSEIGNANTS`, ni `maquette.json`. Ce fichier est donc à remplir
+# à la main, une fois, puis il survit à toutes les régénérations.
+#
+# Tant qu'un enseignant n'a pas d'adresse ici, son bouton « Écrire » ouvre
+# quand même le brouillon (objet + corps + lien personnel pré-remplis), avec le
+# destinataire laissé vide à compléter — plutôt que de faire disparaître le
+# bouton, ce qui donnerait l'impression que la fonction ne marche pas.
+#
+# Format : trigramme (tel qu'utilisé dans la maquette) -> adresse.
+contacts: {}
+  # Exemple :
+  # KBR: kyllian.bresson@univ-reims.fr
+  # ALO: ariane.loizon@univ-reims.fr

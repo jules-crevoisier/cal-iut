@@ -113,11 +113,14 @@ promotions:
   # large" — 10 retenu (marge haute de la fourchette donnée) pour que les
   # petites salles (ex. H.005, capacité 15) restent PRIVILÉGIÉES sans être
   # trop juste. Groupe unique même en TP (pas de sous-groupes).
+  # Nommage aligné sur "Maquette 2026 BUT3 S5-DEV-FC.docx" (10/08/2026) :
+  # "Groupes de référence : TD EF / TP E" — les libellés génériques précédents
+  # ("TD DEV FC") ne correspondaient à rien pour les enseignants.
   BUT3-DEV-FC:
     td_groups:
-      - { id: but3-dev-fc-td-1, label: TD DEV FC, tp_groups: [1], headcount: 10 }
+      - { id: but3-dev-fc-td-ef, label: TD EF, tp_groups: [E], headcount: 10 }
     tp_groups:
-      - { id: but3-dev-fc-tp-1, label: TP DEV FC, headcount: 10 }
+      - { id: but3-dev-fc-tp-e, label: TP E, headcount: 10 }
     promo_group:
       id: but3-dev-fc-promo
       label: Promo BUT3 DEV-FC
@@ -126,11 +129,13 @@ promotions:
   # Retour utilisateur (07/08/2026) : effectif réel "18-20" — 19 retenu
   # (milieu de la fourchette) — surtout : > 15 (capacité H.005) pour que
   # les petites salles soient bien EXCLUES. Groupe unique même en TP.
+  # Nommage aligné sur "Maquette 2026 BUT3 S5-CREAMCOM-FC.docx" (10/08/2026) :
+  # "Groupes de référence : TD GH / TP G".
   BUT3-CREACOM-FC:
     td_groups:
-      - { id: but3-creacom-fc-td-1, label: TD CREACOM FC, tp_groups: [1], headcount: 19 }
+      - { id: but3-creacom-fc-td-gh, label: TD GH, tp_groups: [G], headcount: 19 }
     tp_groups:
-      - { id: but3-creacom-fc-tp-1, label: TP CREACOM FC, headcount: 19 }
+      - { id: but3-creacom-fc-tp-g, label: TP G, headcount: 19 }
     promo_group:
       id: but3-creacom-fc-promo
       label: Promo BUT3 CREACOM-FC

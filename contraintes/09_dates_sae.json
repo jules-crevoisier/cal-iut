@@ -1,0 +1,1191 @@
+{
+  "source": "DATES SAE 2026_2027 - LISTE SAE 2026_2027.csv",
+  "genere_par": "scripts/build_contraintes.py",
+  "regle_lecture": "Chaque fenetre = des journees ENTIERES consacrees a la SAE pour le parcours du module. Regle de sanctuarisation (01_regles_generales) : aucune ressource classique (WR/WRA) ce jour-la pour ce parcours. `groupes_td` non nul restreint la sanctuarisation a ces groupes TD seulement ; `dates_indeterminees` signale une SAE dont les dates restent a fournir (aucune sanctuarisation possible).",
+  "sae": [
+    {
+      "code_matiere": "WS101",
+      "nom_matiere": "Auditer une communication numérique",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 4,
+        "tp": 2
+      },
+      "lead": "RDE",
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [
+        {
+          "debut": "2026-10-20",
+          "fin": "2026-10-23",
+          "dates": [
+            "2026-10-20",
+            "2026-10-21",
+            "2026-10-22",
+            "2026-10-23"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS102",
+      "nom_matiere": "Concevoir une recommandation de communication numérique",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 5,
+        "tp": 2
+      },
+      "lead": "AFR",
+      "autres_enseignants": [
+        "ALO"
+      ],
+      "fenetres": [
+        {
+          "debut": "2027-01-04",
+          "fin": "2027-01-08",
+          "dates": [
+            "2027-01-04",
+            "2027-01-05",
+            "2027-01-06",
+            "2027-01-07",
+            "2027-01-08"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS103",
+      "nom_matiere": "Produire les éléments d'une communication visuelle",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 3,
+        "td": 7,
+        "tp": 4
+      },
+      "lead": "GLE",
+      "autres_enseignants": [
+        "ALO"
+      ],
+      "fenetres": [
+        {
+          "debut": "2026-11-23",
+          "fin": "2026-11-27",
+          "dates": [
+            "2026-11-23",
+            "2026-11-24",
+            "2026-11-25",
+            "2026-11-26",
+            "2026-11-27"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS104",
+      "nom_matiere": "Produire un contenu audio et vidéo",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 3,
+        "td": 12,
+        "tp": 5
+      },
+      "lead": "KBR",
+      "autres_enseignants": [
+        "KNG"
+      ],
+      "fenetres": [
+        {
+          "debut": "2026-12-09",
+          "fin": "2026-12-17",
+          "dates": [
+            "2026-12-09",
+            "2026-12-10",
+            "2026-12-11",
+            "2026-12-14",
+            "2026-12-15",
+            "2026-12-16",
+            "2026-12-17"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS105",
+      "nom_matiere": "Produire un site Web",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 10,
+        "tp": 6
+      },
+      "lead": "FLI",
+      "autres_enseignants": [
+        "AHA"
+      ],
+      "fenetres": [
+        {
+          "debut": "2027-01-11",
+          "fin": "2027-01-22",
+          "dates": [
+            "2027-01-11",
+            "2027-01-12",
+            "2027-01-13",
+            "2027-01-14",
+            "2027-01-15",
+            "2027-01-18",
+            "2027-01-19",
+            "2027-01-20",
+            "2027-01-21",
+            "2027-01-22"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS106",
+      "nom_matiere": "Gérer un projet de communication numérique",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 4,
+        "tp": 0
+      },
+      "lead": "JLE",
+      "autres_enseignants": [],
+      "fenetres": [
+        {
+          "debut": "2027-01-11",
+          "fin": "2027-01-22",
+          "dates": [
+            "2027-01-11",
+            "2027-01-12",
+            "2027-01-13",
+            "2027-01-14",
+            "2027-01-15",
+            "2027-01-18",
+            "2027-01-19",
+            "2027-01-20",
+            "2027-01-21",
+            "2027-01-22"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS107",
+      "nom_matiere": "Production d’un podcast",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 1,
+        "td": 4,
+        "tp": 2
+      },
+      "lead": "KBR",
+      "autres_enseignants": [
+        "KNG"
+      ],
+      "fenetres": [
+        {
+          "debut": "2026-11-09",
+          "fin": "2026-11-13",
+          "dates": [
+            "2026-11-09",
+            "2026-11-10",
+            "2026-11-11",
+            "2026-11-12",
+            "2026-11-13"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS110",
+      "nom_matiere": "Portfolio",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 1,
+        "td": 2,
+        "tp": 0
+      },
+      "lead": "ARA",
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS1PJ",
+      "nom_matiere": "Projet Ens.",
+      "semestre": "S1",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS201",
+      "nom_matiere": "Explorer les usages du numérique",
+      "semestre": "S2",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 3,
+        "td": 2,
+        "tp": 2
+      },
+      "lead": "JTH",
+      "autres_enseignants": [
+        "RHU"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS202",
+      "nom_matiere": "Concevoir un produit ou un service et sa communication",
+      "semestre": "S2",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 11,
+        "td": 27,
+        "tp": 4
+      },
+      "lead": "KBR",
+      "autres_enseignants": [
+        "ALO"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS203",
+      "nom_matiere": "Concevoir un site web avec une source de données",
+      "semestre": "S2",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 5,
+        "td": 14,
+        "tp": 3
+      },
+      "lead": "FME",
+      "autres_enseignants": [
+        "FLI"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS204",
+      "nom_matiere": "Construire sa présence en ligne",
+      "semestre": "S2",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 5,
+        "tp": 1
+      },
+      "lead": "KBR",
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS210",
+      "nom_matiere": "Portfolio",
+      "semestre": "S2",
+      "parcours_source": "BUT1",
+      "volumes_etudiant_seances": {
+        "cm": 1,
+        "td": 2,
+        "tp": 1
+      },
+      "lead": "ARA",
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS301D",
+      "nom_matiere": "Développer des parcours utilisateur au sein d'un système d'information",
+      "semestre": "S3",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 5,
+        "td": 12,
+        "tp": 4
+      },
+      "lead": "DAN",
+      "autres_enseignants": [
+        "ALO"
+      ],
+      "fenetres": [
+        {
+          "debut": "2026-12-07",
+          "fin": "2026-12-16",
+          "dates": [
+            "2026-12-07",
+            "2026-12-08",
+            "2026-12-09",
+            "2026-12-10",
+            "2026-12-11",
+            "2026-12-14",
+            "2026-12-15",
+            "2026-12-16"
+          ]
+        },
+        {
+          "debut": "2027-01-04",
+          "fin": "2027-01-05",
+          "dates": [
+            "2027-01-04",
+            "2027-01-05"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS302D",
+      "nom_matiere": "Produire des contenus pour une communication plurimédia",
+      "semestre": "S3",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 4,
+        "td": 12,
+        "tp": 7
+      },
+      "lead": "ARA",
+      "autres_enseignants": [
+        "KBR"
+      ],
+      "fenetres": [
+        {
+          "debut": "2027-01-06",
+          "fin": "2027-01-08",
+          "dates": [
+            "2027-01-06",
+            "2027-01-07",
+            "2027-01-08"
+          ]
+        },
+        {
+          "debut": "2027-01-18",
+          "fin": "2027-01-22",
+          "dates": [
+            "2027-01-18",
+            "2027-01-19",
+            "2027-01-20",
+            "2027-01-21",
+            "2027-01-22"
+          ]
+        },
+        {
+          "debut": "2027-01-25",
+          "fin": "2027-01-27",
+          "dates": [
+            "2027-01-25",
+            "2027-01-26",
+            "2027-01-27"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS303D",
+      "nom_matiere": "Concevoir des visualisations de données pour le web et une application interactive",
+      "semestre": "S3",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 8,
+        "tp": 3
+      },
+      "lead": "TCA",
+      "autres_enseignants": [],
+      "fenetres": [
+        {
+          "debut": "2026-10-19",
+          "fin": "2026-10-21",
+          "dates": [
+            "2026-10-19",
+            "2026-10-20",
+            "2026-10-21"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS310D",
+      "nom_matiere": "Portfolio",
+      "semestre": "S3",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 4,
+        "tp": 0
+      },
+      "lead": "AFR",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS3PJ",
+      "nom_matiere": "Projet Ens.",
+      "semestre": "S3",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA301M",
+      "nom_matiere": "Produire des interfaces et des parcours utilisateur au sein d'un système d'information",
+      "semestre": "S3",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 22,
+        "tp": 0
+      },
+      "lead": "ALO",
+      "autres_enseignants": [
+        "FLI"
+      ],
+      "fenetres": [
+        {
+          "debut": "2026-11-02",
+          "fin": "2026-11-04",
+          "dates": [
+            "2026-11-02",
+            "2026-11-03",
+            "2026-11-04"
+          ]
+        },
+        {
+          "debut": "2026-11-16",
+          "fin": "2026-11-18",
+          "dates": [
+            "2026-11-16",
+            "2026-11-17",
+            "2026-11-18"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA302M",
+      "nom_matiere": "Produire des contenus pour une communication plurimédia",
+      "semestre": "S3",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 22,
+        "tp": 0
+      },
+      "lead": "AFR",
+      "autres_enseignants": [],
+      "fenetres": [
+        {
+          "debut": "2027-02-01",
+          "fin": "2027-02-05",
+          "dates": [
+            "2027-02-01",
+            "2027-02-02",
+            "2027-02-03",
+            "2027-02-04",
+            "2027-02-05"
+          ]
+        },
+        {
+          "debut": "2027-02-15",
+          "fin": "2027-02-19",
+          "dates": [
+            "2027-02-15",
+            "2027-02-16",
+            "2027-02-17",
+            "2027-02-18",
+            "2027-02-19"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA310M",
+      "nom_matiere": "Portfolio",
+      "semestre": "S3",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 3,
+        "tp": 0
+      },
+      "lead": "ALO",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA3PRJ",
+      "nom_matiere": "Projet Ens.",
+      "semestre": "S3",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS401D",
+      "nom_matiere": "Développer pour le Web",
+      "semestre": "S4",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 2,
+        "td": 7,
+        "tp": 1
+      },
+      "lead": "DAN",
+      "autres_enseignants": [
+        "JBA"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS402D",
+      "nom_matiere": "Concevoir un dispositif interactif",
+      "semestre": "S4",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 1,
+        "td": 10,
+        "tp": 4
+      },
+      "lead": "MRI",
+      "autres_enseignants": [
+        "ARA"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS410D",
+      "nom_matiere": "Portfolio-Parcours Développement Web et Dispositifs interactifs",
+      "semestre": "S4",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 1,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": "ARA",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS411D",
+      "nom_matiere": "Stage-Parcours Développement Web et Dispositifs interactifs",
+      "semestre": "S4",
+      "parcours_source": "BUT2-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA401M",
+      "nom_matiere": "Concevoir et produire des dispositifs numériques",
+      "semestre": "S4",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 10,
+        "tp": 0
+      },
+      "lead": "GLE",
+      "autres_enseignants": [
+        "MGO"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA402M",
+      "nom_matiere": "Mettre en place une solution e-commerce",
+      "semestre": "S4",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 10,
+        "tp": 0
+      },
+      "lead": "RDE",
+      "autres_enseignants": [
+        "JLE"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA410M",
+      "nom_matiere": "Portfolio",
+      "semestre": "S4",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 2,
+        "tp": 0
+      },
+      "lead": "GLE",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA411M",
+      "nom_matiere": "Alternance-Parcours Création Numérique",
+      "semestre": "S4",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS501D",
+      "nom_matiere": "Développer pour le web ou Concevoir un dispositif interactif",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 44,
+        "tp": 9
+      },
+      "lead": "FME",
+      "autres_enseignants": [
+        "ALO"
+      ],
+      "fenetres": [
+        {
+          "debut": "2026-10-19",
+          "fin": "2026-10-22",
+          "dates": [
+            "2026-10-19",
+            "2026-10-20",
+            "2026-10-21",
+            "2026-10-22"
+          ]
+        },
+        {
+          "debut": "2026-11-05",
+          "fin": "2026-11-06",
+          "dates": [
+            "2026-11-05",
+            "2026-11-06"
+          ]
+        },
+        {
+          "debut": "2026-11-12",
+          "fin": "2026-11-13",
+          "dates": [
+            "2026-11-12",
+            "2026-11-13"
+          ]
+        },
+        {
+          "debut": "2026-11-19",
+          "fin": "2026-11-20",
+          "dates": [
+            "2026-11-19",
+            "2026-11-20"
+          ]
+        },
+        {
+          "debut": "2026-11-26",
+          "fin": "2026-11-27",
+          "dates": [
+            "2026-11-26",
+            "2026-11-27"
+          ]
+        },
+        {
+          "debut": "2026-12-03",
+          "fin": "2026-12-04",
+          "dates": [
+            "2026-12-03",
+            "2026-12-04"
+          ]
+        },
+        {
+          "debut": "2026-12-10",
+          "fin": "2026-12-11",
+          "dates": [
+            "2026-12-10",
+            "2026-12-11"
+          ]
+        },
+        {
+          "debut": "2026-12-17",
+          "fin": "2026-12-18",
+          "dates": [
+            "2026-12-17",
+            "2026-12-18"
+          ]
+        },
+        {
+          "debut": "2027-01-07",
+          "fin": "2027-01-08",
+          "dates": [
+            "2027-01-07",
+            "2027-01-08"
+          ]
+        },
+        {
+          "debut": "2027-01-14",
+          "fin": "2027-01-15",
+          "dates": [
+            "2027-01-14",
+            "2027-01-15"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS502D",
+      "nom_matiere": "Jeu d'entreprise",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 1,
+        "tp": 8
+      },
+      "lead": "FME",
+      "autres_enseignants": [
+        "OCH"
+      ],
+      "fenetres": [
+        {
+          "debut": "2027-01-12",
+          "fin": "2027-01-13",
+          "dates": [
+            "2027-01-12",
+            "2027-01-13"
+          ]
+        }
+      ],
+      "groupes_td": [
+        "AB"
+      ],
+      "dates_indeterminees": false,
+      "note": "Source : '12/1/2027 (AB) & 19/01/2027 (CD)' / '13/1/2027 (AB) & 20/01/2027 (CD)'. Arbitrage utilisateur 10/08/2026 : le groupe CD n'existe plus en BUT3-DEV-FI (1 seul TD), seules les dates du groupe AB (12 et 13 janvier 2027) sont retenues."
+    },
+    {
+      "code_matiere": "WS510D",
+      "nom_matiere": "Portfolio-Parcours Développement Web et Dispositifs interactifs",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": "XXX",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS5PJ",
+      "nom_matiere": "Projet Ens.",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA501D",
+      "nom_matiere": "Développer pour le web ou Concevoir un dispositif interactif",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 34,
+        "tp": 0
+      },
+      "lead": "JSA",
+      "autres_enseignants": [
+        "BTO"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": true
+    },
+    {
+      "code_matiere": "WSA502D",
+      "nom_matiere": "Jeu d'entreprise",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 1,
+        "tp": 8
+      },
+      "lead": "FME",
+      "autres_enseignants": [
+        "OCH"
+      ],
+      "fenetres": [
+        {
+          "debut": "2027-01-05",
+          "fin": "2027-01-06",
+          "dates": [
+            "2027-01-05",
+            "2027-01-06"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA510D",
+      "nom_matiere": "Portfolio-Parcours Développement Web et Dispositifs interactifs",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": "XXX",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA5PRJ",
+      "nom_matiere": "Projet enseignants",
+      "semestre": "S5",
+      "parcours_source": "BUT3-DEV-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA501C",
+      "nom_matiere": "Création engagée et communication d'acceptabilité",
+      "semestre": "S5",
+      "parcours_source": "BUT3-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 34,
+        "tp": 0
+      },
+      "lead": "MNI",
+      "autres_enseignants": [],
+      "fenetres": [
+        {
+          "debut": "2026-10-12",
+          "fin": "2026-10-14",
+          "dates": [
+            "2026-10-12",
+            "2026-10-13",
+            "2026-10-14"
+          ]
+        },
+        {
+          "debut": "2026-11-02",
+          "fin": "2026-11-03",
+          "dates": [
+            "2026-11-02",
+            "2026-11-03"
+          ]
+        },
+        {
+          "debut": "2026-11-23",
+          "fin": "2026-11-25",
+          "dates": [
+            "2026-11-23",
+            "2026-11-24",
+            "2026-11-25"
+          ]
+        },
+        {
+          "debut": "2026-12-14",
+          "fin": "2026-12-15",
+          "dates": [
+            "2026-12-14",
+            "2026-12-15"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA502C",
+      "nom_matiere": "Jeu d'entreprise",
+      "semestre": "S5",
+      "parcours_source": "BUT3-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 1,
+        "tp": 8
+      },
+      "lead": "FME",
+      "autres_enseignants": [
+        "OCH"
+      ],
+      "fenetres": [
+        {
+          "debut": "2027-01-05",
+          "fin": "2027-01-06",
+          "dates": [
+            "2027-01-05",
+            "2027-01-06"
+          ]
+        }
+      ],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA510C",
+      "nom_matiere": "Portfolio-Parcours Création Numérique",
+      "semestre": "S5",
+      "parcours_source": "BUT3-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": "GLE",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS610D",
+      "nom_matiere": "Portfolio-Parcours Développement Web et Dispositifs interactifs",
+      "semestre": "S6",
+      "parcours_source": "BUT3-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 5,
+        "tp": 0
+      },
+      "lead": "ARA",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WS611D",
+      "nom_matiere": "Stage-Parcours Développement Web et Dispositifs interactifs",
+      "semestre": "S6",
+      "parcours_source": "BUT3-DEV-FI",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA666D",
+      "nom_matiere": "Projet fin de BUT",
+      "semestre": "S6",
+      "parcours_source": "BUT3-DEV-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 22,
+        "tp": 0
+      },
+      "lead": "RDE",
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA610C",
+      "nom_matiere": "Portfolio-Parcours Création Numérique",
+      "semestre": "S6",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 5,
+        "tp": 0
+      },
+      "lead": "GLE",
+      "autres_enseignants": [],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA611C",
+      "nom_matiere": "Alternance-Parcours Création Numérique",
+      "semestre": "S6",
+      "parcours_source": "BUT2-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 0,
+        "tp": 0
+      },
+      "lead": null,
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    },
+    {
+      "code_matiere": "WSA666C",
+      "nom_matiere": "Projet fin de BUT",
+      "semestre": "S6",
+      "parcours_source": "BUT3-CREACOM-FC",
+      "volumes_etudiant_seances": {
+        "cm": 0,
+        "td": 22,
+        "tp": 0
+      },
+      "lead": "RDE",
+      "autres_enseignants": [
+        "AFR"
+      ],
+      "fenetres": [],
+      "groupes_td": null,
+      "dates_indeterminees": false
+    }
+  ]
+}

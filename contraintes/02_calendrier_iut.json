@@ -1,5 +1,6 @@
 {
-  "source_fichier": "INDISPONIBILITE_S_IUT_TROYES_-_2026-2027_-_Feuille_1.csv (fichier officiel)",
+  "source_fichier": "INDISPONIBILITÉS IUT TROYES - 2026-2027 - Feuille 1.csv",
+  "genere_par": "scripts/build_contraintes.py",
   "vacances_et_pauses_pedagogiques": [
     {
       "debut": "2026-10-26",
@@ -74,7 +75,7 @@
         "2027-05-06",
         "2027-05-07"
       ],
-      "note": "Jeudi 6 mai = jour férié (Ascension) ; vendredi 7 mai = pont, IUT fermé"
+      "note": "Contient un jour férié : 06/05/2027 = jour férié"
     }
   ],
   "jours_feries": [
@@ -88,7 +89,7 @@
     },
     {
       "date": "2027-05-06",
-      "nom": "jour férié (Ascension)"
+      "nom": "jour férié"
     },
     {
       "date": "2027-05-17",

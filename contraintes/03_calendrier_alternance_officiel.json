@@ -1,5 +1,6 @@
 {
-  "source": "DISPONIBILITE_S_ETUDIANTS_S3-FC_S4-FC (csv) + DISPONIBILITE_S_ETUDIANTS_S5-FC_S6-FC (xlsx), fichiers officiels fournis par l'utilisateur",
+  "source": "DISPONIBILITÉS ÉTUDIANTS BUT2 / BUT3 (fichiers officiels)",
+  "genere_par": "scripts/build_contraintes.py",
   "regle_lecture": "Chaque entree = une semaine ou les etudiants FC concernes sont A L'IUT (donc disponibles pour y placer des cours). En dehors de ces semaines, ils sont en entreprise.",
   "BUT2_FC_S3_S4": {
     "parcours_concernes": [
@@ -458,13 +459,13 @@
       }
     ],
     "evenements_speciaux": [
-      "Jeudi 26 aout 2027 : SOUTENANCE",
-      "Vendredi 27 aout 2027 : SOUTENANCE",
-      "Mardi 31 aout 2027 : FIN DE FORMATION"
+      "Jeudi 26 août 2027 : SOUTENANCE",
+      "Vendredi 27 août 2027 : SOUTENANCE",
+      "Mardi 31 août 2027 : FIN DE FORMATION"
     ]
   },
   "conflits_detectes_automatiquement": {
-    "regle": "Un conflit signifie qu'une semaine listee comme 'semaine IUT' pour les alternants contient au moins un jour marque ferme dans le calendrier officiel de l'IUT (vacances/pause pedagogique/jour ferie). Rappel de la regle absolue : la fermeture IUT prevaut toujours.",
+    "regle": "Un conflit signifie qu'une semaine listee comme 'semaine IUT' pour les alternants contient au moins un jour marque ferme dans le calendrier officiel de l'IUT. Regle absolue : la fermeture IUT prevaut toujours.",
     "BUT2_FC_S3_S4": [
       {
         "semaine_debut": "2027-03-29",

@@ -23,3 +23,75 @@ min_week_rules:
       rentrée. Délai ramené à 2 semaines (min_week=3) plutôt que 3 (min_week=4)
       pour préserver la fiabilité du solveur sur le run complet — Kyllian
       n'avait pas donné de chiffre exact ("quelques semaines").
+
+# Fenêtres de dates CIVILES imposées à des séances précises (cf. modèle
+# `SessionDateWindowRule`, `solver/constraints.py::add_session_date_window_constraints`).
+# Contrainte DURE (arbitrage utilisateur du 10/08/2026).
+session_date_windows:
+  # Source : "Maquette 2026 BUT1 S1.docx" (Kyllian Bresson).
+  # "TD n°1 : Visite à la BU (Salle A123) à prévoir plutôt entre 1er et 15 septembre"
+  - course_code: WR100BU
+    semestre: S1
+    session_type: TD
+    sequence_orders: [1]
+    debut: 2026-09-01
+    fin: 2026-09-15
+    note: >
+      Visite à la BU. Fenêtre serrée en pratique : le S1 ne démarre que le
+      lundi 7 septembre 2026 (semaine 3), il ne reste donc que la semaine du
+      7 au 11 et le lundi 14/mardi 15. La salle A123 est hors du parc géré par
+      `rooms.yaml` : à corriger manuellement après résolution.
+
+  # "TD n°2 et n°3 : Séances Informatique (Salle Informatique) à prévoir plutôt
+  # à partir de la 3ème semaine de septembre jusqu'au 15 octobre" — la 3e
+  # semaine de septembre 2026 démarre le lundi 14.
+  - course_code: WR100BU
+    semestre: S1
+    session_type: TD
+    sequence_orders: [2, 3]
+    debut: 2026-09-14
+    fin: 2026-10-15
+    note: >
+      Séances en salle informatique. Information source : l'an dernier (2025)
+      le TD n°2 était en semaine 39 et le TD n°3 en semaine 42.
+
+# Ordre SOUPLE entre les enseignants d'un même module (cf. modèle
+# `CourseTeacherOrderRule`, `solver/objectives.py::add_course_teacher_order_penalties`).
+teacher_order_rules:
+  # Source : contrainte pédagogique d'Ariane Loizon (CSV CONTRAINTES
+  # ENSEIGNANTS) + "Maquette 2026 BUT3 S5-CREAMCOM-FC.docx" : "Commencer la
+  # WRA505C avec essentiellement les créneaux de Ariane (ALO) au début de la
+  # ressource et plutôt ceux de Anthony Froli (AFR) à la fin." Partage 17/17
+  # sur 34 TD.
+  - course_code: WRA505C
+    semestre: S5
+    teacher_order: [ALO, AFR]
+    weight: 200
+    note: >
+      Mou (arbitrage utilisateur 10/08/2026) : une séparation stricte
+      "tous les TD d'ALO avant le premier d'AFR" entrerait en conflit avec les
+      indisponibilités d'AFR (mardi après-midi, jeudis après 17h) sur un module
+      qui occupe la quasi-totalité du semestre.
+
+# Dérogations CIBLÉES au plafond horaire hebdomadaire (§3, 22 créneaux FI —
+# cf. modèle `WeeklyCapException`, `solver/decomposed.py::assign_weeks`,
+# paramètre `cap_exceptions`) — relève le plafond pour UN parcours et UNE
+# semaine civile précise seulement, jamais la valeur par défaut (un relevé
+# global, essayé le 14/08/2026, avait dégradé la fiabilité du run complet en
+# poussant l'étage 2 à exploiter la marge PARTOUT — cf. docs/DATA.md §62).
+weekly_cap_exceptions:
+  - parcours: BUT1
+    semestre: S1
+    week_monday: "2026-11-30"  # semaine-index solveur 12
+    cap: 23
+    note: >
+      WR106 (1 seul enseignant, MRI, pour tout le module — 4 TD + 8 TP + le
+      CM) : son éval commune (CM-2) tombait en semaine-index 12, mais le
+      dernier TP de 6 des 8 groupes en semaine 13 (une semaine plus tard,
+      violant l'ordre éval-après-contenu) faute d'un seul créneau de marge
+      cohorte (20/22 déjà pris par les autres cours cette semaine-là, pas
+      MRI lui-même — 12/26 seulement). Autorisation EXPLICITE de Kyllian
+      Bresson (14/08/2026) : « si on autorise 23 séances au lieu de 22 de
+      manière exceptionnelle j'ai envie de répondre oui si ça solutionne
+      des problèmes [...] les étudiants peuvent faire 1h30 de plus par
+      semaine de manière exceptionnelle. » Cf. docs/DATA.md §61.1/§62.

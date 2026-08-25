@@ -106,7 +106,10 @@ def cmd_solve(args: argparse.Namespace) -> int:
     weights = load_objective_weights(config_dir)
     teacher_avail = load_teacher_availability(config_dir)
 
-    from cal_iut.ingestion.constraints_loader import load_all_constraints, merge_teacher_availability
+    from cal_iut.ingestion.constraints_loader import (
+        load_all_constraints,
+        merge_teacher_availability,
+    )
 
     project_root = config_dir.parents[1]
     bundle = load_all_constraints(project_root)
@@ -114,18 +117,20 @@ def cmd_solve(args: argparse.Namespace) -> int:
 
     groups = load_groups(config_dir)
     duos = load_teacher_duos(config_dir)
-    solver = TimetableSolver(
-        SolverConfig(
-            weeks=args.weeks,
-            gap_weight=args.gap_weight or weights.get("gap_penalty", 100),
-            optimize_gaps=not args.no_gaps,
-            enforce_ordonnancement=not args.no_ordonnancement,
-            time_limit_seconds=args.time_limit,
-            num_workers=args.num_workers,
-            data_root=project_root,
-            fi_max_week=getattr(args, "fi_max_week", None),
-        )
+    solver_config_kwargs: dict[str, object] = dict(
+        weeks=args.weeks,
+        gap_weight=args.gap_weight or weights.get("gap_penalty", 100),
+        optimize_gaps=not args.no_gaps,
+        enforce_ordonnancement=not args.no_ordonnancement,
+        time_limit_seconds=args.time_limit,
+        num_workers=args.num_workers,
+        data_root=project_root,
+        fi_max_week=getattr(args, "fi_max_week", None),
+        enforce_sae_supervisor_availability=not getattr(args, "no_sae_supervisor_hard", False),
     )
+    if getattr(args, "spread_weight", None) is not None:
+        solver_config_kwargs["spread_weight"] = args.spread_weight
+    solver = TimetableSolver(SolverConfig(**solver_config_kwargs))
     semestre_group = getattr(args, "semestre_group", None)
     if semestre_group:
         semestre = SEMESTRE_GROUP_ANCHOR[semestre_group]
@@ -268,8 +273,16 @@ def cmd_export(args: argparse.Namespace) -> int:
 
     if args.format == "html":
         from cal_iut.export.html_view import build_and_render
-        from cal_iut.ingestion.config_loader import load_groups, load_rooms, load_teacher_availability
-        from cal_iut.ingestion.constraints_loader import load_all_constraints, merge_teacher_availability
+        from cal_iut.ingestion.config_loader import (
+            load_groups,
+            load_rooms,
+            load_teacher_availability,
+            load_teacher_contacts,
+        )
+        from cal_iut.ingestion.constraints_loader import (
+            load_all_constraints,
+            merge_teacher_availability,
+        )
         from cal_iut.ingestion.planning_loader import (
             load_mmi_planning_for_semestres,
             planning_events_as_week_days,
@@ -305,19 +318,55 @@ def cmd_export(args: argparse.Namespace) -> int:
                 planning, bundle.calendar.date_to_week_day_any, week_offset, n_weeks
             )
 
-        html = build_and_render(
-            raw,
-            sessions_list,
-            groups,
-            calendar=bundle.calendar,
-            semestre=semestre,
-            teacher_availability=teacher_avail,
-            sae_days_by_course=sae_days_by_course,
-            rooms=rooms,
-            planning_events=planning_events,
-        )
+        contacts = load_teacher_contacts(config_dir)
+
+        def _render(scoped_sessions, **overrides):
+            return build_and_render(
+                raw,
+                scoped_sessions,
+                groups,
+                calendar=bundle.calendar,
+                semestre=semestre,
+                teacher_availability=teacher_avail,
+                sae_days_by_course=sae_days_by_course,
+                rooms=rooms,
+                planning_events=planning_events,
+                teacher_contacts=contacts,
+                **overrides,
+            )
+
+        if args.per_teacher:
+            # Un fichier autonome PAR enseignant (retour utilisateur 10/08/2026).
+            # Chacun ne contient que les séances de l'intéressé : rien à
+            # filtrer côté lecteur, et aucune donnée des autres promotions ne
+            # circule — contrairement au fichier commun + lien, où tout le
+            # planning voyage avec.
+            out_dir = Path(args.per_teacher)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            placed_codes = sorted({c for p in placements_raw for c in p["teacher_codes"]})
+            written = 0
+            for code in placed_codes:
+                own = [s for s in sessions_list if code in s.teacher_codes]
+                if not own:
+                    continue
+                path = out_dir / f"planning-{code}.html"
+                path.write_text(
+                    _render(
+                        own,
+                        heading=f"Planning de {code}",
+                        subheading=(
+                            "Vue personnelle en lecture seule — pour toute correction, "
+                            "contactez le responsable des emplois du temps."
+                        ),
+                    ),
+                    encoding="utf-8",
+                )
+                written += 1
+            print(f"Exported {written} per-teacher HTML files -> {out_dir}")
+            return 0
+
         output = Path(args.output)
-        output.write_text(html, encoding="utf-8")
+        output.write_text(_render(sessions_list), encoding="utf-8")
         print(f"Exported HTML timetable -> {output}")
         return 0
 
@@ -403,7 +452,17 @@ def main() -> int:
         default=900,
         help="900s par défaut : nécessaire empiriquement pour un run complet BUT1-S1 (cf. docs/DATA.md §12.3)",
     )
-    solve_parser.add_argument("--num-workers", type=int, default=8)
+    solve_parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=None,
+        help=(
+            "Parallélisme CP-SAT. Non fourni = nombre de processeurs logiques de "
+            "la machine (détecté automatiquement). En mode --decomposed, ce budget "
+            "est réparti entre les semaines résolues simultanément et les workers "
+            "accordés à chacune."
+        ),
+    )
     solve_parser.add_argument(
         "--legacy-weighted",
         action="store_true",
@@ -449,6 +508,30 @@ def main() -> int:
             "temporel par construction (cf. SEMESTRE_GROUPS)."
         ),
     )
+    solve_parser.add_argument(
+        "--no-sae-supervisor-hard",
+        action="store_true",
+        help=(
+            "Indisponibilité référent SAE (retour utilisateur 11/08/2026) en objectif MOU "
+            "(pénalité, évitée si possible) au lieu de blocage dur. Par défaut, dur — mais "
+            "confirmé empiriquement catastrophique en --decomposed sur un run complet réel "
+            "(2 semaines en échec sans ce mécanisme -> 13 avec, cf. docs/DATA.md §49) : "
+            "utiliser ce drapeau pour tout run --decomposed multi-semestres complet."
+        ),
+    )
+    solve_parser.add_argument(
+        "--spread-weight",
+        type=int,
+        default=None,
+        help=(
+            "Lissage étage 2 (--decomposed uniquement, cf. assign_weeks) : étale les séances "
+            "d'un même cours/type/groupe sur l'horizon au lieu de les regrouper. Non fourni = "
+            "défaut historique (2, calibré pour le modèle joint). Recommandé : 8 pour un run "
+            "--decomposed multi-semestres complet — a résolu un blocage combinatoire sur 2 "
+            "semaines (aucune ressource individuellement saturée) là où 2 échouait, cf. "
+            "docs/DATA.md §49."
+        ),
+    )
     solve_parser.set_defaults(func=cmd_solve)
 
     serve_parser = sub.add_parser("serve", help="Démarrer l'API FastAPI")
@@ -463,6 +546,17 @@ def main() -> int:
     export_parser.add_argument("--config-dir", default=str(_default_config_dir()))
     export_parser.add_argument("--format", choices=["csv", "json", "html"], default="csv")
     export_parser.add_argument("--output", default=str(_default_output_dir() / "export.csv"))
+    export_parser.add_argument(
+        "--per-teacher",
+        metavar="DOSSIER",
+        default=None,
+        help=(
+            "--format html uniquement : écrit un fichier HTML autonome par "
+            "enseignant dans ce dossier (planning-XXX.html), ne contenant que "
+            "ses propres séances. Alternative au fichier commun + liens "
+            "personnels, quand on préfère ne rien faire circuler d'autre."
+        ),
+    )
     export_parser.set_defaults(func=cmd_export)
 
     args = parser.parse_args()

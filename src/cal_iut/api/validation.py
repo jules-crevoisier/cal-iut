@@ -1,6 +1,6 @@
 """Validation des déplacements manuels (contraintes dures)."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from cal_iut.calendar.academic import AcademicCalendar, semester_week_offset, week_status
 from cal_iut.models.entities import TeacherAvailability
@@ -92,15 +92,36 @@ class SlotSuggestion:
 
 def _teacher_free_at(
     teacher_codes: list[str],
+    week: int,
     day: int,
     slot: int,
     d,
     teacher_availability: list[TeacherAvailability],
+    calendar: AcademicCalendar | None = None,
+    week_offset: int = 0,
 ) -> bool:
-    """Recoupe les indispos DÉCLARÉES (récurrentes + dates précises) — en
-    plus des conflits d'agenda déjà couverts par `validate_move`, une
-    alternative suggérée ne doit pas non plus tomber sur un créneau que
-    l'enseignant a explicitement signalé indisponible."""
+    """
+    Recoupe TOUTES les indispos DÉCLARÉES d'un enseignant — les quatre
+    mécanismes du solveur (`solver/constraints.py::add_teacher_availability_constraints`),
+    répliqués ici en pure lecture plutôt qu'en contrainte CP-SAT :
+
+    1. `forbidden_slots` (récurrent, jour/créneau) ;
+    2. `metadata["forbidden_dates"]` (dates absolues — y compris la
+       supervision SAE, cf. `augment_teacher_availability_with_sae_supervision`
+       appliqué une fois au démarrage de l'API, retour utilisateur 11/08/2026) ;
+    3. `allowed_slots`/`allowed_dates` (liste blanche DURE — jusqu'ici
+       manquante ici : un enseignant comme VBU ou MNI restait "libre" aux yeux
+       du glisser-déposer en dehors de ses jours déclarés) ;
+    4. `week_parity_rules` (indisponibilité une semaine sur deux, ex. TCA).
+
+    Retour utilisateur (11/08/2026) : "vérifie bien toutes les contraintes
+    avant que ça s'effectue" — avant ce correctif, seuls 1 et 2 étaient
+    couverts, et uniquement pour FILTRER les suggestions, jamais pour bloquer
+    un glisser-déposer brut (cf. `api/main.py::_teacher_availability_violations`,
+    qui réutilise cette même fonction pour un blocage RÉEL, non contournable).
+    """
+    from cal_iut.solver.constraints import _week_parity
+
     by_code = {a.teacher_code: a for a in teacher_availability}
     for code in teacher_codes:
         avail = by_code.get(code)
@@ -111,6 +132,16 @@ def _teacher_free_at(
         forbidden_dates = avail.metadata.get("forbidden_dates") or []
         if d is not None and d.isoformat() in forbidden_dates:
             return False
+        if avail.allowed_slots and (day, slot) not in {tuple(p) for p in avail.allowed_slots}:
+            return False
+        if avail.allowed_dates and (d is None or d.isoformat() not in set(avail.allowed_dates)):
+            return False
+        if avail.week_parity_rules and calendar is not None:
+            parity = _week_parity(calendar, week_offset, week, avail.parity_reference)
+            if parity is not None:
+                for rule in avail.week_parity_rules:
+                    if rule.parity == parity and rule.day == day and slot in rule.slots:
+                        return False
     return True
 
 
@@ -139,8 +170,10 @@ def suggest_alternative_slots(
     Couvre : conflits groupe/enseignant/salle (`validate_move`, contre le
     planning COMPLET — tous les parcours actuellement chargés, pas
     seulement celui de la séance déplacée), indispos enseignant déclarées
-    (récurrentes + dates précises), jours fériés/bloqués du calendrier, le
-    verrou "semaine passée/en cours" (`week_status`), et — via les
+    (récurrentes, dates précises, liste blanche, parité de semaine — cf.
+    `_teacher_free_at`, les quatre mécanismes du solveur), jours fériés/
+    bloqués du calendrier, le verrou "semaine passée/en cours" (`week_status`),
+    et — via les
     paramètres `extra_blocked`/`allowed_weeks` assemblés par l'appelant
     (`api/main.py::_suggestions_for`, qui a accès à `state`) — le verrou
     jeudi PAC, les jours SAE sanctuarisés, les événements du planning
@@ -176,7 +209,7 @@ def suggest_alternative_slots(
                 result = validate_move(session_id, week, day, slot, timetable, group_ids, teacher_codes, room_id)
                 if not result.valid:
                     continue
-                if not _teacher_free_at(teacher_codes, day, slot, d, teacher_availability):
+                if not _teacher_free_at(teacher_codes, week, day, slot, d, teacher_availability, calendar, week_offset):
                     continue
                 suggestions.append(
                     SlotSuggestion(

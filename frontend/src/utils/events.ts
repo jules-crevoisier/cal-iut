@@ -3,23 +3,36 @@ import type { Placement } from "../types";
 import { shortGroupLabel } from "../utils/years";
 import { placementToDate, slotLabel } from "../utils/slots";
 
+// Même mapping type -> couleur que l'export HTML (`.session.type-CM/TP`,
+// `export/templates/timetable.html`) : TD (par défaut) = accent, CM =
+// ink-soft (gris neutre), TP = teal. `var(--xxx)` résolu par le navigateur
+// contre les tokens du thème (clair/sombre) — pas de couleur figée ici,
+// contrairement à l'ancienne palette or/vert/bleu propre au React.
+// PTUT n'existe pas côté HTML (catégorie propre à cette vue éditable) :
+// teinte dédiée, cohérente avec la palette mais sans réutiliser un token
+// déjà porteur d'un autre sens.
 const TYPE_COLORS: Record<string, { bg: string; border: string }> = {
-  CM: { bg: "#1a3a2a", border: "#3d9970" },
-  TD: { bg: "#1a2a3a", border: "#4a90d9" },
-  TP: { bg: "#3a2a1a", border: "#d4a017" },
-  PTUT: { bg: "#2a1a3a", border: "#9b59b6" },
+  CM: { bg: "color-mix(in srgb, var(--ink-soft) 10%, var(--surface))", border: "var(--ink-soft)" },
+  TD: { bg: "color-mix(in srgb, var(--accent) 10%, var(--surface))", border: "var(--accent)" },
+  TP: { bg: "color-mix(in srgb, var(--teal) 12%, var(--surface))", border: "var(--teal)" },
+  PTUT: { bg: "color-mix(in srgb, #8e44ad 12%, var(--surface))", border: "#8e44ad" },
 };
 
 export function placementsToEvents(
   placements: Placement[],
   displayWeek: number,
+  weekDates: string[],
   groupLabels: Record<string, string> = {},
 ): EventInput[] {
   return placements
     .filter((p) => p.week === displayWeek)
     .map((p) => {
-      const { start, end } = placementToDate(p.week, p.day, p.slot);
-      const colors = TYPE_COLORS[p.session_type] ?? { bg: "#2a2a2a", border: "#666" };
+      const { start, end } = placementToDate(weekDates, p.week, p.day, p.slot);
+      const colors = TYPE_COLORS[p.session_type] ?? { bg: "var(--surface-2)", border: "var(--border)" };
+      // Éval : même override que `.session.eval` côté HTML (accent2/copper
+      // sur la bordure ET le fond, pas seulement un liseré rouge).
+      const evalColors = { bg: "color-mix(in srgb, var(--accent2) 14%, var(--surface))", border: "var(--accent2)" };
+      const resolved = p.is_eval ? evalColors : colors;
       const groupShort = shortGroupLabel(p.group_ids, groupLabels);
       const groupPart = groupShort ? ` · ${groupShort}` : "";
 
@@ -29,8 +42,8 @@ export function placementsToEvents(
         start: start.toISOString(),
         end: end.toISOString(),
         editable: !p.locked,
-        backgroundColor: colors.bg,
-        borderColor: p.is_eval ? "#e74c3c" : colors.border,
+        backgroundColor: resolved.bg,
+        borderColor: resolved.border,
         classNames: [
           "session-event",
           `type-${p.session_type.toLowerCase()}`,

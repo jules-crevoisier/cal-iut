@@ -60,9 +60,16 @@ def load_local_exports(
 def fetch_all_exports_sync(
     prefer_local: bool = True,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """
+    Ordre de préférence : `contraintes/` d'abord — c'est la copie figée par
+    `scripts/build_contraintes.py` depuis les sources officielles, donc celle
+    dont TOUS les autres `contraintes/*.json` sont dérivés. Sans elle, un run
+    pouvait mélanger un `07_modules_maquette_progression.json` régénéré et une
+    maquette re-téléchargée entre-temps, avec des volumes divergents.
+    """
     if prefer_local:
         root = Path(__file__).resolve().parents[3]
-        local = load_local_exports(root, root / "data" / "exports")
+        local = load_local_exports(root / "contraintes", root, root / "data" / "exports")
         if local:
             return local
     return fetch_export_sync(MAQUETTE_URL), fetch_export_sync(PROGRESSION_URL)

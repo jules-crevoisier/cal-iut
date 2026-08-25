@@ -1,5 +1,7 @@
 import type { ViewMode, YearMeta } from "../types";
 import type { GroupMeta, RoomMeta } from "../types";
+import type { WeekRow } from "../types/app";
+import { WeekBar } from "./WeekBar";
 import { DEFAULT_YEARS, yearFromSemestre } from "../utils/years";
 
 interface ToolbarProps {
@@ -10,6 +12,8 @@ interface ToolbarProps {
   parcoursList: string[];
   displayWeek: number;
   maxWeeks: number;
+  weekRows: WeekRow[];
+  weekCounts: Map<number, number>;
   viewMode: ViewMode;
   groupId: string;
   teacherCode: string;
@@ -63,15 +67,11 @@ export function Toolbar(props: ToolbarProps) {
     });
 
   return (
+    // Pas de marque "cal-iut" ici : le titre vit désormais dans `PageHeader`
+    // (§54), au même endroit que le HTML — la répéter ici aurait été le
+    // "superflu" exactement pointé par le retour utilisateur du 11/08/2026
+    // (cf. docs/DATA.md §55).
     <header className="toolbar">
-      <div className="toolbar-brand">
-        <span className="brand-mark">MMI</span>
-        <div>
-          <h1>cal-iut</h1>
-          <p>IUT MMI Troyes — emplois du temps</p>
-        </div>
-      </div>
-
       <div className="toolbar-controls">
         <label>
           Année
@@ -118,19 +118,33 @@ export function Toolbar(props: ToolbarProps) {
           </select>
         </label>
 
-        <label>
-          Semaine
-          <select
-            value={props.displayWeek}
-            onChange={(e) => props.onWeekChange(Number(e.target.value))}
-          >
-            {Array.from({ length: props.maxWeeks }, (_, i) => (
-              <option key={i} value={i}>
-                Semaine {i + 1}
-              </option>
-            ))}
-          </select>
-        </label>
+        {props.weekRows.length > 0 ? (
+          <label className="weekfield">
+            Semaine
+            <WeekBar
+              weekRows={props.weekRows}
+              countByWeekIndex={props.weekCounts}
+              selected={props.displayWeek}
+              onSelect={props.onWeekChange}
+            />
+          </label>
+        ) : (
+          // Repli avant le premier chargement de `/app-state` (pas encore de
+          // `weekRows` — la `WeekBar` n'aurait rien à afficher).
+          <label>
+            Semaine
+            <select
+              value={props.displayWeek}
+              onChange={(e) => props.onWeekChange(Number(e.target.value))}
+            >
+              {Array.from({ length: props.maxWeeks }, (_, i) => (
+                <option key={i} value={i}>
+                  Semaine {i + 1}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label>
           Vue
@@ -194,8 +208,15 @@ export function Toolbar(props: ToolbarProps) {
         <button type="button" className="btn btn--primary" onClick={props.onSolve} disabled={props.loading}>
           {props.loading ? "Calcul…" : "Générer"}
         </button>
-        <button type="button" className="btn btn--accent" onClick={props.onRegenerate} disabled={props.loading}>
-          Régénérer
+        {/* Recalcule TOUT le semestre depuis zéro (même appel que "Générer" —
+            retour utilisateur 11/08/2026 : à ne pas confondre avec la
+            régénération CIBLÉE d'une semaine, désormais dans le panneau
+            latéral "Régénération ciblée", seule fidèle à
+            `POST /regen/week` — cf. docs/DATA.md). Renommé pour éviter
+            l'ambiguïté entre les deux, gardé pour forcer un recalcul complet
+            après une modification de données en amont. */}
+        <button type="button" className="btn btn--accent" onClick={props.onRegenerate} disabled={props.loading} title="Relance le solveur sur tout le semestre — pour une seule semaine, utilisez « Régénération ciblée » dans le panneau de droite.">
+          Recalculer tout
         </button>
       </div>
     </header>

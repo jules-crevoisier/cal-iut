@@ -112,13 +112,48 @@ class Course(BaseModel):
     hors_service: bool = False
 
 
+class TeacherWeekParityRule(BaseModel):
+    """
+    Indisponibilité qui ne s'applique qu'une semaine sur deux — ex. Thomas
+    Castellengo (TCA) : « semaines paires : mercredi pas dispo, jeudi max 17h ;
+    semaines impaires : lundi, mardi, vendredi max 17h ».
+
+    `parity` porte sur le numéro de semaine DÉPARTEMENT par défaut (semaine 1 =
+    ISO 35 2026, cf. `calendar/academic.py::department_week_number`), la
+    référence retenue par l'utilisateur le 10/08/2026. Basculable en numéro ISO
+    via `TeacherAvailability.parity_reference` (`"iso"`) sans toucher au code :
+    la contrainte lit cette valeur à la résolution.
+    """
+
+    parity: Literal["paire", "impaire"]
+    day: int  # 0 = lundi
+    slots: list[int] = Field(default_factory=list)
+
+
 class TeacherAvailability(BaseModel):
-    """Disponibilités d'un enseignant (config externe + CSV contraintes)."""
+    """Disponibilités d'un enseignant (config externe + JSON contraintes)."""
 
     teacher_code: str
     forbidden_slots: list[tuple[int, int]] = Field(default_factory=list)
     preferred_slots: list[tuple[int, int]] = Field(default_factory=list)
     preferred_days: list[int] = Field(default_factory=list)
+    # Liste blanche DURE : hors de ces (jour, créneau), l'enseignant n'est pas
+    # plaçable du tout. Vide = aucune liste blanche, seules les
+    # `forbidden_slots` s'appliquent. Arbitrage utilisateur du 10/08/2026 :
+    # « les jours non listés en DISPONIBILITÉS sont interdits » — sans ça, un
+    # enseignant comme VBU (aucune indisponibilité déclarée, mais disponible
+    # seulement lundi/mardi/mercredi) restait plaçable les 5 jours.
+    allowed_slots: list[tuple[int, int]] = Field(default_factory=list)
+    # Liste blanche DURE de dates ISO : l'enseignant n'est plaçable QUE ces
+    # jours-là de toute l'année (cas des vacataires, ex. Marc Nino et ses 10
+    # dates). Vide = aucune restriction de ce type.
+    allowed_dates: list[str] = Field(default_factory=list)
+    week_parity_rules: list[TeacherWeekParityRule] = Field(default_factory=list)
+    parity_reference: Literal["departement", "iso"] = "departement"
+    # Nombre maximal de semaines distinctes par mois civil où l'enseignant
+    # intervient — objectif MOU (ex. ARA : « regrouper ses cours sur une ou
+    # deux semaines successives par mois »). None = pas de regroupement demandé.
+    monthly_cluster_max_weeks: int | None = None
     max_afternoons_per_week: int | None = None
     notes: str | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
@@ -145,6 +180,10 @@ class DoubleSessionRule(BaseModel):
       premières (ex. CM WR106 : CM1/CM2/CM3, seuls CM2+CM3 — l'éval de fin de
       semestre — doivent être collés en bloc de 3h ; CM1 doit rester seul).
 
+    `max_blocks` borne le nombre de blocs formés (None = autant que possible) :
+    ex. WRA308M, 6 TD dont seuls "les 3 derniers à la suite" forment un bloc de
+    4h30 — sans cette borne, les 6 TD produiraient 2 blocs de 4h30.
+
     Donnée jamais devinée : toujours saisie explicitement dans
     `data/config/double_sessions.yaml`.
     """
@@ -153,6 +192,7 @@ class DoubleSessionRule(BaseModel):
     session_type: SessionType
     slots_per_session: int = 2
     pair_from: Literal["start", "end"] = "start"
+    max_blocks: int | None = None
     note: str | None = None
 
 
@@ -198,6 +238,91 @@ class CourseMinWeekRule(BaseModel):
     course_code: str
     semestre: str
     min_week: int
+    note: str | None = None
+
+
+class SessionDateWindowRule(BaseModel):
+    """
+    Fenêtre de dates CIVILES imposée à certaines séances d'un cours, ciblées
+    par leur numéro d'ordre pédagogique — ex. WR100BU (« Jeu de piste BU »,
+    Valérie Mariot) : le TD n°1 est la visite à la BU, à faire entre le 1er et
+    le 15 septembre 2026 ; les TD n°2 et 3 (salle informatique) entre la 3e
+    semaine de septembre et le 15 octobre.
+
+    Comble un manque réel : jusqu'ici aucun mécanisme ne permettait de borner
+    une séance PRÉCISE dans le calendrier (seul `CourseMinWeekRule` existait,
+    au grain du cours entier et sans borne haute). Arbitrage utilisateur du
+    10/08/2026 : contrainte DURE.
+
+    Donnée jamais devinée : toujours saisie explicitement dans
+    `data/config/course_scheduling_rules.yaml`.
+    """
+
+    course_code: str
+    semestre: str
+    session_type: SessionType | None = None
+    # Numéros d'ordre pédagogique visés (1-indexés, cf.
+    # `SessionToPlace.sequence_order`). Vide = toutes les séances du cours.
+    sequence_orders: list[int] = Field(default_factory=list)
+    start_date: str | None = None  # ISO, borne incluse
+    end_date: str | None = None  # ISO, borne incluse
+    note: str | None = None
+
+
+class CourseTeacherOrderRule(BaseModel):
+    """
+    Ordre SOUPLE entre les enseignants d'un même module — ex. WRA505C (Ariane
+    Loizon) : « commencer essentiellement avec les créneaux d'ALO au début de
+    la ressource, plutôt ceux d'AFR à la fin ».
+
+    Traduit en pénalité sur la position MOYENNE des séances de chaque
+    enseignant (même technique que `add_ordonnancement_constraints` en mode
+    mou) : chaque enseignant du couple doit se dérouler globalement avant le
+    suivant, sans exiger une séparation stricte qui entrerait en conflit avec
+    leurs indisponibilités propres.
+
+    Donnée jamais devinée : toujours saisie explicitement dans
+    `data/config/course_scheduling_rules.yaml`.
+    """
+
+    course_code: str
+    semestre: str
+    teacher_order: list[str]
+    weight: int = 200
+    note: str | None = None
+
+
+class WeeklyCapException(BaseModel):
+    """
+    Dérogation PONCTUELLE et CIBLÉE au plafond horaire hebdomadaire (§3, 22
+    créneaux FI / 23 FC, `add_weekly_hour_cap_constraints`) — relève le
+    plafond pour UN parcours et UNE semaine civile précise seulement (jamais
+    la valeur par défaut, qui reste inchangée partout ailleurs).
+
+    Introduite le 14/08/2026 : un premier essai avait relevé la valeur par
+    défaut GLOBALEMENT (22 -> 23 partout, toutes semaines, tous parcours FI)
+    pour débloquer un cas réel (WR106, 1 seul enseignant pour tout le
+    module, dernier TP repoussé après l'éval faute d'un créneau de marge
+    cohorte) — mesuré ensuite sur un run complet réel que ce relevé global
+    pousse l'étage 2 à exploiter la marge PARTOUT (61 paires
+    cohorte/semaine poussées à la nouvelle limite au lieu de 14),
+    dégradant la fiabilité du run entier au lieu de la seule semaine visée.
+    Remplacé par cette dérogation ciblée : `week_monday` (lundi de la
+    semaine civile concernée, jamais un index solveur brut — cohérent avec
+    `SessionDateWindowRule`) est résolu en semaine-index solveur au chargement
+    (`weekly_cap_exceptions_by_parcours_week`, `decomposed.py`), et
+    n'affecte QUE ce (parcours, semaine) précis, dans `assign_weeks` comme
+    dans `_rebalance_failed_weeks` (même valeur des deux côtés).
+
+    Donnée jamais devinée : toujours saisie explicitement dans
+    `data/config/course_scheduling_rules.yaml`, avec l'autorisation
+    utilisateur citée dans `note`.
+    """
+
+    parcours: str
+    semestre: str
+    week_monday: str  # ISO, lundi de la semaine civile concernée
+    cap: int
     note: str | None = None
 
 

@@ -11,15 +11,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cal_iut.calendar.academic import semester_week_offset, week_status
-from cal_iut.db.repository import PlanningRepository
 from cal_iut.db.models import ScheduleException
+from cal_iut.db.repository import PlanningRepository
 from cal_iut.ingestion.pipeline import SEMESTRE_GROUP_ANCHOR
-from cal_iut.ingestion.planning_loader import load_mmi_planning_for_semestres, planning_event_blocked_slots
+from cal_iut.ingestion.planning_loader import (
+    load_mmi_planning_for_semestres,
+    planning_event_blocked_slots_by_parcours,
+    sae_group_labels_by_course,
+)
 from cal_iut.models.entities import TeacherAvailability
 from cal_iut.models.session import SessionToPlace
 from cal_iut.models.timetable import SLOTS_PER_DAY
-from cal_iut.solver.constraints import sae_blocked_days_by_parcours
-from cal_iut.solver.decomposed import SLOTS_PER_WEEK, _build_sequence_neighbors, _movable_bounds, solve_week_detail
+from cal_iut.solver.constraints import sae_blocked_days_by_group, sae_blocked_days_by_parcours
+from cal_iut.solver.decomposed import (
+    SLOTS_PER_WEEK,
+    _build_sequence_neighbors,
+    _movable_bounds,
+    solve_week_detail,
+)
 from cal_iut.solver.rooms import PlacedSession, PlacedSessionWithRoom, assign_rooms
 
 # Plafond hebdo enseignant repris de `assign_weeks` (decomposed.py, défaut
@@ -166,24 +175,43 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
     sae_days_by_course = sae_windows_as_week_days(
         planning, state.calendar.date_to_week_day, week_offset, n_weeks_horizon
     )
+    sae_group_labels = sae_group_labels_by_course(planning)
     blocked_by_parcours_abs = (
-        sae_blocked_days_by_parcours(all_in_scope, sae_days_by_course) if sae_days_by_course else {}
+        sae_blocked_days_by_parcours(all_in_scope, sae_days_by_course, sae_group_labels)
+        if sae_days_by_course
+        else {}
+    )
+    # SAE ne datée que pour certains groupes TD (ex. WS502D) : rattachée aux
+    # groupes concernés, pas au parcours entier (cf. `sae_blocked_days_by_group`).
+    blocked_by_group_abs = (
+        sae_blocked_days_by_group(all_in_scope, sae_days_by_course, sae_group_labels, state.groups)
+        if sae_days_by_course and sae_group_labels
+        else {}
     )
     # `sae_days_by_course`/`blocked_by_parcours_abs` sont en semaine RELATIVE
     # (à `week_offset`, même convention que `state.timetable[...].week` et
     # `weeks[0]`) — PAS `absolute_week` (index absolu dans
     # `calendar.teaching_mondays`, utilisé uniquement pour `solve_week_detail`).
-    blocked_days_by_parcours_week: dict[str, set[tuple[int, int]]] = {}
-    for parcours, days in blocked_by_parcours_abs.items():
-        local = {(wk - weeks[0], d) for (wk, d) in days if weeks[0] <= wk < weeks[0] + num_weeks}
-        if local:
-            blocked_days_by_parcours_week[parcours] = local
+    def _to_local_days(source: dict[str, set[tuple[int, int]]]) -> dict[str, set[tuple[int, int]]]:
+        out: dict[str, set[tuple[int, int]]] = {}
+        for key, days in source.items():
+            local = {(wk - weeks[0], d) for (wk, d) in days if weeks[0] <= wk < weeks[0] + num_weeks}
+            if local:
+                out[key] = local
+        return out
 
-    planning_event_blocked_abs = planning_event_blocked_slots(
+    blocked_days_by_parcours_week = _to_local_days(blocked_by_parcours_abs)
+    blocked_days_by_group_week = _to_local_days(blocked_by_group_abs)
+
+    planning_event_blocked_abs = planning_event_blocked_slots_by_parcours(
         planning, state.calendar.date_to_week_day_any, week_offset, n_weeks_horizon
     )
     planning_event_blocked_local = {
-        (wk - weeks[0], d, s) for (wk, d, s) in planning_event_blocked_abs if wk in week_set
+        parcours: {(wk - weeks[0], d, s) for (wk, d, s) in slots if wk in week_set}
+        for parcours, slots in planning_event_blocked_abs.items()
+    }
+    planning_event_blocked_local = {
+        parcours: slots for parcours, slots in planning_event_blocked_local.items() if slots
     }
 
     exceptions = repo.list_exceptions(active_only=True)
@@ -223,6 +251,7 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
         student_presences=state.student_presences,
         groups=state.groups,
         blocked_days_by_parcours_week=blocked_days_by_parcours_week or None,
+        blocked_days_by_group_week=blocked_days_by_group_week or None,
         duos=state.teacher_duos,
         planning_event_blocked_local=planning_event_blocked_local or None,
         num_weeks=num_weeks,

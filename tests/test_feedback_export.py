@@ -2,7 +2,7 @@
 
 from cal_iut.db.models import Correction
 from cal_iut.export.formatter import build_export_rows, to_csv
-from cal_iut.feedback.weights import analyze_corrections, apply_learned_weights
+from cal_iut.feedback.weights import analyze_corrections
 from cal_iut.solver.rooms import PlacedSessionWithRoom
 
 

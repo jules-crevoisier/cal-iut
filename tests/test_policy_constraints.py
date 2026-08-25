@@ -62,7 +62,19 @@ def _base_config(**overrides) -> SolverConfig:
 
 
 def test_weekly_hour_cap_blocks_23rd_fi_session() -> None:
-    """FI : 33h/semaine = 22 créneaux max, un 23e doit être infaisable."""
+    """
+    FI : 33h/semaine = 22 créneaux max, un 23e doit être infaisable.
+
+    Un relevé GLOBAL à 23 a été essayé le 14/08/2026 (autorisation de
+    Kyllian Bresson pour débloquer un cas réel, WR106) puis ANNULÉ le même
+    jour : mesuré sur un run complet réel que le relevé global pousse
+    l'étage 2 à exploiter la marge PARTOUT (61 paires cohorte/semaine
+    poussées à la nouvelle limite au lieu de 14), dégradant la fiabilité du
+    run entier au lieu de la seule semaine visée. Remplacé par une
+    dérogation CIBLÉE (`WeeklyCapException`, `cap_exceptions`, testée dans
+    `test_weekly_cap_exceptions.py`) — la valeur par défaut reste 22. Cf.
+    docs/DATA.md §61.1/§62.
+    """
     groups = [Group(id="g-tp", label="TP", parcours="TEST-FI", annee="TEST", kind="tp", headcount=20)]
     sessions = [_td_session(i) for i in range(23)]
 
@@ -143,7 +155,12 @@ def test_s1_integration_week_forbidden_real_courses_start_week_index_1() -> None
     assert result.placements[0].week == 1
 
 
-def test_s1_integration_week_lock_not_applied_to_other_semestres() -> None:
+def test_integration_week_lock_applies_to_all_fi_semestres() -> None:
+    """
+    Généralisé le 11/08/2026 (retour utilisateur) : le verrou de la semaine
+    d'intégration ne concerne plus seulement BUT1/S1 — BUT2-DEV-FI (S3) et
+    BUT3-DEV-FI (S5) démarrent aussi en semaine universitaire 3, pas avant.
+    """
     sessions = [_td_session(0, group_id="g0", parcours="TEST-FI")]
     sessions[0].semestre = "S3"
 
@@ -151,7 +168,22 @@ def test_s1_integration_week_lock_not_applied_to_other_semestres() -> None:
         _base_config(weeks=2, enforce_s1_integration_week_lock=True)
     ).solve(sessions)
     assert result.status in ("OPTIMAL", "FEASIBLE")
-    # Pas de contrainte pour S3 : la semaine 0 reste autorisée.
+    assert result.placements[0].week == 1
+
+
+def test_integration_week_lock_not_applied_to_fc_parcours() -> None:
+    """Les parcours FC démarrent à leur propre date de rentrée (souvent hors
+    semaine-index 0) — le tampon "semaine 3" ne les concerne pas, seul le
+    blocage exact de leur rentrée s'applique (cf.
+    `planning_event_blocked_slots_by_parcours`)."""
+    sessions = [_td_session(0, group_id="g0", parcours="TEST-DEV-FC")]
+    sessions[0].semestre = "S3"
+
+    result = TimetableSolver(
+        _base_config(weeks=2, enforce_s1_integration_week_lock=True)
+    ).solve(sessions)
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    # Pas de contrainte pour un parcours FC : la semaine 0 reste autorisée.
     assert result.placements[0].week in (0, 1)
 
 
@@ -216,7 +248,7 @@ def test_ordonnancement_hard_mode_available_when_requested() -> None:
     assert result.status in ("OPTIMAL", "FEASIBLE")
 
     by_id = {p.session_id: p for p in result.placements}
-    t = lambda p: p.week * 30 + p.day * 6 + p.slot  # noqa: E731
+    t = lambda p: p.week * 30 + p.day * 6 + p.slot
     for gid in ("tp-a", "tp-b"):
         mean_a = sum(t(by_id[f"WRA-{gid}-{i}"]) for i in (1, 2)) / 2
         mean_b = sum(t(by_id[f"WRB-{gid}-{i}"]) for i in (1, 2)) / 2
@@ -259,7 +291,7 @@ def test_ordonnancement_default_is_soft_high_weight() -> None:
     assert result.status in ("OPTIMAL", "FEASIBLE")
 
     by_id = {p.session_id: p for p in result.placements}
-    t = lambda p: p.week * 30 + p.day * 6 + p.slot  # noqa: E731
+    t = lambda p: p.week * 30 + p.day * 6 + p.slot
     for gid in ("tp-a", "tp-b"):
         mean_a = sum(t(by_id[f"WRA-{gid}-{i}"]) for i in (1, 2)) / 2
         mean_b = sum(t(by_id[f"WRB-{gid}-{i}"]) for i in (1, 2)) / 2
@@ -292,7 +324,7 @@ def test_pedagogical_sequence_promo_eval_waits_for_every_group() -> None:
     assert result.status in ("OPTIMAL", "FEASIBLE")
 
     by_id = {p.session_id: p for p in result.placements}
-    t = lambda p: p.week * 30 + p.day * 6 + p.slot  # noqa: E731
+    t = lambda p: p.week * 30 + p.day * 6 + p.slot
     assert t(by_id["eval"]) > t(by_id["tp-a-1"])
     assert t(by_id["eval"]) > t(by_id["tp-b-1"])
 

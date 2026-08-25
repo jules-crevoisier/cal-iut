@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -13,11 +15,20 @@ from cal_iut.calendar.academic import (
     default_horizon_weeks,
     semester_week_offset,
 )
-from cal_iut.ingestion.config_loader import load_course_min_week_rules
-from cal_iut.ingestion.constraints_loader import StudentPresence
+from cal_iut.ingestion.config_loader import (
+    load_course_min_week_rules,
+    load_course_teacher_orders,
+    load_session_date_windows,
+)
+from cal_iut.ingestion.constraints_loader import (
+    StudentPresence,
+    augment_teacher_availability_with_sae_supervision,
+)
 from cal_iut.ingestion.planning_loader import (
     load_mmi_planning_for_semestres,
-    planning_event_blocked_slots,
+    planning_event_blocked_slots_by_parcours,
+    sae_group_labels_by_course,
+    sae_supervisor_dates_by_teacher,
     sae_windows_as_week_days,
 )
 from cal_iut.models.entities import Group, TeacherAvailability, TeacherDuo
@@ -36,17 +47,22 @@ from cal_iut.solver.constraints import (
     add_s1_integration_week_lock,
     add_sae_sanctuarization_constraints,
     add_sae_window_constraints,
+    add_session_date_window_constraints,
     add_student_presence_constraints,
     add_teacher_availability_constraints,
     add_thursday_afternoon_pac_lock,
     add_weekly_hour_cap_constraints,
+    sae_blocked_days_by_group,
     sae_blocked_days_by_parcours,
 )
 from cal_iut.solver.objectives import (
     add_avoid_zone_penalties,
+    add_course_teacher_order_penalties,
     add_intra_day_gap_penalties,
     add_midday_fill_penalties,
+    add_sae_supervisor_soft_penalties,
     add_semester_spread_penalties,
+    add_teacher_monthly_clustering_penalties,
 )
 from cal_iut.solver.resources import add_student_and_teacher_no_overlap
 
@@ -73,6 +89,21 @@ class SolverConfig:
     # par l'utilisateur : évite que les semaines 2-11 soient pleines et 12-19
     # vides) ; <1.0 recompresse artificiellement vers le début (cf.
     # objectives.py::add_semester_spread_penalties pour l'historique).
+    #
+    # `spread_weight` (ci-dessus) était déjà utilisé par le modèle joint sans
+    # jamais être threadé vers `--decomposed` (`assign_weeks` gardait son
+    # propre défaut interne, 2, quel que soit ce réglage). Retour utilisateur
+    # (11/08/2026) : « peux-tu essayer de lisser les cours sur les autres
+    # semaines ? » — diagnostic sur un run réel (BUT1+BUT2+BUT3, S1+S3+S5,
+    # `--decomposed`) : deux semaines (8, 14) restaient en échec sans qu'AUCUNE
+    # ressource individuelle ne soit saturée (aucun enseignant à son plafond
+    # hebdo) — un vrai goulot combinatoire de regroupement, pas de capacité.
+    # `spread_weight=8` au lieu de 2 a suffi à rendre tout l'horizon FEASIBLE
+    # (2389/2389 séances classiques placées, 0 semaine en échec) sur ce même
+    # run — cf. docs/DATA.md §49. Défaut du champ inchangé (2, calibré pour le
+    # modèle joint) : `cal-iut solve --decomposed` recommande `--spread-weight
+    # 8` explicitement plutôt que de changer ce défaut partagé sans nouvelle
+    # validation côté joint.
     spread_frontload_fraction: float = 1.0
     enforce_ordonnancement: bool = True
     # Essentiel pédagogiquement (retour utilisateur), mais testé empiriquement
@@ -92,6 +123,14 @@ class SolverConfig:
     enforce_sae_windows: bool = True
     enforce_sae_sanctuarization: bool = True
     enforce_weekly_hour_cap: bool = True
+    # Relevé 22 -> 23 GLOBALEMENT le 14/08/2026 puis REVENU à 22 le même
+    # jour : mesuré sur run réel que le relevé global pousse l'étage 2 à
+    # exploiter la marge PARTOUT (61 paires cohorte/semaine à la limite au
+    # lieu de 14), dégradant la fiabilité du run complet au lieu de la seule
+    # semaine visée (WR106). Remplacé par une dérogation CIBLÉE
+    # (`weekly_cap_exceptions` dans `course_scheduling_rules.yaml`,
+    # `WeeklyCapException` — parcours + semaine civile précise seulement),
+    # qui ne touche pas cette valeur par défaut. Cf. docs/DATA.md §62.
     fi_weekly_cap_slots: int = 22  # 33h/semaine = 22 créneaux de 1h30 (dur, strict)
     fc_weekly_cap_slots: int = 23  # ~35h/semaine = 23 créneaux de 1h30 max
     # Horizon étendu réservé aux alternants uniquement (`solve_decomposed`
@@ -116,7 +155,27 @@ class SolverConfig:
     # Echange IA") : retour utilisateur, ces créneaux étaient affichés dans
     # l'interface mais pas réellement bloqués pour les cours classiques.
     enforce_planning_events: bool = True
-    num_workers: int = 8
+    # Un enseignant qui encadre une SAE (lead ou co-enseignant) est très peu
+    # disponible ces jours-là pour un cours classique, sur N'IMPORTE QUEL
+    # AUTRE parcours — retour utilisateur du 11/08/2026. Dur par défaut (même
+    # granularité — journée entière — que la sanctuarisation SAE par
+    # parcours) ; `False` = molle si le dur s'avère infaisable sur un cas
+    # réel (cf. `ordonnancement_hard` pour le même patron de repli).
+    enforce_sae_supervisor_availability: bool = True
+    sae_supervisor_weight: int = 300
+    # Fenêtres de dates civiles par séance (ex. WR100BU : visite BU entre le
+    # 1er et le 15 septembre) — cf. data/config/course_scheduling_rules.yaml.
+    enforce_session_date_windows: bool = True
+    # Regroupement mensuel des interventions d'un enseignant (ARA, JHU) : mou,
+    # fortement pondéré — arbitrage utilisateur du 10/08/2026.
+    optimize_teacher_clustering: bool = True
+    teacher_clustering_weight: int = 120
+    # Ordre souple entre enseignants d'un même module (ex. WRA505C ALO -> AFR).
+    optimize_teacher_order: bool = True
+    # Parallélisme CP-SAT : `None` = nombre de processeurs logiques de la
+    # machine (cf. `decomposed.default_num_workers`). Remplace le `8` codé en
+    # dur, qui n'exploitait que la moitié d'un CPU 16 threads.
+    num_workers: int | None = None
     random_seed: int = 2027  # déterminisme : même graine à chaque palier/run
     data_root: Path | None = None
     # Résolution en paliers (`solve_tiered`) : fraction de `time_limit_seconds`
@@ -163,6 +222,9 @@ class _HardModel:
     groups: list[Group]
     horizon: int
     sae_days_by_course: dict[str, set[tuple[int, int]]] | None
+    week_offset: int = 0
+    teacher_availability: list[TeacherAvailability] = field(default_factory=list)
+    sae_supervisor_dates: dict[str, set] = field(default_factory=dict)
 
 
 class TimetableSolver:
@@ -177,7 +239,9 @@ class TimetableSolver:
     def _new_solver(self, time_limit_seconds: float) -> cp_model.CpSolver:
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = max(0.0, time_limit_seconds)
-        solver.parameters.num_search_workers = self.config.num_workers
+        from cal_iut.solver.decomposed import default_num_workers
+
+        solver.parameters.num_search_workers = self.config.num_workers or default_num_workers()
         solver.parameters.random_seed = self.config.random_seed
         return solver
 
@@ -211,7 +275,9 @@ class TimetableSolver:
         week_offset = semester_week_offset(calendar, semestre)
         groups = groups or []
 
-        planning_event_blocked: set[tuple[int, int, int]] = set()
+        planning_event_blocked: dict[str, set[tuple[int, int, int]]] = {}
+        sae_group_labels: dict[str, list[str]] = {}
+        sae_supervisor_dates: dict[str, set] = {}
         if (
             sae_days_by_course is None
             and (self.config.enforce_sae_windows or self.config.enforce_sae_sanctuarization)
@@ -221,13 +287,26 @@ class TimetableSolver:
             # groupe multi-parcours — charger tous les semestres réels présents.
             real_semestres = sorted({s.semestre for s in unlocked}) or [semestre]
             planning = load_mmi_planning_for_semestres(root, real_semestres)
+            sae_group_labels = sae_group_labels_by_course(planning)
             if sae_days_by_course is None:
                 sae_days_by_course = sae_windows_as_week_days(
                     planning, calendar.date_to_week_day, week_offset, self.config.weeks
                 )
             if self.config.enforce_planning_events:
-                planning_event_blocked = planning_event_blocked_slots(
+                planning_event_blocked = planning_event_blocked_slots_by_parcours(
                     planning, calendar.date_to_week_day_any, week_offset, self.config.weeks
+                )
+            # Référent SAE = très peu disponible ces jours-là pour un cours
+            # classique, sur N'IMPORTE QUEL AUTRE parcours (retour utilisateur
+            # 11/08/2026). Dur par défaut : on augmente `teacher_availability`
+            # elle-même (mécanisme `forbidden_dates` déjà câblé et testé) plutôt
+            # que d'ajouter un chemin de contrainte séparé. Repli mou disponible
+            # via `enforce_sae_supervisor_availability=False`, cf.
+            # `_teacher_preference_terms`.
+            sae_supervisor_dates = sae_supervisor_dates_by_teacher(planning)
+            if sae_supervisor_dates and self.config.enforce_sae_supervisor_availability:
+                teacher_availability = augment_teacher_availability_with_sae_supervision(
+                    list(teacher_availability or []), sae_supervisor_dates
                 )
 
         # Les séances SAE (WSxxx) ne sont plus planifiées par l'algorithme
@@ -236,9 +315,15 @@ class TimetableSolver:
         # cours classiques. `blocked_by_parcours` doit être calculé AVANT ce
         # filtrage (sinon plus aucune séance WS n'est présente pour indiquer
         # à quel parcours rattacher ses jours bloqués).
-        blocked_by_parcours: dict[str, set[tuple[int, int]]] = (
-            sae_blocked_days_by_parcours(unlocked, sae_days_by_course) if sae_days_by_course else {}
-        )
+        blocked_by_parcours: dict[str, set[tuple[int, int]]] = {}
+        blocked_by_group: dict[str, set[tuple[int, int]]] = {}
+        if sae_days_by_course:
+            blocked_by_parcours = sae_blocked_days_by_parcours(
+                unlocked, sae_days_by_course, sae_group_labels
+            )
+            blocked_by_group = sae_blocked_days_by_group(
+                unlocked, sae_days_by_course, sae_group_labels, groups
+            )
         unlocked = [s for s in unlocked if not s.course_code.upper().startswith("WS")]
         if not unlocked:
             return None
@@ -304,6 +389,18 @@ class TimetableSolver:
             min_week_rules = load_course_min_week_rules(root / "data" / "config")
             add_course_min_week_constraints(model, unlocked, session_starts, min_week_rules, self.config.weeks)
 
+        if self.config.enforce_session_date_windows:
+            root = self.config.data_root or Path(__file__).resolve().parents[3]
+            add_session_date_window_constraints(
+                model,
+                unlocked,
+                session_starts,
+                load_session_date_windows(root / "data" / "config"),
+                calendar,
+                week_offset,
+                self.config.weeks,
+            )
+
         if self.config.enforce_duo_rare_room and duos:
             add_duo_synchronized_rare_room_constraints(model, unlocked, session_starts, duos)
 
@@ -318,9 +415,14 @@ class TimetableSolver:
                 fc_cap_slots=self.config.fc_weekly_cap_slots,
             )
 
-        if self.config.enforce_sae_sanctuarization and blocked_by_parcours:
+        if self.config.enforce_sae_sanctuarization and (blocked_by_parcours or blocked_by_group):
             add_sae_sanctuarization_constraints(
-                model, unlocked, session_starts, blocked_by_parcours, self.config.weeks
+                model,
+                unlocked,
+                session_starts,
+                blocked_by_parcours,
+                self.config.weeks,
+                blocked_by_group=blocked_by_group,
             )
 
         if teacher_availability:
@@ -354,6 +456,9 @@ class TimetableSolver:
             groups=groups,
             horizon=horizon,
             sae_days_by_course=sae_days_by_course,
+            week_offset=week_offset,
+            teacher_availability=list(teacher_availability or []),
+            sae_supervisor_dates=sae_supervisor_dates,
         )
 
     def solve(
@@ -479,6 +584,8 @@ class TimetableSolver:
                     self.config.eval_clustering_weight,
                 )
             )
+
+        objective_terms.extend(self._teacher_preference_terms(model, built))
 
         use_gaps = (
             self.config.optimize_gaps
@@ -656,6 +763,7 @@ class TimetableSolver:
                     model, unlocked, session_starts, self.config.weeks, self.config.eval_clustering_weight
                 )
             )
+        comfort_terms.extend(self._teacher_preference_terms(model, built))
         use_gaps = self.config.optimize_gaps and self.config.gap_weight > 0 and len(unlocked) <= 150
         if use_gaps:
             group_sessions = self._index_by_group(unlocked)
@@ -706,7 +814,7 @@ class TimetableSolver:
         sae_days_by_course: dict[str, set[tuple[int, int]]] | None = None,
         hints: dict[str, int] | None = None,
         duos: list[TeacherDuo] | None = None,
-        max_attempts: int = 2,
+        max_attempts: int = 3,
     ) -> SolverResult:
         """
         Résolution en 3 étages (ordre -> semaine -> jour/créneau), alternative
@@ -715,15 +823,21 @@ class TimetableSolver:
         `solver/decomposed.py` — délègue ici pour rester au même point
         d'entrée que les deux autres modes.
 
-        `max_attempts` (défaut 2, donc 1 seul ré-essai) : filet de sécurité de
-        dernier recours seulement — `solve_decomposed` gère maintenant lui-même
-        la variance CP-SAT en interne (seeds alternatives sur les semaines en
-        échec après rééquilibrage, cf. sa docstring), bien moins coûteux qu'un
-        restart complet du pipeline (étage 2 + toutes les semaines) depuis ici.
-        Ce ré-essai externe ne devrait donc quasiment plus jamais servir sur
-        une instance de taille raisonnable ; gardé au cas où une instance
-        vraiment défavorable épuise aussi les filets internes.
+        `max_attempts` (défaut 3, retour utilisateur 12/08/2026 : « fais les
+        ajustements nécessaires pour arriver à 100% ») : filet de sécurité —
+        `solve_decomposed` gère lui-même la variance CP-SAT en interne (seeds
+        alternatives sur les semaines en échec après rééquilibrage, cf. sa
+        docstring), bien moins coûteux qu'un restart complet du pipeline
+        (étage 2 + toutes les semaines) depuis ici. Mais un run réel complet a
+        montré que même ce filet interne (8 seeds/semaine en dernier recours)
+        ne suffit pas toujours À LUI SEUL à atteindre 100% — chaque tentative
+        complète (étage 2 inclus) explore une combinatoire assez différente
+        pour qu'un 3e essai indépendant ait de bonnes chances de réussir là où
+        les 2 premiers ont chacun laissé 2-3 semaines en échec ; `best_result`
+        (juste en dessous) garde de toute façon la meilleure des tentatives,
+        jamais moins bien que l'ancien comportement à 2. Cf. docs/DATA.md §58.
         """
+        from cal_iut.solver.decomposed import _split_cpu_budget, default_num_workers
         from cal_iut.solver.decomposed import solve_decomposed as _solve_decomposed
 
         resolved_calendar = calendar or build_default_calendar_2026_2027()
@@ -736,7 +850,10 @@ class TimetableSolver:
         ):
             from pathlib import Path
 
-            from cal_iut.ingestion.planning_loader import load_mmi_planning_for_semestres, sae_windows_as_week_days
+            from cal_iut.ingestion.planning_loader import (
+                load_mmi_planning_for_semestres,
+                sae_windows_as_week_days,
+            )
 
             root = self.config.data_root or Path(__file__).resolve().parents[3]
             # cf. `load_mmi_planning_for_semestres` : un run multi-parcours (ex.
@@ -751,7 +868,48 @@ class TimetableSolver:
                 planning, resolved_calendar.date_to_week_day, resolved_offset, self.config.weeks
             )
 
+        # `--time-limit` ne pilotait RIEN sur ce chemin : `solve_decomposed`
+        # gardait ses valeurs par défaut (180 s pour l'étage 2, 90 s par
+        # semaine à l'étage 3), quel que soit le budget demandé. Un
+        # `--time-limit 2400` n'avait donc aucun effet observable, ce qui rendait
+        # la durée d'un run impossible à piloter.
+        #
+        # Répartition, PLAFONNÉE aux valeurs historiques (180 s / 90 s) plutôt
+        # que scalée librement avec `total_budget` : un premier essai à 600 s /
+        # 300 s (11/08/2026) a produit un run PIRE que l'ancien comportement
+        # fixe — PARTIAL_WEEKS_FAILED sur 3 semaines au lieu de 2, 142 séances
+        # non placées de plus. Cause réelle, pas une coïncidence : l'étage 2
+        # (`assign_weeks`) n'est pas juste "plus fiable avec plus de temps" —
+        # un budget de recherche différent fait converger CP-SAT vers une
+        # affectation semaine PAR SEMAINE différente (meilleure sur SES propres
+        # objectifs, ordonnancement/frontload), sans aucune garantie que cette
+        # nouvelle répartition soit plus facile à placer pour l'étage 3 en
+        # aval — c'est un risque connu des approches décomposées : optimiser
+        # localement un étage amont ne garantit pas la faisabilité globale en
+        # aval. Les bornes hautes (180/90) sont donc conservées comme PLAFOND
+        # (valeurs éprouvées empiriquement, cf. l'historique de ce fichier) ;
+        # seul un `--time-limit` VOLONTAIREMENT COURT (usage : itération
+        # rapide) réduit encore ce budget, jamais ne l'augmente au-delà.
+        week_parallelism, _ = _split_cpu_budget(
+            self.config.num_workers or default_num_workers()
+        )
+        total_budget = max(60.0, float(self.config.time_limit_seconds))
+        stage2_budget = min(180.0, max(60.0, total_budget * 0.2))
+        n_waves = max(1, math.ceil((self.config.weeks or 1) / max(1, week_parallelism)))
+        stage3_budget = min(90.0, max(30.0, (total_budget - stage2_budget) / n_waves))
+
+        # `best_result` : bug réel trouvé le 12/08/2026 en diagnostiquant un
+        # run réel qui régressait de [0, 12, 14] à [12, 14, 16] en échec
+        # d'une tentative à l'autre — la boucle ne gardait QUE le résultat de
+        # la DERNIÈRE tentative (`result`, écrasé à chaque itération), même
+        # si une tentative précédente avait moins de semaines en échec /
+        # plus de séances placées. Chaque tentative reseed ÉTAGE 2 ENTIER
+        # depuis zéro (`random_seed + attempt`), donc rien ne garantit que la
+        # suivante soit meilleure — sur une instance difficile, revenir
+        # bêtement au dernier essai pouvait rendre un run PIRE qu'un essai
+        # antérieur silencieusement jeté. Cf. docs/DATA.md §58.
         result: SolverResult | None = None
+        best_result: SolverResult | None = None
         for attempt in range(max(1, max_attempts)):
             result = _solve_decomposed(
                 sessions,
@@ -763,14 +921,87 @@ class TimetableSolver:
                 sae_days_by_course=sae_days_by_course,
                 duos=duos,
                 weeks=self.config.weeks,
+                week_assignment_time_limit=stage2_budget,
+                week_detail_time_limit=stage3_budget,
                 num_workers=self.config.num_workers,
                 random_seed=self.config.random_seed + attempt,
                 hints=hints,
                 fi_max_week=self.config.fi_max_week,
+                enforce_sae_supervisor_availability=self.config.enforce_sae_supervisor_availability,
+                sae_supervisor_weight=self.config.sae_supervisor_weight,
+                spread_weight=self.config.spread_weight,
             )
             if not result.status.startswith("PARTIAL_WEEKS_FAILED"):
                 return result
-        return result
+            if best_result is None or len(result.placements) > len(best_result.placements):
+                best_result = result
+        return best_result
+
+    def _teacher_preference_terms(
+        self, model: cp_model.CpModel, built: _HardModel
+    ) -> list[cp_model.LinearExprT]:
+        """
+        Objectifs mous propres aux enseignants, communs à `solve()` et à
+        `solve_tiered()` (palier confort) :
+
+        - regroupement mensuel des interventions (ARA, JHU) ;
+        - ordre souple entre enseignants d'un même module (WRA505C : ALO puis AFR).
+
+        Tous deux sont des demandes explicites d'enseignants, arbitrées en MOU
+        le 10/08/2026 : en dur elles risqueraient l'infaisabilité sur des
+        modules qui occupent presque tout le semestre.
+        """
+        terms: list[cp_model.LinearExprT] = []
+        root = self.config.data_root or Path(__file__).resolve().parents[3]
+
+        if (
+            self.config.optimize_teacher_clustering
+            and self.config.teacher_clustering_weight > 0
+            and built.teacher_availability
+        ):
+            terms.extend(
+                add_teacher_monthly_clustering_penalties(
+                    model,
+                    built.unlocked,
+                    built.session_starts,
+                    built.teacher_availability,
+                    built.calendar,
+                    built.week_offset,
+                    self.config.weeks,
+                    self.config.teacher_clustering_weight,
+                )
+            )
+
+        if self.config.optimize_teacher_order:
+            terms.extend(
+                add_course_teacher_order_penalties(
+                    model,
+                    built.unlocked,
+                    built.session_starts,
+                    load_course_teacher_orders(root / "data" / "config"),
+                )
+            )
+
+        # Repli MOU de `enforce_sae_supervisor_availability=False` : la
+        # version dure (par défaut) est déjà posée en amont dans
+        # `_build_hard_model` en augmentant `teacher_availability` — ce terme
+        # ne s'active que si l'utilisateur a explicitement demandé le mode
+        # mou (ex. la version dure s'est avérée infaisable sur un cas réel).
+        if not self.config.enforce_sae_supervisor_availability and built.sae_supervisor_dates:
+            terms.extend(
+                add_sae_supervisor_soft_penalties(
+                    model,
+                    built.unlocked,
+                    built.session_starts,
+                    built.sae_supervisor_dates,
+                    built.calendar,
+                    built.week_offset,
+                    self.config.weeks,
+                    self.config.sae_supervisor_weight,
+                )
+            )
+
+        return terms
 
     @staticmethod
     def _rehint_from_solution(

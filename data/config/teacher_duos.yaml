@@ -1,8 +1,25 @@
-# Duos d'enseignants synchronisés sur une salle rare (Studio H.017 + H.022,
-# "hack Celcat" — cf. contraintes/01_regles_generales.json > distribution_modes
-# > duo_synchronise_salle_rare). Les deux enseignants d'un duo animent leurs
-# groupes EN MÊME TEMPS (co-animation), un en H.017, l'autre en H.022 ; deux
-# duos différents ne peuvent jamais se chevaucher (une seule paire de salles).
+# Duos d'enseignants synchronisés sur une salle rare dédoublée ("hack
+# Celcat" — cf. contraintes/01_regles_generales.json > rooms_hack_celcat_general
+# > distribution_modes.duo_synchronise_salle_rare). Les deux enseignants d'un
+# duo animent leurs groupes EN MÊME TEMPS (co-animation), un dans chaque salle
+# de `rare_rooms` ; deux duos qui partagent la MÊME `rare_rooms` ne peuvent
+# jamais se chevaucher dans le temps (une seule paire de salles à la fois),
+# mais deux duos sur des `rare_rooms` DIFFÉRENTES sont totalement indépendants.
+#
+# `rare_rooms` par duo — TROIS paires physiques distinctes, pas une seule :
+#   - h017/h022 (Studio) : PRIORITAIRE aux cours audiovisuels (WR110).
+#   - h201/h203 et h007/h008 : dev (WR112/WR113), PAS le studio.
+# Retour utilisateur (11/08/2026) : « wr112 et 113 fonctionnent avec des duo
+# mais ne sont pas à placer en priorité dans le studio, il y a des autre salle
+# pour les duo : la 201 203 et la 07 et 08 c'est ces salles en priorité pour
+# le dev, le studio est prioritaire pour les cours d'audio visuel ». Corrige un
+# bug réel où `rare_rooms` n'était consommé QUE pour l'étiquette de salle
+# finale (`solver/rooms.py::_duo_room_overrides`), jamais par la contrainte de
+# planification elle-même (`add_duo_synchronized_rare_room_constraints`) : les
+# 96 épisodes de WR110+WR112+WR113 étaient donc TOUS sérialisés dans un seul
+# groupe de non-chevauchement, comme s'ils se disputaient une seule ressource
+# physique — cf. docs/DATA.md §48 pour le diagnostic complet (76 séances non
+# placées sur un run réel, dont 22 directement sur ces 3 cours).
 #
 # Donnée confirmée par l'utilisateur (jamais devinée, cf. règle "donnée
 # fraîche" du projet) — recoupée avec contraintes/07_modules_maquette_progression.json :
@@ -11,43 +28,54 @@
 duos:
   - teacher_codes: [KBR, KNG]
     course_codes: [WR110]
+    rare_rooms: [h017, h022]
     # Retour utilisateur (Kyllian Bresson, 04/08/2026) : préférer un épisode
     # co-animé "A&B" (visuellement cohérent avec le regroupement TD AB) à
     # l'affectation par défaut (KBR=A,B / KNG=C,D => épisodes A&C puis B&D).
     group_overrides:
       KBR: [A, C]
       KNG: [B, D]
-    note: "Duo 1 (confirmé) : TP de KBR (Kyllian Bresson) verrouillées en simultané avec celles de KNG (Kévin Ngo)."
+    note: "Duo 1 (confirmé) : TP de KBR (Kyllian Bresson) verrouillées en simultané avec celles de KNG (Kévin Ngo). Studio H.017/H.022 (audiovisuel, prioritaire)."
 
   - teacher_codes: [FLI, VBU]
     course_codes: [WR110]
+    rare_rooms: [h017, h022]
     group_overrides:
       FLI: [E, G]
       VBU: [F, H]
-    note: "Duo 2 (confirmé) : séances de FLI (Florent Libbrecht) verrouillées en simultané avec celles de VBU (Valentin Burette)."
+    note: "Duo 2 (confirmé) : séances de FLI (Florent Libbrecht) verrouillées en simultané avec celles de VBU (Valentin Burette). Studio H.017/H.022 (audiovisuel, prioritaire)."
 
   # Confirmé par Kyllian Bresson (05/08/2026), en réponse à la question
   # posée sur "leur TP peut être fait en même temps dans une salle collée"
   # (WR112/WR113, cités comme exemples dans 01_regles_generales.json). Même
   # duo 1 (RDE/FME) sur les deux cours ; le duo 2 diffère (FLI sur WR112,
   # RHU sur WR113 — AHA commun aux deux).
+  #
+  # `rare_rooms` : h201/h203 pour ce duo (Duo 1), h007/h008 pour le Duo 2
+  # ci-dessous — deux paires DISTINCTES, pour que Duo 1 et Duo 2 puissent
+  # co-animer EN PARALLÈLE sur un même cours (WR112 comme WR113) au lieu de se
+  # sérialiser inutilement dans une même ressource. Ni l'un ni l'autre
+  # n'utilise le Studio (réservé WR110, retour utilisateur 11/08/2026).
   - teacher_codes: [RDE, FME]
     course_codes: [WR112, WR113]
+    rare_rooms: [h201, h203]
     group_overrides:
       RDE: [A, C]
       FME: [B, D]
-    note: "Duo 1 (confirmé, WR112+WR113) : TP de RDE (Romain Delon) verrouillées en simultané avec celles de FME."
+    note: "Duo 1 (confirmé, WR112+WR113) : TP de RDE (Romain Delon) verrouillées en simultané avec celles de FME. Salles dev H.201/H.203, pas le studio."
 
   - teacher_codes: [FLI, AHA]
     course_codes: [WR112]
+    rare_rooms: [h007, h008]
     group_overrides:
       FLI: [E, G]
       AHA: [F, H]
-    note: "Duo 2 WR112 (confirmé) : TP de FLI (Florent Libbrecht) verrouillées en simultané avec celles de AHA."
+    note: "Duo 2 WR112 (confirmé) : TP de FLI (Florent Libbrecht) verrouillées en simultané avec celles de AHA. Salles dev H.007/H.008, pas le studio."
 
   - teacher_codes: [RHU, AHA]
     course_codes: [WR113]
+    rare_rooms: [h007, h008]
     group_overrides:
       RHU: [E, G]
       AHA: [F, H]
-    note: "Duo 2 WR113 (confirmé) : TP de RHU (Régis Huez) verrouillées en simultané avec celles de AHA."
+    note: "Duo 2 WR113 (confirmé) : TP de RHU (Régis Huez) verrouillées en simultané avec celles de AHA. Salles dev H.007/H.008, pas le studio."

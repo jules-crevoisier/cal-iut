@@ -15,7 +15,12 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
-from cal_iut.calendar.academic import AcademicCalendar, build_default_calendar_2026_2027, semester_week_offset, week_status
+from cal_iut.calendar.academic import (
+    AcademicCalendar,
+    build_default_calendar_2026_2027,
+    semester_week_offset,
+    week_status,
+)
 from cal_iut.models.entities import Group, Room, TeacherAvailability
 from cal_iut.models.group_scope import expand_group_filter, resolve_tp_ids_for_td
 from cal_iut.models.session import SessionToPlace
@@ -91,11 +96,13 @@ def _teacher_payload(
     teacher_names: dict[str, str],
     calendar: AcademicCalendar | None,
     week_offset: int,
+    sae_supervisor_dates: dict[str, set] | None = None,
 ) -> list[dict]:
     by_teacher: dict[str, list[dict]] = defaultdict(list)
     for p in placements:
         for code in p["teacher_codes"]:
             by_teacher[code].append(p)
+    sae_supervisor_dates = sae_supervisor_dates or {}
 
     result: list[dict] = []
     for t in teacher_availability:
@@ -103,6 +110,19 @@ def _teacher_payload(
         forbidden_slots = set(tuple(x) for x in t.forbidden_slots)
         forbidden_dates_raw = t.metadata.get("forbidden_dates") or []
         forbidden_dates = {date.fromisoformat(str(d)) for d in forbidden_dates_raw}
+        # Dates ajoutées à `forbidden_dates` UNIQUEMENT parce que cet
+        # enseignant encadre une SAE ce jour-là (cf.
+        # `augment_teacher_availability_with_sae_supervision`, docs/DATA.md
+        # §48.2/§49) — à distinguer d'une VRAIE indisponibilité déclarée par
+        # l'enseignant : en mode mou (`--no-sae-supervisor-hard`, le réglage
+        # utilisé pour un run complet), le solveur les traite comme une
+        # préférence, pas un interdit, donc en violer certaines est un
+        # compromis ATTENDU, pas une anomalie à traiter au même titre qu'une
+        # vraie indisponibilité (retour utilisateur 11/08/2026 : "152
+        # contrainte non respectée, ce n'est pas possible" — diagnostic réel :
+        # 115/152 étaient EXACTEMENT ce compromis, 0 vraie violation de
+        # disponibilité déclarée, cf. docs/DATA.md §59).
+        sae_dates_this_teacher = sae_supervisor_dates.get(t.teacher_code, set())
 
         recurring_violations = []
         date_violations = []
@@ -115,7 +135,11 @@ def _teacher_payload(
                 d = calendar.week_day_to_date(week_offset + p["week"], p["day"])
                 if d in forbidden_dates:
                     date_violations.append(
-                        {"date": d.isoformat(), "course_code": p["course_code"]}
+                        {
+                            "date": d.isoformat(),
+                            "course_code": p["course_code"],
+                            "reason": "sae_supervision" if d in sae_dates_this_teacher else "declared",
+                        }
                     )
 
         has_constraint = bool(forbidden_slots or forbidden_dates or t.notes)
@@ -288,20 +312,24 @@ def _rule_checks(
         }
     )
 
-    # -- Semaine d'intégration S1 (semaine-index 0) --
+    # -- Semaine d'intégration, tous les FI (semaine-index 0) --
+    # Généralisé le 11/08/2026 (retour utilisateur) de "S1 uniquement" à tous
+    # les parcours FI — cf. `solver/constraints.py::add_s1_integration_week_lock`.
     week0_hits = [
         p for p in placements
-        if p["week"] == 0 and sessions_by_id.get(p["session_id"]) and sessions_by_id[p["session_id"]].semestre == "S1"
+        if p["week"] == 0
+        and sessions_by_id.get(p["session_id"])
+        and "FC" not in sessions_by_id[p["session_id"]].parcours
     ]
     checks.append(
         {
             "id": "s1_integration_lock",
-            "label": "Semaine d'intégration BUT1 sans cours classique",
+            "label": "Semaine d'intégration FI sans cours classique (BUT1/BUT2-DEV-FI/BUT3-DEV-FI)",
             "status": "pass" if not week0_hits else "fail",
             "detail": (
-                "0 séance S1 en semaine-index 0 (semaine d'intégration)."
+                "0 séance FI en semaine-index 0 (semaine d'intégration)."
                 if not week0_hits
-                else f"{len(week0_hits)} séance(s) S1 placées en semaine d'intégration."
+                else f"{len(week0_hits)} séance(s) FI placées en semaine d'intégration."
             ),
         }
     )
@@ -604,6 +632,8 @@ def build_payload(
     planning_events: list[dict[str, object]] | None = None,
     planning_event_slots: list[dict[str, object]] | None = None,
     exceptions: list[dict[str, object]] | None = None,
+    teacher_contacts: dict[str, str] | None = None,
+    sae_supervisor_dates: dict[str, set] | None = None,
 ) -> dict[str, object]:
     """Construit le payload JSON embarqué dans la page HTML."""
     sessions_by_id = {s.id: s for s in sessions}
@@ -671,6 +701,16 @@ def build_payload(
             {"week": i, "status": week_status(calendar, semestre, i)} for i in range(n_weeks)
         ]
 
+    # Date ISO du lundi de chaque semaine-solveur — indispensable pour produire
+    # un vrai fichier .ics par enseignant (un événement daté, pas un "semaine
+    # 7"). Reconstruite depuis `week_rows`, qui contient déjà la correspondance
+    # index solveur -> lundi réel, plutôt qu'en la recalculant à part.
+    week_dates: list[str] = [""] * n_weeks
+    for row in week_rows:
+        idx = row.get("weekIndex")
+        if isinstance(idx, int) and 0 <= idx < n_weeks:
+            week_dates[idx] = str(row.get("monday") or "")
+
     default_gid = default_group
     if default_gid is None:
         tp_first = next((g.id for g in scoped_groups if g.kind == "tp"), None)
@@ -678,7 +718,10 @@ def build_payload(
 
     teacher_names = _teacher_names(sessions)
     teachers_payload = (
-        _teacher_payload(teacher_availability, sessions_by_id, placements, teacher_names, calendar, week_offset)
+        _teacher_payload(
+            teacher_availability, sessions_by_id, placements, teacher_names, calendar, week_offset,
+            sae_supervisor_dates,
+        )
         if teacher_availability
         else []
     )
@@ -715,6 +758,7 @@ def build_payload(
         "groupIsFc": is_fc,
         "groupParcours": group_parcours,
         "weekLabels": week_labels,
+        "weekDates": week_dates,
         "weekRows": week_rows,
         "weekStatus": week_status_rows,
         "defaultGroup": default_gid,
@@ -726,6 +770,10 @@ def build_payload(
         "exceptions": exceptions or [],
         "teachers": teachers_payload,
         "teacherLabels": teacher_labels,
+        # Adresses mail saisies à la main (cf. `teacher_contacts.yaml`) : aucun
+        # fichier source officiel ne les porte. Vide = le brouillon s'ouvre sans
+        # destinataire, à compléter.
+        "teacherEmails": teacher_contacts or {},
         "ruleChecks": rule_checks,
         "institutionalCalendar": INSTITUTIONAL_EVENTS,
         "rooms": _room_catalog(rooms, rows) if rooms else [],
@@ -773,9 +821,23 @@ def build_and_render(
     planning_events: list[dict[str, object]] | None = None,
     planning_event_slots: list[dict[str, object]] | None = None,
     exceptions: list[dict[str, object]] | None = None,
+    teacher_contacts: dict[str, str] | None = None,
+    sae_supervisor_dates: dict[str, set] | None = None,
     **render_kwargs: object,
 ) -> str:
     calendar = calendar or build_default_calendar_2026_2027()
+    if sae_supervisor_dates is None and teacher_availability:
+        # Auto-chargé si non fourni (même donnée que le solveur/l'API,
+        # jamais réestimée) — sinon `export --format html` distinguait moins
+        # bien les compromis SAE mous que `/app-state` (cf. docs/DATA.md §59).
+        from cal_iut.ingestion.planning_loader import (
+            load_mmi_planning_for_semestres,
+            sae_supervisor_dates_by_teacher,
+        )
+
+        real_semestres = sorted({s.semestre for s in sessions}) or ([semestre] if semestre else [])
+        planning = load_mmi_planning_for_semestres(Path(__file__).resolve().parents[3], real_semestres)
+        sae_supervisor_dates = sae_supervisor_dates_by_teacher(planning)
     payload = build_payload(
         timetable,
         sessions,
@@ -788,5 +850,7 @@ def build_and_render(
         planning_events=planning_events,
         planning_event_slots=planning_event_slots,
         exceptions=exceptions,
+        teacher_contacts=teacher_contacts,
+        sae_supervisor_dates=sae_supervisor_dates,
     )
     return render_html(payload, **render_kwargs)  # type: ignore[arg-type]

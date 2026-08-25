@@ -18,7 +18,11 @@ from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "data" / "exports"
+# Exports officiels figés par `scripts/build_contraintes.py` — même copie que
+# celle dont tous les `contraintes/*.json` sont dérivés (`ingestion/fetch.py`
+# la préfère aussi). `data/exports/` est gitignoré : les tests ne peuvent pas
+# en dépendre.
+FIXTURES = ROOT / "contraintes"
 CONFIG = ROOT / "data" / "config"
 
 SINGLE_GROUP_PARCOURS = ("BUT2-CREACOM-FC", "BUT3-CREACOM-FC", "BUT3-DEV-FC")

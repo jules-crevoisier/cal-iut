@@ -13,7 +13,11 @@ from cal_iut.models.group_scope import expand_group_filter
 from cal_iut.solver.cpsat import SolverConfig, TimetableSolver
 from cal_iut.solver.resources import build_student_cohorts
 
-FIXTURES = Path(__file__).resolve().parents[1] / "data" / "exports"
+# Exports officiels figés par `scripts/build_contraintes.py` — même copie que
+# celle dont tous les `contraintes/*.json` sont dérivés (`ingestion/fetch.py`
+# la préfère aussi). `data/exports/` est gitignoré : les tests ne peuvent pas
+# en dépendre.
+FIXTURES = Path(__file__).resolve().parents[1] / "contraintes"
 CONFIG = Path(__file__).resolve().parents[1] / "data" / "config"
 
 

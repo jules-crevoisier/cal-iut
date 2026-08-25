@@ -1,5 +1,8 @@
 """Pipeline d'ingestion complet."""
 
+import json
+import warnings
+from collections.abc import Iterable
 from pathlib import Path
 
 from cal_iut.ingestion.config_loader import (
@@ -17,7 +20,6 @@ from cal_iut.ingestion.normalize import expand_all_sessions
 from cal_iut.models.entities import Course
 from cal_iut.models.session import SessionToPlace
 
-
 # Run global multi-parcours (retour utilisateur : "il faut que tu fasses les
 # choses nécessaires pour que les parcours fonctionnent tous ensemble") :
 # S1/S3/S5 (et séparément S2/S4/S6) démarrent la même semaine calendaire et
@@ -34,6 +36,19 @@ SEMESTRE_GROUPS: dict[str, set[str]] = {
 }
 SEMESTRE_GROUP_ANCHOR: dict[str, str] = {"odd": "S1", "even": "S2"}
 
+# Semestres sans données de dates SAE pour 2026-2027 : le fichier officiel
+# « DATES SAE 2026_2027 » ne date que les SAE de S1/S3/S5. Arbitrage
+# utilisateur du 10/08/2026 (« CSV uniquement, S2/S4/S6 hors périmètre ») :
+# plutôt que de générer S2/S4/S6 sans aucune sanctuarisation SAE — donc avec
+# des cours classiques librement plaçables sur des journées de projet — on
+# avertit explicitement. Retirer un semestre d'ici dès que ses dates arrivent.
+SEMESTRES_HORS_PERIMETRE: set[str] = {"S2", "S4", "S6"}
+
+
+def out_of_scope_semestres(semestres: Iterable[str]) -> list[str]:
+    """Semestres demandés qui n'ont pas de dates SAE cette année."""
+    return sorted(set(semestres) & SEMESTRES_HORS_PERIMETRE)
+
 
 class IngestionResult:
     def __init__(
@@ -47,6 +62,37 @@ class IngestionResult:
         self.stats = stats
 
 
+def _load_cached_or_fetch(config_dir: Path) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """
+    Préfère le cache local (`contraintes/maquette.json`/`progression.json`,
+    régénéré par `scripts/build_contraintes.py`) à un fetch réseau — même
+    source que `cal-iut ingest --from-cache contraintes` en CLI.
+
+    Corrige un vrai bug trouvé le 11/08/2026 : `api/main.py::_try_restore_latest`
+    (restauration du dernier run au démarrage du serveur) appelait
+    `run_ingestion(...)` SANS cache, donc en fetch réseau LIVE — alors que le
+    planning stocké en base avait, lui, été calculé via le CLI en
+    `--from-cache` (déterministe). Un redémarrage du serveur pouvait ainsi
+    ré-ingérer une image légèrement différente de celle réellement résolue
+    (un fetch amont ayant changé entre-temps), désynchronisant `state.groups`/
+    `state.sessions_by_id` du planning stocké — jusqu'à faire planter
+    `/app-state` entier sur un `group_id` que le fetch live ne reconnaissait
+    plus (cf. `solver/rooms.py::_headcount_for_groups`, docs/DATA.md §52.1).
+
+    Absence des deux fichiers cache (ex. environnement de dev sans
+    `contraintes/` régénéré) = repli sur le fetch réseau, comportement
+    inchangé.
+    """
+    root = config_dir.parents[1]
+    maquette_path = root / "contraintes" / "maquette.json"
+    progression_path = root / "contraintes" / "progression.json"
+    if maquette_path.exists() and progression_path.exists():
+        maquette = json.loads(maquette_path.read_text(encoding="utf-8"))
+        progression = json.loads(progression_path.read_text(encoding="utf-8"))
+        return maquette, progression
+    return fetch_all_exports_sync()
+
+
 def run_ingestion(
     config_dir: Path,
     *,
@@ -57,7 +103,7 @@ def run_ingestion(
     semestre_group: str | None = None,
 ) -> IngestionResult:
     if maquette is None or progression is None:
-        maquette, progression = fetch_all_exports_sync()
+        maquette, progression = _load_cached_or_fetch(config_dir)
 
     # Cours manuels absents de l'export distant (cf. additional_courses.yaml)
     # — injectés ici pour traverser EXACTEMENT le même pipeline qu'une vraie
@@ -89,6 +135,17 @@ def run_ingestion(
     if semestre_group:
         wanted = SEMESTRE_GROUPS[semestre_group]
         sessions = [s for s in sessions if s.semestre in wanted]
+
+    requested = set(SEMESTRE_GROUPS[semestre_group]) if semestre_group else ({semestre} if semestre else set())
+    out_of_scope = out_of_scope_semestres(requested)
+    if out_of_scope:
+        warnings.warn(
+            f"{', '.join(out_of_scope)} : aucune date SAE fournie pour 2026-2027 "
+            "(le fichier « DATES SAE 2026_2027 » ne couvre que S1/S3/S5). Les cours "
+            "classiques de ces semestres seront placés SANS sanctuarisation SAE — "
+            "cf. contraintes/08_alertes_qualite_donnees.json.",
+            stacklevel=2,
+        )
 
     stats: dict[str, object] = {
         "courses_total": len(courses),

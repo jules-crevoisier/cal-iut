@@ -14,6 +14,7 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": "Dans l'idéal"
   },
   {
@@ -43,6 +44,7 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": "Cela lui permettra, dans le prolongement du jeudi, d'avoir un créneau relativement fixe pour se consacrer à ses travaux de recherche et à ses déplacements ; mais ça n'est pas non plus inamovible si, certaines semaines, les contraintes d'EDT sont trop fortes."
   },
   {
@@ -78,6 +80,7 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": "placer ses cours préférentiellement le mardi matin, le mercredi toute la journée et éventuellement le jeudi matin. Les lundis et les vendredis, il a des réunions à Reims ou à Paris qui ne sont pas encore toute calées."
   },
   {
@@ -119,13 +122,14 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": "À voir si c'est suffisant pour réaliser son planning.  Idéalement il préfère des cours de 3h (plutôt que 4h30) afin que les étudiants soient plus concentrés mais il me laisse faire au mieux."
   },
   {
     "nom_complet": "Régis Huez",
     "trigramme": "RHU",
     "contraintes_pedagogiques_raw": null,
-    "indisponibilites_raw": "jeudi toute la journée - vendredi toute la journée - du 19 octobre 2026 au 22 octobre 2026",
+    "indisponibilites_raw": "jeudi toute la journée - vendredi toute la journée",
     "indisponibilites_tokens": [
       {
         "raw": "jeudi toute la journée",
@@ -140,13 +144,15 @@
         "moment": "toute_la_journee"
       },
       {
-        "raw": "du 19 octobre 2026 au 22 octobre 2026",
-        "type": "date_specifique"
+        "raw": "du lundi 19 octobre 2026 au vendredi 23 octobre 2026",
+        "type": "date_specifique",
+        "source": "EXPLICATIONS (conférence Marseille) + arbitrage utilisateur 10/08/2026"
       }
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
-    "explications_raw": "Il préfère ses enseignements en début de semaine (lundi, mardi, mercredi) et plutôt regroupés, comme ça il fais moins de trajets. il est disponible de 8h00 à 18h30. Progression commencer par un cours CM et finir par un CM-éval, les td tp tu peux faire ce t'arrange.\nIndisponible du du mardi 19 octobre 2026 au vendredi 22 octobre 2026 car conférence sur Marseille \"Machine Learning and Signal Processing on Graphs\"."
+    "disponibilites_exclusives": false,
+    "explications_raw": "Il préfère ses enseignements en début de semaine (lundi, mardi, mercredi) et plutôt regroupés, comme ça il fais moins de trajets. il est disponible de 8h00 à 18h30. Progression commencer par un cours CM et finir par un CM-éval, les td tp tu peux faire ce t'arrange.\nIndisponible du mardi 19 octobre 2026 au vendredi 22 octobre 2026 car conférence sur Marseille \"Machine Learning and Signal Processing on Graphs\"."
   },
   {
     "nom_complet": "Anthony Rageul",
@@ -169,7 +175,9 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
-    "explications_raw": "plutôt des aménagements mensuels qui lui sont nécessaires par rapport à sa contrainte géographique. Idéalement, regrouper ses cours sur une ou deux semaines successives par mois."
+    "disponibilites_exclusives": false,
+    "explications_raw": "plutôt des aménagements mensuels qui lui sont nécessaires par rapport à sa contrainte géographique. Idéalement, regrouper ses cours sur une ou deux semaines successives par mois.",
+    "regroupement_mensuel_max_semaines": 2
   },
   {
     "nom_complet": "Philippe Villain",
@@ -214,6 +222,7 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": null
   },
   {
@@ -232,11 +241,12 @@
         "raw": "lundi matin de 8h00 à 9h30",
         "type": "recurrent_hebdomadaire",
         "jour": "lundi",
-        "moment": "matin"
+        "moment": "plage_horaire_precisee_dans_raw"
       }
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": "Il dois conduire Paul à la crèche pour 8H30."
   },
   {
@@ -288,6 +298,7 @@
         "type": "date_specifique"
       }
     ],
+    "disponibilites_exclusives": true,
     "explications_raw": null
   },
   {
@@ -317,6 +328,7 @@
         "moment": "toute_la_journee"
       }
     ],
+    "disponibilites_exclusives": true,
     "explications_raw": "ok pour faire le même module que l'année dernière et un peu plus si nécessaire."
   },
   {
@@ -333,7 +345,9 @@
       },
       {
         "raw": "les jeudis après 17h00",
-        "type": "autre_a_interpreter"
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "plage_horaire_precisee_dans_raw"
       },
       {
         "raw": "jeudi 19 novembre 2026",
@@ -346,6 +360,7 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": "Les jeudis après 17h00, lui permettrait d'aller chercher sa fille à la crèche. 44h d'enseignement en TC (le département MMI restant bien entendu prioritaire dans mon service). Contrainte ponctuelle : mobilisé pour les journées RPPP avec Martial et David les 18 et 19 novembre 2026 à Dijon."
   },
   {
@@ -363,6 +378,7 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": null
   },
   {
@@ -373,7 +389,36 @@
     "indisponibilites_tokens": [],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
-    "explications_raw": "Enfant"
+    "disponibilites_exclusives": false,
+    "explications_raw": "Enfant",
+    "regles_parite_semaine": [
+      {
+        "parite": "paire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "parite": "paire",
+        "jour": "jeudi",
+        "moment": "apres_17h"
+      },
+      {
+        "parite": "impaire",
+        "jour": "lundi",
+        "moment": "apres_17h"
+      },
+      {
+        "parite": "impaire",
+        "jour": "mardi",
+        "moment": "apres_17h"
+      },
+      {
+        "parite": "impaire",
+        "jour": "vendredi",
+        "moment": "apres_17h"
+      }
+    ],
+    "parity_reference": "departement"
   },
   {
     "nom_complet": "David Annebicque",
@@ -439,10 +484,19 @@
     "disponibilites_raw": "possible lundi 11h00 à 12h30 si besoin\npossible mardi 15h30 à 17h00 si besoin",
     "disponibilites_tokens": [
       {
-        "raw": "possible lundi 11h00 à 12h30 si besoin\npossible mardi 15h30 à 17h00 si besoin",
-        "type": "autre_a_interpreter"
+        "raw": "possible lundi 11h00 à 12h30 si besoin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      },
+      {
+        "raw": "possible mardi 15h30 à 17h00 si besoin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "plage_horaire_precisee_dans_raw"
       }
     ],
+    "disponibilites_exclusives": false,
     "explications_raw": "CODIR décalé à 17h00\nLundi matin (possible de prendre le créneau de 11h00 si besoin, réunion de direction)\nMardi à partir de 15h30 (comité de direction)\nVendredi après-midi (réunions DN)\n- 7, 8 et 9 septembre (présentations IA dans les départements)\n- jeudi 24 septembre après-midi et vendredi 25 septembre toute la journée\n- 4 novembre après-midi, 5 novembre journée et 6 novembre (journée IA à Paris)"
   },
   {
@@ -480,9 +534,12 @@
     "disponibilites_tokens": [
       {
         "raw": "les mercredis toute la journée",
-        "type": "autre_a_interpreter"
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
       }
     ],
+    "disponibilites_exclusives": true,
     "explications_raw": null
   },
   {
@@ -505,24 +562,31 @@
     "disponibilites_raw": "lundi toute la journée - mardi toute la journée - mercredi toute la journée",
     "disponibilites_tokens": [
       {
-        "raw": "lundi toute la journée",
+        "raw": "lundi de 9h30 à 18h30",
         "type": "recurrent_hebdomadaire",
         "jour": "lundi",
-        "moment": "toute_la_journee"
+        "moment": "plage_horaire_precisee_dans_raw"
       },
       {
-        "raw": "mardi toute la journée",
+        "raw": "mardi de 8h00 à 18h30",
         "type": "recurrent_hebdomadaire",
         "jour": "mardi",
         "moment": "toute_la_journee"
       },
       {
-        "raw": "mercredi toute la journée",
+        "raw": "mercredi de 8h00 à 18h30",
         "type": "recurrent_hebdomadaire",
         "jour": "mercredi",
         "moment": "toute_la_journee"
+      },
+      {
+        "raw": "jeudi à partir de 14h00",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "plage_horaire_precisee_dans_raw"
       }
     ],
+    "disponibilites_exclusives": true,
     "explications_raw": "Lundi : Disponible 9h30-18h30\nMardi : Disponible 8h-18h30\nMercredi : Disponible 8h-18h30\nJeudi : Disponible 14h (Projet Artistique et Culturel) Si tu réitères l'atelier tournage\nVendredi : Pas dispo."
   },
   {
@@ -533,6 +597,7 @@
     "indisponibilites_tokens": [],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": null
   },
   {
@@ -550,6 +615,7 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": null
   },
   {
@@ -575,13 +641,14 @@
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": null
   },
   {
     "nom_complet": "Romain Delon",
     "trigramme": "RDE",
     "contraintes_pedagogiques_raw": null,
-    "indisponibilites_raw": "mardi 6 octobre 2026 - mercredi 7 octobre 2026 - jeudi 8 octobre 2026",
+    "indisponibilites_raw": "mardi 6 octobre 2026 - mercredi 7 octobre 2026 - jeudi 8 octobre 2026\n\nmardi à partir de 15h30 (CODIR)\n\nvendredi toute la journée",
     "indisponibilites_tokens": [
       {
         "raw": "mardi 6 octobre 2026",
@@ -594,10 +661,53 @@
       {
         "raw": "jeudi 8 octobre 2026",
         "type": "date_specifique"
+      },
+      {
+        "raw": "mardi à partir de 15h30 (CODIR)",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      },
+      {
+        "raw": "vendredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "toute_la_journee"
       }
     ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Justine Hussenet",
+    "trigramme": "JHU",
+    "contraintes_pedagogiques_raw": "pas de contraintes de jours ou d'horaires, cependant, condenser les interventions afin de faciliter ses déplacements depuis Paris",
+    "indisponibilites_raw": null,
+    "indisponibilites_tokens": [],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "n'étant aujourd'hui plus basée à Troyes, serait-il envisageable de condenser les interventions afin de faciliter mes déplacements ?",
+    "regroupement_mensuel_max_semaines": 2
+  },
+  {
+    "nom_complet": "Amine Haraoubia",
+    "trigramme": "AHA",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "mercredi toute la journée",
+    "indisponibilites_tokens": [
+      {
+        "raw": "mercredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
     "explications_raw": null
   }
 ]

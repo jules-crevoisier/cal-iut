@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
-import re
 
 from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
 

@@ -1,18 +1,71 @@
+/*
+ * Palette et typographie IDENTIQUES à l'export HTML
+ * (`src/cal_iut/export/templates/timetable.html`) — retour utilisateur
+ * (11/08/2026) : "on est bien d'accord que l'app React dois avoir exactement
+ * le même look que le html ?". Clair par défaut, sombre via
+ * `prefers-color-scheme`, et `[data-theme]` en repli explicite (même patron
+ * que le HTML, au cas où une bascule manuelle serait ajoutée plus tard).
+ *
+ * `--text`/`--muted`/`--primary`/`--success`/`--danger`/`--font`/`--mono`
+ * gardés comme ALIAS (ancien vocabulaire React, ~100 usages dans ce fichier)
+ * pointant vers les tokens HTML correspondants — évite une réécriture
+ * mécanique de tout le fichier pour un résultat identique. Les endroits où
+ * le sens divergeait vraiment (types de séance CM/TD/TP/éval : couleurs
+ * complètement différentes des deux côtés) sont corrigés explicitement plus
+ * bas, pas par alias.
+ */
 :root {
-  --bg: #0f1114;
-  --surface: #181b21;
-  --surface-2: #22262e;
-  --border: #2e3440;
-  --text: #e8eaed;
-  --muted: #8b939f;
-  --accent: #d4a017;
-  --accent-dim: #a67c00;
-  --primary: #4a90d9;
-  --success: #3d9970;
-  --warn: #e6a817;
-  --danger: #e74c3c;
-  --font: "IBM Plex Sans", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", monospace;
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #f5f7fb;
+  --ink: #1c2333;
+  --ink-soft: #5b6478;
+  --border: #d9dee6;
+  --accent: #4d3fae;
+  --accent-soft: #eeeafc;
+  --accent2: #b9702a;
+  --accent2-soft: #faeee0;
+  --teal: #21807e;
+  --teal-soft: #e2f2f1;
+  --good: #2f8f5b;
+  --good-soft: #e4f5ec;
+  --bad: #c94a3f;
+  --bad-soft: #fbe7e5;
+  --warn: #a8781f;
+  --warn-soft: #faf1de;
+  --shadow: 0 1px 2px rgba(28, 35, 51, .06), 0 8px 24px -12px rgba(28, 35, 51, .12);
+  color-scheme: light;
+
+  /* alias (vocabulaire React existant) */
+  --text: var(--ink);
+  --muted: var(--ink-soft);
+  --primary: var(--accent);
+  --success: var(--good);
+  --danger: var(--bad);
+  --font: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10131b; --surface: #171b26; --surface-2: #1e2330; --ink: #e7e9f0; --ink-soft: #9aa3ba;
+    --border: #2b3244; --accent: #9c8ff2; --accent-soft: #241f3d; --accent2: #e0a95c; --accent2-soft: #3a2e1a;
+    --teal: #5cc4c1; --teal-soft: #163330; --good: #57c98c; --good-soft: #16301f; --bad: #e2685b; --bad-soft: #3a231f;
+    --warn: #e0b45c; --warn-soft: #382e18; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10131b; --surface: #171b26; --surface-2: #1e2330; --ink: #e7e9f0; --ink-soft: #9aa3ba;
+  --border: #2b3244; --accent: #9c8ff2; --accent-soft: #241f3d; --accent2: #e0a95c; --accent2-soft: #3a2e1a;
+  --teal: #5cc4c1; --teal-soft: #163330; --good: #57c98c; --good-soft: #16301f; --bad: #e2685b; --bad-soft: #3a231f;
+  --warn: #e0b45c; --warn-soft: #382e18; color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #eef1f5; --surface: #ffffff; --surface-2: #f5f7fb; --ink: #1c2333; --ink-soft: #5b6478;
+  --border: #d9dee6; --accent: #4d3fae; --accent-soft: #eeeafc; --accent2: #b9702a; --accent2-soft: #faeee0;
+  --teal: #21807e; --teal-soft: #e2f2f1; --good: #2f8f5b; --good-soft: #e4f5ec; --bad: #c94a3f; --bad-soft: #fbe7e5;
+  --warn: #a8781f; --warn-soft: #faf1de; color-scheme: light;
 }
 
 * {
@@ -25,6 +78,12 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading);
+  text-wrap: balance;
 }
 
 .app {
@@ -52,7 +111,8 @@ body {
 
 .brand-mark {
   background: var(--accent);
-  color: #000;
+  color: #fff;
+  border-radius: 8px;
   font-weight: 700;
   font-size: 0.75rem;
   padding: 8px 10px;
@@ -76,6 +136,13 @@ body {
   flex-wrap: wrap;
   gap: 12px;
   flex: 1;
+  /* Item flex sans `min-width:0` = plancher fixé à la largeur intrinsèque du
+     contenu (ici ~530px, tous les champs mis bout à bout) — `flex-wrap`
+     sur SES PROPRES enfants ne peut alors jamais s'activer puisque le
+     conteneur ne rétrécit jamais en dessous de ce plancher, et c'est toute
+     la page qui déborde horizontalement. Même bug que `.calendar-section`
+     (cf. juste au-dessus), trouvé en audit mobile le 11/08/2026. */
+  min-width: 0;
 }
 
 .toolbar-controls label {
@@ -91,6 +158,7 @@ body {
 .toolbar-controls select {
   background: var(--surface-2);
   border: 1px solid var(--border);
+  border-radius: 10px;
   color: var(--text);
   padding: 6px 10px;
   font-family: var(--font);
@@ -109,6 +177,7 @@ body {
   font-weight: 500;
   padding: 8px 16px;
   border: 1px solid var(--border);
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -136,7 +205,7 @@ body {
 .btn--accent {
   background: var(--accent);
   border-color: var(--accent);
-  color: #000;
+  color: #fff;
 }
 
 /* ── Banner ── */
@@ -149,13 +218,13 @@ body {
 }
 
 .banner--error {
-  background: #3a1a1a;
-  color: #ffb4b4;
+  background: var(--bad-soft);
+  color: var(--bad);
 }
 
 .banner--info {
-  background: #1a2a3a;
-  color: #a8d4ff;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .banner button {
@@ -183,6 +252,13 @@ body {
 .calendar-section {
   padding: 20px 24px;
   overflow-x: auto;
+  /* Sans ça, l'item de grille `.layout` prend la largeur intrinsèque de son
+     contenu (la table à `min-width: 920px`) comme plancher — `1fr` ne
+     "rétrécit" jamais en dessous, et c'est toute la PAGE qui déborde
+     horizontalement au lieu que seule cette section scrolle (comportement
+     par défaut de CSS Grid/Flexbox : `min-width: auto` implicite sur les
+     items). Bug réel trouvé en audit mobile le 11/08/2026. */
+  min-width: 0;
 }
 
 .section-header {
@@ -216,10 +292,13 @@ body {
   border-left: 3px solid;
 }
 
-.legend-item.cm { border-color: #3d9970; background: rgba(61, 153, 112, 0.15); }
-.legend-item.td { border-color: #4a90d9; background: rgba(74, 144, 217, 0.15); }
-.legend-item.tp { border-color: #d4a017; background: rgba(212, 160, 23, 0.15); }
-.legend-item.eval { border-color: #e74c3c; }
+/* Même mapping type -> couleur que `.session.type-*` côté HTML (cf. plus
+   bas et `export/templates/timetable.html`) : TD = accent, CM = ink-soft,
+   TP = teal, éval = accent2 — pas vert/bleu/or/rouge comme avant. */
+.legend-item.cm { border-color: var(--ink-soft); background: color-mix(in srgb, var(--ink-soft) 10%, var(--surface)); }
+.legend-item.td { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.legend-item.tp { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--surface)); }
+.legend-item.eval { border-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
 
 /* ── Grille TD 2 colonnes TP ── */
 .td-grid-wrap {
@@ -259,6 +338,12 @@ body {
   font-size: 0.85rem;
 }
 
+.td-grid-daydate {
+  font-weight: 400;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
 .td-grid-tp-labels {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -285,6 +370,12 @@ body {
   outline: 1px solid var(--danger);
 }
 
+/* Glisser-déposer (retour utilisateur 11/08/2026 — cf. docs/DATA.md §58) */
+.td-grid-cell.dropzone-hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
 .td-conflict-flag {
   display: block;
   margin-top: 2px;
@@ -297,7 +388,7 @@ body {
 .td-grid-before-lunch td,
 .td-grid-before-lunch th {
   border-bottom-width: 3px;
-  border-bottom-color: var(--accent-dim);
+  border-bottom-color: var(--accent);
 }
 
 .td-grid-split {
@@ -330,33 +421,46 @@ body {
   z-index: 1;
 }
 
+.td-block[draggable="true"] { cursor: grab; }
+.td-block[draggable="true"]:active { cursor: grabbing; }
+.td-block.dragging { opacity: 0.35; }
+
+/* Même mapping que `.session.type-*` côté HTML (cf. plus bas). */
 .td-block.type-cm {
-  background: #143326;
-  border-left-color: #3d9970;
+  background: color-mix(in srgb, var(--ink-soft) 10%, var(--surface));
+  border-left-color: var(--ink-soft);
 }
 
 .td-block.type-td {
-  background: #152536;
-  border-left-color: #4a90d9;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-left-color: var(--accent);
 }
 
 .td-block.type-tp {
-  background: #2e2412;
-  border-left-color: #d4a017;
+  background: color-mix(in srgb, var(--teal) 12%, var(--surface));
+  border-left-color: var(--teal);
 }
 
+/* PTUT n'existe pas côté HTML (catégorie propre à cette vue éditable) :
+   teinte dédiée, distincte des tokens partagés. */
 .td-block.type-ptut {
-  background: #241830;
-  border-left-color: #9b59b6;
+  background: color-mix(in srgb, #8e44ad 12%, var(--surface));
+  border-left-color: #8e44ad;
 }
 
 .td-block.eval {
-  box-shadow: inset 0 0 0 1px var(--danger);
+  box-shadow: inset 0 0 0 1px var(--accent2);
 }
 
 .td-block.locked {
   border-style: dashed;
   opacity: 0.9;
+  cursor: not-allowed;
+}
+
+.td-block .lockbadge {
+  float: right;
+  opacity: 0.7;
 }
 
 .td-block-code {
@@ -376,9 +480,9 @@ body {
   min-width: 220px;
   max-width: 300px;
   padding: 12px 14px;
-  background: #12151a;
+  background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
   font-size: 0.78rem;
   line-height: 1.45;
   pointer-events: none;
@@ -676,4 +780,977 @@ body {
 
 .diff-item strong {
   color: var(--accent);
+}
+
+/* ══════════════ Coquille à onglets (portage HTML/JS) ══════════════ */
+
+.tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.tabbtn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.86rem;
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tabbtn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tabbtn:hover:not(.active) {
+  color: var(--text);
+}
+
+.searchopenbtn {
+  margin-left: auto;
+  align-self: center;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.searchopenbtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.kbd {
+  opacity: 0.65;
+}
+
+.app-main {
+  flex: 1;
+  padding: 20px 24px 40px;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1400px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+
+.panel h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.panel h4 {
+  margin: 18px 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.panel.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 24px;
+}
+
+.panel.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.panel.controls select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 34px 8px 12px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.92rem;
+  appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%235b6478"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  min-width: 220px;
+  cursor: pointer;
+}
+
+.weekfield {
+  flex: 1 1 320px;
+  min-width: 260px;
+}
+
+.readonly-banner {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.readonly-banner h1 {
+  margin: 0 0 4px;
+  font-size: 1.2rem;
+}
+
+.readonly-banner p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ══════════════ WeekBar ══════════════
+   Histogramme (hauteur ∝ charge de la semaine), identique à `.weekbar`
+   côté export HTML — pas de simples points uniformes. */
+
+.weekbar {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 46px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.weekbar-bar {
+  flex: 1 0 auto;
+  min-width: 16px;
+  border: none;
+  border-radius: 4px 4px 2px 2px;
+  cursor: pointer;
+  background: var(--accent-soft);
+  position: relative;
+  padding: 0;
+  height: 100%;
+}
+
+.weekbar-bar .bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 4px 4px 2px 2px;
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.weekbar-bar.active .bar {
+  opacity: 1;
+}
+
+.weekbar-bar.active {
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
+.weekbar-bar.blocked {
+  background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 3px, var(--border) 3px, var(--border) 6px);
+}
+
+.weekbar-bar.blocked .bar {
+  background: transparent;
+}
+
+.weekbar-caption {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 4px;
+  /* Neutralise l'uppercase hérité quand la WeekBar est nichée dans un
+     `<label>` de `.toolbar-controls` (Vue Semaine) — seul le libellé
+     "Semaine" doit être en capitales, pas les dates de la légende. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+/* ══════════════ DayStrip (mobile) ══════════════ */
+
+.daystrip {
+  display: none;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.daystrip button {
+  flex: 1 1 0;
+  padding: 9px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.daystrip button.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.daystrip .dshort {
+  display: none;
+}
+
+/* ══════════════ SessionGrid (lecture seule) ══════════════ */
+
+.sessiongrid-wrap {
+  overflow-x: auto;
+}
+
+.sessiongrid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.sessiongrid th,
+.sessiongrid td {
+  border: 1px solid var(--border);
+  padding: 4px;
+  vertical-align: top;
+}
+
+.sessiongrid thead th {
+  background: var(--surface-2);
+  padding: 8px 4px;
+  font-size: 0.75rem;
+}
+
+.sessiongrid-daydate {
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.sessiongrid-corner {
+  width: 76px;
+}
+
+.sessiongrid-timecell {
+  width: 76px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+  background: var(--surface-2);
+}
+
+.sessiongrid-pause td {
+  background: var(--surface-2);
+  height: 6px;
+  padding: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.sessiongrid-cell {
+  min-width: 120px;
+  height: 52px;
+}
+
+.sessiongrid-subcols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  height: 100%;
+}
+
+.sessiongrid-block {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--text);
+  padding: 3px 6px;
+  margin-bottom: 2px;
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.sessiongrid-block.small {
+  font-size: 0.66rem;
+  padding: 2px 4px;
+}
+
+/* Même mapping que `.session.type-*` côté HTML. */
+.sessiongrid-block.type-cm { border-left-color: var(--ink-soft); background: color-mix(in srgb, var(--ink-soft) 10%, var(--surface)); }
+.sessiongrid-block.type-td { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.sessiongrid-block.type-tp { border-left-color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--surface)); }
+.sessiongrid-block.type-ptut { border-left-color: #8e44ad; background: color-mix(in srgb, #8e44ad 12%, var(--surface)); }
+.sessiongrid-block.eval { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
+.sessiongrid-block.locked { opacity: 0.75; }
+
+.sessiongrid-block .code {
+  font-weight: 700;
+}
+
+.sessiongrid-block .meta,
+.sessiongrid-block .room {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.sessiongrid-holiday,
+.sessiongrid-pac,
+.sessiongrid-sae,
+.sessiongrid-event {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.68rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.sessiongrid-holiday .title,
+.sessiongrid-sae .title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.62rem;
+}
+
+.sessiongrid-pac {
+  /* même traitement que `.pac-cell` côté HTML : gris neutre + bordure
+     pointillée, pas un accent — le PAC n'est pas une action à mettre en
+     avant, juste un créneau réservé, non éditable ici. */
+  color: var(--ink-soft);
+  border: 1px dashed var(--border);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.sessiongrid-lunch {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.sessiongrid-hover {
+  position: fixed;
+  z-index: 40;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  max-width: 260px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.sessiongrid-hover strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.promogrid th > div:first-child {
+  font-weight: 700;
+}
+
+/* ══════════════ ShareBar / Agenda ══════════════ */
+
+.sharebar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.callout {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.callout.pass { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); background: var(--good-soft); }
+.callout.fail { border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
+.callout .icon { font-weight: 700; }
+
+.raw-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 12px 0 4px;
+}
+
+.raw-label:first-child {
+  margin-top: 0;
+}
+
+.raw {
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.slotlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Rouge par défaut (vraie violation de disponibilité déclarée) — même
+   traitement que le HTML, jamais repris ici jusqu'au 11/08/2026 (`.slotchip`
+   restait neutre, cf. docs/DATA.md §59). `.sae` = compromis MOU accepté
+   (encadrement SAE ce jour-là), ambre plutôt que rouge : pas une règle
+   cassée, une préférence non respectée faute de mieux. */
+.slotchip {
+  background: var(--bad-soft);
+  color: var(--danger);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
+
+.slotchip.sae {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.agenda-summary {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.agenda-week {
+  margin-bottom: 10px;
+}
+
+.agenda-week-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.agenda-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agenda-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 0.75rem;
+}
+
+/* ══════════════ Vue Promo ══════════════ */
+
+.daybar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.daybtn {
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.daybtn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.daybtn.sae:not(.active) { border-color: var(--accent2); color: var(--accent2); }
+.daybtn.holiday:not(.active) { border-color: var(--ink-soft); color: var(--ink-soft); }
+.daybtn.event:not(.active) { border-color: var(--teal); color: var(--teal); }
+
+table.promo-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+table.promo-grid th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 6px 6px;
+  text-align: center;
+  background: var(--surface-2);
+  border-bottom: 2px solid var(--border);
+}
+table.promo-grid th.timecol { text-align: left; width: 70px; }
+table.promo-grid td.timecell {
+  font-size: 0.72rem;
+  color: var(--muted);
+  padding: 6px 8px 6px 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+table.promo-grid td.promocell {
+  border: 1px solid var(--border);
+  padding: 4px;
+  vertical-align: top;
+  min-width: 92px;
+  height: 62px;
+  background: var(--surface-2);
+}
+table.promo-grid tr.pause td { height: 4px; padding: 0; border: none; }
+
+/* Une teinte par parcours (bande d'en-tête + léger lavis sur toute la
+   colonne) + trait plus épais au début de chaque nouveau parcours, sur
+   toute la hauteur — sinon 15-20 colonnes toutes années confondues sont
+   dures à suivre (retour utilisateur historique, cf. HTML). */
+table.promo-grid .pc0 { --pc: var(--accent); }
+table.promo-grid .pc1 { --pc: var(--teal); }
+table.promo-grid .pc2 { --pc: var(--accent2); }
+table.promo-grid .pc3 { --pc: var(--good); }
+table.promo-grid .pc4 { --pc: var(--warn); }
+table.promo-grid .pc5 { --pc: var(--bad); }
+table.promo-grid th.grp-band { background: color-mix(in srgb, var(--pc) 20%, var(--surface-2)); color: var(--pc); font-weight: 700; }
+table.promo-grid td.promocell { background: color-mix(in srgb, var(--pc, var(--surface-2)) 6%, var(--surface-2)); }
+table.promo-grid .grp-first { border-left: 3px solid var(--pc); }
+
+.promo-chip {
+  border-radius: 7px;
+  padding: 4px 6px;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  margin-bottom: 3px;
+}
+.promo-chip.type-cm { border-left-color: var(--ink-soft); background: color-mix(in srgb, var(--ink-soft) 10%, var(--surface)); }
+.promo-chip.type-tp { border-left-color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--surface)); }
+.promo-chip.eval { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
+.promo-chip .code { font-weight: 700; font-family: var(--mono); display: block; }
+.promo-chip .ty { color: var(--muted); display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.promo-chip .rm { color: var(--muted); display: block; }
+.promo-chip .te { color: var(--muted); display: block; font-style: italic; }
+
+/* Surbrillance enseignant : atténue les autres puces plutôt que de les
+   masquer (garde le contexte visible), fait ressortir celles de
+   l'enseignant sélectionné. */
+table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.4); }
+table.promo-grid.teacher-filter .promo-chip.chip-highlight {
+  opacity: 1;
+  filter: none;
+  box-shadow: 0 0 0 2px var(--accent2);
+  border-left-color: var(--accent2);
+}
+
+/* ══════════════ Sous-onglets (Référence) ══════════════ */
+
+.subtabbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.subtabbtn {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.subtabbtn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.subtabbtn.small {
+  padding: 3px 9px;
+  font-size: 0.72rem;
+}
+
+.linkactions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 16px;
+}
+
+.ref-table-wrap {
+  overflow-x: auto;
+}
+
+table.ref {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+table.ref th,
+table.ref td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+table.ref thead th {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.linklike {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-item {
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--border);
+}
+
+.timeline-item .kind {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.timeline-item .label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.timeline-item .dates {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.timeline-item.vacances { border-left-color: var(--muted); }
+.timeline-item.ferie { border-left-color: var(--danger); }
+.timeline-item.rentree { border-left-color: var(--accent); }
+.timeline-item.special { border-left-color: var(--accent2); }
+
+/* ══════════════ Contraintes / rule checks ══════════════ */
+
+.rule-grid,
+.teacherlist,
+.todolist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  width: 100%;
+  text-align: left;
+}
+
+.check.clickable {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.check.clickable:hover {
+  border-color: var(--primary);
+}
+
+.check.pass { border-color: color-mix(in srgb, var(--good) 35%, var(--border)); }
+.check.fail { border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
+.check .icon { font-weight: 700; min-width: 16px; }
+.check.pass .icon { color: var(--success); }
+.check.fail .icon { color: var(--danger); }
+.check .sub { color: var(--muted); font-size: 0.76rem; margin-top: 2px; }
+
+/* ══════════════ À traiter ══════════════ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.pill.good { background: var(--good-soft); color: var(--success); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.pill.bad { background: var(--bad-soft); color: var(--danger); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.pill.dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+/* Variante "grande" (`PageHeader` — statut solveur) : le `.pill` de base
+   ci-dessus est en réalité la taille "mini" du HTML (déjà utilisée partout
+   ailleurs en React, ex. badge "À traiter") — `.lg` restaure le format
+   d'origine (padding 6px 12px, pas de fond/bordure gris par défaut). */
+.pill.lg { padding: 6px 12px; font-size: 0.78rem; letter-spacing: 0.02em; }
+
+/* ══════════════ En-tête de page (PageHeader) ══════════════ */
+
+header.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px 0;
+}
+header.top .titles { display: flex; flex-direction: column; gap: 6px; max-width: 68ch; }
+header.top h1 { margin: 0; font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.1rem); font-weight: 600; letter-spacing: -0.01em; }
+header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 0 24px 18px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+.stat .value { font-size: 1.5rem; font-weight: 600; }
+.stat .value small { font-size: 0.95rem; color: var(--muted); font-weight: 500; }
+
+.todo-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 11px 13px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.todo-item:hover {
+  border-color: var(--accent);
+}
+
+.todo-item .sev {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  min-width: 74px;
+}
+
+.todo-item.bad .sev { color: var(--danger); }
+.todo-item.warn .sev { color: var(--warn); }
+.todo-item .sub { color: var(--muted); font-size: 0.79rem; margin-top: 2px; }
+
+/* ══════════════ Recherche globale (Ctrl+K) ══════════════ */
+
+.searchoverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding-top: 12vh;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.searchbox {
+  width: min(620px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.searchbox input {
+  padding: 15px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  outline: none;
+}
+
+.searchresults {
+  overflow-y: auto;
+}
+
+.searchresults .hit {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 10px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.searchresults .hit:hover,
+.searchresults .hit.sel {
+  background: var(--accent-soft);
+}
+
+.searchresults .hit .kind {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  min-width: 82px;
+}
+
+.searchresults .hit .sub {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.searchhint {
+  padding: 8px 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.searchempty {
+  padding: 18px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ══════════════ Mobile ══════════════ */
+
+@media (max-width: 760px) {
+  .app-main { padding: 12px; }
+  header.top { padding: 12px 12px 0; flex-direction: column; align-items: flex-start; }
+  .stats { padding: 0 12px 12px; }
+  .tabbar { padding: 0 12px; overflow-x: auto; flex-wrap: nowrap; }
+  .tabbtn { white-space: nowrap; }
+  .searchopenbtn .kbd { display: none; }
+  /* `.weekfield { flex: 1 1 320px }` fixe une base de 320px sur l'axe
+     PRINCIPAL du flex parent — en ligne (desktop) c'est une largeur, mais
+     `.panel.controls` passe en colonne ici, donc ce même 320px devient une
+     HAUTEUR minimale : sans le override, un grand vide apparaissait sous les
+     points de la WeekBar avant les boutons de partage. */
+  .panel.controls { flex-direction: column; align-items: stretch; }
+  .panel.controls .weekfield { flex-basis: auto; min-width: 0; width: 100%; }
+  /* La WeekBar (histogramme, ~28 barres à largeur minimale non compressible)
+     défile déjà À L'INTÉRIEUR d'elle-même (`.weekbar { overflow-x: auto }`)
+     — mais seulement si son propre conteneur ne grandit pas pour l'accueillir
+     en premier. Même bug que `.calendar-section`/`.toolbar-controls`
+     (min-width implicite qui empêche le rétrécissement), trouvé au même
+     audit mobile du 11/08/2026 : sans ce `min-width: 0` explicite ici aussi,
+     `.weekfield` grandissait jusqu'à ~529px (largeur intrinsèque des barres)
+     et repoussait toute la page en largeur au lieu de laisser la WeekBar
+     défiler dans son espace alloué. */
+  .weekbar { min-width: 0; }
+  .daystrip { display: flex; }
+  .daystrip .dfull { display: none; }
+  .daystrip .dshort { display: inline; }
+  .sessiongrid-cell { min-width: 0; }
+}
+
+/* ══════════════ Impression ══════════════ */
+
+@media print {
+  .tabbar, .panel.controls, .no-print, .weekbar, .searchoverlay, .sharebar {
+    display: none !important;
+  }
+  .app-main { padding: 0; }
+  .panel { border: 1px solid #999; box-shadow: none; break-inside: avoid; }
 }

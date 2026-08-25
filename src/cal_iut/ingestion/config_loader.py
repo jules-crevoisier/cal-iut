@@ -6,14 +6,17 @@ import yaml
 
 from cal_iut.models.entities import (
     CourseMinWeekRule,
+    CourseTeacherOrderRule,
     DoubleSessionRule,
     Group,
     Room,
     RoomType,
+    SessionDateWindowRule,
     SessionType,
     TeacherAvailability,
     TeacherCorrection,
     TeacherDuo,
+    WeeklyCapException,
 )
 
 
@@ -141,6 +144,53 @@ def load_double_sessions(config_dir: Path) -> list[DoubleSessionRule]:
                 session_type=SessionType(str(item["session_type"])),
                 slots_per_session=int(item.get("slots_per_session", 2)),
                 pair_from=str(item.get("pair_from", "start")),
+                max_blocks=(int(item["max_blocks"]) if item.get("max_blocks") else None),
+                note=item.get("note"),
+            )
+        )
+    return rules
+
+
+def load_session_date_windows(config_dir: Path) -> list[SessionDateWindowRule]:
+    """Fenêtres de dates par séance (cf. course_scheduling_rules.yaml)."""
+    path = config_dir / "course_scheduling_rules.yaml"
+    if not path.exists():
+        return []
+    data = load_yaml(path) or {}
+    rules: list[SessionDateWindowRule] = []
+    for item in data.get("session_date_windows", []):
+        session_type = item.get("session_type")
+        rules.append(
+            SessionDateWindowRule(
+                course_code=str(item["course_code"]),
+                semestre=str(item["semestre"]),
+                session_type=SessionType(str(session_type)) if session_type else None,
+                sequence_orders=[int(o) for o in item.get("sequence_orders", [])],
+                start_date=(str(item["debut"]) if item.get("debut") else None),
+                end_date=(str(item["fin"]) if item.get("fin") else None),
+                note=item.get("note"),
+            )
+        )
+    return rules
+
+
+def load_course_teacher_orders(config_dir: Path) -> list[CourseTeacherOrderRule]:
+    """Ordre souple entre enseignants d'un module (cf. course_scheduling_rules.yaml)."""
+    path = config_dir / "course_scheduling_rules.yaml"
+    if not path.exists():
+        return []
+    data = load_yaml(path) or {}
+    rules: list[CourseTeacherOrderRule] = []
+    for item in data.get("teacher_order_rules", []):
+        codes = [str(c) for c in item.get("teacher_order", [])]
+        if len(codes) < 2:
+            continue
+        rules.append(
+            CourseTeacherOrderRule(
+                course_code=str(item["course_code"]),
+                semestre=str(item["semestre"]),
+                teacher_order=codes,
+                weight=int(item.get("weight", 200)),
                 note=item.get("note"),
             )
         )
@@ -183,6 +233,24 @@ def load_additional_courses(config_dir: Path) -> list[dict[str, object]]:
     return list(data.get("courses", []))
 
 
+def load_teacher_contacts(config_dir: Path) -> dict[str, str]:
+    """
+    Adresses mail par trigramme (cf. `teacher_contacts.yaml`) — alimente le
+    bouton « Écrire » de l'annuaire de liens dans l'export HTML.
+
+    Aucun fichier source officiel ne porte les adresses mail : ce fichier est
+    saisi à la main et n'est jamais écrasé par une régénération. Absent ou vide
+    est un cas NORMAL, pas une erreur : le brouillon s'ouvre alors sans
+    destinataire.
+    """
+    path = config_dir / "teacher_contacts.yaml"
+    if not path.exists():
+        return {}
+    data = load_yaml(path) or {}
+    contacts = data.get("contacts") or {}
+    return {str(code): str(mail) for code, mail in contacts.items() if mail}
+
+
 def load_course_min_week_rules(config_dir: Path) -> list[CourseMinWeekRule]:
     """Contraintes de démarrage minimum par cours (cf. course_scheduling_rules.yaml)."""
     path = config_dir / "course_scheduling_rules.yaml"
@@ -200,3 +268,24 @@ def load_course_min_week_rules(config_dir: Path) -> list[CourseMinWeekRule]:
             )
         )
     return rules
+
+
+def load_weekly_cap_exceptions(config_dir: Path) -> list[WeeklyCapException]:
+    """Dérogations ciblées au plafond horaire hebdomadaire (cf. course_scheduling_rules.yaml,
+    `WeeklyCapException`, docs/DATA.md §62)."""
+    path = config_dir / "course_scheduling_rules.yaml"
+    if not path.exists():
+        return []
+    data = load_yaml(path) or {}
+    exceptions: list[WeeklyCapException] = []
+    for item in data.get("weekly_cap_exceptions", []):
+        exceptions.append(
+            WeeklyCapException(
+                parcours=str(item["parcours"]),
+                semestre=str(item["semestre"]),
+                week_monday=str(item["week_monday"]),
+                cap=int(item["cap"]),
+                note=item.get("note"),
+            )
+        )
+    return exceptions

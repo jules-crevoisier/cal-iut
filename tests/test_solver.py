@@ -18,7 +18,11 @@ from cal_iut.solver.cpsat import SolverConfig, TimetableSolver
 from cal_iut.solver.quality import compute_quality
 from cal_iut.solver.rooms import assign_rooms, parse_room_rules
 
-FIXTURES = Path(__file__).resolve().parents[1] / "data" / "exports"
+# Exports officiels figés par `scripts/build_contraintes.py` — même copie que
+# celle dont tous les `contraintes/*.json` sont dérivés (`ingestion/fetch.py`
+# la préfère aussi). `data/exports/` est gitignoré : les tests ne peuvent pas
+# en dépendre.
+FIXTURES = Path(__file__).resolve().parents[1] / "contraintes"
 CONFIG = Path(__file__).resolve().parents[1] / "data" / "config"
 
 
@@ -374,6 +378,49 @@ def test_solve_decomposed_on_real_subset(but1_s1_sessions: list[SessionToPlace])
     assert conflicts == {}, f"Conflits enseignant: {conflicts}"
 
 
+def test_solve_decomposed_keeps_best_attempt_not_just_the_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Bug réel du 12/08/2026, trouvé en diagnostiquant un run réel qui
+    régressait de `PARTIAL_WEEKS_FAILED:[0, 12, 14]` à `[12, 14, 16]` d'une
+    tentative à l'autre : la boucle de `TimetableSolver.solve_decomposed`
+    (max_attempts=3 par défaut, cf. sa docstring) ne conservait QUE le
+    résultat de la DERNIÈRE tentative, même si une tentative précédente
+    avait moins de semaines en échec / plus de séances placées — chaque
+    tentative reseed l'étage 2 entièrement (`random_seed + attempt`), rien
+    ne garantit qu'une nouvelle tentative soit meilleure que la précédente.
+    Simule 3 tentatives où seule la 1re réussit mieux que les 2 suivantes
+    (toutes deux PIRES), et vérifie que le wrapper retourne bien la
+    meilleure des trois, pas systématiquement la dernière. Cf.
+    docs/DATA.md §58.
+    """
+    from cal_iut.solver.cpsat import PlacedSession, SolverResult
+
+    def _placements(n: int) -> list[PlacedSession]:
+        return [
+            PlacedSession(session_id=f"S{i}", week=0, day=0, slot=0, course_code="X", group_ids=[], teacher_codes=[])
+            for i in range(n)
+        ]
+
+    seen_seeds: list[int] = []
+
+    def fake_solve_decomposed(sessions, **kwargs):
+        seen_seeds.append(kwargs["random_seed"])
+        if kwargs["random_seed"] == 2027:
+            # 1re tentative : meilleure (1 semaine en échec, 8 placées).
+            return SolverResult(status="PARTIAL_WEEKS_FAILED:[3]", placements=_placements(8))
+        # 2e et 3e (dernières) tentatives : pires (3 semaines en échec, 3 placées).
+        return SolverResult(status="PARTIAL_WEEKS_FAILED:[3, 7, 9]", placements=_placements(3))
+
+    monkeypatch.setattr("cal_iut.solver.decomposed.solve_decomposed", fake_solve_decomposed)
+
+    solver = TimetableSolver(SolverConfig(weeks=10, random_seed=2027))
+    result = solver.solve_decomposed([], groups=[], semestre="S1", sae_days_by_course={})
+
+    assert seen_seeds == [2027, 2028, 2029], "les 3 tentatives doivent bien avoir eu lieu"
+    assert result.status == "PARTIAL_WEEKS_FAILED:[3]"
+    assert len(result.placements) == 8
+
+
 def test_wr110_duo_synchronized_rare_room(but1_s1_sessions: list[SessionToPlace]) -> None:
     """
     Duo confirmé (data/config/teacher_duos.yaml) : KBR+KNG et FLI+VBU doivent
@@ -507,3 +554,24 @@ def test_quality_metrics(but1_s1_sessions: list[SessionToPlace]) -> None:
     report = compute_quality(result.placements, sessions_by_id)
     assert report.total_gaps >= 0
     assert isinstance(report.gaps_by_group, dict)
+
+
+def test_headcount_for_groups_falls_back_instead_of_crashing_on_unknown_group_id():
+    """
+    Bug réel trouvé le 11/08/2026 : `/app-state` faisait 500 EN ENTIER
+    (`max()` d'un générateur vide) dès qu'un `group_id` de séance n'était
+    reconnu par AUCUN groupe connu de `state.groups` — un scénario réel côté
+    API, puisque `_try_restore_latest` ré-ingère en LIVE (pas de cache) au
+    redémarrage du serveur et peut donc légitimement dater d'un instant où le
+    fetch amont différait de celui utilisé pour calculer le planning stocké.
+    Repli neutre (30) attendu, jamais une exception.
+    """
+    from cal_iut.models.entities import Group
+    from cal_iut.solver.rooms import _headcount_for_groups
+
+    groups = [Group(id="g1", label="G1", parcours="BUT1", annee="BUT1", headcount=24, kind="td")]
+
+    assert _headcount_for_groups([], groups) == 30
+    assert _headcount_for_groups(["g1"], groups) == 24
+    assert _headcount_for_groups(["ghost-id"], groups) == 30
+    assert _headcount_for_groups(["ghost-id", "g1"], groups) == 24

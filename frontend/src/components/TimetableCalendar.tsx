@@ -8,11 +8,12 @@ import frLocale from "@fullcalendar/core/locales/fr";
 import type { Placement } from "../types";
 import { dateToPlacement, weekStartDate } from "../utils/slots";
 import { placementsToEvents } from "../utils/events";
-import { movePlacement, validateMove } from "../api/client";
+import { performMove } from "../utils/moveSession";
 
 interface TimetableCalendarProps {
   placements: Placement[];
   displayWeek: number;
+  weekDates: string[];
   groupLabels?: Record<string, string>;
   onPlacementUpdated: (p: Placement) => void;
   onSelect: (p: Placement | null) => void;
@@ -22,13 +23,14 @@ interface TimetableCalendarProps {
 export function TimetableCalendar({
   placements,
   displayWeek,
+  weekDates,
   groupLabels = {},
   onPlacementUpdated,
   onSelect,
   onError,
 }: TimetableCalendarProps) {
   const calendarRef = useRef<FullCalendar>(null);
-  const events = placementsToEvents(placements, displayWeek, groupLabels);
+  const events = placementsToEvents(placements, displayWeek, weekDates, groupLabels);
 
   const handleEventClick = useCallback(
     (info: EventClickArg) => {
@@ -54,45 +56,9 @@ export function TimetableCalendar({
         return;
       }
 
-      const { week, day, slot } = dateToPlacement(start, displayWeek);
-
-      try {
-        const validation = await validateMove(sessionId, {
-          week,
-          day,
-          slot,
-          room_id: placement.room_id,
-        });
-
-        if (!validation.valid) {
-          const force = window.confirm(
-            `Conflit détecté :\n${validation.hard_conflicts.join("\n")}\n\nForcer le déplacement ?`,
-          );
-          if (!force) {
-            info.revert();
-            return;
-          }
-          const updated = await movePlacement(sessionId, {
-            week,
-            day,
-            slot,
-            room_id: placement.room_id,
-            force: true,
-          });
-          onPlacementUpdated(updated);
-          return;
-        }
-
-        if (validation.soft_warnings.length > 0) {
-          onError(`Avertissement : ${validation.soft_warnings.join(", ")}`);
-        }
-
-        const updated = await movePlacement(sessionId, { week, day, slot, room_id: placement.room_id });
-        onPlacementUpdated(updated);
-      } catch (err) {
-        info.revert();
-        onError(err instanceof Error ? err.message : "Erreur de déplacement");
-      }
+      const target = dateToPlacement(weekDates, start, displayWeek);
+      const ok = await performMove(sessionId, target, placement, onPlacementUpdated, onError);
+      if (!ok) info.revert();
     },
     [placements, displayWeek, onPlacementUpdated, onError],
   );
@@ -105,7 +71,7 @@ export function TimetableCalendar({
         initialView="timeGridWeek"
         locale={frLocale}
         headerToolbar={false}
-        initialDate={weekStartDate(displayWeek)}
+        initialDate={weekStartDate(weekDates, displayWeek)}
         key={displayWeek}
         weekends={false}
         allDaySlot={false}

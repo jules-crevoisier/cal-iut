@@ -6,6 +6,7 @@ import type {
   TimetableResponse,
   ValidationResponse,
 } from "../types";
+import type { AppException, AppPayload } from "../types/app";
 
 const BASE = "";
 
@@ -23,6 +24,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchMeta(): Promise<MetaResponse> {
   return request<MetaResponse>("/meta");
+}
+
+/**
+ * État applicatif complet — mêmes données que celles embarquées dans
+ * `/legacy` (page HTML/JS historique), calculées par la même fonction Python
+ * (`build_payload`). Source unique pour toutes les vues en lecture seule
+ * (Enseignant, Promo, Référence, Contraintes, À traiter, recherche) : le
+ * frontend ne redérive aucun verdict, il affiche ce que le serveur a déjà
+ * validé.
+ */
+export function fetchAppState(): Promise<AppPayload> {
+  return request<AppPayload>("/app-state");
 }
 
 export function ingest(parcours: string, semestre: string): Promise<Record<string, unknown>> {
@@ -115,6 +128,56 @@ export function exportCsvUrl(): string {
 
 export function exportJson(): Promise<Record<string, unknown>[]> {
   return request("/export/json");
+}
+
+// ── Exceptions ponctuelles + régénération ciblée ──
+// Portage de la section "ONGLET SEMAINE" de `export/templates/timetable.html`
+// (`renderExceptionList`/le handler `regenBtn`) — jusqu'ici jamais câblée
+// côté React alors que le backend l'exposait déjà entièrement (retour
+// utilisateur 11/08/2026, cf. docs/DATA.md).
+
+export function listExceptions(): Promise<AppException[]> {
+  return request<AppException[]>("/exceptions");
+}
+
+export function createException(body: {
+  kind: "teacher_absence" | "room_unavailable";
+  exception_date: string;
+  teacher_code?: string | null;
+  room_id?: string | null;
+  reason?: string | null;
+}): Promise<AppException> {
+  return request<AppException>("/exceptions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteException(id: number): Promise<{ deleted: boolean }> {
+  return request(`/exceptions/${id}`, { method: "DELETE" });
+}
+
+export interface RegenResult {
+  status: string;
+  touched_weeks: number[];
+  placements: Placement[];
+  message: string;
+}
+
+export function regenWeek(week: number, extendNext: boolean): Promise<{ job_id: string; status: string }> {
+  return request("/regen/week", {
+    method: "POST",
+    body: JSON.stringify({ week, extend_next: extendNext }),
+  });
+}
+
+export type RegenStatus =
+  | { job_id: string; status: "running" }
+  | { job_id: string; status: "done"; result: RegenResult }
+  | { job_id: string; status: "error"; error: string };
+
+export function fetchRegenStatus(jobId: string): Promise<RegenStatus> {
+  return request<RegenStatus>(`/regen/status?job_id=${encodeURIComponent(jobId)}`);
 }
 
 export function extractTeachers(placements: Placement[]): string[] {

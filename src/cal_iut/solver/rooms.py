@@ -152,10 +152,23 @@ def _consecutive_runs(
 
 
 def _headcount_for_groups(group_ids: list[str], groups: list[Group]) -> int:
+    """
+    30 = repli neutre historique (aucun `group_id` fourni). Étendu le
+    11/08/2026 : un `group_id` NON reconnu (aucun des `group_ids` fournis
+    n'existe dans `groups`) tombait sur `max()` d'un générateur vide ->
+    `ValueError`, qui faisait 500er `/app-state` EN ENTIER (donc les 4 vues
+    lecture seule + `/legacy`) pour une seule séance mal résolue — trouvé en
+    conditions réelles : `_try_restore_latest` (API) ré-ingère en LIVE
+    (`run_ingestion` sans cache, contrairement au CLI `--from-cache`) au
+    redémarrage du serveur, donc peut légitimement dater d'un instant où le
+    fetch amont différait de celui utilisé pour calculer le planning stocké
+    en base — un vrai risque de désync, pas une faute de frappe locale.
+    """
     group_map = {g.id: g for g in groups}
     if not group_ids:
         return 30
-    return max(group_map[gid].headcount for gid in group_ids if gid in group_map)
+    known = [group_map[gid].headcount for gid in group_ids if gid in group_map]
+    return max(known) if known else 30
 
 
 def _duo_room_overrides(

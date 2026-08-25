@@ -14,6 +14,32 @@ export function yearFromSemestre(semestre: string): number {
   return 3;
 }
 
+function yearPrefixOf(parcours: string): string {
+  const m = /^BUT(\d)/.exec(parcours || "");
+  return m ? m[1] : "9";
+}
+
+export function isFcParcours(parcours: string): boolean {
+  return (parcours || "").includes("FC");
+}
+
+/**
+ * Portage de `compareParcoursForDisplay` (`export/templates/timetable.html`) :
+ * année d'abord, puis FI avant FC de la MÊME année (pas l'ordre alphabétique
+ * brut, qui mettrait "CREACOM-FC" avant "DEV-FI" puisque C < D — retour
+ * utilisateur 11/08/2026 : "les groupe [FC] sont mis après les fi dans
+ * l'ordre"), puis alphabétique.
+ */
+export function compareParcoursForDisplay(pa: string, pb: string): number {
+  const ya = yearPrefixOf(pa);
+  const yb = yearPrefixOf(pb);
+  if (ya !== yb) return ya.localeCompare(yb);
+  const fa = isFcParcours(pa);
+  const fb = isFcParcours(pb);
+  if (fa !== fb) return fa ? 1 : -1;
+  return pa.localeCompare(pb, "fr");
+}
+
 export function shortGroupLabel(groupIds: string[], labelsById: Record<string, string>): string {
   if (!groupIds.length) return "";
   const labels = groupIds.map((id) => labelsById[id] ?? id);

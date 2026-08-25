@@ -88,3 +88,46 @@ def test_fc_and_fi_together_only_fi_is_capped() -> None:
     fc_ids = {s.id for s in fc_sessions}
     assert all(result.week_by_session[i] <= 18 for i in fi_ids)
     assert max(result.week_by_session[i] for i in fc_ids) > 18
+
+
+def test_fc_min_week_keeps_sessions_out_of_weeks_before_rentree() -> None:
+    """
+    Bug réel du 11/08/2026 : `assign_weeks` ignorait totalement la rentrée
+    exacte des parcours FC (blocage "avant rentrée" jusque-là connu de
+    l'étage 3 seulement, via `planning_event_blocked_local`) — il pouvait
+    donc assigner une semaine ENTIÈREMENT antérieure à la rentrée d'un
+    parcours FC (ex. BUT2-CREACOM-FC, rentrée le 14/09 -> toute la semaine
+    0 lui est interdite), rendant l'étage 3 prouvé INFEASIBLE en 0s (les 30
+    créneaux de la semaine sont tous bloqués pour ce parcours). `fc_min_week`
+    (cf. `fc_rentree_first_week_by_parcours`) borde désormais l'étage 2 de
+    la même façon. Cf. docs/DATA.md §58.
+    """
+    sessions = _sessions("BUT2-CREACOM-FC", 10)
+    result = assign_weeks(
+        sessions,
+        groups=[],
+        weeks=24,
+        teacher_weekly_cap_slots=26,
+        fc_min_week={"BUT2-CREACOM-FC": 2},
+        time_limit_seconds=10,
+    )
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    assert all(w >= 2 for w in result.week_by_session.values())
+
+
+def test_fc_min_week_does_not_affect_other_parcours() -> None:
+    """Une borne `fc_min_week` propre à un parcours ne doit pas contraindre
+    les séances d'un AUTRE parcours FC, même sans rentrée déclarée pour lui."""
+    sessions = _sessions("BUT3-DEV-FC", 10)
+    result = assign_weeks(
+        sessions,
+        groups=[],
+        weeks=24,
+        teacher_weekly_cap_slots=26,
+        fc_min_week={"BUT2-CREACOM-FC": 2},
+        time_limit_seconds=10,
+    )
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    # Pas borné à >= 2 comme BUT2-CREACOM-FC (peut légitimement atterrir avant,
+    # l'étalement objectif décide du reste) — seule la borne dure importe ici.
+    assert min(result.week_by_session.values()) < 2
