@@ -229,3 +229,12 @@ Retours utilisateur : « modifier uniquement les salles » en Vue Promo ; « A18
 6. Modale « Nouvelle salle » : vraie modale interne (pas `window.prompt`, désactivé chez l'utilisateur) + styles d'`<input>` ajoutés (l'app n'avait que des `<select>` stylés, les inputs sortaient bruts).
 Vérifié en réel via curl sur le serveur : 404 salle inconnue, changement vers salle libre (créneau strictement inchangé), 409 sur salle occupée, 200 en forçant, création + persistance confirmée APRÈS redémarrage, affectation à la salle créée, puis remise en état complète (base restaurée à l'identique). 11 tests dédiés (`test_changer_salle_2026_08_28.py`) + périmètre mail/auth : 26 passed.
 Périmètre de tests volontairement restreint aux fichiers concernés (demande utilisateur : « arrête de lancer tous les tests, 90% n'ont rien à voir »).
+
+## follow-up 24 (avertissement capacite au changement de salle)
+Retour utilisateur : « il faut mettre un warning quand l'on change de salle s'il y a un conflit ».
+Le conflit d'OCCUPATION déclenchait déjà une confirmation (follow-up 23). Ce qui manquait : la CAPACITÉ — mettre un TD de 30 dans H.006 (15 places) passait totalement en silence, alors que c'est précisément le sujet sur lequel on a passé du temps plus tôt dans la session (capacités réelles des salles de TP ramenées à 15, salles combinées...).
+- `changer_salle` calcule l'effectif avec la MÊME fonction que le solveur (`rooms.py::_headcount_for_groups`) pour que l'avertissement dise la même chose que l'affectation automatique.
+- Classé en `soft_warnings`, pas `hard_conflicts` : une salle trop petite est presque toujours une erreur mais pas toujours (groupe partiellement absent, TP dédoublé) — on le dit clairement et on laisse trancher, sans décider à la place de l'utilisateur. Reste franchissable via `force`, comme l'occupation.
+- Les deux problèmes sont renvoyés ENSEMBLE quand ils coexistent (sinon : corriger l'un, relancer, découvrir l'autre).
+- Front : la modale affiche désormais `hard_conflicts` ET `soft_warnings`, avec un titre qui suit ce qui est réellement en cause (« Salle déjà occupée » vs « Attention à la capacité ») — annoncer une occupation pour un simple souci de capacité enverrait chercher un conflit inexistant.
+Vérifié en réel (serveur live, vraie séance TD BUT1 de 30 vers H.006) : 409 avec `hard_conflicts: []` et l'avertissement de capacité seul, puis 200 en forçant, puis remise en état. 4 nouveaux tests, 15 passed sur le fichier.
