@@ -25,7 +25,9 @@ import {
   type SeanceAPlacer,
   type SeancesAPlacer,
 } from "../api/client";
+import type { AppPayload } from "../types/app";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
+import { PromoView } from "./PromoView";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HORAIRES = ["08h00", "09h30", "11h00", "14h00", "15h30", "17h00"];
@@ -43,12 +45,22 @@ function dateLisible(iso: string): string {
 interface APlacerViewProps {
   /** Rechargement du planning après un placement réussi. */
   onPlacement: () => void;
-  /** Bascule vers la Vue Promo avec CETTE séance active pour un placement
-   * visuel directement sur la grille (retour utilisateur 28/08/2026). */
-  onChoisirSurPromo: (seance: SeanceAPlacer) => void;
+  /** Nécessaire pour la grille de placement direct (`PromoView` intégrée
+   * ci-dessous) — absent/`null` tant que le planning n'est pas résolu, le
+   * reste de l'écran (liste, sélecteur manuel) reste utilisable quand même
+   * (retour utilisateur 26/08/2026 : cet écran « doit rester accessible
+   * même quand le planning est trop incomplet pour que les autres vues
+   * aient du sens »). */
+  payload: AppPayload | null;
 }
 
-export function APlacerView({ onPlacement, onChoisirSurPromo }: APlacerViewProps) {
+export function APlacerView({ onPlacement, payload }: APlacerViewProps) {
+  // Séance choisie pour un placement visuel direct sur la grille — vue
+  // intégrée ICI (pas une bascule vers l'onglet Vue Promo, retour
+  // utilisateur 28/08/2026 : « on peut pas avoir la vue dédiée dans à
+  // placer que cela soit bien » — la première version renvoyait vers
+  // l'onglet Vue Promo, ce qui sortait la personne de cet écran).
+  const [placementActif, setPlacementActif] = useState<SeanceAPlacer | null>(null);
   const [inventaire, setInventaire] = useState<SeancesAPlacer | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(true);
@@ -110,6 +122,21 @@ export function APlacerView({ onPlacement, onChoisirSurPromo }: APlacerViewProps
       <p role="status" aria-live="polite" className="sr-only">
         {annonce}
       </p>
+
+      {placementActif && payload ? (
+        <PromoView
+          payload={payload}
+          placementActif={placementActif}
+          onAnnulerPlacement={() => setPlacementActif(null)}
+          onPlaced={() => {
+            setPlacementActif(null);
+            setVersion((v) => v + 1);
+            recharger();
+            onPlacement();
+          }}
+        />
+      ) : (
+        <>
       <div className="panel">
         <h3>Séances à placer à la main</h3>
         <p className="muted">{inventaire?.resume}</p>
@@ -206,10 +233,13 @@ export function APlacerView({ onPlacement, onChoisirSurPromo }: APlacerViewProps
                 recharger();
                 onPlacement();
               }}
-              onChoisirSurPromo={onChoisirSurPromo}
+              onChoisirSurPromo={setPlacementActif}
+              payloadDisponible={Boolean(payload)}
             />
           ))}
         </div>
+      )}
+        </>
       )}
     </section>
   );
@@ -220,11 +250,13 @@ function CarteSeance({
   version,
   onPlace,
   onChoisirSurPromo,
+  payloadDisponible,
 }: {
   seance: SeanceAPlacer;
   version: number;
   onPlace: () => void;
   onChoisirSurPromo: (seance: SeanceAPlacer) => void;
+  payloadDisponible: boolean;
 }) {
   const [ouverte, setOuverte] = useState(false);
   const [creneaux, setCreneaux] = useState<CreneauLibre[] | null>(null);
@@ -376,9 +408,11 @@ function CarteSeance({
               risque), celui-ci un choix explicite avec confirmation en cas
               de conflit (`placerAvecConfirmation`). */}
           <div className="aplacer-manuel">
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => onChoisirSurPromo(seance)}>
-              Placer sur la grille (Vue Promo)
-            </button>
+            {payloadDisponible && (
+              <button type="button" className="btn btn--primary btn--sm" onClick={() => onChoisirSurPromo(seance)}>
+                Placer sur la grille
+              </button>
+            )}
             <button
               type="button"
               className="btn btn--ghost btn--sm"
