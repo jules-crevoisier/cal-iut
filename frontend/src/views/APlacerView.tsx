@@ -28,11 +28,81 @@ import {
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HORAIRES = ["08h00", "09h30", "11h00", "14h00", "15h30", "17h00"];
+// Plage du sélecteur manuel — même horizon d'affichage que le Toolbar de la
+// Vue Semaine (`MAX_WEEKS`, App.tsx) ; l'horizon RÉEL vient toujours du
+// serveur (`week_status`), qui refusera une semaine hors calendrier.
+const MAX_WEEKS = 24;
 
 function dateLisible(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+/** Le serveur renvoie le détail structuré d'un conflit (`hard_conflicts`/
+ * `soft_warnings`) comme `detail` JSON d'un 409 — `request()` le rejette en
+ * `Error(JSON.stringify(detail))` (cf. api/client.ts) faute de type d'erreur
+ * dédié. On le re-parse ici plutôt que d'ajouter un mécanisme d'erreur
+ * générique juste pour cet écran. `null` = pas un conflit structuré (panne
+ * réseau, autre message serveur) — dans ce cas pas de proposition de forçage. */
+function detailConflit(e: unknown): { hard_conflicts: string[]; soft_warnings: string[] } | null {
+  if (!(e instanceof Error)) return null;
+  try {
+    const d = JSON.parse(e.message) as { hard_conflicts?: unknown; soft_warnings?: unknown };
+    if (Array.isArray(d.hard_conflicts)) {
+      return {
+        hard_conflicts: d.hard_conflicts as string[],
+        soft_warnings: Array.isArray(d.soft_warnings) ? (d.soft_warnings as string[]) : [],
+      };
+    }
+  } catch {
+    /* pas un détail structuré */
+  }
+  return null;
+}
+
+/** Placement à un créneau choisi À LA MAIN (donc potentiellement hors des
+ * suggestions déjà validées) — retour utilisateur 28/08/2026 : « cela va
+ * être fait à la main et ne respectera pas toutes les contraintes ». Même
+ * logique que le glisser-déposer (`utils/moveSession.ts::performMove`) :
+ * essai normal, et seulement si ça bute sur un conflit RESSOURCE
+ * (contournable), popup de confirmation puis nouvel essai avec `force`. Les
+ * règles institutionnelles (PAC, SAE, ordre pédagogique...) restent NON
+ * contournables — le serveur les rejette même avec `force`, cf.
+ * `placer_seance` (api/main.py) ; dans ce cas la popup ne s'affiche pas, le
+ * message d'échec du serveur est montré tel quel. */
+async function placerAvecConfirmation(
+  sessionId: string,
+  cible: { week: number; day: number; slot: number },
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    await placerSeance(sessionId, cible);
+    return { ok: true };
+  } catch (e) {
+    const detail = detailConflit(e);
+    if (!detail) {
+      return { ok: false, message: e instanceof Error ? e.message : "Erreur de placement" };
+    }
+    const forcer = window.confirm(
+      `Conflit détecté :\n${[...detail.hard_conflicts, ...detail.soft_warnings].join("\n")}\n\nForcer le placement quand même ?`,
+    );
+    if (!forcer) return { ok: false, message: "Placement annulé." };
+    try {
+      await placerSeance(sessionId, { ...cible, force: true });
+      return { ok: true };
+    } catch (e2) {
+      // Un second échec malgré `force` = règle institutionnelle non
+      // contournable (ex. ordre pédagogique) — le message reste structuré
+      // de la même façon, on le reparse pour ne pas afficher le JSON brut.
+      const detail2 = detailConflit(e2);
+      const message = detail2
+        ? [...detail2.hard_conflicts, ...detail2.soft_warnings].join(" · ")
+        : e2 instanceof Error
+          ? e2.message
+          : "Erreur de placement (forcé)";
+      return { ok: false, message };
+    }
+  }
 }
 
 interface APlacerViewProps {
@@ -222,6 +292,13 @@ function CarteSeance({
   const [enCours, setEnCours] = useState<string | null>(null);
   const [echec, setEchec] = useState<string | null>(null);
 
+  // Créneau manuel, hors suggestions déjà validées — cf. `placerAvecConfirmation`.
+  const [manuelOuvert, setManuelOuvert] = useState(false);
+  const [semaineManuelle, setSemaineManuelle] = useState(seance.semaines_possibles[0] ?? 0);
+  const [jourManuel, setJourManuel] = useState(0);
+  const [slotManuel, setSlotManuel] = useState(0);
+  const [manuelEnCours, setManuelEnCours] = useState(false);
+
   const charger = useCallback(() => {
     setChargement(true);
     fetchCreneauxLibres(seance.session_id)
@@ -258,11 +335,30 @@ function CarteSeance({
       .catch((e: Error) => {
         // Un refus vient presque toujours d'un créneau pris entre-temps :
         // on redemande la liste plutôt que de laisser un choix périmé à
-        // l'écran.
-        setEchec(`${e.message} — la liste des créneaux vient d'être actualisée.`);
+        // l'écran. `detailConflit` évite d'afficher le JSON brut du détail
+        // structuré quand ce refus en est un.
+        const detail = detailConflit(e);
+        const message = detail ? [...detail.hard_conflicts, ...detail.soft_warnings].join(" · ") : e.message;
+        setEchec(`${message} — la liste des créneaux vient d'être actualisée.`);
         charger();
       })
       .finally(() => setEnCours(null));
+  };
+
+  const placerManuellement = async () => {
+    setManuelEnCours(true);
+    setEchec(null);
+    const resultat = await placerAvecConfirmation(seance.session_id, {
+      week: semaineManuelle,
+      day: jourManuel,
+      slot: slotManuel,
+    });
+    setManuelEnCours(false);
+    if (resultat.ok) {
+      onPlace();
+    } else {
+      setEchec(resultat.message);
+    }
   };
 
   const titre = `${seance.course_code} — ${seance.course_name}`;
@@ -286,6 +382,12 @@ function CarteSeance({
       {ouverte && (
         <div className="aplacer-corps" id={panneauId}>
           <p className="muted small">{seance.raison}</p>
+          {seance.semaines_possibles.length > 0 && (
+            <p className="muted small">
+              Semaine(s) idéale(s) selon l'ordre pédagogique et le calendrier :{" "}
+              {seance.semaines_possibles.map((w) => `S${w + 1}`).join(", ")}.
+            </p>
+          )}
 
           {chargement && <p className="muted">Recherche des créneaux possibles…</p>}
           {note && <p className="alerte">{note}</p>}
@@ -325,6 +427,67 @@ function CarteSeance({
               </ul>
             </>
           )}
+
+          {/* Créneau hors suggestions — retour utilisateur 28/08/2026 :
+              « cela va être fait à la main et ne respectera pas toutes les
+              contraintes ». Volontairement séparé des suggestions sûres
+              ci-dessus : celles-ci restent le chemin par défaut (aucun
+              risque), celui-ci un choix explicite avec confirmation en cas
+              de conflit (`placerAvecConfirmation`). */}
+          <div className="aplacer-manuel">
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => setManuelOuvert((v) => !v)}
+              aria-expanded={manuelOuvert}
+            >
+              {manuelOuvert ? "Annuler le choix manuel" : "Choisir un autre créneau (hors suggestions)"}
+            </button>
+
+            {manuelOuvert && (
+              <div className="aplacer-manuel-form">
+                <label>
+                  Semaine
+                  <select value={semaineManuelle} onChange={(e) => setSemaineManuelle(Number(e.target.value))}>
+                    {Array.from({ length: MAX_WEEKS }, (_, w) => (
+                      <option key={w} value={w}>
+                        S{w + 1}
+                        {seance.semaines_possibles.includes(w) ? " · idéale" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Jour
+                  <select value={jourManuel} onChange={(e) => setJourManuel(Number(e.target.value))}>
+                    {JOURS.map((j, i) => (
+                      <option key={j} value={i}>
+                        {j}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Horaire
+                  <select value={slotManuel} onChange={(e) => setSlotManuel(Number(e.target.value))}>
+                    {HORAIRES.map((h, i) => (
+                      <option key={h} value={i}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="btn btn--accent btn--sm" onClick={placerManuellement} disabled={manuelEnCours}>
+                  {manuelEnCours ? "Placement…" : "Placer à ce créneau"}
+                </button>
+                <p className="muted small">
+                  Ce créneau n'a PAS été vérifié à l'avance : un conflit de salle/enseignant/groupe vous sera proposé
+                  en confirmation avant d'être forcé. Les règles institutionnelles (PAC, SAE, ordre pédagogique) ne
+                  peuvent jamais être forcées.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </article>
