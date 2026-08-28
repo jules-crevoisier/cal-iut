@@ -77,6 +77,19 @@ export function buildIcs(
   return lines.join("\r\n");
 }
 
+/** URL du flux .ics ABONNABLE (serveur, `GET /ics/{kind}/{code}.ics`) — à la
+ * différence de `downloadIcs` ci-dessous (fichier figé au moment du clic),
+ * une appli agenda qui s'abonne à cette URL la re-télécharge périodiquement
+ * toute seule (retour utilisateur 28/08/2026, relayé depuis Discord : « pour
+ * le ics on pourrait peut-être faire un lien qui s'update automatique ? »).
+ * `token` : le même paramètre `t` public que le reste des liens personnels
+ * (cf. api/auth.py) — sans lui l'appli agenda se ferait bloquer par le mot
+ * de passe partagé à chaque resynchronisation. */
+export function subscribeUrl(kind: "prof" | "groupe", code: string, token: string): string {
+  const t = token ? `?t=${encodeURIComponent(token)}` : "";
+  return `${window.location.origin}/ics/${kind}/${encodeURIComponent(code)}.ics${t}`;
+}
+
 export function downloadIcs(
   items: IcsSession[],
   calendarName: string,

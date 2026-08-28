@@ -371,6 +371,12 @@ h1, h2, h3 {
   margin-left: 8px;
 }
 
+.section-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .legend {
   display: flex;
   gap: 12px;
@@ -1065,6 +1071,14 @@ h1, h2, h3 {
   max-width: 1400px;
 }
 
+/* Lien personnel (prof/groupe) : pas de nav/barre latérale à partager
+   l'écran avec, le plafond de largeur laissait un vide sur les grands
+   écrans (retour utilisateur 28/08/2026, relayé depuis Discord : « pourquoi
+   l'emploi du temps ne prend pas toute la page »). */
+.read-only-mode .view {
+  max-width: none;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1279,15 +1293,24 @@ h1, h2, h3 {
 
 .sessiongrid-pause td {
   background: var(--surface-2);
-  height: 6px;
+  height: 22px;
   padding: 0;
   border-left: none;
   border-right: none;
 }
 
+.sessiongrid-pause-label {
+  text-align: center;
+  vertical-align: middle !important;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+
 .sessiongrid-cell {
-  min-width: 120px;
-  height: 52px;
+  min-width: 132px;
+  height: 60px;
 }
 
 .sessiongrid-subcols {
@@ -1327,14 +1350,37 @@ h1, h2, h3 {
 .sessiongrid-block.eval { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
 .sessiongrid-block.locked { opacity: 0.75; }
 
-.sessiongrid-block .code {
-  font-weight: 700;
+/* Nom du cours + salle en tête, mis en avant à égalité — retour utilisateur
+   28/08/2026 : le nom prime sur le code (« WSA501D ça me parle pas »), et la
+   salle mérite la même importance que le nom (« 95% du temps c'est pour
+   savoir dans quelle salle je suis »), affichée à sa droite. */
+.sessiongrid-block .head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
 }
 
-.sessiongrid-block .meta,
+.sessiongrid-block .name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .sessiongrid-block .room {
+  font-weight: 700;
+  flex: none;
+  white-space: nowrap;
+}
+
+.sessiongrid-block .meta {
   color: var(--muted);
   font-size: 0.66rem;
+  margin-top: 1px;
+}
+
+.sessiongrid-block .meta .code {
+  font-weight: 600;
 }
 
 .sessiongrid-holiday,
@@ -1370,13 +1416,6 @@ h1, h2, h3 {
   border: 1px dashed var(--border);
   font-weight: 700;
   letter-spacing: 0.06em;
-}
-
-.sessiongrid-lunch {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 0.75rem;
-  text-align: center;
 }
 
 .sessiongrid-hover {

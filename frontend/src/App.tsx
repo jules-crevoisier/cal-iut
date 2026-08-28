@@ -396,7 +396,17 @@ export function App() {
               <h1>
                 {readOnlyTarget === "prof"
                   ? `Planning de ${appPayload.teacherLabels[route.prof] ?? route.prof}`
-                  : `Planning — ${appPayload.groupLabels[route.groupe] ?? route.groupe}`}
+                  : // Parcours en préfixe — retour utilisateur 28/08/2026 :
+                    // « pourquoi on a pas le nom complet du groupe dessus ».
+                    // Le libellé seul ("TD EF") existe en double identique
+                    // entre plusieurs parcours (cf. ReferenceView.tsx, même
+                    // correctif) : sans le parcours, impossible de savoir
+                    // lequel des deux ce lien désigne.
+                    `Planning — ${
+                      appPayload.groupParcours[route.groupe]
+                        ? `${appPayload.groupParcours[route.groupe]} · ${appPayload.groupLabels[route.groupe] ?? route.groupe}`
+                        : (appPayload.groupLabels[route.groupe] ?? route.groupe)
+                    }`}
               </h1>
               <p>Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.</p>
             </header>

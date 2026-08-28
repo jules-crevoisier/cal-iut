@@ -10,7 +10,8 @@ import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { downloadIcs, sessionsWithDates } from "../utils/ics";
+import { copyToClipboard } from "../utils/clipboard";
+import { downloadIcs, sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 
@@ -44,6 +45,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
   // les prof ». N'a de sens que côté planification (readOnly = déjà le
   // lien d'UN seul enseignant, rien à lister).
   const [showAllLinks, setShowAllLinks] = useState(false);
+  const [abonnementCopie, setAbonnementCopie] = useState(false);
 
   useEffect(() => {
     if (route.prof && route.prof !== code) setCode(route.prof);
@@ -136,6 +138,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
           onDownloadIcs={() =>
             downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
           }
+          onCopySubscribeLink={() => subscribeUrl("prof", code, payload.teacherTokens[code] ?? "")}
           extra={
             <a
               className="btn btn--ghost btn--sm"
@@ -195,15 +198,31 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
         <div className="panel">
           <div className="section-header">
             <h3>{payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}</h3>
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm no-print"
-              onClick={() =>
-                downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
-              }
-            >
-              Agenda .ics
-            </button>
+            <div className="section-header-actions no-print">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={async () => {
+                  const ok = await copyToClipboard(subscribeUrl("prof", code, payload.teacherTokens[code] ?? ""));
+                  if (ok) {
+                    setAbonnementCopie(true);
+                    setTimeout(() => setAbonnementCopie(false), 1400);
+                  }
+                }}
+                title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
+              >
+                {abonnementCopie ? "Copié ✓" : "Lien d'abonnement"}
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() =>
+                  downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
+                }
+              >
+                Agenda .ics
+              </button>
+            </div>
           </div>
           {solverWeek === null ? (
             <p className="muted">Semaine bloquée (vacances/fermeture).</p>

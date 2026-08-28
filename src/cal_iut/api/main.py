@@ -146,7 +146,7 @@ app.add_middleware(
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
     "/app-state", "/corrections", "/diff", "/exceptions", "/export",
-    "/feedback", "/ingest", "/legacy", "/mail", "/meta", "/placements",
+    "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/placements",
     "/regen", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
 )
 
@@ -895,6 +895,74 @@ def export_csv() -> Response:
     )
     content = to_csv(rows)
     return Response(content=content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=emploi_du_temps.csv"})
+
+
+def _ics_items_for_placements(state: object, placements: list) -> list:
+    """`IcsItem` par placement — date calculée depuis le SEMESTRE PROPRE à
+    chaque séance (pas un semestre de référence unique, cf. `ics_feed.py`
+    pour pourquoi c'est important pour un flux personnel)."""
+    from cal_iut.api.ics_feed import IcsItem
+    from cal_iut.export.formatter import SLOT_TIMES as _ICS_SLOT_TIMES
+
+    items = []
+    for p in placements:
+        session = state.sessions_by_id.get(p.session_id)
+        semestre = getattr(session, "semestre", None) or _export_semestre(state)
+        start, end = _ICS_SLOT_TIMES[p.slot] if 0 <= p.slot < len(_ICS_SLOT_TIMES) else ("", "")
+        items.append(IcsItem(
+            session_id=p.session_id,
+            course_code=p.course_code,
+            course_name=getattr(session, "course_name", "") if session else "",
+            date=_date_iso(state, semestre, p.week, p.day),
+            time_start=start,
+            time_end=end,
+            room_label=getattr(p, "room_label", None),
+            group_ids=list(p.group_ids or []),
+            teacher_codes=list(p.teacher_codes or []),
+        ))
+    return items
+
+
+@app.get("/ics/prof/{code}.ics")
+def ics_teacher(code: str) -> Response:
+    """Flux .ics abonnable pour UN enseignant — cf. `api/ics_feed.py`."""
+    state = get_state()
+    placements = [p for p in state.timetable if code in (p.teacher_codes or [])]
+    items = _ics_items_for_placements(state, placements)
+    noms = _noms_enseignants(state)
+    group_labels = {g.id: g.label for g in state.groups}
+    from cal_iut.api.ics_feed import build_ics
+
+    content = build_ics(items, noms.get(code, code), f"prof-{code}", group_labels, noms)
+    return Response(
+        content=content, media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'inline; filename="planning-{code}.ics"'},
+    )
+
+
+@app.get("/ics/groupe/{group_id}.ics")
+def ics_groupe(group_id: str) -> Response:
+    """Flux .ics abonnable pour UN groupe (cohorte complète : CM promo + TD
+    + TP jumelé, mêmes séances que sur son lien personnel) — cf.
+    `api/ics_feed.py`."""
+    from cal_iut.models.group_scope import expand_group_filter
+
+    state = get_state()
+    if not any(g.id == group_id for g in state.groups):
+        raise HTTPException(404, f"Groupe {group_id} inconnu")
+    cohort = expand_group_filter(group_id, state.groups)
+    placements = [p for p in state.timetable if cohort.intersection(p.group_ids or [])]
+    items = _ics_items_for_placements(state, placements)
+    noms = _noms_enseignants(state)
+    group_labels = {g.id: g.label for g in state.groups}
+    label = group_labels.get(group_id, group_id)
+    from cal_iut.api.ics_feed import build_ics
+
+    content = build_ics(items, label, f"groupe-{group_id}", group_labels, noms)
+    return Response(
+        content=content, media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'inline; filename="planning-{group_id}.ics"'},
+    )
 
 
 def _check_move_editable(state: object, session_id: str, source_week: int, dest_week: int) -> None:
