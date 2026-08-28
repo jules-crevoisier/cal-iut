@@ -2067,25 +2067,83 @@ def completer() -> CompletionResponse:
     )
 
 
+def _semestres_couverts_label(state: object) -> str:
+    """Libellé humain des semestres couverts par le run chargé (« S1, S3 et
+    S5 ») — dérivé de `state.semestre_group`, pas codé en dur (retour
+    utilisateur 28/08/2026 : « préciser dans le mail que c'est les emploi du
+    temps pour les semestre impaire S1 S3 et S5 ») : coder ça en dur serait
+    devenu FAUX le jour où un run "even" (S2/S4/S6) est chargé à la place."""
+    from cal_iut.ingestion.pipeline import SEMESTRE_GROUPS
+
+    semestres = sorted(SEMESTRE_GROUPS.get(state.semestre_group or "", set()))
+    if not semestres:
+        # Groupe de semestres inconnu (run par parcours unique, pas par
+        # groupe pair/impair) : reconstitue depuis ce qui est réellement
+        # chargé plutôt que de ne rien dire.
+        semestres = sorted({s.semestre for s in state.sessions if s.semestre})
+    if not semestres:
+        return ""
+    if len(semestres) == 1:
+        return semestres[0]
+    return ", ".join(semestres[:-1]) + " et " + semestres[-1]
+
+
+def _teacher_a_des_seances_non_placees(state: object, code: str) -> bool:
+    """Un enseignant peut avoir des séances qui lui reviennent, mais que le
+    solveur n'a pas su placer (cf. écran « À placer ») — sans ce signal, son
+    lien perso lui montrerait un planning qui a l'air complet alors qu'il
+    manque des heures, sans qu'il sache qu'il doit relancer quelqu'un.
+    Même filtre SAE que `seances_manquantes` (l'inventaire réel de l'écran
+    « À placer ») pour rester cohérent avec ce qu'il verrait en l'ouvrant."""
+    from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
+
+    placees = {p.session_id for p in state.timetable}
+    scheduled_sae = load_solver_scheduled_sae(state.config_dir)
+    for s in state.sessions:
+        if s.id in placees:
+            continue
+        if code not in (s.teacher_codes or []):
+            continue
+        if s.course_code.upper().startswith("WS") and (s.course_code.upper(), s.semestre) not in scheduled_sae:
+            continue
+        return True
+    return False
+
+
 def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[str, str]:
-    """`(subject, body)` — même texte que le brouillon `mailto:` existant
-    (`frontend/src/utils/mailto.ts`), pour que le contenu reste identique
-    qu'un enseignant reçoive son lien via le mail auto ou via le bouton
-    « Écrire » manuel de l'annuaire."""
+    """`(subject, body)` — texte de base identique au brouillon `mailto:`
+    existant (`frontend/src/utils/mailto.ts`), pour que le contenu reste le
+    même qu'un enseignant reçoive son lien via le mail auto ou via le bouton
+    « Écrire » manuel de l'annuaire. Deux ajouts SPÉCIFIQUES à l'envoi auto,
+    volontairement absents du brouillon manuel (celui-ci se rédige alors que
+    l'admin regarde déjà l'écran de CET enseignant, ces deux infos y sont
+    déjà visibles autrement) : le rappel des semestres couverts, et
+    l'alerte "séances à placer" quand elle s'applique."""
     items = [p for p in state.timetable if code in (p.teacher_codes or [])]
     sessions_by_id = state.sessions_by_id
     hours = sum((sessions_by_id[p.session_id].duration_slots or 1) if p.session_id in sessions_by_id else 1 for p in items) * 1.5
     hours_label = f"{hours:g}".replace(".", ",")
-    body = (
-        f"Bonjour {name},\n\n"
-        f"Voici votre emploi du temps : {link}\n\n"
-        f"Il compte {len(items)} séance(s), soit {hours_label} h.\n"
-        "Le lien ouvre directement votre planning ; un bouton permet d'exporter\n"
-        "les séances vers votre agenda personnel (fichier .ics).\n\n"
-        "Une question ? Contactez Kyllian Bresson au 07 81 25 78 87.\n\n"
-        "Cordialement,"
-    )
-    return "Votre emploi du temps MMI", body
+    semestres_label = _semestres_couverts_label(state)
+    lignes = [
+        f"Bonjour {name},",
+        "",
+        f"Voici votre emploi du temps : {link}",
+        "",
+        f"Il compte {len(items)} séance(s), soit {hours_label} h.",
+        "Le lien ouvre directement votre planning ; un bouton permet d'exporter",
+        "les séances vers votre agenda personnel (fichier .ics).",
+    ]
+    if semestres_label:
+        lignes += ["", f"Cet emploi du temps couvre le(s) semestre(s) {semestres_label}."]
+    if _teacher_a_des_seances_non_placees(state, code):
+        lignes += [
+            "",
+            "⚠ Vous avez des séances qui n'ont pas encore pu être placées",
+            "automatiquement dans l'emploi du temps. Merci de contacter le",
+            "référent pour les positionner.",
+        ]
+    lignes += ["", "Une question ? Contactez Kyllian Bresson au 07 81 25 78 87.", "", "Cordialement,"]
+    return "Votre emploi du temps MMI", "\n".join(lignes)
 
 
 @app.get("/mail/teacher-links", response_model=TeacherMailPreviewListResponse, dependencies=[Depends(require_admin_session)])
