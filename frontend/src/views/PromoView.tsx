@@ -97,12 +97,16 @@ export function PromoView({
       let maj = await changerSalle(sessionId, { room_id: roomId }).catch(async (e) => {
         const detail = detailConflit(e);
         if (!detail) throw e;
-        // Conflit de salle : proposé en forçage explicite, comme partout
-        // ailleurs dans l'app (modale interne, pas `window.confirm`).
-        const forcer = await confirmAsync(detail.hard_conflicts.join("\n"), {
-          title: "Salle déjà occupée",
-          confirmLabel: "Mettre quand même cette salle",
-        });
+        // Salle occupée ET/OU capacité insuffisante : les deux sont montrés,
+        // en forçage explicite (modale interne, pas `window.confirm`). Le
+        // titre suit ce qui est RÉELLEMENT en cause — annoncer « Salle déjà
+        // occupée » pour un simple souci de capacité enverrait chercher un
+        // conflit d'occupation qui n'existe pas.
+        const titre = detail.hard_conflicts.length ? "Salle déjà occupée" : "Attention à la capacité";
+        const forcer = await confirmAsync(
+          [...detail.hard_conflicts, ...detail.soft_warnings].join("\n"),
+          { title: titre, confirmLabel: "Mettre quand même cette salle" },
+        );
         if (!forcer) return null;
         return changerSalle(sessionId, { room_id: roomId, force: true });
       });

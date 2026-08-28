@@ -69,6 +69,9 @@ def etat():
         Room(id="h101", label="H.101", capacity=30, room_type=RoomType.STANDARD),
         Room(id="h102", label="H.102", capacity=30, room_type=RoomType.STANDARD),
         Room(id="h103", label="H.103", capacity=30, room_type=RoomType.STANDARD),
+        # Volontairement trop petite : sert aux tests d'avertissement de
+        # capacité (un TD BUT1 = 30 étudiants).
+        Room(id="h006", label="H.006", capacity=15, room_type=RoomType.STANDARD),
     ]
     etat.groups = GROUPES
     etat.calendar = build_default_calendar_2026_2027()
@@ -202,3 +205,43 @@ def test_aucun_endpoint_ne_reste_sans_protection() -> None:
     from cal_iut.api.main import _verifier_couverture_auth
 
     assert _verifier_couverture_auth() == []
+
+
+# --------------------------------------------------------------------------
+# Avertissement de capacité — retour utilisateur 28/08/2026 : « il faut
+# mettre un warning quand l'on change de salle s'il y a un conflit ».
+# --------------------------------------------------------------------------
+
+
+def test_une_salle_trop_petite_declenche_un_avertissement(etat) -> None:
+    """Signalé comme `soft_warnings` et non `hard_conflicts` : ce n'est pas
+    une impossibilité (groupe partiellement absent, TP dédoublé...), mais ça
+    ne doit jamais passer en silence."""
+    reponse = client.patch("/placements/a/salle", json={"room_id": "h006"})
+    assert reponse.status_code == 409
+    detail = reponse.json()["detail"]
+    assert detail["hard_conflicts"] == []  # la salle est LIBRE, rien d'occupé
+    assert any("apacité" in w for w in detail["soft_warnings"])
+    assert any("15" in w and "30" in w for w in detail["soft_warnings"]), detail["soft_warnings"]
+
+
+def test_la_salle_trop_petite_reste_acceptable_en_forcant(etat) -> None:
+    reponse = client.patch("/placements/a/salle", json={"room_id": "h006", "force": True})
+    assert reponse.status_code == 200, reponse.text
+    assert reponse.json()["room_id"] == "h006"
+
+
+def test_une_salle_assez_grande_ne_declenche_aucun_avertissement(etat) -> None:
+    reponse = client.patch("/placements/a/salle", json={"room_id": "h103"})
+    assert reponse.status_code == 200, reponse.text
+
+
+def test_occupation_et_capacite_sont_signalees_ensemble(etat) -> None:
+    """Les deux problèmes à la fois doivent être montrés d'un coup — sinon
+    on corrige l'un, on relance, et on découvre l'autre."""
+    etat.timetable[1].room_id = "h006"  # `b` occupe la petite salle au même créneau
+    reponse = client.patch("/placements/a/salle", json={"room_id": "h006"})
+    assert reponse.status_code == 409
+    detail = reponse.json()["detail"]
+    assert detail["hard_conflicts"], "l'occupation doit être signalée"
+    assert detail["soft_warnings"], "la capacité doit l'être aussi"

@@ -1613,13 +1613,35 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
         duree_autre = max(1, getattr(autre, "duration_slots", 1) or 1) if autre else 1
         if creneaux_vises & {p.slot + k for k in range(duree_autre)}:
             occupants.append(p.course_code)
-    if occupants and not body.force:
+    # Capacité : AVERTISSEMENT, jamais un refus sec — mettre 30 étudiants
+    # dans une salle de 15 est presque toujours une erreur, mais pas
+    # toujours (groupe partiellement absent, TP dédoublé...). Il faut donc
+    # le dire clairement et laisser trancher, pas décider à la place de
+    # l'utilisateur. Sans ça, changer une salle pour une trop petite passait
+    # en silence — retour utilisateur 28/08/2026 : « il faut mettre un
+    # warning quand l'on change de salle s'il y a un conflit ». Même calcul
+    # d'effectif que le solveur (`rooms.py::_headcount_for_groups`), pour
+    # que l'avertissement dise la même chose que l'affectation automatique.
+    from cal_iut.solver.rooms import _headcount_for_groups
+
+    avertissements: list[str] = []
+    effectif = _headcount_for_groups(list(match.group_ids or []), state.groups)
+    if salle.capacity < effectif:
+        avertissements.append(
+            f"Capacité insuffisante : {salle.label} a {salle.capacity} place(s) "
+            f"pour un effectif de {effectif}."
+        )
+
+    if (occupants or avertissements) and not body.force:
+        conflits = (
+            [f"Conflit salle : {', '.join(sorted(set(occupants)))} occupe(nt) déjà {salle.label} à ce créneau."]
+            if occupants else []
+        )
         raise HTTPException(409, detail={
             "message": "Conflit",
-            "hard_conflicts": [
-                f"Conflit salle : {', '.join(sorted(set(occupants)))} occupe(nt) déjà {salle.label} à ce créneau."
-            ],
-            "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+            "hard_conflicts": conflits,
+            "soft_warnings": avertissements,
+            "suggestions": [], "suggestions_note": None,
         })
 
     match.room_id, match.room_label = salle.id, salle.label
