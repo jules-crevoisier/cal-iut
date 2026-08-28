@@ -2210,6 +2210,51 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   cursor: default;
 }
 
+.aplacer-manuel {
+  margin-top: .85rem;
+  padding-top: .75rem;
+  border-top: 1px dashed var(--border);
+}
+
+.aplacer-manuel-form {
+  margin-top: .6rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: .6rem .85rem;
+}
+
+.aplacer-manuel-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+
+.aplacer-manuel-form select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-family: var(--font);
+  font-size: .875rem;
+  min-height: 44px;
+  min-width: 140px;
+}
+
+.aplacer-manuel-form .btn {
+  min-height: 44px;
+}
+
+.aplacer-manuel-form p.muted {
+  flex-basis: 100%;
+  margin: .3rem 0 0;
+}
+
 .aplacer-quand {
   display: flex;
   flex-direction: column;
