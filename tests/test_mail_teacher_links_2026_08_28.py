@@ -109,7 +109,7 @@ def test_envoi_reussi_journalise_et_reapparait_comme_deja_envoye(etat_avec_seanc
         "cal_iut.ingestion.config_loader.load_teacher_contacts",
         lambda config_dir: {"KBR": "kyllian.bresson@univ-reims.fr"},
     )
-    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: "msg_123")
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text, html=None: "msg_123")
     monkeypatch.setattr(mailer, "personal_link", lambda code: "https://example.test/#vue=prof")
 
     reponse = client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
@@ -155,7 +155,7 @@ def test_un_echec_n_interrompt_pas_les_autres_envois(etat_avec_seance, session_a
         lambda config_dir: {"KBR": "kyllian.bresson@univ-reims.fr", "XYZ": "xyz@example.test"},
     )
 
-    def _send(to, subject, text):
+    def _send(to, subject, text, html=None):
         if to == "xyz@example.test":
             raise RuntimeError("panne réseau simulée")
         return "msg_ok"
@@ -176,11 +176,14 @@ def test_un_echec_n_interrompt_pas_les_autres_envois(etat_avec_seance, session_a
 # --------------------------------------------------------------------------
 
 
-def _capturer_corps(monkeypatch) -> list[str]:
-    corps_captures: list[str] = []
+def _capturer_corps(monkeypatch) -> list[tuple[str, str | None]]:
+    """`[(texte, html), ...]` — capture les DEUX versions envoyées à
+    `send_email`, pour vérifier que l'alerte "à placer" existe aussi comme
+    un vrai encart visuel côté HTML, pas seulement comme texte brut."""
+    corps_captures: list[tuple[str, str | None]] = []
 
-    def _send(to, subject, text):
-        corps_captures.append(text)
+    def _send(to, subject, text, html=None):
+        corps_captures.append((text, html))
         return "msg_ok"
 
     monkeypatch.setattr(mailer, "send_email", _send)
@@ -195,14 +198,17 @@ def _capturer_corps(monkeypatch) -> list[str]:
 def test_le_mail_rappelle_les_semestres_couverts(etat_avec_seance, session_admin, monkeypatch) -> None:
     corps_captures = _capturer_corps(monkeypatch)
     client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
-    assert "S1, S3 et S5" in corps_captures[0]
+    texte, _html = corps_captures[0]
+    assert "S1, S3 et S5" in texte
 
 
 def test_alerte_seances_a_placer_absente_si_tout_est_place(etat_avec_seance, session_admin, monkeypatch) -> None:
     corps_captures = _capturer_corps(monkeypatch)
     client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
-    assert "à placer" not in corps_captures[0]
-    assert "référent" not in corps_captures[0]
+    texte, html = corps_captures[0]
+    assert "à placer" not in texte
+    assert "référent" not in texte
+    assert "référent" not in (html or "")
 
 
 def test_alerte_seances_a_placer_presente_si_pertinente(etat_avec_seance, session_admin, monkeypatch) -> None:
@@ -220,5 +226,12 @@ def test_alerte_seances_a_placer_presente_si_pertinente(etat_avec_seance, sessio
 
     corps_captures = _capturer_corps(monkeypatch)
     client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
-    assert "n'ont pas encore pu être placées" in corps_captures[0]
-    assert "référent" in corps_captures[0]
+    texte, html = corps_captures[0]
+    assert "n'ont pas encore pu être placées" in texte
+    assert "référent" in texte
+    # Le HTML doit porter un VRAI encart visuel (fond coloré), pas juste le
+    # même texte sans forme — retour utilisateur : « pour que cela soit bien
+    # lu dans le mail ».
+    assert html is not None
+    assert "référent" in html
+    assert "background" in html

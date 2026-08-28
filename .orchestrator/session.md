@@ -199,3 +199,10 @@ Retour utilisateur (capture à l'appui) : « les séances ne remplissent pas ent
 - 3 nouveaux tests (semestres dans le corps, alerte absente si tout placé, alerte présente avec une 2e séance non placée pour le même prof) — 10/10 passent sur ce fichier.
 - Vérifié en réel sur `/placements/manquantes` : KBR a effectivement des séances non placées en ce moment (ALO, BTO, JLE aussi) — cas réel, pas hypothétique.
 Pas de suite de tests COMPLÈTE relancée (accord utilisateur) — seulement le fichier mail concerné + tsc/build.
+
+## follow-up 20 (grille cassee corrigee + warning HTML dans le mail)
+Retour utilisateur (capture à l'appui) : « c'est pas bon dutout la sur l'interface » + « met l'invitation à placer les cours en warning pour que cela soit bien lu dans le mail ».
+- RÉGRESSION réelle du follow-up précédent trouvée et corrigée : poser `display: flex` directement sur `.sessiongrid-cell` (un `<td>`) cassait la synchronisation de hauteur entre cellules d'une même LIGNE que fait normalement un `<table>` — chaque colonne se remettait à grandir indépendamment, décalant tout visuellement (labels d'heure désalignés du contenu). Fix : la mise en page flex se fait maintenant sur un `<div class="sessiongrid-cell-inner">` DÉDIÉ à l'intérieur du `<td>` (nouveau wrapper dans `SessionGrid.tsx`), jamais sur le `<td>` lui-même — même technique que `.sessiongrid-subcols`, qui elle n'avait jamais eu ce problème car déjà un `<div>`, pas un `<td>`.
+- `main.py::_teacher_mail_text` envoie maintenant AUSSI un corps HTML (en plus du texte brut, toujours présent) — seul moyen de faire ressortir l'alerte "séances à placer" comme un vrai encart visuel (fond jaune, bordure, gras) : un `text/plain` ne peut porter aucune mise en forme. `mailer.send_email` gagne un paramètre `html: str | None` optionnel, transmis à Resend (qui choisit HTML si le client le sait afficher, texte brut sinon).
+- Tests : `_capturer_corps` capture maintenant `(texte, html)`, nouvelle assertion sur la présence d'un `background` dans le HTML quand l'alerte s'applique. 10/10 passent.
+Vérifié : tsc+build propres, tests du fichier mail concerné. Pas de suite complète relancée (accord utilisateur).

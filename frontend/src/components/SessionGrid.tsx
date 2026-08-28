@@ -134,9 +134,21 @@ export function SessionGrid({
                   if (shared.length) {
                     return (
                       <td key={d} className="sessiongrid-cell">
-                        {shared.map((r) => (
-                          <SessionBlock key={r.id} row={r} payload={payload} onSelect={onSelect} onHover={setHover} />
-                        ))}
+                        {/* Wrapper DÉDIÉ pour la mise en page flex (lecture
+                            seule : carte(s) étirée(s) sur toute la case) —
+                            jamais sur le <td> lui-même. Bug réel trouvé le
+                            28/08/2026 (capture à l'appui) : `display: flex`
+                            posé directement sur `.sessiongrid-cell` cassait
+                            la synchronisation de hauteur entre cellules
+                            D'UNE MÊME LIGNE que fait normalement un
+                            <table> — chaque colonne se remettait à
+                            grandir indépendamment, décalant tout
+                            visuellement. */}
+                        <div className="sessiongrid-cell-inner">
+                          {shared.map((r) => (
+                            <SessionBlock key={r.id} row={r} payload={payload} onSelect={onSelect} onHover={setHover} />
+                          ))}
+                        </div>
                       </td>
                     );
                   }

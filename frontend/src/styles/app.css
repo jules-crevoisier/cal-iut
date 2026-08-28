@@ -1376,23 +1376,21 @@ h1, h2, h3 {
 /* En lecture seule, la hauteur est un plancher, pas un plafond — la ligne
    grandit avec le reste de la table étirée (`.read-only-mode .sessiongrid`
    ci-dessus), au lieu de rester bloquée à 60px avec du vide en dessous.
-   `display: flex` ici (pas juste sur la table) : sans lui, la case grandit
-   bien mais la CARTE de séance à l'intérieur restait à sa hauteur de
-   contenu naturelle, laissant un vide sous elle plutôt que de remplir la
-   case (retour utilisateur 28/08/2026, capture à l'appui : « les séances ne
-   remplissent pas entièrement la hauteur des cases »). `.sessiongrid-block`
-   ci-dessous prend `flex: 1` pour combler cet espace — s'il y en a
-   plusieurs empilées dans la même case, elles se partagent la hauteur à
-   parts égales plutôt que de laisser la dernière avaler tout le vide. */
+   JAMAIS `display: flex` directement ici : bug réel trouvé le 28/08/2026
+   (capture à l'appui, toute la grille visuellement décalée) — poser
+   `display: flex` sur le <td> lui-même casse la synchronisation de hauteur
+   entre cellules D'UNE MÊME LIGNE qu'un <table> fait normalement tout seul
+   (chaque colonne se remet à grandir indépendamment de sa voisine). La
+   mise en page flex se fait donc UNIQUEMENT sur un `<div>` interne dédié
+   (`.sessiongrid-cell-inner`, cf. SessionGrid.tsx), jamais sur le <td>. */
 .read-only-mode .sessiongrid-cell {
   height: auto;
   min-height: 60px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
+.read-only-mode .sessiongrid-cell-inner,
 .read-only-mode .sessiongrid-subcols > div {
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 2px;
