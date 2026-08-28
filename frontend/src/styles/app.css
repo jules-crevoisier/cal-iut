@@ -1384,7 +1384,17 @@ h1, h2, h3 {
    mise en page flex se fait donc UNIQUEMENT sur un `<div>` interne dédié
    (`.sessiongrid-cell-inner`, cf. SessionGrid.tsx), jamais sur le <td>. */
 .read-only-mode .sessiongrid-cell {
-  height: auto;
+  /* `height: 1%` et pas `auto` — "astuce" CSS bien connue pour les cellules
+     de tableau : un `<td>` en `height: auto` ne fournit PAS de hauteur
+     définie pour la résolution des `height: 100%` de ses enfants (règle
+     spécifique aux pourcentages), même une fois réellement étiré par la
+     ligne — trouvé le 28/08/2026 (2e capture d'écran) : la case grandissait
+     bien, mais la carte à l'intérieur (`.sessiongrid-cell-inner`, `height:
+     100%`) ne suivait qu'à moitié. N'importe quelle valeur NON-`auto`
+     suffit à rendre la hauteur "définie" pour ce calcul, même minuscule —
+     `min-height: 60px` reste le vrai plancher, `1%` ne fait que déclencher
+     la bonne branche de résolution CSS. */
+  height: 1%;
   min-height: 60px;
 }
 
