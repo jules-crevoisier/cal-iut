@@ -9,8 +9,8 @@ déclenche l'import de l'appli, donc en session-scoped/autouse ici plutôt
 que dans chaque fichier.
 
 `CAL_IUT_SECRET_KEY` fixé aussi : sans lui, `auth.get_secret()` écrirait
-`data/.secret_key` au premier test qui l'utilise — un effet de bord sur le
-disque du dépôt, inutile en test.
+`data/state/.secret_key` au premier test qui l'utilise — un effet de bord
+sur le disque du dépôt, inutile en test.
 """
 
 import os
@@ -34,7 +34,7 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
     """Isole TOUS les petits fichiers JSON d'état persisté (`api/mailer.py`,
     `api/forced_pending.py`) vers un répertoire temporaire — sans ça,
     n'importe quel test qui force un placement (ordre pédagogique) ou envoie
-    un mail écrirait dans le VRAI `data/mail_log.json`/`data/
+    un mail écrirait dans le VRAI `data/state/mail_log.json`/`data/state/
     forced_pending.json` du dépôt. Autouse : la pollution serait sinon aussi
     facile à introduire par erreur dans un futur test que le bug qu'elle
     évite est difficile à remarquer après coup."""

@@ -11,7 +11,16 @@ from cal_iut.models.entities import Course, Group, Room, TeacherAvailability, Te
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom, RoomAssignmentRule
 
-DB_PATH = Path(__file__).resolve().parents[3] / "data" / "cal-iut.db"
+# `data/state/` (pas `data/` directement) — sépare ce qui doit PERSISTER
+# entre déploiements (cette base, cf. `data/state/.secret_key`, `mailer.py`,
+# `forced_pending.py`) de `data/config/`, qui doit au contraire se mettre à
+# jour à CHAQUE déploiement. Trouvé le 28/08/2026 : le volume Docker montait
+# `/app/data` en entier, donc `data/config/teacher_contacts.yaml` restait
+# figé sur son contenu du tout premier déploiement — aucune mise à jour
+# ultérieure de la config ne pouvait plus jamais atteindre le conteneur
+# (retour utilisateur : « on a les mails de tous les prof [...] alors que »
+# le site déployé affichait encore "mail inconnu"). Cf. Dockerfile.
+DB_PATH = Path(__file__).resolve().parents[3] / "data" / "state" / "cal-iut.db"
 
 
 @dataclass

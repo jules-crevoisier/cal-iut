@@ -2921,7 +2921,7 @@ scratchpad, piloté contre le Chrome déjà installé
 (`C:\Program Files\Google\Chrome\Application\chrome.exe`) via
 `executablePath`. Un run léger (30s, 3 modules) a été rejoué directement en
 base (`repo.save_run(...)`, sans repasser par `/solve`) pour peupler
-`data/cal-iut.db` sans consommer de CPU pendant que le run complet du §45
+`data/state/cal-iut.db` sans consommer de CPU pendant que le run complet du §45
 tournait encore en arrière-plan.
 
 Neuf captures (bureau : Semaine/Enseignant/Groupe/Promo/Référence-Liens/

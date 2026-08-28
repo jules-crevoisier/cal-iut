@@ -13,7 +13,7 @@ frontend/dist/
 data/exports/*.json
 data/generated/
 *.db
-!data/cal-iut.db
+!data/state/cal-iut.db
 data/test_cal_iut.db
 *.log
 .DS_Store
@@ -21,6 +21,6 @@ Thumbs.db
 .coverage
 coverage.json
 /export/
-data/.secret_key
-data/mail_log.json
-data/forced_pending.json
+data/state/.secret_key
+data/state/mail_log.json
+data/state/forced_pending.json

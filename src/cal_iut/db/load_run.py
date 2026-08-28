@@ -19,7 +19,7 @@ def load_run_from_json(
     Charge les placements d'un run déjà résolu dans la base locale.
 
     @param timetable_path - JSON exporté (ex. data/timetable_odd_fresh.json)
-    @param db_path - SQLite cible (défaut data/cal-iut.db)
+    @param db_path - SQLite cible (défaut data/state/cal-iut.db)
     @param semestre_group - Sentinel ODD/EVEN si absent du fichier
     @returns Le PlanningRun créé
     @raises ValueError si le fichier est vide ou sans placements
