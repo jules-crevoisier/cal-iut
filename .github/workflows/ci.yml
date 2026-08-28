@@ -31,12 +31,12 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Tests
-        # `CAL_IUT_PASSWORD`/`CAL_IUT_SECRET_KEY` : `tests/conftest.py` pose
-        # déjà des valeurs par défaut, mais les fixer ici rend la CI
-        # indépendante de cet ordre d'import.
-        env:
-          CAL_IUT_PASSWORD: ci-test-password
-          CAL_IUT_SECRET_KEY: ci-test-secret-key
+        # AUCUNE variable d'environnement d'authentification ici, volontairement.
+        # `tests/conftest.py` les pose lui-même via `setdefault`, et les tests
+        # se connectent avec CETTE valeur en dur. Les fixer aussi dans la CI
+        # (première version de ce fichier) les rendait prioritaires sur le
+        # `setdefault` : 49 tests tombaient en 401, alors qu'ils passaient en
+        # local. Une seule source de vérité pour ces valeurs : le conftest.
         run: pytest -q -m "not slow"
 
   frontend:
