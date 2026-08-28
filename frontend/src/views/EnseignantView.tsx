@@ -61,8 +61,11 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
   const rowsThisWeek = solverWeek === null ? [] : allItems.filter((r) => r.w === solverWeek);
 
-  const countByWeek = new Map<number, number>();
-  for (const it of allItems) countByWeek.set(it.w, (countByWeek.get(it.w) ?? 0) + 1);
+  // Heures, pas un compte de séances — retour utilisateur 28/08/2026 (relayé
+  // depuis Discord, idée de Jordan) : « le nombre d'heure total de la
+  // semaine ça serait cool si il pouvait être montré ».
+  const hoursByWeek = new Map<number, number>();
+  for (const it of allItems) hoursByWeek.set(it.w, (hoursByWeek.get(it.w) ?? 0) + (it.dur || 1) * 1.5);
 
   const info = payload.teachers.find((t) => t.code === code);
 
@@ -105,9 +108,10 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
           <div className="field weekfield">
             <WeekBar
               weekRows={payload.weekRows}
-              countByWeekIndex={countByWeek}
+              countByWeekIndex={hoursByWeek}
               selected={displayWeek}
               onSelect={setDisplayWeek}
+              unit="heures"
             />
           </div>
         )}
