@@ -56,6 +56,11 @@ def validate_move(
     room_id: str | None = None,
     sessions_by_id: dict[str, object] | None = None,
     groups: list[Group] | None = None,
+    # Salles combinées (retour utilisateur 28/08/2026, cf.
+    # `solver/rooms.py::_build_conflict_map`) : occuper "h007_h008" doit
+    # aussi ressortir en conflit pour "h007"/"h008" pris individuellement,
+    # et réciproquement. Vide/absent = comportement d'avant, inchangé.
+    conflicting_room_ids: set[str] | None = None,
 ) -> ValidationResult:
     """
     Vérifie qu'un déplacement manuel ne crée pas de conflit dur.
@@ -112,7 +117,7 @@ def validate_move(
                 f"({', '.join(placement.teacher_codes)})"
             )
 
-        if room_id and getattr(placement, "room_id", None) == room_id:
+        if room_id and getattr(placement, "room_id", None) in ({room_id} | (conflicting_room_ids or set())):
             hard.append(f"Conflit salle : {placement.course_code} occupe déjà cette salle")
 
     if slot == 2 and day >= 0:

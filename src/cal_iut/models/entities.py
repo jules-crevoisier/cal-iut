@@ -26,6 +26,14 @@ class RoomType(StrEnum):
     TP_VR_RESEAUX = "tp_vr_reseaux"  # H.205 — baie serveurs, VR, débordement H.201/203
     RESERVE = "reserve"  # H.001 — exclue des cours (usage BDE)
     EVALUATION = "evaluation"  # A.018 — salle d'évaluation dédiée, toute séance is_eval
+    # Salle "fusion" virtuelle (H.007+H.008, H.201+H.203) — retour utilisateur
+    # 28/08/2026 : deux salles collées, cloison ouvrable, réservables comme UNE
+    # SEULE grande salle. `Room.combines` porte les salles individuelles
+    # recouvertes ; cf. `solver/rooms.py::_build_conflict_map` pour le blocage
+    # croisé (occuper la version fusionnée bloque chaque moitié, et
+    # inversement — jamais l'inverse entre les deux moitiés elles-mêmes,
+    # qui restent réservables indépendamment cloison fermée).
+    COMBINED = "combined"
     # Anciens types génériques conservés pour compat / règles héritées
     LABO_DEV = "labo_dev"
     STUDIO_CREA = "studio_crea"
@@ -76,6 +84,10 @@ class Room(BaseModel):
     capacity: int
     room_type: RoomType
     equipment: list[str] = Field(default_factory=list)
+    # Salles individuelles recouvertes par CETTE salle si elle est une
+    # fusion (`room_type == COMBINED`) — ex. h007_h008.combines = [h007, h008].
+    # Vide sur une salle "normale". Cf. solver/rooms.py::_build_conflict_map.
+    combines: list[str] = Field(default_factory=list)
 
 
 class SchedulingConstraint(BaseModel):
