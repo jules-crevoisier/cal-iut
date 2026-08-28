@@ -374,6 +374,16 @@ export interface TeacherMailPreview {
   name: string;
   email: string | null;
   sent_at: string | null;
+  /** Première ouverture détectée (pixel de suivi). `null` ne prouve PAS que
+   * le mail n'a pas été lu : beaucoup de clients bloquent les images. */
+  opened_at: string | null;
+}
+
+/** Le mail EXACT tel qu'il partira pour ce destinataire — rendu par la même
+ * fonction que l'envoi réel côté serveur, pour qu'un aperçu ne puisse pas
+ * diverger de ce qui part vraiment. */
+export function apercuMailProf(code: string): Promise<{ subject: string; text: string; html: string }> {
+  return request(`/mail/teacher-links/apercu/${encodeURIComponent(code)}`);
 }
 
 export interface TeacherMailPreviewList {

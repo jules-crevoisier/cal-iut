@@ -162,6 +162,12 @@ _PROTECTED_PREFIXES = (
 # code). Un oubli doit casser bruyamment, jamais ouvrir l'accès.
 _PUBLIC_PATHS = frozenset({"/auth/login", "/auth/logout", "/auth/status", "/health"})
 
+# Préfixes publics qui tombent DANS un préfixe protégé — l'exception doit
+# donc être testée avant lui. Seul cas à ce jour : le pixel de suivi
+# d'ouverture des mails, chargé par le client mail de l'enseignant, qui ne
+# peut par nature présenter aucune session ni aucun lien perso.
+_PUBLIC_PREFIXES = ("/mail/pixel/",)
+
 
 def _verifier_couverture_auth() -> list[str]:
     """Chemins ni protégés ni explicitement publics — vide = tout est couvert."""
@@ -172,7 +178,9 @@ def _verifier_couverture_auth() -> list[str]:
             continue
         if chemin.startswith(("/openapi", "/docs", "/redoc")):
             continue
-        if chemin in _PUBLIC_PATHS or chemin.startswith(_PROTECTED_PREFIXES):
+        if chemin in _PUBLIC_PATHS or chemin.startswith(_PUBLIC_PREFIXES):
+            continue
+        if chemin.startswith(_PROTECTED_PREFIXES):
             continue
         oublis.append(chemin)
     return sorted(oublis)
@@ -181,6 +189,8 @@ def _verifier_couverture_auth() -> list[str]:
 @app.middleware("http")
 async def require_auth(request: Request, call_next):
     path = request.url.path
+    if path.startswith(_PUBLIC_PREFIXES):
+        return await call_next(request)
     if not path.startswith(_PROTECTED_PREFIXES):
         return await call_next(request)
 
@@ -445,8 +455,23 @@ def _build_app_context(state: object) -> _AppContext:
     )
 
 
+# Clés du payload retirées pour une requête NON authentifiée (lien personnel
+# public). Deux natures :
+#   - données personnelles : adresses mail des enseignants, et leurs
+#     contraintes déclarées en texte libre (« mercredi toute la journée »,
+#     « possible lundi si besoin »...) — 32 adresses et une trentaine de
+#     contraintes se retrouvaient sur une URL publique, alors qu'un lien
+#     perso n'a besoin QUE d'afficher un planning ;
+#   - données d'administration : inventaire des séances non placées,
+#     vérifications de règles, exceptions — jamais affichées en lecture
+#     seule, aucune raison d'être envoyées.
+# Le nom des enseignants (`teacherLabels`) reste, lui : il s'affiche sur les
+# séances de n'importe quel emploi du temps, c'est l'objet même de l'outil.
+_CLES_PRIVEES_PAYLOAD = ("teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions")
+
+
 @app.get("/app-state")
-def app_state() -> dict[str, object]:
+def app_state(request: Request) -> dict[str, object]:
     """
     Tout l'état applicatif en JSON — même calcul (`build_payload`) que celui
     embarqué dans la page `/legacy`, exposé ici comme API pour le frontend
@@ -461,7 +486,7 @@ def app_state() -> dict[str, object]:
     from cal_iut.export.html_view import build_payload
     from cal_iut.ingestion.config_loader import load_teacher_contacts
 
-    return build_payload(
+    payload = build_payload(
         ctx.timetable_dict,
         state.sessions,
         state.groups,
@@ -476,6 +501,16 @@ def app_state() -> dict[str, object]:
         teacher_contacts=load_teacher_contacts(state.config_dir),
         sae_supervisor_dates=ctx.sae_supervisor_dates,
     )
+
+    # Session admin (mot de passe saisi) = payload complet. Lien personnel
+    # public = version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`). Filtré ICI,
+    # à la sortie, plutôt qu'en amont dans `build_payload` : une seule
+    # liste à relire pour savoir ce qui sort, et `/legacy` (page admin)
+    # continue d'utiliser le calcul complet sans condition.
+    if auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
+        return payload
+    vide: dict[str, object] = {"teacherEmails": {}}
+    return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
 
 
 @app.get("/legacy", response_class=HTMLResponse)
@@ -2337,6 +2372,19 @@ def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[
     import html as _html
 
     e = _html.escape
+    # Pixel de suivi d'ouverture (retour utilisateur 28/08/2026) — présent
+    # UNIQUEMENT dans la version HTML : la version texte brut ne peut pas
+    # porter d'image, et y coller une URL nue serait à la fois inutile et
+    # visible. Absent si l'URL publique n'est pas configurée : mieux vaut
+    # aucun suivi qu'une balise pointant vers une adresse invalide dans un
+    # mail réel.
+    try:
+        pixel_html = (
+            f'<img src="{e(mailer.public_base_url())}/mail/pixel/{e(code)}.gif" '
+            'width="1" height="1" alt="" style="display:none">'
+        )
+    except mailer.MailerNotConfigured:
+        pixel_html = ""
     warning_html = (
         '<div style="margin:16px 0;padding:12px 16px;background:#fff3cd;'
         "border:1px solid #f0ad4e;border-left:4px solid #f0ad4e;border-radius:4px;"
@@ -2357,9 +2405,48 @@ def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[
         f"{warning_html}"
         "<p>Une question ? Contactez Kyllian Bresson au 07 81 25 78 87.</p>"
         "<p>Cordialement,</p>"
+        f"{pixel_html}"
         "</div>"
     )
     return "Votre emploi du temps MMI", texte, html_body
+
+
+@app.get("/mail/pixel/{code}.gif")
+def mail_pixel(code: str) -> Response:
+    """Pixel de suivi d'ouverture — appelé par le client mail de
+    l'enseignant, donc OBLIGATOIREMENT accessible sans authentification
+    (cf. `_PUBLIC_PATHS`) : aucun client mail ne peut se connecter.
+    N'expose rien en retour (une image vide de 43 octets) et n'enregistre
+    que la PREMIÈRE ouverture d'un envoi déjà journalisé.
+
+    Répond toujours 200 avec l'image, même pour un code inconnu : renvoyer
+    une erreur afficherait une icône d'image cassée dans le mail d'un
+    enseignant, pour un problème qui ne le concerne pas."""
+    mailer.record_opened(code)
+    return Response(
+        content=mailer.PIXEL_GIF,
+        media_type="image/gif",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
+    )
+
+
+@app.get("/mail/teacher-links/apercu/{code}", dependencies=[Depends(require_admin_session)])
+def mail_teacher_link_apercu(code: str) -> dict[str, str]:
+    """Le mail EXACT tel qu'il partira, pour ce destinataire (retour
+    utilisateur 28/08/2026 : pouvoir relire avant d'envoyer à 32 personnes).
+    Rendu par la même fonction que l'envoi réel (`_teacher_mail_text`) —
+    un aperçu calculé autrement finirait tôt ou tard par diverger de ce qui
+    part vraiment, ce qui est pire que pas d'aperçu du tout."""
+    state = get_state()
+    noms = _noms_enseignants(state)
+    try:
+        lien = mailer.personal_link(code)
+    except mailer.MailerNotConfigured:
+        # Aperçu utile même sans URL publique configurée : on montre la
+        # forme du lien, en disant clairement qu'elle n'est pas définitive.
+        lien = f"(CAL_IUT_PUBLIC_URL non configurée)/#vue=prof&prof={code}&mode=prof&t={code}"
+    sujet, texte, html_body = _teacher_mail_text(state, code, noms.get(code, code), lien)
+    return {"subject": sujet, "text": texte, "html": html_body}
 
 
 @app.get("/mail/teacher-links", response_model=TeacherMailPreviewListResponse, dependencies=[Depends(require_admin_session)])
@@ -2384,6 +2471,7 @@ def mail_teacher_links_preview() -> TeacherMailPreviewListResponse:
                 name=noms.get(code, code),
                 email=contacts.get(code),
                 sent_at=log.get(code, {}).get("sent_at"),
+                opened_at=log.get(code, {}).get("opened_at"),
             )
             for code in codes
         ],

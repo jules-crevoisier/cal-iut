@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  apercuMailProf,
   fetchTeacherMailPreview,
   sendTeacherMails,
   type TeacherMailPreview,
@@ -24,6 +25,24 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<TeacherMailSendResult[] | null>(null);
+  // Aperçu du mail RÉEL avant envoi (retour utilisateur 28/08/2026) — on
+  // n'envoie pas à 32 personnes sans avoir pu relire le message.
+  const [apercu, setApercu] = useState<{ code: string; subject: string; text: string } | null>(null);
+  const [apercuEnCours, setApercuEnCours] = useState(false);
+
+  const ouvrirApercu = async (code: string) => {
+    setApercuEnCours(true);
+    try {
+      const a = await apercuMailProf(code);
+      setApercu({ code, subject: a.subject, text: a.text });
+    } catch (err) {
+      setState({ status: "error", message: err instanceof Error ? err.message : "Aperçu indisponible" });
+    } finally {
+      setApercuEnCours(false);
+    }
+  };
+
+  const dateCourte = (iso: string) => new Date(iso).toLocaleDateString("fr-FR");
 
   useEffect(() => {
     fetchTeacherMailPreview()
@@ -104,19 +123,52 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
                   </span>
                   <span className="mailmodal-email mono muted">{t.email ?? "adresse inconnue"}</span>
                   <span className="mailmodal-status">
-                    {resultat ? (
-                      resultat.ok ? (
-                        <span className="mailmodal-ok">Envoyé ✓</span>
-                      ) : (
-                        <span className="mailmodal-err" title={resultat.error ?? ""}>Échec ✗</span>
-                      )
+                    {/* Statut PERSISTANT (retour utilisateur 28/08/2026 :
+                        « une validation qui reste à côté qui dit que le mail
+                        a été envoyé ») : l'issue du dernier envoi de cette
+                        session prime, sinon on retombe sur le journal, qui
+                        lui survit aux rechargements et redémarrages. */}
+                    {resultat && !resultat.ok ? (
+                      <span className="mailmodal-err" title={resultat.error ?? ""}>Échec ✗</span>
+                    ) : t.opened_at ? (
+                      <span className="mailmodal-ok" title={`Ouverture détectée le ${dateCourte(t.opened_at)}`}>
+                        Lu ✓✓
+                      </span>
                     ) : t.sent_at ? (
-                      <span className="muted">Déjà envoyé le {new Date(t.sent_at).toLocaleDateString("fr-FR")}</span>
+                      <span className="mailmodal-ok">Envoyé le {dateCourte(t.sent_at)}</span>
                     ) : null}
+                    {t.email && (
+                      <button
+                        type="button"
+                        className="mailmodal-apercu"
+                        disabled={apercuEnCours}
+                        onClick={(e) => {
+                          e.preventDefault(); // dans un <label> : ne pas cocher la case
+                          void ouvrirApercu(t.code);
+                        }}
+                      >
+                        Aperçu
+                      </button>
+                    )}
                   </span>
                 </label>
               );
             })}
+          </div>
+        )}
+
+        {apercu && (
+          <div className="mailapercu">
+            <div className="mailapercu-tete">
+              <strong>Aperçu — {apercu.code}</strong>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setApercu(null)}>
+                Fermer l'aperçu
+              </button>
+            </div>
+            <div className="mailapercu-sujet">Objet : {apercu.subject}</div>
+            {/* Le texte brut du mail, tel quel — `white-space: pre-wrap` en
+                CSS pour conserver les retours à la ligne réels du message. */}
+            <pre className="mailapercu-corps">{apercu.text}</pre>
           </div>
         )}
 

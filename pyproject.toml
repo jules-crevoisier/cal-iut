@@ -43,3 +43,11 @@ target-version = "py311"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    # Tests qui font tourner CP-SAT sur des données réelles : ~9 min à eux
+    # seuls sur les ~10 min de la suite complète. Exclus de la CI de chaque
+    # push (`pytest -m "not slow"`, ~1 min 40) pour que le retour reste
+    # consultable ; à relancer en entier (`pytest` sans filtre) avant une
+    # mise en production ou après un changement touchant le solveur.
+    "slow: test lourd (résolution CP-SAT réelle)",
+]

@@ -18,6 +18,12 @@ from cal_iut.solver.cpsat import SolverConfig, TimetableSolver
 from cal_iut.solver.quality import compute_quality
 from cal_iut.solver.rooms import assign_rooms, parse_room_rules
 
+
+# Tout ce module fait tourner CP-SAT sur des données réelles (~9 min) :
+# exclu de la CI rapide, cf. `pyproject.toml [tool.pytest.ini_options]`.
+pytestmark = pytest.mark.slow
+
+
 # Exports officiels figés par `scripts/build_contraintes.py` — même copie que
 # celle dont tous les `contraintes/*.json` sont dérivés (`ingestion/fetch.py`
 # la préfère aussi). `data/exports/` est gitignoré : les tests ne peuvent pas

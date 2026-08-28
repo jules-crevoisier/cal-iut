@@ -33,6 +33,19 @@ GROUPES = load_groups(ROOT / "data" / "config")
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _sans_session():
+    """Repart d'un client SANS cookie avant chaque test. Le `TestClient` est
+    partagé par le module et conserve les cookies : un test qui se connecte
+    laissait sa session active pour les suivants, si bien qu'un test censé
+    vérifier l'accès PUBLIC recevait en réalité le payload admin — il
+    passait isolément et échouait dans la suite complète. Chaque test
+    déclare donc désormais son authentification lui-même."""
+    client.cookies.clear()
+    yield
+    client.cookies.clear()
+
+
 def test_une_valeur_non_vide_authentifie() -> None:
     assert auth.verify_personal_link_param("KBR") is True
     assert auth.verify_personal_link_param("but1-td-ab") is True
@@ -106,3 +119,41 @@ def test_app_state_expose_le_code_en_clair_pour_profs_et_groupes(etat_avec_seanc
     corps = client.get("/app-state").json()
     assert corps["teacherTokens"]["KBR"] == "KBR"
     assert corps["groupTokens"]["but1-td-ab"] == "but1-td-ab"
+
+
+# --------------------------------------------------------------------------
+# Données personnelles hors du payload public — retour utilisateur
+# 28/08/2026 : « on veut cacher les données personnelles, il faut juste que
+# les liens des profs et des parcours soient simples d'accès sans mot de
+# passe ».
+# --------------------------------------------------------------------------
+
+
+def test_un_lien_public_n_expose_ni_mails_ni_contraintes(etat_avec_seance) -> None:
+    corps = client.get("/app-state?t=KBR").json()
+    assert corps["teacherEmails"] == {}
+    assert corps["teachers"] == []
+    # Données d'administration, jamais affichées en lecture seule.
+    assert corps["seancesNonPlacees"] == []
+    assert corps["ruleChecks"] == []
+    assert corps["exceptions"] == []
+
+
+def test_un_lien_public_garde_de_quoi_afficher_le_planning(etat_avec_seance) -> None:
+    """Le filtrage ne doit pas casser ce que la page perso affiche vraiment :
+    séances, noms d'enseignants, semaines, groupes."""
+    corps = client.get("/app-state?t=KBR").json()
+    assert corps["rows"], "les séances doivent rester"
+    assert corps["teacherLabels"], "les noms restent : ils figurent sur tout emploi du temps"
+    assert corps["weekRows"] and corps["groupLabels"]
+    assert corps["teacherTokens"] and corps["groupTokens"]
+
+
+def test_une_session_admin_recoit_le_payload_complet(etat_avec_seance, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "cal_iut.ingestion.config_loader.load_teacher_contacts",
+        lambda config_dir: {"KBR": "kyllian.bresson@univ-reims.fr"},
+    )
+    assert client.post("/auth/login", json={"password": "test-password"}).status_code == 200
+    corps = client.get("/app-state").json()
+    assert corps["teacherEmails"] == {"KBR": "kyllian.bresson@univ-reims.fr"}
