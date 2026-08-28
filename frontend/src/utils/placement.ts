@@ -15,6 +15,7 @@
  */
 
 import { placerSeance } from "../api/client";
+import { confirmAsync } from "./confirmDialog";
 
 /** Le serveur renvoie le détail structuré d'un conflit (`hard_conflicts`/
  * `soft_warnings`) comme `detail` JSON d'un 409 — `request()` le rejette en
@@ -50,9 +51,11 @@ export async function placerAvecConfirmation(
     if (!detail) {
       return { ok: false, message: e instanceof Error ? e.message : "Erreur de placement" };
     }
-    const forcer = window.confirm(
-      `Conflit détecté :\n${[...detail.hard_conflicts, ...detail.soft_warnings].join("\n")}\n\nForcer le placement quand même ?`,
-    );
+    // Modale interne, pas `window.confirm` — cf. utils/confirmDialog.ts
+    // (retour utilisateur 28/08/2026, popups navigateur désactivées).
+    const forcer = await confirmAsync([...detail.hard_conflicts, ...detail.soft_warnings].join("\n"), {
+      confirmLabel: "Forcer le placement",
+    });
     if (!forcer) return { ok: false, message: "Placement annulé." };
     try {
       await placerSeance(sessionId, { ...cible, force: true });

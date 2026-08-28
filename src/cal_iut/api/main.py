@@ -1241,15 +1241,19 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
     _check_move_editable(state, session_id, match.week, body.week)
 
     # Règles institutionnelles/pédagogiques : JAMAIS contournables via
-    # `force`, contrairement aux conflits de ressources plus bas (un humain
-    # peut avoir une bonne raison ponctuelle de forcer un conflit de
-    # ressources ; casser le verrou PAC, la sanctuarisation SAE, l'ordre
-    # pédagogique ou une synchro duo n'en a jamais une bonne). Retour
-    # utilisateur : "vérifie bien toutes les contraintes avant que ça
-    # s'effectue" — avant ce correctif, ces règles ne servaient qu'à filtrer
-    # les suggestions, un glisser-déposer direct sur une case arbitraire
-    # (hors suggestion) pouvait les violer sans aucun garde-fou serveur.
-    if session and _is_duo_synced(session, state.teacher_duos):
+    # `force` (un humain peut avoir une bonne raison ponctuelle de forcer un
+    # conflit de ressources ; casser le verrou PAC, la sanctuarisation SAE
+    # ou l'ordre pédagogique n'en a jamais une bonne). Retour utilisateur :
+    # "vérifie bien toutes les contraintes avant que ça s'effectue" — avant
+    # ce correctif, ces règles ne servaient qu'à filtrer les suggestions, un
+    # glisser-déposer direct sur une case arbitraire (hors suggestion)
+    # pouvait les violer sans aucun garde-fou serveur.
+    #
+    # La synchro duo (WR110/112/113) EST contournable via `force` depuis le
+    # 28/08/2026 (retour utilisateur : « il faut que je puisse forcer ») —
+    # à la différence des règles ci-dessus, c'est une optimisation de
+    # confort, pas une contrainte réglementaire.
+    if session and _is_duo_synced(session, state.teacher_duos) and not body.force:
         raise HTTPException(409, detail={
             "message": "Conflit", "hard_conflicts": [_DUO_SYNC_NOTE],
             "soft_warnings": [], "suggestions": [], "suggestions_note": _DUO_SYNC_NOTE,
@@ -1613,7 +1617,15 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     if statut != "future":
         raise HTTPException(409, f"Semaine {body.week + 1} non modifiable (statut : {statut})")
 
-    if _is_duo_synced(session, state.teacher_duos):
+    # `force` contourne la synchro duo depuis le 28/08/2026 (retour
+    # utilisateur : « il faut que je puisse forcer ») — jusque-là jamais
+    # contournable au même titre que PAC/SAE/ordre pédagogique (cf.
+    # commentaire dans `move_session` ci-dessus, écrit AVANT ce retour).
+    # Contrairement à ces règles institutionnelles, une synchro duo est une
+    # optimisation de confort (garder deux moitiés de cours alignées), pas
+    # une contrainte réglementaire — un humain qui force ici sait qu'il
+    # désynchronise sciemment le binôme.
+    if _is_duo_synced(session, state.teacher_duos) and not body.force:
         raise HTTPException(409, detail={
             "message": "Conflit", "hard_conflicts": [_DUO_SYNC_NOTE],
             "soft_warnings": [], "suggestions": [], "suggestions_note": _DUO_SYNC_NOTE,

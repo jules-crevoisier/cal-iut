@@ -16,6 +16,7 @@ import {
 import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { ConfirmModal } from "./components/ConfirmModal";
 import { LoginGate } from "./components/LoginGate";
 import { PageHeader } from "./components/PageHeader";
 import { SideNav } from "./components/SideNav";
@@ -566,6 +567,8 @@ export function App() {
       {appPayload && !readOnlyTarget && (
         <GlobalSearch payload={appPayload} open={search} onClose={() => setSearch(false)} onNavigate={setRoute} />
       )}
+      {/* Une seule instance pour toute l'app — cf. utils/confirmDialog.ts. */}
+      <ConfirmModal />
     </div>
   );
 }
