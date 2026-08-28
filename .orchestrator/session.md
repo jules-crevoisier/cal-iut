@@ -206,3 +206,9 @@ Retour utilisateur (capture à l'appui) : « c'est pas bon dutout la sur l'inter
 - `main.py::_teacher_mail_text` envoie maintenant AUSSI un corps HTML (en plus du texte brut, toujours présent) — seul moyen de faire ressortir l'alerte "séances à placer" comme un vrai encart visuel (fond jaune, bordure, gras) : un `text/plain` ne peut porter aucune mise en forme. `mailer.send_email` gagne un paramètre `html: str | None` optionnel, transmis à Resend (qui choisit HTML si le client le sait afficher, texte brut sinon).
 - Tests : `_capturer_corps` capture maintenant `(texte, html)`, nouvelle assertion sur la présence d'un `background` dans le HTML quand l'alerte s'applique. 10/10 passent.
 Vérifié : tsc+build propres, tests du fichier mail concerné. Pas de suite complète relancée (accord utilisateur).
+
+## follow-up 21 (carte ne remplissait que ~50% de la case, vraie cause CSS)
+Retour utilisateur (2e capture) : la grille est maintenant bien alignée, mais les cartes ne remplissent qu'environ 50% de la hauteur de leur case.
+Cause : `.sessiongrid-cell` (`<td>`) posé en `height: auto` — un `<td>` en `auto` ne fournit PAS de hauteur "définie" pour la résolution des `height: 100%` de ses enfants, MÊME UNE FOIS réellement étiré par la ligne du tableau (règle CSS spécifique aux pourcentages, indépendante de la taille réellement rendue). `.sessiongrid-cell-inner { height: 100% }` ne pouvait donc jamais vraiment se résoudre.
+Fix : "astuce" CSS bien connue et documentée pour ce cas précis — `height: 1%` au lieu de `auto` sur `.read-only-mode .sessiongrid-cell` (n'importe quelle valeur NON-auto suffit à déclencher la bonne branche de résolution ; `min-height: 60px` reste le vrai plancher, la hauteur réellement rendue vient toujours de l'étirement de la ligne).
+tsc+build propres. Pas de suite de tests relancée (100% CSS, accord utilisateur). Toujours pas de vérification visuelle possible ici — à confirmer par l'utilisateur après déploiement.
