@@ -26,7 +26,14 @@ from cal_iut.api.schemas import (
     QualityResponse,
     RegenRequest,
     RegenResultResponse,
+    CompletionResponse,
+    CreneauLibreResponse,
+    CreneauxLibresResponse,
     RoomMeta,
+    SeanceAPlacerResponse,
+    SeancePlaceeAutoResponse,
+    SeanceRefuseeResponse,
+    SeancesAPlacerResponse,
     SlotSuggestionResponse,
     SolveRequest,
     TimetableResponse,
@@ -46,6 +53,7 @@ from cal_iut.ingestion.config_loader import (
     load_objective_weights,
     load_room_assignment_rules,
     load_rooms,
+    load_room_reservations,
     load_teacher_availability,
     load_teacher_duos,
 )
@@ -57,6 +65,14 @@ from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.cpsat import PlacedSession, SolverConfig, TimetableSolver
 from cal_iut.solver.quality import compute_quality
 from cal_iut.solver.rooms import PlacedSessionWithRoom, assign_rooms, parse_room_rules
+
+def _export_semestre(state) -> str:
+    """Semestre servant de référence temporelle à l'export (dates, numéros de
+    semaine). Même résolution que la régénération, réutilisée telle quelle."""
+    from cal_iut.api.regen import resolve_semestre
+
+    return resolve_semestre(state)
+
 
 YEAR_DEFINITIONS: list[tuple[int, str, list[str]]] = [
     (1, "1re année (S1–S2)", ["S1", "S2"]),
@@ -124,6 +140,7 @@ def startup() -> None:
     state.groups = load_groups(CONFIG_DIR)
     state.rooms = load_rooms(CONFIG_DIR)
     state.room_rules = parse_room_rules(load_room_assignment_rules(CONFIG_DIR))
+    state.room_reservations = load_room_reservations(CONFIG_DIR, state.calendar)
     state.teacher_duos = load_teacher_duos(CONFIG_DIR)
 
     yaml_teachers = load_teacher_availability(CONFIG_DIR)
@@ -515,7 +532,10 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
     placements = _merge_locked_placements(result.placements, locked, state.timetable)
 
     with_rooms = (
-        assign_rooms(placements, sessions_by_id, state.rooms, state.groups, state.room_rules, state.teacher_duos)
+        assign_rooms(
+            placements, sessions_by_id, state.rooms, state.groups, state.room_rules,
+            state.teacher_duos, reserved=state.room_reservations,
+        )
         if body.assign_rooms
         else [
             PlacedSessionWithRoom(
@@ -779,7 +799,10 @@ def export_json() -> list[dict[str, object]]:
     state = get_state()
     if not state.timetable:
         raise HTTPException(404, "No timetable")
-    rows = build_export_rows(state.timetable, state.sessions_by_id)
+    rows = build_export_rows(
+        state.timetable, state.sessions_by_id,
+        state.calendar, semester_week_offset(state.calendar, _export_semestre(state)),
+    )
     return to_json(rows)
 
 
@@ -788,7 +811,10 @@ def export_csv() -> Response:
     state = get_state()
     if not state.timetable:
         raise HTTPException(404, "No timetable")
-    rows = build_export_rows(state.timetable, state.sessions_by_id)
+    rows = build_export_rows(
+        state.timetable, state.sessions_by_id,
+        state.calendar, semester_week_offset(state.calendar, _export_semestre(state)),
+    )
     content = to_csv(rows)
     return Response(content=content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=emploi_du_temps.csv"})
 
@@ -846,6 +872,7 @@ def _resolve_room(state: object, session: object, week: int, day: int, slot: int
     return find_room_for_slot(
         session, week, day, slot, state.timetable, state.sessions_by_id,
         state.rooms, state.groups, state.room_rules, prefer_room_id=prefer_room_id,
+        reserved=getattr(state, "room_reservations", None),
     )
 
 
@@ -871,7 +898,7 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
         sae_windows_as_week_days,
     )
     from cal_iut.solver.constraints import sae_blocked_days_by_group, sae_blocked_days_by_parcours
-    from cal_iut.solver.decomposed import _build_sequence_neighbors, _movable_bounds
+    from cal_iut.solver.decomposed import FI_MAX_WEEK_DEFAULT, _build_sequence_neighbors, _movable_bounds
 
     week_offset = semester_week_offset(state.calendar, semestre)
     n_weeks = (max((p.week for p in state.timetable), default=-1)) + 1
@@ -883,6 +910,44 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
         for week in range(n_weeks):
             for slot in (3, 4, 5):
                 extra_blocked.add((week, 3, slot))
+
+    # Fin de semestre FI (retour utilisateur 27/08/2026 : « les FI doivent
+    # finir leur semestre le 1er février, les FC eux ont jusqu'au 12 mars »)
+    # — jamais pour la FC, symétrique du verrou PAC ci-dessus. Trouvé le
+    # même jour : `assign_weeks` respecte déjà cette borne dès la génération
+    # (`fi_max_week`), mais ce chemin manuel (glisser-déposer, suggestions,
+    # `cal-iut completer`) ne la connaissait pas du tout — une séance FI
+    # manquante pouvait être "complétée" avec succès sur une semaine hors
+    # délai, aussi silencieusement que les 76 séances FC placées hors
+    # présence avant le correctif `alternance_presence` du même jour.
+    if "FC" not in session.parcours:
+        for week in range(FI_MAX_WEEK_DEFAULT + 1, n_weeks):
+            for day in range(5):
+                for slot in range(6):
+                    extra_blocked.add((week, day, slot))
+
+    # Alternants FC : présents à l'IUT seulement certains jours (calendrier
+    # d'alternance). Le solveur l'impose comme contrainte DURE
+    # (`add_student_presence_constraints`) ; ce chemin — placement manuel,
+    # suggestions, complétion automatique — n'en avait AUCUNE connaissance
+    # jusqu'au 27/08/2026, découvert en auditant un run complété : 76 séances
+    # FC placées alors que les étudiants étaient en entreprise. Jamais
+    # contournable, au même titre que le verrou PAC ci-dessus.
+    if "FC" in session.parcours:
+        presence = next(
+            (p for p in (state.student_presences or []) if session.parcours in p.parcours_keys),
+            None,
+        )
+        if presence and presence.presence_dates:
+            from cal_iut.ingestion.constraints_loader import allowed_week_days_for_parcours
+
+            allowed_days = allowed_week_days_for_parcours(presence, state.calendar, week_offset, n_weeks)
+            if allowed_days:
+                for week in range(n_weeks):
+                    for day in range(5):
+                        if (week, day) not in allowed_days:
+                            for slot in range(6):
+                                extra_blocked.add((week, day, slot))
 
     planning = load_mmi_planning(state.config_dir.parents[1], semestre)
     # Événements fixes : seuls ceux du parcours de la séance (ou sans parcours
@@ -912,10 +977,54 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
     # Ordre pédagogique : mêmes bornes que la régénération ciblée
     # (`_movable_bounds`, déjà utilisé par `api/regen.py`) — ne jamais
     # autoriser une semaine qui violerait l'ordre avec un voisin de séquence.
-    neighbors = _build_sequence_neighbors(state.sessions)
+    # `state.groups` : sans lui, les suggestions de créneau proposeraient des
+    # semaines qui placent un CM après les TD qu'il doit précéder (les paires
+    # inter-granularités CM promo ↔ TD/TP de sous-groupe seraient ignorées).
+    neighbors = _build_sequence_neighbors(state.sessions, state.groups)
     week_by_session = {p.session_id: p.week for p in state.timetable}
     lo, hi = _movable_bounds(session.id, neighbors, week_by_session, n_weeks)
     allowed_weeks = set(range(lo, hi + 1))
+
+    # Affinage AU CRÉNEAU sur les deux semaines-limites, ajouté le 27/08/2026.
+    # `_movable_bounds` ne borne qu'à la SEMAINE (résolution utilisée pour le
+    # rééquilibrage, moins coûteuse) — mais l'ordre pédagogique se vérifie au
+    # créneau précis (comparaison stricte, cf. `export/html_view.py::
+    # _rule_checks`, comparaison `t_of[a] < t_of[b]`). Deux séances liées
+    # peuvent légitimement PARTAGER une semaine ; il faut alors seulement
+    # garantir que leur jour/créneau respecte encore le sens de la relation.
+    #
+    # Trouvé en auditant un run complété : 102 séances (« ordre pédagogique
+    # CM→TD→TP ») et 111 paires (« vu par l'étudiant ») en semaine correcte
+    # mais créneau incorrect — le placement manuel et la complétion
+    # automatique acceptaient sans le savoir des créneaux « techniquement
+    # dans les clous » côté semaine, mais chronologiquement à l'envers.
+    from cal_iut.models.timetable import DAYS_PER_WEEK as _DPW
+    from cal_iut.models.timetable import SLOTS_PER_DAY as _SPD
+
+    preds, succs = neighbors.get(session.id, ([], []))
+    placement_by_id = {p.session_id: p for p in state.timetable}
+    temps_preds_a_lo = [
+        placement_by_id[pid].day * _SPD + placement_by_id[pid].slot
+        for pid in preds
+        if pid in placement_by_id and week_by_session.get(pid) == lo
+    ]
+    if temps_preds_a_lo:
+        seuil = max(temps_preds_a_lo)
+        for day in range(_DPW):
+            for slot in range(_SPD):
+                if day * _SPD + slot <= seuil:
+                    extra_blocked.add((lo, day, slot))
+    temps_succs_a_hi = [
+        placement_by_id[sid].day * _SPD + placement_by_id[sid].slot
+        for sid in succs
+        if sid in placement_by_id and week_by_session.get(sid) == hi
+    ]
+    if temps_succs_a_hi:
+        seuil = min(temps_succs_a_hi)
+        for day in range(_DPW):
+            for slot in range(_SPD):
+                if day * _SPD + slot >= seuil:
+                    extra_blocked.add((hi, day, slot))
 
     return extra_blocked, allowed_weeks
 
@@ -935,8 +1044,9 @@ def _institutional_violations(
     if (week, day, slot) in extra_blocked:
         violations.append(
             "Créneau institutionnellement bloqué (jeudi après-midi PAC, journée SAE "
-            "sanctuarisée, ou événement du planning officiel à cet horaire précis) — "
-            "non modifiable, même en forçant."
+            "sanctuarisée, événement du planning officiel à cet horaire précis, présence "
+            "IUT d'un alternant, ou ordre pédagogique au créneau précis avec une séance "
+            "voisine déjà placée dans la même semaine) — non modifiable, même en forçant."
         )
     if allowed_weeks and week not in allowed_weeks:
         violations.append(
@@ -1012,6 +1122,7 @@ def _suggestions_for(state: object, session_id: str, match: object) -> tuple[lis
         state.calendar, session.semestre, teacher_availability=state.teacher_availability,
         room_id=None, search_from_week=match.week, max_suggestions=8,
         extra_blocked=extra_blocked, allowed_weeks=allowed_weeks,
+        sessions_by_id=state.sessions_by_id, groups=state.groups,
     )
 
     resolved: list[SlotSuggestionResponse] = []
@@ -1109,7 +1220,15 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         if resolved_room is not None:
             target_room_id = resolved_room.id
 
-    validation = validate_move(session_id, body.week, body.day, body.slot, _as_placed(state.timetable), match.group_ids, match.teacher_codes, target_room_id)
+    validation = validate_move(
+        session_id, body.week, body.day, body.slot, _as_placed(state.timetable),
+        match.group_ids, match.teacher_codes, target_room_id,
+        # Sans ces deux-là, la validation ignorait la DURÉE des séances (un
+        # bloc de 3h n'était vu que sur son premier créneau) et la COHORTE
+        # étudiante (un TD posé sur le CM de sa promo passait sans conflit).
+        sessions_by_id=state.sessions_by_id,
+        groups=state.groups,
+    )
 
     if not validation.valid and not body.force:
         suggestions, note = _suggestions_for(state, session_id, match)
@@ -1156,7 +1275,23 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             match.course_code,
             match.teacher_codes,
         )
-        repo.update_current_placement(session_id, body.week, body.day, body.slot, getattr(match, "room_id", None), getattr(match, "room_label", None), body.lock or (session.locked if session else False))
+        persiste = repo.update_current_placement(
+            session_id, body.week, body.day, body.slot,
+            getattr(match, "room_id", None), getattr(match, "room_label", None),
+            body.lock or (session.locked if session else False),
+            run_id=state.current_run_id, course_code=match.course_code,
+        )
+        if not persiste:
+            # Ne jamais laisser croire qu'un déplacement est enregistré quand il
+            # ne l'est pas : à l'écran il resterait visible jusqu'au prochain
+            # redémarrage, puis disparaîtrait sans explication.
+            raise HTTPException(
+                500,
+                detail={
+                    "message": "Déplacement non enregistré : aucun run en base.",
+                    "quoi_faire": "Relancer une génération (`POST /solve`) avant de modifier le planning.",
+                },
+            )
 
     return _to_placement(match, state.sessions_by_id)
 
@@ -1180,6 +1315,399 @@ def list_corrections() -> list[dict[str, object]]:
             for r in db_rows
         ]
     return state.corrections
+
+
+# ==========================================================================
+# Placement manuel des séances que le solveur n'a pas su placer
+# ==========================================================================
+#
+# Pourquoi ces routes existent (26/08/2026). Le solveur place ~96,5 % des
+# séances ; les quelques dizaines restantes butent sur des combinaisons
+# PROUVÉES infaisables par l'étage 3 (cf. `decomposed._cuts_from_failed_weeks`)
+# — pas sur un manque de temps de calcul ni de capacité. Jusqu'ici elles
+# disparaissaient purement et simplement : le planning avait l'air complet
+# alors qu'il manquait des heures, et rien dans l'interface ne les mentionnait.
+#
+# Décision de l'utilisateur : accepter ce reliquat et le placer à la main, à
+# condition que l'interface le permette. C'est à quoi servent ces routes —
+# inventorier ce qui manque, proposer des créneaux réellement libres, et poser
+# la séance en passant par EXACTEMENT les mêmes contrôles que le
+# glisser-déposer (`move_session`), pour qu'un placement manuel ne puisse
+# jamais introduire ce que le solveur s'interdit.
+
+
+_LIBELLES_DUREE = {1: "1h30", 2: "3h", 3: "4h30", 4: "6h"}
+
+
+def _noms_enseignants(state: object) -> dict[str, str]:
+    """code -> « Prénom NOM », pour ne jamais afficher un trigramme seul.
+
+    ALO, FME, BTO... ne parlent qu'aux initiés ; la personne qui reprendra ce
+    travail l'an prochain doit pouvoir lire l'écran sans glossaire.
+    """
+    noms: dict[str, str] = {}
+    for course in getattr(state, "courses", []) or []:
+        candidats = [getattr(course, "lead", None)]
+        candidats += [b.teacher for b in (getattr(course, "profs", None) or [])]
+        for t in candidats:
+            if t is not None and getattr(t, "code", None) and t.code not in noms:
+                noms[t.code] = f"{t.prenom} {t.nom}".strip()
+    return noms
+
+
+def _raison_non_placee(state: object, session: object) -> str:
+    """Ce qui rend cette séance difficile, en une phrase.
+
+    Un inventaire qui dit seulement « 85 séances manquantes » n'aide personne à
+    les placer. On donne le motif le plus probable, annoncé comme tel : CP-SAT
+    ne rend aucune justification d'infaisabilité, tout ce qui serait présenté
+    comme une certitude serait inventé.
+    """
+    motifs: list[str] = []
+    duree = session.duration_slots or 1
+    if duree >= 2:
+        motifs.append(f"bloc de {_LIBELLES_DUREE.get(duree, '?')} d'affilée à caser")
+    if len(session.teacher_codes or []) > 1:
+        motifs.append("plusieurs enseignants à réunir sur le même créneau")
+    for code in session.teacher_codes or []:
+        if any(a.teacher_code == code for a in (state.teacher_availability or [])):
+            motifs.append(f"disponibilités restreintes déclarées pour {code}")
+            break
+    if not motifs:
+        motifs.append("semaine saturée pour ce groupe ou cet enseignant")
+    return "Probablement : " + ", ".join(motifs) + "."
+
+
+def _date_iso(state: object, semestre: str, week: int, day: int) -> str:
+    from datetime import timedelta
+
+    index = semester_week_offset(state.calendar, semestre) + week
+    if 0 <= index < len(state.calendar.teaching_mondays):
+        return (state.calendar.teaching_mondays[index] + timedelta(days=day)).isoformat()
+    return ""
+
+
+@app.get("/placements/manquantes", response_model=SeancesAPlacerResponse)
+def seances_manquantes() -> SeancesAPlacerResponse:
+    """Inventaire des séances absentes du planning.
+
+    Calculé par DIFFÉRENCE — séances à placer moins séances placées — plutôt
+    que lu dans un champ du solveur : l'inventaire reste ainsi juste même si
+    une séance disparaît par un autre chemin (reprise d'un run partiel,
+    régénération de semaine interrompue, correction manuelle).
+    """
+    state = get_state()
+    places = {p.session_id for p in state.timetable}
+    noms = _noms_enseignants(state)
+    libelle_groupe = {g.id: g.label for g in state.groups}
+
+    # Les bornes d'ordre pédagogique sont calculées ICI, une fois pour toutes,
+    # au lieu de passer par `_hard_constraint_context` séance par séance :
+    # celui-ci relit le planning officiel sur disque et reparcourt les 3101
+    # séances à chaque appel. Mesuré sur un run très incomplet (795 séances
+    # manquantes) : 13,6 s pour dresser l'inventaire, contre une fraction de
+    # seconde ici. Le résultat est identique — `allowed_weeks` n'y vient que
+    # de `_movable_bounds`.
+    from cal_iut.solver.decomposed import _build_sequence_neighbors, _movable_bounds
+
+    voisins = _build_sequence_neighbors(state.sessions, state.groups)
+    semaine_par_seance = {p.session_id: p.week for p in state.timetable}
+    n_semaines = max((p.week for p in state.timetable), default=-1) + 1
+
+    # Exclut les SAE non planifiées par le solveur (préfixe "WS", sauf
+    # `solver_scheduled_sae`, ex. WSA501D) — même filtre que l'audit
+    # (`resultat.seances_non_placees`) et `scripts/solve_until_ok.py::score_run`.
+    # Bug réel trouvé le 27/08/2026 (retour utilisateur : « j'ai 1121 à
+    # placer pas 426 ») : cet inventaire — l'onglet « À placer » réel de
+    # l'appli — comptait encore les 695 séances SAE dont la semaine vient du
+    # calendrier réel, jamais du solveur, jamais censées être placées à la
+    # main.
+    from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
+
+    scheduled_sae = load_solver_scheduled_sae(state.config_dir)
+
+    manquantes: list[SeanceAPlacerResponse] = []
+    par_parcours: dict[str, int] = {}
+    for session in state.sessions:
+        if session.id in places:
+            continue
+        if session.course_code.upper().startswith("WS") and (session.course_code.upper(), session.semestre) not in scheduled_sae:
+            continue
+        lo, hi = _movable_bounds(session.id, voisins, semaine_par_seance, n_semaines)
+        semaines_ok = set(range(lo, hi + 1))
+        par_parcours[session.parcours] = par_parcours.get(session.parcours, 0) + 1
+        manquantes.append(SeanceAPlacerResponse(
+            session_id=session.id,
+            course_code=session.course_code,
+            course_name=session.course_name,
+            session_type=str(getattr(session.session_type, "value", session.session_type)),
+            semestre=session.semestre,
+            parcours=session.parcours,
+            annee=session.annee,
+            duration_slots=session.duration_slots or 1,
+            duree_libelle=_LIBELLES_DUREE.get(session.duration_slots or 1, "?"),
+            group_ids=list(session.group_ids or []),
+            groupes_libelles=[libelle_groupe.get(g, g) for g in (session.group_ids or [])],
+            teacher_codes=list(session.teacher_codes or []),
+            enseignants_libelles=[noms.get(c, c) for c in (session.teacher_codes or [])],
+            sequence_order=session.sequence_order,
+            semaines_possibles=sorted(semaines_ok),
+            raison=_raison_non_placee(state, session),
+        ))
+
+    manquantes.sort(key=lambda m: (m.parcours, m.course_code, m.sequence_order or 0))
+    total = len(state.sessions)
+    if not manquantes:
+        resume = "Toutes les séances sont placées."
+    else:
+        resume = (
+            f"{len(manquantes)} séance(s) sur {total} restent à placer à la main. "
+            "Ouvrez-en une : l'application ne propose que des créneaux où aucune "
+            "règle n'est violée."
+        )
+    return SeancesAPlacerResponse(
+        total_a_placer=total,
+        total_placees=len(places),
+        manquantes=manquantes,
+        par_parcours=par_parcours,
+        resume=resume,
+    )
+
+
+@app.get("/placements/{session_id}/creneaux-libres", response_model=CreneauxLibresResponse)
+def creneaux_libres(session_id: str, depuis_semaine: int = 0, maximum: int = 12) -> CreneauxLibresResponse:
+    """Créneaux où cette séance PEUT réellement aller.
+
+    Même moteur que les suggestions du glisser-déposer, mais balayant tout
+    l'horizon plutôt que six semaines : une séance jamais placée n'a pas de
+    position d'origine autour de laquelle chercher.
+    """
+    state = get_state()
+    session = state.sessions_by_id.get(session_id)
+    if session is None:
+        raise HTTPException(404, f"Séance {session_id} inconnue")
+    if _is_duo_synced(session, state.teacher_duos):
+        return CreneauxLibresResponse(session_id=session_id, creneaux=[], note=_DUO_SYNC_NOTE)
+
+    extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
+    brutes = suggest_alternative_slots(
+        session_id, list(session.group_ids or []), list(session.teacher_codes or []),
+        _as_placed(state.timetable), state.calendar, session.semestre,
+        teacher_availability=state.teacher_availability, room_id=None,
+        search_from_week=depuis_semaine,
+        max_weeks=len(state.calendar.teaching_mondays),
+        max_suggestions=maximum, extra_blocked=extra_blocked, allowed_weeks=allowed_weeks,
+        sessions_by_id=state.sessions_by_id, groups=state.groups,
+    )
+
+    creneaux: list[CreneauLibreResponse] = []
+    for suggestion in brutes:
+        salle = _resolve_room(state, session, suggestion.week, suggestion.day, suggestion.slot, None)
+        remarques: list[str] = []
+        if salle is None:
+            # Signalé, pas éliminé : une séance sans salle reste plaçable, et
+            # la salle peut très bien s'arbitrer hors application.
+            remarques.append("aucune salle libre trouvée à ce créneau")
+        if suggestion.slot >= 5:
+            remarques.append("dernier créneau de la journée (17h-18h30)")
+        creneaux.append(CreneauLibreResponse(
+            week=suggestion.week, day=suggestion.day, slot=suggestion.slot,
+            label=suggestion.label,
+            date=_date_iso(state, session.semestre, suggestion.week, suggestion.day),
+            salle_label=getattr(salle, "label", None),
+            remarques=remarques,
+        ))
+
+    note = None
+    if not creneaux:
+        note = (
+            "Aucun créneau ne respecte toutes les règles pour cette séance. "
+            "Deux pistes : régénérer une semaine entière (elle réarrange les "
+            "autres cours pour faire de la place), ou assouplir une contrainte "
+            "dans les fichiers de configuration."
+        )
+    return CreneauxLibresResponse(session_id=session_id, creneaux=creneaux, note=note)
+
+
+@app.post("/placements/{session_id}/placer", response_model=PlacementResponse)
+def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementResponse:
+    """Pose au planning une séance qui n'y était pas.
+
+    `PATCH /placements/{id}` ne sait que DÉPLACER : il commence par chercher la
+    séance dans le planning et rend 404 si elle n'y est pas — précisément le cas
+    de toutes les séances que le solveur a laissées de côté. D'où cette route
+    jumelle, qui applique les MÊMES contrôles dans le MÊME ordre : règles
+    institutionnelles d'abord (jamais contournables), conflits de ressources
+    ensuite (contournables via `force`). Un placement manuel ne doit pas pouvoir
+    introduire ce qu'un déplacement manuel interdit.
+    """
+    state = get_state()
+    session = state.sessions_by_id.get(session_id)
+    if session is None:
+        raise HTTPException(404, f"Séance {session_id} inconnue")
+    if any(p.session_id == session_id for p in state.timetable):
+        raise HTTPException(
+            409,
+            "Cette séance est déjà au planning : utilisez le déplacement plutôt "
+            "que le placement.",
+        )
+
+    statut = week_status(state.calendar, session.semestre, body.week)
+    if statut != "future":
+        raise HTTPException(409, f"Semaine {body.week + 1} non modifiable (statut : {statut})")
+
+    if _is_duo_synced(session, state.teacher_duos):
+        raise HTTPException(409, detail={
+            "message": "Conflit", "hard_conflicts": [_DUO_SYNC_NOTE],
+            "soft_warnings": [], "suggestions": [], "suggestions_note": _DUO_SYNC_NOTE,
+        })
+
+    extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
+    institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked, allowed_weeks)
+    institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
+    if institutional:
+        raise HTTPException(409, detail={
+            "message": "Conflit", "hard_conflicts": institutional,
+            "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+        })
+
+    if body.room_id:
+        salle = next((r for r in state.rooms if r.id == body.room_id), None)
+    else:
+        salle = _resolve_room(state, session, body.week, body.day, body.slot, None)
+
+    validation = validate_move(
+        session_id, body.week, body.day, body.slot, _as_placed(state.timetable),
+        list(session.group_ids or []), list(session.teacher_codes or []),
+        getattr(salle, "id", None),
+        sessions_by_id=state.sessions_by_id, groups=state.groups,
+    )
+    if not validation.valid and not body.force:
+        raise HTTPException(409, detail={
+            "message": "Conflit",
+            "hard_conflicts": validation.hard_conflicts,
+            "soft_warnings": validation.soft_warnings,
+            "suggestions": [], "suggestions_note": None,
+        })
+
+    place = PlacedSessionWithRoom(
+        session_id=session_id, week=body.week, day=body.day, slot=body.slot,
+        course_code=session.course_code, group_ids=list(session.group_ids or []),
+        teacher_codes=list(session.teacher_codes or []),
+        room_id=getattr(salle, "id", None), room_label=getattr(salle, "label", None),
+    )
+    state.timetable.append(place)
+
+    if body.lock:
+        session.locked = True
+        session.locked_day = body.day
+        session.locked_slot = body.slot
+        session.metadata["locked_week"] = body.week
+
+    state.corrections.append({
+        "session_id": session_id,
+        # Aucune position proposée : le solveur ne l'avait pas placée du tout.
+        "proposed": None,
+        "manual": {"week": body.week, "day": body.day, "slot": body.slot},
+        "locked": body.lock,
+        "forced": body.force,
+    })
+
+    if state.current_run_id:
+        persiste = get_repo().update_current_placement(
+            session_id, body.week, body.day, body.slot,
+            getattr(salle, "id", None), getattr(salle, "label", None),
+            body.lock, run_id=state.current_run_id, course_code=session.course_code,
+        )
+        if not persiste:
+            # Ne jamais laisser croire qu'un placement est enregistré quand il
+            # ne l'est pas : à l'écran il resterait visible jusqu'au prochain
+            # redémarrage, puis disparaîtrait sans explication.
+            state.timetable.remove(place)
+            raise HTTPException(500, detail={
+                "message": "Placement non enregistré : aucun run en base.",
+                "quoi_faire": "Relancer une génération avant de modifier le planning.",
+            })
+
+    return _to_placement(place, state.sessions_by_id)
+
+
+@app.post("/placements/completer", response_model=CompletionResponse)
+def completer() -> CompletionResponse:
+    """Place d'un coup toutes les séances que le solveur a laissées de côté.
+
+    Constat qui justifie cette route (26/08/2026) : sur 20 séances manquantes
+    tirées du run réel, **20** avaient au moins un créneau parfaitement
+    valable. Faire cliquer une personne 85 fois pour poser des séances que la
+    machine sait poser serait un gâchis — et une source d'erreurs.
+
+    Ce remplissage ne déplace jamais une séance déjà posée et ne cherche aucun
+    optimum : il complète, il ne réarrange pas. Ce qu'il ne sait pas faire est
+    rendu à la décision humaine avec son motif, jamais passé sous silence.
+    """
+    from cal_iut.solver.completion import completer_placements
+
+    state = get_state()
+    if not state.timetable:
+        raise HTTPException(404, "Aucun planning chargé : lancez d'abord une génération.")
+
+    semestre = next((s.semestre for s in state.sessions), "S1")
+    horizon = max((p.week for p in state.timetable), default=-1) + 1
+
+    def _candidats(session):
+        if _is_duo_synced(session, state.teacher_duos):
+            # Déplacer une moitié de duo sans l'autre casse la synchronisation
+            # salle rare : jamais automatiquement.
+            return []
+        extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
+        brutes = suggest_alternative_slots(
+            session.id, list(session.group_ids or []), list(session.teacher_codes or []),
+            _as_placed(state.timetable), state.calendar, session.semestre,
+            teacher_availability=state.teacher_availability, room_id=None,
+            search_from_week=0, max_weeks=horizon, max_suggestions=25,
+            extra_blocked=extra_blocked, allowed_weeks=allowed_weeks,
+            sessions_by_id=state.sessions_by_id, groups=state.groups,
+        )
+        return [(b.week, b.day, b.slot) for b in brutes]
+
+    def _poser(session, week, day, slot) -> bool:
+        try:
+            placer_seance(
+                session.id,
+                MoveSessionRequest(week=week, day=day, slot=slot, lock=False, force=False),
+            )
+        except HTTPException:
+            return False
+        return True
+
+    a_traiter = list(state.sessions)
+    rapport = completer_placements(
+        sessions=a_traiter,
+        placements=list(state.timetable),
+        groups=state.groups,
+        calendar=state.calendar,
+        semestre_par_defaut=semestre,
+        config_dir=state.config_dir,
+        teacher_availability=state.teacher_availability,
+        contexte_dur=lambda s: _hard_constraint_context(state, s),
+        creneaux_candidats=_candidats,
+        poser=_poser,
+    )
+
+    return CompletionResponse(
+        placees=[
+            SeancePlaceeAutoResponse(
+                session_id=p.session_id, course_code=p.course_code,
+                week=p.week, day=p.day, slot=p.slot, date=p.date_iso,
+            )
+            for p in rapport.placees
+        ],
+        refusees=[
+            SeanceRefuseeResponse(session_id=r.session_id, course_code=r.course_code, raison=r.raison)
+            for r in rapport.refusees
+        ],
+        resume=rapport.resume(),
+    )
 
 
 def _find_placement(state: object, session_id: str) -> PlacedSessionWithRoom:
@@ -1288,6 +1816,7 @@ def _to_placement(p: PlacedSessionWithRoom, sessions_by_id: dict[str, SessionToP
         room_label=getattr(p, "room_label", None),
         is_eval=s.is_eval if s else False,
         locked=s.locked if s else False,
+        duration_slots=max(1, s.duration_slots) if s else 1,
     )
 
 

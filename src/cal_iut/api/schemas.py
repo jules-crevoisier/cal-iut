@@ -105,6 +105,13 @@ class PlacementResponse(BaseModel):
     room_label: str | None = None
     is_eval: bool = False
     locked: bool = False
+    # Absent jusqu'au 27/08/2026 (retour utilisateur : « je vois des cours
+    # WSA501D... mais ils ne sont pas en groupe de 3h ») — la Vue Semaine
+    # (`TdWeekGrid.tsx`, la vue par défaut) construit sa grille depuis CETTE
+    # réponse, pas depuis `/app-state` (qui, lui, porte déjà `dur`) : sans ce
+    # champ, une séance de 3h (`duration_slots=2`, ex. WSA501D) n'occupait
+    # visuellement qu'UN seul créneau de 1h30, jamais les deux.
+    duration_slots: int = 1
 
 
 class QualityResponse(BaseModel):
@@ -187,3 +194,84 @@ class RegenResultResponse(BaseModel):
     touched_weeks: list[int]
     placements: list[PlacementResponse]
     message: str = ""
+
+
+class SeanceAPlacerResponse(BaseModel):
+    """Une séance que le solveur n'a pas réussi à placer.
+
+    Elle existe dans les séances à placer mais n'apparaît nulle part dans le
+    planning : sans cet inventaire, elle disparaît purement et simplement — le
+    planning a l'air complet alors qu'il manque des heures. Les libellés sont
+    en clair : la personne qui reprendra ce travail l'an prochain n'a pas à
+    savoir ce qu'est un `session_id`.
+    """
+
+    session_id: str
+    course_code: str
+    course_name: str
+    session_type: str
+    semestre: str
+    parcours: str
+    annee: str
+    duration_slots: int
+    duree_libelle: str
+    group_ids: list[str]
+    groupes_libelles: list[str]
+    teacher_codes: list[str]
+    enseignants_libelles: list[str]
+    sequence_order: int | None = None
+    semaines_possibles: list[int] = []
+    raison: str = ""
+
+
+class SeancesAPlacerResponse(BaseModel):
+    total_a_placer: int
+    total_placees: int
+    manquantes: list[SeanceAPlacerResponse]
+    par_parcours: dict[str, int] = {}
+    resume: str = ""
+
+
+class CreneauLibreResponse(BaseModel):
+    week: int
+    day: int
+    slot: int
+    label: str
+    date: str = ""
+    salle_label: str | None = None
+    # Ce qui rend ce créneau meilleur ou moins bon qu'un autre, en clair.
+    remarques: list[str] = []
+
+
+class CreneauxLibresResponse(BaseModel):
+    session_id: str
+    creneaux: list[CreneauLibreResponse]
+    note: str | None = None
+
+
+class SeancePlaceeAutoResponse(BaseModel):
+    session_id: str
+    course_code: str
+    week: int
+    day: int
+    slot: int
+    date: str = ""
+
+
+class SeanceRefuseeResponse(BaseModel):
+    session_id: str
+    course_code: str
+    raison: str
+
+
+class CompletionResponse(BaseModel):
+    """Résultat du remplissage automatique du reliquat.
+
+    Le rapport dit toujours ce qui n'a PAS pu être fait, et pourquoi. Un
+    remplissage qui annoncerait seulement ses succès laisserait croire le
+    planning complet — exactement le défaut qu'il est censé corriger.
+    """
+
+    placees: list[SeancePlaceeAutoResponse] = []
+    refusees: list[SeanceRefuseeResponse] = []
+    resume: str = ""

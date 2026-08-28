@@ -24,6 +24,31 @@ min_week_rules:
       pour préserver la fiabilité du solveur sur le run complet — Kyllian
       n'avait pas donné de chiffre exact ("quelques semaines").
 
+  # « voeux EDT 2026-2027.pdf » (projet Webdocumentaire, BUT2-DEV-FI S3,
+  # Anthony Rageul) — chronologie souhaitée :
+  #     sept.      WR308D CM + TD 1 à 3
+  #     oct. nov.  WR304D, WR311D, WR301D
+  #     déc.       WR308D TP 1 à 4
+  #     jan.       WS302D CM 1-2 vers la moitié de la SAE, CM 3-4 à la toute fin
+  # Les trois modules "oct. nov." sont bornés par le BAS seulement : les
+  # confiner AUSSI par le haut à fin novembre concentrerait 38 séances par
+  # cohorte sur 7 semaines dont une entièrement sanctuarisée par la SAE
+  # WS303D — le document est un vœu, et précise lui-même que « la répartition
+  # CM, TD, TP est à revoir ». Semaine-index 4 = semaine du 28 sept. au
+  # 2 octobre 2026, la première qui touche octobre.
+  - course_code: WR304D
+    semestre: S3
+    min_week: 4
+    note: "voeux EDT 2026-2027.pdf : Culture numérique en octobre-novembre, après le lancement du webdoc (WR308D)."
+  - course_code: WR311D
+    semestre: S3
+    min_week: 4
+    note: "voeux EDT 2026-2027.pdf : Audiovisuel et Motion Design en octobre-novembre."
+  - course_code: WR301D
+    semestre: S3
+    min_week: 4
+    note: "voeux EDT 2026-2027.pdf : Anglais en octobre-novembre."
+
 # Fenêtres de dates CIVILES imposées à des séances précises (cf. modèle
 # `SessionDateWindowRule`, `solver/constraints.py::add_session_date_window_constraints`).
 # Contrainte DURE (arbitrage utilisateur du 10/08/2026).
@@ -54,6 +79,72 @@ session_date_windows:
     note: >
       Séances en salle informatique. Information source : l'an dernier (2025)
       le TD n°2 était en semaine 39 et le TD n°3 en semaine 42.
+
+  # « voeux EDT 2026-2027.pdf » (BUT2-DEV-FI S3) — WR308D « Écriture
+  # multimédia et narration » lance le projet Webdocumentaire : ses CM et ses
+  # premiers TD en septembre, ses TP en décembre. Progression réelle
+  # (progression.json) : ordre 1-2 = CM, ordre 3-7 = TD, ordre 8-10 = TP.
+  #
+  # Le document annonce « TD 1 à 3 » et « TP 1 à 4 » alors que la maquette
+  # porte 5 TD et 3 TP : la fenêtre de septembre ne vise donc que les TD
+  # d'ordre 3, 4 et 5 (= TD 1 à 3), les TD 4 et 5 restant libres pour
+  # octobre-novembre ; la fenêtre de décembre vise les 3 TP existants. Le
+  # document précise lui-même que « la répartition CM, TD, TP est à revoir en
+  # fonction et avec l'absence de Jérôme Thomas ».
+  - course_code: WR308D
+    semestre: S3
+    session_type: CM
+    debut: 2026-09-07
+    fin: 2026-09-30
+    note: "voeux EDT : les 2 CM du webdoc lancent le module en septembre."
+  - course_code: WR308D
+    semestre: S3
+    session_type: TD
+    sequence_orders: [3, 4, 5]
+    debut: 2026-09-07
+    fin: 2026-09-30
+    note: "voeux EDT : TD 1 à 3 en septembre (les TD 4 et 5 restent libres)."
+  - course_code: WR308D
+    semestre: S3
+    session_type: TP
+    debut: 2026-11-30
+    fin: 2026-12-18
+    note: >
+      voeux EDT : les TP du webdoc en décembre. Fenêtre volontairement ouverte
+      du 30 novembre au 18 décembre : la SAE WS301D sanctuarise le 7 au 16
+      décembre pour ce parcours, il ne reste sinon que deux jours utiles.
+
+  # Séance CONJOINTE WRA505C (BUT3-CREACOM-FC) ∥ WS501D (BUT3-DEV-FI).
+  # Ariane Loizon (progression.json, 30/06/2026 ; repris dans le CSV
+  # CONTRAINTES ENSEIGNANTS) : « une séance où Fabrice a les DEV en WS501D et
+  # où moi j'ai les Créa Comm en WRA505C en même temps ».
+  #
+  # Dates admissibles = jours de SAE WS501D (fichier officiel DATES SAE) qui
+  # sont AUSSI des jours de présence IUT des alternants BUT3-CREACOM-FC
+  # (contraintes/03_calendrier_alternance_officiel.json) et postérieurs à la
+  # phase « 5 TD FME + 5 TD ALO » (à partir du 12 novembre) — soit les 26 et
+  # 27 novembre, 17 et 18 décembre, 7 et 8 janvier. Aucune autre date ne
+  # satisfait les deux calendriers : la liste est dérivée, pas choisie.
+  #
+  # Ordre 17 : dernière des 17 séances portées par ALO (partage 17/17 avec AFR,
+  # cf. `teacher_order_rules` ci-dessous) — le TD conjoint clôt donc sa partie
+  # du module, ce qui correspond à la chronologie décrite (« et ensuite faire
+  # vraiment commencer la WRA505C… plutôt les créneaux d'Anthony à la fin »).
+  - course_code: WRA505C
+    semestre: S5
+    session_type: TD
+    sequence_orders: [17]
+    dates:
+      - 2026-11-26
+      - 2026-11-27
+      - 2026-12-17
+      - 2026-12-18
+      - 2027-01-07
+      - 2027-01-08
+    note: >
+      Séance conjointe avec la WS501D des DEV-FI (Ariane Loizon). Les 6 dates
+      sont l'intersection des jours de SAE WS501D et des semaines de présence
+      IUT des alternants CREACOM-FC, après le 12 novembre.
 
 # Ordre SOUPLE entre les enseignants d'un même module (cf. modèle
 # `CourseTeacherOrderRule`, `solver/objectives.py::add_course_teacher_order_penalties`).
@@ -95,3 +186,71 @@ weekly_cap_exceptions:
       manière exceptionnelle j'ai envie de répondre oui si ça solutionne
       des problèmes [...] les étudiants peuvent faire 1h30 de plus par
       semaine de manière exceptionnelle. » Cf. docs/DATA.md §61.1/§62.
+
+# Bornes de FIN par cours (cf. modèle `CourseMaxWeekRule`,
+# `solver/decomposed.py::assign_weeks`) — symétrique de `min_week_rules`.
+# Semaine-index SOLVEUR (0 = semaine du 31 août 2026 ; cf.
+# `AcademicCalendar.department_week_label` pour la correspondance civile).
+max_week_rules:
+  - course_code: WRA507D
+    semestre: S5
+    max_week: 18          # semaine du 25-29 janvier 2027
+    note: >
+      Retour utilisateur (25/08/2026) : « pour la WRA507D il faudrait que la
+      dernière séance soit environ en janvier ». Sur le run `odd26` ce module
+      s'étalait jusqu'à la semaine-index 23 (8-12 mars 2027). Les 10 semaines
+      de présence IUT des BUT3-DEV-FC vont du 31 août au 12 mars ; seules les
+      ressources doivent tenir dans les 8 premières (jusqu'au 29 janvier),
+      la SAE WSA501D ayant seule vocation à occuper février et mars.
+
+# SAE que le SOLVEUR place lui-même (cf. `load_solver_scheduled_sae`). Par
+# défaut une SAE (préfixe WS/WSA) est définie par ses enseignants et n'est PAS
+# planifiée : seules ses dates officielles servent à sanctuariser les jours des
+# cours classiques. Les entrées ci-dessous font exception.
+solver_scheduled_sae:
+  - course_code: WSA501D
+    semestre: S5
+    note: >
+      Retour utilisateur (25/08/2026) : « il faut placer les heures de WSA501D
+      pour les DEV FC 3e année ». Cette SAE est la seule du fichier officiel
+      DATES SAE 2026_2027 marquée `dates_indeterminees: true` — aucune date
+      fournie, donc rien à sanctuariser et, jusqu'ici, 0 séance placée sur les
+      34 dues. Format demandé : blocs de 3h minimum et 4h30 maximum
+      (cf. `double_sessions.yaml`), étalés sur tout le semestre — assuré par
+      l'objectif de lissage `spread_weight` de l'étage 2, qui répartit
+      proportionnellement chaque cours sur l'horizon.
+
+# Répartition des séances d'un module entre ses enseignants (cf. modèle
+# `TeacherDistributionRule`, `ingestion/normalize.py::_alternating_assignment`).
+#
+# Par défaut, chaque enseignant prend un bloc CONTIGU : sur un module partagé
+# 17/17, le premier assure les 17 premières séances et le second les 17
+# dernières. C'est ce qu'il faut quand les deux se relaient sur des parties
+# distinctes du programme (WRA505C : Ariane Loizon au début, Anthony Froli à la
+# fin — cf. `teacher_order_rules`). `mode: alterne` fait au contraire tourner
+# les enseignants séance après séance, à volume inchangé.
+teacher_distribution:
+  - course_code: WRA507D
+    semestre: S5
+    mode: alterne
+    teacher_order: [BTO, JSA]
+    note: >
+      Retour utilisateur (25/08/2026) : « il y a eu un prof qui s'est rajouté
+      [sur la WRA507D], il faut donc découper les cours pour les attribuer au
+      prof et si on peut faire en sorte d'alterner les profs entre les cours ce
+      serait bien ». La maquette mise à jour partage les 34 TD en 17 pour
+      Barthélémy Tomasina (BTO) et 17 pour Jules Sabater (JSA) — auparavant BTO
+      les portait tous les 34. L'alternance aide aussi le solveur : BTO n'est
+      disponible que le mercredi et le jeudi matin, un bloc de 17 séances
+      consécutives lui demanderait de tout caser dans une demi-période.
+
+  # WSA501D n'a VOLONTAIREMENT pas de règle ici : elle garde donc le découpage
+  # séquentiel par défaut (9 blocs à JSA, puis 8 à BTO).
+  #
+  # Une alternance y avait été ajoutée le 25/08/2026 « par cohérence » avec la
+  # WRA507D — alors que la demande utilisateur ne portait que sur cette
+  # dernière. Retirée le 26/08/2026 : mesurée sur 3 graines, elle ne rend rien
+  # (4,3 semaines infaisables en séquentiel contre 4,7 en alterné, écart dans
+  # le bruit) et n'avait donc aucune justification. Barthélémy Tomasina n'étant
+  # disponible que le mercredi et le jeudi matin, disperser ses blocs de 3h sur
+  # les 10 semaines de présence obligeait chacune à lui réserver son mercredi.

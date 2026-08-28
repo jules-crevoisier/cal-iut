@@ -7,6 +7,7 @@ from cal_iut.models.entities import (
     SessionType,
     Teacher,
     TeacherBlock,
+    TeacherDistributionRule,
     TeacherDuo,
 )
 from cal_iut.models.session import SessionToPlace
@@ -109,11 +110,11 @@ def _teacher_for_group(
     group_id: str,
     group_ids: list[str],
     duos: list[TeacherDuo] | None = None,
-    occurrence_index: int = 0,
+    slots_before: int = 0,
 ) -> Teacher:
     """
-    Un enseignant par (groupe, occurrence dans la séquence de CE groupe) —
-    ou l'override duo prioritaire, cf. `_duo_teacher_for_group`.
+    Un enseignant par (groupe, position EN CRÉNEAUX dans la séquence de CE
+    groupe) — ou l'override duo prioritaire, cf. `_duo_teacher_for_group`.
 
     Répartition par défaut : consomme `block.td`/`block.tp` (nombre RÉEL de
     créneaux que ce bloc délivre, tous groupes confondus — vérifié fiable
@@ -152,7 +153,19 @@ def _teacher_for_group(
     if per_group <= 0:
         return blocks[0].teacher
 
-    flat_index = group_index * int(per_group) + occurrence_index
+    # `slots_before` compte des CRÉNEAUX de 1h30 déjà consommés par ce groupe,
+    # pas des séances : sur un cours fusionné en blocs (`double_sessions.yaml`),
+    # une séance émise peut en valoir 2 ou 3. Les volumes `block.td`/`block.tp`
+    # de la maquette sont eux aussi en créneaux — les comparer à un simple
+    # compteur de séances décalait tout le partage.
+    #
+    # Bug réel trouvé le 25/08/2026 en ajoutant WSA501D (34 TD, JSA 17 / BTO 17)
+    # aux cours fusionnés : les 34 TD devenaient 17 blocs de 3h, l'index de
+    # séance ne dépassait donc jamais 16 et JSA récupérait la TOTALITÉ du
+    # module, BTO aucune séance. Aucun autre cours fusionné n'était concerné
+    # (WR104, WR106, WRA308M n'ont qu'un enseignant ; WR110/WR112/WR113
+    # passent par `group_overrides`), d'où un bug resté invisible jusqu'ici.
+    flat_index = group_index * int(per_group) + slots_before
 
     cursor = 0
     for block in blocks:
@@ -164,6 +177,58 @@ def _teacher_for_group(
         cursor += count
 
     return blocks[-1].teacher
+
+
+def _alternating_assignment(
+    course: Course,
+    session_type: SessionType,
+    entries: list[dict[str, object]],
+    rule: TeacherDistributionRule,
+) -> list[Teacher]:
+    """
+    Répartition ALTERNÉE d'un enseignant à l'autre, séance après séance
+    (A, B, A, B…), pour UN groupe — cf. `TeacherDistributionRule`.
+
+    Le volume de chacun reste EXACTEMENT celui de la maquette : on tourne sur
+    les enseignants encore en quota, en créneaux de 1h30 (`duration_slots`, pas
+    en nombre de séances — un bloc collé consomme sa durée). Quand un
+    enseignant a épuisé son quota, l'alternance continue sans lui plutôt que de
+    le faire déborder.
+
+    Retourne un enseignant par entrée de `entries`, dans le même ordre.
+    """
+    blocks = _blocks_for_type(course, session_type)
+    if len(blocks) < 2:
+        return [(blocks[0].teacher if blocks else course.lead)] * len(entries)
+
+    if rule.teacher_order:
+        rank = {code: i for i, code in enumerate(rule.teacher_order)}
+        blocks = sorted(blocks, key=lambda b: rank.get(b.teacher.code, len(rank)))
+
+    field = session_type.value.lower()
+    remaining = {b.teacher.code: round(getattr(b, field, 0) or 0) for b in blocks}
+    teacher_by_code = {b.teacher.code: b.teacher for b in blocks}
+    order = [b.teacher.code for b in blocks]
+
+    assigned: list[Teacher] = []
+    cursor = 0
+    for entry in entries:
+        duration = int(entry.get("duration_slots", 1) or 1)
+        picked = None
+        for step in range(len(order)):
+            code = order[(cursor + step) % len(order)]
+            if remaining[code] >= duration:
+                picked = code
+                cursor = (cursor + step + 1) % len(order)
+                break
+        if picked is None:
+            # Quotas épuisés (volumes maquette incohérents avec la séquence) :
+            # on retombe sur l'enseignant le moins servi plutôt que d'échouer.
+            picked = max(remaining, key=lambda c: remaining[c])
+            cursor = (order.index(picked) + 1) % len(order)
+        remaining[picked] -= duration
+        assigned.append(teacher_by_code[picked])
+    return assigned
 
 
 def _teacher_codes(teachers: list[Teacher]) -> list[str]:
@@ -277,6 +342,7 @@ def expand_course_to_sessions(
     include_hors_service: bool = False,
     double_session_rules: list[DoubleSessionRule] | None = None,
     duos: list[TeacherDuo] | None = None,
+    teacher_distributions: list[TeacherDistributionRule] | None = None,
 ) -> list[SessionToPlace]:
     if course.hors_service and not include_hors_service:
         return []
@@ -314,8 +380,30 @@ def expand_course_to_sessions(
     # `_teacher_for_group`) : seuls le type émis et le groupe cible changent.
     single_group_cohort = course.groupes_td == 1 and course.groupes_tp == 1 and bool(td_ids)
 
+    # Répartition ALTERNÉE (cf. `TeacherDistributionRule`) : calculée une fois
+    # pour toute la séquence, par type de séance, parce qu'elle a besoin de la
+    # liste complète des séances — contrairement au découpage séquentiel par
+    # défaut, qui se décide séance par séance.
+    alternating: dict[tuple[str, int], Teacher] = {}
+    for rule in teacher_distributions or []:
+        if rule.course_code != course.code or rule.semestre != course.semestre:
+            continue
+        if rule.mode != "alterne":
+            continue
+        for session_type in (SessionType.TD, SessionType.TP):
+            if rule.session_type is not None and rule.session_type != session_type:
+                continue
+            entries = [e for e in sequence if str(e.get("type")) == session_type.value]
+            if not entries:
+                continue
+            for position, teacher in enumerate(
+                _alternating_assignment(course, session_type, entries, rule)
+            ):
+                alternating[(session_type.value, position)] = teacher
+
     sessions: list[SessionToPlace] = []
     counters = {"CM": 0, "TD": 0, "TP": 0, "PTUT": 0}
+    consumed = {"CM": 0, "TD": 0, "TP": 0, "PTUT": 0}
 
     for entry in sequence:
         session_type = SessionType(str(entry["type"]))
@@ -351,12 +439,22 @@ def expand_course_to_sessions(
             continue
 
         target_ids = td_ids if session_type == SessionType.TD else tp_ids
+        # Créneaux déjà consommés par ce type AVANT la séance courante : c'est
+        # l'unité des volumes `block.td`/`block.tp` de la maquette (cf.
+        # `_teacher_for_group`), et elle diffère du numéro de séance dès qu'un
+        # bloc collé en vaut plusieurs.
+        slots_before = consumed[session_type.value]
+        consumed[session_type.value] += int(entry.get("duration_slots", 1))
         # cf. `single_group_cohort` : le TP d'une cohorte à groupe unique est
         # émis comme un TD sur le groupe TD unique (mêmes étudiants).
         emit_as_td = single_group_cohort and session_type == SessionType.TP
         emitted_type = SessionType.TD if emit_as_td else session_type
         for group_id in target_ids:
-            teacher = _teacher_for_group(course, session_type, group_id, target_ids, duos, occurrence_index=idx - 1)
+            teacher = alternating.get((session_type.value, idx - 1))
+            if teacher is None:
+                teacher = _teacher_for_group(
+                    course, session_type, group_id, target_ids, duos, slots_before=slots_before
+                )
             # `session_id` garde le type d'origine : il doit rester unique
             # face aux vraies séances TD du même cours et du même index.
             session_id = f"{course.code}-{course.semestre}-{session_type.value}-{idx}-{group_id}"
@@ -396,6 +494,7 @@ def expand_all_sessions(
     include_hors_service: bool = False,
     double_session_rules: list[DoubleSessionRule] | None = None,
     duos: list[TeacherDuo] | None = None,
+    teacher_distributions: list[TeacherDistributionRule] | None = None,
 ) -> list[SessionToPlace]:
     sessions: list[SessionToPlace] = []
     for course in courses:
@@ -412,6 +511,7 @@ def expand_all_sessions(
                 include_hors_service=include_hors_service,
                 double_session_rules=double_session_rules,
                 duos=duos,
+                teacher_distributions=teacher_distributions,
             )
         )
     return sessions

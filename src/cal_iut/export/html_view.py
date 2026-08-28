@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from datetime import date, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 from cal_iut.calendar.academic import (
@@ -21,6 +22,8 @@ from cal_iut.calendar.academic import (
     semester_week_offset,
     week_status,
 )
+from cal_iut.ingestion.constraints_loader import allowed_week_days_for_parcours
+from cal_iut.solver.decomposed import FC_WEEKLY_CAP_SLOTS, FI_WEEKLY_CAP_SLOTS, _cours_avec_progression_declaree
 from cal_iut.models.entities import Group, Room, TeacherAvailability
 from cal_iut.models.group_scope import expand_group_filter, resolve_tp_ids_for_td
 from cal_iut.models.session import SessionToPlace
@@ -51,7 +54,6 @@ INSTITUTIONAL_EVENTS = [
     {"label": "Rentrée BUT2-FC/ALT", "start": "2026-09-14", "end": "2026-09-14", "kind": "rentree"},
     {"label": "Semaine d'intégration BUT1 (accueil, pas de cours classique)", "start": "2026-09-02", "end": "2026-09-04", "kind": "special"},
     {"label": "Vrai démarrage des enseignements S1", "start": "2026-09-07", "end": "2026-09-07", "kind": "special"},
-    {"label": "VSS (S1) — Amphi GMP/GEII 9h30-11h", "start": "2026-09-17", "end": "2026-09-17", "kind": "special"},
     {"label": "Fin des cours S4-FI / S6-FI (avant stages)", "start": "2027-04-09", "end": "2027-04-09", "kind": "special"},
     {"label": "Début des stages S4-FI / S6-FI", "start": "2027-04-12", "end": "2027-04-12", "kind": "special"},
     {"label": "Fin des cours (toutes promos)", "start": "2027-06-30", "end": "2027-06-30", "kind": "special"},
@@ -166,6 +168,38 @@ def _teacher_payload(
     return result
 
 
+@lru_cache(maxsize=1)
+def _cap_exceptions() -> dict[tuple[str, int], int]:
+    """Dérogations au plafond hebdomadaire, résolues en (parcours, semaine)."""
+    from cal_iut.calendar.academic import build_default_calendar_2026_2027, semester_week_offset
+    from cal_iut.ingestion.config_loader import load_weekly_cap_exceptions
+    from cal_iut.solver.decomposed import weekly_cap_exceptions_by_parcours_week
+
+    calendar = build_default_calendar_2026_2027()
+    config = Path(__file__).resolve().parents[3] / "data" / "config"
+    return weekly_cap_exceptions_by_parcours_week(
+        load_weekly_cap_exceptions(config), calendar, semester_week_offset(calendar, "S1")
+    )
+
+
+def _parcours_of(group_id: str, groups: list[Group]) -> str:
+    for g in groups:
+        if g.id == group_id:
+            return g.parcours
+    return ""
+
+
+@lru_cache(maxsize=1)
+def _solver_scheduled_sae() -> frozenset[tuple[str, str]]:
+    """cf. `config_loader.load_solver_scheduled_sae` — mis en cache : appelé
+    une fois par placement lors de la vérification des règles."""
+    from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
+
+    return frozenset(
+        load_solver_scheduled_sae(Path(__file__).resolve().parents[3] / "data" / "config")
+    )
+
+
 def _rule_checks(
     sessions_by_id: dict[str, SessionToPlace],
     placements: list[dict],
@@ -176,8 +210,13 @@ def _rule_checks(
     sae_days_by_course: dict[str, set[tuple[int, int]]] | None,
     rooms: list[Room] | None = None,
     tier_values: dict[str, int] | None = None,
+    calendar: AcademicCalendar | None = None,
+    week_offset: int = 0,
+    teacher_availability: list[TeacherAvailability] | None = None,
+    sae_supervisor_dates: dict[str, set] | None = None,
 ) -> list[dict]:
     checks: list[dict] = []
+    SLOTS_PER_DAY_LOCAL = 6
 
     # -- Capacité salle vs effectif de la cohorte (ex. CM = toute la promo) --
     # Un CM doit contenir tous les étudiants de la promo (rappel utilisateur) :
@@ -237,10 +276,21 @@ def _rule_checks(
             # dure du solveur (`add_weekly_hour_cap_constraints`).
             session = sessions_by_id.get(p["session_id"])
             weekly[p["week"]] += max(1, getattr(session, "duration_slots", 1))
-        cap = 23 if is_fc.get(gid) else 22
-        mx = max(weekly.values()) if weekly else 0
-        if mx > cap:
-            over_cap.append((gid, mx, cap))
+        # SOURCE UNIQUE partagée avec le solveur : vérifier un plafond que le
+        # solveur n'applique pas produit des « violations » inexplicables — ce
+        # qui est arrivé pendant dix jours (cf. le commentaire sur
+        # `FI_WEEKLY_CAP_SLOTS`).
+        cap = FC_WEEKLY_CAP_SLOTS if is_fc.get(gid) else FI_WEEKLY_CAP_SLOTS
+        # Les dérogations CIBLÉES au plafond (`weekly_cap_exceptions`) sont des
+        # décisions documentées, pas des violations : sans les lire, ce contrôle
+        # signalait « 8 cohortes au-dessus du plafond » alors que la seule
+        # semaine concernée avait été explicitement autorisée. Un contrôle qui
+        # crie à tort finit ignoré — et c'est ainsi qu'une vraie violation passe.
+        for semaine, charge in weekly.items():
+            plafond = max(cap, _cap_exceptions().get((_parcours_of(gid, groups), semaine), 0))
+            if charge > plafond:
+                over_cap.append((gid, charge, plafond))
+                break
     checks.append(
         {
             "id": "weekly_cap",
@@ -279,7 +329,14 @@ def _rule_checks(
         sae_hits = []
         for p in placements:
             s = sessions_by_id.get(p["session_id"])
-            if s is None or s.course_code.upper().startswith("WS"):
+            # Une SAE que le solveur place lui-même (`solver_scheduled_sae`,
+            # ex. WSA501D) est soumise à la sanctuarisation des AUTRES SAE de
+            # son parcours, exactement comme un cours classique — la relire
+            # depuis la config plutôt que de se fier au préfixe "WS".
+            if s is None or (
+                s.course_code.upper().startswith("WS")
+                and (s.course_code.upper(), s.semestre) not in _solver_scheduled_sae()
+            ):
                 continue
             if (p["week"], p["day"]) in blocked_by_parcours.get(s.parcours, set()):
                 sae_hits.append(p)
@@ -298,19 +355,24 @@ def _rule_checks(
 
     # -- Éval -> salle A.018 --
     eval_rows = [p for p in placements if sessions_by_id.get(p["session_id"]) and sessions_by_id[p["session_id"]].is_eval]
-    eval_bad = [p for p in eval_rows if not (p.get("room_label") or "").startswith("A.018")]
-    checks.append(
-        {
-            "id": "eval_room",
-            "label": "Toute évaluation en salle A.018",
-            "status": "pass" if not eval_bad else "fail",
-            "detail": (
-                f"{len(eval_rows)} évaluation(s), toutes en A.018."
-                if not eval_bad
-                else f"{len(eval_bad)}/{len(eval_rows)} évaluations hors A.018."
-            ),
-        }
-    )
+    # Ne se prononce que si des salles ont RÉELLEMENT été affectées : sur un run
+    # incomplet, `cal-iut solve` n'attribue aucune salle, et ce contrôle
+    # déclarait alors « 16/16 évaluations hors A.018 » — un faux échec qui
+    # détourne l'attention du vrai problème (le run incomplet lui-même).
+    if eval_rows and any(p.get("room_label") for p in placements):
+        eval_bad = [p for p in eval_rows if not (p.get("room_label") or "").startswith("A.018")]
+        checks.append(
+            {
+                "id": "eval_room",
+                "label": "Toute évaluation en salle A.018",
+                "status": "pass" if not eval_bad else "fail",
+                "detail": (
+                    f"{len(eval_rows)} évaluation(s), toutes en A.018."
+                    if not eval_bad
+                    else f"{len(eval_bad)}/{len(eval_rows)} évaluations hors A.018."
+                ),
+            }
+        )
 
     # -- Semaine d'intégration, tous les FI (semaine-index 0) --
     # Généralisé le 11/08/2026 (retour utilisateur) de "S1 uniquement" à tous
@@ -353,12 +415,22 @@ def _rule_checks(
         for gid in s.group_ids:
             by_group_course[(s.course_code, gid)].append(s)
 
+    # Séances du MÊME type (TD-TD, TP-TP) exemptées quand aucune progression
+    # de contenu n'est déclarée pour ce cours — même correctif que le
+    # solveur (`decomposed.py::assign_weeks`/`_build_sequence_neighbors`,
+    # retour utilisateur 27/08/2026, Kyllian Bresson : « TD n°3 avant TD
+    # n°1, ce n'est pas une erreur »). Un rapport qui signale plus strict
+    # que ce que le solveur applique réellement n'aiderait personne.
+    cours_avec_progression = _cours_avec_progression_declaree(Path(__file__).resolve().parents[3])
+
     seq_violations = 0
     seq_checked = 0
     for key, sess_list in by_group_course.items():
         ordered = sorted(sess_list, key=lambda s: s.sequence_order or 0)
         for a, b in zip(ordered, ordered[1:]):
             if (a.sequence_order or 0) == (b.sequence_order or 0):
+                continue
+            if a.session_type == b.session_type and (a.course_code, a.semestre) not in cours_avec_progression:
                 continue
             seq_checked += 1
             if not (t_of[a.id] < t_of[b.id]):
@@ -407,6 +479,139 @@ def _rule_checks(
             "detail": f"{eval_after_violations}/{eval_checked} évaluations placées avant la fin du contenu (doit être 0).",
         }
     )
+
+    # -- Ordre pédagogique VU PAR L'ÉTUDIANT (CM promo <-> TD/TP sous-groupe) --
+    # Le contrôle `pedagogical_order` ci-dessus ne compare que des séances du
+    # même `group_id` brut : il ne voyait donc PAS un CM programmé après les TD
+    # qu'il doit précéder (790 paires hors ordre sur le run `odd26`, alors que
+    # `pedagogical_order` était au vert). Cf.
+    # `solver/constraints.py::cohort_sequence_pairs`.
+    from cal_iut.solver.constraints import cohort_sequence_pairs
+
+    placed_sessions = [s for sid, s in sessions_by_id.items() if sid in t_of]
+    cohort_pairs = cohort_sequence_pairs(placed_sessions, groups)
+    cohort_violations = [
+        (before, after) for before, after in cohort_pairs if not (t_of[before] < t_of[after])
+    ]
+    checks.append(
+        {
+            "id": "cohort_pedagogical_order",
+            "label": "Ordre pédagogique vu par l'étudiant (CM avant les TD/TP qui le suivent)",
+            "status": "pass" if not cohort_violations else "fail",
+            "detail": (
+                f"{len(cohort_violations)}/{len(cohort_pairs)} paires hors ordre "
+                "toutes granularités confondues (CM promo vs TD/TP de sous-groupe)."
+                + (
+                    f" Ex. {cohort_violations[0][0]} devrait précéder {cohort_violations[0][1]}."
+                    if cohort_violations
+                    else ""
+                )
+            ),
+        }
+    )
+
+    # -- Bornes de fin par cours (`max_week_rules`) --
+    from cal_iut.ingestion.config_loader import load_course_max_week_rules
+
+    max_week_rules = load_course_max_week_rules(Path(__file__).resolve().parents[3] / "data" / "config")
+    if max_week_rules:
+        by_key_max = {(r.course_code, r.semestre): r for r in max_week_rules}
+        late_by_course: dict[str, tuple[int, int]] = {}
+        for p_row in placements:
+            sess = sessions_by_id.get(p_row["session_id"])
+            if sess is None:
+                continue
+            rule = by_key_max.get((sess.course_code, sess.semestre))
+            if rule is None or p_row["week"] <= rule.max_week:
+                continue
+            current = late_by_course.get(sess.course_code)
+            worst = max(current[0], p_row["week"]) if current else p_row["week"]
+            late_by_course[sess.course_code] = (worst, rule.max_week)
+        checks.append(
+            {
+                "id": "course_max_week",
+                "label": "Bornes de fin de module respectées (max_week_rules)",
+                "status": "pass" if not late_by_course else "fail",
+                "detail": (
+                    f"{len(max_week_rules)} borne(s) déclarée(s), toutes respectées."
+                    if not late_by_course
+                    else "; ".join(
+                        f"{code} déborde en semaine-index {worst} (borne {limit})"
+                        for code, (worst, limit) in sorted(late_by_course.items())
+                    )
+                ),
+            }
+        )
+
+    # -- Fenêtres de dates civiles par séance --
+    # Règle documentée « dure » depuis le 10/08/2026 mais jamais vérifiée, et
+    # jamais appliquée en mode `--decomposed` avant le 25/08/2026 : sur le run
+    # `odd26`, la visite à la BU (WR100BU TD n°1, fenêtre 1-15 septembre) était
+    # placée du 21 au 25 septembre sans que rien ne le signale.
+    from cal_iut.ingestion.config_loader import load_session_date_windows
+
+    date_rules = load_session_date_windows(Path(__file__).resolve().parents[3] / "data" / "config")
+    if date_rules and calendar is not None:
+        window_violations: list[str] = []
+        window_checked = 0
+        for rule in date_rules:
+            start = date.fromisoformat(rule.start_date) if rule.start_date else None
+            end = date.fromisoformat(rule.end_date) if rule.end_date else None
+            only = {date.fromisoformat(d) for d in rule.only_dates}
+            for p_row in placements:
+                sess = sessions_by_id.get(p_row["session_id"])
+                if sess is None or sess.course_code != rule.course_code or sess.semestre != rule.semestre:
+                    continue
+                if rule.session_type is not None and sess.session_type != rule.session_type:
+                    continue
+                if rule.sequence_orders and sess.sequence_order not in rule.sequence_orders:
+                    continue
+                placed = calendar.week_day_to_date(week_offset + p_row["week"], p_row["day"])
+                if placed is None:
+                    continue
+                window_checked += 1
+                if (
+                    (only and placed not in only)
+                    or (start is not None and placed < start)
+                    or (end is not None and placed > end)
+                ):
+                    window_violations.append(f"{p_row['session_id']} le {placed.isoformat()}")
+        checks.append(
+            {
+                "id": "session_date_windows",
+                "label": "Fenêtres de dates imposées à une séance précise",
+                "status": "pass" if not window_violations else "fail",
+                "detail": (
+                    f"{window_checked} séance(s) sous fenêtre, toutes dans leur fenêtre."
+                    if not window_violations
+                    else f"{len(window_violations)}/{window_checked} hors fenêtre : "
+                    + ", ".join(window_violations[:4])
+                ),
+            }
+        )
+
+    # -- SAE que le solveur doit placer lui-même --
+    scheduled_sae = _solver_scheduled_sae()
+    if scheduled_sae:
+        details = []
+        all_ok = True
+        for code, semestre in sorted(scheduled_sae):
+            due = [
+                s for s in sessions_by_id.values()
+                if s.course_code.upper() == code and s.semestre == semestre
+            ]
+            done = [s for s in due if s.id in t_of]
+            if len(done) != len(due) or not due:
+                all_ok = False
+            details.append(f"{code} ({semestre}) : {len(done)}/{len(due)} séances placées")
+        checks.append(
+            {
+                "id": "sae_solver_scheduled",
+                "label": "SAE planifiées par le solveur (solver_scheduled_sae)",
+                "status": "pass" if all_ok else "fail",
+                "detail": " ; ".join(details),
+            }
+        )
 
     # -- Ordonnancement inter-matières (moyenne par groupe) --
     # `solve_tiered` (mode par défaut, cf. docs/DATA.md §12.3) minimise
@@ -474,6 +679,314 @@ def _rule_checks(
                 "detail": detail,
             }
         )
+
+        # -- Critère STRICT : « A entièrement fini avant que B commence » --
+        # Le critère "moyenne" ci-dessus se satisfait d'un simple décalage des
+        # barycentres : sur le run `odd26` il était à 13/89 alors que le
+        # critère strict, lui, était à 89/89 (aucun module n'était réellement
+        # terminé avant le démarrage du suivant — retour utilisateur du
+        # 25/08/2026 : « des matières qui devaient être finies pour
+        # commencer »). Rapporté séparément, en semaines de chevauchement,
+        # parce que c'est une pénalité MOLLE et graduée côté solveur
+        # (`assign_weeks::strict_ordonnancement_weight`) : le chiffre à
+        # surveiller est l'ampleur du chevauchement, pas seulement son
+        # existence.
+        slots_per_week_local = slots_per_week
+        strict_viol: list[tuple[str, str, str, int]] = []
+        strict_total = 0
+        for code, pos, target in sorted(ord_relations):
+            groups_a = {g for (c, g) in by_group_course_t if c == code}
+            groups_b = {g for (c, g) in by_group_course_t if c == target}
+            for gid in sorted(groups_a & groups_b):
+                ta = by_group_course_t[(code, gid)]
+                tb = by_group_course_t[(target, gid)]
+                first, last = (tb, ta) if pos == "before" else (ta, tb)
+                strict_total += 1
+                overlap_slots = max(last) - min(first) + 1
+                if overlap_slots > 0:
+                    strict_viol.append((code, pos, target, overlap_slots // slots_per_week_local + 1))
+        if strict_total:
+            worst = max((v[3] for v in strict_viol), default=0)
+            mean_overlap = round(sum(v[3] for v in strict_viol) / len(strict_viol), 1) if strict_viol else 0
+            checks.append(
+                {
+                    "id": "ordonnancement_strict",
+                    "label": "Module terminé avant le démarrage du suivant (critère strict)",
+                    "status": "pass" if not strict_viol else "info",
+                    "detail": (
+                        f"0/{strict_total} couple(s) en chevauchement."
+                        if not strict_viol
+                        else (
+                            f"{len(strict_viol)}/{strict_total} couple(s) (matière, groupe) en "
+                            f"chevauchement — {mean_overlap} semaine(s) en moyenne, {worst} au pire. "
+                            "Objectif MOU gradué : une séparation totale de deux modules étalés sur "
+                            "tout le semestre n'est pas toujours physiquement possible, le chiffre "
+                            "à faire baisser est l'ampleur du chevauchement."
+                        )
+                    ),
+                }
+            )
+
+    # -- Regroupement mensuel des interventions (ARA, JHU) --
+    # Règle demandée par les enseignants eux-mêmes (contrainte géographique) et
+    # jamais vérifiée jusqu'au 26/08/2026 : sur le run `odd26`, ARA intervenait
+    # 15 semaines distinctes et JHU 14, pour une demande de 1 à 2 semaines par
+    # mois. Objectif MOU côté solveur, donc « info » et non « fail » — mais le
+    # chiffre doit être visible.
+    if teacher_availability and calendar is not None:
+        vises = {
+            a.teacher_code: a.monthly_cluster_max_weeks
+            for a in teacher_availability
+            if a.monthly_cluster_max_weeks
+        }
+        if vises:
+            semaines_par_prof: dict[str, set[int]] = defaultdict(set)
+            for p_row in placements:
+                for code in p_row["teacher_codes"]:
+                    if code in vises:
+                        semaines_par_prof[code].add(p_row["week"])
+            # Nombre de mois civils couverts par l'horizon : le maximum demandé
+            # est mensuel, il faut donc le multiplier pour obtenir la cible.
+            mois = {
+                (m.year, m.month)
+                for m in calendar.teaching_mondays[week_offset : week_offset + 24]
+            }
+            lignes = []
+            depassements = 0
+            for code, maxi in sorted(vises.items()):
+                utilisees = len(semaines_par_prof.get(code, set()))
+                cible = maxi * max(1, len(mois))
+                lignes.append(f"{code} : {utilisees} semaine(s) pour ~{cible} visée(s)")
+                if utilisees > cible:
+                    depassements += 1
+            checks.append({
+                "id": "teacher_monthly_clustering",
+                "label": "Regroupement mensuel des interventions (1 à 2 semaines/mois)",
+                "status": "pass" if not depassements else "info",
+                "detail": " ; ".join(lignes),
+            })
+
+    # -- Ordre entre enseignants d'un même module (WRA505C : ALO puis AFR) --
+    from cal_iut.ingestion.config_loader import load_course_teacher_orders
+
+    order_rules = load_course_teacher_orders(Path(__file__).resolve().parents[3] / "data" / "config")
+    if order_rules:
+        semaines: dict[tuple[str, str], list[int]] = defaultdict(list)
+        for p_row in placements:
+            sess = sessions_by_id.get(p_row["session_id"])
+            if sess is None:
+                continue
+            for code in p_row["teacher_codes"]:
+                semaines[(sess.course_code, code)].append(p_row["week"])
+        anomalies, verifies = [], 0
+        for rule in order_rules:
+            for avant, apres in zip(rule.teacher_order, rule.teacher_order[1:]):
+                a = semaines.get((rule.course_code, avant), [])
+                b = semaines.get((rule.course_code, apres), [])
+                if not a or not b:
+                    continue
+                verifies += 1
+                moy_a, moy_b = sum(a) / len(a), sum(b) / len(b)
+                if moy_a >= moy_b:
+                    anomalies.append(
+                        f"{rule.course_code} : {avant} (semaine moy. {moy_a:.1f}) devrait "
+                        f"précéder {apres} ({moy_b:.1f})"
+                    )
+        if verifies:
+            checks.append({
+                "id": "course_teacher_order",
+                "label": "Ordre entre enseignants d'un module (ex. WRA505C : ALO puis AFR)",
+                "status": "pass" if not anomalies else "info",
+                "detail": (
+                    f"{verifies} relation(s) vérifiée(s), toutes respectées."
+                    if not anomalies
+                    else " ; ".join(anomalies)
+                ),
+            })
+
+    # -- Alternants : aucun cours hors semaine de présence IUT --
+    # Contrainte DURE côté solveur, jamais vérifiée sur le résultat : une séance
+    # FC placée une semaine où les étudiants sont en entreprise est un défaut
+    # invisible jusqu'à ce qu'ils ne viennent pas.
+    if calendar is not None:
+        from cal_iut.ingestion.constraints_loader import load_alternance_presence_json
+
+        presences = load_alternance_presence_json(
+            Path(__file__).resolve().parents[3]
+            / "contraintes"
+            / "03_calendrier_alternance_officiel.json"
+        )
+        jours_presence: dict[str, set[tuple[int, int]]] = {}
+        for presence in presences:
+            if not presence.presence_dates:
+                continue
+            jours = allowed_week_days_for_parcours(presence, calendar, week_offset, 30)
+            for key in presence.parcours_keys:
+                jours_presence[key] = jours
+        hors_presence = []
+        verifies_fc = 0
+        for p_row in placements:
+            sess = sessions_by_id.get(p_row["session_id"])
+            if sess is None or "FC" not in sess.parcours:
+                continue
+            jours = jours_presence.get(sess.parcours)
+            if jours is None:
+                continue
+            verifies_fc += 1
+            if (p_row["week"], p_row["day"]) not in jours:
+                hors_presence.append(p_row["session_id"])
+        if verifies_fc:
+            checks.append({
+                "id": "alternance_presence",
+                "label": "Cours des alternants uniquement les semaines de présence IUT",
+                "status": "pass" if not hors_presence else "fail",
+                "detail": (
+                    f"{verifies_fc} séance(s) FC, toutes une semaine de présence."
+                    if not hors_presence
+                    else f"{len(hors_presence)}/{verifies_fc} séance(s) FC placées alors que les "
+                    f"étudiants sont en entreprise (ex. {hors_presence[0]})."
+                ),
+            })
+
+    # -- Indisponibilités enseignant réellement respectées --
+    # Contrainte DURE côté solveur, mais son verdict n'existait que dans
+    # l'onglet Enseignant (une ligne par enseignant) — jamais en synthèse. Un
+    # tableau de bord qui n'affiche pas le total d'une règle dure laisse ses
+    # violations passer inaperçues.
+    if teacher_availability and calendar is not None:
+        violations: list[str] = []
+        verifiees = 0
+        for avail in teacher_availability:
+            interdits = {tuple(x) for x in (avail.forbidden_slots or [])}
+            autorises = {tuple(x) for x in (avail.allowed_slots or [])}
+            dates_interdites = set((avail.metadata or {}).get("forbidden_dates") or [])
+            dates_autorisees = set(avail.allowed_dates or [])
+            if not (interdits or autorises or dates_interdites or dates_autorisees):
+                continue
+            for p_row in placements:
+                if avail.teacher_code not in p_row["teacher_codes"]:
+                    continue
+                verifiees += 1
+                jour, creneau = p_row["day"], p_row["slot"]
+                quand = calendar.week_day_to_date(week_offset + p_row["week"], jour)
+                iso = quand.isoformat() if quand else ""
+                # Une date bloquée UNIQUEMENT parce que l'enseignant encadre une
+                # SAE ce jour-là est une préférence en mode mou, pas un interdit :
+                # elle a son propre indicateur (`sae_supervisor`), on ne la
+                # compte pas ici.
+                supervision = set(
+                    (sae_supervisor_dates or {}).get(avail.teacher_code, set())
+                )
+                sae_ce_jour = quand is not None and quand in supervision
+                if (jour, creneau) in interdits:
+                    violations.append(f"{avail.teacher_code} le {iso} créneau {creneau}")
+                elif autorises and (jour, creneau) not in autorises:
+                    violations.append(f"{avail.teacher_code} hors liste blanche, {iso}")
+                elif iso in dates_interdites and not sae_ce_jour:
+                    violations.append(f"{avail.teacher_code} le {iso} (date déclarée)")
+                elif dates_autorisees and iso not in dates_autorisees:
+                    violations.append(f"{avail.teacher_code} hors dates de venue, {iso}")
+        if verifiees:
+            checks.append({
+                "id": "teacher_availability",
+                "label": "Indisponibilités et listes blanches enseignant respectées",
+                "status": "pass" if not violations else "fail",
+                "detail": (
+                    f"{verifiees} séance(s) vérifiée(s), aucune sur un créneau interdit."
+                    if not violations
+                    else f"{len(violations)}/{verifiees} séance(s) sur un créneau interdit "
+                    f"(ex. {violations[0]})."
+                ),
+            })
+
+    # -- Une salle n'accueille jamais deux cours en même temps --
+    # Règle si évidente qu'elle n'avait AUCUN contrôle : le tableau de bord
+    # vérifiait la CAPACITÉ des salles, jamais leur OCCUPATION. Un bug réel a
+    # survécu à cause de cette absence — la branche « salle de duo » de
+    # `rooms.py` prenait sa salle sans regarder si elle était libre, et le run
+    # `odd26` envoyait 4 fois deux groupes dans la même pièce (H.007, H.008,
+    # H.201, H.203). Corrigé le 26/08/2026, trouvé par exploration.
+    if rooms:
+        occupation: dict[tuple[str, int], str] = {}
+        collisions: list[str] = []
+        for p_row in placements:
+            salle = p_row.get("room_id")
+            if not salle:
+                continue
+            sess = sessions_by_id.get(p_row["session_id"])
+            duree = max(1, getattr(sess, "duration_slots", 1))
+            base = t_of.get(p_row["session_id"])
+            if base is None:
+                continue
+            for t in range(base, base + duree):
+                cle = (salle, t)
+                autre = occupation.get(cle)
+                if autre is not None:
+                    collisions.append(
+                        f"{p_row.get('room_label') or salle} : {p_row['session_id']} et {autre}"
+                    )
+                else:
+                    occupation[cle] = p_row["session_id"]
+        avec_salle = sum(1 for p_row in placements if p_row.get("room_id"))
+        if avec_salle:
+            checks.append({
+                "id": "room_double_booking",
+                "label": "Une salle n'accueille jamais deux cours en même temps",
+                "status": "pass" if not collisions else "fail",
+                "detail": (
+                    f"{avec_salle} séance(s) avec salle, aucune collision."
+                    if not collisions
+                    else f"{len(collisions)} collision(s) de salle : "
+                    + " ; ".join(collisions[:3])
+                ),
+            })
+
+    # -- Duos synchronisés sur une salle rare --
+    from cal_iut.ingestion.config_loader import load_teacher_duos
+    from cal_iut.solver.constraints import duo_episode_pairs
+
+    duos = load_teacher_duos(Path(__file__).resolve().parents[3] / "data" / "config")
+    if duos:
+        paires = duo_episode_pairs(list(sessions_by_id.values()), duos)
+        desynchronisees = [
+            (a, b)
+            for a, b in paires
+            if a in t_of and b in t_of and t_of[a] != t_of[b]
+        ]
+        verifiables = [(a, b) for a, b in paires if a in t_of and b in t_of]
+        if verifiables:
+            checks.append({
+                "id": "duo_rare_room",
+                "label": "Duos co-animés au même créneau (salle rare dédoublée)",
+                "status": "pass" if not desynchronisees else "fail",
+                "detail": (
+                    f"{len(verifiables)} épisode(s) de duo, tous synchronisés."
+                    if not desynchronisees
+                    else f"{len(desynchronisees)}/{len(verifiables)} épisode(s) désynchronisés "
+                    f"(ex. {desynchronisees[0][0]} vs {desynchronisees[0][1]})."
+                ),
+            })
+
+    # -- Blocs de 3h / 4h30 restés d'un seul tenant --
+    blocs = [s for s in sessions_by_id.values() if s.duration_slots > 1 and s.id in t_of]
+    if blocs:
+        # Un bloc ne doit jamais déborder sur le jour suivant : il démarre donc
+        # au plus tard au créneau `6 - durée`.
+        deborde = [
+            s.id for s in blocs
+            if (t_of[s.id] % SLOTS_PER_DAY_LOCAL) + s.duration_slots > SLOTS_PER_DAY_LOCAL
+        ]
+        checks.append({
+            "id": "double_sessions",
+            "label": "Blocs de 3h / 4h30 d'un seul tenant dans la journée",
+            "status": "pass" if not deborde else "fail",
+            "detail": (
+                f"{len(blocs)} bloc(s) long(s), tous entiers dans leur journée."
+                if not deborde
+                else f"{len(deborde)}/{len(blocs)} bloc(s) débordent sur le jour suivant "
+                f"(ex. {deborde[0]})."
+            ),
+        })
 
     return checks
 
@@ -740,6 +1253,10 @@ def build_payload(
         sae_days_by_course,
         rooms,
         timetable.get("tier_values") if isinstance(timetable.get("tier_values"), dict) else None,
+        calendar,
+        week_offset,
+        teacher_availability,
+        sae_supervisor_dates,
     )
     group_parcours = {g.id: g.parcours for g in scoped_groups}
     sae_rows = _sae_rows(sae_days_by_course, sessions)
@@ -747,8 +1264,43 @@ def build_payload(
     event_rows = [e for e in (planning_events or []) if 0 <= int(e.get("w", -1)) < n_weeks]
     event_slot_rows = [e for e in (planning_event_slots or []) if 0 <= int(e.get("w", -1)) < n_weeks]
 
+    # Séances absentes du planning. Calculées ICI, par différence, plutôt que
+    # laissées implicites : sans cette liste, une séance non placée
+    # disparaissait de toutes les vues et de tous les compteurs — le planning
+    # avait l'air complet alors qu'il manquait des heures d'enseignement
+    # (cf. docs/DATA.md §66). Le pire des trois états possibles : pire qu'un
+    # échec visible, et pire qu'un placement imparfait.
+    placees = {p["session_id"] for p in placements}
+    # Exclut les SAE non planifiées par le solveur (préfixe "WS", sauf celles
+    # de `solver_scheduled_sae`, ex. WSA501D) — MÊME filtre que l'audit
+    # (`resultat.seances_non_placees`, la référence de confiance de cette
+    # nuit) et `score_run`. Bug réel trouvé le 27/08/2026 (retour
+    # utilisateur : « j'ai 1121 à placer pas 426 ») : cette liste-ci, comme
+    # `/placements/manquantes` côté API, comptait encore les 695 séances SAE
+    # dont la semaine vient du calendrier réel, jamais du solveur — jamais
+    # censées être placées à la main, et donc jamais des « manquantes » au
+    # sens où l'audit (et l'utilisateur) l'entendent.
+    scheduled_sae = _solver_scheduled_sae()
+    non_placees = [
+        {
+            "id": s.id,
+            "code": s.course_code,
+            "nom": s.course_name,
+            "type": str(getattr(s.session_type, "value", s.session_type)),
+            "parcours": s.parcours,
+            "groupes": [labels.get(g, g) for g in (s.group_ids or [])],
+            "profs": [teacher_labels.get(c, c) for c in (s.teacher_codes or [])],
+        }
+        for s in sessions
+        if s.id not in placees
+        and s.parcours in relevant_parcours
+        and (not s.course_code.upper().startswith("WS") or (s.course_code.upper(), s.semestre) in scheduled_sae)
+    ]
+    non_placees.sort(key=lambda m: (m["parcours"], m["code"]))
+
     return {
         "status": timetable.get("status"),
+        "seancesNonPlacees": non_placees,
         "objective": timetable.get("objective_value"),
         "quality": timetable.get("quality"),
         "groupLabels": labels,

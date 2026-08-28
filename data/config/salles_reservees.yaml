@@ -1,0 +1,31 @@
+# Salles réservées à des tiers, en dehors des enseignements MMI.
+#
+# Pourquoi ce fichier existe (26/08/2026). Le solveur ne modélise pas les
+# salles du tout (cf. docs/DATA.md §65.5) : elles sont attribuées APRÈS coup
+# par `solver/rooms.py::assign_rooms`. Une salle prise par la Direction ne peut
+# donc pas se déclarer comme une contrainte du solveur — elle se déclare ici,
+# et l'attribution des salles n'en dispose plus.
+#
+# Conséquence à connaître : réserver une salle ne déplace AUCUN cours. Elle
+# force seulement l'outil à en trouver une autre. Pour les deux promotions qui
+# ne tiennent que dans l'amphi (BUT1, 120 étudiants ; BUT2-DEV-FI, 56), il n'y a
+# pas d'autre salle — un CM programmé au même créneau se retrouverait sans
+# solution. Le contrôle `capacite.salles_rares` de `cal-iut audit` le signale.
+#
+# Chaque entrée porte QUI l'a demandée et QUAND : dans un an, une réservation
+# sans justification finit supprimée à tort, ou conservée à tort.
+#
+# Champs :
+#   salle   identifiant tel que déclaré dans rooms.yaml (ex. "h018")
+#   date    ISO (AAAA-MM-JJ)
+#   slots   0 = 8h-9h30, 1 = 9h30-11h, 2 = 11h-12h30,
+#           3 = 14h-15h30, 4 = 15h30-17h, 5 = 17h-18h30
+#   motif / demande_par / le
+
+reservations:
+  - salle: "h018"
+    date: "2026-09-11"
+    slots: [1, 2]
+    motif: "Besoin de la Direction (amphi H, 9h30-12h30)"
+    demande_par: "Kyllian Bresson"
+    le: "2026-08-26"

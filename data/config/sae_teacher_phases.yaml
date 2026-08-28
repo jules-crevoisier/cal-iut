@@ -1,0 +1,95 @@
+# Répartition des jours d'une SAE ENTRE SES ENSEIGNANTS (cf. modèle
+# `SaeTeacherPhase`, `ingestion/planning_loader.py::sae_supervisor_dates_by_teacher`).
+#
+# Sans entrée ici, le comportement par défaut reste inchangé : TOUS les
+# enseignants listés sur une SAE dans « DATES SAE 2026_2027 » sont considérés
+# indisponibles sur TOUS les jours de cette SAE (retour utilisateur du
+# 11/08/2026 : « pendant une SAE les profs qui sont assignés dessus ne sont que
+# très peu disponibles »). Prudent, mais grossier dès que la SAE est longue et
+# que les enseignants s'y relaient : Ariane Loizon se retrouvait bloquée 22
+# jours sur la seule WS501D, alors qu'elle n'y intervient qu'en fin de module.
+#
+# Une SAE déclarée ici voit ses jours RESTREINTS, enseignant par enseignant, aux
+# fenêtres listées. Un enseignant présent sur la SAE mais absent de cette liste
+# garde tous les jours (repli prudent : on ne libère jamais quelqu'un par
+# omission).
+
+phases:
+  # ---------------------------------------------------------------------
+  # WS501D — « Développer pour le web ou concevoir un dispositif interactif »
+  # (BUT3-DEV-FI). Source : Ariane Loizon, colonne CONTRAINTES du CSV
+  # « CONTRAINTES ENSEIGNANTS MMI 2026_2027 » + son commentaire dans
+  # progression.json (30/06/2026), repris mot pour mot :
+  #
+  #   TOTAL WS501D 0 CM / 44 TD / 9 TP
+  #   10 TD WS501D pour Fabrice (FME) avant le 23 octobre 2026
+  #   9 TD WS501D pour Sébastien Loizon (SLO) entre le 26 et le 30 octobre 2026
+  #   5 TD WS501D pour Fabrice (FME) après le 30 octobre 2026
+  #   5 TD WS501D pour Ariane (ALO) après le 30 octobre 2026
+  #   1 TD WS501D pour Fabrice (FME) après les 5 TD, en parallèle en même temps
+  #     1 TD WRA505C pour Ariane (ALO)
+  #
+  # CONTRADICTION RELEVÉE puis TRANCHÉE À LA SOURCE.
+  #
+  # 25/08/2026 — « les 9 séances de Sébastien Loizon entre le 26 et le 30
+  # octobre » tombent intégralement dans la pause pédagogique de la Toussaint
+  # (IUT fermé du 26 au 30 octobre, cf. contraintes/02_calendrier_iut.json), et
+  # le fichier officiel DATES SAE n'y a AUCUNE fenêtre : il saute du 19-22
+  # octobre au 5-6 novembre. Question posée à Ariane Loizon ; en attendant, la
+  # phase avait été décalée provisoirement au 2-6 novembre.
+  #
+  # 26/08/2026 — réponse d'Ariane Loizon via Kyllian Bresson : c'est la semaine
+  # PRÉCÉDENTE qui était visée, du lundi 19 au vendredi 23 octobre 2026. La
+  # phase provisoire est donc remplacée par la vraie.
+  #
+  # À noter : les jours réellement retenus restent ceux du fichier officiel
+  # (19 au 22 octobre — le 23 n'est pas un jour de SAE WS501D). Cette fenêtre
+  # ne dit que QUI encadre, elle n'ajoute jamais de jour de SAE. Conséquence :
+  # les 10 TD de Fabrice Meuzeret « avant le 23 octobre » et les 9 de Sébastien
+  # Loizon partagent désormais la même semaine de 4 jours — c'est l'organisation
+  # interne de la SAE, décidée par ses enseignants, que le solveur ne planifie
+  # pas ; il en tire seulement leurs indisponibilités.
+  - course_code: WS501D
+    semestre: S5
+    teachers:
+      - teacher_code: FME
+        debut: 2026-10-19
+        fin: 2026-10-22
+        note: "10 TD avant le 23 octobre (fenêtre officielle 19-22 oct.)."
+      - teacher_code: SLO
+        debut: 2026-10-19
+        fin: 2026-10-23
+        note: >
+          9 TD. Demandés à l'origine « entre le 26 et le 30 octobre », semaine
+          où l'IUT est fermé : Ariane Loizon a confirmé le 26/08/2026 (via
+          Kyllian Bresson) qu'il s'agissait de la semaine précédente, du 19 au
+          23 octobre 2026.
+      - teacher_code: FME
+        debut: 2026-11-12
+        fin: 2027-01-15
+        note: "5 TD après le 30 octobre, puis le TD conjoint avec la WRA505C."
+      - teacher_code: ALO
+        debut: 2026-11-12
+        fin: 2027-01-15
+        # Jours où Ariane n'encadre PAS la WS501D : ce sont les seuls jours de
+        # SAE WS501D qui tombent aussi une semaine de présence IUT des
+        # alternants BUT3-CREACOM-FC (23-27 nov., 14-18 déc., 4-8 janv.). Le
+        # TD conjoint qu'elle demande — « une séance où Fabrice a les DEV en
+        # WS501D et où moi j'ai les Créa Comm en WRA505C en même temps » — ne
+        # peut avoir lieu qu'un de ces jours-là ; elle y est donc devant les
+        # CREACOM, pas sur la SAE des DEV. Cf. la règle WRA505C correspondante
+        # dans `course_scheduling_rules.yaml::session_date_windows`.
+        exclure:
+          - 2026-11-26
+          - 2026-11-27
+          - 2026-12-17
+          - 2026-12-18
+          - 2027-01-07
+          - 2027-01-08
+        note: >
+          5 TD après le 30 octobre. Ariane n'est donc PAS mobilisée sur la
+          WS501D avant le 12 novembre : ses créneaux d'octobre redeviennent
+          disponibles pour la WRA505C et ses autres modules. Les 5 séances
+          qu'elle y assure tiennent largement dans les 16 jours de la phase :
+          la bloquer sur les 6 jours ci-dessus en plus serait une
+          sur-approximation coûteuse pour la WRA505C.

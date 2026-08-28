@@ -1,0 +1,39 @@
+# Événements fixes annoncés APRÈS l'export « Dates MMI 26_27 - DATES OK.csv ».
+#
+# Pourquoi ce fichier existe (26/08/2026). `contraintes/10_dates_fixes.json` est
+# REGÉNÉRÉ à chaque `python scripts/build_contraintes.py` à partir du CSV de
+# l'établissement. Y ajouter une ligne à la main serait effacé au premier
+# rebuild ; modifier le CSV de l'établissement le ferait diverger de la version
+# officielle, et le prochain export écraserait l'ajout sans prévenir.
+#
+# Les événements déclarés ici sont FUSIONNÉS avec ceux du CSV, en gardant trace
+# de leur origine (`source: "config"`). Quand l'établissement finit par les
+# intégrer à son propre export, la ligne correspondante se retire d'ici.
+#
+# Chaque entrée porte QUI l'a demandée et QUAND : dans un an, une contrainte
+# sans justification finit supprimée à tort, ou conservée à tort.
+#
+# Champs :
+#   date      ISO (AAAA-MM-JJ)
+#   debut/fin "9h30" / "12h30" — les créneaux couverts sont bloqués
+#   parcours  liste des parcours empêchés d'avoir cours ; [] = information seule
+#   salle     indicative (le solveur ne modélise pas les salles)
+#   motif     ce que c'est, en clair
+#   demande_par / le  traçabilité
+
+evenements:
+  - date: "2026-09-03"
+    debut: "9h30"
+    fin: "12h30"
+    parcours: ["BUT2-CREACOM-FC"]
+    salle: null
+    motif: "Pré-rentrée BUT2 FC alternants"
+    demande_par: "Kyllian Bresson"
+    le: "2026-08-26"
+    note: >-
+      Seul parcours BUT2 en formation continue actif cette année :
+      BUT2-DEV-FC est gelé (effectif alternants insuffisant, cf.
+      contraintes/00_INDEX.md). Florent Libbrecht (FLI) et Anthony Froli (AFR)
+      doivent être libres sur ce créneau — déclaré séparément dans
+      teacher_availability.yaml, car un blocage de parcours ne les empêcherait
+      pas d'être placés devant une AUTRE promotion à la même heure.

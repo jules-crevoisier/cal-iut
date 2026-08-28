@@ -44,7 +44,8 @@
       },
       "lead": "AFR",
       "autres_enseignants": [
-        "ALO"
+        "ALO",
+        "AGT"
       ],
       "fenetres": [
         {
@@ -74,7 +75,9 @@
       },
       "lead": "GLE",
       "autres_enseignants": [
-        "ALO"
+        "ALO",
+        "APE",
+        "CGA"
       ],
       "fenetres": [
         {
@@ -104,7 +107,8 @@
       },
       "lead": "KBR",
       "autres_enseignants": [
-        "KNG"
+        "KNG",
+        "FLI"
       ],
       "fenetres": [
         {
@@ -136,7 +140,9 @@
       },
       "lead": "FLI",
       "autres_enseignants": [
-        "AHA"
+        "AHA",
+        "TCA",
+        "RDE"
       ],
       "fenetres": [
         {
@@ -250,7 +256,7 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [],
       "fenetres": [],
       "groupes_td": null,
@@ -286,7 +292,9 @@
       },
       "lead": "KBR",
       "autres_enseignants": [
-        "ALO"
+        "ALO",
+        "JLE",
+        "FLI"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -304,7 +312,9 @@
       },
       "lead": "FME",
       "autres_enseignants": [
-        "FLI"
+        "FLI",
+        "TCA",
+        "RDE"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -487,9 +497,22 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "FLI",
+        "FME",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "RDE",
+        "RHU",
+        "JLE",
+        "TCA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -597,9 +620,22 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "FLI",
+        "FME",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "RDE",
+        "RHU",
+        "JLE",
+        "TCA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -667,9 +703,24 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "FLI",
+        "FME",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "RDE",
+        "RHU",
+        "JLE",
+        "TCA",
+        "TPA",
+        "ARA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -737,9 +788,21 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "TPA",
+        "ARA",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "RHU",
+        "JLE",
+        "TCA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -757,7 +820,8 @@
       },
       "lead": "FME",
       "autres_enseignants": [
-        "ALO"
+        "ALO",
+        "SLO"
       ],
       "fenetres": [
         {
@@ -902,9 +966,22 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "FLI",
+        "FME",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "RDE",
+        "RHU",
+        "JLE",
+        "TCA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -981,9 +1058,22 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "FLI",
+        "FME",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "RDE",
+        "RHU",
+        "JLE",
+        "TCA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -1109,9 +1199,20 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "FLI",
+        "FME",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "JLE",
+        "ARA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -1129,7 +1230,8 @@
       },
       "lead": "RDE",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "ALO"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -1161,9 +1263,22 @@
         "td": 0,
         "tp": 0
       },
-      "lead": null,
+      "lead": "ODY",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "AHA",
+        "ALO",
+        "DAN",
+        "FLI",
+        "FME",
+        "GLE",
+        "JTH",
+        "KBR",
+        "MRI",
+        "RDE",
+        "RHU",
+        "JLE",
+        "TCA"
       ],
       "fenetres": [],
       "groupes_td": null,
@@ -1181,7 +1296,8 @@
       },
       "lead": "RDE",
       "autres_enseignants": [
-        "AFR"
+        "AFR",
+        "ALO"
       ],
       "fenetres": [],
       "groupes_td": null,

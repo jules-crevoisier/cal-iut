@@ -13,6 +13,30 @@ teachers:
     forbidden_slots: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]  # créneau 0 (8h-9h30), tous les jours
     notes: "Retour utilisateur (06/08/2026) : ne débute ses cours qu'à partir de 9h30."
 
+  # --- Pré-rentrée BUT2 FC alternants, jeudi 3 septembre 2026 ---------------
+  # Demande de Kyllian Bresson, 26/08/2026 : « FLI et AFR doivent être
+  # disponibles sur ce créneau, il ne faut pas leur mettre des cours ».
+  #
+  # 9h30-12h30 = créneaux 1 (9h30-11h) et 2 (11h-12h30). Leur après-midi reste
+  # libre : bloquer la journée entière les priverait de quatre créneaux sans
+  # raison.
+  #
+  # Le blocage de parcours déclaré dans `evenements_supplementaires.yaml` ne
+  # suffit PAS : il protège les étudiants de BUT2-CREACOM-FC, pas les
+  # enseignants — FLI et AFR interviennent aussi en BUT1 et BUT2-DEV-FI, et
+  # resteraient programmables devant ces promotions à la même heure.
+  - teacher_code: FLI  # Florent Libbrecht
+    forbidden_date_slots:
+      - date: "2026-09-03"
+        slots: [1, 2]
+        note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Kyllian Bresson, 26/08/2026)"
+
+  - teacher_code: AFR  # Anthony Froli
+    forbidden_date_slots:
+      - date: "2026-09-03"
+        slots: [1, 2]
+        note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Kyllian Bresson, 26/08/2026)"
+
 # Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
   gap_penalty: 100

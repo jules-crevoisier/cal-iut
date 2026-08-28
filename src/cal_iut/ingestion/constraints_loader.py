@@ -505,6 +505,14 @@ def merge_teacher_availability(
             preferred_days=days,
             allowed_slots=allowed_slots,
             allowed_dates=allowed_dates,
+            # UNION, et surtout : ne jamais oublier ce champ ici. Cette fusion
+            # RECONSTRUIT l'objet — tout champ non recopié disparaît en silence
+            # dès qu'un enseignant est présent des deux côtés, ce qui est le cas
+            # de presque tous. Une indisponibilité saisie en YAML serait alors
+            # perdue sans le moindre avertissement.
+            forbidden_date_slots=(
+                list(existing.forbidden_date_slots) + list(teacher.forbidden_date_slots)
+            ),
             week_parity_rules=teacher.week_parity_rules or existing.week_parity_rules,
             parity_reference=teacher.parity_reference,
             monthly_cluster_max_weeks=(

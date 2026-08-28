@@ -5,16 +5,19 @@ from pathlib import Path
 import yaml
 
 from cal_iut.models.entities import (
+    CourseMaxWeekRule,
     CourseMinWeekRule,
     CourseTeacherOrderRule,
     DoubleSessionRule,
     Group,
     Room,
     RoomType,
+    SaeTeacherPhase,
     SessionDateWindowRule,
     SessionType,
     TeacherAvailability,
     TeacherCorrection,
+    TeacherDistributionRule,
     TeacherDuo,
     WeeklyCapException,
 )
@@ -97,6 +100,44 @@ def load_teacher_availability(config_dir: Path) -> list[TeacherAvailability]:
     return [TeacherAvailability.model_validate(item) for item in data.get("teachers", [])]
 
 
+def load_room_reservations(
+    config_dir: Path, calendar, week_offset: int = 0
+) -> dict[str, set[int]]:
+    """Salles réservées par des tiers -> index de créneaux occupés.
+
+    Le solveur ne modélise pas les salles (cf. docs/DATA.md §65.5) : elles sont
+    attribuées après coup. Une salle prise par la Direction se déclare donc
+    ici, et l'attribution n'en dispose plus — elle ne déplace aucun cours,
+    elle force seulement à en trouver une autre.
+
+    Retourne `{room_id: {index de créneau absolu}}`, dans le même repère que
+    `solver/rooms.py::_time_index`, prêt à pré-remplir `room_schedule`.
+    """
+    from datetime import date as _date
+
+    from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
+
+    chemin = config_dir / "salles_reservees.yaml"
+    if not chemin.exists() or calendar is None:
+        return {}
+    data = load_yaml(chemin) or {}
+    slots_per_week = DAYS_PER_WEEK * SLOTS_PER_DAY
+    reserve: dict[str, set[int]] = {}
+    for entree in data.get("reservations", []) or []:
+        mapped = calendar.date_to_week_day_any(_date.fromisoformat(str(entree["date"])))
+        if mapped is None:
+            continue
+        rel = mapped[0] - week_offset
+        if rel < 0:
+            continue
+        base = rel * slots_per_week + mapped[1] * SLOTS_PER_DAY
+        cible = reserve.setdefault(str(entree["salle"]), set())
+        for slot in entree.get("slots", []) or []:
+            if 0 <= int(slot) < SLOTS_PER_DAY:
+                cible.add(base + int(slot))
+    return reserve
+
+
 def load_objective_weights(config_dir: Path) -> dict[str, int]:
     data = load_yaml(config_dir / "teacher_availability.yaml")
     weights = data.get("objective_weights", {})
@@ -168,6 +209,7 @@ def load_session_date_windows(config_dir: Path) -> list[SessionDateWindowRule]:
                 sequence_orders=[int(o) for o in item.get("sequence_orders", [])],
                 start_date=(str(item["debut"]) if item.get("debut") else None),
                 end_date=(str(item["fin"]) if item.get("fin") else None),
+                only_dates=[str(d) for d in item.get("dates", [])],
                 note=item.get("note"),
             )
         )
@@ -268,6 +310,103 @@ def load_course_min_week_rules(config_dir: Path) -> list[CourseMinWeekRule]:
             )
         )
     return rules
+
+
+def load_course_max_week_rules(config_dir: Path) -> list[CourseMaxWeekRule]:
+    """Bornes de FIN par cours (cf. course_scheduling_rules.yaml, `max_week_rules`)."""
+    path = config_dir / "course_scheduling_rules.yaml"
+    if not path.exists():
+        return []
+    data = load_yaml(path) or {}
+    return [
+        CourseMaxWeekRule(
+            course_code=str(item["course_code"]),
+            semestre=str(item["semestre"]),
+            max_week=int(item["max_week"]),
+            note=item.get("note"),
+        )
+        for item in data.get("max_week_rules", [])
+    ]
+
+
+def load_solver_scheduled_sae(config_dir: Path) -> set[tuple[str, str]]:
+    """
+    (code_matiere, semestre) des SAE que le SOLVEUR doit placer lui-même, au
+    lieu de les laisser aux enseignants.
+
+    Par défaut, toute séance dont le code commence par "WS" est retirée de la
+    planification : une SAE est définie par ses enseignants, seules ses dates
+    calendaires servent à sanctuariser les cours classiques (cf.
+    `solve_decomposed`). Certaines SAE n'ont pourtant AUCUNE date dans le
+    fichier officiel et doivent bien apparaître à l'emploi du temps — cas de
+    WSA501D (BUT3-DEV-FC), `dates_indeterminees: true` dans
+    `contraintes/09_dates_sae.json`, demandée explicitement par l'utilisateur
+    le 25/08/2026.
+
+    Liste EXPLICITE et non déduite de l'absence de dates : une SAE sans date
+    est le plus souvent une donnée manquante à réclamer, pas une invitation à
+    la planifier d'office.
+    """
+    path = config_dir / "course_scheduling_rules.yaml"
+    if not path.exists():
+        return set()
+    data = load_yaml(path) or {}
+    return {
+        (str(item["course_code"]).upper(), str(item["semestre"]))
+        for item in data.get("solver_scheduled_sae", [])
+    }
+
+
+def is_solver_scheduled(course_code: str, semestre: str, scheduled: set[tuple[str, str]]) -> bool:
+    """Une séance doit-elle rester dans la planification malgré son préfixe WS ?"""
+    return (course_code.upper(), semestre) in scheduled
+
+
+def load_teacher_distributions(config_dir: Path) -> list[TeacherDistributionRule]:
+    """Répartition des séances d'un module entre ses enseignants (cf.
+    `course_scheduling_rules.yaml::teacher_distribution`)."""
+    path = config_dir / "course_scheduling_rules.yaml"
+    if not path.exists():
+        return []
+    data = load_yaml(path) or {}
+    rules: list[TeacherDistributionRule] = []
+    for item in data.get("teacher_distribution", []):
+        session_type = item.get("session_type")
+        rules.append(
+            TeacherDistributionRule(
+                course_code=str(item["course_code"]),
+                semestre=str(item["semestre"]),
+                mode=str(item.get("mode", "alterne")),
+                session_type=SessionType(str(session_type)) if session_type else None,
+                teacher_order=[str(c).upper() for c in item.get("teacher_order", [])],
+                note=item.get("note"),
+            )
+        )
+    return rules
+
+
+def load_sae_teacher_phases(config_dir: Path) -> list[SaeTeacherPhase]:
+    """Répartition des jours d'une SAE entre ses enseignants (cf.
+    `sae_teacher_phases.yaml`, modèle `SaeTeacherPhase`)."""
+    path = config_dir / "sae_teacher_phases.yaml"
+    if not path.exists():
+        return []
+    data = load_yaml(path) or {}
+    phases: list[SaeTeacherPhase] = []
+    for entry in data.get("phases", []):
+        for teacher in entry.get("teachers", []):
+            phases.append(
+                SaeTeacherPhase(
+                    course_code=str(entry["course_code"]).upper(),
+                    semestre=str(entry["semestre"]),
+                    teacher_code=str(teacher["teacher_code"]).upper(),
+                    debut=str(teacher["debut"]),
+                    fin=str(teacher["fin"]),
+                    exclure=[str(d) for d in teacher.get("exclure", [])],
+                    note=teacher.get("note"),
+                )
+            )
+    return phases
 
 
 def load_weekly_cap_exceptions(config_dir: Path) -> list[WeeklyCapException]:

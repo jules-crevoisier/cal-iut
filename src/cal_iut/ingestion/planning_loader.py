@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
+from cal_iut.ingestion.config_loader import load_sae_teacher_phases
+
 # Semestres réellement couverts par un fichier de dates SAE. Un module est
 # retenu pour un run si son semestre est demandé — plus besoin de mapper un
 # semestre vers des « feuilles » de tableur.
@@ -265,7 +267,10 @@ def sae_group_labels_by_course(bundle: PlanningBundle) -> dict[str, list[str]]:
     }
 
 
-def sae_supervisor_dates_by_teacher(bundle: PlanningBundle) -> dict[str, set[date]]:
+def sae_supervisor_dates_by_teacher(
+    bundle: PlanningBundle,
+    config_dir: Path | None = None,
+) -> dict[str, set[date]]:
     """
     Trigramme enseignant → dates où il encadre une SAE (lead ou co-enseignant,
     n'importe quel parcours confondu) — retour utilisateur du 11/08/2026 :
@@ -275,11 +280,50 @@ def sae_supervisor_dates_by_teacher(bundle: PlanningBundle) -> dict[str, set[dat
     parcours à la fois (ex. Ariane Loizon : 5 SAE, S1+S3+S5, 48 jours cumulés) —
     toutes leurs dates sont unies ici, quel que soit le parcours de la SAE
     source : l'indisponibilité n'est pas propre à un seul parcours.
+
+    `data/config/sae_teacher_phases.yaml` (modèle `SaeTeacherPhase`) permet de
+    RESTREINDRE ces dates enseignant par enseignant quand la répartition réelle
+    est connue — cas de WS501D, dont Ariane Loizon a fourni le découpage
+    (FME du 19 au 22 octobre, SLO début novembre, FME+ALO à partir du 12
+    novembre). Sans ça, ALO comptait 22 jours bloqués sur cette seule SAE,
+    alors qu'elle n'y intervient qu'en fin de module — au détriment de la
+    WRA505C, qu'elle doit justement commencer tôt.
     """
+    phases = load_sae_teacher_phases(
+        config_dir or Path(__file__).resolve().parents[3] / "data" / "config"
+    )
+    # (code_matiere) -> {trigramme -> [(debut, fin), ...]}. Le semestre n'est
+    # pas discriminant ici : un code de SAE n'existe que dans un semestre.
+    phases_by_course: dict[str, dict[str, list[tuple[date, date, set[date]]]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    for phase in phases:
+        phases_by_course[phase.course_code][phase.teacher_code].append(
+            (
+                date.fromisoformat(phase.debut),
+                date.fromisoformat(phase.fin),
+                {date.fromisoformat(d) for d in phase.exclure},
+            )
+        )
+
     result: dict[str, set[date]] = defaultdict(set)
     for window in bundle.sae_windows:
+        declared = {}
+        for code in window.course_codes:
+            declared.update(phases_by_course.get(code.upper(), {}))
         for teacher in window.teachers:
-            result[teacher].update(window.dates)
+            # Enseignant sans phase déclarée : comportement historique, tous
+            # les jours de la SAE le bloquent. On ne libère jamais quelqu'un
+            # par omission — seule une déclaration explicite restreint.
+            ranges = declared.get(teacher.upper())
+            if ranges is None:
+                result[teacher].update(window.dates)
+                continue
+            result[teacher].update(
+                d
+                for d in window.dates
+                if any(start <= d <= end and d not in excluded for start, end, excluded in ranges)
+            )
     return dict(result)
 
 

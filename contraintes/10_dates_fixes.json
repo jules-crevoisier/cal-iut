@@ -69,6 +69,22 @@
       "motif": "Rentrée"
     },
     {
+      "date": "2026-09-03",
+      "debut": "9h30",
+      "fin": "12h30",
+      "debut_minutes": 570,
+      "fin_minutes": 750,
+      "salle": null,
+      "parcours": [
+        "BUT2-CREACOM-FC"
+      ],
+      "parcours_source": "config",
+      "motif": "Pré-rentrée BUT2 FC alternants",
+      "source": "config",
+      "demande_par": "Kyllian Bresson",
+      "le": "2026-08-26"
+    },
+    {
       "date": "2026-09-08",
       "debut": "9h30",
       "fin": "12h30",
@@ -119,19 +135,6 @@
       ],
       "parcours_source": "S3-CREACOM-FC",
       "motif": "Rentrée"
-    },
-    {
-      "date": "2026-09-17",
-      "debut": "9h30",
-      "fin": "11h00",
-      "debut_minutes": 570,
-      "fin_minutes": 660,
-      "salle": "Amphi GMP/GEII",
-      "parcours": [
-        "BUT1"
-      ],
-      "parcours_source": "S1",
-      "motif": "VSS - Interventions"
     }
   ],
   "a_fixer": [
@@ -146,6 +149,13 @@
       "motif": "Date de début de stages BUT2",
       "parcours": [],
       "statut": "A FIXER"
+    }
+  ],
+  "annules": [
+    {
+      "date": "2026-09-17",
+      "motif": "VSS - Interventions",
+      "raison": "annulé (retour utilisateur), cf. _CANCELLED_FIXED_EVENTS"
     }
   ]
 }

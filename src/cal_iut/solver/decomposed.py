@@ -27,16 +27,25 @@ un peu moins global. cf. §14 pour le comparatif chiffré.
 from __future__ import annotations
 
 import os
+import warnings
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 
 from ortools.sat.python import cp_model
 
 from cal_iut.calendar.academic import AcademicCalendar
-from cal_iut.ingestion.config_loader import load_course_min_week_rules, load_weekly_cap_exceptions
+from cal_iut.ingestion.config_loader import (
+    load_course_max_week_rules,
+    load_course_min_week_rules,
+    load_course_teacher_orders,
+    load_session_date_windows,
+    load_solver_scheduled_sae,
+    load_weekly_cap_exceptions,
+)
 from cal_iut.ingestion.constraints_loader import (
     StudentPresence,
     allowed_week_days_for_parcours,
@@ -54,28 +63,103 @@ from cal_iut.models.session import SessionToPlace
 from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
 from cal_iut.solver.constraints import (
     add_blocked_calendar_constraints,
+    add_cohort_sequence_constraints,
     add_duo_synchronized_rare_room_constraints,
     add_duration_domain_constraints,
     add_pedagogical_sequence_constraints,
     add_planning_event_block_constraints,
+    add_session_date_window_constraints,
     add_student_presence_constraints,
     add_teacher_availability_constraints,
     add_teacher_weekly_hour_cap_constraints,
     add_thursday_afternoon_pac_lock,
+    cohort_sequence_pairs,
     duo_episode_pairs,
     sae_blocked_days_by_group,
     sae_blocked_days_by_parcours,
 )
 from cal_iut.solver.objectives import (
     add_avoid_zone_penalties,
+    add_cm_spread_penalties,
+    add_course_grouping_penalties,
+    add_course_teacher_order_penalties,
     add_edge_slot_penalties,
     add_intra_day_gap_penalties,
     add_midday_fill_penalties,
     add_sae_supervisor_soft_penalties,
+    add_teacher_monthly_clustering_penalties,
 )
 from cal_iut.solver.resources import add_student_and_teacher_no_overlap, build_student_cohorts
 
 SLOTS_PER_WEEK = DAYS_PER_WEEK * SLOTS_PER_DAY
+
+# Plafond horaire hebdomadaire réellement appliqué aux runs complets, et
+# SOURCE UNIQUE pour le solveur comme pour le tableau de bord.
+#
+# Avoir eu deux valeurs différentes (22 dans `SolverConfig`, 23 ici) a coûté
+# cher : les runs tournaient à 23 pendant que le contrôle `weekly_cap`
+# vérifiait 22 et signalait des « violations » que personne ne savait
+# expliquer. Une règle vérifiée à une valeur et appliquée à une autre n'est
+# pas une règle.
+#
+# 23 créneaux = 34h30/semaine, au-dessus des 33h de la règle pédagogique.
+# Justification chiffrée et arbitrage : cf. le commentaire détaillé sur
+# `solve_decomposed(fi_cap_slots=...)`.
+FI_WEEKLY_CAP_SLOTS = 23
+FC_WEEKLY_CAP_SLOTS = 23
+
+# Dernière semaine-index admise pour un parcours FI (non-FC) — retour
+# utilisateur du 27/08/2026 : « les FI doivent finir leur semestre le 1er
+# février, les FC eux ont jusqu'au 12 mars ». Semaine-index 18 = 25-29
+# janvier 2027 (juste avant le 1er février), déjà la valeur par défaut de
+# `cal-iut audit --fi-max-week` et de `scripts/solve_until_ok.py` — reprise
+# ici comme unique source pour que `assign_weeks`, l'audit ET
+# `_hard_constraint_context` (verrous manuels : glisser-déposer, suggestions,
+# complétion) appliquent tous la MÊME borne, plutôt que trois « 18 » écrits
+# à la main à trois endroits différents (même piège que celui documenté
+# ci-dessus pour `FI_WEEKLY_CAP_SLOTS`).
+FI_MAX_WEEK_DEFAULT = 18
+
+
+@lru_cache(maxsize=4)
+def _session_date_windows(config_dir: Path) -> tuple:
+    """Fenêtres de dates par séance, mises en cache : `solve_week_detail` est
+    appelé une fois par semaine (et en parallèle), relire le YAML à chaque fois
+    ne servirait à rien."""
+    return tuple(load_session_date_windows(config_dir))
+
+
+@lru_cache(maxsize=1)
+def _cours_avec_progression_declaree(root: Path) -> frozenset[tuple[str, str]]:
+    """{(course_code, semestre)} pour les cours dont `progression.json`
+    déclare `"definie": true` — jamais deviné, jamais un défaut permissif.
+
+    Retour utilisateur (27/08/2026, Kyllian Bresson, sur un TD n°3 placé
+    avant un TD n°1 du même cours) : « Mais des mélange de TD ce n'est pas
+    une erreur ? [...] Pourquoi l'outil bloque ? ». Vérifié : pour WS105
+    (et 6 autres cours sur les 8 concernés par les violations du run réel),
+    `progression.json` porte `"definie": false, "seances": []` — le
+    `sequence_order` de ses séances n'est alors qu'un numéro généré
+    automatiquement à l'ingestion (`normalize.py::expand_course_to_sessions`,
+    `_synthetic_sequence` quand `progression_defined` est faux), jamais un
+    ordre de contenu déclaré par un enseignant. Bloquer TD n°3 avant TD n°1
+    dans ce cas n'a donc aucune justification pédagogique — seul CM avant
+    TD/TP (l'introduction du contenu avant sa pratique) reste une vraie
+    contrainte structurelle, quel que soit `definie`."""
+    import json
+
+    chemin = root / "contraintes" / "progression.json"
+    if not chemin.exists():
+        return frozenset()
+    try:
+        data = json.loads(chemin.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return frozenset()
+    return frozenset(
+        (str(item.get("code_matiere")), str(item.get("semestre")))
+        for item in data
+        if isinstance(item, dict) and item.get("progression", {}).get("definie")
+    )
 
 
 def default_num_workers() -> int:
@@ -141,7 +225,7 @@ def _teacher_available_slots_by_week(
     weeks: int,
     calendar: AcademicCalendar | None,
     week_offset: int,
-    fi_only_teachers: set[str] | None = None,
+    no_thursday_pm: set[str] | None = None,
 ) -> dict[tuple[str, int], int]:
     """
     Créneaux DISPONIBLES par (enseignant, semaine) — utilisé pour plafonner
@@ -161,7 +245,10 @@ def _teacher_available_slots_by_week(
     d'indisponibilité manquaient encore et faisaient SUR-ESTIMER la capacité —
     (a) les jours fériés / fermetures du calendrier, (b) le jeudi après-midi
     réservé aux PAC pour un enseignant qui n'intervient QU'EN formation
-    initiale (`fi_only_teachers`), qui ne peut donc jamais y placer de séance.
+    initiale, qui ne peut donc jamais y placer de séance. `no_thursday_pm`
+    liste les enseignants pour lesquels ce retrait s'applique — `assign_weeks`
+    appelle cette fonction DEUX fois, avec et sans, pour poser un plafond par
+    cas plutôt qu'un test annuel approximatif (cf. le bug AHA du 25/08/2026).
     Exemple mesuré : JLE en semaine 8 était plafonné à 21 créneaux alors que
     son maximum réel était 18 — l'étage 2 lui en assignait 20, rendant la
     semaine PROUVÉE infaisable en 0s à l'étage 3.
@@ -183,7 +270,7 @@ def _teacher_available_slots_by_week(
     result: dict[tuple[str, int], int] = {}
     if not teacher_availability:
         return result
-    fi_only_teachers = fi_only_teachers or set()
+    no_thursday_pm = no_thursday_pm or set()
     all_slots = {(day, s) for day in range(DAYS_PER_WEEK) for s in range(SLOTS_PER_DAY)}
 
     for avail in teacher_availability:
@@ -194,7 +281,7 @@ def _teacher_available_slots_by_week(
         for w in range(weeks):
             open_slots = set(allowed_slots) if allowed_slots else set(all_slots)
             open_slots -= set(avail.forbidden_slots or [])
-            if avail.teacher_code in fi_only_teachers:
+            if avail.teacher_code in no_thursday_pm:
                 open_slots -= {(3, s) for s in (3, 4, 5)}
 
             if calendar is not None:
@@ -356,6 +443,44 @@ def assign_weeks(
     # offre un vrai minimum verrouillé, écarté pour l'instance complète
     # (fiabilité insuffisante à cette échelle, cf. §14).
     ordonnancement_weight: int = 400,
+    # Ordre pédagogique inter-granularités (CM promo <-> TD/TP sous-groupe),
+    # cf. `constraints.py::cohort_sequence_pairs`. Pénalité PAR SEMAINE de
+    # retard, appliquée à ~800 paires sur le run complet : à 60, un CM placé
+    # une semaine trop tard pèse déjà plus qu'une relation d'ordonnancement
+    # inter-matières entière (400 en tout-ou-rien sur ~90 relations), ce qui
+    # correspond à la priorité annoncée par l'utilisateur (25/08/2026 :
+    # « l'ordonnancement n'est pas bon »). 0 = désactivé.
+    cohort_order_weight: int = 60,
+    # Critère STRICT de l'ordonnancement inter-matières (« A fini avant que B
+    # commence », par cohorte) : pénalité PAR SEMAINE de chevauchement, en
+    # complément — pas en remplacement — du critère "moyenne" à
+    # `ordonnancement_weight`. Volontairement plus modeste que ce dernier :
+    # ~90 couples (relation, cohorte) × un chevauchement initial de 10 à 19
+    # semaines, à 400 le terme écraserait tous les autres objectifs (lissage
+    # compris) et déstabiliserait l'étage 2 exactement comme le relevé de
+    # poids infirmé du 12/08/2026. 0 = désactivé (critère "moyenne" seul,
+    # comportement d'avant le 25/08/2026).
+    strict_ordonnancement_weight: int = 50,
+    # Regroupement mensuel des interventions (ARA, JHU) — même valeur que
+    # `SolverConfig.teacher_clustering_weight`, l'objectif étant strictement le
+    # même que celui du modèle joint. 0 = désactivé.
+    teacher_clustering_weight: int = 120,
+    # Inconfort d'une semaine trop pleine — ESSAYÉ ET INFIRMÉ le 26/08/2026,
+    # gardé désactivé et configurable pour ne pas avoir à le réécrire si
+    # l'hypothèse revient. Mesuré sur 3 graines par configuration (et non sur
+    # un tirage unique, la variance entre graines étant de 3 à 6 semaines en
+    # échec à configuration identique) :
+    #
+    #     sans inconfort : 4,7 semaines KO en moyenne  (pic 257 séances)
+    #     poids 40       : 6,3                          (pic 246)
+    #     poids 120      : 6,0                          (pic 238)
+    #
+    # Le mécanisme fait pourtant ce qu'on lui demande — le pic de charge baisse
+    # nettement. Mais les semaines presque vides le sont pour de BONNES raisons
+    # (SAE sanctuarisées, vacances) : y pousser de la charge crée de nouvelles
+    # semaines infaisables au lieu d'en soulager. Étaler n'est pas le remède.
+    comfort_margin: int = 3,
+    comfort_weight: int = 0,
     eval_clustering_weight: int = 30,
     time_limit_seconds: float = 180,
     num_workers: int | None = None,
@@ -393,6 +518,10 @@ def assign_weeks(
     # volume total reste largement plaçable (vérifié : la cohorte la plus
     # tendue, BUT3-CREACOM-FC, garde +10 créneaux de marge cumulée).
     physical_margin: int = 2,
+    # Combinaisons (semaine, séances) PROUVÉES infaisables par l'étage 3 lors
+    # d'une passe précédente — cf. `solve_decomposed` et le commentaire sur les
+    # coupes plus bas.
+    forbidden_combinations: list[tuple[int, list[str]]] | None = None,
 ) -> WeekAssignmentResult:
     """Étage 2 : une semaine par séance (domaine ~n_weeks, pas ~n_weeks*30)."""
     model = cp_model.CpModel()
@@ -401,7 +530,10 @@ def assign_weeks(
         s.id: model.new_int_var(0, max_week, f"wk_{s.id}") for s in sessions
     }
     session_index = {s.id: s for s in sessions}
-    objective_terms: list[cp_model.IntVar] = []
+    # `LinearExpr` et non `IntVar` : certaines pénalités sont pondérées
+    # directement (`var * poids`) au lieu de passer par une variable
+    # intermédiaire — moins de variables pour le même modèle.
+    objective_terms: list[cp_model.LinearExpr] = []
 
     if fi_max_week is not None and fi_max_week < max_week:
         for s in sessions:
@@ -431,7 +563,9 @@ def assign_weeks(
     # WR119/PPP S1 ne démarre pas dès la rentrée, retour utilisateur) --
     from pathlib import Path
 
-    min_week_rules = load_course_min_week_rules(Path(__file__).resolve().parents[3] / "data" / "config")
+    config_dir = Path(__file__).resolve().parents[3] / "data" / "config"
+    teacher_order_rules = load_course_teacher_orders(config_dir)
+    min_week_rules = load_course_min_week_rules(config_dir)
     if min_week_rules:
         by_key = {(r.course_code, r.semestre): r for r in min_week_rules}
         for s in sessions:
@@ -439,18 +573,152 @@ def assign_weeks(
             if rule is not None and 0 < rule.min_week <= max_week:
                 model.add(week_var[s.id] >= rule.min_week)
 
+    # -- Borne de FIN par cours (cf. `CourseMaxWeekRule`, ex. WRA507D qui doit
+    # se terminer « environ en janvier ») --
+    max_week_rules = load_course_max_week_rules(config_dir)
+    if max_week_rules:
+        by_key_max = {(r.course_code, r.semestre): r for r in max_week_rules}
+        for s in sessions:
+            rule = by_key_max.get((s.course_code, s.semestre))
+            if rule is not None and 0 <= rule.max_week < max_week:
+                model.add(week_var[s.id] <= rule.max_week)
+
+    # -- Coupes : interdire ce que l'étage 3 a PROUVÉ infaisable --
+    #
+    # C'est la boucle de retour qui manquait à l'architecture. L'étage 2 décide
+    # d'une répartition en semaines à partir de comptages par ressource
+    # (créneaux d'une cohorte, créneaux d'un enseignant) ; l'étage 3, lui, doit
+    # ensuite trouver un horaire RÉEL où ces ressources ne se chevauchent pas et
+    # où chaque enseignant tombe sur ses propres créneaux. Les deux ne sont pas
+    # équivalents : mesuré le 26/08/2026, 8 semaines sur 24 étaient prouvées
+    # infaisables en 0,1 s alors qu'AUCUNE ressource n'y dépassait son plafond.
+    # Exemple isolé : la cohorte BUT3-DEV-FC seule tient, Barthélémy Tomasina
+    # seul tient, mais pas les deux — ses blocs de 3h, cantonnés au mercredi et
+    # au jeudi matin, repoussent les autres séances vers des jours où les
+    # enseignants partagés avec les CREACOM-FC sont déjà pris.
+    #
+    # Aucun réglage ne corrige ça : plafond 22 ou 23, marge physique de 0 à 4,
+    # pénalité d'inconfort — tous mesurés sur 3 graines, tous dans le bruit
+    # (4,3 à 6,3 semaines en échec, pour une variance de 3 à 6 à configuration
+    # identique). Ce n'est pas un paramètre à trouver, c'est une information
+    # qui ne remonte pas.
+    #
+    # Une coupe dit exactement : « ces séances-là, toutes ensemble dans cette
+    # semaine-là, c'est impossible — trouve autre chose ». Elle est VALIDE par
+    # construction (l'étage 3 l'a prouvé, pas supposé) et n'exclut jamais une
+    # solution réalisable. C'est une décomposition de Benders logique, le
+    # remède standard pour ce genre d'architecture à deux étages.
+    for numero, (semaine_ko, ids_ko) in enumerate(forbidden_combinations or []):
+        presents = [sid for sid in ids_ko if sid in week_var]
+        if len(presents) < 2:
+            continue
+        indicateurs = []
+        for i, sid in enumerate(presents):
+            ind = model.new_bool_var(f"coupe{numero}_{i}")
+            model.add(week_var[sid] == semaine_ko).only_enforce_if(ind)
+            model.add(week_var[sid] != semaine_ko).only_enforce_if(ind.Not())
+            indicateurs.append(ind)
+        model.add(sum(indicateurs) <= len(presents) - 1)
+
+    # -- Fenêtres de dates civiles par séance (cf. `SessionDateWindowRule`) --
+    # BUG RÉEL (25/08/2026) : ces fenêtres n'étaient posées QUE dans le modèle
+    # joint (`cpsat.py::_build_hard_model`), jamais dans le solveur décomposé —
+    # qui est pourtant le mode utilisé pour les runs réels (`--decomposed`).
+    # Elles étaient donc documentées « dures » dans le README et
+    # `contraintes/00_INDEX.md` tout en n'ayant AUCUN effet : sur le run
+    # `odd26`, la visite à la BU (WR100BU TD n°1, à faire « entre le 1er et le
+    # 15 septembre ») était placée du 21 au 25 septembre, et le TD n°3 (« avant
+    # le 15 octobre ») jusqu'au 3 décembre.
+    #
+    # Ici on ne borne que la SEMAINE : l'étage 3 affine ensuite au grain du
+    # jour, la fenêtre pouvant commencer ou finir en milieu de semaine.
+    if calendar is not None:
+        for rule in _session_date_windows(config_dir):
+            start_date = date.fromisoformat(rule.start_date) if rule.start_date else None
+            end_date = date.fromisoformat(rule.end_date) if rule.end_date else None
+            only_dates = {date.fromisoformat(d) for d in rule.only_dates}
+            allowed_weeks_rule = sorted({
+                rel
+                for rel in range(weeks)
+                for day in range(DAYS_PER_WEEK)
+                if (d := calendar.week_day_to_date(week_offset + rel, day)) is not None
+                and d not in calendar.blocked_dates
+                and d not in calendar.holidays
+                and (not only_dates or d in only_dates)
+                and (start_date is None or d >= start_date)
+                and (end_date is None or d <= end_date)
+            })
+            targets = [
+                s
+                for s in sessions
+                if s.course_code == rule.course_code
+                and s.semestre == rule.semestre
+                and (rule.session_type is None or s.session_type == rule.session_type)
+                and (not rule.sequence_orders or s.sequence_order in rule.sequence_orders)
+            ]
+            if not targets:
+                continue
+            if not allowed_weeks_rule:
+                warnings.warn(
+                    f"{rule.course_code} : la fenêtre {rule.start_date}..{rule.end_date} "
+                    "ne contient aucune semaine de l'horizon — contrainte ignorée.",
+                    stacklevel=2,
+                )
+                continue
+            for s in targets:
+                model.add_allowed_assignments([week_var[s.id]], [[w] for w in allowed_weeks_rule])
+
     # -- Séquence pédagogique (par groupe brut) : semaine(N) <= semaine(N+1) --
+    #
+    # Séances du MÊME type (TD-TD, TP-TP) exemptées quand aucune progression
+    # de contenu n'est déclarée pour ce cours (retour utilisateur 27/08/2026,
+    # Kyllian Bresson : « TD n°3 avant TD n°1, ce n'est pas une erreur »
+    # — vérifié : `progression.json::definie=false` pour 7 des 8 cours
+    # concernés sur le run réel, donc `sequence_order` n'y est qu'un numéro
+    # généré à l'ingestion, jamais un ordre de contenu voulu). Seul un
+    # changement de TYPE (CM -> TD/TP, ou TD/TP -> CM si le CM arrive en fin
+    # de séquence) reste une vraie dépendance structurelle — contenu
+    # introduit avant sa pratique — et reste donc bloqué dans tous les cas.
+    cours_avec_progression = _cours_avec_progression_declaree(Path(__file__).resolve().parents[3])
     by_group_course: dict[tuple[str, str, str], list[SessionToPlace]] = defaultdict(list)
     for s in sessions:
         if s.sequence_order is None:
             continue
         for gid in s.group_ids:
             by_group_course[(s.course_code, s.semestre, gid)].append(s)
-    for group_sessions in by_group_course.values():
+    for (course_code, semestre, _gid), group_sessions in by_group_course.items():
+        progression_declaree = (course_code, semestre) in cours_avec_progression
         ordered = sorted(group_sessions, key=lambda s: s.sequence_order or 0)
         for prev, nxt in zip(ordered, ordered[1:]):
+            if not progression_declaree and prev.session_type == nxt.session_type:
+                continue
             if (prev.sequence_order or 0) < (nxt.sequence_order or 0):
                 model.add(week_var[prev.id] <= week_var[nxt.id])
+
+    # -- Ordre pédagogique VU PAR L'ÉTUDIANT (CM promo <-> TD/TP sous-groupe) --
+    # La boucle ci-dessus ne relie que les séances du même `group_id` brut ;
+    # un CM (groupe `promo`) et les TD/TP qui l'encadrent dans
+    # `progression.json` ne partagent aucun groupe, donc aucune relation
+    # d'ordre. Cf. `cohort_sequence_pairs` pour le bug mesuré (790 paires hors
+    # ordre sur le run `odd26`).
+    #
+    # MOU et GRADUÉ, pas dur : la version dure de cette même barrière a été
+    # essayée le 05/08/2026 et rendait 5 semaines infaisables sur BUT1-S1 réel
+    # (cf. `constraints.py::add_pedagogical_sequence_constraints`). La
+    # pénalité vaut `poids × nombre de semaines de retard`, pas un booléen :
+    # un CM une semaine trop tard coûte beaucoup moins qu'un CM cinq semaines
+    # trop tard, ce qui donne à CP-SAT un gradient à descendre — un booléen
+    # tout-ou-rien lui laisse au contraire toutes les violations équivalentes
+    # (c'est précisément ce qui a fait échouer le relevé de poids du
+    # 12/08/2026 sur l'ordonnancement inter-matières, cf. plus bas).
+    # L'étage 3 finit le travail en dur À L'INTÉRIEUR de chaque semaine.
+    if cohort_order_weight > 0:
+        for idx, (before, after) in enumerate(cohort_sequence_pairs(sessions, groups)):
+            if before not in week_var or after not in week_var:
+                continue
+            late = model.new_int_var(0, max_week, f"cohordwk_{idx}")
+            model.add_max_equality(late, [0, week_var[before] - week_var[after]])
+            objective_terms.append(late * cohort_order_weight)
 
     # -- Éval après le dernier contenu de chaque cohorte réelle --
     # Tentative testée et abandonnée (05/08/2026) : étendre cette barrière
@@ -484,7 +752,9 @@ def assign_weeks(
         for sid1, sid2 in duo_episode_pairs(sessions, duos):
             model.add(week_var[sid1] == week_var[sid2])
 
-    # -- Ordonnancement inter-matières (molle, moyenne par groupe brut) --
+    # -- Ordonnancement inter-matières (molle : moyenne par groupe brut ET
+    #    chevauchement strict par cohorte réelle, cf. plus bas) --
+    cohorts_for_order = build_student_cohorts(groups) if groups else {}
     by_course_key: dict[str, list[str]] = defaultdict(list)
     for s in sessions:
         by_course_key[f"{s.course_code}:{s.semestre}:{s.parcours}"].append(s.id)
@@ -531,6 +801,38 @@ def assign_weeks(
                 model.add(pen == 0).only_enforce_if(ok)
                 model.add(pen == ordonnancement_weight).only_enforce_if(ok.Not())
                 objective_terms.append(pen)
+
+            # Critère STRICT « A entièrement fini avant que B commence », par
+            # COHORTE réelle et en pénalité GRADUÉE (poids × nombre de semaines
+            # de chevauchement), en plus du critère "moyenne" ci-dessus.
+            #
+            # Pourquoi les deux : la moyenne seule est satisfaite dès que le
+            # barycentre de A précède celui de B, ce qui laissait 89/89
+            # relations violées au sens strict sur le run `odd26` (WR102/WR101 :
+            # A = semaines 3→19, B = semaines 1→13 — la moyenne passe, l'étudiant
+            # voit pourtant les deux modules entrelacés tout le semestre).
+            # Demande utilisateur du 25/08/2026 : « des matières qui devaient
+            # être finies pour commencer ». Molle et graduée, jamais dure :
+            # une séparation totale de deux modules de 30+ séances chacun n'est
+            # pas toujours physiquement possible dans l'horizon, et un
+            # chevauchement de 2 semaines vaut infiniment mieux que 15.
+            if strict_ordonnancement_weight > 0 and cohorts_for_order:
+                for cohort_ids in cohorts_for_order.values():
+                    s_ids = [i for i in source_ids if cohort_ids.intersection(session_index[i].group_ids)]
+                    t_ids = [i for i in target_ids if cohort_ids.intersection(session_index[i].group_ids)]
+                    if not s_ids or not t_ids:
+                        continue
+                    ord_idx += 1
+                    safe = f"{ord_idx}"
+                    # `before` : max(A) doit rester < min(B) ; `after` : l'inverse.
+                    first_ids, last_ids = (t_ids, s_ids) if position == "before" else (s_ids, t_ids)
+                    late = model.new_int_var(0, max_week, f"ordstrict_max_{safe}")
+                    early = model.new_int_var(0, max_week, f"ordstrict_min_{safe}")
+                    model.add_max_equality(late, [week_var[i] for i in last_ids])
+                    model.add_min_equality(early, [week_var[i] for i in first_ids])
+                    overlap = model.new_int_var(0, max_week + 1, f"ordstrict_ov_{safe}")
+                    model.add_max_equality(overlap, [0, late - early + 1])
+                    objective_terms.append(overlap * strict_ordonnancement_weight)
 
     # Jours SAE bloqués par parcours (mêmes règles que le modèle joint) :
     # précalculé UNE FOIS par l'appelant (`solve_decomposed`) sur la liste
@@ -639,6 +941,35 @@ def assign_weeks(
                     terms.append(ind * duration if duration != 1 else ind)
                 if terms:
                     model.add(sum(terms) <= cap_w)
+                    # Plafond DUR ci-dessus, INCONFORT mou ci-dessous.
+                    #
+                    # Diagnostic du 26/08/2026 : aucune cohorte ne dépasse 69 %
+                    # d'occupation sur le semestre — la capacité globale n'a
+                    # jamais été le problème. Les échecs sont LOCAUX : l'étage 2
+                    # remplissait certaines semaines jusqu'au dernier créneau
+                    # (270 séances en semaine 12, deux cohortes pile à leur
+                    # limite physique en semaine 15) pendant que d'autres
+                    # restaient presque vides. Une semaine remplie à ras bord ne
+                    # laisse plus à l'étage 3 la moindre liberté pour entrelacer
+                    # cohortes et enseignants : elle devient infaisable sans
+                    # qu'aucune ressource ne soit individuellement saturée.
+                    #
+                    # Le plafond dur seul ne peut pas exprimer ça — il autorise
+                    # tout jusqu'à la limite, sans préférence. D'où cette
+                    # pénalité graduée sur les derniers créneaux : remplir la
+                    # 21e case d'une semaine coûte, remplir la 23e coûte trois
+                    # fois plus. L'étage 2 étale donc de lui-même quand il le
+                    # peut, et n'entasse que lorsqu'il n'a pas le choix.
+                    #
+                    # Élargir la marge DURE avait été essayé et mesuré nuisible
+                    # (marge 2 -> 3 -> 4 : 4, 5 puis 6 semaines en échec) :
+                    # retirer de la capacité contraint l'étage 2 au lieu de le
+                    # guider. Une préférence molle, elle, ne retire rien.
+                    if comfort_weight > 0 and cap_w > comfort_margin:
+                        confort = cap_w - comfort_margin
+                        trop = model.new_int_var(0, cap_w, f"confort_{safe_key}_w{w}")
+                        model.add_max_equality(trop, [0, sum(terms) - confort])
+                        objective_terms.append(trop * comfort_weight)
 
     # -- Plafond horaire hebdomadaire PAR ENSEIGNANT (dur) --
     # Un enseignant est aussi une ressource NoOverlap (une seule salle à la
@@ -661,19 +992,36 @@ def assign_weeks(
     for s in sessions:
         for tc in s.teacher_codes:
             by_teacher[tc].append(s)
-    # Enseignants n'intervenant QU'EN formation initiale : le jeudi après-midi
-    # (réservé aux PAC) leur est structurellement inaccessible. Un enseignant
-    # ayant ne serait-ce qu'une séance FC garde, lui, ces créneaux.
-    fi_only_teachers = {
-        tc for tc, ts in by_teacher.items() if all("FC" not in s.parcours for s in ts)
-    }
+    # Le jeudi après-midi est réservé aux PAC : une séance de FORMATION
+    # INITIALE ne peut jamais y être placée (`add_thursday_afternoon_pac_lock`),
+    # une séance FC si.
+    #
+    # Bug réel trouvé le 25/08/2026 en diagnostiquant une semaine prouvée
+    # INFEASIBLE en 0,1 s : ce retrait était décidé par un test ANNUEL — « cet
+    # enseignant a-t-il au moins une séance FC dans tout le semestre ? ». AHA
+    # (Amine Haraoubia) en a une seule ; il gardait donc le jeudi après-midi
+    # dans le calcul de capacité de TOUTES ses semaines, y compris celles où il
+    # n'a que des séances FI. En semaine 16 (11-15 janvier), l'étage 2 le
+    # créditait de 24 créneaux (30 moins son mercredi indisponible) et lui en
+    # assignait 22 — alors que ses 22 séances de cette semaine, toutes FI, ne
+    # disposaient en réalité que de 21 créneaux. Infaisable d'exactement un
+    # créneau, et aucune quantité de temps de calcul ne pouvait le rattraper.
+    #
+    # Corrigé en posant DEUX plafonds au lieu d'un test approximatif :
+    #   - toutes les séances de l'enseignant  <= capacité JEUDI PM INCLUS ;
+    #   - ses seules séances FI               <= capacité JEUDI PM EXCLU.
+    # Exact quelle que soit la répartition FI/FC réelle de la semaine, et sans
+    # jamais sous-estimer la capacité d'un enseignant réellement mixte.
     availability_by_week = _teacher_available_slots_by_week(
-        teacher_availability, weeks, calendar, week_offset, fi_only_teachers
+        teacher_availability, weeks, calendar, week_offset, set()
+    )
+    availability_by_week_no_thursday_pm = _teacher_available_slots_by_week(
+        teacher_availability, weeks, calendar, week_offset, set(by_teacher)
     )
     # Capacité physique par défaut (fériés + jeudi PAC), pour les enseignants
     # SANS entrée de disponibilité déclarée : sans ça ils gardaient le plafond
     # nominal (26) même une semaine à 4 jours ouvrables.
-    def _default_teacher_slots(teacher_code: str, w: int) -> int:
+    def _default_teacher_slots(w: int, *, thursday_pm: bool) -> int:
         slots = SLOTS_PER_WEEK
         thursday_open = True
         if calendar is not None:
@@ -683,30 +1031,47 @@ def assign_weeks(
                     slots -= SLOTS_PER_DAY
                     if day == 3:
                         thursday_open = False
-        if teacher_code in fi_only_teachers and thursday_open:
+        if not thursday_pm and thursday_open:
             slots -= 3
         return max(0, slots)
 
     for teacher_code, teacher_sessions in by_teacher.items():
+        fi_sessions = [s for s in teacher_sessions if "FC" not in s.parcours]
         for w in range(weeks):
             terms = []
+            fi_terms = []
             for s in teacher_sessions:
                 ind = model.new_bool_var(f"tcapwk_{teacher_code}_{s.id}_w{w}")
                 model.add(week_var[s.id] == w).only_enforce_if(ind)
                 model.add(week_var[s.id] != w).only_enforce_if(ind.Not())
                 duration = max(1, s.duration_slots)
-                terms.append(ind * duration if duration != 1 else ind)
-            if terms:
-                # Même marge que le plafond de cohorte ci-dessus : un
-                # enseignant rempli EXACTEMENT à sa disponibilité physique
-                # (ex. JLE 20/21 en semaine 8, 3 créneaux interdits + 1 jour
-                # d'absence) ne laisse aucune liberté d'entrelacement à
-                # l'étage 3, qui doit en plus respecter les cohortes.
-                phys = availability_by_week.get((teacher_code, w))
-                if phys is None:
-                    phys = _default_teacher_slots(teacher_code, w)
-                cap_this_week = min(teacher_weekly_cap_slots, max(1, phys - physical_margin))
-                model.add(sum(terms) <= cap_this_week)
+                term = ind * duration if duration != 1 else ind
+                terms.append(term)
+                if s in fi_sessions:
+                    fi_terms.append(term)
+            if not terms:
+                continue
+            # Même marge que le plafond de cohorte ci-dessus : un enseignant
+            # rempli EXACTEMENT à sa disponibilité physique (ex. JLE 20/21 en
+            # semaine 8, 3 créneaux interdits + 1 jour d'absence) ne laisse
+            # aucune liberté d'entrelacement à l'étage 3, qui doit en plus
+            # respecter les cohortes.
+            phys = availability_by_week.get((teacher_code, w))
+            if phys is None:
+                phys = _default_teacher_slots(w, thursday_pm=True)
+            model.add(sum(terms) <= min(teacher_weekly_cap_slots, max(1, phys - physical_margin)))
+
+            # Second plafond, sur les seules séances FI : elles n'ont pas accès
+            # au jeudi après-midi (cf. le commentaire sur `availability_by_week`).
+            if fi_terms:
+                phys_fi = availability_by_week_no_thursday_pm.get((teacher_code, w))
+                if phys_fi is None:
+                    phys_fi = _default_teacher_slots(w, thursday_pm=False)
+                if phys_fi < phys:
+                    model.add(
+                        sum(fi_terms)
+                        <= min(teacher_weekly_cap_slots, max(1, phys_fi - physical_margin))
+                    )
 
     # -- SAE : semaine entièrement bloquée pour un parcours -> exclue pour ses cours classiques --
     if blocked_by_parcours:
@@ -715,7 +1080,7 @@ def assign_weeks(
             if count >= DAYS_PER_WEEK:
                 fully_blocked_weeks[parcours].add(w)
         for s in sessions:
-            if s.course_code.upper().startswith("WS"):
+            if s.is_unplaced_sae:
                 continue
             blocked = fully_blocked_weeks.get(s.parcours)
             if not blocked:
@@ -749,7 +1114,7 @@ def assign_weeks(
             for w, d in days:
                 group_days_by_week[gid][w].add(d)
         for s in sessions:
-            if s.course_code.upper().startswith("WS"):
+            if s.is_unplaced_sae:
                 continue
             combined_blocked_weeks: set[int] = set()
             for gid in s.group_ids:
@@ -782,7 +1147,7 @@ def assign_weeks(
     if partial_blocked_by_parcours:
         sae_avoid_weight = 80
         for s in sessions:
-            if s.course_code.upper().startswith("WS"):
+            if s.is_unplaced_sae:
                 continue
             for w, count in partial_blocked_by_parcours.get(s.parcours, []):
                 ind = model.new_bool_var(f"saeavoid_{s.id}_w{w}")
@@ -812,7 +1177,30 @@ def assign_weeks(
                 model.add_allowed_assignments([week_var[s.id]], [[w] for w in allowed_weeks])
 
     # -- Objectif : lissage proportionnel par cours (pas de compression artificielle) --
+    #
+    # La semaine visée par une séance vient de son rang dans la progression
+    # COMPLÈTE du cours (`sequence_order`), pas de son rang parmi les seules
+    # séances de son type. La version par type était une cause DIRECTE du
+    # désordre CM/TD/TP mesuré sur le run `odd26` : les 3 CM de WR106 étaient
+    # étalés sur tout le semestre (cibles ~1/6, ~1/2, ~5/6 de l'horizon) et ses
+    # 7 TP aussi (mêmes cibles) — le lissage poussait donc activement le CM
+    # d'ordre 9 vers le milieu du semestre et le TP d'ordre 5 au même endroit,
+    # en contradiction avec l'ordre pédagogique que l'étage 2 essayait par
+    # ailleurs de faire respecter. Aligner les deux objectifs supprime la
+    # contradiction au lieu de la compenser à coups de poids.
+    #
+    # Une séance sans `sequence_order` garde le comportement précédent (rang
+    # dans son propre bucket) : rien à déduire d'une progression absente.
     if spread_weight > 0:
+        course_ranks: dict[tuple[str, str], dict[int, int]] = {}
+        for s in sessions:
+            if s.sequence_order is None:
+                continue
+            course_ranks.setdefault((s.course_code, s.semestre), {})[s.sequence_order] = 0
+        for orders in course_ranks.values():
+            for rank, order in enumerate(sorted(orders)):
+                orders[order] = rank
+
         buckets: dict[tuple[str, str, str], list[SessionToPlace]] = defaultdict(list)
         for s in sessions:
             for gid in s.group_ids:
@@ -823,7 +1211,16 @@ def assign_weeks(
             ordered = sorted(group, key=lambda s: (s.sequence_order or 0, s.id))
             n = len(ordered)
             for index, s in enumerate(ordered):
-                target = min(int((index + 0.5) * max_week / n), max_week) if n and max_week else 0
+                ranks = course_ranks.get((s.course_code, s.semestre))
+                if ranks and s.sequence_order is not None:
+                    position, total = ranks[s.sequence_order], len(ranks)
+                else:
+                    position, total = index, n
+                target = (
+                    min(int((position + 0.5) * max_week / total), max_week)
+                    if total and max_week
+                    else 0
+                )
                 diff = model.new_int_var(-max_week, max_week, f"wspr_d_{s.id}")
                 model.add(diff == week_var[s.id] - target)
                 abs_diff = model.new_int_var(0, max_week, f"wspr_a_{s.id}")
@@ -831,6 +1228,33 @@ def assign_weeks(
                 weighted = model.new_int_var(0, max(1, max_week * spread_weight), f"wspr_w_{s.id}")
                 model.add(weighted == abs_diff * spread_weight)
                 objective_terms.append(weighted)
+
+    # -- Regroupement mensuel des interventions d'un enseignant (molle) --
+    # ARA (« regrouper ses cours sur une ou deux semaines successives par
+    # mois », contrainte géographique) et JHU (« condenser les interventions »,
+    # basée à Paris). BUG RÉEL (25/08/2026) : cet objectif n'existait QUE dans
+    # le modèle joint, jamais en `--decomposed` — le mode réellement utilisé.
+    # Mesuré sur le run `odd26` : ARA intervenait 15 semaines distinctes, JHU
+    # 14, pour une demande de 1 à 2 semaines par mois (~10 au plus sur la
+    # période). C'est pourtant une décision d'AFFECTATION DE SEMAINE, donc
+    # exactement le rôle de cet étage.
+    if teacher_clustering_weight > 0 and teacher_availability and calendar is not None:
+        objective_terms.extend(
+            add_teacher_monthly_clustering_penalties(
+                model, sessions, None, teacher_availability, calendar,
+                week_offset, weeks, teacher_clustering_weight, week_vars=week_var,
+            )
+        )
+
+    # -- Ordre souple entre enseignants d'un même module (molle) --
+    # Ex. WRA505C : ALO au début de la ressource, AFR à la fin. Même constat
+    # que ci-dessus — objectif absent du mode `--decomposed`. Comparé ici sur
+    # les SEMAINES plutôt que sur les créneaux absolus : c'est le même critère
+    # de position moyenne, à la granularité de cet étage.
+    if teacher_order_rules:
+        objective_terms.extend(
+            add_course_teacher_order_penalties(model, sessions, week_var, teacher_order_rules)
+        )
 
     # -- Regroupement des évaluations sur une même semaine (molle) --
     if eval_clustering_weight > 0:
@@ -912,7 +1336,7 @@ def _apply_sae_sanctuarization_for_week(
     """
     by_group = blocked_days_by_group_week or {}
     for s in week_sessions:
-        if s.course_code.upper().startswith("WS"):
+        if s.is_unplaced_sae:
             continue
         blocked = set(blocked_days_by_parcours_week.get(s.parcours) or ())
         for gid in s.group_ids:
@@ -949,6 +1373,22 @@ def solve_week_detail(
     teacher_weekly_cap_slots: int | None = None,
     sae_supervisor_dates: dict[str, set] | None = None,
     sae_supervisor_weight: int = 300,
+    # Répartition des CM sur la semaine plutôt que concentrés sur un seul jour
+    # (retour utilisateur 27/08/2026, en regardant le run réel : « pour les
+    # S1 c'est juste impossible ils ont des journées entières de CM » — une
+    # journée BUT1 vue en production : 6 CM d'affilée, 5 matières
+    # différentes). 0 = désactivé (comportement d'avant ce correctif), pour
+    # ne rien changer au run principal tant que ce n'est pas explicitement
+    # demandé — cf. `scripts/polish_run.py`, qui l'active pour sa passe de
+    # rééquilibrage ciblée.
+    cm_spread_weight: int = 0,
+    cm_spread_threshold: int = 2,
+    # Regroupement de deux cours sur les mêmes journées (l'inverse du terme
+    # ci-dessus) — ex. BUT3-DEV-FC, WRA507D + WSA501D : présence limitée à
+    # l'IUT, autant remplir la journée plutôt que fragmenter. Vide/poids nul
+    # = désactivé.
+    course_grouping_pairs: list[tuple[str, str]] | None = None,
+    course_grouping_weight: int = 0,
     # Dernier recours (12/08/2026, cf. `_solve_week_with_retry::long_budget`)
     # : arrête CP-SAT dès la PREMIÈRE solution FAISABLE trouvée, sans
     # chercher à l'améliorer sur les objectifs mous (trous, créneaux bord,
@@ -1018,6 +1458,13 @@ def solve_week_detail(
         model, week_sessions, session_starts, groups, enforce_student_cohort=enforce_student_cohort
     )
     add_pedagogical_sequence_constraints(model, week_sessions, session_starts, groups)
+    # Ordre pédagogique VU PAR L'ÉTUDIANT (CM promo vs TD/TP sous-groupe) : la
+    # ligne au-dessus n'ordonne que les séances du même `group_id` brut, donc
+    # jamais un CM face aux TD/TP qui l'entourent. Ici, dur — les deux séances
+    # sont dans la même semaine, les ordonner ne coûte quasiment rien ; la
+    # relation INTER-semaines est portée en pénalité graduée par l'étage 2
+    # (`assign_weeks`). Cf. `cohort_sequence_pairs`.
+    add_cohort_sequence_constraints(model, week_sessions, session_starts, groups)
     add_thursday_afternoon_pac_lock(model, week_sessions, session_starts, num_weeks)
 
     sliced_calendar = _slice_calendar(calendar, absolute_week, num_weeks)
@@ -1030,6 +1477,18 @@ def solve_week_detail(
         add_planning_event_block_constraints(
             model, week_sessions, session_starts, planning_event_blocked_local, num_weeks
         )
+
+    # Fenêtres de dates par séance, au grain du JOUR (l'étage 2 n'a borné que
+    # la semaine) — cf. le commentaire dans `assign_weeks`.
+    add_session_date_window_constraints(
+        model,
+        week_sessions,
+        session_starts,
+        list(_session_date_windows(Path(__file__).resolve().parents[3] / "data" / "config")),
+        sliced_calendar,
+        0,
+        num_weeks,
+    )
 
     if teacher_availability:
         add_teacher_availability_constraints(
@@ -1085,6 +1544,18 @@ def solve_week_detail(
                 group_sessions[gid].append(s.id)
         objective_terms += add_intra_day_gap_penalties(model, session_starts, group_sessions, num_weeks, 100)
 
+    if cm_spread_weight > 0:
+        objective_terms += add_cm_spread_penalties(
+            model, week_sessions, session_starts, groups, num_weeks, cm_spread_weight, cm_spread_threshold
+        )
+    if course_grouping_weight > 0 and course_grouping_pairs and num_weeks == 1:
+        # `add_course_grouping_penalties` suppose un horizon LOCAL à une seule
+        # semaine (cf. sa docstring) — jamais utilisé sur une régénération
+        # jointe de plusieurs semaines.
+        objective_terms += add_course_grouping_penalties(
+            model, week_sessions, session_starts, course_grouping_pairs, course_grouping_weight
+        )
+
     if objective_terms:
         model.minimize(sum(objective_terms))
     else:
@@ -1104,12 +1575,42 @@ def solve_week_detail(
     return status_name, {s.id: solver.value(session_starts[s.id]) for s in week_sessions}
 
 
-def _build_sequence_neighbors(sessions: list[SessionToPlace]) -> dict[str, tuple[list[str], list[str]]]:
+def _build_sequence_neighbors(
+    sessions: list[SessionToPlace],
+    groups: list[Group] | None = None,
+    *,
+    # Désactivable (27/08/2026) pour `scripts/polish_run.py` : la 3e source
+    # (ordonnancement ENTRE cours, cf. plus bas) est une contrainte SOUPLE
+    # côté solveur (poids 400, léger dépassement toléré) — l'imposer comme
+    # borne DURE lors d'une réparation ciblée peut combiner deux léger
+    # chevauchements par ailleurs acceptables en une fenêtre [lo,hi]
+    # IMPOSSIBLE (lo > hi), alors qu'aucune des deux relations, prise seule,
+    # n'est en violation dure. Vrai dans tous les autres appelants (la
+    # complétion automatique, qui POSE des séances neuves, n'a pas ce
+    # problème : rien n'y a encore de chevauchement à combiner).
+    include_ordonnancement: bool = True,
+) -> dict[str, tuple[list[str], list[str]]]:
     """
-    session_id -> (ids devant le précéder, ids devant le suivre), au sein du
-    même (cours, semestre, groupe brut) — utilisé par `_movable_bounds` pour
-    le rééquilibrage post-échec sans dupliquer l'ordonnancement de l'étage 2.
+    session_id -> (ids devant le précéder, ids devant le suivre), utilisé par
+    `_movable_bounds` pour le rééquilibrage post-échec sans dupliquer
+    l'ordonnancement de l'étage 2.
+
+    Deux sources, exactement celles que l'étage 2 fait respecter :
+    - le même (cours, semestre, groupe brut) — ordre pédagogique littéral ;
+    - les paires inter-granularités vues par une même cohorte étudiante
+      (`cohort_sequence_pairs`, ex. CM promo ↔ TD d'un sous-groupe) quand
+      `groups` est fourni. Sans elles, le rééquilibrage pouvait déplacer un CM
+      APRÈS les TD qu'il doit précéder, cassant après coup une garantie que
+      l'étage 2 venait d'obtenir — exactement le patron du bug corrigé le
+      12/08/2026 sur les évaluations (cf. `_eval_after_content_bounds`).
     """
+    # Séances du MÊME type (TD-TD, TP-TP) exemptées quand aucune progression
+    # de contenu n'est déclarée pour ce cours — même correctif et même
+    # justification que `assign_weeks` ci-dessus (retour utilisateur
+    # 27/08/2026, Kyllian Bresson), pour que les bornes de rééquilibrage/
+    # placement manuel restent cohérentes avec ce que le solveur impose
+    # réellement.
+    cours_avec_progression = _cours_avec_progression_declaree(Path(__file__).resolve().parents[3])
     by_group_course: dict[tuple[str, str, str], list[SessionToPlace]] = defaultdict(list)
     for s in sessions:
         if s.sequence_order is None:
@@ -1118,12 +1619,103 @@ def _build_sequence_neighbors(sessions: list[SessionToPlace]) -> dict[str, tuple
             by_group_course[(s.course_code, s.semestre, gid)].append(s)
 
     neighbors: dict[str, tuple[list[str], list[str]]] = {s.id: ([], []) for s in sessions}
-    for group_sessions in by_group_course.values():
+    for (course_code, semestre, _gid), group_sessions in by_group_course.items():
+        progression_declaree = (course_code, semestre) in cours_avec_progression
         ordered = sorted(group_sessions, key=lambda s: s.sequence_order or 0)
         for prev, nxt in zip(ordered, ordered[1:]):
+            if not progression_declaree and prev.session_type == nxt.session_type:
+                continue
             if (prev.sequence_order or 0) < (nxt.sequence_order or 0):
                 neighbors[nxt.id][0].append(prev.id)
                 neighbors[prev.id][1].append(nxt.id)
+
+    if groups:
+        for before, after in cohort_sequence_pairs(sessions, groups):
+            if before in neighbors and after in neighbors:
+                neighbors[after][0].append(before)
+                neighbors[before][1].append(after)
+
+    # Troisième source, ajoutée le 27/08/2026 : l'ordonnancement ENTRE cours
+    # différents (`metadata["ordonnancement"]`, ex. « WR101 doit être
+    # entièrement fini avant que WR103 commence »). C'est la contrainte
+    # DURE que le solveur applique dans `add_ordonnancement_constraints`, à
+    # la granularité du groupe brut partagé — jusqu'ici ABSENTE de cette
+    # fonction, alors que `_movable_bounds` et `_rebalance_failed_weeks` en
+    # dépendent tous les deux, et que l'API (`_hard_constraint_context`,
+    # placement manuel, complétion automatique) s'appuie sur `_movable_bounds`
+    # pour borner les semaines admissibles.
+    #
+    # Conséquence mesurée sur le run réel du 26/08/2026 : le module de
+    # complétion automatique a placé des séances de cours liés par cette
+    # relation SANS EN AVOIR CONNAISSANCE — le chevauchement inter-matières
+    # (`score_run::overlap`) est passé de 495 à 993 semaines cumulées après
+    # complétion. Exactement le défaut initial signalé en tête de ce chantier
+    # (« des exemples de matière qui devait être finie pour commencer »).
+    #
+    # Même sémantique que le solveur, par arêtes complètes entre les deux
+    # côtés du groupe partagé (pas seulement les voisins immédiats) : la borne
+    # calculée par `_movable_bounds` (min/max sur les voisins déjà placés)
+    # donne alors exactement max(source) < min(target) — ou l'inverse pour
+    # "after" — dès qu'AU MOINS UN élément de l'autre côté est déjà placé.
+    #
+    # `include_ordonnancement=False` (cf. paramètre) saute tout ce bloc :
+    # trouvé le 27/08/2026 en réparant des violations sur un run réel où
+    # `add_ordonnancement_constraints` n'est que SOUPLE côté solveur (léger
+    # chevauchement toléré) — combiner ce chevauchement DÉJÀ TOLÉRÉ à une
+    # borne SAME-COURSE (source 1) peut produire un [lo,hi] avec lo > hi,
+    # une fenêtre RÉELLEMENT impossible, alors qu'aucune des deux relations
+    # prise seule n'est en violation dure.
+    if include_ordonnancement:
+        by_course_key: dict[str, list[SessionToPlace]] = defaultdict(list)
+        for s in sessions:
+            by_course_key[f"{s.course_code}:{s.semestre}:{s.parcours}"].append(s)
+
+        seen_ord_pairs: set[tuple[str, str, str]] = set()
+        for s in sessions:
+            for raw in s.metadata.get("ordonnancement") or []:
+                position = str(raw.get("position", ""))
+                target_code = str(raw.get("target_course_code", ""))
+                if position not in ("before", "after") or not target_code:
+                    continue
+                semestre = str(raw.get("semestre", s.semestre))
+                source_key = f"{s.course_code}:{semestre}:{s.parcours}"
+                target_key = f"{target_code}:{semestre}:{s.parcours}"
+                pair_key = (position, source_key, target_key)
+                if pair_key in seen_ord_pairs:
+                    continue
+                seen_ord_pairs.add(pair_key)
+
+                source_sessions = by_course_key.get(source_key, [])
+                target_sessions = by_course_key.get(target_key, [])
+                if not source_sessions or not target_sessions:
+                    continue
+
+                # Comparaison PAR GROUPE BRUT PARTAGÉ, comme le solveur : sans
+                # groupe commun, la relation ne borne rien ici (repli global du
+                # solveur non répliqué — l'API n'a pas besoin d'aller jusque-là).
+                src_by_group: dict[str, list[str]] = defaultdict(list)
+                for ss in source_sessions:
+                    for gid in ss.group_ids:
+                        src_by_group[gid].append(ss.id)
+                tgt_by_group: dict[str, list[str]] = defaultdict(list)
+                for ts in target_sessions:
+                    for gid in ts.group_ids:
+                        tgt_by_group[gid].append(ts.id)
+
+                for gid in set(src_by_group) & set(tgt_by_group):
+                    src_ids = src_by_group[gid]
+                    tgt_ids = tgt_by_group[gid]
+                    if position == "before":
+                        for sid in src_ids:
+                            neighbors[sid][1].extend(tgt_ids)
+                        for tid in tgt_ids:
+                            neighbors[tid][0].extend(src_ids)
+                    else:  # "after" : toute séance source après toute séance cible
+                        for sid in src_ids:
+                            neighbors[sid][0].extend(tgt_ids)
+                        for tid in tgt_ids:
+                            neighbors[tid][1].extend(src_ids)
+
     return neighbors
 
 
@@ -1199,6 +1791,58 @@ def _eval_after_content_bounds(
     return eval_min_week, content_max_week
 
 
+def _date_window_weeks_by_session(
+    sessions: list[SessionToPlace],
+    calendar: AcademicCalendar | None,
+    week_offset: int,
+    weeks: int,
+    config_dir: Path,
+) -> dict[str, set[int]]:
+    """
+    session_id -> semaines admissibles au titre de sa fenêtre de dates civiles
+    (`SessionDateWindowRule`), pour que le RÉÉQUILIBRAGE ne déplace jamais une
+    séance hors de sa fenêtre.
+
+    L'étage 2 pose bien la contrainte sur `week_var`, mais
+    `_rebalance_failed_weeks` déplace ensuite des séances d'une semaine à
+    l'autre en dehors de tout modèle CP-SAT : sans cette borne il défaisait
+    silencieusement la garantie, et l'étage 3 ne pouvait plus rien rattraper
+    (la fenêtre ne couvre aucun jour de la nouvelle semaine, la contrainte est
+    alors ignorée avec un avertissement). Même patron que
+    `_eval_after_content_bounds`, corrigé pour la même raison.
+    """
+    if calendar is None:
+        return {}
+    result: dict[str, set[int]] = {}
+    for rule in _session_date_windows(config_dir):
+        start = date.fromisoformat(rule.start_date) if rule.start_date else None
+        end = date.fromisoformat(rule.end_date) if rule.end_date else None
+        only = {date.fromisoformat(d) for d in rule.only_dates}
+        allowed = {
+            rel
+            for rel in range(weeks)
+            for day in range(DAYS_PER_WEEK)
+            if (d := calendar.week_day_to_date(week_offset + rel, day)) is not None
+            and d not in calendar.blocked_dates
+            and d not in calendar.holidays
+            and (not only or d in only)
+            and (start is None or d >= start)
+            and (end is None or d <= end)
+        }
+        if not allowed:
+            continue
+        for session in sessions:
+            if session.course_code != rule.course_code or session.semestre != rule.semestre:
+                continue
+            if rule.session_type is not None and session.session_type != rule.session_type:
+                continue
+            if rule.sequence_orders and session.sequence_order not in rule.sequence_orders:
+                continue
+            previous = result.get(session.id)
+            result[session.id] = allowed if previous is None else (previous & allowed)
+    return result
+
+
 def _movable_bounds(
     session_id: str,
     neighbors: dict[str, tuple[list[str], list[str]]],
@@ -1257,8 +1901,23 @@ def _rebalance_failed_weeks(
     allowed_weeks_by_parcours: dict[str, set[int]] | None = None,
     physical_by_parcours: dict[str, list[int]] | None = None,
     fc_min_week: dict[str, int] | None = None,
+    # Symétrique de `fc_min_week` ci-dessus, jamais lu ici avant le 27/08/2026 :
+    # trouvé en auditant une recherche `solve_until_ok.py --fi-max-week 18`
+    # (retour utilisateur : « les FI doivent finir le 1er février ») —
+    # `assign_weeks` respecte bien la borne pour son affectation initiale,
+    # mais une séance FI strandée dans une semaine PROUVÉE infaisable par
+    # l'étage 3 pouvait ensuite être rééquilibrée ICI vers n'importe quelle
+    # semaine libre, y compris au-delà de `fi_max_week` (133 séances FI en
+    # semaine 19 constatées sur un run réel, alors que `assign_weeks` seul
+    # n'en avait laissé passer aucune). Même mécanisme de fuite que
+    # `allowed_weeks_by_parcours` (FC) ci-dessus, côté FI cette fois.
+    fi_max_week: int | None = None,
     eval_min_week: dict[str, int] | None = None,
     content_max_week: dict[str, int] | None = None,
+    # cf. `_date_window_weeks_by_session` : sans cette borne, le rééquilibrage
+    # peut sortir une séance de sa fenêtre de dates, et plus rien ne l'y
+    # ramène.
+    date_window_weeks: dict[str, set[int]] | None = None,
     # Même dérogation ciblée que `assign_weeks::cap_exceptions` (14/08/2026,
     # docs/DATA.md §62) — le rééquilibrage doit voir la MÊME capacité que
     # l'étage 2, sous peine de refuser un déplacement pourtant valide vers
@@ -1288,7 +1947,7 @@ def _rebalance_failed_weeks(
     présence). Cf. docs/DATA.md §35.
     """
     all_sessions = [s for sess in sessions_by_week.values() for s in sess]
-    neighbors = _build_sequence_neighbors(all_sessions)
+    neighbors = _build_sequence_neighbors(all_sessions, list(group_by_id.values()))
 
     partner_of: dict[str, str] = {}
     if duos:
@@ -1336,6 +1995,8 @@ def _rebalance_failed_weeks(
             min_w = fc_min_week.get(session.parcours)
             if min_w is not None and target_w < min_w:
                 return False  # avant la rentrée exacte de ce parcours FC (cf. assign_weeks::fc_min_week)
+        if fi_max_week is not None and "FC" not in session.parcours and target_w > fi_max_week:
+            return False  # après la fin de semestre FI (cf. assign_weeks::fi_max_week)
         if target_w in fully_blocked_weeks_by_parcours.get(session.parcours, ()):
             return False  # semaine entièrement sanctuarisée SAE pour ce parcours
         if allowed_weeks_by_parcours is not None and "FC" in session.parcours:
@@ -1350,6 +2011,9 @@ def _rebalance_failed_weeks(
             max_w = content_max_week.get(session.id)
             if max_w is not None and target_w > max_w:
                 return False  # dernier contenu déplacé après l'éval qui doit le suivre (cf. _eval_after_content_bounds)
+        allowed_window = (date_window_weeks or {}).get(session.id)
+        if allowed_window is not None and target_w not in allowed_window:
+            return False  # hors de la fenêtre de dates civiles de la séance (cf. _date_window_weeks_by_session)
         duration = max(1, session.duration_slots)
         for tc in session.teacher_codes:
             if teacher_counts.get((tc, target_w), 0) + duration > teacher_weekly_cap_slots:
@@ -1377,10 +2041,12 @@ def _rebalance_failed_weeks(
 
     for w in failed_weeks:
         candidates = sorted(
-            # Les séances SAE (WSxxx) ont une semaine imposée par le calendrier
-            # réel (contrainte dure ajoutée dans `assign_weeks`) — jamais
-            # rééquilibrées, sous peine de casser la sanctuarisation.
-            [s for s in sessions_by_week[w] if not s.course_code.upper().startswith("WS")],
+            # Les séances SAE non planifiées par le solveur ont une semaine
+            # imposée par le calendrier réel — jamais rééquilibrées, sous peine
+            # de casser la sanctuarisation. Une SAE que le solveur place bien
+            # (`solver_scheduled_sae`, ex. WSA501D) est déplaçable comme les
+            # autres séances.
+            [s for s in sessions_by_week[w] if not s.is_unplaced_sae],
             key=lambda s: -max((teacher_counts.get((tc, w), 0) for tc in s.teacher_codes), default=0),
         )
         moved = 0
@@ -1441,6 +2107,7 @@ def _solve_week_with_retry(
     # semaines encore en échec après tout le reste (rééquilibrage + 3
     # tentatives standard), jamais en routine.
     long_budget: float | None = None,
+    long_budget_seeds: int = 8,
 ) -> tuple[str, dict[str, int]]:
     # Semaine locale 0 (une seule semaine par appel ici, cf. `solve_week_detail`
     # docstring — le cas multi-semaines jointes est réservé à la régénération
@@ -1505,7 +2172,9 @@ def _solve_week_with_retry(
         # total de 8 tentatives reste donc proche de celui de 2-3 avant —
         # seule une tentative qui échoue consomme tout son budget (réduit
         # en contrepartie côté appelant, cf. `solve_decomposed`).
-        attempts = tuple((long_budget, random_seed + 5000 * i) for i in range(8))
+        attempts = tuple(
+            (long_budget, random_seed + 5000 * i) for i in range(max(1, long_budget_seeds))
+        )
     status_name, local_times = "", {}
     for attempt_budget, attempt_seed in attempts:
         status_name, local_times = solve_week_detail(
@@ -1536,6 +2205,106 @@ def _solve_week_with_retry(
     return status_name, local_times
 
 
+def _cuts_from_failed_weeks(
+    failed_weeks: list[int],
+    sessions_by_week: dict[int, list[SessionToPlace]],
+    week_offset: int,
+    *,
+    calendar: AcademicCalendar,
+    teacher_availability: list[TeacherAvailability] | None,
+    groups: list[Group],
+    student_presences: list[StudentPresence] | None,
+    duos: list[TeacherDuo] | None,
+    blocked_by_parcours: dict[str, set[tuple[int, int]]] | None,
+    blocked_by_group: dict[str, set[tuple[int, int]]] | None,
+    planning_event_blocked: dict[str, set[tuple[int, int, int]]] | None,
+) -> list[tuple[int, list[str]]]:
+    """Transforme des semaines en échec en coupes exploitables par l'étage 2.
+
+    Deux précautions qui font toute la valeur des coupes :
+
+    1. **Ne couper que le PROUVÉ.** On rejoue la semaine avec un budget court
+       et on ne retient que `INFEASIBLE`. Une semaine `UNKNOWN` n'a rien
+       démontré : l'interdire écarterait peut-être la bonne solution.
+    2. **Couper le plus PETIT sous-ensemble possible.** Interdire les 250
+       séances d'une semaine n'apprend presque rien — l'étage 2 déplace une
+       séance et recommence. On cherche donc la cohorte responsable et on ne
+       coupe qu'elle : la coupe est alors beaucoup plus contraignante, donc
+       beaucoup plus informative.
+    """
+    from cal_iut.solver.resources import build_student_cohorts
+
+    cohorts = build_student_cohorts(groups) if groups else {}
+    cuts: list[tuple[int, list[str]]] = []
+
+    for w in sorted(failed_weeks):
+        sess = sessions_by_week.get(w) or []
+        if len(sess) < 2:
+            continue
+
+        def _local2(source):
+            out = {k: {(0, d) for (wk, d) in v if wk == w} for k, v in (source or {}).items()}
+            return {k: v for k, v in out.items() if v} or None
+
+        def _local3(source):
+            out = {k: {(0, d, sl) for (wk, d, sl) in v if wk == w} for k, v in (source or {}).items()}
+            return {k: v for k, v in out.items() if v} or None
+
+        def _essai(sous_ensemble: list[SessionToPlace], budget: float = 12.0) -> str:
+            statut, _ = solve_week_detail(
+                sous_ensemble, week_offset + w,
+                teacher_availability=teacher_availability, calendar=calendar,
+                student_presences=student_presences, groups=groups,
+                blocked_days_by_parcours_week=_local2(blocked_by_parcours),
+                blocked_days_by_group_week=_local2(blocked_by_group),
+                duos=duos, time_limit_seconds=budget, num_workers=4, random_seed=2027,
+                planning_event_blocked_local=_local3(planning_event_blocked),
+                stop_at_first_solution=True,
+            )
+            return statut
+
+        if _essai(sess) != "INFEASIBLE":
+            continue  # pas prouvé : rien à couper
+
+        # Réduction : une seule cohorte suffit-elle à rendre la semaine
+        # impossible ? Si oui, la coupe ne porte que sur ses séances.
+        coupe = [s.id for s in sess]
+        for ids in cohorts.values():
+            mine = [s for s in sess if ids.intersection(s.group_ids)]
+            if len(mine) < 2 or len(mine) >= len(sess):
+                continue
+            if _essai(mine, budget=5.0) == "INFEASIBLE":
+                coupe = [s.id for s in mine]
+                break
+        cuts.append((w, coupe))
+    return cuts
+
+
+def _tag_scheduled_sae(
+    session: SessionToPlace,
+    scheduled: set[tuple[str, str]],
+) -> SessionToPlace:
+    """
+    Marque une SAE que le solveur doit placer lui-même, pour que
+    `SessionToPlace.is_unplaced_sae` la traite ensuite comme une séance
+    ordinaire (soumise à la sanctuarisation des AUTRES SAE de son parcours,
+    rééquilibrable, comptée dans les plafonds).
+
+    Copie plutôt que mutation : `sessions` est la liste d'entrée de l'appelant,
+    qui peut la réutiliser après la résolution (l'API la garde en mémoire entre
+    deux runs).
+    """
+    if not session.course_code.upper().startswith("WS"):
+        return session
+    if (session.course_code.upper(), session.semestre) not in scheduled:
+        return session
+    return replace_metadata(session, solver_scheduled_sae=True)
+
+
+def replace_metadata(session: SessionToPlace, **extra: object) -> SessionToPlace:
+    return session.model_copy(update={"metadata": {**session.metadata, **extra}})
+
+
 def solve_decomposed(
     sessions: list[SessionToPlace],
     teacher_availability: list[TeacherAvailability] | None = None,
@@ -1555,10 +2324,36 @@ def solve_decomposed(
     num_workers: int | None = None,
     random_seed: int = 2027,
     hints: dict[str, int] | None = None,
-    # Relevé 22 -> 23 le 14/08/2026, cf. le même relevé sur `assign_weeks`
-    # ci-dessus (autorisation Kyllian Bresson, docs/DATA.md §61.1).
-    fi_cap_slots: int = 23,
-    fc_cap_slots: int = 23,
+    # HISTORIQUE, à lire avant de retoucher cette valeur.
+    #
+    # 14/08/2026 : relevé 22 -> 23, puis annulé le jour même (§62, mesuré sur 5
+    # runs : le relevé GLOBAL dégradait la fiabilité). `assign_weeks` et
+    # `SolverConfig` sont revenus à 22 — mais PAS cette valeur-ci, qui écrase
+    # la leur et est la seule qui compte pour un run complet. Tous les runs
+    # depuis tournaient donc à 23 sans que personne ne le sache, y compris le
+    # run de référence `odd26`, qui était complet.
+    #
+    # 25/08/2026 : aligné à 22 par cohérence avec la décision documentée.
+    # 26/08/2026 : ANNULÉ après mesure. Onze runs consécutifs à 22 n'ont produit
+    # AUCUN emploi du temps complet (85 séances manquantes au mieux), et une
+    # comparaison à réglages égaux donne :
+    #
+    #     plafond 22 : 4 semaines infaisables   |   plafond 23 : 3
+    #     marge physique 3 : 5                  |   marge physique 4 : 6
+    #     sans les objectifs ajoutés le 25/08 : 4 (identique à 22 — ils sont
+    #                                              hors de cause)
+    #
+    # Le seul levier qui améliore la faisabilité est la capacité. Revenir à 22
+    # revient à préférer un planning INEXISTANT à un planning où certaines
+    # semaines comptent 1h30 de plus — arbitrage que Kyllian Bresson a déjà
+    # tranché explicitement (§61.1 : « les étudiants peuvent faire 1h30 de plus
+    # par semaine de manière exceptionnelle »).
+    #
+    # 23 est donc rétabli, mais ce N'EST PAS un choix neutre : il autorise
+    # 34h30 hebdomadaires au lieu des 33h de la règle. Repasser à 22 est une
+    # décision d'une ligne, à prendre en connaissance de son coût.
+    fi_cap_slots: int = FI_WEEKLY_CAP_SLOTS,
+    fc_cap_slots: int = FC_WEEKLY_CAP_SLOTS,
     # Remis à 0 (désactivé) après test empirique le 04/08/2026 : une marge de
     # 2 sur BUT1-S1 réel n'a pas clairement amélioré la convergence (a
     # simplement déplacé la semaine qui coince, résultats bruyants sur
@@ -1574,6 +2369,28 @@ def solve_decomposed(
     enforce_sae_supervisor_availability: bool = True,
     sae_supervisor_weight: int = 300,
     spread_weight: int = 2,
+    # Budget du DERNIER RECOURS (cf. plus bas) : chaque semaine encore en échec
+    # après tout le reste est retentée seule, à pleine puissance CP-SAT, sur
+    # `last_resort_seeds` graines de `last_resort_seconds` chacune. Une
+    # tentative qui RÉUSSIT s'arrête presque tout de suite
+    # (`stop_at_first_solution`) ; seules celles qui échouent consomment leur
+    # budget entier — d'où un coût pire cas de
+    # `semaines_en_échec × graines × secondes`, soit jusqu'à 40 minutes par
+    # semaine aux valeurs par défaut.
+    #
+    # Paramétrables depuis le 25/08/2026 pour `scripts/solve_until_ok.py` :
+    # quand on relance en boucle sur des graines différentes, mieux vaut dix
+    # runs courts qu'un run qui s'acharne — la variance de graine domine
+    # largement le budget (même constat qu'en §58 à l'échelle de la semaine).
+    # Les défauts restent les valeurs éprouvées, un run manuel ne change donc
+    # pas de comportement.
+    last_resort_seconds: float | None = None,
+    last_resort_seeds: int = 8,
+    # Nombre de tours de la boucle de retour étage 3 -> étage 2 (coupes de
+    # Benders logiques, cf. `_cuts_from_failed_weeks`). 0 = comportement
+    # d'avant le 26/08/2026 : l'étage 2 décide une fois, sans jamais apprendre
+    # de ses échecs.
+    benders_rounds: int = 3,
 ):
     """
     Orchestrateur : étage 2 (`assign_weeks`) puis étage 3 (`solve_week_detail`
@@ -1638,7 +2455,19 @@ def solve_decomposed(
         if sae_days_by_course and sae_group_labels
         else {}
     )
-    unlocked = [s for s in unlocked if not s.course_code.upper().startswith("WS")]
+    # Les SAE sont normalement définies par leurs enseignants : on ne garde que
+    # leurs dates pour sanctuariser les cours classiques. Exception explicite,
+    # déclarée dans `course_scheduling_rules.yaml::solver_scheduled_sae` (ex.
+    # WSA501D, sans aucune date officielle) — cf. `load_solver_scheduled_sae`.
+    solver_scheduled_sae = load_solver_scheduled_sae(
+        Path(__file__).resolve().parents[3] / "data" / "config"
+    )
+    unlocked = [
+        _tag_scheduled_sae(s, solver_scheduled_sae)
+        for s in unlocked
+        if not s.course_code.upper().startswith("WS")
+        or (s.course_code.upper(), s.semestre) in solver_scheduled_sae
+    ]
     if not unlocked:
         return SolverResult(status="NO_SESSIONS")
 
@@ -1803,6 +2632,7 @@ def solve_decomposed(
                 sae_supervisor_dates=soft_supervisor_dates,
                 sae_supervisor_weight=sae_supervisor_weight,
                 long_budget=long_budget,
+                long_budget_seeds=last_resort_seeds,
             )
             return w, status_name, local_times
 
@@ -1826,6 +2656,131 @@ def solve_decomposed(
                 failed_weeks.append(w)
 
     _solve_weeks(sorted(sessions_by_week))
+
+    # ------------------------------------------------------------------
+    # Boucle de retour étage 3 -> étage 2 (coupes de Benders logiques)
+    # ------------------------------------------------------------------
+    # Chaque semaine que l'étage 3 déclare INFEASIBLE est une information dure
+    # que l'étage 2 n'avait pas. On la lui rend sous forme de coupe et on lui
+    # redemande une répartition — plutôt que de laisser le rééquilibrage
+    # déplacer des séances au jugé, sans jamais comprendre pourquoi.
+    #
+    # Seules les semaines PROUVÉES infaisables produisent une coupe : une
+    # semaine simplement trop lente (`UNKNOWN`) n'a rien démontré, l'interdire
+    # écarterait peut-être une solution valable.
+    #
+    # On garde le MEILLEUR état rencontré, jamais le dernier. Une coupe est
+    # valide — elle n'écarte aucune solution réalisable — mais rien ne garantit
+    # que la répartition SUIVANTE soit plus facile à réaliser : l'étage 2
+    # optimise un proxy, pas la faisabilité réelle. Sans ce garde-fou, un bon
+    # résultat pourrait être écrasé par un moins bon, exactement le piège
+    # corrigé le 12/08/2026 sur la boucle de tentatives (cf. docs/DATA.md).
+    coupes: list[tuple[int, list[str]]] = []
+    meilleur: tuple[int, dict[str, int], dict[int, dict[str, int]], list[int]] | None = None
+
+    def _seances_manquantes() -> int:
+        # Compte de SÉANCES non placées — pas de semaines en échec. Mesuré le
+        # 26/08/2026 : une coupe peut faire passer 10 semaines en échec à 7
+        # tout en concentrant tellement de séances dans ces 7 semaines que le
+        # nombre RÉEL de séances non placées augmente (2100 -> 1712 sur un run
+        # réel). Compter les semaines aurait gardé ce résultat comme
+        # "meilleur" alors qu'il est nettement pire — exactement le piège déjà
+        # documenté pour `RunScore` (cf. scripts/solve_until_ok.py, correctif
+        # du 12/08/2026) : ce qui compte n'est jamais "combien de conteneurs
+        # ont un problème", mais "combien d'heures d'enseignement manquent".
+        return sum(len(sessions_by_week.get(w, ())) for w in failed_weeks)
+
+    def _memoriser_si_meilleur() -> None:
+        nonlocal meilleur
+        manquantes = _seances_manquantes()
+        if meilleur is None or manquantes < meilleur[0]:
+            meilleur = (
+                manquantes,
+                dict(week_by_session),
+                {w: dict(t) for w, t in local_times_by_week.items()},
+                list(failed_weeks),
+            )
+
+    if benders_rounds > 0:
+        _memoriser_si_meilleur()
+
+    for tour in range(max(0, benders_rounds)):
+        if not failed_weeks:
+            break
+        nouvelles = _cuts_from_failed_weeks(
+            failed_weeks, sessions_by_week, week_offset, calendar=calendar,
+            teacher_availability=teacher_availability, groups=groups,
+            student_presences=student_presences, duos=duos,
+            blocked_by_parcours=blocked_by_parcours, blocked_by_group=blocked_by_group,
+            planning_event_blocked=planning_event_blocked,
+        )
+        if not nouvelles:
+            break  # aucune semaine prouvée : les coupes n'ont rien à apprendre
+        coupes.extend(nouvelles)
+
+        relance = assign_weeks(
+            unlocked, groups, weeks,
+            duos=duos, blocked_by_parcours=blocked_by_parcours,
+            blocked_by_group=blocked_by_group, student_presences=student_presences,
+            teacher_availability=teacher_availability, calendar=calendar,
+            week_offset=week_offset, teacher_weekly_cap_slots=teacher_weekly_cap_slots,
+            fi_cap_slots=stage2_fi_cap, fc_cap_slots=stage2_fc_cap,
+            time_limit_seconds=week_assignment_time_limit,
+            num_workers=num_workers, random_seed=random_seed + 1000 * (tour + 1),
+            fi_max_week=fi_max_week, fc_min_week=fc_min_week,
+            cap_exceptions=cap_exceptions, physical_margin=physical_margin,
+            spread_weight=spread_weight, forbidden_combinations=coupes,
+        )
+        if relance.status not in ("OPTIMAL", "FEASIBLE"):
+            break  # les coupes rendent l'étage 2 infaisable : on garde l'existant
+
+        # Nouvelle répartition. Ne re-résoudre QUE les semaines dont le contenu
+        # a réellement changé : une coupe ne déplace en général qu'une poignée
+        # de séances, et un étage 3 complet sur 24 semaines est ce qui coûte
+        # l'essentiel du temps d'un run. Une semaine au contenu identique garde
+        # son horaire déjà calculé — il reste valide, rien de ce qui la
+        # concerne n'a bougé.
+        avant = {w: {x.id for x in ss} for w, ss in sessions_by_week.items()}
+
+        sessions_by_week.clear()
+        week_by_session.clear()
+        week_by_session.update(relance.week_by_session)
+        for s in unlocked:
+            sessions_by_week[week_by_session[s.id]].append(s)
+
+        apres = {w: {x.id for x in ss} for w, ss in sessions_by_week.items()}
+        changees = sorted(
+            w for w in set(avant) | set(apres)
+            if avant.get(w, set()) != apres.get(w, set())
+        )
+        for w in changees:
+            local_times_by_week.pop(w, None)
+            if w in failed_weeks:
+                failed_weeks.remove(w)
+        # Une semaine devenue vide n'est plus un échec : il n'y a rien à y placer.
+        for w in list(failed_weeks):
+            if not apres.get(w):
+                failed_weeks.remove(w)
+
+        if not changees:
+            break  # l'étage 2 rend la même chose : les coupes n'apportent plus rien
+        _solve_weeks(changees, seed_bump=7_000 * (tour + 1))
+        _memoriser_si_meilleur()
+
+    # Restauration du meilleur état : la dernière répartition essayée n'est pas
+    # forcément la meilleure (cf. commentaire ci-dessus). Comparaison sur le
+    # même critère que `_memoriser_si_meilleur` : des SÉANCES manquantes, pas
+    # des semaines en échec.
+    if meilleur is not None and _seances_manquantes() > meilleur[0]:
+        _, best_weeks, best_times, best_failed = meilleur
+        week_by_session.clear()
+        week_by_session.update(best_weeks)
+        sessions_by_week.clear()
+        for s in unlocked:
+            sessions_by_week[week_by_session[s.id]].append(s)
+        local_times_by_week.clear()
+        local_times_by_week.update(best_times)
+        failed_weeks[:] = best_failed
 
     # Rééquilibrage : une semaine en échec après re-essai (budget x3) est
     # souvent due à une concentration locale (ex. un même enseignant surchargé
@@ -1876,6 +2831,12 @@ def solve_decomposed(
         # garantie "éval après le dernier contenu de chaque cohorte" que
         # l'étage 2 vient de satisfaire, faute de la connaître.
         eval_min_week, content_max_week = _eval_after_content_bounds(unlocked, groups, week_by_session)
+        # Fenêtres de dates civiles : mêmes bornes pour le rééquilibrage que
+        # pour l'étage 2, sinon il les casse (cf. `_date_window_weeks_by_session`).
+        date_window_weeks = _date_window_weeks_by_session(
+            unlocked, calendar, week_offset, weeks,
+            Path(__file__).resolve().parents[3] / "data" / "config",
+        )
         for round_idx in range(6):
             if not failed_weeks:
                 break
@@ -1895,8 +2856,10 @@ def solve_decomposed(
                 allowed_weeks_by_parcours=allowed_weeks_by_parcours,
                 physical_by_parcours=physical_by_parcours,
                 fc_min_week=fc_min_week,
+                fi_max_week=fi_max_week,
                 eval_min_week=eval_min_week,
                 content_max_week=content_max_week,
+                date_window_weeks=date_window_weeks,
                 cap_exceptions=cap_exceptions,
             )
             if not touched:
@@ -1938,7 +2901,11 @@ def solve_decomposed(
         # RÉUSSIT s'arrête toujours presque immédiatement quel que soit ce
         # plafond, qui ne coûte donc cher que sur les tentatives qui échouent
         # réellement.
-        last_resort_budget = max(week_detail_time_limit * 3, 300.0)
+        last_resort_budget = (
+            last_resort_seconds
+            if last_resort_seconds is not None
+            else max(week_detail_time_limit * 3, 300.0)
+        )
         for w in sorted(failed_weeks):
             _solve_weeks([w], seed_bump=900_000, long_budget=last_resort_budget, sequential=True)
 
@@ -1972,14 +2939,18 @@ def solve_decomposed(
             allowed_weeks_by_parcours=allowed_weeks_by_parcours,
             physical_by_parcours=physical_by_parcours,
             fc_min_week=fc_min_week,
+            fi_max_week=fi_max_week,
             cap_exceptions=cap_exceptions,
+            # Les fenêtres de dates restent, elles, TOUJOURS respectées : ce
+            # dernier recours ne lève que les bornes éval/contenu (compromis
+            # explicite §61), pas une contrainte dure de calendrier.
+            date_window_weeks=date_window_weeks,
             # Volontairement PAS de eval_min_week/content_max_week ici, cf.
             # commentaire ci-dessus.
         )
         if touched:
             _solve_weeks(sorted(touched), seed_bump=950_000)
             if failed_weeks:
-                last_resort_budget = max(week_detail_time_limit * 3, 300.0)
                 for w in sorted(failed_weeks):
                     _solve_weeks([w], seed_bump=980_000, long_budget=last_resort_budget, sequential=True)
 

@@ -61,33 +61,48 @@ def _base_config(**overrides) -> SolverConfig:
     return SolverConfig(**defaults)
 
 
-def test_weekly_hour_cap_blocks_23rd_fi_session() -> None:
-    """
-    FI : 33h/semaine = 22 créneaux max, un 23e doit être infaisable.
+def test_weekly_hour_cap_blocks_one_session_above_the_cap() -> None:
+    """Une séance de plus que le plafond doit être infaisable.
 
-    Un relevé GLOBAL à 23 a été essayé le 14/08/2026 (autorisation de
-    Kyllian Bresson pour débloquer un cas réel, WR106) puis ANNULÉ le même
-    jour : mesuré sur un run complet réel que le relevé global pousse
-    l'étage 2 à exploiter la marge PARTOUT (61 paires cohorte/semaine
-    poussées à la nouvelle limite au lieu de 14), dégradant la fiabilité du
-    run entier au lieu de la seule semaine visée. Remplacé par une
-    dérogation CIBLÉE (`WeeklyCapException`, `cap_exceptions`, testée dans
-    `test_weekly_cap_exceptions.py`) — la valeur par défaut reste 22. Cf.
-    docs/DATA.md §61.1/§62.
+    Le plafond lui-même a bougé au fil des mesures (22 puis 23, cf.
+    `decomposed.FI_WEEKLY_CAP_SLOTS` pour l'historique complet et l'arbitrage) :
+    le test lit donc la valeur en vigueur au lieu de la figer. Ce qu'il vérifie
+    n'est pas le chiffre, c'est que la contrainte MORD — écrire « 23 » en dur
+    ici l'aurait rendu vert le jour où le plafond passe à 24.
     """
+    from cal_iut.solver.decomposed import FI_WEEKLY_CAP_SLOTS
+
     groups = [Group(id="g-tp", label="TP", parcours="TEST-FI", annee="TEST", kind="tp", headcount=20)]
-    sessions = [_td_session(i) for i in range(23)]
+    sessions = [_td_session(i) for i in range(FI_WEEKLY_CAP_SLOTS + 1)]
 
     result = TimetableSolver(_base_config(enforce_weekly_hour_cap=True)).solve(sessions, groups=groups)
     assert result.status == "INFEASIBLE"
 
 
-def test_weekly_hour_cap_allows_22_fi_sessions() -> None:
+def test_weekly_hour_cap_allows_exactly_the_cap() -> None:
+    from cal_iut.solver.decomposed import FI_WEEKLY_CAP_SLOTS
+
     groups = [Group(id="g-tp", label="TP", parcours="TEST-FI", annee="TEST", kind="tp", headcount=20)]
-    sessions = [_td_session(i) for i in range(22)]
+    sessions = [_td_session(i) for i in range(FI_WEEKLY_CAP_SLOTS)]
 
     result = TimetableSolver(_base_config(enforce_weekly_hour_cap=True)).solve(sessions, groups=groups)
     assert result.status in ("OPTIMAL", "FEASIBLE")
+
+
+def test_le_plafond_du_solveur_et_celui_du_tableau_de_bord_sont_les_memes() -> None:
+    """Une règle vérifiée à une valeur et appliquée à une autre n'est pas une règle.
+
+    Pendant dix jours, les runs tournaient à 23 pendant que le contrôle
+    `weekly_cap` vérifiait 22 : il signalait des violations que personne ne
+    savait expliquer, et la vraie cause (deux constantes divergentes) est
+    restée invisible.
+    """
+    from cal_iut.solver.cpsat import SolverConfig
+    from cal_iut.solver.decomposed import FC_WEEKLY_CAP_SLOTS, FI_WEEKLY_CAP_SLOTS
+
+    config = SolverConfig()
+    assert config.fi_weekly_cap_slots == FI_WEEKLY_CAP_SLOTS
+    assert config.fc_weekly_cap_slots == FC_WEEKLY_CAP_SLOTS
 
 
 def test_weekly_hour_cap_relaxed_for_fc() -> None:

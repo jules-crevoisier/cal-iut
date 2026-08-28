@@ -2226,6 +2226,22 @@
   function buildTodoList() {
     const items = [];
 
+    // En TÊTE : une séance non placée est une heure d'enseignement qui n'aura
+    // pas lieu. Rien d'autre dans cette liste n'a ce poids, et jusqu'au
+    // 26/08/2026 elle n'apparaissait NULLE PART — le planning avait l'air
+    // complet alors qu'il manquait des heures (cf. docs/DATA.md §66). Cette
+    // page étant un fichier autonome (envoyé par mail, sans serveur), elle ne
+    // peut pas proposer de placer la séance : elle dit ce qui manque, et
+    // renvoie vers l'application.
+    for (const m of (payload.seancesNonPlacees || [])) {
+      items.push({
+        sev: 'bad',
+        title: `${m.code} — séance non placée`,
+        sub: `${m.type} · ${(m.groupes || []).join(', ')} · ${(m.profs || []).join(', ')} — à placer depuis l'onglet « À placer » de l'application`,
+        go: null,
+      });
+    }
+
     for (const t of (payload.teachers || [])) {
       for (const v of (t.violations || [])) {
         const when = v.date
@@ -2297,7 +2313,10 @@
       : '<p style="color:var(--ink-soft); font-size:.85rem;">Rien à signaler : aucune contrainte violée, aucune journée trouée.</p>';
     box.onclick = (e) => {
       const btn = e.target.closest('.todo-item');
-      if (btn) items[Number(btn.dataset.i)].go();
+      // `go` peut être absent : une séance non placée n'a aucun créneau vers
+      // lequel naviguer, elle se rattrape depuis l'application.
+      const cible = btn && items[Number(btn.dataset.i)];
+      if (cible && typeof cible.go === 'function') cible.go();
     };
   }
   renderTodo();

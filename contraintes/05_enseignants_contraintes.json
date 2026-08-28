@@ -20,7 +20,7 @@
   {
     "nom_complet": "Marine Riguet",
     "trigramme": "MRI",
-    "contraintes_pedagogiques_raw": "WR106, l'ordre idéal des cours est le suivant : TD1, TD2, TD3, TD4, TP1, TP2, TP3, TP4, CM1, TP5, TP6, TP7, CM2+3 (évaluation fin de semestre)\nSerait-il possible de prévoir les CM2 et 3 à la suite, en toute fin de module, afin que je puisse organiser une évaluation de 3h en amphi ?\n\nWRA308C, prévoir les 3 derniers TD à la suite (sur une matinée ou une après-midi) pour que je puisse proposer une activité notée aux étudiants sur 4h30",
+    "contraintes_pedagogiques_raw": "WR106, l'ordre idéal des cours est le suivant : TD1, TD2, TD3, TD4, TP1, TP2, TP3, TP4, CM1, TP5, TP6, TP7, CM2+3 (évaluation fin de semestre)\r\nSerait-il possible de prévoir les CM2 et 3 à la suite, en toute fin de module, afin que je puisse organiser une évaluation de 3h en amphi ?\r\n\r\nWRA308C, prévoir les 3 derniers TD à la suite (sur une matinée ou une après-midi) pour que je puisse proposer une activité notée aux étudiants sur 4h30",
     "indisponibilites_raw": "vendredi matin - vendredi 20 novembre - mardi 8 décembre - lundi 14 décembre -",
     "indisponibilites_tokens": [
       {
@@ -152,7 +152,7 @@
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
     "disponibilites_exclusives": false,
-    "explications_raw": "Il préfère ses enseignements en début de semaine (lundi, mardi, mercredi) et plutôt regroupés, comme ça il fais moins de trajets. il est disponible de 8h00 à 18h30. Progression commencer par un cours CM et finir par un CM-éval, les td tp tu peux faire ce t'arrange.\nIndisponible du mardi 19 octobre 2026 au vendredi 22 octobre 2026 car conférence sur Marseille \"Machine Learning and Signal Processing on Graphs\"."
+    "explications_raw": "Il préfère ses enseignements en début de semaine (lundi, mardi, mercredi) et plutôt regroupés, comme ça il fais moins de trajets. il est disponible de 8h00 à 18h30. Progression commencer par un cours CM et finir par un CM-éval, les td tp tu peux faire ce t'arrange.\r\nIndisponible du mardi 19 octobre 2026 au vendredi 22 octobre 2026 car conférence sur Marseille \"Machine Learning and Signal Processing on Graphs\"."
   },
   {
     "nom_complet": "Anthony Rageul",
@@ -366,7 +366,7 @@
   {
     "nom_complet": "Ariane Loizon",
     "trigramme": "ALO",
-    "contraintes_pedagogiques_raw": "Mise en relation une SAE WS501D et une ressource WRA505C\n\nTOTAL WS501D 0 CM / 44 TD / 9 TP\n\n10 TD WS501D pour Fabrice (FME) avant le 23 octobre 2026\n9 TD WS501D pour Sébastien Loizon (SLO) entre le 26 et le 30 octobre 2026\n5 TD WS501D pour Fabrice (FME) après le 30 octobre 2026\n5 TD WS501D pour Ariane (ALO) après le 30 octobre 2026\n1TD WS501D pour Fabrice (FME) après les 5 TD, en parallèle en même temps 1TD WRA505C pour Ariane (ALO)\n\n Commencer la WRA505C (0 CM / 34 TD / 0 TP) avec essentiellement les créneaux de Ariane (ALO) au début de la ressource et plutôt ceux de Anthony Froli (AFR) à la fin.\n\nPrévoir une demie journée de PTUT par mois en commun entre les Dev et les Créa Comm pour qu'ils puissent travailler ensemble de temps et temps",
+    "contraintes_pedagogiques_raw": "Mise en relation une SAE WS501D et une ressource WRA505C\r\n\r\nTOTAL WS501D 0 CM / 44 TD / 9 TP\r\n\r\n10 TD WS501D pour Fabrice (FME) avant le 23 octobre 2026\r\n9 TD WS501D pour Sébastien Loizon (SLO) entre le 26 et le 30 octobre 2026\r\n5 TD WS501D pour Fabrice (FME) après le 30 octobre 2026\r\n5 TD WS501D pour Ariane (ALO) après le 30 octobre 2026\r\n1TD WS501D pour Fabrice (FME) après les 5 TD, en parallèle en même temps 1TD WRA505C pour Ariane (ALO)\r\n\r\n Commencer la WRA505C (0 CM / 34 TD / 0 TP) avec essentiellement les créneaux de Ariane (ALO) au début de la ressource et plutôt ceux de Anthony Froli (AFR) à la fin.\r\n\r\nPrévoir une demie journée de PTUT par mois en commun entre les Dev et les Créa Comm pour qu'ils puissent travailler ensemble de temps et temps",
     "indisponibilites_raw": "lundi matin",
     "indisponibilites_tokens": [
       {
@@ -384,7 +384,7 @@
   {
     "nom_complet": "Thomas Castellengo",
     "trigramme": "TCA",
-    "contraintes_pedagogiques_raw": "Semaines paires :\n    - mercredi : pas dispo\n    - jeudi : max 17h\n\nSemaines impaires :\n    - lundi : max 17h\n    - mardi : max 17h\n    - vendredi : max 17h",
+    "contraintes_pedagogiques_raw": "Semaines paires :\r\n    - mercredi : pas dispo\r\n    - jeudi : max 17h\r\n\r\nSemaines impaires :\r\n    - lundi : max 17h\r\n    - mardi : max 17h\r\n    - vendredi : max 17h",
     "indisponibilites_raw": null,
     "indisponibilites_tokens": [],
     "disponibilites_raw": null,
@@ -481,7 +481,7 @@
         "type": "date_specifique"
       }
     ],
-    "disponibilites_raw": "possible lundi 11h00 à 12h30 si besoin\npossible mardi 15h30 à 17h00 si besoin",
+    "disponibilites_raw": "possible lundi 11h00 à 12h30 si besoin\r\npossible mardi 15h30 à 17h00 si besoin",
     "disponibilites_tokens": [
       {
         "raw": "possible lundi 11h00 à 12h30 si besoin",
@@ -497,7 +497,7 @@
       }
     ],
     "disponibilites_exclusives": false,
-    "explications_raw": "CODIR décalé à 17h00\nLundi matin (possible de prendre le créneau de 11h00 si besoin, réunion de direction)\nMardi à partir de 15h30 (comité de direction)\nVendredi après-midi (réunions DN)\n- 7, 8 et 9 septembre (présentations IA dans les départements)\n- jeudi 24 septembre après-midi et vendredi 25 septembre toute la journée\n- 4 novembre après-midi, 5 novembre journée et 6 novembre (journée IA à Paris)"
+    "explications_raw": "CODIR décalé à 17h00\r\nLundi matin (possible de prendre le créneau de 11h00 si besoin, réunion de direction)\r\nMardi à partir de 15h30 (comité de direction)\r\nVendredi après-midi (réunions DN)\r\n- 7, 8 et 9 septembre (présentations IA dans les départements)\r\n- jeudi 24 septembre après-midi et vendredi 25 septembre toute la journée\r\n- 4 novembre après-midi, 5 novembre journée et 6 novembre (journée IA à Paris)"
   },
   {
     "nom_complet": "Emmanuelle Huguenot",
@@ -559,7 +559,7 @@
         "type": "date_specifique"
       }
     ],
-    "disponibilites_raw": "lundi toute la journée - mardi toute la journée - mercredi toute la journée",
+    "disponibilites_raw": "lundi toute la journée - mardi toute la journée - mercredi toute la journée - jeudi toute la journée",
     "disponibilites_tokens": [
       {
         "raw": "lundi de 9h30 à 18h30",
@@ -587,18 +587,27 @@
       }
     ],
     "disponibilites_exclusives": true,
-    "explications_raw": "Lundi : Disponible 9h30-18h30\nMardi : Disponible 8h-18h30\nMercredi : Disponible 8h-18h30\nJeudi : Disponible 14h (Projet Artistique et Culturel) Si tu réitères l'atelier tournage\nVendredi : Pas dispo."
+    "explications_raw": "Lundi : Disponible 9h30-18h30\r\nMardi : Disponible 8h-18h30\r\nMercredi : Disponible 8h-18h30\r\nJeudi : Disponible 14h (Projet Artistique et Culturel) Si KBR réitères l'atelier tournage\r\nVendredi : Pas dispo."
   },
   {
     "nom_complet": "Valérie Mariot",
     "trigramme": "VMA",
     "contraintes_pedagogiques_raw": null,
-    "indisponibilites_raw": null,
-    "indisponibilites_tokens": [],
+    "indisponibilites_raw": "mercredi 23/09/26 toute la journée - mercredi 7/10/26",
+    "indisponibilites_tokens": [
+      {
+        "raw": "mercredi 23/09/26 toute la journée",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mercredi 7/10/26",
+        "type": "date_specifique"
+      }
+    ],
     "disponibilites_raw": null,
     "disponibilites_tokens": [],
     "disponibilites_exclusives": false,
-    "explications_raw": null
+    "explications_raw": "Mercredi 23/09 je suis à Charleville toute la journée, de même que mercredi 7 octobre (je suis à Reims)."
   },
   {
     "nom_complet": "Guillaume Leullier",
@@ -648,7 +657,7 @@
     "nom_complet": "Romain Delon",
     "trigramme": "RDE",
     "contraintes_pedagogiques_raw": null,
-    "indisponibilites_raw": "mardi 6 octobre 2026 - mercredi 7 octobre 2026 - jeudi 8 octobre 2026\n\nmardi à partir de 15h30 (CODIR)\n\nvendredi toute la journée",
+    "indisponibilites_raw": "mardi 6 octobre 2026 - mercredi 7 octobre 2026 - jeudi 8 octobre 2026\r\n\r\nmardi à partir de 15h30 (CODIR)\r\n\r\nvendredi toute la journée",
     "indisponibilites_tokens": [
       {
         "raw": "mardi 6 octobre 2026",
@@ -703,6 +712,22 @@
         "type": "recurrent_hebdomadaire",
         "jour": "mercredi",
         "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "raisons liées à ses enfants"
+  },
+  {
+    "nom_complet": "Kyllian Bresson",
+    "trigramme": "KBR",
+    "contraintes_pedagogiques_raw": "si possible débuter ses cours à partir de 9h30",
+    "indisponibilites_raw": "vendredi 20 novembre de 10h00 à 11h00",
+    "indisponibilites_tokens": [
+      {
+        "raw": "vendredi 20 novembre de 10h00 à 11h00",
+        "type": "date_specifique"
       }
     ],
     "disponibilites_raw": null,

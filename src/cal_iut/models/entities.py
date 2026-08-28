@@ -130,6 +130,30 @@ class TeacherWeekParityRule(BaseModel):
     slots: list[int] = Field(default_factory=list)
 
 
+class TeacherDateSlotRule(BaseModel):
+    """Indisponibilité d'un enseignant à une DATE et un HORAIRE précis.
+
+    Comble un manque réel (26/08/2026). Les quatre mécanismes existants sont
+    soit récurrents (`forbidden_slots`, un créneau tous les jeudis), soit à la
+    journée entière (`metadata["forbidden_dates"]`). Aucun ne savait dire
+    « ce jeudi-là, de 9h30 à 12h30 ».
+
+    Cas fondateur : la pré-rentrée BUT2 FC alternants du jeudi 3 septembre 2026,
+    9h30-12h30, où Florent Libbrecht et Anthony Froli doivent être présents
+    (demande de Kyllian Bresson). Bloquer leur journée entière les priverait de
+    l'après-midi sans raison ; ne rien bloquer les laisserait programmables
+    devant une autre promotion à cette heure-là — un blocage de parcours ne
+    protège que les étudiants concernés, pas les enseignants.
+
+    Donnée jamais devinée : toujours saisie explicitement dans
+    `data/config/teacher_availability.yaml`.
+    """
+
+    date: str  # ISO (AAAA-MM-JJ)
+    slots: list[int] = Field(default_factory=list)  # 0 = 8h-9h30 … 5 = 17h-18h30
+    note: str | None = None
+
+
 class TeacherAvailability(BaseModel):
     """Disponibilités d'un enseignant (config externe + JSON contraintes)."""
 
@@ -148,6 +172,10 @@ class TeacherAvailability(BaseModel):
     # jours-là de toute l'année (cas des vacataires, ex. Marc Nino et ses 10
     # dates). Vide = aucune restriction de ce type.
     allowed_dates: list[str] = Field(default_factory=list)
+    # Indisponibilités à une date ET un horaire précis (cf.
+    # `TeacherDateSlotRule`) — le seul des cinq mécanismes qui sache dire
+    # « ce jeudi-là, de 9h30 à 12h30 ».
+    forbidden_date_slots: list[TeacherDateSlotRule] = Field(default_factory=list)
     week_parity_rules: list[TeacherWeekParityRule] = Field(default_factory=list)
     parity_reference: Literal["departement", "iso"] = "departement"
     # Nombre maximal de semaines distinctes par mois civil où l'enseignant
@@ -241,6 +269,30 @@ class CourseMinWeekRule(BaseModel):
     note: str | None = None
 
 
+class CourseMaxWeekRule(BaseModel):
+    """
+    Symétrique de `CourseMinWeekRule` : interdit à un cours de DÉBORDER
+    au-delà de la semaine-index `max_week` du solveur.
+
+    Donnée jamais devinée. Cas fondateur (retour utilisateur du 25/08/2026) :
+    WRA507D (BUT3-DEV-FC) s'étalait jusqu'au 8-12 mars 2027 sur le run
+    `odd26`, alors que les ressources de ce parcours doivent se terminer
+    « environ en janvier » — seule la SAE WSA501D a vocation à occuper les
+    semaines de présence de février/mars.
+
+    Contrainte DURE : contrairement au bornage global `fi_max_week` (qui vise
+    un type de parcours), elle ne concerne qu'UN cours précis, ce qui la rend
+    beaucoup moins susceptible de rendre l'instance infaisable — le volume
+    déplacé reste petit et les autres cours du parcours gardent tout
+    l'horizon.
+    """
+
+    course_code: str
+    semestre: str
+    max_week: int
+    note: str | None = None
+
+
 class SessionDateWindowRule(BaseModel):
     """
     Fenêtre de dates CIVILES imposée à certaines séances d'un cours, ciblées
@@ -266,6 +318,76 @@ class SessionDateWindowRule(BaseModel):
     sequence_orders: list[int] = Field(default_factory=list)
     start_date: str | None = None  # ISO, borne incluse
     end_date: str | None = None  # ISO, borne incluse
+    # Liste EXPLICITE de dates ISO admissibles, au lieu (ou en plus) d'une
+    # plage continue. Nécessaire quand les jours autorisés sont épars et non
+    # déductibles d'un intervalle — cas de la séance WRA505C que Ariane Loizon
+    # veut animer EN MÊME TEMPS qu'une séance WS501D de Fabrice Meuzeret : les
+    # jours possibles sont les jours de SAE WS501D qui sont aussi des jours de
+    # présence IUT des alternants BUT3-CREACOM-FC, soit 6 dates isolées
+    # réparties de fin novembre à début janvier.
+    only_dates: list[str] = Field(default_factory=list)
+    note: str | None = None
+
+
+class TeacherDistributionRule(BaseModel):
+    """
+    Change la façon dont les séances d'un module sont RÉPARTIES entre ses
+    enseignants, sans toucher aux volumes de la maquette.
+
+    Par défaut (`sequentiel`, cf. `normalize.py::_teacher_for_group`), chaque
+    enseignant prend un bloc CONTIGU : sur un module 17/17, le premier assure
+    les 17 premières séances, le second les 17 dernières. C'est le bon modèle
+    quand deux enseignants se relaient sur des parties distinctes du programme
+    (WRA505C : Ariane Loizon au début, Anthony Froli à la fin).
+
+    `alterne` fait tourner les enseignants séance après séance (A, B, A, B…)
+    tout en respectant EXACTEMENT le volume de chacun : demandé le 25/08/2026
+    pour WRA507D, où Jules Sabater vient de rejoindre Barthélémy Tomasina.
+    Effet secondaire utile : un enseignant à disponibilité étroite (BTO n'est
+    là que le mercredi et le jeudi matin) n'a plus à caser un bloc de 17
+    séances consécutives dans une demi-période, mais une séance sur deux sur
+    tout le semestre.
+
+    Donnée jamais devinée : toujours saisie dans
+    `data/config/course_scheduling_rules.yaml`.
+    """
+
+    course_code: str
+    semestre: str
+    mode: Literal["sequentiel", "alterne"] = "alterne"
+    session_type: SessionType | None = None  # None = tous les types
+    # Ordre de passage. Vide = ordre de la maquette (cf. `_blocks_for_type`).
+    teacher_order: list[str] = Field(default_factory=list)
+    note: str | None = None
+
+
+class SaeTeacherPhase(BaseModel):
+    """
+    Fenêtre de dates pendant laquelle UN enseignant encadre effectivement une
+    SAE — cf. `data/config/sae_teacher_phases.yaml`.
+
+    Par défaut, tout enseignant listé sur une SAE est considéré indisponible
+    sur TOUS les jours de cette SAE (`sae_supervisor_dates_by_teacher`). Sur une
+    SAE longue où les enseignants se relaient, cette approximation coûte cher :
+    Ariane Loizon se retrouvait bloquée sur les 22 jours de WS501D alors que son
+    propre plan ne la fait intervenir qu'à partir de la mi-novembre.
+
+    Déclarer des phases RESTREINT les jours retenus pour les enseignants cités ;
+    un enseignant absent de la déclaration garde tous les jours (on ne libère
+    jamais quelqu'un par omission).
+    """
+
+    course_code: str
+    semestre: str
+    teacher_code: str
+    debut: str  # ISO, borne incluse
+    fin: str  # ISO, borne incluse
+    # Dates ISO retirées de la fenêtre : l'enseignant est bien sur la SAE
+    # pendant la phase, sauf ces jours-là. Cas réel : Ariane Loizon anime,
+    # sur un jour de WS501D, une séance de WRA505C avec les CREACOM pendant
+    # que Fabrice Meuzeret tient les DEV — ce jour-là elle n'encadre donc pas
+    # la SAE et doit rester plaçable.
+    exclure: list[str] = Field(default_factory=list)
     note: str | None = None
 
 

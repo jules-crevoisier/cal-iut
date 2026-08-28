@@ -176,16 +176,41 @@ class PlanningRepository:
         room_id: str | None,
         room_label: str | None,
         locked: bool,
-    ) -> None:
+        run_id: int | None = None,
+        course_code: str | None = None,
+    ) -> bool:
+        """Retourne `False` si le placement n'a PAS pu être enregistré."""
         row = self.db.get(CurrentPlacement, session_id)
-        if row:
-            row.week = week
-            row.day = day
-            row.slot = slot
-            row.room_id = room_id
-            row.room_label = room_label
-            row.locked = locked
-            self.db.commit()
+        if row is None:
+            # Créer plutôt qu'ignorer en silence. L'ancienne version ne faisait
+            # RIEN quand la ligne n'existait pas : le déplacement restait visible
+            # à l'écran (il vit dans `state.timetable`) mais n'était jamais
+            # persisté — il disparaissait au redémarrage du serveur, sans le
+            # moindre message. Le cas survient dès qu'une séance est déplacée
+            # alors qu'elle n'était pas dans le dernier run enregistré
+            # (régénération partielle, run interrompu, base recréée).
+            if run_id is None:
+                latest = self.get_latest_run()
+                run_id = latest.id if latest else None
+            if run_id is None:
+                # Aucun run enregistré : il n'y a rien à quoi rattacher ce
+                # placement. On le signale à l'appelant au lieu de faire
+                # semblant d'avoir enregistré.
+                return False
+            row = CurrentPlacement(
+                session_id=session_id, run_id=run_id, course_code=course_code or ""
+            )
+            self.db.add(row)
+        row.week = week
+        row.day = day
+        row.slot = slot
+        row.room_id = room_id
+        row.room_label = room_label
+        row.locked = locked
+        if course_code:
+            row.course_code = course_code
+        self.db.commit()
+        return True
 
     def upsert_current_placements(self, run_id: int, placements: list[dict[str, object]]) -> None:
         """
