@@ -179,3 +179,8 @@ Retour relayé via capture Discord (Jordan) + questions directes de l'utilisateu
 Vérifié : 470 passed/1 skipped (465 + 5 nouveaux tests ICS), tsc+build propres, ET flux réels testés en direct sur données de prod (curl, sans cookie) : KBR -> 153 événements, but1-td-ab -> 290 (cohorte fusionnée CM+TD+TP jumelé).
 Non traité (demande la plus incertaine, explicitement présentée comme "juste une idée" par l'auteur, valeurs volontairement fictives dans le mockup) : la frise "heures totales par semaine" — posé en question à l'utilisateur plutôt que construit à l'aveugle.
 Status DONE pour les 5 points concrets, EN ATTENTE de clarification pour la frise horaire.
+
+## follow-up 17 (weekbar en heures, idee jordan version light)
+Choix fait avec l'utilisateur (question posée sur la frise "heures totales" du mockup Discord) : version légère qui réutilise l'histogramme `WeekBar` existant plutôt qu'un nouveau composant.
+`WeekBar.tsx` gagne une prop `unit?: "creneaux" | "heures"` (défaut inchangé pour Vue Semaine/Vue Promo) — la barre elle-même ET l'info-bulle au survol affichent maintenant des HEURES (pas juste un compte de séances) sur les vues Groupe/Enseignant (perso, lecture seule ET côté planification). `countByWeek`/`hoursByWeek` renommé dans ces 2 vues pour refléter le nouveau contenu (`(it.dur || 1) * 1.5` par séance, même formule que partout ailleurs dans l'app).
+100% frontend, tsc+build propres.

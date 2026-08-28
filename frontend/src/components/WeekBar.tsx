@@ -16,9 +16,16 @@ interface WeekBarProps {
   countByWeekIndex: Map<number, number>;
   selected: number; // index d'AFFICHAGE (dans weekRows)
   onSelect: (displayIndex: number) => void;
+  /** Unité affichée dans l'info-bulle de chaque barre — "creneaux" (défaut,
+   * vues admin) ou "heures" (retour utilisateur 28/08/2026, relayé depuis
+   * Discord, idée de Jordan : « le nombre d'heure total de la semaine ça
+   * serait cool si il pouvait être montré » — version légère qui réutilise
+   * l'histogramme existant plutôt qu'un nouveau composant, `countByWeekIndex`
+   * portant alors des heures au lieu d'un compte de séances). */
+  unit?: "creneaux" | "heures";
 }
 
-export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect }: WeekBarProps) {
+export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit = "creneaux" }: WeekBarProps) {
   const counts = weekRows.map((wr) => (wr.weekIndex !== null ? countByWeekIndex.get(wr.weekIndex) ?? 0 : 0));
   const max = Math.max(1, ...counts);
 
@@ -27,9 +34,8 @@ export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect }: Week
       <div className="weekbar">
         {weekRows.map((wr, i) => {
           const count = counts[i];
-          const title = wr.blocked
-            ? `${wr.label} — bloquée (vacances/fermeture)`
-            : `${wr.label} — ${count} créneau(x) occupé(s)`;
+          const valeur = unit === "heures" ? `${count.toLocaleString("fr-FR")} h` : `${count} créneau(x) occupé(s)`;
+          const title = wr.blocked ? `${wr.label} — bloquée (vacances/fermeture)` : `${wr.label} — ${valeur}`;
           // Retour utilisateur (11/08/2026) : "le % violet dois coressponde
           // au nombre de séance dans la semaine" — le plancher de 6 % hérité
           // du HTML (qui gardait un minimum visible même à 0 créneau) rendait
