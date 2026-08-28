@@ -2110,20 +2110,31 @@ def _teacher_a_des_seances_non_placees(state: object, code: str) -> bool:
     return False
 
 
-def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[str, str]:
-    """`(subject, body)` — texte de base identique au brouillon `mailto:`
-    existant (`frontend/src/utils/mailto.ts`), pour que le contenu reste le
-    même qu'un enseignant reçoive son lien via le mail auto ou via le bouton
-    « Écrire » manuel de l'annuaire. Deux ajouts SPÉCIFIQUES à l'envoi auto,
-    volontairement absents du brouillon manuel (celui-ci se rédige alors que
-    l'admin regarde déjà l'écran de CET enseignant, ces deux infos y sont
-    déjà visibles autrement) : le rappel des semestres couverts, et
-    l'alerte "séances à placer" quand elle s'applique."""
+def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[str, str, str]:
+    """`(subject, text_body, html_body)` — le texte brut reste la base
+    identique au brouillon `mailto:` existant (`frontend/src/utils/
+    mailto.ts`), pour que le contenu reste le même qu'un enseignant reçoive
+    son lien via le mail auto ou via le bouton « Écrire » manuel de
+    l'annuaire. Deux ajouts SPÉCIFIQUES à l'envoi auto, volontairement
+    absents du brouillon manuel (celui-ci se rédige alors que l'admin
+    regarde déjà l'écran de CET enseignant, ces deux infos y sont déjà
+    visibles autrement) : le rappel des semestres couverts, et l'alerte
+    "séances à placer" quand elle s'applique.
+
+    Le HTML existe UNIQUEMENT pour que cette alerte ressorte comme un vrai
+    encart d'avertissement (fond coloré, gras) — retour utilisateur
+    28/08/2026 : « met l'invitation à placer les cours en warning pour que
+    cela soit bien lu ». Un `text/plain` seul ne peut pas porter de mise en
+    forme ; Resend (comme la plupart des clients mail) envoie les deux et
+    laisse le client choisir, donc le texte brut reste la version de repli
+    pour qui n'affiche pas le HTML."""
     items = [p for p in state.timetable if code in (p.teacher_codes or [])]
     sessions_by_id = state.sessions_by_id
     hours = sum((sessions_by_id[p.session_id].duration_slots or 1) if p.session_id in sessions_by_id else 1 for p in items) * 1.5
     hours_label = f"{hours:g}".replace(".", ",")
     semestres_label = _semestres_couverts_label(state)
+    a_placer = _teacher_a_des_seances_non_placees(state, code)
+
     lignes = [
         f"Bonjour {name},",
         "",
@@ -2135,7 +2146,7 @@ def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[
     ]
     if semestres_label:
         lignes += ["", f"Cet emploi du temps couvre le(s) semestre(s) {semestres_label}."]
-    if _teacher_a_des_seances_non_placees(state, code):
+    if a_placer:
         lignes += [
             "",
             "⚠ Vous avez des séances qui n'ont pas encore pu être placées",
@@ -2143,7 +2154,34 @@ def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[
             "référent pour les positionner.",
         ]
     lignes += ["", "Une question ? Contactez Kyllian Bresson au 07 81 25 78 87.", "", "Cordialement,"]
-    return "Votre emploi du temps MMI", "\n".join(lignes)
+    texte = "\n".join(lignes)
+
+    import html as _html
+
+    e = _html.escape
+    warning_html = (
+        '<div style="margin:16px 0;padding:12px 16px;background:#fff3cd;'
+        "border:1px solid #f0ad4e;border-left:4px solid #f0ad4e;border-radius:4px;"
+        'color:#664d03;font-weight:bold;">'
+        "⚠️ Vous avez des séances qui n'ont pas encore pu être placées automatiquement "
+        "dans l'emploi du temps. Merci de contacter le référent pour les positionner."
+        "</div>"
+    ) if a_placer else ""
+    semestres_html = f"<p>Cet emploi du temps couvre le(s) semestre(s) {e(semestres_label)}.</p>" if semestres_label else ""
+    html_body = (
+        '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.5;">'
+        f"<p>Bonjour {e(name)},</p>"
+        f'<p>Voici votre emploi du temps : <a href="{e(link)}">{e(link)}</a></p>'
+        f"<p>Il compte {len(items)} séance(s), soit {hours_label} h.<br>"
+        "Le lien ouvre directement votre planning ; un bouton permet d'exporter "
+        "les séances vers votre agenda personnel (fichier .ics).</p>"
+        f"{semestres_html}"
+        f"{warning_html}"
+        "<p>Une question ? Contactez Kyllian Bresson au 07 81 25 78 87.</p>"
+        "<p>Cordialement,</p>"
+        "</div>"
+    )
+    return "Votre emploi du temps MMI", texte, html_body
 
 
 @app.get("/mail/teacher-links", response_model=TeacherMailPreviewListResponse, dependencies=[Depends(require_admin_session)])
@@ -2196,8 +2234,8 @@ def mail_teacher_links_send(body: SendTeacherMailsRequest) -> SendTeacherMailsRe
             continue
         try:
             link = mailer.personal_link(code)
-            subject, texte = _teacher_mail_text(state, code, noms.get(code, code), link)
-            message_id = mailer.send_email(email, subject, texte)
+            subject, texte, html_body = _teacher_mail_text(state, code, noms.get(code, code), link)
+            message_id = mailer.send_email(email, subject, texte, html=html_body)
             mailer.record_sent(code, message_id)
             resultats.append(TeacherMailSendResultResponse(code=code, ok=True))
         except mailer.MailerNotConfigured as exc:

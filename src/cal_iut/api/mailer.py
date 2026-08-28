@@ -75,20 +75,29 @@ def personal_link(code: str) -> str:
     return f"{public_base_url()}/#vue=prof&prof={code}&mode=prof&t={code}"
 
 
-def send_email(to: str, subject: str, text: str) -> str:
-    """Envoie un mail texte brut via l'API Resend. Rend l'id du message
-    (utile pour retrouver un envoi précis côté Resend en cas de souci de
-    délivrabilité). Ne rattrape RIEN : un échec (`MailerNotConfigured`,
-    `httpx.HTTPStatusError`, erreur réseau) doit remonter tel quel jusqu'à
-    l'appelant, jamais disparaître silencieusement."""
+def send_email(to: str, subject: str, text: str, html: str | None = None) -> str:
+    """Envoie un mail via l'API Resend — texte brut seul si `html` est
+    absent, ou les deux (Resend, comme la plupart des clients mail, choisit
+    HTML quand il sait l'afficher et retombe sur le texte brut sinon).
+    `html` sert notamment à faire ressortir un avertissement en encart
+    coloré, impossible à rendre en texte brut (retour utilisateur
+    28/08/2026 : « met l'invitation à placer les cours en warning pour que
+    cela soit bien lu »). Rend l'id du message (utile pour retrouver un
+    envoi précis côté Resend en cas de souci de délivrabilité). Ne rattrape
+    RIEN : un échec (`MailerNotConfigured`, `httpx.HTTPStatusError`, erreur
+    réseau) doit remonter tel quel jusqu'à l'appelant, jamais disparaître
+    silencieusement."""
     api_key = os.environ.get(_API_KEY_ENV)
     if not api_key:
         raise MailerNotConfigured(f"{_API_KEY_ENV} non configuré — aucun mail ne peut être envoyé.")
     sender = os.environ.get(_FROM_ENV) or _DEFAULT_FROM
+    payload: dict[str, object] = {"from": sender, "to": [to], "subject": subject, "text": text}
+    if html:
+        payload["html"] = html
     response = httpx.post(
         _RESEND_ENDPOINT,
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={"from": sender, "to": [to], "subject": subject, "text": text},
+        json=payload,
         timeout=15.0,
     )
     response.raise_for_status()
