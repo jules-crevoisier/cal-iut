@@ -315,3 +315,31 @@ export interface Completion {
 export function completerPlacements(): Promise<Completion> {
   return request<Completion>("/placements/completer", { method: "POST" });
 }
+
+// ── Envoi automatique du lien perso par mail (retour utilisateur 28/08/2026) ──
+
+export interface TeacherMailPreview {
+  code: string;
+  name: string;
+  email: string | null;
+  sent_at: string | null;
+}
+
+export interface TeacherMailPreviewList {
+  configured: boolean;
+  teachers: TeacherMailPreview[];
+}
+
+export function fetchTeacherMailPreview(): Promise<TeacherMailPreviewList> {
+  return request<TeacherMailPreviewList>("/mail/teacher-links");
+}
+
+export interface TeacherMailSendResult {
+  code: string;
+  ok: boolean;
+  error: string | null;
+}
+
+export function sendTeacherMails(codes: string[]): Promise<{ results: TeacherMailSendResult[] }> {
+  return request("/mail/teacher-links/send", { method: "POST", body: JSON.stringify({ codes }) });
+}
