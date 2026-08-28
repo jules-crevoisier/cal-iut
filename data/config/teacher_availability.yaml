@@ -37,6 +37,90 @@ teachers:
         slots: [1, 2]
         note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Kyllian Bresson, 26/08/2026)"
 
+  # --- Barthélémy TOMASINA : matins de septembre ---------------------------
+  # Mail du 28/08/2026 (à Kyllian, Jules, Fabrice) : « Habituellement je
+  # commence les cours en novembre et je ne pensais pas avoir des cours en
+  # septembre. [...] concernant septembre, je suis indisponible tous les
+  # matins de ce mois. » Disponibilité annoncée à partir d'octobre : la
+  # restriction s'arrête donc au 30 septembre, elle n'est pas reconduite.
+  #
+  # Créneaux 0/1/2 = 8h-9h30, 9h30-11h, 11h-12h30. Ses après-midis restent
+  # ouverts (c'est explicitement ce qu'il propose), d'où un blocage par
+  # créneaux et non par journée entière.
+  #
+  # Dates énumérées une à une : `forbidden_date_slots` est le seul des cinq
+  # mécanismes qui sache viser une date précise, il n'existe pas de forme
+  # « tout un mois ». Les 22 jours ci-dessous sont les jours de cours réels
+  # de septembre 2026, dérivés du calendrier (pas saisis à la main).
+  - teacher_code: BTO  # Barthélémy Tomasina (vacataire)
+    forbidden_date_slots:
+      - date: "2026-09-01"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-02"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-03"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-04"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-07"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-08"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-09"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-10"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-11"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-14"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-15"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-16"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-17"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-18"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-21"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-22"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-23"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-24"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-25"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-28"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-29"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+      - date: "2026-09-30"
+        slots: [0, 1, 2]
+        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+
 # Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
   gap_penalty: 100
