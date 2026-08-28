@@ -348,7 +348,13 @@ def test_eval_session_forced_into_a018(but1_s1_sessions: list[SessionToPlace]) -
 
     for p in assigned:
         if sessions_by_id[p.session_id].is_eval:
-            assert p.room_label == "A.018 (Évaluation)"
+            # `startswith` et pas une égalité exacte (comme
+            # `test_salles_invariants.py`) : ce qui compte est QUELLE salle,
+            # pas son libellé d'affichage — celui-ci a déjà changé une fois
+            # (suffixe « (Évaluation) » retiré le 28/08/2026, retour
+            # utilisateur : il se lisait comme un qualificatif du cours dans
+            # la case salle) et cassait alors ce test pour rien.
+            assert p.room_label.startswith("A.018")
 
 
 def test_solve_decomposed_on_real_subset(but1_s1_sessions: list[SessionToPlace]) -> None:

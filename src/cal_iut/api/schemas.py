@@ -47,6 +47,26 @@ class MoveSessionRequest(BaseModel):
     force: bool = False
 
 
+class ChangeRoomRequest(BaseModel):
+    """Changement de salle SEULE, à créneau inchangé (`PATCH /placements/
+    {id}/salle`) — retour utilisateur 28/08/2026 : « on va vouloir sur la vue
+    promo modifier uniquement les salles »."""
+
+    room_id: str
+    force: bool = False
+
+
+class CreateRoomRequest(BaseModel):
+    """Salle ajoutée à la main (`POST /rooms`) — retour utilisateur
+    28/08/2026 : « il se peut que l'on utilise des salles autres que dans le
+    bâtiment ». L'`id` n'est pas demandé : il est dérivé du libellé côté
+    serveur, une personne qui ajoute « Amphi Descartes » n'a pas à inventer
+    un identifiant technique."""
+
+    label: str = Field(min_length=1, max_length=80)
+    capacity: int = Field(default=30, ge=1, le=1000)
+
+
 class SlotSuggestionResponse(BaseModel):
     week: int
     day: int

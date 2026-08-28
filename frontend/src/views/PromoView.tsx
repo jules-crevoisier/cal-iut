@@ -22,14 +22,16 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import type { SeanceAPlacer } from "../api/client";
+import { changerSalle, type SeanceAPlacer } from "../api/client";
 import type { Placement } from "../types";
 import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { placerAvecConfirmation } from "../utils/placement";
+import { confirmAsync } from "../utils/confirmDialog";
+import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 import { performMove } from "../utils/moveSession";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { compareParcoursForDisplay } from "../utils/years";
+import { NewRoomModal } from "../components/NewRoomModal";
 import { WeekBar } from "../components/WeekBar";
 
 interface PromoViewProps {
@@ -71,6 +73,50 @@ export function PromoView({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
   const dragEnabled = Boolean(placements && onPlacementUpdated && onError);
+
+  // Édition de la SALLE seule (retour utilisateur 28/08/2026 : « on va
+  // vouloir sur la vue promo modifier uniquement les salles ») — même
+  // condition d'activation que le glisser-déposer : réservé au contexte
+  // d'édition (onglet Vue Promo), jamais dans la Vue Promo intégrée à
+  // « À placer », qui ne reçoit pas ces props.
+  const [salleEnEdition, setSalleEnEdition] = useState<string | null>(null);
+  const [salleEnCours, setSalleEnCours] = useState(false);
+  const roomEditEnabled = Boolean(onPlacementUpdated && onError);
+  // Séance pour laquelle on est en train de créer une salle — la salle
+  // créée lui est appliquée directement, sans re-sélection manuelle.
+  const [creationSallePour, setCreationSallePour] = useState<string | null>(null);
+  const sallesTriees = useMemo(
+    () => [...payload.rooms].sort((a, b) => a.label.localeCompare(b.label, "fr")),
+    [payload.rooms],
+  );
+
+  const appliquerSalle = async (sessionId: string, roomId: string) => {
+    if (!roomId || !onPlacementUpdated || !onError) return;
+    setSalleEnCours(true);
+    try {
+      let maj = await changerSalle(sessionId, { room_id: roomId }).catch(async (e) => {
+        const detail = detailConflit(e);
+        if (!detail) throw e;
+        // Conflit de salle : proposé en forçage explicite, comme partout
+        // ailleurs dans l'app (modale interne, pas `window.confirm`).
+        const forcer = await confirmAsync(detail.hard_conflicts.join("\n"), {
+          title: "Salle déjà occupée",
+          confirmLabel: "Mettre quand même cette salle",
+        });
+        if (!forcer) return null;
+        return changerSalle(sessionId, { room_id: roomId, force: true });
+      });
+      if (maj) {
+        onPlacementUpdated(maj);
+        setAnnonce(`Salle changée : ${maj.room_label ?? roomId}.`);
+        setSalleEnEdition(null);
+      }
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Changement de salle impossible");
+    } finally {
+      setSalleEnCours(false);
+    }
+  };
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
 
@@ -381,6 +427,16 @@ export function PromoView({
                                 const highlighted = teacherFilter && r.te.includes(teacherFilter);
                                 const teacherNames = r.te.map((tc) => payload.teacherLabels[tc] ?? tc).join(", ");
                                 const durLabel = (r.dur || 1) > 1 ? ` · ${((r.dur || 1) * 1.5).toFixed(1).replace(".0", "")}h` : "";
+                                // Clé d'édition de salle UNIQUE PAR CELLULE, pas par
+                                // séance : un CM de promo est rendu dans TOUTES les
+                                // colonnes de sa promo (et sur chaque créneau de sa
+                                // durée). Avec la seule `r.id`, cliquer « changer la
+                                // salle » ouvrait un <select autoFocus> dans chacune
+                                // — chacun volant le focus au précédent, dont le
+                                // `onBlur` refermait aussitôt l'édition. Symptôme
+                                // observé : seuls les TP (présents dans une seule
+                                // colonne) étaient modifiables.
+                                const cleEditionSalle = `${i}-${s}-${r.id}`;
                                 // Verrouillée = jamais glissable, même quand le
                                 // drag est actif (même règle que l'ancien
                                 // TdWeekGrid) — `placements` sert UNIQUEMENT à
@@ -408,7 +464,54 @@ export function PromoView({
                                       {r.ev ? " · éval" : ""}
                                       {durLabel}
                                     </span>
-                                    <span className="rm">{r.r || "—"}</span>
+                                    {/* Salle modifiable sur place (retour utilisateur
+                                        28/08/2026) — un <select> apparaît à la place du
+                                        libellé au clic. `stopPropagation` sur le clic :
+                                        sans lui, ouvrir le sélecteur déclencherait aussi
+                                        le clic de la CELLULE (poser une séance en cours
+                                        de placement). */}
+                                    {salleEnEdition === cleEditionSalle ? (
+                                      <select
+                                        className="rm promo-chip-salle"
+                                        autoFocus
+                                        disabled={salleEnCours}
+                                        defaultValue={sallesTriees.find((s2) => s2.label === r.r)?.id ?? ""}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onChange={(e) => {
+                                          if (e.target.value === "__new__") {
+                                            setCreationSallePour(r.id);
+                                            setSalleEnEdition(null);
+                                            return;
+                                          }
+                                          void appliquerSalle(r.id, e.target.value);
+                                        }}
+                                        onBlur={() => setSalleEnEdition(null)}
+                                      >
+                                        <option value="">— choisir une salle —</option>
+                                        <option value="__new__">+ Créer une salle…</option>
+                                        {sallesTriees.map((s2) => (
+                                          <option key={s2.id} value={s2.id}>
+                                            {s2.label} ({s2.capacity} pl.)
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : roomEditEnabled ? (
+                                      <button
+                                        type="button"
+                                        className="rm promo-chip-salle-btn"
+                                        title="Changer la salle"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSalleEnEdition(cleEditionSalle);
+                                        }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                      >
+                                        {r.r || "—"}
+                                      </button>
+                                    ) : (
+                                      <span className="rm">{r.r || "—"}</span>
+                                    )}
                                     <span className="te">{teacherNames || "—"}</span>
                                   </div>
                                 );
@@ -485,6 +588,19 @@ export function PromoView({
           </div>
         )}
       </div>
+
+      {creationSallePour && (
+        <NewRoomModal
+          onCancel={() => setCreationSallePour(null)}
+          onCreated={(salle) => {
+            const sessionId = creationSallePour;
+            setCreationSallePour(null);
+            // La salle vient d'être créée côté serveur : elle est libre par
+            // construction, l'appliquer ne peut pas buter sur un conflit.
+            void appliquerSalle(sessionId, salle.id);
+          }}
+        />
+      )}
     </section>
   );
 }
