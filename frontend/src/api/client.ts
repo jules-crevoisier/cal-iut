@@ -187,3 +187,102 @@ export function extractTeachers(placements: Placement[]): string[] {
   }
   return [...set].sort();
 }
+
+// ── Séances non placées + placement manuel ──
+// Le solveur place ~96,5 % des séances ; le reste bute sur des combinaisons
+// prouvées infaisables (cf. docs/DATA.md §66). Ces trois appels permettent de
+// placer ce reliquat à la main sans jamais deviner : le serveur ne propose que
+// des créneaux où aucune règle n'est violée, et revérifie tout au placement.
+
+export interface SeanceAPlacer {
+  session_id: string;
+  course_code: string;
+  course_name: string;
+  session_type: string;
+  semestre: string;
+  parcours: string;
+  annee: string;
+  duration_slots: number;
+  duree_libelle: string;
+  group_ids: string[];
+  groupes_libelles: string[];
+  teacher_codes: string[];
+  enseignants_libelles: string[];
+  sequence_order: number | null;
+  semaines_possibles: number[];
+  raison: string;
+}
+
+export interface SeancesAPlacer {
+  total_a_placer: number;
+  total_placees: number;
+  manquantes: SeanceAPlacer[];
+  par_parcours: Record<string, number>;
+  resume: string;
+}
+
+export interface CreneauLibre {
+  week: number;
+  day: number;
+  slot: number;
+  label: string;
+  date: string;
+  salle_label: string | null;
+  remarques: string[];
+}
+
+export interface CreneauxLibres {
+  session_id: string;
+  creneaux: CreneauLibre[];
+  note: string | null;
+}
+
+export function fetchSeancesManquantes(): Promise<SeancesAPlacer> {
+  return request<SeancesAPlacer>("/placements/manquantes");
+}
+
+export function fetchCreneauxLibres(sessionId: string, depuisSemaine = 0): Promise<CreneauxLibres> {
+  return request<CreneauxLibres>(
+    `/placements/${encodeURIComponent(sessionId)}/creneaux-libres?depuis_semaine=${depuisSemaine}`,
+  );
+}
+
+export function placerSeance(
+  sessionId: string,
+  body: { week: number; day: number; slot: number; room_id?: string | null; lock?: boolean; force?: boolean },
+): Promise<Placement> {
+  return request<Placement>(`/placements/${encodeURIComponent(sessionId)}/placer`, {
+    method: "POST",
+    body: JSON.stringify({ lock: false, force: false, ...body }),
+  });
+}
+
+// ── Remplissage automatique du reliquat ──
+// Constat du 26/08/2026 sur le run réel : sur 20 séances manquantes, 20
+// avaient au moins un créneau parfaitement valable. Faire cliquer 85 fois pour
+// poser des séances que la machine sait poser serait un gâchis.
+
+export interface SeancePlaceeAuto {
+  session_id: string;
+  course_code: string;
+  week: number;
+  day: number;
+  slot: number;
+  date: string;
+}
+
+export interface SeanceRefusee {
+  session_id: string;
+  course_code: string;
+  raison: string;
+}
+
+export interface Completion {
+  placees: SeancePlaceeAuto[];
+  refusees: SeanceRefusee[];
+  resume: string;
+}
+
+export function completerPlacements(): Promise<Completion> {
+  return request<Completion>("/placements/completer", { method: "POST" });
+}

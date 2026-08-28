@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   applyFeedback,
@@ -11,13 +11,12 @@ import {
   fetchFeedbackAnalysis,
   fetchMeta,
   fetchTimetable,
-  ingest,
-  solve,
 } from "./api/client";
 import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { PageHeader } from "./components/PageHeader";
+import { SideNav } from "./components/SideNav";
 import { QualityPanel } from "./components/QualityPanel";
 import { RegenPanel } from "./components/RegenPanel";
 import { SessionPanel } from "./components/SessionPanel";
@@ -46,6 +45,7 @@ import { EnseignantView } from "./views/EnseignantView";
 import { GroupeView } from "./views/GroupeView";
 import { PromoView } from "./views/PromoView";
 import { ReferenceView } from "./views/ReferenceView";
+import { APlacerView } from "./views/APlacerView";
 import { TodoView } from "./views/TodoView";
 
 const DEFAULT_PARCOURS = "BUT1";
@@ -55,19 +55,29 @@ const DEFAULT_SEMESTRE = "S1";
 // (cf. cal_iut.calendar.academic.default_horizon_weeks), pas fixé ici.
 const MAX_WEEKS = 24;
 
-const TABS: { id: RouteView; label: string }[] = [
-  { id: "semaine", label: "Vue Semaine" },
-  { id: "groupe", label: "Vue Groupe" },
-  { id: "prof", label: "Vue Enseignant" },
-  { id: "promo", label: "Vue Promo" },
-  { id: "reference", label: "Référence" },
-  { id: "contraintes", label: "Contraintes" },
-  { id: "apf", label: "À traiter" },
-];
-
 export function App() {
   const { route, setRoute } = useHashRoute();
   const [search, setSearch] = useState(false);
+  // Tiroir de navigation mobile (<1024px) — la barre latérale devient un
+  // panneau coulissant sous ce seuil (cf. .sidenav dans app.css).
+  const [navOpen, setNavOpen] = useState(false);
+  const navToggleRef = useRef<HTMLButtonElement>(null);
+  const appContentRef = useRef<HTMLDivElement>(null);
+  // Symétrique du focus posé sur le bouton fermer à l'ouverture
+  // (SideNav.tsx) : à la fermeture, le focus clavier revient sur le ☰ qui
+  // l'a ouvert plutôt que de se perdre sur le body (audit a11y du
+  // 27/08/2026). Ignore le premier rendu (navOpen déjà à false).
+  const wasNavOpen = useRef(false);
+  useEffect(() => {
+    if (wasNavOpen.current && !navOpen) navToggleRef.current?.focus();
+    wasNavOpen.current = navOpen;
+  }, [navOpen]);
+  // `inert` posé impérativement (pas en prop JSX) : les types
+  // `@types/react` 18.3 ne déclarent pas encore cet attribut HTML, alors
+  // que `HTMLElement.inert` existe bien dans le DOM lui-même.
+  useEffect(() => {
+    if (appContentRef.current) appContentRef.current.inert = navOpen;
+  }, [navOpen]);
   const narrow = useNarrowScreen();
   const [mobileDay, setMobileDay] = useState(todayIndex());
 
@@ -162,42 +172,11 @@ export function App() {
     void loadTimetable();
   }, [loadTimetable]);
 
-  const handleIngest = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await ingest(parcours, semestre);
-      setNotice(`Données ${parcours} ${semestre} chargées`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur ingestion");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSolve = async (regenerate = false) => {
-    setLoading(true);
-    setError(null);
-    setNotice(regenerate ? "Régénération…" : "Génération…");
-    try {
-      await ingest(parcours, semestre);
-      const data = await solve({
-        parcours,
-        semestre,
-        optimize_gaps: false,
-      });
-      setPlacements(data.placements);
-      setQuality(data.quality);
-      setNotice(`Planning généré — ${data.placements.length} séances`);
-      await refreshDiff();
-      await refreshCorrections();
-      await refreshAppState();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur solveur");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // `handleIngest`/`handleSolve` (boutons "Charger données"/"Générer"/
+  // "Recalculer tout" du Toolbar) retirés (retour utilisateur 27/08/2026) —
+  // génération toujours faite en CLI. `loading`/`setNotice`/`setError`
+  // restent utilisés par la régénération ciblée (RegenPanel) et les autres
+  // actions encore présentes.
 
   const handlePlacementUpdated = (updated: Placement) => {
     setPlacements((prev) => prev.map((p) => (p.session_id === updated.session_id ? updated : p)));
@@ -326,56 +305,94 @@ export function App() {
         if (!readOnlyTarget) setSearch(true);
       } else if (e.key === "Escape" && search) {
         setSearch(false);
+      } else if (e.key === "Escape" && navOpen) {
+        setNavOpen(false);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [search, readOnlyTarget]);
+  }, [search, navOpen, readOnlyTarget]);
 
   return (
     <div className={`app ${readOnlyTarget ? "read-only-mode" : ""}`}>
-      {!readOnlyTarget && appPayload && <PageHeader payload={appPayload} />}
-
+      {/* Lien d'évitement : premier élément focusable de la page, il permet à
+          qui navigue au clavier de sauter la navigation pour atteindre
+          directement le contenu. Visible uniquement au focus (cf. `.skiplink`). */}
       {!readOnlyTarget && (
-        <nav className="tabbar">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`tabbtn ${activeTab === t.id ? "active" : ""}`}
-              onClick={() => setRoute({ vue: t.id })}
+        <a className="skiplink" href="#contenu">
+          Aller au contenu
+        </a>
+      )}
+
+      <div className="app-shell">
+        {!readOnlyTarget && (
+          <>
+            {/* Bande fine visible <1024px seulement (cf. app.css) — la barre
+                latérale devient un tiroir coulissant sous ce seuil. */}
+            <div className="navtoggle-bar no-print">
+              <button
+                type="button"
+                ref={navToggleRef}
+                className="navtoggle"
+                onClick={() => setNavOpen(true)}
+                aria-label="Ouvrir la navigation"
+              >
+                <span aria-hidden="true">☰</span> cal-iut
+              </button>
+            </div>
+            <SideNav
+              activeTab={activeTab}
+              onSelect={(id) => setRoute({ vue: id })}
+              onOpenSearch={() => setSearch(true)}
+              hasPayload={!!appPayload}
+              todoCount={todoCount}
+              todoHasBad={todoHasBad}
+              open={navOpen}
+              onClose={() => setNavOpen(false)}
+            />
+          </>
+        )}
+
+        {/* `inert` pendant que le tiroir mobile est ouvert : sans lui, un
+            `Tab` traverse le fond visuellement assombri par `.sidenav-scrim`
+            comme si de rien n'était (le z-index n'affecte pas l'ordre de
+            tabulation) — sûr ici car `navOpen` ne passe à `true` que via le
+            ☰, lui-même masqué par CSS dès 1024px (audit a11y du
+            27/08/2026). */}
+        <div className="app-content" ref={appContentRef}>
+          {!readOnlyTarget && appPayload && <PageHeader payload={appPayload} />}
+
+          {readOnlyTarget && appPayload && (
+            <header className="readonly-banner">
+              <h1>
+                {readOnlyTarget === "prof"
+                  ? `Planning de ${appPayload.teacherLabels[route.prof] ?? route.prof}`
+                  : `Planning — ${appPayload.groupLabels[route.groupe] ?? route.groupe}`}
+              </h1>
+              <p>Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.</p>
+            </header>
+          )}
+
+          {/* `role="alert"` pour une erreur (annoncée immédiatement), `status` pour
+              une information (annoncée sans interrompre). Sans eux, un message
+              d'erreur apparaissait sans qu'un lecteur d'écran le signale. */}
+          {(error || notice) && !readOnlyTarget && (
+            <div
+              className={`banner ${error ? "banner--error" : "banner--info"}`}
+              role={error ? "alert" : "status"}
             >
-              {t.label}
-              {t.id === "apf" && appPayload && (
-                <span className={`pill mini ${todoHasBad ? "bad" : todoCount ? "warn" : "good"}`}>{todoCount}</span>
-              )}
-            </button>
-          ))}
-          <button type="button" className="searchopenbtn no-print" onClick={() => setSearch(true)}>
-            Rechercher <span className="mono kbd">Ctrl+K</span>
-          </button>
-        </nav>
-      )}
+              {error ?? notice}
+              <button
+                type="button"
+                aria-label="Fermer ce message"
+                onClick={() => { setError(null); setNotice(null); }}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+          )}
 
-      {readOnlyTarget && appPayload && (
-        <header className="readonly-banner">
-          <h1>
-            {readOnlyTarget === "prof"
-              ? `Planning de ${appPayload.teacherLabels[route.prof] ?? route.prof}`
-              : `Planning — ${appPayload.groupLabels[route.groupe] ?? route.groupe}`}
-          </h1>
-          <p>Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.</p>
-        </header>
-      )}
-
-      {(error || notice) && !readOnlyTarget && (
-        <div className={`banner ${error ? "banner--error" : "banner--info"}`}>
-          {error ?? notice}
-          <button type="button" onClick={() => { setError(null); setNotice(null); }}>×</button>
-        </div>
-      )}
-
-      <main className="app-main">
+          <main className="app-main" id="contenu" tabIndex={-1}>
         {activeTab === "semaine" && !readOnlyTarget && (
           <>
             <Toolbar
@@ -404,9 +421,6 @@ export function App() {
               onGroupChange={setGroupId}
               onTeacherChange={setTeacherCode}
               onRoomChange={setRoomId}
-              onIngest={handleIngest}
-              onSolve={() => handleSolve(false)}
-              onRegenerate={() => handleSolve(true)}
             />
 
             <div className="layout">
@@ -429,7 +443,7 @@ export function App() {
                 {placements.length === 0 ? (
                   <div className="empty-state">
                     <p>Aucun planning chargé.</p>
-                    <p className="muted">Cliquez « Générer » pour lancer le solveur CP-SAT.</p>
+                    <p className="muted">Lancez le solveur CP-SAT en CLI (cal-iut solve / load-run), puis rechargez cette page.</p>
                   </div>
                 ) : solverWeek === null ? (
                   <div className="empty-state">
@@ -516,7 +530,14 @@ export function App() {
           <ContraintesView payload={appPayload} setRoute={setRoute} />
         )}
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
-      </main>
+        {/* Placement manuel du reliquat que le solveur n'a pas su placer.
+            Pas de `appPayload` requis : cet écran interroge le serveur
+            directement, et doit rester accessible même quand le planning
+            est trop incomplet pour que les autres vues aient du sens. */}
+        {activeTab === "aplacer" && !readOnlyTarget && <APlacerView onPlacement={() => void loadTimetable()} />}
+          </main>
+        </div>
+      </div>
 
       {appPayload && !readOnlyTarget && (
         <GlobalSearch payload={appPayload} open={search} onClose={() => setSearch(false)} onNavigate={setRoute} />

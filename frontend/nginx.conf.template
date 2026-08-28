@@ -1,0 +1,74 @@
+# Gabarit — `${BACKEND_URL}` substitué au démarrage du conteneur (variable
+# d'environnement Dokploy, défaut `http://backend:8000` défini dans le
+# Dockerfile). Sans path/trailing slash — laisser tel quel, ex.
+# `http://mon-service-api:8000`.
+
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Vérifié par le HEALTHCHECK du Dockerfile — répond directement depuis
+    # nginx, sans dépendre du backend (un conteneur frontend en bonne santé
+    # sert ses fichiers statiques même si l'API est momentanément injoignable).
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+        add_header Content-Type text/plain;
+    }
+
+    # Compression : gzip suffit ici (assets déjà compacts, pas de gros
+    # médias) — pas besoin de brotli pour ce volume.
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml application/json application/javascript
+               application/xml application/xml+rss text/javascript image/svg+xml;
+
+    # Assets Vite (`/assets/xxx-<hash>.js|css`) : le hash change à chaque
+    # contenu différent, donc un cache long + immutable est sûr — un
+    # nouveau déploiement produit de nouveaux noms de fichiers, jamais de
+    # contenu périmé servi sous une ancienne URL.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # Tout le reste : fichier statique s'il existe (index.html, favicon…),
+    # sinon reverse-proxy vers le backend cal-iut. Pas de repli SPA
+    # `try_files $uri /index.html` : le routage interne se fait par
+    # fragment d'URL (#vue=...), jamais envoyé au serveur, donc il n'y a
+    # aucune route "profonde" à réécrire — juste `/` qui sert index.html
+    # normalement. Ce repli "statique d'abord, sinon backend" reste
+    # correct même si de nouvelles routes API apparaissent côté serveur
+    # sans qu'il faille les lister ici une par une (ancienne approche par
+    # liste blanche de préfixes, plus fragile).
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ @backend;
+    }
+
+    location @backend {
+        # `${BACKEND_URL}` est substitué par `envsubst` AVANT que nginx ne
+        # lise ce fichier (simple remplacement de texte, ne comprend rien à
+        # la syntaxe nginx) — une fois substitué, cette ligne est un
+        # `proxy_pass` 100% littéral, sans aucune variable nginx. C'est
+        # important : dès qu'une variable nginx apparaît DANS `proxy_pass`
+        # (ex. `$uri` collé juste après), nginx bascule en résolution DNS
+        # À LA REQUÊTE plutôt qu'au chargement de la config, ce qui exige un
+        # `resolver` (sinon : "no resolver defined to resolve
+        # host.docker.internal", trouvé en testant l'image le 27/08/2026).
+        # Sans variable ici, la résolution se fait une fois au démarrage —
+        # et sans chemin après l'hôte, nginx transmet automatiquement l'URI
+        # d'origine (chemin + query) tel quel, pas besoin de le recoller
+        # manuellement.
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

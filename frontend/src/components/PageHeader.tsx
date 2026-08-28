@@ -23,47 +23,21 @@ interface PageHeaderProps {
 
 export function PageHeader({ payload }: PageHeaderProps) {
   const [cls, label] = STATUS_MAP[payload.status ?? ""] ?? ["bad", payload.status ?? "—"];
-  const firstFutureWeek = payload.weekStatus.find((w) => w.status === "future");
-  const activeWeekLabel = firstFutureWeek
-    ? `Prochaine semaine modifiable : ${payload.weekRows[firstFutureWeek.week]?.label ?? `Semaine ${firstFutureWeek.week + 1}`}`
-    : "";
 
-  const q = payload.quality;
-  const nWeeks = payload.weekRows.length;
-  const blockedWeekCount = payload.weekRows.filter((w) => w.blocked).length;
-  const matieres = new Set(payload.rows.map((r) => r.c)).size;
-
-  const stats: [string, string | number, string?][] = [
-    ["Séances placées", payload.rows.length.toLocaleString("fr-FR")],
-    ["Matières", matieres],
-    ["Semaines affichées", nWeeks + (blockedWeekCount ? ` (dont ${blockedWeekCount} bloquée(s))` : "")],
-    ["Trous détectés", q?.total_gaps ?? "—"],
-    ["Jours isolés", q?.isolated_days ?? "—"],
-    ["Score objectif", `${(payload.objective ?? 0).toLocaleString("fr-FR")} `, "plus bas = meilleur"],
-  ];
-
+  // La pastille "Prochaine semaine modifiable" et les 6 statistiques
+  // (séances/matières/semaines/trous/jours isolés/score) ont été retirées
+  // (retour utilisateur 27/08/2026 : « on peut aussi enlever les séance
+  // matiere semaine trou etc le cache prochaine semaine modifiable etc »)
+  // — pur affichage, aucune donnée ni action perdue ; `payload.quality`,
+  // `payload.rows`, `payload.weekStatus` etc. restent utilisés ailleurs
+  // (QualityPanel, TodoView...), rien n'a changé côté calcul.
   return (
-    <>
-      <header className="top">
-        <div className="titles">
-          <h1>Planning généré</h1>
-          <p>Sortie du solveur CP-SAT cal-iut.</p>
-        </div>
-        {activeWeekLabel && <span className="pill">{activeWeekLabel}</span>}
-        <span className={`pill lg dot ${cls}`}>{label}</span>
-      </header>
-
-      <section className="stats">
-        {stats.map(([l, v, sub]) => (
-          <div className="stat" key={l}>
-            <span className="label">{l}</span>
-            <span className="value mono">
-              {v}
-              {sub && <small> {sub}</small>}
-            </span>
-          </div>
-        ))}
-      </section>
-    </>
+    <header className="top">
+      <div className="titles">
+        <h1>Planning généré</h1>
+        <p>Sortie du solveur CP-SAT cal-iut.</p>
+      </div>
+      <span className={`pill lg dot ${cls}`}>{label}</span>
+    </header>
   );
 }

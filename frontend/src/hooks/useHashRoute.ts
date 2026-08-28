@@ -11,7 +11,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export type RouteView = "semaine" | "groupe" | "prof" | "promo" | "reference" | "contraintes" | "apf";
+export type RouteView =
+  | "semaine"
+  | "groupe"
+  | "prof"
+  | "promo"
+  | "reference"
+  | "contraintes"
+  | "apf"
+  | "aplacer";
 
 export interface Route {
   vue: RouteView | "";

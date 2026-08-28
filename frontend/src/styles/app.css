@@ -33,6 +33,13 @@
   --bad-soft: #fbe7e5;
   --warn: #a8781f;
   --warn-soft: #faf1de;
+  /* Variantes texte, assombries pour rester en AA (≥4.5:1) sur leur fond
+     `-soft` — `--good`/`--warn`/`--bad` seuls tombaient à 3.5-3.9:1 pour le
+     petit texte gras des pastilles (audit a11y du 27/08/2026). Le mode
+     sombre passait déjà : `--good-text` etc. y valent simplement `--good`. */
+  --good-text: #1f7a48;
+  --warn-text: #8a611a;
+  --bad-text: #a53a2f;
   --shadow: 0 1px 2px rgba(28, 35, 51, .06), 0 8px 24px -12px rgba(28, 35, 51, .12);
   color-scheme: light;
 
@@ -53,6 +60,7 @@
     --border: #2b3244; --accent: #9c8ff2; --accent-soft: #241f3d; --accent2: #e0a95c; --accent2-soft: #3a2e1a;
     --teal: #5cc4c1; --teal-soft: #163330; --good: #57c98c; --good-soft: #16301f; --bad: #e2685b; --bad-soft: #3a231f;
     --warn: #e0b45c; --warn-soft: #382e18; color-scheme: dark;
+    --good-text: #57c98c; --warn-text: #e0b45c; --bad-text: #e2685b;
   }
 }
 :root[data-theme="dark"] {
@@ -60,12 +68,14 @@
   --border: #2b3244; --accent: #9c8ff2; --accent-soft: #241f3d; --accent2: #e0a95c; --accent2-soft: #3a2e1a;
   --teal: #5cc4c1; --teal-soft: #163330; --good: #57c98c; --good-soft: #16301f; --bad: #e2685b; --bad-soft: #3a231f;
   --warn: #e0b45c; --warn-soft: #382e18; color-scheme: dark;
+  --good-text: #57c98c; --warn-text: #e0b45c; --bad-text: #e2685b;
 }
 :root[data-theme="light"] {
   --bg: #eef1f5; --surface: #ffffff; --surface-2: #f5f7fb; --ink: #1c2333; --ink-soft: #5b6478;
   --border: #d9dee6; --accent: #4d3fae; --accent-soft: #eeeafc; --accent2: #b9702a; --accent2-soft: #faeee0;
   --teal: #21807e; --teal-soft: #e2f2f1; --good: #2f8f5b; --good-soft: #e4f5ec; --bad: #c94a3f; --bad-soft: #fbe7e5;
   --warn: #a8781f; --warn-soft: #faf1de; color-scheme: light;
+  --good-text: #1f7a48; --warn-text: #8a611a; --bad-text: #a53a2f;
 }
 
 * {
@@ -243,9 +253,86 @@ h1, h2, h3 {
   flex: 1;
 }
 
-@media (max-width: 1024px) {
+/* 1023.98px et non 1024px : un appareil pile à 1024 de large (iPad
+   paysage) doit tomber du côté "colonne fixe ≥1024px" décrit plus haut, pas
+   du tiroir (audit a11y du 27/08/2026). */
+@media (max-width: 1023.98px) {
   .layout {
     grid-template-columns: 1fr;
+  }
+
+  /* Sous 1024px, la colonne fixe devient un tiroir : bande d'accès (bouton
+     ☰) toujours visible, panneau coulissant par-dessus le contenu plutôt
+     que de lui voler de la largeur (poste de travail = colonne fixe,
+     téléphone/tablette = tiroir, cf. retour utilisateur 25/08/2026). */
+  .navtoggle-bar {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .navtoggle {
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: none;
+    background: none;
+    color: var(--text);
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  .sidenav {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(84vw, 300px);
+    flex-basis: auto;
+    transform: translateX(-100%);
+    /* `visibility` retire le tiroir fermé du parcours clavier (`Tab`
+       n'atteindrait sinon jamais le contenu de la page : les boutons
+       restent dans le DOM, seulement déplacés hors écran par le
+       `transform`). Le délai sur la fermeture laisse l'animation de
+       glissement se terminer avant de disparaître ; l'ouverture, elle,
+       redevient visible immédiatement. */
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+    z-index: 60;
+    box-shadow: var(--shadow);
+  }
+
+  .sidenav.open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.2s ease, visibility 0s linear 0s;
+  }
+
+  .sidenav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 18, 26, 0.4);
+    z-index: 50;
+  }
+
+  .sidenav-close {
+    display: flex;
+    /* Cible tactile ≥44px indépendante du type de pointeur détecté — un
+       navigateur de bureau redimensionné en dessous de 1024px (poste de
+       QA, portable hybride) doit rester utilisable, pas seulement le vrai
+       tactile (`@media (pointer: coarse)` plus bas, insuffisant seul —
+       audit a11y du 27/08/2026). */
+    width: 44px;
+    height: 44px;
+  }
+
+  .navbtn {
+    min-height: 44px;
   }
 }
 
@@ -782,55 +869,143 @@ h1, h2, h3 {
   color: var(--accent);
 }
 
-/* ══════════════ Coquille à onglets (portage HTML/JS) ══════════════ */
+/* ══════════════ Navigation (barre latérale groupée) ══════════════
+   Remplace l'ancienne rangée plate de 8 onglets (retour utilisateur
+   25/08/2026 : « je suis perdu ») — mêmes 8 vues, regroupées par intention
+   dans `SideNav.tsx` (Planning / Perspectives / Référentiel / À faire).
+   Colonne fixe ≥1024px (poste de travail, cas d'usage principal), tiroir
+   coulissant en dessous (cf. media query plus bas). */
 
-.tabbar {
+.app-shell {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  align-items: stretch;
+  min-height: 0;
 }
 
-.tabbtn {
+.app-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.navtoggle-bar {
+  display: none;
+}
+
+.sidenav {
+  width: 240px;
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 14px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  /* `dvh` et non `vh` : sur mobile, la barre d'adresse qui se rétracte au
+     scroll fait varier `100vh`, laissant un vide sous le panneau sticky
+     (règle maison, cf. CLAUDE.md — audit a11y du 27/08/2026). */
+  height: 100dvh;
+  overflow-y: auto;
+}
+
+.sidenav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+}
+
+.sidenav-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.sidenav-brand-text strong {
+  font-size: 0.98rem;
+}
+
+.sidenav-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.sidenav-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-group-label {
+  padding: 6px 10px 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.navbtn {
   font: inherit;
   font-weight: 600;
-  font-size: 0.86rem;
-  padding: 12px 14px;
+  font-size: 0.88rem;
+  padding: 9px 10px;
   border: none;
+  border-radius: 8px;
   background: none;
-  color: var(--muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tabbtn.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
-.tabbtn:hover:not(.active) {
   color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 3px solid transparent;
+}
+
+.navbtn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.navbtn:hover:not(.active) {
+  background: var(--surface-2);
+}
+
+.navbtn .pill.mini {
+  margin-left: auto;
 }
 
 .searchopenbtn {
-  margin-left: auto;
-  align-self: center;
   font: inherit;
   font-size: 0.8rem;
   font-weight: 600;
-  padding: 7px 14px;
+  padding: 9px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-2);
   color: var(--muted);
   cursor: pointer;
+}
+
+.sidenav-search {
+  width: 100%;
+  justify-content: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .searchopenbtn:hover {
@@ -840,6 +1015,31 @@ h1, h2, h3 {
 
 .kbd {
   opacity: 0.65;
+}
+
+.sidenav-scrim {
+  display: none;
+}
+
+.sidenav-close {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidenav-close:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .app-main {
@@ -1289,6 +1489,42 @@ h1, h2, h3 {
   font-size: 0.75rem;
 }
 
+/* ══════════════ Liens de tous les enseignants (vue simple) ══════════════ */
+
+.teacherlinks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.teacherlinks-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.teacherlinks-name {
+  flex: 0 0 180px;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.teacherlinks-input {
+  flex: 1 1 240px;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
 /* ══════════════ Vue Promo ══════════════ */
 
 .daybar {
@@ -1532,10 +1768,13 @@ table.ref thead th {
 }
 
 .check.pass { border-color: color-mix(in srgb, var(--good) 35%, var(--border)); }
-.check.fail { border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
+/* Anciennement rouge (--bad/--danger) — adouci en ambre (--warn), retour
+   utilisateur 27/08/2026 : "on peut enlever le rouge dans contrainte". La
+   distinction pass/fail reste visible (icône + fond), juste moins alarmante. */
+.check.fail { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); background: var(--warn-soft); }
 .check .icon { font-weight: 700; min-width: 16px; }
 .check.pass .icon { color: var(--success); }
-.check.fail .icon { color: var(--danger); }
+.check.fail .icon { color: var(--warn); }
 .check .sub { color: var(--muted); font-size: 0.76rem; margin-top: 2px; }
 
 /* ══════════════ À traiter ══════════════ */
@@ -1555,9 +1794,9 @@ table.ref thead th {
   color: var(--muted);
 }
 
-.pill.good { background: var(--good-soft); color: var(--success); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
-.pill.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
-.pill.bad { background: var(--bad-soft); color: var(--danger); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.pill.good { background: var(--good-soft); color: var(--good-text); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn-text); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.pill.bad { background: var(--bad-soft); color: var(--bad-text); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
 .pill.dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 /* Variante "grande" (`PageHeader` — statut solveur) : le `.pill` de base
    ci-dessus est en réalité la taille "mini" du HTML (déjà utilisée partout
@@ -1719,8 +1958,7 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   .app-main { padding: 12px; }
   header.top { padding: 12px 12px 0; flex-direction: column; align-items: flex-start; }
   .stats { padding: 0 12px 12px; }
-  .tabbar { padding: 0 12px; overflow-x: auto; flex-wrap: nowrap; }
-  .tabbtn { white-space: nowrap; }
+  .sidenav { width: min(88vw, 280px); }
   .searchopenbtn .kbd { display: none; }
   /* `.weekfield { flex: 1 1 320px }` fixe une base de 320px sur l'axe
      PRINCIPAL du flex parent — en ligne (desktop) c'est une largeur, mais
@@ -1748,9 +1986,305 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 /* ══════════════ Impression ══════════════ */
 
 @media print {
-  .tabbar, .panel.controls, .no-print, .weekbar, .searchoverlay, .sharebar {
+  .navtoggle-bar, .sidenav, .panel.controls, .no-print, .weekbar, .searchoverlay, .sharebar {
     display: none !important;
   }
   .app-main { padding: 0; }
   .panel { border: 1px solid #999; box-shadow: none; break-inside: avoid; }
+}
+
+/* ==========================================================================
+   Accessibilité — ajouts du 26/08/2026
+   L'application ne comptait qu'un seul attribut `aria-*` : la structure était
+   entièrement visuelle. Pour un établissement public, l'accessibilité (RGAA)
+   n'est pas une option ; et un lien d'évitement ou un focus visible profitent
+   à tout le monde, pas seulement aux lecteurs d'écran.
+   ========================================================================== */
+
+/* Texte réservé aux technologies d'assistance : présent dans l'arbre
+   d'accessibilité, invisible à l'écran. `clip-path` plutôt que
+   `display:none`, qui le retirerait aussi de la lecture. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Lien d'évitement : hors écran, il revient au premier plan dès qu'il reçoit
+   le focus. Sans lui, atteindre le contenu au clavier demandait de traverser
+   les huit onglets à chaque changement de page. */
+.skiplink {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 200;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top .15s ease;
+}
+.skiplink:focus {
+  top: 8px;
+}
+
+/* Focus VISIBLE et homogène. Plusieurs navigateurs l'effacent dès qu'un
+   `outline: none` traîne dans une feuille de style ; on le rétablit
+   explicitement, en ne l'affichant qu'au clavier (`:focus-visible`) pour ne
+   pas alourdir la navigation à la souris. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* `<main>` reçoit le focus via le lien d'évitement : sans ce retrait, une
+   bordure apparaîtrait autour de toute la page au moment du saut. */
+.app-main:focus {
+  outline: none;
+}
+
+/* Cible tactile d'au moins 44px : en dessous, un bouton devient difficile à
+   viser au doigt — la moitié des consultations se fait sur téléphone. */
+@media (pointer: coarse) {
+  .navbtn,
+  .navtoggle,
+  .subtabbtn,
+  .btn {
+    min-height: 44px;
+  }
+
+  .sidenav-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Respect de « réduire les animations » : une transition non désirée peut
+   provoquer un malaise chez les personnes sensibles au mouvement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Onglet « À placer » — placement manuel du reliquat du solveur
+   ==========================================================================
+   Écrit en 320 px d'abord : la personne qui rattrape des séances le fait
+   souvent debout devant un planning affiché, téléphone à la main. Les cibles
+   font 44 px minimum, rien ne déborde horizontalement, et chaque créneau
+   proposé se lit d'un coup d'œil (date en clair, horaire, salle). */
+
+.aplacer-jauge {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin: .75rem 0 .35rem;
+}
+
+.aplacer-jauge-remplie {
+  height: 100%;
+  background: var(--good);
+  transition: width .3s ease;
+}
+
+.small {
+  font-size: .82rem;
+}
+
+.alerte {
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: .6rem .75rem;
+  margin: .5rem 0;
+  font-size: .88rem;
+}
+
+.aplacer-liste {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+
+.aplacer-carte {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.aplacer-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  width: 100%;
+  min-height: 44px;
+  padding: .75rem .85rem;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+}
+
+.aplacer-entete:hover {
+  background: var(--surface-2);
+}
+
+.aplacer-titre {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  min-width: 0;
+}
+
+.aplacer-titre .sub {
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.aplacer-chevron {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.aplacer-corps {
+  border-top: 1px solid var(--border);
+  padding: .75rem .85rem 1rem;
+}
+
+.aplacer-creneaux {
+  list-style: none;
+  margin: .5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+.aplacer-creneau {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  width: 100%;
+  min-height: 44px;
+  padding: .6rem .75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.aplacer-creneau:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.aplacer-creneau:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.aplacer-quand {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  min-width: 0;
+}
+
+.aplacer-quand strong {
+  /* Les dates longues (« mercredi 14 octobre ») doivent tenir à 320 px sans
+     pousser le bouton « Placer ici » hors de l'écran. */
+  overflow-wrap: anywhere;
+}
+
+.aplacer-quand .sub {
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.aplacer-action {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: .85rem;
+}
+
+@media (min-width: 768px) {
+  .aplacer-titre .sub,
+  .aplacer-quand .sub {
+    font-size: .85rem;
+  }
+}
+
+.aplacer-auto {
+  margin-top: .85rem;
+  padding-top: .85rem;
+  border-top: 1px solid var(--border);
+}
+
+.aplacer-auto .btn {
+  min-height: 44px;
+  width: 100%;
+}
+
+.aplacer-auto p {
+  margin: .5rem 0 0;
+}
+
+.aplacer-rapport {
+  margin-top: .85rem;
+  padding: .7rem .8rem;
+  background: var(--good-soft);
+  border: 1px solid var(--good);
+  border-radius: 10px;
+  font-size: .88rem;
+}
+
+.aplacer-rapport p {
+  margin: 0;
+}
+
+.aplacer-rapport summary {
+  cursor: pointer;
+  margin-top: .4rem;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.aplacer-rapport ul {
+  margin: .3rem 0 0;
+  padding-left: 1.1rem;
+}
+
+@media (min-width: 768px) {
+  .aplacer-auto .btn {
+    width: auto;
+  }
 }

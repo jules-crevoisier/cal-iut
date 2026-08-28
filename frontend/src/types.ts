@@ -12,6 +12,7 @@ export interface Placement {
   room_label: string | null;
   is_eval: boolean;
   locked: boolean;
+  duration_slots: number;
 }
 
 export interface Quality {
