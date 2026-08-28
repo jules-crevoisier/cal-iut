@@ -40,7 +40,7 @@ def etat_avec_seance():
         "teacher_availability": etat.teacher_availability,
         "config_dir": etat.config_dir, "student_presences": etat.student_presences,
         "corrections": etat.corrections, "courses": etat.courses,
-        "teacher_duos": etat.teacher_duos,
+        "teacher_duos": etat.teacher_duos, "semestre_group": etat.semestre_group,
     }
     seance = SessionToPlace(
         id="s1", course_code="WR101", course_name="T", semestre="S1",
@@ -63,6 +63,7 @@ def etat_avec_seance():
     etat.corrections = []
     etat.courses = []
     etat.teacher_duos = []
+    etat.semestre_group = "odd"
     yield
     for cle, valeur in ancien.items():
         setattr(etat, cle, valeur)
@@ -167,3 +168,57 @@ def test_un_echec_n_interrompt_pas_les_autres_envois(etat_avec_seance, session_a
     assert resultats["KBR"]["ok"] is True
     assert resultats["XYZ"]["ok"] is False
     assert "panne réseau simulée" in resultats["XYZ"]["error"]
+
+
+# --------------------------------------------------------------------------
+# Contenu intelligent du mail — retour utilisateur 28/08/2026 : rappel des
+# semestres couverts + alerte "séances à placer" quand elle s'applique.
+# --------------------------------------------------------------------------
+
+
+def _capturer_corps(monkeypatch) -> list[str]:
+    corps_captures: list[str] = []
+
+    def _send(to, subject, text):
+        corps_captures.append(text)
+        return "msg_ok"
+
+    monkeypatch.setattr(mailer, "send_email", _send)
+    monkeypatch.setattr(mailer, "personal_link", lambda code: "https://example.test/#vue=prof")
+    monkeypatch.setattr(
+        "cal_iut.ingestion.config_loader.load_teacher_contacts",
+        lambda config_dir: {"KBR": "kyllian.bresson@univ-reims.fr"},
+    )
+    return corps_captures
+
+
+def test_le_mail_rappelle_les_semestres_couverts(etat_avec_seance, session_admin, monkeypatch) -> None:
+    corps_captures = _capturer_corps(monkeypatch)
+    client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
+    assert "S1, S3 et S5" in corps_captures[0]
+
+
+def test_alerte_seances_a_placer_absente_si_tout_est_place(etat_avec_seance, session_admin, monkeypatch) -> None:
+    corps_captures = _capturer_corps(monkeypatch)
+    client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
+    assert "à placer" not in corps_captures[0]
+    assert "référent" not in corps_captures[0]
+
+
+def test_alerte_seances_a_placer_presente_si_pertinente(etat_avec_seance, session_admin, monkeypatch) -> None:
+    """Ajoute une 2e séance pour KBR jamais placée (absente de
+    `etat.timetable`, contrairement à `s1`) — même signal que l'écran
+    « À placer » réel."""
+    etat = get_state()
+    manquante = SessionToPlace(
+        id="s2", course_code="WR102", course_name="T2", semestre="S1",
+        parcours="BUT1", annee="BUT1", session_type=SessionType.TD,
+        sequence_order=1, group_ids=["but1-td-cd"], teacher_codes=["KBR"],
+    )
+    etat.sessions = etat.sessions + [manquante]
+    etat.sessions_by_id["s2"] = manquante
+
+    corps_captures = _capturer_corps(monkeypatch)
+    client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
+    assert "n'ont pas encore pu être placées" in corps_captures[0]
+    assert "référent" in corps_captures[0]
