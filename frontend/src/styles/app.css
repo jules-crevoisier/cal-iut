@@ -1079,6 +1079,66 @@ h1, h2, h3 {
   max-width: none;
 }
 
+/* Même chose en HAUTEUR — retour utilisateur 28/08/2026 : « il faudrait que
+   ça utilise toute la hauteur, que les séances soient bien ajustées à la
+   place disponible, et de ce fait on peut ajuster la taille de la police en
+   fonction ». Chaîne flex complète jusqu'à la grille : `.app-main` devient
+   colonne flex (il ne l'était pas — ses enfants ne s'étiraient donc pas
+   malgré son propre `flex: 1` plus haut dans la chaîne), `.view` et le
+   DERNIER panel (celui de la grille — DayStrip/en-tête restent à taille
+   naturelle avant lui) grandissent pour occuper le reste. `min-height: 0`
+   à chaque étage : sans lui, un enfant flex refuse par défaut de rétrécir
+   sous la taille de son contenu, ce qui empêcherait tout l'étirement.
+   Scopé à `.read-only-mode` : la Vue Semaine (éditable, FullCalendar) gère
+   déjà sa propre hauteur autrement, pas concernée par ce correctif. */
+.read-only-mode .app-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.read-only-mode .view {
+  flex: 1;
+  min-height: 0;
+}
+
+.read-only-mode .view > .panel:last-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.read-only-mode .sessiongrid-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.read-only-mode .sessiongrid-wrap .sessiongrid {
+  flex: 1;
+  height: 100%;
+}
+
+/* La police grandit avec la place réellement disponible (approximée par la
+   hauteur de fenêtre, la grille en occupant l'essentiel) plutôt que de
+   rester figée à sa taille compacte d'origine, pensée pour un espace
+   contraint qui n'existe plus une fois la grille étirée. Le plancher du
+   clamp() reste la taille compacte d'avant (jamais plus petit qu'avant, y
+   compris sur un petit écran/mobile paysage). */
+.read-only-mode .sessiongrid {
+  font-size: clamp(0.78rem, 1.6vh, 1.05rem);
+}
+
+.read-only-mode .sessiongrid-block {
+  font-size: clamp(0.72rem, 1.4vh, 0.95rem);
+}
+
+.read-only-mode .sessiongrid-block .meta {
+  font-size: clamp(0.62rem, 1.15vh, 0.8rem);
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1310,7 +1370,15 @@ h1, h2, h3 {
 
 .sessiongrid-cell {
   min-width: 132px;
-  height: 60px;
+  height: 60px; /* plancher fixe en vue admin (compacte, table à hauteur naturelle) */
+}
+
+/* En lecture seule, la hauteur est un plancher, pas un plafond — la ligne
+   grandit avec le reste de la table étirée (`.read-only-mode .sessiongrid`
+   ci-dessus), au lieu de rester bloquée à 60px avec du vide en dessous. */
+.read-only-mode .sessiongrid-cell {
+  height: auto;
+  min-height: 60px;
 }
 
 .sessiongrid-subcols {
