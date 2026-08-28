@@ -2444,3 +2444,50 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   min-height: 44px;
   margin-top: 4px;
 }
+
+/* ══════════════ Modale de confirmation (ConfirmModal) ══════════════
+   Remplace `window.confirm` pour le forçage sur conflit (glisser-déposer,
+   placement manuel) — retour utilisateur 28/08/2026 : un bloqueur de
+   popup rendait `window.confirm` muet, donc le forçage impossible. */
+
+.confirmmodal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.confirmmodal {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.confirmmodal h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.confirmmodal-message {
+  margin: 0;
+  white-space: pre-line;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.confirmmodal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.confirmmodal-actions .btn {
+  min-height: 44px;
+}

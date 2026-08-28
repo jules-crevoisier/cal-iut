@@ -10,6 +10,7 @@
 
 import { movePlacement, validateMove } from "../api/client";
 import type { Placement } from "../types";
+import { confirmAsync } from "./confirmDialog";
 
 export async function performMove(
   sessionId: string,
@@ -21,9 +22,10 @@ export async function performMove(
   try {
     const validation = await validateMove(sessionId, { ...target, room_id: placement.room_id });
     if (!validation.valid) {
-      const force = window.confirm(
-        `Conflit détecté :\n${validation.hard_conflicts.join("\n")}\n\nForcer le déplacement ?`,
-      );
+      // Modale interne, pas `window.confirm` (retour utilisateur 28/08/2026 :
+      // un bloqueur de popup le renvoie à `false` en silence, empêchant tout
+      // forçage — cf. utils/confirmDialog.ts).
+      const force = await confirmAsync(validation.hard_conflicts.join("\n"), { confirmLabel: "Forcer le déplacement" });
       if (!force) return false;
       const updated = await movePlacement(sessionId, { ...target, room_id: placement.room_id, force: true });
       onPlacementUpdated(updated);

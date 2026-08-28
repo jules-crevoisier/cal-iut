@@ -20,7 +20,13 @@ rooms:
 
   - id: h006
     label: H.006
-    capacity: 30
+    # Corrigé de 30 à 15 (retour utilisateur 28/08/2026, verbatim : « la h006
+    # fait 15 place max ») — la capacité affichée servait de repli TD (les TD
+    # préfèrent les salles `standard`, cf. `room_assignment_rules` plus bas,
+    # H.006 n'intervenant qu'en repli faute de salle standard libre) et
+    # atterrissait pile sur l'effectif TD BUT1 (30/30), ce qui ne correspond
+    # pas à la vraie salle.
+    capacity: 15
     room_type: tp_standard
     equipment: [televiseur]  # communique avec H.009
 

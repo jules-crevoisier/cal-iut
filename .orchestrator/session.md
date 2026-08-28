@@ -58,3 +58,16 @@ Découverte : presque tout existait déjà (liste complète des manquantes, plac
 Ajouté côté frontend (PR #4, mergée) : affichage de `semaines_possibles` (déjà renvoyé, jamais affiché), sélecteur manuel semaine/jour/horaire par carte (hors suggestions sûres), flux confirm-puis-force sur conflit (même UX que le drag du Toolbar), parsing du détail structuré des 409 (`hard_conflicts`/`soft_warnings`) pour ne jamais afficher de JSON brut à l'écran (nettoyé aussi sur le flux "safe slot" existant au passage).
 Vérifié contre le serveur local réel (409 institutionnel en string, 409 structuré en objet) sans muter de vraie donnée (semaines passées/occupées choisies exprès).
 Status DONE. Note ménage session : la branche `main` locale avait pris du retard (jamais fast-forward après les merges précédents faute de pouvoir checkout avec des fichiers modifiés en cours) — corrigée via `git branch -f main origin/main`, aucun impact sur GitHub qui était toujours à jour.
+
+## follow-up 8 (vue semaine allegee + drag deplace vers vue promo)
+Fait après le mot de passe (l'utilisateur a rappelé que ces items étaient aussi demandés dans le même message) :
+- QualityPanel + RegenPanel retirés de Vue Semaine (sidebar 300px->260px, cellules grille 76px->92px).
+- Drag&drop retiré de TdWeekGrid.tsx et TimetableCalendar.tsx (Vue Semaine, lecture seule pour le déplacement, clic->détail conservé).
+- Drag&drop ajouté à PromoView.tsx (même logique performMove/confirmation-forçage que l'ancien TdWeekGrid). Nouvelle liste App.tsx `promoPlacements` (non filtrée, chargée seulement quand l'onglet Promo est actif) car `placements` (Vue Semaine) est filtrée par le Toolbar et n'aurait pas trouvé la bonne séance à déplacer depuis Vue Promo.
+PR #7 (mot de passe) et #8 (ce lot) — statut à vérifier avant de clore.
+
+## follow-up 9 (3 bugs signales apres coup)
+1. Popups navigateur desactivees -> window.confirm() silencieusement false -> force impossible. Fix : nouveau utils/confirmDialog.ts (event-bus + Promise) + components/ConfirmModal.tsx (montee une fois dans App.tsx), remplace window.confirm dans moveSession.ts et placement.ts.
+2. WR112 "duo synchronise" bloquait TOUJOURS meme avec force=true (3 lieux dans main.py : validate_placement/move_session/placer_seance, check AVANT le check de force). User a explicitement demande de pouvoir forcer -> move_session et placer_seance modifies (`and not body.force`). Teste reellement (curl PATCH sans force = 409 duo-sync ; avec force=true = 200). validate_placement et suggestions laisses tels quels (continuent a signaler le conflit / ne pas suggerer automatiquement, correct).
+3. TD BUT1 (effectif 30) dans H.006 (tp_standard, capacite configuree 30) -> pile a la capacite, jamais au-dessus (verifie : 0 vraie violation effectif>capacite nulle part dans tout le planning, 151 placements exactement a la limite). User confirme H.006 fait reellement 15 places max -> rooms.yaml corrige (30->15). IMPACT REEL : 41 placements actuellement en h006 ont maintenant effectif>capacite (surtout BUT1-S1 TD, WR112/113/108/109 + quelques BUT2/BUT3-FC) -> a signaler clairement, PAS deplace automatiquement (config-only fix demande, pas un re-solve).
+Verifie : tsc -b/build propres, redeploye en local, suite pytest complete relancee (duo_synced=[] dans les 3 fixtures TestClient, donc inerte pour les tests existants).
