@@ -226,6 +226,15 @@ class SeanceAPlacerResponse(BaseModel):
     sequence_order: int | None = None
     semaines_possibles: list[int] = []
     raison: str = ""
+    # Placée en forçant l'ordre pédagogique, pas encore validée — reste
+    # listée ici plutôt que de disparaître silencieusement une fois posée
+    # (retour utilisateur 28/08/2026 : « il faut le laisser dans la liste
+    # pour peut-être revenir en arrière »). `None` = jamais placée du tout ;
+    # rempli seulement si `placee_provisoirement` est vrai.
+    placee_provisoirement: bool = False
+    semaine_actuelle: int | None = None
+    jour_actuel: int | None = None
+    slot_actuel: int | None = None
 
 
 class SeancesAPlacerResponse(BaseModel):
@@ -310,3 +319,11 @@ class TeacherMailSendResultResponse(BaseModel):
 
 class SendTeacherMailsResponse(BaseModel):
     results: list[TeacherMailSendResultResponse] = []
+
+
+class ForcagePedagogiqueResponse(BaseModel):
+    """Retour de `POST /placements/{id}/valider` — `etait_en_attente=False` =
+    no-op (rien à valider, déjà validé ou jamais forcé)."""
+
+    session_id: str
+    etait_en_attente: bool

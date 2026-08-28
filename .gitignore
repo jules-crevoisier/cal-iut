@@ -23,3 +23,4 @@ coverage.json
 /export/
 data/.secret_key
 data/mail_log.json
+data/forced_pending.json

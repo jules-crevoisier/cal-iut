@@ -212,6 +212,19 @@ class PlanningRepository:
         self.db.commit()
         return True
 
+    def remove_current_placement(self, session_id: str) -> bool:
+        """Retire une séance du planning (l'inverse d'`update_current_
+        placement`) — utilisé par `DELETE /placements/{id}` pour annuler un
+        placement forcé (ordre pédagogique), cf. `api/forced_pending.py`.
+        Rend `False` si la ligne n'existait déjà pas (pas une erreur : l'état
+        visé est atteint dans les deux cas)."""
+        row = self.db.get(CurrentPlacement, session_id)
+        if row is None:
+            return False
+        self.db.delete(row)
+        self.db.commit()
+        return True
+
     def upsert_current_placements(self, run_id: int, placements: list[dict[str, object]]) -> None:
         """
         Écriture ciblée pour une régénération partielle (1-2 semaines) :

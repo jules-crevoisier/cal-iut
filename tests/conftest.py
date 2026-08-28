@@ -27,3 +27,18 @@ def auth_password() -> str:
     dans les fixtures `TestClient` existantes plutôt que de dupliquer la
     valeur en dur partout."""
     return os.environ["CAL_IUT_PASSWORD"]
+
+
+@pytest.fixture(autouse=True)
+def _fichiers_etat_isoles(tmp_path, monkeypatch):
+    """Isole TOUS les petits fichiers JSON d'état persisté (`api/mailer.py`,
+    `api/forced_pending.py`) vers un répertoire temporaire — sans ça,
+    n'importe quel test qui force un placement (ordre pédagogique) ou envoie
+    un mail écrirait dans le VRAI `data/mail_log.json`/`data/
+    forced_pending.json` du dépôt. Autouse : la pollution serait sinon aussi
+    facile à introduire par erreur dans un futur test que le bug qu'elle
+    évite est difficile à remarquer après coup."""
+    from cal_iut.api import forced_pending, mailer
+
+    monkeypatch.setattr(mailer, "_log_path", lambda: tmp_path / "mail_log.json")
+    monkeypatch.setattr(forced_pending, "_path", lambda: tmp_path / "forced_pending.json")

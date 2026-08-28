@@ -148,6 +148,71 @@ def test_placer_avant_la_precedente_reussit_en_forcant(client):
     assert reponse.status_code == 200, reponse.text
 
 
+# --------------------------------------------------------------------------
+# Un placement forcé reste suivi (`api/forced_pending.py`) — retour
+# utilisateur 28/08/2026 : « une fois le cm placé il faut le laisser dans
+# la liste pour peut-être revenir en arrière, et il faut peut-être un
+# bouton valider ».
+# --------------------------------------------------------------------------
+
+
+def test_un_placement_force_reste_visible_dans_a_placer(client):
+    reponse = client.post("/placements/manquante/placer", json={
+        "week": 10, "day": 1, "slot": 0, "force": True,
+    })
+    assert reponse.status_code == 200, reponse.text
+
+    corps = client.get("/placements/manquantes").json()
+    ligne = next(m for m in corps["manquantes"] if m["session_id"] == "manquante")
+    assert ligne["placee_provisoirement"] is True
+    assert (ligne["semaine_actuelle"], ligne["jour_actuel"], ligne["slot_actuel"]) == (10, 1, 0)
+
+
+def test_valider_retire_du_suivi_et_de_la_liste(client):
+    client.post("/placements/manquante/placer", json={"week": 10, "day": 1, "slot": 0, "force": True})
+
+    reponse = client.post("/placements/manquante/valider")
+    assert reponse.status_code == 200, reponse.text
+    assert reponse.json() == {"session_id": "manquante", "etait_en_attente": True}
+
+    corps = client.get("/placements/manquantes").json()
+    assert all(m["session_id"] != "manquante" for m in corps["manquantes"])
+
+
+def test_valider_deux_fois_est_un_no_op_sans_erreur(client):
+    client.post("/placements/manquante/placer", json={"week": 10, "day": 1, "slot": 0, "force": True})
+    client.post("/placements/manquante/valider")
+    reponse = client.post("/placements/manquante/valider")
+    assert reponse.status_code == 200
+    assert reponse.json() == {"session_id": "manquante", "etait_en_attente": False}
+
+
+def test_retirer_repose_la_seance_en_a_placer_normale(client):
+    client.post("/placements/manquante/placer", json={"week": 10, "day": 1, "slot": 0, "force": True})
+
+    reponse = client.delete("/placements/manquante")
+    assert reponse.status_code == 200, reponse.text
+    assert reponse.json() == {"session_id": "manquante", "etait_en_attente": True}
+
+    corps = client.get("/placements/manquantes").json()
+    ligne = next(m for m in corps["manquantes"] if m["session_id"] == "manquante")
+    assert ligne["placee_provisoirement"] is False
+    assert ligne["semaine_actuelle"] is None
+
+    # Vraiment retirée du planning, pas seulement démasquée dans la liste.
+    assert not any(p.session_id == "manquante" for p in get_state().timetable)
+
+
+def test_retirer_un_placement_non_en_attente_est_refuse(client):
+    """Garde-fou : cet endpoint n'est PAS un « supprimer n'importe quel
+    placement » générique — seulement le rattrapage d'un forçage d'ordre
+    pédagogique en attente. `precedente` est un placement normal, jamais
+    forcé."""
+    reponse = client.delete("/placements/precedente")
+    assert reponse.status_code == 400
+    assert any(p.session_id == "precedente" for p in get_state().timetable)
+
+
 def test_une_semaine_hors_bornes_reste_ouverte_par_ailleurs(client):
     """La restriction fine (au créneau) ne doit s'ajouter qu'aux semaines-
     limites — elle ne doit pas, par erreur, se répandre sur tout l'horizon.
