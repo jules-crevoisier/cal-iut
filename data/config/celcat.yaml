@@ -1,0 +1,146 @@
+# Correspondance vers CELCAT — l'outil officiel de l'URCA (emplois du temps
+# + paie des enseignants), qui n'expose AUCUNE API. Les séances y sont
+# saisies par automatisation du navigateur (cf. `src/cal_iut/celcat/`).
+#
+# Ce fichier ne contient QUE de la correspondance : nos identifiants d'un
+# côté, ceux de Celcat de l'autre. Aucune logique, aucune donnée de planning.
+#
+# Rempli le 29/08/2026 à partir de `export/CODE CELCAT ENSEIGNANT _ MODULE
+# - CODE CELCAT ENSEIGNANT.csv` (enseignants) et des scripts d'autoclicker
+# existants `export/*.bat` (salles, types de séance).
+
+# --- Enseignants : trigramme (le nôtre) -> code Celcat ---
+# 83 correspondances reprises telles quelles du CSV fourni.
+enseignants:
+  ABE: "33853"  # Bernardi ALEXIA
+  ACA: "39149"  # LO CASTRO AGATINO
+  ADH: "38707"  # DIEHL ANNE SOPHIE
+  AFA: "38062"  # Fabre AURELIA
+  AFR: "37948"  # FROLI ANTHONY
+  AGR: "38321"  # Gram AMBROISE
+  AGT: "3233"  # GRENET ANNE
+  AGU: "34732"  # Guillaume ALIX
+  AHA: "22885"  # Haraoubia Mohamed Amine
+  ALE: "0"  # LEMAITRE Alexandra
+  ALO: "35448"  # Loizon Ariane
+  APA: "39514"  # Pallamidessi ALICE
+  APE: "39386"  # PERRONE ANNE LAURE
+  ARA: "39031"  # Rageul ANTHONY
+  BDE: "36680"  # DEFLORENNE BETTY
+  BMA: "0"  # Machkouri Brahim
+  BTO: "39387"  # TOMASINA BARTHELEMY
+  CDE: "38609"  # DEBOISSY CAMILLE
+  CGA: "35519"  # GAY CELINE
+  CMA: "30125"  # Matran Christophe
+  CPI: "38903"  # PITEAU CLEMENCE
+  CRA: "38641"  # RAVO CAMILLE
+  DAN: "16041"  # ANNEBICQUE David
+  DGA: "35380"  # GANEWATTA KANKANAMGE DILUSHA
+  DOE: "0"  # Doe John
+  DVO: "33556"  # Voilmy DIMITRI
+  ECO: "38351"  # COLAS EMILIE
+  EHU: "38172"  # HUGUENOT EMMANUELLE
+  ENO: "38582"  # NONON ERWAN
+  FCI: "0"  # CIRILLO Fabio
+  FLI: "20900"  # Libbrecht Florent
+  FME: "2158"  # Meuzeret Fabrice
+  GDO: "31405"  # Dolat Gwennael
+  GDR: "39388"  # DRU GWLADYS
+  GGA: "3994"  # Grosdoit-Artur Gilles
+  GLE: "24594"  # Leullier Guillaume
+  GLS: "20289"  # Le Saulnier Guillaume
+  HKO: "23565"  # Kouider HANIA
+  JBA: "34188"  # Bastard JULIE
+  JLA: "39330"  # LASNIER JULIE
+  JLE: "32477"  # LEFEVRE JOAN
+  JME: "0"  # MEREAU Jordan
+  JME: "39578"  # MEREAU JORDAN
+  JPA: "39594"  # PAYET JEAN FRANCOIS
+  JPI: "33806"  # Pinel Jeanne
+  JSA: "36500"  # Sabater JULES
+  JSL: "32486"  # Séverin-Ligabue Julie
+  JTH: "21399"  # Thomas Jérôme
+  KBR: "35543"  # BRESSON Kyllian
+  KNG: "38463"  # NGO KEVIN
+  LBA: "37156"  # HENRIOT LAURIE
+  MGL: "39464"  # GLONIN MAXENCE
+  MGO: "37046"  # GOUAILLE MARION
+  MGR: "39579"  # GRENIER MATTIS
+  MLE: "39632"  # LEMOINE MAXIMILIEN
+  MMA: "3920"  # Martin Martial
+  MNI: "37429"  # NINO MARC
+  MPI: "38586"  # PICARD MANON
+  MRI: "34044"  # Riguet Marine
+  MTH: "22535"  # Thai Tang Minh Nhat
+  OBU: "39063"  # BUJOREANU OANA
+  OCH: "3132"  # Chérain Olivier
+  OLA: "37973"  # LASNIER OLIVIER
+  PCA: "7450"  # Caterino Paula
+  PCO: "0"  # PARCOM Dave
+  PFA: "40683"  # FARENC PIERRE
+  PGO: "3680"  # Gommery Patrice
+  PTU: "0"  # Projet Tutoré
+  PVI: "4954"  # Villain Philippe
+  RDE: "37949"  # Delon ROMAIN
+  RGY: "37138"  # GYEJACQUOT REMI
+  RHU: "2569"  # Huez Régis
+  SHN: "39577"  # HNIENE SARAH
+  SLO: "40170"  # LOIZON SEBASTIEN
+  SZI: "22215"  # Zilioli SIMON
+  TCA: "39757"  # CASTELLENGO THOMAS
+  THE: "39380"  # HEMMEN TIFFANY
+  TMI: "0"  # MIOLANE THIBAUD
+  TPA: "38031"  # PAVIE THOMAS
+  VBU: "33513"  # Burette Valentin
+  VDI: "30722"  # Dias Valentin
+  VMA: "3696"  # Mariot Valérie
+  VNG: "34275"  # Nguyen Van Hop
+  VPR: "39462"  # PRUDHOMME VICTOR
+
+# --- Salles : id interne -> libellé Celcat ---
+# Celcat attend le libellé avec le point (« H.111 ») ; la variante sans
+# point (« H111 ») utilisée par l'ancien autoclicker en est déduite
+# automatiquement, elle n'a pas à être saisie ici.
+#
+# PARTICULARITÉ signalée par l'utilisateur : « on n'a pas de salle 203 dans
+# notre Celcat, on utilise H.023 à la place, c'est la même chose ».
+salles:
+  h005: "H.005"  # H.005
+  h006: "H.006"  # H.006
+  h007: "H.007"  # H.007
+  h008: "H.008"  # H.008
+  h007_h008: ""  # H.007-008 : salle combinée, équivalent Celcat À CONFIRMER
+  h009: "H.009"  # H.009 (Design)
+  h016: "H.016"  # H.016 (Salle Mac)
+  h017: "H.017"  # H.017 (Studio)
+  h022: "H.022"  # H.022 (fantôme Studio)
+  h018: "H.018"  # H.018 (Amphi MMI)
+  h101: "H.101"  # H.101
+  h103: "H.103"  # H.103 (Anglais)
+  h104: "H.104"  # H.104
+  h105: "H.105"  # H.105
+  h111: "H.111"  # H.111
+  h201: "H.201"  # H.201
+  h203: "H.023"  # H.203 -> H.023 : la 203 n'existe pas dans Celcat
+  h201_h203: ""  # H.201-203 : salle combinée, équivalent Celcat À CONFIRMER
+  h205: "H.205"  # H.205 (VR/Réseaux)
+  a018: "A.018"  # A.018
+
+# --- Types de séance : le nôtre -> code Celcat ---
+# TD=4 et TP=6 relevés dans les scripts `.bat` existants. CM jamais observé
+# (le fichier `S2_S19_CM_CM.bat` fourni est vide) : À CONFIRMER avant tout
+# envoi réel, l'outil refuse de pousser un type non renseigné.
+types_seance:
+  TD: 4
+  TP: 6
+  CM: null   # À CONFIRMER
+  PTUT: null # À CONFIRMER
+
+# --- Modules : notre code cours -> code module Celcat (ex. TSBZ2520) ---
+# VIDE volontairement : la liste fournie (`export/LISTE DES MODULES MMI 28
+# AOUT 2026.pdf`) est un PDF SCANNÉ, sans texte extractible — impossible d'en
+# tirer la correspondance de façon fiable, et l'inventer serait le meilleur
+# moyen de créer des séances fausses dans l'outil qui sert aussi à PAYER les
+# enseignants. À compléter à la main (ou depuis un export texte/CSV de cette
+# liste). L'outil affiche précisément les codes manquants avant tout envoi.
+modules: {}
