@@ -2366,3 +2366,65 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
     width: auto;
   }
 }
+
+/* ══════════════ Mot de passe partagé (LoginGate) ══════════════ */
+
+.loginwrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.loginpanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.loginpanel .brand-mark {
+  font-size: 0.9rem;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+.loginpanel h1 {
+  margin: 4px 0 0;
+  font-size: 1.4rem;
+}
+
+.loginpanel p {
+  margin: 0 0 6px;
+}
+
+.loginpanel label {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.loginpanel input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+  min-height: 44px;
+}
+
+.loginpanel .btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+}

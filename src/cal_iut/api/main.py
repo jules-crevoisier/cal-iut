@@ -6,11 +6,12 @@ from dataclasses import dataclass
 from datetime import date as _date
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from cal_iut.api import auth
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
@@ -20,6 +21,7 @@ from cal_iut.api.schemas import (
     FeedbackAnalysisResponse,
     GroupMeta,
     IngestRequest,
+    LoginRequest,
     MetaResponse,
     MoveSessionRequest,
     PlacementResponse,
@@ -131,6 +133,61 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Chemins d'API réels (mêmes préfixes que le proxy de dev Vite,
+# `frontend/vite.config.ts`) — tout ce qui n'est PAS ici (page HTML, JS/CSS
+# buildés, favicon...) reste servi sans authentification : sans ça, le
+# formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
+_PROTECTED_PREFIXES = (
+    "/app-state", "/corrections", "/diff", "/exceptions", "/export",
+    "/feedback", "/ingest", "/legacy", "/meta", "/placements", "/regen",
+    "/sessions", "/solve", "/timetable", "/weeks", "/weights",
+)
+
+
+@app.middleware("http")
+async def require_auth(request: Request, call_next):
+    path = request.url.path
+    if not path.startswith(_PROTECTED_PREFIXES):
+        return await call_next(request)
+
+    password = auth.get_password()
+    if not password:
+        # Volontairement un blocage total, pas un accès libre — un
+        # `CAL_IUT_PASSWORD` non configuré à un vrai déploiement est une
+        # erreur de configuration, jamais silencieusement "pas de mot de
+        # passe" (retour utilisateur : « met moi un mot de passe... qui
+        # bloque l'entrée »).
+        return JSONResponse(status_code=503, content={"detail": "Authentification non configurée (CAL_IUT_PASSWORD absent)."})
+
+    if auth.verify_teacher_access_param(request.query_params.get("t")):
+        return await call_next(request)
+    if auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
+        return await call_next(request)
+    return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
+
+
+@app.post("/auth/login")
+def auth_login(body: LoginRequest, response: Response) -> dict:
+    password = auth.get_password()
+    if not password or body.password != password:
+        raise HTTPException(401, "Mot de passe incorrect.")
+    response.set_cookie(
+        auth.SESSION_COOKIE, auth.make_session_token(),
+        max_age=auth.SESSION_MAX_AGE_S, httponly=True, samesite="lax",
+    )
+    return {"ok": True}
+
+
+@app.post("/auth/logout")
+def auth_logout(response: Response) -> dict:
+    response.delete_cookie(auth.SESSION_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/auth/status")
+def auth_status(request: Request) -> dict:
+    return {"authenticated": auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE))}
 
 
 @app.on_event("startup")

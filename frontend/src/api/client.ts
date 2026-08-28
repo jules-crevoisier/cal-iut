@@ -10,8 +10,22 @@ import type { AppException, AppPayload } from "../types/app";
 
 const BASE = "";
 
+// Jeton d'accès personnel (`<trigramme>.<hmac>`, cf. api/auth.py) — posé une
+// fois au démarrage (App.tsx, lu depuis `route.t`) quand la page est ouverte
+// via un lien enseignant, puis rejoué sur CHAQUE appel API pour contourner
+// le mot de passe partagé sans jamais avoir à le taper (retour utilisateur
+// 28/08/2026). `null` = comportement normal, rien n'est ajouté aux requêtes.
+let accessToken: string | null = null;
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const url = accessToken
+    ? `${BASE}${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(accessToken)}`
+    : `${BASE}${path}`;
+  const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
@@ -20,6 +34,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   }
   return res.json() as Promise<T>;
+}
+
+/** Mot de passe partagé — session posée en cookie httpOnly par le serveur,
+ * jamais manipulée côté JS directement (cf. api/auth.py). */
+export async function login(password: string): Promise<void> {
+  await request("/auth/login", { method: "POST", body: JSON.stringify({ password }) });
+}
+
+export async function logout(): Promise<void> {
+  await request("/auth/logout", { method: "POST" });
+}
+
+export async function checkAuthStatus(): Promise<boolean> {
+  const r = await request<{ authenticated: boolean }>("/auth/status");
+  return r.authenticated;
 }
 
 export function fetchMeta(): Promise<MetaResponse> {

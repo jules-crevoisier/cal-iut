@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   applyFeedback,
+  checkAuthStatus,
   exportCsvUrl,
   exportJson,
   extractTeachers,
@@ -11,10 +12,12 @@ import {
   fetchFeedbackAnalysis,
   fetchMeta,
   fetchTimetable,
+  setAccessToken,
 } from "./api/client";
 import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
 import { GlobalSearch } from "./components/GlobalSearch";
+import { LoginGate } from "./components/LoginGate";
 import { PageHeader } from "./components/PageHeader";
 import { SideNav } from "./components/SideNav";
 import { QualityPanel } from "./components/QualityPanel";
@@ -111,6 +114,24 @@ export function App() {
     route.mode === "prof" && route.prof ? "prof" : route.mode === "groupe" && route.groupe ? "groupe" : null;
   const activeTab: RouteView = readOnlyTarget ?? (route.vue || "semaine");
 
+  // Mot de passe partagé (retour utilisateur 28/08/2026) — `null` = statut
+  // pas encore connu (évite un flash du formulaire avant la première
+  // réponse de `/auth/status`, endpoint jamais bloqué lui-même).
+  const [authentifie, setAuthentifie] = useState<boolean | null>(null);
+
+  // Jeton d'accès personnel (`route.t`, lien enseignant) — posé AVANT tout
+  // appel API (cf. api/client.ts::setAccessToken) : sans cet ordre, les
+  // fetches initiaux ci-dessous partiraient sans lui.
+  useEffect(() => {
+    setAccessToken(route.t || null);
+  }, [route.t]);
+
+  useEffect(() => {
+    checkAuthStatus()
+      .then(setAuthentifie)
+      .catch(() => setAuthentifie(false));
+  }, []);
+
   const refreshMeta = useCallback(async () => {
     try {
       setMeta(await fetchMeta());
@@ -148,9 +169,14 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    // Lien perso (readOnlyTarget) : le jeton fait le travail d'auth tout
+    // seul, peu importe `authentifie` (qui reste `false`, ces liens n'ont
+    // jamais la session admin). Sinon, attend une session confirmée —
+    // partir plus tôt ne ferait qu'échouer en 401 pour rien.
+    if (!readOnlyTarget && authentifie !== true) return;
     void refreshMeta();
     void refreshAppState();
-  }, [refreshMeta, refreshAppState]);
+  }, [refreshMeta, refreshAppState, readOnlyTarget, authentifie]);
 
   const loadTimetable = useCallback(async () => {
     try {
@@ -312,6 +338,18 @@ export function App() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [search, navOpen, readOnlyTarget]);
+
+  // Mot de passe requis avant TOUT le reste — sauf lien perso (readOnlyTarget),
+  // qui n'entre jamais dans ce couloir (retour utilisateur 28/08/2026 :
+  // « uniquement les prof ai accès a leur lien sans mot de passe »).
+  // `authentifie === null` : statut pas encore connu, écran neutre plutôt
+  // qu'un flash du formulaire suivi d'un flash de l'app.
+  if (!readOnlyTarget && authentifie === false) {
+    return <LoginGate onSuccess={() => setAuthentifie(true)} />;
+  }
+  if (!readOnlyTarget && authentifie === null) {
+    return <div className="app" aria-busy="true" />;
+  }
 
   return (
     <div className={`app ${readOnlyTarget ? "read-only-mode" : ""}`}>

@@ -21,3 +21,4 @@ Thumbs.db
 .coverage
 coverage.json
 /export/
+data/.secret_key

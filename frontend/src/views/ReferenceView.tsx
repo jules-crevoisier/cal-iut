@@ -149,7 +149,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
     code,
     label: payload.teacherLabels[code] ?? code,
     items: sessionsWithDates(payload, payload.rows.filter((r) => r.te.includes(code))),
-    link: buildLink({ vue: "prof", prof: code, mode: "prof" }),
+    link: buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" }),
     mail: payload.teacherEmails[code] || "",
   }));
   const groupItems = groupIds.map((gid) => {

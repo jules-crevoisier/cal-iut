@@ -10,6 +10,16 @@ services:
     build: .
     expose:
       - "8000"
+    environment:
+      # OBLIGATOIRE — sans lui, TOUTE l'API répond 503 (cf. api/auth.py,
+      # blocage volontaire plutôt qu'un accès libre par défaut). Change
+      # cette valeur avant un vrai déploiement.
+      CAL_IUT_PASSWORD: cal-iut-2026
+      # Optionnel — sans lui, un secret est généré au premier démarrage et
+      # écrit dans le volume `cal-iut-data` (donc stable tant que ce volume
+      # existe). Le fixer explicitement évite de perdre les liens
+      # enseignants déjà envoyés si le volume est un jour recréé.
+      # CAL_IUT_SECRET_KEY: change-moi-aussi
     volumes:
       # Named volume : seedé UNE fois depuis data/cal-iut.db baké dans
       # l'image (cf. Dockerfile), puis les écritures ultérieures
