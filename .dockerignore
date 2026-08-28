@@ -1,0 +1,20 @@
+# Contexte de build du Dockerfile RACINE (backend) — le frontend a son
+# propre .dockerignore dans frontend/.
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+coverage.json
+node_modules
+frontend/node_modules
+frontend/dist
+tests
+docs
+export
+.orchestrator
+.claude
+GUIDE.md
