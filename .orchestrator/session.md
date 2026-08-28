@@ -44,3 +44,17 @@ data/cal-iut.db (Run #13, 2392 placements) baké directement dans l'image depuis
 Testé RÉELLEMENT bout en bout via `docker compose up --build` (root docker-compose.yml, nouveau) : backend+frontend healthy, /timetable via le frontend proxy = identique au backend direct (2392 placements, run_id 13), persistance vérifiée par un restart réel du backend (données toujours là après).
 3 fichiers ajoutés à la racine : Dockerfile, .dockerignore, docker-compose.yml. Commit + push fait (PR #1 mise à jour automatiquement).
 Status: DONE, vérifié en conditions réelles (build+run+restart+persistence), prêt pour Dokploy.
+
+## follow-up 6 (déploiement Dokploy réel — échec puis fix)
+Dokploy a build depuis un clone GitHub (pas depuis le disque local) -> `COPY data/cal-iut.db data/cal-iut.db` a échoué ("not found") car data/cal-iut.db était gitignored, jamais poussé sur GitHub. C'était LE trou signalé dans ma question précédente, confirmé réel dès le premier vrai déploiement.
+Fix (PR #3, mergée) : exception `!data/cal-iut.db` dans .gitignore + fichier committé (~4MB, run #13, 2392 placements).
+Vérifié avec un clone frais réel (git clone --depth 1 vers /tmp, PAS depuis le disque local existant) : le fichier est bien dans le clone, docker build + run depuis CE clone -> /timetable retourne bien 2392 placements, run_id 13. C'est exactement ce que Dokploy fait.
+PR #1, #2, #3 toutes mergées sur main — main est maintenant déployable tel quel sur Dokploy.
+Status: DONE, prêt à relancer le déploiement Dokploy.
+
+## follow-up 7 (vue à placer — placement manuel + forçage)
+User: "on ai toutes les séance a chaque séance toutes les contrain, la ou il devrait etre placer dans l'idéal, et que l'on puisse les placer dans le planing... fait a la main et ne respectera pas toutes les contrainte... enregistré et que cela s'update dans les autres vues".
+Découverte : presque tout existait déjà (liste complète des manquantes, placement qui persiste en DB + refresh partout via onPlacement -> loadTimetable/refreshAppState). Le backend (`placer_seance`, POST /placements/{id}/placer) supportait DÉJÀ `force` avec les 2 niveaux de blocage (institutionnel jamais contournable, ressource contournable) — zéro changement backend nécessaire.
+Ajouté côté frontend (PR #4, mergée) : affichage de `semaines_possibles` (déjà renvoyé, jamais affiché), sélecteur manuel semaine/jour/horaire par carte (hors suggestions sûres), flux confirm-puis-force sur conflit (même UX que le drag du Toolbar), parsing du détail structuré des 409 (`hard_conflicts`/`soft_warnings`) pour ne jamais afficher de JSON brut à l'écran (nettoyé aussi sur le flux "safe slot" existant au passage).
+Vérifié contre le serveur local réel (409 institutionnel en string, 409 structuré en objet) sans muter de vraie donnée (semaines passées/occupées choisies exprès).
+Status DONE. Note ménage session : la branche `main` locale avait pris du retard (jamais fast-forward après les merges précédents faute de pouvoir checkout avec des fichiers modifiés en cours) — corrigée via `git branch -f main origin/main`, aucun impact sur GitHub qui était toujours à jour.
