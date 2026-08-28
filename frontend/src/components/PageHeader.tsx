@@ -22,7 +22,14 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ payload }: PageHeaderProps) {
-  const [cls, label] = STATUS_MAP[payload.status ?? ""] ?? ["bad", payload.status ?? "—"];
+  // Seuls les VRAIS verdicts du solveur méritent une pastille. Le serveur
+  // renvoie aussi `"CACHED"` quand le planning vient de la base plutôt que
+  // d'une résolution fraîche (`api/main.py`) : ce n'est pas un verdict, et
+  // il s'affichait tel quel — jargon interne, en rouge « échec » de surcroît
+  // puisqu'absent de `STATUS_MAP` (retour utilisateur 28/08/2026 : « enlève
+  // moi ça CACHED »). Tout statut non reconnu masque donc la pastille au
+  // lieu d'exposer une valeur brute.
+  const statut = STATUS_MAP[payload.status ?? ""];
 
   // La pastille "Prochaine semaine modifiable" et les 6 statistiques
   // (séances/matières/semaines/trous/jours isolés/score) ont été retirées
@@ -37,7 +44,7 @@ export function PageHeader({ payload }: PageHeaderProps) {
         <h1>Planning généré</h1>
         <p>Sortie du solveur CP-SAT cal-iut.</p>
       </div>
-      <span className={`pill lg dot ${cls}`}>{label}</span>
+      {statut && <span className={`pill lg dot ${statut[0]}`}>{statut[1]}</span>}
     </header>
   );
 }

@@ -9,6 +9,8 @@
  * ne montrait ni la charge relative ni les dates, cf. docs/DATA.md).
  */
 
+import { useState } from "react";
+
 import type { WeekRow } from "../types/app";
 
 interface WeekBarProps {
@@ -28,9 +30,21 @@ interface WeekBarProps {
 export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit = "creneaux" }: WeekBarProps) {
   const counts = weekRows.map((wr) => (wr.weekIndex !== null ? countByWeekIndex.get(wr.weekIndex) ?? 0 : 0));
   const max = Math.max(1, ...counts);
+  // Infobulle INTERNE (retour utilisateur 28/08/2026 : « internalise moi les
+  // hover, là on est sur les hover du navigateur ») — l'attribut `title`
+  // natif est lent à apparaître, non stylable, et invisible au toucher.
+  // Positionnée en `position: fixed` d'après le rectangle de la barre
+  // survolée : la `.weekbar` défile horizontalement (`overflow-x: auto`),
+  // un positionnement relatif au conteneur se décalerait au défilement.
+  const [survol, setSurvol] = useState<{ texte: string; x: number; y: number } | null>(null);
+
+  const montrer = (e: { currentTarget: HTMLElement }, texte: string) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setSurvol({ texte, x: r.left + r.width / 2, y: r.top });
+  };
 
   return (
-    <div>
+    <div className="weekbar-wrap">
       <div className="weekbar">
         {weekRows.map((wr, i) => {
           const count = counts[i];
@@ -47,15 +61,26 @@ export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit =
             <button
               key={wr.monday}
               type="button"
-              title={title}
+              aria-label={title}
               className={"weekbar-bar" + (i === selected ? " active" : "") + (wr.blocked ? " blocked" : "")}
               onClick={() => onSelect(i)}
+              onMouseEnter={(e) => montrer(e, title)}
+              onMouseLeave={() => setSurvol(null)}
+              // Clavier aussi : l'infobulle native apparaissait au survol
+              // seulement, celle-ci suit aussi la navigation au clavier.
+              onFocus={(e) => montrer(e, title)}
+              onBlur={() => setSurvol(null)}
             >
               <span className="bar" style={{ height: `${barHeight}%` }} />
             </button>
           );
         })}
       </div>
+      {survol && (
+        <div className="weekbar-tip" role="tooltip" style={{ left: survol.x, top: survol.y }}>
+          {survol.texte}
+        </div>
+      )}
       {weekRows.length > 0 && (
         <div className="weekbar-caption">
           <span>{weekRows[0].label}</span>

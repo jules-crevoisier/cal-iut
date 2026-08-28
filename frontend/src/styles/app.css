@@ -50,7 +50,13 @@
   --success: var(--good);
   --danger: var(--bad);
   --font: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-heading: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  /* Titres dans la MÊME famille que le reste (retour utilisateur
+     28/08/2026 : « la police du titre ne colle pas du tout à la DA ») — la
+     serif précédente (Palatino/Georgia) donnait un ton éditorial en rupture
+     avec une interface d'outil dense et sobre. La hiérarchie vient
+     désormais de la graisse et du crénage (cf. `h1, h2, h3`), pas d'un
+     changement de famille. */
+  --font-heading: var(--font);
   --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
@@ -94,6 +100,10 @@ body {
 h1, h2, h3 {
   font-family: var(--font-heading);
   text-wrap: balance;
+  /* Crénage resserré : c'est ce qui distingue un titre du texte courant
+     maintenant que la famille est la même (cf. `--font-heading`). */
+  letter-spacing: -0.015em;
+  font-weight: 650;
 }
 
 .app {
@@ -1201,6 +1211,32 @@ h1, h2, h3 {
 
 .weekbar-bar.blocked .bar {
   background: transparent;
+}
+
+/* Infobulle interne de la barre des semaines — remplace l'attribut `title`
+   natif (lent, non stylable, invisible au toucher). `position: fixed` +
+   coordonnées calculées au survol : la `.weekbar` défile horizontalement,
+   un positionnement relatif se décalerait au défilement.
+   `pointer-events: none` : l'infobulle ne doit jamais intercepter le clic
+   destiné à la barre qu'elle recouvre partiellement. */
+.weekbar-wrap {
+  position: relative;
+}
+
+.weekbar-tip {
+  position: fixed;
+  z-index: 60;
+  transform: translate(-50%, calc(-100% - 8px));
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
 }
 
 .weekbar-caption {
