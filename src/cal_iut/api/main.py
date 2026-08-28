@@ -1454,9 +1454,22 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         if resolved_room is not None:
             target_room_id = resolved_room.id
 
+    # `sessions_by_id`/`groups` OBLIGATOIRES ici, exactement comme dans
+    # `move_session` : sans eux, `validate_move` ignore la DURÉE des séances
+    # (un bloc de 3h n'est vu que sur son premier créneau) et la COHORTE
+    # étudiante. Bug réel trouvé le 29/08/2026 : cet endroit — la
+    # vérification À BLANC, celle qui prévient AVANT un glisser-déposer —
+    # les avait perdus alors que le déplacement réel les passait déjà. Une
+    # séance de 3h posée sur une autre était donc annoncée « valide », puis
+    # refusée (ou forcée en créant un vrai conflit) au moment de l'appliquer.
+    # Concrètement : deux cours du même groupe FC se sont retrouvés à 14h00,
+    # et cette vérification a répondu « aucun conflit ».
     result = validate_move(
         session_id, body.week, body.day, body.slot, _as_placed(state.timetable), match.group_ids, match.teacher_codes,
-        target_room_id, conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+        target_room_id,
+        sessions_by_id=state.sessions_by_id,
+        groups=state.groups,
+        conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
     )
     suggestions, note = ([], None) if result.valid else _suggestions_for(state, session_id, match)
     return ValidationResponse(valid=result.valid, hard_conflicts=result.hard_conflicts, soft_warnings=result.soft_warnings, suggestions=suggestions, suggestions_note=note)
