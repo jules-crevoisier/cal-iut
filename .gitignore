@@ -13,7 +13,7 @@ frontend/dist/
 data/exports/*.json
 data/generated/
 *.db
-data/cal-iut.db
+!data/cal-iut.db
 data/test_cal_iut.db
 *.log
 .DS_Store
