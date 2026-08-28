@@ -30,13 +30,6 @@ GROUPES = load_groups(ROOT / "data" / "config")
 client = TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def journal_isole(tmp_path, monkeypatch):
-    """Le journal d'envoi (`data/mail_log.json`) ne doit jamais s'écrire
-    dans le vrai dépôt pendant les tests."""
-    monkeypatch.setattr(mailer, "_log_path", lambda: tmp_path / "mail_log.json")
-
-
 @pytest.fixture
 def etat_avec_seance():
     etat = get_state()

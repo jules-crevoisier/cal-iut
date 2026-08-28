@@ -759,6 +759,11 @@ h1, h2, h3 {
   background: var(--border);
 }
 
+.badge.warn {
+  background: var(--warn-soft, var(--warn));
+  color: var(--warn);
+}
+
 .session-details {
   display: grid;
   grid-template-columns: auto 1fr;

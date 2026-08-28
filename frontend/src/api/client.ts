@@ -240,6 +240,14 @@ export interface SeanceAPlacer {
   sequence_order: number | null;
   semaines_possibles: number[];
   raison: string;
+  /** Placée en forçant l'ordre pédagogique, pas encore validée — reste
+   * listée ici pour pouvoir revenir en arrière (retour utilisateur
+   * 28/08/2026). `semaine_actuelle`/`jour_actuel`/`slot_actuel` ne sont
+   * remplis que si `placee_provisoirement` est vrai. */
+  placee_provisoirement: boolean;
+  semaine_actuelle: number | null;
+  jour_actuel: number | null;
+  slot_actuel: number | null;
 }
 
 export interface SeancesAPlacer {
@@ -284,6 +292,22 @@ export function placerSeance(
     method: "POST",
     body: JSON.stringify({ lock: false, force: false, ...body }),
   });
+}
+
+// ── Suivi des placements forcés (ordre pédagogique) — retour utilisateur
+// 28/08/2026 : « valider »/« revenir en arrière ». ──
+
+export interface ForcagePedagogique {
+  session_id: string;
+  etait_en_attente: boolean;
+}
+
+export function validerPlacementForce(sessionId: string): Promise<ForcagePedagogique> {
+  return request<ForcagePedagogique>(`/placements/${encodeURIComponent(sessionId)}/valider`, { method: "POST" });
+}
+
+export function retirerPlacementForce(sessionId: string): Promise<ForcagePedagogique> {
+  return request<ForcagePedagogique>(`/placements/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
 }
 
 // ── Remplissage automatique du reliquat ──

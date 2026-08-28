@@ -20,6 +20,8 @@ import {
   fetchCreneauxLibres,
   fetchSeancesManquantes,
   placerSeance,
+  retirerPlacementForce,
+  validerPlacementForce,
   type Completion,
   type CreneauLibre,
   type SeanceAPlacer,
@@ -233,6 +235,18 @@ export function APlacerView({ onPlacement, payload }: APlacerViewProps) {
                 recharger();
                 onPlacement();
               }}
+              onValidee={() => {
+                setAnnonce(`${s.course_code} validée.`);
+                setVersion((v) => v + 1);
+                recharger();
+                onPlacement();
+              }}
+              onRetiree={() => {
+                setAnnonce(`${s.course_code} retirée du planning, redevient à placer.`);
+                setVersion((v) => v + 1);
+                recharger();
+                onPlacement();
+              }}
               onChoisirSurPromo={setPlacementActif}
               payloadDisponible={Boolean(payload)}
             />
@@ -249,12 +263,16 @@ function CarteSeance({
   seance,
   version,
   onPlace,
+  onValidee,
+  onRetiree,
   onChoisirSurPromo,
   payloadDisponible,
 }: {
   seance: SeanceAPlacer;
   version: number;
   onPlace: () => void;
+  onValidee: () => void;
+  onRetiree: () => void;
   onChoisirSurPromo: (seance: SeanceAPlacer) => void;
   payloadDisponible: boolean;
 }) {
@@ -271,6 +289,38 @@ function CarteSeance({
   const [jourManuel, setJourManuel] = useState(0);
   const [slotManuel, setSlotManuel] = useState(0);
   const [manuelEnCours, setManuelEnCours] = useState(false);
+
+  // Placement forcé (ordre pédagogique) en attente de validation — retour
+  // utilisateur 28/08/2026 : « il faut le laisser dans la liste pour
+  // peut-être revenir en arrière, et il faut peut-être un bouton valider ».
+  const [actionEnCours, setActionEnCours] = useState<"valider" | "retirer" | null>(null);
+  const [erreurAction, setErreurAction] = useState<string | null>(null);
+
+  const valider = async () => {
+    setActionEnCours("valider");
+    setErreurAction(null);
+    try {
+      await validerPlacementForce(seance.session_id);
+      onValidee();
+    } catch (e) {
+      setErreurAction(e instanceof Error ? e.message : "Erreur de validation");
+    } finally {
+      setActionEnCours(null);
+    }
+  };
+
+  const retirer = async () => {
+    setActionEnCours("retirer");
+    setErreurAction(null);
+    try {
+      await retirerPlacementForce(seance.session_id);
+      onRetiree();
+    } catch (e) {
+      setErreurAction(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setActionEnCours(null);
+    }
+  };
 
   const charger = useCallback(() => {
     setChargement(true);
@@ -342,6 +392,7 @@ function CarteSeance({
       <button type="button" className="aplacer-entete" onClick={ouvrir} aria-expanded={ouverte} aria-controls={panneauId}>
         <span className="aplacer-titre">
           <strong>{titre}</strong>
+          {seance.placee_provisoirement && <span className="badge warn">Forcée, à valider</span>}
           <span className="sub">
             {seance.session_type} · {seance.duree_libelle} · {seance.groupes_libelles.join(", ")} ·{" "}
             {seance.enseignants_libelles.join(", ")}
@@ -352,7 +403,26 @@ function CarteSeance({
         </span>
       </button>
 
-      {ouverte && (
+      {ouverte && seance.placee_provisoirement && (
+        <div className="aplacer-corps" id={panneauId}>
+          <p className="muted small">
+            Posée en semaine {(seance.semaine_actuelle ?? 0) + 1} — {JOURS[seance.jour_actuel ?? 0]}{" "}
+            {HORAIRES[seance.slot_actuel ?? 0]}, en forçant l'ordre pédagogique (une séance voisine du même cours
+            devait normalement être avant/après). Vérifiez que ça reste pertinent avant de valider.
+          </p>
+          {erreurAction && <p className="alerte">{erreurAction}</p>}
+          <div className="aplacer-manuel">
+            <button type="button" className="btn btn--primary btn--sm" onClick={valider} disabled={actionEnCours !== null}>
+              {actionEnCours === "valider" ? "Validation…" : "Valider ce placement"}
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={retirer} disabled={actionEnCours !== null}>
+              {actionEnCours === "retirer" ? "Retrait…" : "Revenir en arrière (retirer du planning)"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ouverte && !seance.placee_provisoirement && (
         <div className="aplacer-corps" id={panneauId}>
           <p className="muted small">{seance.raison}</p>
           {seance.semaines_possibles.length > 0 && (

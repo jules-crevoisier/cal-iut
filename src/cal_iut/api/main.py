@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import auth, mailer
+from cal_iut.api import auth, forced_pending, mailer
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
@@ -19,6 +19,7 @@ from cal_iut.api.schemas import (
     ExceptionCreateRequest,
     ExceptionResponse,
     FeedbackAnalysisResponse,
+    ForcagePedagogiqueResponse,
     GroupMeta,
     IngestRequest,
     LoginRequest,
@@ -1344,14 +1345,19 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             })
         # Ordre pédagogique : contournable via `force` depuis le 28/08/2026
         # (cf. `_pedagogical_order_violations`), à la différence du bloc
-        # institutionnel ci-dessus.
-        if not body.force:
-            pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
-            if pedago:
-                raise HTTPException(409, detail={
-                    "message": "Conflit", "hard_conflicts": pedago,
-                    "soft_warnings": [], "suggestions": [], "suggestions_note": None,
-                })
+        # institutionnel ci-dessus. Calculé même si `force` est déjà vrai —
+        # `forced_pending.sync_after_move`, appelé plus bas UNE FOIS le
+        # déplacement réellement effectué (pas ici : un conflit de ressource
+        # peut encore faire échouer le déplacement après ce point), en a
+        # besoin pour savoir si CE déplacement doit rester suivi.
+        pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+        if pedago and not body.force:
+            raise HTTPException(409, detail={
+                "message": "Conflit", "hard_conflicts": pedago,
+                "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+            })
+    else:
+        pedago = []
 
     # Résolution de salle : garde l'actuelle si elle est encore libre à ce
     # créneau, recalcule sinon (retour utilisateur : "si on modifie [le
@@ -1400,6 +1406,9 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         session.locked_day = body.day
         session.locked_slot = body.slot
         session.metadata["locked_week"] = body.week
+
+    if session:
+        forced_pending.sync_after_move(session_id, body.week, body.day, body.slot, bool(pedago))
 
     correction = {
         "session_id": session_id,
@@ -1564,6 +1573,11 @@ def seances_manquantes() -> SeancesAPlacerResponse:
     """
     state = get_state()
     places = {p.session_id for p in state.timetable}
+    placement_by_id = {p.session_id: p for p in state.timetable}
+    # Placées en forçant l'ordre pédagogique, pas encore validées : restent
+    # listées ici même si elles SONT au planning (`session.id in places`),
+    # cf. `api/forced_pending.py` — retour utilisateur 28/08/2026.
+    en_attente = forced_pending.all_pending()
     noms = _noms_enseignants(state)
     libelle_groupe = {g.id: g.label for g in state.groups}
 
@@ -1595,13 +1609,15 @@ def seances_manquantes() -> SeancesAPlacerResponse:
     manquantes: list[SeanceAPlacerResponse] = []
     par_parcours: dict[str, int] = {}
     for session in state.sessions:
-        if session.id in places:
+        provisoire = session.id in en_attente
+        if session.id in places and not provisoire:
             continue
         if session.course_code.upper().startswith("WS") and (session.course_code.upper(), session.semestre) not in scheduled_sae:
             continue
         lo, hi = _movable_bounds(session.id, voisins, semaine_par_seance, n_semaines)
         semaines_ok = set(range(lo, hi + 1))
         par_parcours[session.parcours] = par_parcours.get(session.parcours, 0) + 1
+        actuel = placement_by_id.get(session.id) if provisoire else None
         manquantes.append(SeanceAPlacerResponse(
             session_id=session.id,
             course_code=session.course_code,
@@ -1619,16 +1635,28 @@ def seances_manquantes() -> SeancesAPlacerResponse:
             sequence_order=session.sequence_order,
             semaines_possibles=sorted(semaines_ok),
             raison=_raison_non_placee(state, session, semaines_ok, n_semaines),
+            placee_provisoirement=provisoire,
+            semaine_actuelle=actuel.week if actuel else None,
+            jour_actuel=actuel.day if actuel else None,
+            slot_actuel=actuel.slot if actuel else None,
         ))
 
     manquantes.sort(key=lambda m: (m.parcours, m.course_code, m.sequence_order or 0))
     total = len(state.sessions)
+    n_provisoires = sum(1 for m in manquantes if m.placee_provisoirement)
+    n_reellement_manquantes = len(manquantes) - n_provisoires
     if not manquantes:
         resume = "Toutes les séances sont placées."
+    elif n_reellement_manquantes == 0:
+        resume = (
+            f"Toutes les séances sont placées. {n_provisoires} en attente de validation "
+            "(ordre pédagogique forcé) — à vérifier ci-dessous."
+        )
     else:
         resume = (
-            f"{len(manquantes)} séance(s) sur {total} restent à placer à la main. "
-            "Ouvrez-en une : l'application ne propose que des créneaux où aucune "
+            f"{n_reellement_manquantes} séance(s) sur {total} restent à placer à la main"
+            + (f", + {n_provisoires} en attente de validation (ordre pédagogique forcé)" if n_provisoires else "")
+            + ". Ouvrez-en une : l'application ne propose que des créneaux où aucune "
             "règle n'est violée."
         )
     return SeancesAPlacerResponse(
@@ -1775,14 +1803,16 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
         })
     # Ordre pédagogique : contournable via `force` depuis le 28/08/2026 (cf.
     # `_pedagogical_order_violations`), à la différence du bloc institutionnel
-    # ci-dessus.
-    if not body.force:
-        pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
-        if pedago:
-            raise HTTPException(409, detail={
-                "message": "Conflit", "hard_conflicts": pedago,
-                "soft_warnings": [], "suggestions": [], "suggestions_note": None,
-            })
+    # ci-dessus. Calculé même si `force` est déjà vrai — `forced_pending.
+    # sync_after_move`, appelé plus bas UNE FOIS le placement réellement
+    # effectué (un conflit de ressource peut encore le faire échouer après
+    # ce point), en a besoin pour savoir si CE placement doit rester suivi.
+    pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+    if pedago and not body.force:
+        raise HTTPException(409, detail={
+            "message": "Conflit", "hard_conflicts": pedago,
+            "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+        })
 
     if body.room_id:
         salle = next((r for r in state.rooms if r.id == body.room_id), None)
@@ -1812,6 +1842,7 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
         room_id=getattr(salle, "id", None), room_label=getattr(salle, "label", None),
     )
     state.timetable.append(place)
+    forced_pending.sync_after_move(session_id, body.week, body.day, body.slot, bool(pedago))
 
     if body.lock:
         session.locked = True
@@ -1845,6 +1876,42 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
             })
 
     return _to_placement(place, state.sessions_by_id)
+
+
+@app.post("/placements/{session_id}/valider", response_model=ForcagePedagogiqueResponse)
+def valider_forcage_pedagogique(session_id: str) -> ForcagePedagogiqueResponse:
+    """Confirme un placement qui avait dû forcer l'ordre pédagogique — le
+    retire du suivi (`api/forced_pending.py`), il n'apparaît plus dans « À
+    placer » (retour utilisateur 28/08/2026 : « il faut peut-être un bouton
+    valider »). Idempotent : cliquer deux fois, ou valider quelque chose qui
+    n'était pas en attente, ne fait rien de plus qu'un no-op — jamais
+    d'erreur pour un état déjà atteint."""
+    etait_en_attente = forced_pending.get(session_id) is not None
+    forced_pending.clear(session_id)
+    return ForcagePedagogiqueResponse(session_id=session_id, etait_en_attente=etait_en_attente)
+
+
+@app.delete("/placements/{session_id}", response_model=ForcagePedagogiqueResponse)
+def retirer_placement_force(session_id: str) -> ForcagePedagogiqueResponse:
+    """Retire du planning un placement qui avait forcé l'ordre pédagogique —
+    la séance redevient une séance « à placer » normale (retour utilisateur
+    28/08/2026 : « il faut le laisser dans la liste pour peut-être revenir
+    en arrière »). Volontairement restreint aux placements EN ATTENTE de
+    validation (`forced_pending`) : ce n'est pas un endpoint générique de
+    suppression de placement — retirer un cours normalement placé n'a pas
+    été demandé et mérite un chemin (et une confirmation) dédiés s'il l'est
+    un jour."""
+    if forced_pending.get(session_id) is None:
+        raise HTTPException(
+            400,
+            "Ce placement n'est pas un forçage d'ordre pédagogique en attente de validation — rien à retirer ici.",
+        )
+    state = get_state()
+    state.timetable[:] = [p for p in state.timetable if p.session_id != session_id]
+    if state.current_run_id:
+        get_repo().remove_current_placement(session_id)
+    forced_pending.clear(session_id)
+    return ForcagePedagogiqueResponse(session_id=session_id, etait_en_attente=True)
 
 
 @app.post("/placements/completer", response_model=CompletionResponse)
