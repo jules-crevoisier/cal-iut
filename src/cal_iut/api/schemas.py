@@ -320,6 +320,10 @@ class TeacherMailPreviewResponse(BaseModel):
     name: str
     email: str | None = None
     sent_at: str | None = None
+    # Première ouverture détectée via le pixel de suivi. `None` ne prouve
+    # PAS que le mail n'a pas été lu : beaucoup de clients mail bloquent
+    # les images distantes par défaut (cf. `api/mailer.py::PIXEL_GIF`).
+    opened_at: str | None = None
 
 
 class TeacherMailPreviewListResponse(BaseModel):

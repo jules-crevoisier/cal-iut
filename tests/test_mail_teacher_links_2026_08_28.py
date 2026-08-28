@@ -235,3 +235,68 @@ def test_alerte_seances_a_placer_presente_si_pertinente(etat_avec_seance, sessio
     assert html is not None
     assert "référent" in html
     assert "background" in html
+
+
+# --------------------------------------------------------------------------
+# Aperçu avant envoi + suivi d'ouverture — retour utilisateur 28/08/2026.
+# --------------------------------------------------------------------------
+
+
+def test_l_apercu_rend_le_mail_reel(etat_avec_seance, session_admin, monkeypatch) -> None:
+    """L'aperçu doit passer par la MÊME fonction que l'envoi : un aperçu
+    calculé autrement finirait par diverger de ce qui part vraiment, ce qui
+    est pire que pas d'aperçu."""
+    monkeypatch.setenv("CAL_IUT_PUBLIC_URL", "https://exemple.test")
+    corps = client.get("/mail/teacher-links/apercu/KBR").json()
+    assert corps["subject"] == "Votre emploi du temps MMI"
+    assert "Bonjour" in corps["text"]
+    assert "https://exemple.test" in corps["text"]
+    # Le pixel n'existe QUE dans la version HTML (un texte brut ne peut pas
+    # porter d'image, et une URL nue y serait visible et inutile).
+    assert "/mail/pixel/KBR.gif" in corps["html"]
+    assert "/mail/pixel/" not in corps["text"]
+
+
+def test_l_apercu_exige_une_session_admin(etat_avec_seance) -> None:
+    assert client.get("/mail/teacher-links/apercu/KBR?t=KBR").status_code == 401
+
+
+def test_le_pixel_est_accessible_sans_authentification(etat_avec_seance) -> None:
+    """Indispensable : c'est le client mail de l'enseignant qui le charge,
+    il ne peut présenter ni session ni lien perso."""
+    reponse = client.get("/mail/pixel/KBR.gif")
+    assert reponse.status_code == 200
+    assert reponse.headers["content-type"] == "image/gif"
+    assert reponse.content[:6] == b"GIF89a"
+
+
+def test_le_pixel_repond_200_meme_pour_un_code_inconnu(etat_avec_seance) -> None:
+    """Une erreur afficherait une icône d'image cassée dans le mail d'un
+    enseignant, pour un problème qui ne le concerne pas."""
+    assert client.get("/mail/pixel/CODE-INEXISTANT.gif").status_code == 200
+
+
+def test_l_ouverture_est_journalisee_puis_remontee(etat_avec_seance, session_admin, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "cal_iut.ingestion.config_loader.load_teacher_contacts",
+        lambda config_dir: {"KBR": "kyllian.bresson@univ-reims.fr"},
+    )
+    monkeypatch.setattr(mailer, "send_email", lambda to, subject, text, html=None: "msg_1")
+    monkeypatch.setattr(mailer, "personal_link", lambda code: "https://exemple.test/#vue=prof")
+    client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
+
+    avant = next(t for t in client.get("/mail/teacher-links").json()["teachers"] if t["code"] == "KBR")
+    assert avant["sent_at"] and avant["opened_at"] is None
+
+    client.get("/mail/pixel/KBR.gif")
+    apres = next(t for t in client.get("/mail/teacher-links").json()["teachers"] if t["code"] == "KBR")
+    assert apres["opened_at"], "l'ouverture doit remonter dans l'annuaire d'envoi"
+
+
+def test_une_ouverture_sans_envoi_prealable_est_ignoree(etat_avec_seance, session_admin) -> None:
+    """Sinon une URL de pixel bricolée pourrait fabriquer de fausses
+    ouvertures pour des enseignants jamais contactés."""
+    client.get("/mail/pixel/KBR.gif")
+    ligne = next(t for t in client.get("/mail/teacher-links").json()["teachers"] if t["code"] == "KBR")
+    assert ligne["sent_at"] is None
+    assert ligne["opened_at"] is None

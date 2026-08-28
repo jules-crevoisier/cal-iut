@@ -136,8 +136,39 @@ def _save_log(log: dict[str, dict[str, str]]) -> None:
 
 def record_sent(code: str, message_id: str) -> None:
     log = _load_log()
+    # `opened_at` volontairement REMIS À ZÉRO à chaque envoi : un nouveau
+    # mail est une nouvelle question (« celui-là, l'a-t-il vu ? »), garder
+    # l'ouverture du précédent ferait croire à tort qu'il a été lu.
     log[code] = {"sent_at": datetime.now(timezone.utc).isoformat(), "message_id": message_id}
     _save_log(log)
+
+
+def record_opened(code: str) -> None:
+    """Première ouverture seulement — on veut savoir SI le mail a été vu,
+    pas combien de fois (ce serait de la surveillance, pas un accusé de
+    réception). Ignoré si aucun envoi n'est enregistré pour ce code : une
+    requête sur le pixel sans envoi correspondant ne peut venir que d'une
+    URL bricolée, jamais d'un vrai mail."""
+    log = _load_log()
+    entree = log.get(code)
+    if not entree or entree.get("opened_at"):
+        return
+    entree["opened_at"] = datetime.now(timezone.utc).isoformat()
+    _save_log(log)
+
+
+# GIF transparent 1x1, le plus petit fichier image valide — sert de pixel
+# de suivi d'ouverture. Beaucoup de clients mail bloquent les images
+# distantes par défaut (Gmail les met en cache, Outlook demande souvent
+# l'autorisation) : une ouverture non détectée ne veut donc PAS dire que le
+# mail n'a pas été lu. C'est un indice, jamais une preuve — d'où le libellé
+# prudent côté interface.
+PIXEL_GIF = bytes([
+    0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00,
+    0x00, 0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02,
+    0x44, 0x01, 0x00, 0x3B,
+])
 
 
 def sent_log() -> dict[str, dict[str, str]]:

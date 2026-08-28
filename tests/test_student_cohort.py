@@ -6,6 +6,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+import pytest
+
 from cal_iut.ingestion.config_loader import load_groups
 from cal_iut.ingestion.merge import merge_exports
 from cal_iut.ingestion.normalize import expand_all_sessions
@@ -28,6 +30,7 @@ def test_cohort_maps_tp_a_to_promo_td_tp() -> None:
     assert cohort == {"but1-tp-a", "but1-td-ab", "but1-promo"}
 
 
+@pytest.mark.slow  # ~38 s : résolution CP-SAT réelle, cf. pyproject
 def test_no_student_overlap_on_subset() -> None:
     """Sous-ensemble BUT1 S1 : aucune collision pour un étudiant TP A."""
     maquette = json.loads((FIXTURES / "maquette.json").read_text(encoding="utf-8"))

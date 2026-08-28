@@ -1,0 +1,62 @@
+# Filet de sécurité automatique sur chaque push/PR — il n'y en avait aucun
+# jusqu'au 28/08/2026 : la suite ne tournait que lancée à la main, et ce
+# sont les yeux de l'utilisateur qui rattrapaient les régressions d'affichage.
+#
+# Volontairement SANS les tests marqués `slow` (résolution CP-SAT réelle,
+# ~9 min à eux seuls) : une CI qui met 10 minutes n'est pas relue, elle est
+# ignorée. Ici ~1 min 40 pour 471 tests, ce qui reste consultable à chaque
+# push. Les tests lents restent à lancer avant une release ou après un
+# changement de solveur (`pytest` sans filtre), cf. `pyproject.toml`.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Tests backend (rapides)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Installer le projet
+        run: pip install -e ".[dev]"
+
+      - name: Tests
+        # AUCUNE variable d'environnement d'authentification ici, volontairement.
+        # `tests/conftest.py` les pose lui-même via `setdefault`, et les tests
+        # se connectent avec CETTE valeur en dur. Les fixer aussi dans la CI
+        # (première version de ce fichier) les rendait prioritaires sur le
+        # `setdefault` : 49 tests tombaient en 401, alors qu'ils passaient en
+        # local. Une seule source de vérité pour ces valeurs : le conftest.
+        run: pytest -q -m "not slow and not local"
+
+  frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Installer les dépendances
+        working-directory: frontend
+        run: npm ci
+
+      - name: Vérification de types + build
+        # `npm run build` enchaîne déjà `tsc -b` puis `vite build` : une
+        # erreur de type casse donc la CI, comme en local.
+        working-directory: frontend
+        run: npm run build

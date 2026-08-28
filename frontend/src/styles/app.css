@@ -2757,6 +2757,60 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   white-space: nowrap;
 }
 
+/* Bouton d'aperçu par ligne : discret, il ne doit pas concurrencer
+   visuellement la case à cocher (l'action principale de cet écran). */
+.mailmodal-apercu {
+  background: none;
+  border: none;
+  padding: 0 0 0 8px;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.mailmodal-apercu:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Aperçu du mail réel avant envoi */
+.mailapercu {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.mailapercu-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mailapercu-sujet {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.mailapercu-corps {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  /* Conserve les retours à la ligne du mail sans déborder en largeur. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
 .mailmodal-ok {
   color: var(--success, var(--primary));
 }

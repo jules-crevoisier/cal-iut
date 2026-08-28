@@ -172,6 +172,7 @@ def test_doctor_sur_un_dossier_vide_ne_plante_pas_et_guide(tmp_path: Path):
             assert check.action, f"{check.libelle} ne dit pas quoi faire"
 
 
+@pytest.mark.local  # état de la machine (ingestion, contraintes), pas le code
 def test_doctor_sur_le_projet_reel_est_au_vert():
     checks, etapes = run_doctor(ROOT)
     bloquants_ko = [c for c in checks if not c.ok and c.bloquant]
