@@ -20,7 +20,11 @@ export function TeacherLinksList({ payload }: TeacherLinksListProps) {
     () =>
       Object.keys(payload.teacherLabels)
         .sort((a, b) => (payload.teacherLabels[a] ?? a).localeCompare(payload.teacherLabels[b] ?? b, "fr"))
-        .map((code) => ({ code, label: payload.teacherLabels[code] ?? code, link: buildLink({ vue: "prof", prof: code, mode: "prof" }) })),
+        .map((code) => ({
+          code,
+          label: payload.teacherLabels[code] ?? code,
+          link: buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" }),
+        })),
     [payload.teacherLabels],
   );
 

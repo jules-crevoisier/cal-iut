@@ -3,6 +3,10 @@
 from pydantic import BaseModel, Field
 
 
+class LoginRequest(BaseModel):
+    password: str
+
+
 class IngestRequest(BaseModel):
     parcours: str | None = None
     semestre: str | None = None

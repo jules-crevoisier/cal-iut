@@ -27,9 +27,16 @@ export interface Route {
   groupe: string;
   sem: number | null;
   mode: "prof" | "groupe" | "";
+  /** Jeton d'accès (`<trigramme>.<hmac>`) — seul moyen pour un lien
+   * personnel enseignant de contourner le mot de passe partagé, cf.
+   * `api/auth.py` (retour utilisateur 28/08/2026). Jamais envoyé au
+   * serveur par LE FRAGMENT lui-même (comme le reste du routage), mais lu
+   * une fois au démarrage (App.tsx) pour être rejoué en paramètre de
+   * requête sur chaque appel API (`api/client.ts::setAccessToken`). */
+  t: string;
 }
 
-const EMPTY_ROUTE: Route = { vue: "", prof: "", groupe: "", sem: null, mode: "" };
+const EMPTY_ROUTE: Route = { vue: "", prof: "", groupe: "", sem: null, mode: "", t: "" };
 
 function readHash(): Route {
   const raw = (window.location.hash || "").replace(/^#/, "");
@@ -40,6 +47,7 @@ function readHash(): Route {
     groupe: params.get("groupe") || "",
     sem: params.get("sem") ? Number(params.get("sem")) : null,
     mode: (params.get("mode") as Route["mode"]) || "",
+    t: params.get("t") || "",
   };
 }
 

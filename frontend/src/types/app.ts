@@ -206,6 +206,9 @@ export interface AppPayload {
   teachers: TeacherInfo[];
   teacherLabels: Record<string, string>;
   teacherEmails: Record<string, string>;
+  /** Jeton d'accès personnel (`<trigramme>.<hmac>`) — cf. api/auth.py,
+   * intégré au lien perso par `buildLink` pour éviter le mot de passe. */
+  teacherTokens: Record<string, string>;
 
   ruleChecks: RuleCheck[];
   institutionalCalendar: InstitutionalEvent[];

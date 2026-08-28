@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 
+from cal_iut.api.auth import make_teacher_token
 from cal_iut.calendar.academic import (
     AcademicCalendar,
     build_default_calendar_2026_2027,
@@ -1326,6 +1327,14 @@ def build_payload(
         # fichier source officiel ne les porte. Vide = le brouillon s'ouvre sans
         # destinataire, à compléter.
         "teacherEmails": teacher_contacts or {},
+        # Jeton d'accès (`<trigramme>.<hmac>`) intégré au lien personnel par
+        # le front (`buildLink`) — seul moyen pour un enseignant d'accéder à
+        # SA page sans taper le mot de passe partagé, cf. `api/auth.py`. Ce
+        # payload n'est lui-même atteignable qu'une fois authentifié (ou
+        # déjà via un jeton valide) : distribuer les jetons de tout le monde
+        # à qui consulte l'annuaire (Référentiel > Liens & partage) est
+        # attendu, pas une fuite.
+        "teacherTokens": {code: make_teacher_token(code) for code in teacher_labels},
         "ruleChecks": rule_checks,
         "institutionalCalendar": INSTITUTIONAL_EVENTS,
         "rooms": _room_catalog(rooms, rows) if rooms else [],

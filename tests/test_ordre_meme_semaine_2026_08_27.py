@@ -91,7 +91,11 @@ def client():
     etat.config_dir = ROOT / "data" / "config"
     etat.student_presences = []
 
-    yield TestClient(app)
+    client = TestClient(app)
+    # Mot de passe partagé (src/cal_iut/api/auth.py, retour utilisateur
+    # 28/08/2026) — sans ce login, chaque appel de ce client tomberait en 401.
+    client.post("/auth/login", json={"password": "test-password"})
+    yield client
 
     for cle, valeur in ancien.items():
         setattr(etat, cle, valeur)
