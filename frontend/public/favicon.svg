@@ -1,9 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="cal-iut">
-  <!-- Marque : une grille d'emploi du temps stylisée, avec une case
-       "occupée" mise en avant — c'est littéralement ce que fait l'outil.
-       Couleur reprise de `--accent` (#4d3fae, thème clair) pour rester
-       cohérente avec l'interface. Format SVG : net à toutes les tailles,
-       pas de jeu de PNG à maintenir pour un outil interne. -->
+  <!--
+    Marque : une grille d'emploi du temps stylisée, avec une case "occupée"
+    mise en avant. Couleur reprise du jeton d'accent de l'interface
+    (#4d3fae, thème clair). Format SVG : net à toutes les tailles, pas de
+    jeu de PNG à maintenir pour un outil interne.
+
+    ATTENTION en éditant ces commentaires : un XML interdit la séquence de
+    DEUX TIRETS consécutifs à l'intérieur d'un commentaire. Une première
+    version citait le nom du jeton CSS avec ses deux tirets de préfixe, ce
+    qui rendait le fichier mal formé — le serveur le renvoyait bien en
+    HTTP 200, mais le navigateur refusait de le rendre : aucun favicon, et
+    aucune erreur visible nulle part.
+  -->
   <rect width="64" height="64" rx="14" fill="#4d3fae"/>
 
   <!-- Anneaux de reliure : lit "calendrier" instantanément à 16px. -->
@@ -16,7 +24,7 @@
   <rect x="11" y="14" width="42" height="9" rx="7" fill="#b9b1ee"/>
   <rect x="11" y="19" width="42" height="4" fill="#b9b1ee"/>
 
-  <!-- Trame : 3 colonnes x 3 lignes de créneaux -->
+  <!-- Trame de créneaux -->
   <g fill="#cfd3e2">
     <rect x="17" y="28" width="9" height="6" rx="2"/>
     <rect x="41" y="28" width="9" height="6" rx="2"/>
@@ -25,7 +33,7 @@
     <rect x="29" y="48" width="9" height="4" rx="2"/>
   </g>
 
-  <!-- La séance "placée" : l'accent du produit -->
+  <!-- Les séances "placées" : l'accent du produit -->
   <rect x="29" y="28" width="9" height="6" rx="2" fill="#4d3fae"/>
   <rect x="41" y="38" width="9" height="6" rx="2" fill="#b9702a"/>
 </svg>
