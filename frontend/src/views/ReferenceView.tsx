@@ -139,12 +139,28 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
       ),
     [payload.teacherLabels],
   );
+  // Groupes "promo" (CM seul) écartés de l'annuaire — retour utilisateur
+  // 28/08/2026 : « clean up les groupes étudiant... les promo, les groupe à
+  // 0h... on peut enlever ». Un TD/TP a déjà les séances CM de sa promo
+  // fusionnées dans son propre lien (`groupCohort`, cf. GroupeView) : la
+  // ligne "promo" à part ne montre qu'un SOUS-ENSEMBLE de ce que n'importe
+  // quel TD/TP de la même cohorte affiche déjà — jamais le lien le plus
+  // utile à partager. Les groupes à 0 séance (cohortes FC à groupe unique,
+  // ex. BUT3-DEV-FC : tout est émis côté TD, le "TP" qui les porte pour le
+  // solveur reste vide côté planning) sont écartés séparément, une fois les
+  // séances effectivement comptées ci-dessous.
   const groupIds = useMemo(
     () =>
-      Object.keys(payload.groupLabels).sort((a, b) =>
-        (payload.groupLabels[a] ?? a).localeCompare(payload.groupLabels[b] ?? b, "fr"),
-      ),
-    [payload.groupLabels],
+      Object.keys(payload.groupLabels)
+        .filter((gid) => payload.groupKind[gid] !== "promo")
+        .sort((a, b) => {
+          const pa = payload.groupParcours[a] ?? "";
+          const pb = payload.groupParcours[b] ?? "";
+          return pa !== pb
+            ? pa.localeCompare(pb, "fr")
+            : (payload.groupLabels[a] ?? a).localeCompare(payload.groupLabels[b] ?? b, "fr");
+        }),
+    [payload.groupLabels, payload.groupKind, payload.groupParcours],
   );
 
   const teacherItems = teacherCodes.map((code) => ({
@@ -154,16 +170,22 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
     link: buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" }),
     mail: payload.teacherEmails[code] || "",
   }));
-  const groupItems = groupIds.map((gid) => {
-    const cohort = new Set(payload.groupCohort[gid] ?? [gid]);
-    return {
-      code: gid,
-      label: payload.groupLabels[gid] ?? gid,
-      items: sessionsWithDates(payload, payload.rows.filter((r) => r.g.some((g) => cohort.has(g)))),
-      link: buildLink({ vue: "groupe", groupe: gid, mode: "groupe" }),
-      mail: "",
-    };
-  });
+  const groupItems = groupIds
+    .map((gid) => {
+      const cohort = new Set(payload.groupCohort[gid] ?? [gid]);
+      const parcours = payload.groupParcours[gid];
+      return {
+        code: gid,
+        // "TD GH" seul existe en double (BUT2-CREACOM-FC ET BUT3-CREACOM-FC,
+        // labels identiques sinon) — le parcours en préfixe désambiguïse
+        // partout où cette liste s'affiche à plat.
+        label: parcours ? `${parcours} · ${payload.groupLabels[gid] ?? gid}` : (payload.groupLabels[gid] ?? gid),
+        items: sessionsWithDates(payload, payload.rows.filter((r) => r.g.some((g) => cohort.has(g)))),
+        link: buildLink({ vue: "groupe", groupe: gid, mode: "groupe" }),
+        mail: "",
+      };
+    })
+    .filter((g) => g.items.length > 0);
 
   const allRows = (): CsvRow[] =>
     [

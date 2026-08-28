@@ -69,10 +69,19 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
     setRoute({ vue: "groupe", groupe: gid });
   };
 
+  const telechargerIcs = () =>
+    downloadIcs(allItems, payload.groupLabels[groupId] ?? groupId, groupId, payload.groupLabels, payload.teacherLabels);
+
   return (
     <section className="view">
-      {!readOnly && (
-        <div className="panel controls">
+      <div className="panel controls">
+        {/* Sélecteur de groupe caché en lecture seule (le lien personnel
+            désigne déjà UN seul groupe) — la barre de semaines reste, elle :
+            même correctif que la vue Enseignant (retour utilisateur
+            28/08/2026 : « on veut les semaines comme les profs »), sinon un
+            groupe ouvrant son lien perso restait bloqué sur une seule
+            semaine sans pouvoir parcourir le reste du semestre. */}
+        {!readOnly && (
           <label>
             Groupe étudiant
             <select value={groupId} onChange={(e) => handleChangeGroup(e.target.value)}>
@@ -83,50 +92,81 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
               ))}
             </select>
           </label>
-          <div className="field weekfield">
-            <WeekBar
-              weekRows={payload.weekRows}
-              countByWeekIndex={countByWeek}
-              selected={displayWeek}
-              onSelect={setDisplayWeek}
-            />
-          </div>
+        )}
+        <div className="field weekfield">
+          <WeekBar
+            weekRows={payload.weekRows}
+            countByWeekIndex={countByWeek}
+            selected={displayWeek}
+            onSelect={setDisplayWeek}
+          />
         </div>
-      )}
+      </div>
 
-      <ShareBar
-        onCopyLink={() => buildLink({ vue: "groupe", groupe: groupId, mode: "groupe" })}
-        onDownloadIcs={() =>
-          downloadIcs(allItems, payload.groupLabels[groupId] ?? groupId, groupId, payload.groupLabels, payload.teacherLabels)
-        }
-      />
+      {/* Partage/export : utile côté planification (préparer l'envoi du
+          lien), hors de propos une fois que c'est LE groupe qui regarde sa
+          propre page via ce même lien — retiré en lecture seule pour ne
+          garder que l'essentiel (barre des semaines + planning), même
+          traitement que la vue Enseignant. Le bouton .ics reste accessible
+          en lecture seule, déplacé dans l'en-tête du planning ci-dessous. */}
+      {!readOnly && <ShareBar onCopyLink={() => buildLink({ vue: "groupe", groupe: groupId, mode: "groupe" })} onDownloadIcs={telechargerIcs} />}
 
       {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
 
-      <div className="panel">
-        <h3>
-          {payload.groupLabels[groupId] ?? groupId} —{" "}
-          {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
-        </h3>
-        {solverWeek === null ? (
-          <p className="muted">Semaine bloquée (vacances/fermeture).</p>
-        ) : (
-          <SessionGrid
-            payload={payload}
-            rows={rowsThisWeek}
-            week={solverWeek}
-            parcours={parcours}
-            showPac={!parcours.includes("FC")}
-            split={tpPair}
-            onlyDay={narrow ? mobileDay : null}
-          />
-        )}
-      </div>
+      {/* Lecture seule : grille seule en pleine largeur, sans la liste de
+          « toutes les séances du semestre » en dessous (retour utilisateur
+          28/08/2026 : « enlève les séances en dessous du planning ») —
+          parcourir les semaines dans la grille couvre déjà le même besoin. */}
+      {readOnly ? (
+        <div className="panel">
+          <div className="section-header">
+            <h3>{payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}</h3>
+            <button type="button" className="btn btn--ghost btn--sm no-print" onClick={telechargerIcs}>
+              Agenda .ics
+            </button>
+          </div>
+          {solverWeek === null ? (
+            <p className="muted">Semaine bloquée (vacances/fermeture).</p>
+          ) : (
+            <SessionGrid
+              payload={payload}
+              rows={rowsThisWeek}
+              week={solverWeek}
+              parcours={parcours}
+              showPac={!parcours.includes("FC")}
+              split={tpPair}
+              onlyDay={narrow ? mobileDay : null}
+            />
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="panel">
+            <h3>
+              {payload.groupLabels[groupId] ?? groupId} —{" "}
+              {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
+            </h3>
+            {solverWeek === null ? (
+              <p className="muted">Semaine bloquée (vacances/fermeture).</p>
+            ) : (
+              <SessionGrid
+                payload={payload}
+                rows={rowsThisWeek}
+                week={solverWeek}
+                parcours={parcours}
+                showPac={!parcours.includes("FC")}
+                split={tpPair}
+                onlyDay={narrow ? mobileDay : null}
+              />
+            )}
+          </div>
 
-      <div className="panel">
-        <h3>Toutes les séances du semestre</h3>
-        <SemesterAgenda payload={payload} items={allItems} />
-      </div>
+          <div className="panel">
+            <h3>Toutes les séances du semestre</h3>
+            <SemesterAgenda payload={payload} items={allItems} />
+          </div>
+        </>
+      )}
     </section>
   );
 }
