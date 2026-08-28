@@ -169,7 +169,15 @@ rooms:
 
   # --- Bâtiment A ---
   - id: a018
-    label: A.018 (Évaluation)
+    # Libellé volontairement SANS le suffixe « (Évaluation) » (retiré le
+    # 28/08/2026, retour utilisateur) : ce libellé s'affiche dans la case
+    # salle de chaque séance, où il se lisait comme un qualificatif du COURS
+    # (« on ne veut pas qu'il y ait écrit évaluation si ce n'est pas une
+    # vraie éval »). La nature d'évaluation vient déjà de `is_eval` sur la
+    # séance, affiché à part (« · éval »). C'est `room_type` ci-dessous — pas
+    # le libellé — qui pilote l'affectation, le renommage est donc sans effet
+    # sur le solveur.
+    label: A.018
     capacity: 150
     room_type: evaluation
     equipment: [salle_examen]  # ex. WR107 CM2 = évaluation

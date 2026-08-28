@@ -294,6 +294,33 @@ export function placerSeance(
   });
 }
 
+/** Crée une salle hors bâtiment (retour utilisateur 28/08/2026). Rend la
+ * salle créée — l'appelant doit rafraîchir `payload` pour qu'elle apparaisse
+ * dans les listes déjà rendues. */
+export function creerSalle(body: { label: string; capacity: number }): Promise<{
+  id: string;
+  label: string;
+  capacity: number;
+  room_type: string;
+}> {
+  return request("/rooms", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** Change UNIQUEMENT la salle, à créneau inchangé (retour utilisateur
+ * 28/08/2026 : « on va vouloir sur la vue promo modifier uniquement les
+ * salles »). Endpoint distinct de `movePlacement` : celui-ci refait tous les
+ * contrôles de POSITION, qui peuvent refuser à tort une séance déjà posée à
+ * une position limite (cf. api/main.py::changer_salle). */
+export function changerSalle(
+  sessionId: string,
+  body: { room_id: string; force?: boolean },
+): Promise<Placement> {
+  return request<Placement>(`/placements/${encodeURIComponent(sessionId)}/salle`, {
+    method: "PATCH",
+    body: JSON.stringify({ force: false, ...body }),
+  });
+}
+
 // ── Suivi des placements forcés (ordre pédagogique) — retour utilisateur
 // 28/08/2026 : « valider »/« revenir en arrière ». ──
 

@@ -1169,6 +1169,15 @@ def build_payload(
 
     labels, kinds, cohorts, tp_pairs, is_fc = _group_maps(scoped_groups)
 
+    # Libellé de salle relu depuis la CONFIG COURANTE (`rooms.yaml`) plutôt
+    # que depuis celui figé dans le placement au moment de l'affectation —
+    # sinon renommer une salle dans la config n'a aucun effet tant qu'on n'a
+    # pas relancé une affectation complète (trouvé le 28/08/2026 en retirant
+    # le suffixe « (Évaluation) » du libellé d'A.018 : la config était à
+    # jour, l'écran affichait toujours l'ancien libellé stocké). Repli sur le
+    # libellé stocké si la salle a disparu de la config entre-temps.
+    room_labels_by_id = {r.id: r.label for r in (rooms or [])}
+
     rows = []
     for p in placements:
         session = sessions_by_id.get(p["session_id"])
@@ -1185,7 +1194,7 @@ def build_payload(
                 "t": session.session_type.value,
                 "g": p["group_ids"],
                 "te": p["teacher_codes"],
-                "r": p.get("room_label") or "",
+                "r": room_labels_by_id.get(p.get("room_id") or "") or p.get("room_label") or "",
                 "ev": bool(session.is_eval),
                 "dur": max(1, session.duration_slots),
                 "locked": bool(session.locked),

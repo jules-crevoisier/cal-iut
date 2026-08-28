@@ -1079,22 +1079,6 @@ h1, h2, h3 {
   max-width: none;
 }
 
-/* Tentative d'étirement en HAUTEUR sur toute la chaîne flex, RETIRÉE le
-   28/08/2026 après 3 essais qui ont chacun cassé la grille davantage
-   (lignes désynchronisées, cartes à moitié vides, puis une ligne vide
-   énorme en haut). Cause de fond, comprise trop tard : un `<table>` HTML,
-   une fois étiré au-delà de sa hauteur naturelle, répartit l'espace en trop
-   ÉGALEMENT entre toutes ses lignes — jamais proportionnellement à ce que
-   chaque ligne contient. Une ligne sans séance devient donc un vide énorme,
-   quelle que soit la technique CSS utilisée par-dessus (flex, height: 1%,
-   etc.) : le problème n'était pas la technique, c'est qu'un tableau HTML
-   n'a tout simplement pas de mécanisme pour répartir l'espace au prorata du
-   contenu par ligne. Le corriger correctement demanderait de reconstruire
-   cette grille en CSS Grid (qui sait faire ça nativement) plutôt qu'en
-   `<table>` — pas fait ici, remis à plus tard si demandé. Revenu à la
-   largeur pleine page (celle-là marchait, jamais signalée cassée) avec des
-   lignes à hauteur naturelle/plancher fixe, comme avant cet essai. */
-
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1326,14 +1310,62 @@ h1, h2, h3 {
 
 .sessiongrid-cell {
   min-width: 132px;
-  height: 60px; /* hauteur fixe, admin ET lecture seule — cf. note plus haut sur l'étirement retiré */
+  height: 60px; /* vue admin : compacte, la grille partage l'écran avec le reste */
 }
 
-/* `.sessiongrid-cell-inner` (SessionGrid.tsx) reste un simple wrapper
-   transparent, sans mise en page particulière — l'étirement qui le
-   justifiait a été retiré (cf. note plus haut). Gardé dans le JSX plutôt
-   que retiré : un futur passage en CSS Grid en aurait de toute façon
-   besoin. */
+/* ── Lecture seule (lien perso) : occuper la hauteur de l'écran ──
+   Retour utilisateur 28/08/2026, après 3 tentatives ratées d'étirer le
+   <table> lui-même (`height: 100%` + chaîne flex) : quand on force un
+   tableau au-delà de sa hauteur naturelle, la répartition du surplus entre
+   les lignes n'est PAS définie par la spec — les navigateurs la donnent en
+   pratique à la première ligne ou la répartissent au hasard, d'où la ligne
+   vide géante et les cartes à moitié remplies observées.
+
+   Approche retenue à la place, déterministe : ne jamais étirer le tableau,
+   mais donner à chaque LIGNE une hauteur proportionnelle au viewport. 6
+   créneaux × ~9,5vh ≈ 57vh, plus l'en-tête/la barre de semaines/les marges,
+   remplit l'écran sans jamais dépendre d'un comportement indéfini. Les
+   bornes du clamp() : plancher 64px (jamais plus petit qu'avant sur un
+   écran court), plafond 120px (au-delà, les cases deviennent des pavés
+   vides sur un grand écran).
+
+   Bonus obtenu gratuitement : `height` étant ici une valeur DÉFINIE (pas
+   `auto`, pas un étirement), le `height: 100%` de `.sessiongrid-cell-inner`
+   se résout enfin correctement — c'est ce qui permet aux cartes de remplir
+   vraiment leur case, ce qui échouait dans les tentatives précédentes. Un
+   `height` sur une cellule de tableau vaut de toute façon MINIMUM : une
+   séance au contenu long fait grandir sa ligne, rien n'est jamais tronqué. */
+.read-only-mode .sessiongrid-cell {
+  height: clamp(64px, 9.5vh, 120px);
+}
+
+.read-only-mode .sessiongrid-cell-inner,
+.read-only-mode .sessiongrid-subcols > div {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.read-only-mode .sessiongrid-block {
+  flex: 1;
+  justify-content: center;
+  margin-bottom: 0; /* remplacé par le `gap` du conteneur flex ci-dessus */
+}
+
+/* La police suit la même logique que la hauteur de ligne : plancher = la
+   taille compacte d'avant (jamais plus petit qu'avant sur mobile). */
+.read-only-mode .sessiongrid {
+  font-size: clamp(0.78rem, 1.5vh, 1rem);
+}
+
+.read-only-mode .sessiongrid-block {
+  font-size: clamp(0.72rem, 1.35vh, 0.92rem);
+}
+
+.read-only-mode .sessiongrid-block .meta {
+  font-size: clamp(0.62rem, 1.1vh, 0.78rem);
+}
 
 .sessiongrid-subcols {
   display: grid;
@@ -1719,6 +1751,43 @@ table.promo-grid td.promocell--placeable:focus-visible {
 .promo-chip .ty { color: var(--muted); display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.02em; }
 .promo-chip .rm { color: var(--muted); display: block; }
 .promo-chip .te { color: var(--muted); display: block; font-style: italic; }
+
+/* Salle modifiable sur place (retour utilisateur 28/08/2026 : « modifier
+   uniquement les salles » depuis la Vue Promo). Le bouton reprend EXACTEMENT
+   l'apparence du `<span class="rm">` qu'il remplace (même couleur, même
+   taille) — seul le soulignement pointillé au survol signale qu'il est
+   cliquable : la grille est déjà dense, un vrai bouton visible sur chaque
+   chip la surchargerait. */
+.promo-chip .rm { color: var(--muted); display: block; }
+
+.promo-chip-salle-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  border-bottom: 1px dashed transparent;
+}
+
+.promo-chip-salle-btn:hover,
+.promo-chip-salle-btn:focus-visible {
+  color: var(--text);
+  border-bottom-color: var(--muted);
+}
+
+.promo-chip-salle {
+  width: 100%;
+  font: inherit;
+  font-size: 0.68rem;
+  padding: 1px 2px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+}
 
 /* Surbrillance enseignant : atténue les autres puces plutôt que de les
    masquer (garde le contexte visible), fait ressortir celles de
@@ -2556,6 +2625,41 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 
 .confirmmodal-actions .btn {
   min-height: 44px;
+}
+
+/* Champs de la modale « Nouvelle salle » — les <input> n'héritaient
+   d'aucun style (l'app n'avait jusqu'ici que des <select> stylés), ils
+   sortaient donc en contrôles bruts du navigateur au milieu d'une modale
+   soignée. Reprend l'apparence des <select> de `.panel.controls`. */
+.newroom-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.newroom-field input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 9px 12px;
+  min-height: 42px;
+  width: 100%;
+}
+
+.newroom-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.newroom-field input::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 .mailmodal {

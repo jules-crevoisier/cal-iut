@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import auth, forced_pending, mailer
+from cal_iut.api import auth, custom_rooms, forced_pending, mailer
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
@@ -29,9 +29,11 @@ from cal_iut.api.schemas import (
     QualityResponse,
     RegenRequest,
     RegenResultResponse,
+    ChangeRoomRequest,
     CompletionResponse,
     CreneauLibreResponse,
     CreneauxLibresResponse,
+    CreateRoomRequest,
     RoomMeta,
     SeanceAPlacerResponse,
     SeancePlaceeAutoResponse,
@@ -147,8 +149,33 @@ app.add_middleware(
 _PROTECTED_PREFIXES = (
     "/app-state", "/corrections", "/diff", "/exceptions", "/export",
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/placements",
-    "/regen", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
+    "/regen", "/rooms", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
 )
+
+
+# Routes volontairement PUBLIQUES. Toute route hors de cette liste ET hors
+# de `_PROTECTED_PREFIXES` fait échouer le démarrage (cf.
+# `_verifier_couverture_auth`) : c'est exactement comme ça que `POST /rooms`
+# est resté accessible sans mot de passe le 28/08/2026 — un nouveau endpoint
+# dont le chemin ne commençait par aucun préfixe connu devenait public en
+# silence, sans que rien ne le signale (trouvé par l'utilisateur, pas par le
+# code). Un oubli doit casser bruyamment, jamais ouvrir l'accès.
+_PUBLIC_PATHS = frozenset({"/auth/login", "/auth/logout", "/auth/status", "/health"})
+
+
+def _verifier_couverture_auth() -> list[str]:
+    """Chemins ni protégés ni explicitement publics — vide = tout est couvert."""
+    oublis = []
+    for route in app.routes:
+        chemin = getattr(route, "path", None)
+        if not chemin or not getattr(route, "methods", None):
+            continue
+        if chemin.startswith(("/openapi", "/docs", "/redoc")):
+            continue
+        if chemin in _PUBLIC_PATHS or chemin.startswith(_PROTECTED_PREFIXES):
+            continue
+        oublis.append(chemin)
+    return sorted(oublis)
 
 
 @app.middleware("http")
@@ -213,10 +240,21 @@ def auth_status(request: Request) -> dict:
 
 @app.on_event("startup")
 def startup() -> None:
+    oublis = _verifier_couverture_auth()
+    if oublis:
+        raise RuntimeError(
+            "Endpoint(s) sans protection d'authentification : "
+            + ", ".join(oublis)
+            + ". Ajoutez le préfixe à `_PROTECTED_PREFIXES`, ou le chemin à "
+            "`_PUBLIC_PATHS` si l'accès public est VOULU."
+        )
+
     state = get_state()
     state.config_dir = CONFIG_DIR
     state.groups = load_groups(CONFIG_DIR)
-    state.rooms = load_rooms(CONFIG_DIR)
+    # Salles du bâtiment + celles ajoutées depuis l'interface (volume
+    # persistant, cf. `api/custom_rooms.py`).
+    state.rooms = custom_rooms.merge_into(load_rooms(CONFIG_DIR))
     state.room_rules = parse_room_rules(load_room_assignment_rules(CONFIG_DIR))
     state.room_reservations = load_room_reservations(CONFIG_DIR, state.calendar)
     state.teacher_duos = load_teacher_duos(CONFIG_DIR)
@@ -1521,6 +1559,124 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             )
 
     return _to_placement(match, state.sessions_by_id)
+
+
+@app.patch("/placements/{session_id}/salle", response_model=PlacementResponse)
+def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse:
+    """Change UNIQUEMENT la salle, à créneau inchangé — retour utilisateur
+    28/08/2026 : « on va vouloir sur la vue promo modifier uniquement les
+    salles ».
+
+    Endpoint DISTINCT de `PATCH /placements/{id}` (qui sait déjà changer la
+    salle au passage) parce que celui-ci refait tous les contrôles liés à la
+    POSITION : ordre pédagogique, verrou PAC/SAE, synchro duo, disponibilité
+    enseignant. Aucun ne peut changer de verdict quand le créneau ne bouge
+    pas — mais tous peuvent REFUSER à tort une séance déjà posée à une
+    position elle-même limite (typiquement une séance placée en forçant
+    l'ordre pédagogique, cf. `forced_pending.py` : sa salle deviendrait
+    impossible à corriger). Seul le conflit de SALLE est donc revérifié ici,
+    le seul que ce changement peut réellement introduire.
+    """
+    state = get_state()
+    match = _find_placement(state, session_id)
+    session = state.sessions_by_id.get(session_id)
+
+    salle = next((r for r in state.rooms if r.id == body.room_id), None)
+    if salle is None:
+        raise HTTPException(404, f"Salle {body.room_id} inconnue")
+
+    # Même garde-fou "on ne réécrit pas le passé" que le déplacement — la
+    # semaine ne bouge pas, on la passe donc des deux côtés.
+    _check_move_editable(state, session_id, match.week, match.week)
+
+    # Occupation de la salle calculée DIRECTEMENT plutôt qu'en filtrant les
+    # messages de `validate_move` : celui-ci juge la position ENTIÈRE
+    # (groupe/enseignant/salle), or à créneau inchangé les conflits groupe/
+    # enseignant sont ceux qui existent DÉJÀ, indépendants de la salle
+    # demandée — les laisser bloquer ferait échouer un simple changement de
+    # salle pour une raison sans rapport. Trier ses messages par
+    # sous-chaîne (« salle ») marcherait aujourd'hui mais casserait
+    # silencieusement à la première reformulation du texte français.
+    #
+    # Salles combinées incluses (`_build_conflict_map`) : réserver H.007-008
+    # doit voir H.007 et H.008 comme occupées, et réciproquement.
+    conflits_ids = {salle.id} | _build_conflict_map(state.rooms).get(salle.id, set())
+    duree = max(1, getattr(session, "duration_slots", 1) or 1) if session else 1
+    creneaux_vises = {match.slot + k for k in range(duree)}
+    occupants = []
+    for p in state.timetable:
+        if p.session_id == session_id or p.week != match.week or p.day != match.day:
+            continue
+        if getattr(p, "room_id", None) not in conflits_ids:
+            continue
+        autre = state.sessions_by_id.get(p.session_id)
+        duree_autre = max(1, getattr(autre, "duration_slots", 1) or 1) if autre else 1
+        if creneaux_vises & {p.slot + k for k in range(duree_autre)}:
+            occupants.append(p.course_code)
+    if occupants and not body.force:
+        raise HTTPException(409, detail={
+            "message": "Conflit",
+            "hard_conflicts": [
+                f"Conflit salle : {', '.join(sorted(set(occupants)))} occupe(nt) déjà {salle.label} à ce créneau."
+            ],
+            "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+        })
+
+    match.room_id, match.room_label = salle.id, salle.label
+
+    if state.current_run_id:
+        persiste = get_repo().update_current_placement(
+            session_id, match.week, match.day, match.slot,
+            salle.id, salle.label,
+            session.locked if session else False,
+            run_id=state.current_run_id, course_code=match.course_code,
+        )
+        if not persiste:
+            raise HTTPException(500, detail={
+                "message": "Changement de salle non enregistré : aucun run en base.",
+                "quoi_faire": "Relancer une génération avant de modifier le planning.",
+            })
+
+    return _to_placement(match, state.sessions_by_id)
+
+
+@app.post("/rooms", response_model=RoomMeta, dependencies=[Depends(require_admin_session)])
+def creer_salle(body: CreateRoomRequest) -> RoomMeta:
+    """Ajoute une salle hors bâtiment — retour utilisateur 28/08/2026 :
+    « il se peut que l'on utilise des salles autres que dans le bâtiment,
+    il faut donc laisser la possibilité de créer une salle ».
+
+    Persistée dans le volume (`api/custom_rooms.py`), pas dans
+    `data/config/rooms.yaml` qui est réécrit à chaque déploiement. Type
+    `standard` imposé : ces salles ne portent aucune règle d'affectation,
+    le solveur ne les choisira jamais seul — elles servent au choix MANUEL
+    de salle (Vue Promo). Voulu : une salle exceptionnelle ne doit pas
+    devenir une ressource que la génération automatique se met à utiliser.
+    """
+    from cal_iut.models.entities import Room, RoomType
+
+    state = get_state()
+    libelle = body.label.strip()
+    if not libelle:
+        raise HTTPException(400, "Le nom de la salle ne peut pas être vide.")
+
+    # Identifiant dérivé du libellé : « Amphi Descartes » -> « amphi-descartes ».
+    base = "".join(c.lower() if c.isalnum() else "-" for c in libelle).strip("-")
+    base = "-".join(filter(None, base.split("-"))) or "salle"
+    room_id = base
+    n = 2
+    existants = {r.id for r in state.rooms}
+    while room_id in existants:
+        room_id = f"{base}-{n}"
+        n += 1
+
+    if any(r.label.strip().lower() == libelle.lower() for r in state.rooms):
+        raise HTTPException(409, f"Une salle nommée « {libelle} » existe déjà.")
+
+    salle = Room(id=room_id, label=libelle, capacity=body.capacity, room_type=RoomType.STANDARD)
+    custom_rooms.add_custom_room(salle)
+    state.rooms = state.rooms + [salle]
+    return RoomMeta(id=salle.id, label=salle.label, capacity=salle.capacity, room_type=salle.room_type.value)
 
 
 @app.get("/corrections")

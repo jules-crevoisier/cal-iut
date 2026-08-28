@@ -24,3 +24,4 @@ coverage.json
 data/state/.secret_key
 data/state/mail_log.json
 data/state/forced_pending.json
+data/state/custom_rooms.json

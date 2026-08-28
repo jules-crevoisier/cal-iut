@@ -38,7 +38,8 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
     forced_pending.json` du dépôt. Autouse : la pollution serait sinon aussi
     facile à introduire par erreur dans un futur test que le bug qu'elle
     évite est difficile à remarquer après coup."""
-    from cal_iut.api import forced_pending, mailer
+    from cal_iut.api import custom_rooms, forced_pending, mailer
 
     monkeypatch.setattr(mailer, "_log_path", lambda: tmp_path / "mail_log.json")
     monkeypatch.setattr(forced_pending, "_path", lambda: tmp_path / "forced_pending.json")
+    monkeypatch.setattr(custom_rooms, "_path", lambda: tmp_path / "custom_rooms.json")
