@@ -2011,6 +2011,7 @@ def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[
         f"Il compte {len(items)} séance(s), soit {hours_label} h.\n"
         "Le lien ouvre directement votre planning ; un bouton permet d'exporter\n"
         "les séances vers votre agenda personnel (fichier .ics).\n\n"
+        "Une question ? Contactez le 07 81 25 78 87.\n\n"
         "Cordialement,"
     )
     return "Votre emploi du temps MMI", body
