@@ -109,9 +109,13 @@ export function SessionGrid({
               {s === 3 && (
                 <tr className="sessiongrid-pause">
                   <td className="sessiongrid-timecell">12h30–14h</td>
-                  {days.map((d) => (
-                    <td key={d} />
-                  ))}
+                  {/* Étiquette DANS la grille, au milieu de la journée — pas
+                      sous tout le tableau (retour utilisateur 28/08/2026,
+                      relayé depuis Discord : « pourquoi le texte "Pause
+                      déjeuner" est en bas, au lieu d'être au centre ? »). */}
+                  <td colSpan={days.length} className="sessiongrid-pause-label">
+                    Pause déjeuner
+                  </td>
                 </tr>
               )}
               <tr>
@@ -214,7 +218,6 @@ export function SessionGrid({
           ))}
         </tbody>
       </table>
-      <p className="sessiongrid-lunch">Pause déjeuner 12h30 – 14h00</p>
 
       {hover && (
         <div className="sessiongrid-hover" style={{ left: hover.x + 12, top: hover.y + 12 }}>
@@ -264,12 +267,20 @@ function SessionBlock({
       onMouseMove={(e) => onHover({ row, x: e.clientX, y: e.clientY })}
       onMouseLeave={() => onHover(null)}
     >
-      <span className="code">{row.c}</span>
+      {/* Nom du cours + salle en tête, tous deux mis en avant — retour
+          utilisateur 28/08/2026 (relayé depuis Discord) : « c'est 95% du
+          temps pour savoir dans quelle salle je suis » (la salle mérite la
+          même importance que le nom) et « WSA501D ça me parle pas » (le nom
+          du cours doit primer sur son code). Le code reste affiché, mais
+          rétrogradé en petit sous le nom plutôt qu'en tête. */}
+      <span className="head">
+        <span className="name">{row.n || row.c}</span>
+        {row.r && <span className="room">{row.r}</span>}
+      </span>
       <span className="meta">
-        {row.t}
+        <span className="code">{row.c}</span> · {row.t}
         {groupShort ? ` · ${groupShort}` : ""}
       </span>
-      {row.r && <span className="room">{row.r}</span>}
     </button>
   );
 }

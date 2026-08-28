@@ -9,7 +9,8 @@ import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { downloadIcs, sessionsWithDates } from "../utils/ics";
+import { copyToClipboard } from "../utils/clipboard";
+import { downloadIcs, sessionsWithDates, subscribeUrl } from "../utils/ics";
 
 interface GroupeViewProps {
   payload: AppPayload;
@@ -40,6 +41,7 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
   const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, route.sem));
   const [mobileDay, setMobileDay] = useState(todayIndex());
   const narrow = useNarrowScreen();
+  const [abonnementCopie, setAbonnementCopie] = useState(false);
 
   // Resynchronise depuis un lien externe (recherche, « à traiter ») qui ne
   // touche que la route sans démonter cette vue.
@@ -71,6 +73,13 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
 
   const telechargerIcs = () =>
     downloadIcs(allItems, payload.groupLabels[groupId] ?? groupId, groupId, payload.groupLabels, payload.teacherLabels);
+
+  // Nom complet (parcours en préfixe) — retour utilisateur 28/08/2026 : « on
+  // a pas le nom complet du groupe dessus ». Le libellé seul ("TD EF")
+  // existe en double identique entre plusieurs parcours FC (cf.
+  // ReferenceView.tsx, même correctif) : sans le parcours, impossible de
+  // savoir lequel des deux ce planning désigne.
+  const nomComplet = parcours ? `${parcours} · ${payload.groupLabels[groupId] ?? groupId}` : (payload.groupLabels[groupId] ?? groupId);
 
   return (
     <section className="view">
@@ -115,6 +124,7 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
             buildLink({ vue: "groupe", groupe: groupId, mode: "groupe", t: payload.groupTokens[groupId] ?? "" })
           }
           onDownloadIcs={telechargerIcs}
+          onCopySubscribeLink={() => subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? "")}
         />
       )}
 
@@ -127,10 +137,28 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
       {readOnly ? (
         <div className="panel">
           <div className="section-header">
-            <h3>{payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}</h3>
-            <button type="button" className="btn btn--ghost btn--sm no-print" onClick={telechargerIcs}>
-              Agenda .ics
-            </button>
+            <h3>
+              {nomComplet} — {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
+            </h3>
+            <div className="section-header-actions no-print">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={async () => {
+                  const ok = await copyToClipboard(subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? ""));
+                  if (ok) {
+                    setAbonnementCopie(true);
+                    setTimeout(() => setAbonnementCopie(false), 1400);
+                  }
+                }}
+                title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
+              >
+                {abonnementCopie ? "Copié ✓" : "Lien d'abonnement"}
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={telechargerIcs}>
+                Agenda .ics
+              </button>
+            </div>
           </div>
           {solverWeek === null ? (
             <p className="muted">Semaine bloquée (vacances/fermeture).</p>
