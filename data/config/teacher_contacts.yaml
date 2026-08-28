@@ -11,8 +11,69 @@
 # destinataire laissé vide à compléter — plutôt que de faire disparaître le
 # bouton, ce qui donnerait l'impression que la fonction ne marche pas.
 #
+# Rempli le 28/08/2026 à partir d'une liste de 48 adresses fournie par
+# l'utilisateur, corrélée par nom avec les 32 enseignants connus du système
+# (`payload.teacherLabels`). Seuls les rapprochements à correspondance de
+# nom EXACTE ou quasi-exacte sont retenus ci-dessous — les cas ambigus/non
+# trouvés sont listés en commentaire plus bas, à trancher à la main plutôt
+# que de deviner (un mauvais rapprochement enverrait le planning d'un prof
+# à quelqu'un d'autre).
+#
 # Format : trigramme (tel qu'utilisé dans la maquette) -> adresse.
-contacts: {}
-  # Exemple :
-  # KBR: kyllian.bresson@univ-reims.fr
-  # ALO: ariane.loizon@univ-reims.fr
+contacts:
+  AHA: mohamed-amine.haraoubia@univ-reims.fr
+  AFR: anthony.froli@univ-reims.fr
+  ARA: anthony.rageul@univ-reims.fr
+  ALO: ariane.loizon@univ-reims.fr
+  APE: alp@annelaureperrone.com
+  DAN: david.annebicque@univ-reims.fr
+  DGA: dilusha.ganewatta-kankanamge@univ-reims.fr
+  FME: fabrice.meuzeret@gmail.com
+  FLI: florent.libbrecht@univ-reims.fr
+  GLE: guillaume.leullier@univ-reims.fr
+  HKO: haniakouider@hotmail.fr
+  JTH: jerome.thomas@univ-reims.fr
+  JLE: joan.lefevre@univ-reims.fr
+  JSA: jules.sabater@univ-reims.fr
+  JBA: julie.bastard@free.fr
+  KNG: kevinngofr@gmail.com
+  KBR: kyllian.bresson@univ-reims.fr
+  MRI: marine.riguet@univ-reims.fr
+  MMA: martial.martin@univ-reims.fr
+  OLA: olivier.lasnier@lo-design.com
+  PVI: philippe-villain@laposte.net
+  RHU: regis.huez@univ-reims.fr
+  RDE: romain.delon@univ-reims.fr
+  TPA: thomas.pavie@univ-reims.fr
+  TCA: thomas.castellengo@gmail.com
+  VBU: valentin.burette.pro@gmail.com
+  VMA: valerie.mariot@univ-reims.fr
+  VPR: vprudhomme@sinfin.fr
+  DVO: dimitri.voilmy@utt.fr
+  JHU: justine.hussenet2@gmail.com
+  MTH: simplypew@gmail.com
+  BTO: barth@emulsyon.fr
+
+# ── Non tranché, à confirmer toi-même ──
+#
+# 1) Emails de ta liste qui NE correspondent à AUCUN enseignant du système
+#    (peut-être d'autres contacts, ou des gens qui n'enseignent plus/pas
+#    encore dans les données actuelles) :
+#    alexia@ikadia.fr, alice.pallamidessi@gmail.com, anne.grenet@univ-reims.fr,
+#    diehl@gmail.com, camilleravo@hotmail.fr, bonjour@celinegay.fr,
+#    clemence@designersethiques.org, emmanuelle.huguenot@ac-reims.fr,
+#    gilles.grosdoit-artur@univ-reims.fr, jeanfrancois.payet.pro@gmail.com,
+#    mninomarc@gmail.com (Marc Nino — cf. `teacher_availability.yaml`,
+#    connu du système mais pas dans les 32 enseignants ayant des séances
+#    dans ce run), m.grenier@puissancegroup.fr,
+#    maximilien.lemoine.pro@gmail.com, oana.bujoreanu@gmail.com,
+#    olivier.cherain@gmail.com (différent de OLA/Olivier LASNIER — même
+#    prénom, nom de famille différent), zilisimon@yahoo.fr
+#
+# 4) IGNORÉ délibérément : john.doe@mmi-troyes.fr ressemble à une adresse de
+#    test/placeholder ("John Doe"), pas rattaché à un vrai enseignant.
+#
+# 5) seb.loizon@gmail.com — même nom de famille que ALO (Ariane LOIZON) mais
+#    prénom différent ("Seb...") : probablement une AUTRE personne (famille ?
+#    homonyme ?), volontairement PAS associé à ALO pour éviter d'envoyer son
+#    planning à quelqu'un d'autre.

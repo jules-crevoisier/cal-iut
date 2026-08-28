@@ -125,13 +125,27 @@ def test_le_creneau_juste_entre_les_deux_est_accepte(client):
     assert reponse.status_code == 200, reponse.text
 
 
-def test_placer_avant_la_precedente_est_refuse_meme_en_forcant(client):
-    """Jamais contournable, comme le reste de l'ordre pédagogique."""
+def test_placer_avant_la_precedente_est_refuse_sans_forcer(client):
+    """Refusé par défaut : l'ordre pédagogique reste une vraie règle, pas une
+    simple suggestion — mais contournable via `force` (cf. test suivant),
+    depuis le 28/08/2026 (retour utilisateur : « on veut que si on appuie
+    sur forcer cela soit bon et que le placement se fasse »)."""
+    reponse = client.post("/placements/manquante/placer", json={
+        "week": 10, "day": 1, "slot": 0, "force": False,
+    })
+    assert reponse.status_code == 409
+    assert any("ordre pédagogique" in m.lower() for m in reponse.json()["detail"]["hard_conflicts"])
+
+
+def test_placer_avant_la_precedente_reussit_en_forcant(client):
+    """Contournable via `force`, à la différence des verrous institutionnels
+    (PAC/SAE/etc, cf. `test_ordonnancement_2026_08_25.py` ou équivalent) —
+    un humain qui force ici sait qu'il place sciemment cette séance hors de
+    l'ordre de contenu attendu."""
     reponse = client.post("/placements/manquante/placer", json={
         "week": 10, "day": 1, "slot": 0, "force": True,
     })
-    assert reponse.status_code == 409
-    assert any("institutionnellement" in m.lower() for m in reponse.json()["detail"]["hard_conflicts"])
+    assert reponse.status_code == 200, reponse.text
 
 
 def test_une_semaine_hors_bornes_reste_ouverte_par_ailleurs(client):
@@ -146,7 +160,7 @@ def test_une_semaine_hors_bornes_reste_ouverte_par_ailleurs(client):
     reponse = client.post("/placements/manquante/placer", json={"week": 15, "day": 0, "slot": 0})
     assert reponse.status_code == 409
     assert any(
-        "cette semaine violerait" in m.lower() for m in reponse.json()["detail"]["hard_conflicts"]
+        "cette semaine contredit" in m.lower() for m in reponse.json()["detail"]["hard_conflicts"]
     ), "refusé pour la mauvaise raison : le raffinement au créneau ne doit pas déborder sur d'autres semaines"
 
 
