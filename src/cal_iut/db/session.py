@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from cal_iut.db.models import Base
 
-DEFAULT_DB = Path(__file__).resolve().parents[3] / "data" / "cal-iut.db"
+# `data/state/`, pas `data/` directement — cf. commentaire équivalent dans
+# `api/state.py::DB_PATH` (même constante, dupliquée ici pour ce module
+# utilisable indépendamment).
+DEFAULT_DB = Path(__file__).resolve().parents[3] / "data" / "state" / "cal-iut.db"
 
 _engine = None
 _SessionLocal = None

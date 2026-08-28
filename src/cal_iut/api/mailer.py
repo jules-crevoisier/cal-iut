@@ -25,8 +25,8 @@ lien construit sur une URL locale inutilisable — même philosophie que
 `CAL_IUT_PASSWORD` (`api/auth.py`) : un oubli de configuration doit être
 visible, jamais confondu avec "ça a marché".
 
-Journal d'envoi (`data/mail_log.json`, jamais commité — cf. `.gitignore`,
-même traitement que `data/.secret_key`) : une ligne par enseignant déjà
+Journal d'envoi (`data/state/mail_log.json`, jamais commité — cf. `.gitignore`,
+même traitement que `data/state/.secret_key`) : une ligne par enseignant déjà
 contacté, pour que l'écran d'envoi puisse avertir avant un ré-envoi
 accidentel plutôt que de forcer l'utilisateur à s'en souvenir lui-même.
 """
@@ -100,7 +100,9 @@ def send_email(to: str, subject: str, text: str) -> str:
 
 
 def _log_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "data" / "mail_log.json"
+    # `data/state/`, pas `data/` directement — cf. `api/state.py::DB_PATH`
+    # pour pourquoi (config vs état, volume Docker).
+    return Path(__file__).resolve().parents[3] / "data" / "state" / "mail_log.json"
 
 
 def _load_log() -> dict[str, dict[str, str]]:

@@ -6,6 +6,7 @@ import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { copyToClipboard } from "../utils/clipboard";
+import { confirmAsync } from "../utils/confirmDialog";
 import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { downloadIcs, sessionsWithDates } from "../utils/ics";
 
@@ -291,6 +292,17 @@ function DirectoryRow({
   const [erreurEnvoi, setErreurEnvoi] = useState<string | null>(null);
 
   const envoyer = async () => {
+    // Vraie popup de confirmation AVANT l'envoi (retour utilisateur
+    // 28/08/2026 : « je veux des vrais popup de confirmation ») — une
+    // modale interne (`confirmAsync`), pas `window.confirm` (peut être
+    // désactivé par un bloqueur de popups, cf. utils/confirmDialog.ts).
+    const confirme = await confirmAsync(`Envoyer l'emploi du temps à ${row.label} (${row.mail}) ?`, {
+      title: "Confirmer l'envoi",
+      confirmLabel: "Envoyer",
+      cancelLabel: "Annuler",
+    });
+    if (!confirme) return;
+
     setEtatEnvoi("envoi");
     setErreurEnvoi(null);
     try {
@@ -346,7 +358,7 @@ function DirectoryRow({
                   ? "Échec ✗"
                   : `Envoyer${row.mail ? "" : " ⚠"}`}
           </button>
-          {erreurEnvoi && <div className="muted small">{erreurEnvoi}</div>}
+          {erreurEnvoi && <div className="alerte small">{erreurEnvoi}</div>}
         </td>
       )}
     </tr>

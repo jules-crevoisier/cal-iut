@@ -53,7 +53,7 @@ def export_latest_run(db_path: Path, output: Path) -> int:
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description="Exporte le dernier run DB en JSON")
-    parser.add_argument("--db", type=Path, default=root / "data" / "cal-iut.db")
+    parser.add_argument("--db", type=Path, default=root / "data" / "state" / "cal-iut.db")
     parser.add_argument(
         "--output",
         type=Path,

@@ -12,7 +12,7 @@ existe depuis longtemps dans l'app sans que personne n'ait demandé ce
 garde-fou pour lui).
 
 Persisté dans un petit fichier JSON (même traitement que
-`data/mail_log.json`/`data/.secret_key`) plutôt qu'une table SQL dédiée :
+`data/state/mail_log.json`/`data/state/.secret_key`) plutôt qu'une table SQL dédiée :
 état administratif léger (quelques entrées à la fois), pas une donnée de
 planning à part entière.
 """
@@ -24,7 +24,9 @@ from pathlib import Path
 
 
 def _path() -> Path:
-    return Path(__file__).resolve().parents[3] / "data" / "forced_pending.json"
+    # `data/state/`, pas `data/` directement — cf. `api/state.py::DB_PATH`
+    # pour pourquoi (config vs état, volume Docker).
+    return Path(__file__).resolve().parents[3] / "data" / "state" / "forced_pending.json"
 
 
 def _load() -> dict[str, dict[str, int]]:

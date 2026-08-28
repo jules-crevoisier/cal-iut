@@ -42,7 +42,9 @@ _PASSWORD_ENV = "CAL_IUT_PASSWORD"
 
 
 def _secret_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "data" / ".secret_key"
+    # `data/state/`, pas `data/` directement — cf. `api/state.py::DB_PATH`
+    # pour pourquoi (config vs état, volume Docker).
+    return Path(__file__).resolve().parents[3] / "data" / "state" / ".secret_key"
 
 
 _secret_cache: str | None = None

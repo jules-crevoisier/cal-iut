@@ -36,10 +36,13 @@ services:
       RESEND_FROM: ${RESEND_FROM}
       CAL_IUT_PUBLIC_URL: ${CAL_IUT_PUBLIC_URL}
     volumes:
-      # Named volume : seedé UNE fois depuis data/cal-iut.db baké dans
-      # l'image (cf. Dockerfile), puis les écritures ultérieures
+      # `data/state/` SEULEMENT (pas `data/` en entier) — sépare la config
+      # (rafraîchie à chaque déploiement, hors du volume) de l'état
+      # (base SQLite, secret HMAC, journal des mails envoyés), qui doit
+      # persister. Named volume : seedé UNE fois depuis data/state/cal-iut.db
+      # baké dans l'image (cf. Dockerfile), puis les écritures ultérieures
       # (glisser-déposer, régénération...) y survivent aux redémarrages.
-      - cal-iut-data:/app/data
+      - cal-iut-data:/app/data/state
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
       interval: 30s
