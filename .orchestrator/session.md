@@ -276,3 +276,12 @@ Architecture en 3 couches, pour que l'essentiel soit testable sans navigateur ni
 - `GET /celcat/plan` (session admin) : diagnostic complet sans rien envoyer. `/celcat` ajouté aux préfixes protégés — le garde-fou de couverture auth (follow-up 23) l'a signalé automatiquement, il a servi.
 Diagnostic réel sur les 2393 séances : 2393 sans code module, 95 CM sans code de type, 38 avec JHU, 14+14 sur les 2 salles combinées. Aucune autre surprise.
 26 tests dédiés, tous verts. Reste : réponses aux 4 questions + l'onglet d'interface (dont le contenu dépend des réponses).
+
+## follow-up 29 (vacataire BTO indisponible les matins de septembre)
+Mail transmis (capture) : Barthélémy TOMASINA commence d'habitude en novembre, ne s'attendait pas à des cours en septembre ; INDISPONIBLE tous les matins de septembre, dispo à partir d'octobre, urgence sur « mercredi et jeudi, les 2 premiers cours ».
+- Ajouté dans `teacher_availability.yaml` : 22 `forbidden_date_slots` (créneaux 0/1/2), un par jour de cours réel de septembre 2026 — dates DÉRIVÉES du calendrier, pas saisies à la main. Blocage par créneaux et non par journée : ses après-midis restent ouverts, c'est ce qu'il propose lui-même. S'arrête au 30/09 (dispo annoncée dès octobre).
+- Diagnostic : 5 séances BTO tombent un matin de septembre. Le serveur n'en signale que 3 — les 2 autres (2 et 3 septembre, PRÉCISÉMENT celles du mail) sont en semaine « current », donc non modifiables même en forçant.
+  Cause NON bugguée : `current_relative_week` fait retomber un week-end sur le PROCHAIN lundi enseignable (docstring explicite). Nous sommes samedi 29/08, la semaine du 31/08 est donc déjà « en cours ». Conséquence réelle à signaler : on ne peut pas corriger la semaine qui arrive depuis le week-end qui la précède — exactement le moment où on en a besoin. Décision laissée à l'utilisateur (la règle « une semaine en cours ne se modifie pas » vient de lui).
+- Vérifié par recoupement de DEUX méthodes (dates réelles calculées depuis le calendrier vs vérification par le serveur), ce qui est justement ce qui a révélé l'écart de 2 séances. Le premier filtrage par index de semaine était faux (les libellés sont des numéros de département, pas des index solveur).
+Salles combinées : la suggestion de l'utilisateur (« un TP dans une salle, le 2e dans l'autre ») ne s'applique PAS — vérifié : h007_h008 contient 14 TD à groupe unique, h201_h203 14 CM de promo. Une séance unique ne peut pas être dans deux salles ; la question reste entière côté Celcat.
+Suite rapide : 505 passed.
