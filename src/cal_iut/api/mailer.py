@@ -66,12 +66,13 @@ def public_base_url() -> str:
     return url.rstrip("/")
 
 
-def personal_link(code: str, token: str) -> str:
+def personal_link(code: str) -> str:
     """Même format que `buildLink`/`useHashRoute.ts` côté front
-    (`#vue=prof&prof=<code>&mode=prof&t=<code>.<hmac>`) — construit ici
-    côté serveur pour l'e-mail, qui n'a pas de navigateur pour appeler
-    `buildLink`."""
-    return f"{public_base_url()}/#vue=prof&prof={code}&mode=prof&t={token}"
+    (`#vue=prof&prof=<code>&mode=prof&t=<code>`) — construit ici côté
+    serveur pour l'e-mail, qui n'a pas de navigateur pour appeler
+    `buildLink`. `t` est public depuis le 28/08/2026 (cf. `api/auth.py`) :
+    il ne porte plus qu'un identifiant, jamais un jeton signé."""
+    return f"{public_base_url()}/#vue=prof&prof={code}&mode=prof&t={code}"
 
 
 def send_email(to: str, subject: str, text: str) -> str:

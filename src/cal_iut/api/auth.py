@@ -1,29 +1,27 @@
 """Mot de passe unique partagé — bloque l'accès à l'API (donc à l'app, qui
-n'affiche rien sans elle) sauf pour deux exceptions volontaires :
+n'affiche rien sans elle) sauf pour trois exceptions volontaires :
 
 1. les endpoints d'authentification eux-mêmes (`/auth/*`) et `/health` ;
-2. une requête portant un jeton personnel valide (`?t=<trigramme>.<hmac>`),
-   généré côté serveur pour CHAQUE enseignant et intégré à son lien
-   personnel (`buildLink`, frontend) — retour utilisateur 28/08/2026 :
-   « il faut que uniquement les prof ai accès a leur lien sans mot de
-   passe ».
+2. une session valide (mot de passe déjà saisi) ;
+3. un lien personnel (prof ou groupe, `?t=<code>`) — PUBLIC, sans jeton
+   secret : retour utilisateur 28/08/2026, après un aller-retour sur le
+   sujet. D'abord un jeton HMAC signé avait été mis en place (« jeton secret
+   par lien (Recommandé) », choisi explicitement à l'époque) ; le lien
+   GROUPE n'avait ensuite jamais reçu l'équivalent (scope initial limité aux
+   profs), ce qui cassait "Aucun planning résolu" en navigation privée sur
+   un vrai lien de groupe déployé. Plutôt que d'ajouter le même mécanisme
+   pour les groupes, retour utilisateur final : « pour les lien groupe et
+   prof on s'en fiche on veut qu'il soit public » — `?t=` n'est donc plus
+   vérifié cryptographiquement, sa seule présence suffit.
 
-Le trigramme seul (ex. `KBR`) N'EST PAS ce jeton : ~17 000 combinaisons,
-trivialement devinables. Le jeton est un HMAC signé avec un secret serveur
-que le front n'a jamais — sans lui, deviner un trigramme ne suffit plus à
-contourner le mot de passe (retour utilisateur, question posée
-explicitement avant d'implémenter : « jeton secret par lien
-(Recommandé) »).
-
-Limite assumée et documentée (pas cachée) : un jeton prof valide autorise
-les MÊMES endpoints qu'une session mot de passe — l'app ne scope pas encore
-les réponses par enseignant (`/app-state`/`/timetable` renvoient tout,
-filtré côté client). Un jeton prof légitime empêche donc de deviner un
-lien, mais n'isole pas cryptographiquement les données d'un enseignant de
-celles des autres si quelqu'un modifiait le fragment d'URL à la main.
-Scoper réellement les réponses serait un chantier bien plus large, pas ce
-qui a été demandé ici (« bloquer l'entrée » à qui n'a ni mot de passe ni
-lien).
+Limite assumée et documentée (pas cachée), désormais plus large qu'avant :
+n'importe qui devinant l'URL exacte d'un lien personnel (ou la reconstruisant
+à partir d'un trigramme/id de groupe connu) y accède sans mot de passe — et,
+comme avant ce changement, ce lien donne accès aux MÊMES endpoints qu'une
+session mot de passe (`/app-state`/`/timetable` renvoient tout, filtré côté
+client, jamais scopé par enseignant/groupe). Accepté explicitement par
+l'utilisateur : la contrainte réelle reste de ne PAS publier/deviner le lien
+lui-même, pas une protection cryptographique dessus.
 """
 
 from __future__ import annotations
@@ -105,16 +103,14 @@ def verify_session_token(token: str | None) -> bool:
         return False
 
 
-def make_teacher_token(course_code_or_teacher: str) -> str:
-    return _sign(f"teacher:{course_code_or_teacher}")[:24]
-
-
-def verify_teacher_access_param(value: str | None) -> bool:
-    """`value` attendu au format `<trigramme>.<jeton>` (paramètre `?t=`)."""
-    if not value or "." not in value:
-        return False
-    code, token = value.split(".", 1)
-    return hmac.compare_digest(make_teacher_token(code), token)
+def verify_personal_link_param(value: str | None) -> bool:
+    """Lien personnel (prof ou groupe, `?t=<code>`) — PUBLIC depuis le
+    28/08/2026 : la seule présence d'une valeur suffit, plus de vérification
+    cryptographique (cf. docstring du module pour l'historique de cette
+    décision). `value` porte encore le code prof/groupe (utile pour
+    déboguer un lien à l'œil), mais son contenu n'est plus significatif ici
+    — seule sa présence compte."""
+    return bool(value)
 
 
 SESSION_COOKIE = _SESSION_COOKIE

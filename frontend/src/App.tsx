@@ -120,7 +120,7 @@ export function App() {
   // réponse de `/auth/status`, endpoint jamais bloqué lui-même).
   const [authentifie, setAuthentifie] = useState<boolean | null>(null);
 
-  // Jeton d'accès personnel (`route.t`, lien enseignant) — posé AVANT tout
+  // Code du lien personnel (`route.t`, prof ou groupe) — posé AVANT tout
   // appel API (cf. api/client.ts::setAccessToken) : sans cet ordre, les
   // fetches initiaux ci-dessous partiraient sans lui.
   useEffect(() => {
@@ -161,10 +161,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    // Lien perso (readOnlyTarget) : le jeton fait le travail d'auth tout
-    // seul, peu importe `authentifie` (qui reste `false`, ces liens n'ont
-    // jamais la session admin). Sinon, attend une session confirmée —
-    // partir plus tôt ne ferait qu'échouer en 401 pour rien.
+    // Lien perso (readOnlyTarget) : le paramètre `t` fait le travail d'auth
+    // tout seul (public depuis le 28/08/2026), peu importe `authentifie`
+    // (qui reste `false`, ces liens n'ont jamais la session admin). Sinon,
+    // attend une session confirmée — partir plus tôt ne ferait qu'échouer
+    // en 401 pour rien.
     if (!readOnlyTarget && authentifie !== true) return;
     void refreshMeta();
     void refreshAppState();

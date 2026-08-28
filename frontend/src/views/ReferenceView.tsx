@@ -182,7 +182,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
         // partout où cette liste s'affiche à plat.
         label: parcours ? `${parcours} · ${payload.groupLabels[gid] ?? gid}` : (payload.groupLabels[gid] ?? gid),
         items: sessionsWithDates(payload, payload.rows.filter((r) => r.g.some((g) => cohort.has(g)))),
-        link: buildLink({ vue: "groupe", groupe: gid, mode: "groupe" }),
+        link: buildLink({ vue: "groupe", groupe: gid, mode: "groupe", t: payload.groupTokens[gid] ?? "" }),
         mail: "",
       };
     })

@@ -109,7 +109,14 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
           garder que l'essentiel (barre des semaines + planning), même
           traitement que la vue Enseignant. Le bouton .ics reste accessible
           en lecture seule, déplacé dans l'en-tête du planning ci-dessous. */}
-      {!readOnly && <ShareBar onCopyLink={() => buildLink({ vue: "groupe", groupe: groupId, mode: "groupe" })} onDownloadIcs={telechargerIcs} />}
+      {!readOnly && (
+        <ShareBar
+          onCopyLink={() =>
+            buildLink({ vue: "groupe", groupe: groupId, mode: "groupe", t: payload.groupTokens[groupId] ?? "" })
+          }
+          onDownloadIcs={telechargerIcs}
+        />
+      )}
 
       {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
 

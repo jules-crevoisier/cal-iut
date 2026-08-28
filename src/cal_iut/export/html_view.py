@@ -16,7 +16,6 @@ from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 
-from cal_iut.api.auth import make_teacher_token
 from cal_iut.calendar.academic import (
     AcademicCalendar,
     build_default_calendar_2026_2027,
@@ -1327,22 +1326,25 @@ def build_payload(
         # fichier source officiel ne les porte. Vide = le brouillon s'ouvre sans
         # destinataire, à compléter.
         "teacherEmails": teacher_contacts or {},
-        # Jeton d'accès complet, déjà au format `<trigramme>.<hmac>` attendu
-        # par `verify_teacher_access_param` (cf. `api/auth.py`) — intégré tel
-        # quel au lien personnel par le front (`buildLink`, `t: payload.
-        # teacherTokens[code]`), seul moyen pour un enseignant d'accéder à SA
-        # page sans taper le mot de passe partagé. Bug réel trouvé le
-        # 28/08/2026 en vérifiant un lien avant envoi par mail : cette valeur
-        # ne portait AVANT que le hmac seul (`make_teacher_token(code)`),
-        # jamais le trigramme devant le point — `verify_teacher_access_param`
-        # exige ce format pour retrouver À QUI le jeton appartient, donc
-        # `"." not in value` faisait échouer la vérification à coup sûr ;
-        # tout lien personnel généré jusqu'ici renvoyait sur l'écran de mot
-        # de passe au lieu du planning. Ce payload n'est lui-même atteignable
-        # qu'une fois authentifié (ou déjà via un jeton valide) : distribuer
-        # les jetons de tout le monde à qui consulte l'annuaire (Référentiel
-        # > Liens & partage) est attendu, pas une fuite.
-        "teacherTokens": {code: f"{code}.{make_teacher_token(code)}" for code in teacher_labels},
+        # Paramètre `t` des liens personnels — PUBLIC depuis le 28/08/2026
+        # (`api/auth.py::verify_personal_link_param` : sa seule présence
+        # suffit, plus de jeton signé). Gardé au format `code` simple ici
+        # (plutôt que de construire l'URL entièrement côté client à partir
+        # du seul `code`) pour que `buildLink({..., t: payload.
+        # teacherTokens[code]})` reste inchangé côté front — un dict qui
+        # associe trivialement chaque code à lui-même, mais garde la même
+        # forme qu'avant (facilite un retour à un vrai jeton signé plus tard
+        # si besoin, sans retoucher le front).
+        "teacherTokens": {code: code for code in teacher_labels},
+        # Même chose pour le lien personnel d'un GROUPE d'étudiants
+        # (`GroupeView.tsx`) — n'existait pas du tout jusqu'ici (la demande
+        # initiale ne portait explicitement que sur les profs), bug réel
+        # trouvé le 28/08/2026 : un lien de groupe ouvert en navigation
+        # privée tombait sur "Aucun planning résolu" faute de TOUT paramètre
+        # `t` pour ce type de lien (ça "marchait" en navigation normale
+        # seulement parce qu'une session admin traînait déjà en cookie,
+        # masquant le trou).
+        "groupTokens": {gid: gid for gid in labels},
         "ruleChecks": rule_checks,
         "institutionalCalendar": INSTITUTIONAL_EVENTS,
         "rooms": _room_catalog(rooms, rows) if rooms else [],

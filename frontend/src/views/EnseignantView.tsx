@@ -69,10 +69,10 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
     setRoute({ vue: "prof", prof: next });
   };
 
-  // `t` : jeton d'accès (cf. api/auth.py) — sans lui, ce lien exigerait le
+  // `t` : rend ce lien public (cf. api/auth.py) — sans lui, il exigerait le
   // mot de passe partagé comme n'importe quelle autre page (retour
   // utilisateur 28/08/2026 : « uniquement les prof ai accès a leur lien
-  // sans mot de passe »).
+  // sans mot de passe », puis « on s'en fiche on veut qu'il soit public »).
   const personalLink = buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" });
 
   return (

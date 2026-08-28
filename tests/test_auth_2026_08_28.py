@@ -1,15 +1,14 @@
-"""Le jeton d'accès personnel enseignant (`?t=<trigramme>.<hmac>`).
+"""Le paramètre d'accès des liens personnels (`?t=<code>`).
 
-Bug réel trouvé le 28/08/2026 en vérifiant un lien avant un envoi par mail
-(retour utilisateur : « ok on veux une fonctionnalité qui permet d'envoyer
-automatiquement un mail à chaque prof avec leur lien ») : `html_view.py::
-build_payload` ne mettait dans `teacherTokens[code]` que le hmac seul
-(`make_teacher_token(code)`), jamais le trigramme devant le point attendu par
-`verify_teacher_access_param` (qui en a besoin pour savoir À QUI le jeton
-appartient). Résultat, invisible sans test dédié : chaque lien personnel
-généré depuis le 28/08/2026 (date d'introduction du mot de passe partagé)
-renvoyait sur l'écran de mot de passe au lieu du planning — `"." not in
-value` faisait toujours échouer `verify_teacher_access_param`.
+Historique (tout dans la même journée) : un jeton HMAC signé d'abord (retour
+utilisateur, choisi explicitement : « jeton secret par lien (Recommandé) »),
+réservé aux profs — jamais implémenté pour les groupes, ce qui cassait
+"Aucun planning résolu" sur un vrai lien de groupe ouvert en navigation
+privée (fonctionnait par accident en navigation normale, une session admin
+traînant déjà en cookie). Retour utilisateur final, après explication du
+compromis : « pour les lien groupe et prof on s'en fiche on veut qu'il soit
+public » — `t` n'est donc plus vérifié cryptographiquement, sa seule
+présence suffit désormais, pour les deux types de lien.
 """
 
 from __future__ import annotations
@@ -34,30 +33,26 @@ GROUPES = load_groups(ROOT / "data" / "config")
 client = TestClient(app)
 
 
-def test_le_format_code_point_jeton_authentifie() -> None:
-    """Le format documenté (`<trigramme>.<hmac>`) doit réellement passer."""
-    valeur = f"KBR.{auth.make_teacher_token('KBR')}"
-    assert auth.verify_teacher_access_param(valeur) is True
+def test_une_valeur_non_vide_authentifie() -> None:
+    assert auth.verify_personal_link_param("KBR") is True
+    assert auth.verify_personal_link_param("but1-td-ab") is True
+    assert auth.verify_personal_link_param("n'importe quoi") is True
 
 
-def test_le_hmac_seul_sans_trigramme_est_refuse() -> None:
-    """Exactement le bug du 28/08/2026 : sans le `code.` devant, jamais valide."""
-    valeur = auth.make_teacher_token("KBR")
-    assert auth.verify_teacher_access_param(valeur) is False
+def test_valeur_vide_ou_absente_est_refusee() -> None:
+    assert auth.verify_personal_link_param("") is False
+    assert auth.verify_personal_link_param(None) is False
 
 
-def test_un_lien_avec_le_bon_format_traverse_le_mot_de_passe() -> None:
-    """Bout en bout, sans login préalable : `?t=<code>.<hmac>` doit suffire
-    à passer le middleware `require_auth` sur une route protégée."""
-    valeur = f"KBR.{auth.make_teacher_token('KBR')}"
-    reponse = client.get(f"/meta?t={valeur}")
+def test_un_lien_avec_n_importe_quel_code_traverse_le_mot_de_passe() -> None:
+    """Bout en bout, sans login préalable : `?t=<code>` suffit à passer le
+    middleware `require_auth` sur une route protégée — peu importe le code."""
+    reponse = client.get("/meta?t=KBR")
     assert reponse.status_code == 200, reponse.text
 
 
-def test_un_lien_avec_seulement_le_hmac_est_bloque() -> None:
-    """Reproduit exactement ce que le front envoyait avant le correctif."""
-    valeur = auth.make_teacher_token("KBR")
-    reponse = client.get(f"/meta?t={valeur}")
+def test_sans_parametre_t_c_est_bloque() -> None:
+    reponse = client.get("/meta")
     assert reponse.status_code == 401
 
 
@@ -65,9 +60,7 @@ def test_un_lien_avec_seulement_le_hmac_est_bloque() -> None:
 def etat_avec_seance():
     """État minimal, monté à la main (même schéma que
     `test_ordre_meme_semaine_2026_08_27.py`) — exerce le VRAI chemin de
-    production (`GET /app-state` -> `build_payload`), pas seulement les
-    primitives `auth.py`, qui elles étaient déjà correctes avant ce
-    correctif : le bug vivait dans la ligne qui les assemble."""
+    production (`GET /app-state` -> `build_payload`)."""
     etat = get_state()
     ancien = {
         "sessions": etat.sessions, "sessions_by_id": etat.sessions_by_id,
@@ -104,10 +97,12 @@ def etat_avec_seance():
         setattr(etat, cle, valeur)
 
 
-def test_app_state_produit_bien_le_format_complet(etat_avec_seance) -> None:
-    """Le vrai producteur de la valeur (`html_view.build_payload`, via le
-    vrai endpoint `/app-state`) — c'est LÀ que le bug vivait réellement."""
+def test_app_state_expose_le_code_en_clair_pour_profs_et_groupes(etat_avec_seance) -> None:
+    """Le vrai producteur du payload (`html_view.build_payload`, via le vrai
+    endpoint `/app-state`) — `teacherTokens`/`groupTokens` associent
+    maintenant chaque code à lui-même, plus un jeton signé."""
     reponse = client.post("/auth/login", json={"password": "test-password"})
     assert reponse.status_code == 200
     corps = client.get("/app-state").json()
-    assert corps["teacherTokens"]["KBR"] == f"KBR.{auth.make_teacher_token('KBR')}"
+    assert corps["teacherTokens"]["KBR"] == "KBR"
+    assert corps["groupTokens"]["but1-td-ab"] == "but1-td-ab"

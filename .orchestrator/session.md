@@ -154,3 +154,17 @@ Retour utilisateur : « pourquoi sur les bouton envoyer il y a un attention qui 
    - ATTENTION UTILISATEUR : il faudra recréer le volume Dokploy une fois pour que ce nouveau découpage prenne effet (l'ancien volume monte encore tout `/app/data`) — perd les modifs live faites depuis le tout premier déploiement s'il y en a eu.
 Vérifié : suite complète 465 passed/1 skipped, tsc+build propres, ET test Docker réel bout-en-bout (build/run/rebuild/swap de volume) prouvant le comportement corrigé.
 Status DONE (code) — recréation du volume Dokploy encore à faire côté utilisateur.
+
+## follow-up 15 (lien groupe casse en navigation privee -> liens publics)
+Retour utilisateur : "Aucun planning résolu" sur un vrai lien de groupe déployé (`#vue=groupe&groupe=but3-dev-fc-td-ef&mode=groupe`) en navigation PRIVÉE, alors que ça marchait en navigation normale.
+Diagnostic confirmé : le mécanisme de jeton d'accès (`?t=<code>.<hmac>`) n'avait JAMAIS été implémenté pour les groupes — seulement pour les profs (scope initial de la demande). En navigation normale, une session admin déjà en cookie masquait le trou ; en navigation privée (aucun cookie), aucun accès n'était possible pour un lien de groupe.
+J'ai commencé à ajouter l'équivalent groupe du jeton HMAC prof (`make_group_token`/`verify_group_access_param`), puis retour utilisateur en cours de route : « on s'en fiche on veut qu'il soit public » (pour les DEUX types de lien, prof et groupe) — décision explicite de renoncer à la vérification cryptographique du jeton, gardée en historique dans les docstrings.
+- `api/auth.py` : `make_teacher_token`/`verify_teacher_access_param`/`make_group_token`/`verify_group_access_param` remplacés par une seule fonction `verify_personal_link_param(value) -> bool` = `bool(value)` — la présence de `?t=` suffit, plus de HMAC.
+- `main.py::require_auth` : un seul check désormais, pour prof ET groupe.
+- `html_view.py::build_payload` : `teacherTokens`/`groupTokens` associent maintenant chaque code À LUI-MÊME (`{code: code for code in ...}`) — gardé sous cette forme de dict (pas juste "envoie le code brut") pour que le front (`buildLink`, déjà câblé sur `payload.teacherTokens[code]`) n'ait rien à changer si un vrai jeton signé revient un jour.
+- `mailer.py::personal_link` simplifié : `personal_link(code)` au lieu de `personal_link(code, token)`.
+- Ajouté ce qui manquait vraiment : `groupTokens` dans `types/app.ts`, et `t: payload.groupTokens[gid]` dans les 2 endroits qui construisent un lien de groupe (`GroupeView.tsx::ShareBar`, `ReferenceView.tsx::LinksDirectory`) — c'était ÇA le vrai trou, IL n'existait tout simplement JAMAIS pour les groupes.
+- Nettoyage de commentaires "jeton"/HMAC devenus faux dans `client.ts`, `App.tsx`, `useHashRoute.ts`, `EnseignantView.tsx`.
+- Tests réécrits (`test_auth_2026_08_28.py` entièrement, `test_mail_teacher_links_2026_08_28.py` ajusté) pour le nouveau modèle public.
+Vérifié : 465 passed/1 skipped, tsc+build propres, ET reproduction+fix confirmés en réel via curl SANS AUCUN cookie (équivalent exact d'une navigation privée) : `/app-state?t=but3-dev-fc-td-ef` -> 200 (était cassé avant), `/app-state?t=KBR` -> 200 (profs, déjà bon), sans aucun `t` -> 401 (toujours bloqué), `/mail/*?t=KBR` -> 401 (garde-fou admin intact, un lien perso ne peut toujours pas déclencher un envoi de mail).
+Status DONE.
