@@ -55,4 +55,10 @@ markers = [
     # consultable ; à relancer en entier (`pytest` sans filtre) avant une
     # mise en production ou après un changement touchant le solveur.
     "slow: test lourd (résolution CP-SAT réelle)",
+    # Vérifie l'ÉTAT DE LA MACHINE de développement (version de Python
+    # installée, contraintes régénérées depuis les sources, séances déjà
+    # ingérées), pas le code. Un checkout neuf de CI n'a rien de tout ça par
+    # construction : y faire tourner ces tests produit un échec qui ne dit
+    # rien sur la qualité du code.
+    "local: vérifie l'environnement de développement local, pas le code",
 ]

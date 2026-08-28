@@ -24,7 +24,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           cache: pip
 
       - name: Installer le projet
@@ -37,7 +37,7 @@ jobs:
         # (première version de ce fichier) les rendait prioritaires sur le
         # `setdefault` : 49 tests tombaient en 401, alors qu'ils passaient en
         # local. Une seule source de vérité pour ces valeurs : le conftest.
-        run: pytest -q -m "not slow"
+        run: pytest -q -m "not slow and not local"
 
   frontend:
     name: Build frontend
