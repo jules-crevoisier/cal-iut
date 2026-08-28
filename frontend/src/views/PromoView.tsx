@@ -20,12 +20,14 @@
  */
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import type { SeanceAPlacer } from "../api/client";
+import type { Placement } from "../types";
 import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { placerAvecConfirmation } from "../utils/placement";
+import { performMove } from "../utils/moveSession";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { compareParcoursForDisplay } from "../utils/years";
 import { WeekBar } from "../components/WeekBar";
@@ -39,15 +41,36 @@ interface PromoViewProps {
   placementActif?: SeanceAPlacer | null;
   onAnnulerPlacement?: () => void;
   onPlaced?: () => void;
+  /** Glisser-déposer d'une séance DÉJÀ placée — retour utilisateur
+   * 28/08/2026 : « on enlève la possibilité de drag and drop dans vue
+   * semaine [...] on veut que cela soit possible dans vue promo ». Les
+   * trois props vont ensemble ; absentes (ex. Vue Promo intégrée dans
+   * « À placer », qui n'a que `payload`), la grille reste lecture seule
+   * pour ce qui est déjà au planning — le placement d'une séance MANQUANTE
+   * (`placementActif` ci-dessus) reste, lui, toujours possible. */
+  placements?: Placement[];
+  onPlacementUpdated?: (p: Placement) => void;
+  onError?: (msg: string) => void;
 }
 
-export function PromoView({ payload, placementActif = null, onAnnulerPlacement, onPlaced }: PromoViewProps) {
+export function PromoView({
+  payload,
+  placementActif = null,
+  onAnnulerPlacement,
+  onPlaced,
+  placements,
+  onPlacementUpdated,
+  onError,
+}: PromoViewProps) {
   const [displayWeek, setDisplayWeek] = useState(0);
   const [day, setDay] = useState(0);
   const [teacherFilter, setTeacherFilter] = useState("");
   const [enCoursPlacement, setEnCoursPlacement] = useState<string | null>(null);
   const [erreurPlacement, setErreurPlacement] = useState<string | null>(null);
   const [annonce, setAnnonce] = useState("");
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
+  const dragEnabled = Boolean(placements && onPlacementUpdated && onError);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
 
@@ -166,6 +189,39 @@ export function PromoView({ payload, placementActif = null, onAnnulerPlacement, 
       setErreurPlacement(resultat.message);
     }
   };
+
+  // Glisser-déposer d'une séance déjà placée — même logique que l'ancien
+  // TdWeekGrid (validation -> confirmation si conflit -> forçage ou non,
+  // `utils/moveSession.ts::performMove`), déplacée ici (retour utilisateur
+  // 28/08/2026). `dragEnabled` seul détermine si c'est actif — voir
+  // `PromoViewProps.placements`.
+  const handleDrop = async (targetDay: number, slot: number) => {
+    setDropTarget(null);
+    const sessionId = draggingId;
+    setDraggingId(null);
+    if (!sessionId || !placements || !onPlacementUpdated || !onError || solverWeek === null) return;
+    const placement = placements.find((p) => p.session_id === sessionId);
+    if (!placement || placement.locked) return;
+    if (placement.day === targetDay && placement.slot === slot && placement.week === solverWeek) return;
+    await performMove(sessionId, { week: solverWeek, day: targetDay, slot }, placement, onPlacementUpdated, onError);
+  };
+
+  const dropHandlers = (targetDay: number, slot: number) =>
+    dragEnabled
+      ? {
+          onDragOver: (e: ReactDragEvent) => {
+            if (!draggingId) return;
+            e.preventDefault();
+            if (dropTarget?.day !== targetDay || dropTarget?.slot !== slot) setDropTarget({ day: targetDay, slot });
+          },
+          onDragLeave: () =>
+            setDropTarget((cur) => (cur?.day === targetDay && cur?.slot === slot ? null : cur)),
+          onDrop: (e: ReactDragEvent) => {
+            e.preventDefault();
+            void handleDrop(targetDay, slot);
+          },
+        }
+      : {};
 
   return (
     <section className="view">
@@ -305,10 +361,17 @@ export function PromoView({ payload, placementActif = null, onAnnulerPlacement, 
                             }
                           : {};
                         const eligibleClass = eligible ? " promocell--placeable" : "";
+                        const isDropHover = dragEnabled && dropTarget?.day === day && dropTarget?.slot === s;
+                        const dropCls = isDropHover ? " dropzone-hover" : "";
 
                         if (entries.length) {
                           return (
-                            <td key={c} className={cellClass + eligibleClass} {...placementProps}>
+                            <td
+                              key={c}
+                              className={cellClass + eligibleClass + dropCls}
+                              {...placementProps}
+                              {...dropHandlers(day, s)}
+                            >
                               {eligible && (
                                 <div className="promocell-poser">
                                   {enCoursPlacement === cleCellule ? "Placement…" : "+ poser ici (conflit possible)"}
@@ -318,10 +381,26 @@ export function PromoView({ payload, placementActif = null, onAnnulerPlacement, 
                                 const highlighted = teacherFilter && r.te.includes(teacherFilter);
                                 const teacherNames = r.te.map((tc) => payload.teacherLabels[tc] ?? tc).join(", ");
                                 const durLabel = (r.dur || 1) > 1 ? ` · ${((r.dur || 1) * 1.5).toFixed(1).replace(".0", "")}h` : "";
+                                // Verrouillée = jamais glissable, même quand le
+                                // drag est actif (même règle que l'ancien
+                                // TdWeekGrid) — `placements` sert UNIQUEMENT à
+                                // ça ici, le contenu affiché reste `payload.rows`.
+                                const source = placements?.find((p) => p.session_id === r.id);
+                                const draggableHere = dragEnabled && !!source && !source.locked;
                                 return (
                                   <div
                                     key={r.id}
-                                    className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${highlighted ? "chip-highlight" : ""}`}
+                                    draggable={draggableHere}
+                                    onDragStart={
+                                      draggableHere
+                                        ? (e) => {
+                                            e.dataTransfer.effectAllowed = "move";
+                                            setDraggingId(r.id);
+                                          }
+                                        : undefined
+                                    }
+                                    onDragEnd={draggableHere ? () => setDraggingId(null) : undefined}
+                                    className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${highlighted ? "chip-highlight" : ""} ${draggableHere ? "promo-chip--draggable" : ""} ${draggingId === r.id ? "dragging" : ""}`}
                                   >
                                     <span className="code">{r.c}</span>
                                     <span className="ty">
@@ -384,7 +463,12 @@ export function PromoView({ payload, placementActif = null, onAnnulerPlacement, 
                           );
                         }
                         return (
-                          <td key={c} className={cellClass + eligibleClass} {...placementProps}>
+                          <td
+                            key={c}
+                            className={cellClass + eligibleClass + dropCls}
+                            {...placementProps}
+                            {...dropHandlers(day, s)}
+                          >
                             {eligible && (
                               <div className="promocell-poser">
                                 {enCoursPlacement === cleCellule ? "Placement…" : "+ poser ici"}

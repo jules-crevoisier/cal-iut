@@ -248,7 +248,10 @@ h1, h2, h3 {
 /* ── Layout ── */
 .layout {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  /* 260px et non 300px : la colonne latérale ne porte plus que DiffPanel/
+     SessionPanel (QualityPanel/RegenPanel retirés, retour utilisateur
+     28/08/2026) — moins de contenu, place rendue à la grille elle-même. */
+  grid-template-columns: 1fr 260px;
   gap: 0;
   flex: 1;
 }
@@ -444,8 +447,11 @@ h1, h2, h3 {
 }
 
 .td-grid-cell {
-  height: 76px;
-  padding: 3px;
+  /* Agrandi (76px -> 92px), retour utilisateur 28/08/2026 : « agrandit le
+     planning pour que cela soit beau » — la colonne latérale allégée
+     (QualityPanel/RegenPanel retirés) laisse la place. */
+  height: 92px;
+  padding: 5px;
   background: var(--bg);
 }
 
@@ -1652,6 +1658,16 @@ table.promo-grid td.promocell--placeable:focus-visible {
    masquer (garde le contexte visible), fait ressortir celles de
    l'enseignant sélectionné. */
 table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.4); }
+
+/* Glisser-déposer (retour utilisateur 28/08/2026, déplacé depuis l'ancienne
+   Vue Semaine éditable) — même patron que `.td-block` d'origine. */
+.promo-chip--draggable { cursor: grab; }
+.promo-chip--draggable:active { cursor: grabbing; }
+.promo-chip.dragging { opacity: 0.35; }
+table.promo-grid td.promocell.dropzone-hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
 table.promo-grid.teacher-filter .promo-chip.chip-highlight {
   opacity: 1;
   filter: none;
