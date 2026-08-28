@@ -27,6 +27,8 @@ export function mailtoForTeacher(
     "Le lien ouvre directement votre planning ; un bouton permet d'exporter",
     "les séances vers votre agenda personnel (fichier .ics).",
     "",
+    "Une question ? Contactez le 07 81 25 78 87.",
+    "",
     "Cordialement,",
   ].join("\r\n");
   return `mailto:${encodeURIComponent(mail)}?subject=${encodeURIComponent(

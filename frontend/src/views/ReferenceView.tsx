@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { sendTeacherMails } from "../api/client";
 import { SendTeacherMailsModal } from "../components/SendTeacherMailsModal";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
@@ -7,7 +8,6 @@ import type { AppPayload } from "../types/app";
 import { copyToClipboard } from "../utils/clipboard";
 import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { downloadIcs, sessionsWithDates } from "../utils/ics";
-import { mailtoForTeacher } from "../utils/mailto";
 
 type SubTab = "salles" | "cours" | "calendrier" | "liens";
 
@@ -280,6 +280,34 @@ function DirectoryRow({
   showMail?: boolean;
 }) {
   const hours = (row.items.reduce((n, it) => n + (it.dur || 1), 0) * 1.5).toLocaleString("fr-FR");
+  // Envoi ciblé à CETTE seule personne — retour utilisateur 28/08/2026 :
+  // « remplacer le bouton mail écrire par un bouton qui envoie le mail à la
+  // personne avec son lien, au cas où on veuille envoyer le lien à une
+  // seule personne ». Réutilise le même endpoint que l'envoi groupé
+  // (`SendTeacherMailsModal`), juste avec UN code au lieu de la sélection
+  // entière — remplace le brouillon `mailto:` (qui n'envoyait rien tout
+  // seul) par un vrai envoi.
+  const [etatEnvoi, setEtatEnvoi] = useState<"repos" | "envoi" | "ok" | "echec">("repos");
+  const [erreurEnvoi, setErreurEnvoi] = useState<string | null>(null);
+
+  const envoyer = async () => {
+    setEtatEnvoi("envoi");
+    setErreurEnvoi(null);
+    try {
+      const { results } = await sendTeacherMails([row.code]);
+      const resultat = results[0];
+      if (resultat?.ok) {
+        setEtatEnvoi("ok");
+      } else {
+        setEtatEnvoi("echec");
+        setErreurEnvoi(resultat?.error ?? "Échec de l'envoi.");
+      }
+    } catch (e) {
+      setEtatEnvoi("echec");
+      setErreurEnvoi(e instanceof Error ? e.message : "Échec de l'envoi.");
+    }
+  };
+
   return (
     <tr>
       <td style={{ textAlign: "left" }}>
@@ -303,13 +331,22 @@ function DirectoryRow({
       </td>
       {showMail && (
         <td>
-          <a
+          <button
+            type="button"
             className="subtabbtn small"
-            href={mailtoForTeacher(payload, row.code, row.items, row.link)}
-            title={row.mail || "Adresse inconnue"}
+            onClick={envoyer}
+            disabled={!row.mail || etatEnvoi === "envoi"}
+            title={row.mail || "Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml"}
           >
-            Écrire{row.mail ? "" : " ⚠"}
-          </a>
+            {etatEnvoi === "envoi"
+              ? "Envoi…"
+              : etatEnvoi === "ok"
+                ? "Envoyé ✓"
+                : etatEnvoi === "echec"
+                  ? "Échec ✗"
+                  : `Envoyer${row.mail ? "" : " ⚠"}`}
+          </button>
+          {erreurEnvoi && <div className="muted small">{erreurEnvoi}</div>}
         </td>
       )}
     </tr>

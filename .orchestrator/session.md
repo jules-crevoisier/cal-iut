@@ -137,3 +137,10 @@ Retour utilisateur : « clean up les groupes étudiant dans référence... les p
 - Responsive : réutilise tel quel les classes déjà rendues responsive pour la vue Enseignant (`.panel.controls`/`.weekfield`/`.daystrip`/`.sessiongrid-cell`, media query 760px existante) — aucun nouveau CSS nécessaire, mêmes composants.
 - Vérifié : `tsc -b` + `npm run build` propres. Aucun fichier backend touché (changement 100% frontend), pas de re-run pytest nécessaire.
 Status DONE.
+
+## follow-up 13 (envoi individuel dans referentiel + numero de contact dans le mail)
+Retour utilisateur : « remplacer le bouton mail écrire par un bouton qui envoie le mail à la personne avec son lien, au cas où on veuille envoyer le lien à une seule personne » + « ajouter ce numéro 0781257887 à contacter si question ».
+- `ReferenceView.tsx::DirectoryRow` : le bouton "Écrire" (`mailto:`, brouillon jamais envoyé tout seul) remplacé par un vrai bouton "Envoyer" qui appelle `sendTeacherMails([row.code])` (même endpoint que l'envoi groupé, un seul code) — états Envoi…/Envoyé ✓/Échec ✗ affichés inline, désactivé sans adresse connue.
+- Numéro "07 81 25 78 87" ajouté au corps du mail dans LES DEUX générateurs de texte (`main.py::_teacher_mail_text` pour l'envoi réel, `frontend/src/utils/mailto.ts` pour le brouillon `mailto:` resté ailleurs — ex. bouton "Écrire" de la Vue Enseignant, hors scope de cette demande donc pas remplacé, mais le contenu doit rester identique).
+Vérifié : tsc -b + npm run build propres, 7/7 tests mail passent, contenu du corps du mail vérifié directement (numéro présent, bien formaté).
+Status DONE.
