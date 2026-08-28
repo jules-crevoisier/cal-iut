@@ -50,3 +50,17 @@ rules:
     pair_from: end
     max_blocks: 1
     note: "Confirmé (Marine Riguet) : les 3 derniers TD WRA308M = 1 bloc de 4h30 (activité notée)."
+
+  # WSA501D (SAE "Développer pour le web / Concevoir un dispositif interactif",
+  # BUT3-DEV-FC) : 34 TD au volume. Retour utilisateur (25/08/2026) : « on fait
+  # des cours de 3h minimum, 4h30 max ». 34 étant pair, `slots_per_session: 2`
+  # forme 17 blocs de 3h exactement, sans reliquat de 1h30 — un découpage en
+  # blocs de 3 (4h30) laisserait 11 blocs + 1 séance seule de 1h30, sous le
+  # minimum demandé. Les 17 blocs se répartissent sur les 10 semaines de
+  # présence IUT du parcours (~1,7 bloc/semaine), ce qui satisfait le
+  # « étendu sur tout le semestre ».
+  - course_code: WSA501D
+    session_type: TD
+    slots_per_session: 2
+    pair_from: start
+    note: "Confirmé (retour utilisateur 25/08/2026) : WSA501D = blocs de 3h (2x1h30 collées), étalés sur le semestre."

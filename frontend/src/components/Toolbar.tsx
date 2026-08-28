@@ -30,9 +30,6 @@ interface ToolbarProps {
   onGroupChange: (v: string) => void;
   onTeacherChange: (v: string) => void;
   onRoomChange: (v: string) => void;
-  onIngest: () => void;
-  onSolve: () => void;
-  onRegenerate: () => void;
 }
 
 function groupOptionLabel(g: GroupMeta, all: GroupMeta[]): string {
@@ -201,24 +198,13 @@ export function Toolbar(props: ToolbarProps) {
         )}
       </div>
 
-      <div className="toolbar-actions">
-        <button type="button" className="btn btn--ghost" onClick={props.onIngest} disabled={props.loading}>
-          Charger données
-        </button>
-        <button type="button" className="btn btn--primary" onClick={props.onSolve} disabled={props.loading}>
-          {props.loading ? "Calcul…" : "Générer"}
-        </button>
-        {/* Recalcule TOUT le semestre depuis zéro (même appel que "Générer" —
-            retour utilisateur 11/08/2026 : à ne pas confondre avec la
-            régénération CIBLÉE d'une semaine, désormais dans le panneau
-            latéral "Régénération ciblée", seule fidèle à
-            `POST /regen/week` — cf. docs/DATA.md). Renommé pour éviter
-            l'ambiguïté entre les deux, gardé pour forcer un recalcul complet
-            après une modification de données en amont. */}
-        <button type="button" className="btn btn--accent" onClick={props.onRegenerate} disabled={props.loading} title="Relance le solveur sur tout le semestre — pour une seule semaine, utilisez « Régénération ciblée » dans le panneau de droite.">
-          Recalculer tout
-        </button>
-      </div>
+      {/* "Charger données" / "Générer" / "Recalculer tout" retirés (retour
+          utilisateur 27/08/2026 : génération toujours faite en CLI —
+          `cal-iut solve` / `cal-iut load-run` — ces boutons ne servaient
+          plus depuis le navigateur). La régénération CIBLÉE d'une semaine
+          (`RegenPanel`, panneau latéral) reste : elle fait autre chose
+          (re-solve d'UNE semaine, pas tout le semestre) et n'a pas été
+          demandée à la suppression. */}
     </header>
   );
 }

@@ -226,6 +226,11 @@ def assign_rooms(
     rules: list[RoomAssignmentRule],
     duos: list[TeacherDuo] | None = None,
     course_cm_room_seed: dict[str, str] | None = None,
+    # Salles réservées par des tiers (`data/config/salles_reservees.yaml`) :
+    # {room_id: {index de créneau}}. Le solveur ne modélise pas les salles
+    # (cf. docs/DATA.md §65.5), ce point est donc le SEUL endroit où une
+    # réservation extérieure peut être honorée.
+    reserved: dict[str, set[int]] | None = None,
 ) -> list[PlacedSessionWithRoom]:
     """
     Affecte les salles par placement glouton avec règles configurables.
@@ -238,7 +243,12 @@ def assign_rooms(
     """
     duo_overrides = _duo_room_overrides(placements, sessions_by_id, duos or [], rooms)
     sorted_placements = sorted(placements, key=_sort_key)
-    room_schedule: dict[str, set[int]] = {r.id: set() for r in rooms}
+    # Pré-rempli avec les réservations extérieures : une salle occupée par la
+    # Direction devient, pour tout le reste de l'algorithme, une salle déjà
+    # prise — aucun cas particulier à gérer ailleurs.
+    room_schedule: dict[str, set[int]] = {
+        r.id: set(reserved.get(r.id, ())) if reserved else set() for r in rooms
+    }
     course_cm_room: dict[str, str] = dict(course_cm_room_seed or {})
     results: list[PlacedSessionWithRoom] = []
 
@@ -279,9 +289,27 @@ def assign_rooms(
 
         duo_room = duo_overrides.get(placement.session_id)
         if duo_room is not None:
-            room_schedule[duo_room.id].update(_occupied_indices(placement, duration))
-            results.append(_with_room(placement, duo_room))
-            continue
+            duo_slots = _occupied_indices(placement, duration)
+            # La salle de duo n'est prise QUE si elle est réellement libre.
+            #
+            # BUG RÉEL trouvé le 26/08/2026 en vérifiant le run `odd26` : cette
+            # branche prenait la salle sans jamais consulter `room_schedule`.
+            # Une séance ordinaire traitée plus tôt pouvait déjà l'occuper, et
+            # les deux se retrouvaient dans la MÊME pièce au MÊME créneau —
+            # 4 cas dans le planning de production (H.007, H.008, H.201,
+            # H.203), invisibles au tableau de bord qui ne contrôlait que la
+            # capacité, jamais l'occupation.
+            #
+            # C'est exactement le défaut déjà corrigé le 06/08/2026 sur la
+            # branche `same_room` ci-dessous ; il subsistait ici. Même remède :
+            # à défaut de salle libre, on retombe sur la sélection normale
+            # plutôt que de garantir la salle de duo au prix d'un conflit
+            # physique. Le duo perd alors sa salle dédiée — un désagrément —
+            # là où le double-booking envoie deux groupes au même endroit.
+            if room_schedule[duo_room.id].isdisjoint(duo_slots):
+                room_schedule[duo_room.id].update(duo_slots)
+                results.append(_with_room(placement, duo_room))
+                continue
 
         rule = _find_matching_rule(rules, course_code, st_value, is_eval)
         preferred = rule.preferred_room_types if rule else [RoomType.STANDARD]
@@ -356,6 +384,20 @@ def assign_rooms(
             )
             if fitting:
                 return fitting
+            # DERNIER RECOURS, assumé et volontairement visible : aucune salle
+            # assez grande n'est libre sur ce créneau. On rend alors la PLUS
+            # GRANDE salle libre, même insuffisante, plutôt que de laisser la
+            # séance sans salle du tout — un planning avec une salle à corriger
+            # se répare, un planning sans salle bloque tout le monde.
+            #
+            # Ce choix est silencieux par construction : le contrôle
+            # `room_capacity` du tableau de bord (et `cal-iut audit`) est le
+            # SEUL endroit qui le signale. Ne jamais retirer ce contrôle sans
+            # retirer ce repli — sinon des étudiants se retrouvent dans une
+            # salle trop petite sans que rien ne l'indique.
+            # Trouvé par test de propriété le 26/08/2026 : la branche existait
+            # sans explication, et rien ne disait qu'elle pouvait sous-doter
+            # une séance.
             return sorted(
                 [r for r in rooms if room_schedule[r.id].isdisjoint(window)],
                 key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),
@@ -394,6 +436,11 @@ def find_room_for_slot(
     groups: list[Group],
     rules: list[RoomAssignmentRule],
     prefer_room_id: str | None = None,
+    # Salles réservées par des tiers (`data/config/salles_reservees.yaml`).
+    # Doit être honoré ICI comme dans `assign_rooms` : sans ça, un déplacement
+    # manuel remettrait un cours dans une salle que la Direction occupe, alors
+    # que la génération complète l'évitait.
+    reserved: dict[str, set[int]] | None = None,
 ) -> Room | None:
     """
     Trouve une salle libre et adaptée pour CETTE séance à UN (semaine, jour,
@@ -415,7 +462,9 @@ def find_room_for_slot(
     base = week * slots_per_week + day * SLOTS_PER_DAY + slot
     occupied_target = set(range(base, base + duration))
 
-    room_schedule: dict[str, set[int]] = {r.id: set() for r in rooms}
+    room_schedule: dict[str, set[int]] = {
+        r.id: set(reserved.get(r.id, ())) if reserved else set() for r in rooms
+    }
     for p in timetable:
         if p.session_id == session.id:
             continue

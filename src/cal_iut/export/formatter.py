@@ -1,9 +1,22 @@
-"""Export planning hors Celcat (JSON + CSV)."""
+"""Export planning hors Celcat (JSON + CSV).
+
+Deux défauts corrigés le 26/08/2026, trouvés en explorant ce module :
+
+1. **Aucune date.** L'export ne portait qu'un numéro de semaine interne : pour
+   savoir QUAND avait lieu un cours, il fallait refaire soi-même la conversion.
+   Un emploi du temps sans date n'est pas exploitable.
+2. **Un numéro de semaine différent de celui de l'interface.** La colonne
+   `week` valait `index_solveur + 1`, alors que l'interface et l'export HTML
+   affichent le numéro de semaine DÉPARTEMENT (semaine 1 = ISO 35). L'index
+   solveur 0 sortait en « semaine 1 » côté CSV et « Semaine 2 » côté web : deux
+   exports du même planning se contredisaient d'une semaine.
+"""
 
 import csv
 import io
 from dataclasses import dataclass
 
+from cal_iut.calendar.academic import AcademicCalendar, department_week_number
 from cal_iut.models.timetable import TimeSlot
 
 DAY_LABELS = ("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi")
@@ -17,7 +30,12 @@ class ExportRow:
     session_type: str
     semestre: str
     parcours: str
+    # Numéro de semaine DÉPARTEMENT — le même que celui affiché partout
+    # ailleurs (interface, export HTML, `department_week_label`).
     week: int
+    # Index interne du solveur, conservé pour rapprocher un export d'un run.
+    semaine_solveur: int
+    date: str
     day: str
     slot: str
     time_start: str
@@ -40,7 +58,15 @@ SLOT_TIMES = [
 ]
 
 
-def build_export_rows(placements: list[object], sessions_by_id: dict[str, object]) -> list[ExportRow]:
+def build_export_rows(
+    placements: list[object],
+    sessions_by_id: dict[str, object],
+    calendar: AcademicCalendar | None = None,
+    week_offset: int = 0,
+) -> list[ExportRow]:
+    """`calendar` est facultatif pour ne pas casser les appelants existants,
+    mais sans lui l'export ne peut porter ni date ni numéro de semaine réel —
+    les colonnes correspondantes restent alors vides plutôt que fausses."""
     rows: list[ExportRow] = []
     for p in placements:
         session = sessions_by_id.get(p.session_id)
@@ -56,7 +82,9 @@ def build_export_rows(placements: list[object], sessions_by_id: dict[str, object
                 session_type=session_type,
                 semestre=getattr(session, "semestre", "") if session else "",
                 parcours=getattr(session, "parcours", "") if session else "",
-                week=p.week + 1,
+                week=_departement_week(calendar, week_offset, p.week),
+                semaine_solveur=p.week,
+                date=_date_iso(calendar, week_offset, p.week, p.day),
                 day=DAY_LABELS[p.day] if 0 <= p.day < 5 else "?",
                 slot=TimeSlot(slot_idx).label if slot_idx < 6 else "?",
                 time_start=start,
@@ -69,7 +97,33 @@ def build_export_rows(placements: list[object], sessions_by_id: dict[str, object
                 is_eval=getattr(session, "is_eval", False) if session else False,
             )
         )
-    return sorted(rows, key=lambda r: (r.week, r.day, r.time_start, r.course_code))
+    # Trié sur la DATE quand elle est connue : trier sur le libellé de jour
+    # rangeait « Jeudi » avant « Lundi » (ordre alphabétique), ce qui rendait
+    # le CSV illisible pour qui l'ouvre dans un tableur.
+    return sorted(
+        rows,
+        key=lambda r: (r.semaine_solveur, _day_order(r.day), r.time_start, r.course_code),
+    )
+
+
+def _day_order(label: str) -> int:
+    return DAY_LABELS.index(label) if label in DAY_LABELS else len(DAY_LABELS)
+
+
+def _departement_week(calendar: AcademicCalendar | None, week_offset: int, week: int) -> int:
+    if calendar is None:
+        return week + 1
+    absolu = week_offset + week
+    if 0 <= absolu < len(calendar.teaching_mondays):
+        return department_week_number(calendar.teaching_mondays[absolu])
+    return week + 1
+
+
+def _date_iso(calendar: AcademicCalendar | None, week_offset: int, week: int, day: int) -> str:
+    if calendar is None:
+        return ""
+    d = calendar.week_day_to_date(week_offset + week, day)
+    return d.isoformat() if d else ""
 
 
 def to_csv(rows: list[ExportRow]) -> str:

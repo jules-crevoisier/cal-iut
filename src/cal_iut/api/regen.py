@@ -232,7 +232,13 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
         # les séances connues (pas juste la portée) pour voir les voisins
         # hors fenêtre — réutilise telles quelles les fonctions déjà en place
         # pour le rééquilibrage étage 3 (`_build_sequence_neighbors`/`_movable_bounds`).
-        neighbors = _build_sequence_neighbors(state.sessions)
+        # `state.groups` est indispensable : sans lui, `_build_sequence_neighbors`
+        # ne rend que l'ordre au sein d'un MÊME group_id brut et ignore les
+        # paires inter-granularités (CM promo ↔ TD/TP de sous-groupe). Une
+        # régénération sur deux semaines pouvait alors déplacer un CM APRÈS les
+        # TD qu'il doit précéder — exactement le défaut corrigé le 25/08/2026
+        # sur le rééquilibrage de l'étage 3, qui subsistait ici.
+        neighbors = _build_sequence_neighbors(state.sessions, state.groups)
         # Semaine RELATIVE (même convention que `state.timetable[...].week`),
         # pas `absolute_week` — `_movable_bounds` a été conçu pour ce référentiel.
         week_by_session_rel = {p.session_id: p.week for p in state.timetable}
@@ -295,6 +301,7 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
     with_rooms = assign_rooms(
         new_placements, state.sessions_by_id, state.rooms, state.groups, state.room_rules,
         state.teacher_duos, course_cm_room_seed=course_cm_room_seed,
+        reserved=getattr(state, "room_reservations", None),
     )
 
     # Écrit UNIQUEMENT les séances touchées dans l'état en mémoire (jamais un

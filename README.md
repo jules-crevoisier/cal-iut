@@ -68,11 +68,51 @@ disponible sur `/legacy` : même moteur de résolution, même données
 --format html` continue de produire un fichier autonome distribuable par
 mail, indépendant des deux.
 
+## Reprise du projet par quelqu'un d'autre
+
+`GUIDE.md` s'adresse à la personne qui reprend l'outil sans l'avoir écrit :
+installation, fichiers à fournir, production d'un emploi du temps, diagnostic.
+Trois commandes suffisent à s'en sortir sans lire le code :
+
+```powershell
+cal-iut doctor     # est-ce que tout est en place ? que faire ensuite ?
+cal-iut refresh    # récupérer maquette + progression officielles, voir ce qui change
+cal-iut annee      # tout dérouler : contraintes -> séances -> audit -> emploi du temps
+cal-iut regles     # lister en français toutes les règles actives, avec leur raison
+```
+
+`refresh` télécharge les deux exports depuis le serveur MMI, **montre ce qui
+change** (modules ajoutés, volumes ou enseignants modifiés) et n'écrit qu'avec
+`--ecrire`, en sauvegardant l'ancienne version dans `data/sauvegardes/`. En cas
+de serveur injoignable, `--depuis <dossier>` lit deux fichiers reçus par mail.
+
+## Audit
+
+```powershell
+cal-iut audit                                          # données, config, capacité
+cal-iut audit --timetable data/generated/timetable.json  # + vérification du résultat
+cal-iut audit --json                                   # sortie machine (code retour 1 si erreur)
+```
+
+L'audit ne résout rien : il cherche les quatre familles de défauts qui ont
+réellement coûté du temps sur ce projet (cf. docs/DATA.md §63).
+
+| Famille | Exemple trouvé | Contrôle |
+|---|---|---|
+| Une règle déclarée qui ne s'applique pas | fenêtres de dates absentes du mode `--decomposed` | `couverture.*` |
+| Une règle qui pointe dans le vide | code de cours mal orthographié, ignoré en silence | `config.*` |
+| Une donnée source mal comprise | « mercredi 23/09/26 » lu comme « tous les mercredis » | `donnees.*` |
+| Une impossibilité arithmétique | 22 créneaux FI pour 21 disponibles hors jeudi PAC | `capacite.*` |
+
+Chaque constat dit **où** et **quoi faire**. L'audit liste aussi les règles
+qu'il ne sait PAS vérifier : une règle sans vérification est un bug en attente.
+
 ## CLI
 
 ```powershell
 python scripts/build_contraintes.py                    # régénère contraintes/*.json depuis les sources
 cal-iut ingest --semestre-group odd                    # normalise les séances (S1+S3+S5)
+python scripts/solve_until_ok.py --max-runs 20         # relance jusqu'au meilleur résultat
 cal-iut solve --decomposed --semestre-group odd --weeks 24 --fi-max-week 18
 cal-iut solve --course WR108 --no-gaps                 # une matière, rapide
 cal-iut solve --warm-start data/generated/timetable.json  # relance à partir d'un run précédent (rapide)
@@ -114,9 +154,19 @@ parallélisme plutôt qu'un seul :
 
 Les semaines de l'étage 3 sont indépendantes par construction une fois
 l'affectation semaine (étage 2) figée : chaque modèle hebdomadaire ne lit que
-ses propres séances. Le résultat reste **déterministe** — les solutions sont
-collectées puis appliquées dans l'ordre croissant des semaines, jamais dans
-l'ordre d'arrivée du pool.
+ses propres séances. Les solutions sont collectées puis appliquées dans l'ordre
+croissant des semaines, jamais dans l'ordre d'arrivée du pool : le
+parallélisme n'introduit donc aucune dépendance à l'ordonnancement des threads.
+
+**En revanche, le RÉSULTAT n'est pas reproductible d'un run à l'autre**, et ce
+n'est pas dû au parallélisme des semaines : `max_time_in_seconds` combiné à
+plusieurs `num_search_workers` rend CP-SAT lui-même non déterministe (le
+résultat dépend de quel worker a fini quoi à l'échéance), malgré
+`random_seed=2027`. Deux exécutions identiques peuvent donc donner des
+affectations de semaine différentes — et une semaine en échec dans l'une et pas
+dans l'autre. Rendre le run reproductible demanderait de passer à
+`max_deterministic_time` et de recalibrer tous les budgets ; cf. docs/DATA.md
+§63.9ter.
 
 Répartition privilégiant la largeur (4 workers/semaine) parce que le rendement
 de `num_search_workers` sature vite sur un modèle d'une seule semaine, alors
@@ -159,7 +209,13 @@ trous). Recommandé pour toute régénération après un ajustement mineur
 - **Référence** — salles, cours, calendrier institutionnel, **Liens & partage**.
 - **Contraintes** — chaque règle (enseignant ou solveur) avec son verdict recalculé
   depuis la sortie brute du solveur (jamais une affirmation pré-écrite).
-- **À traiter** — violations, journées trouées : liste de travail cliquable.
+- **À traiter** — séances non placées, violations, journées trouées : liste de
+  travail cliquable.
+- **À placer** — les séances que le solveur n'a pas su placer. Un bouton les pose
+  toutes d'un coup quand un créneau valable existe (l'essentiel du reliquat) ;
+  le reste se place à la main sur des créneaux déjà vérifiés. Sans cet onglet
+  elles disparaissaient sans bruit : le planning avait l'air complet alors qu'il
+  manquait des heures (cf. docs/DATA.md §66).
 - **Recherche globale** (`Ctrl+K`) — enseignant, cours, salle ou groupe, ouvre directement la bonne vue.
 
 Les données des vues en lecture seule viennent d'un unique endpoint,
@@ -206,6 +262,10 @@ cal-iut export --format html --per-teacher data/generated/par-enseignant
 | `POST /solve` | Génère planning + salles + persiste SQLite |
 | `GET /timetable` | Planning courant (filtres groupe/prof/salle/semaine) |
 | `GET /app-state` | État complet pour le frontend React (Groupe/Enseignant/Promo/Référence/Contraintes/À traiter) |
+| `GET /placements/manquantes` | Séances absentes du planning, calculées par différence |
+| `GET /placements/{id}/creneaux-libres` | Créneaux où cette séance peut réellement aller |
+| `POST /placements/{id}/placer` | Pose une séance non placée — mêmes contrôles que le glisser-déposer |
+| `POST /placements/completer` | Pose d'un coup tout le reliquat pour lequel un créneau valable existe |
 | `GET /diff` | Diff solveur vs manuel |
 | `PATCH /placements/{id}` | Déplacement + verrouillage |
 | `POST /feedback/apply` | Réinjection poids objectif |
@@ -263,7 +323,14 @@ Règles dures/molles issues du cahier des charges (`SolverConfig`, `solver/cpsat
 | **Indisponibilité à parité de semaine** (TCA : mercredi les semaines paires…) | Dure | `week_parity_rules`, `parity_reference` |
 | **Fenêtre de dates civiles par séance** (WR100BU : visite BU avant le 15 sept.) | Dure | `enforce_session_date_windows` |
 | Toute séance `is_eval` affectée en salle A.018 | Dure | `data/config/rooms.yaml` (règle `is_eval: true`) |
+| **Ordre pédagogique vu par l'étudiant** (CM promo ↔ TD/TP de sous-groupe) | Dure à l'étage 3, molle graduée à l'étage 2 | `cohort_order_weight`, `cohort_sequence_pairs` |
+| **Borne de FIN par cours** (ex. WRA507D doit finir en janvier) | Dure | `max_week_rules` (`course_scheduling_rules.yaml`) |
+| **SAE planifiée par le solveur** (ex. WSA501D, sans dates officielles) | — | `solver_scheduled_sae` (`course_scheduling_rules.yaml`) |
+| **Répartition des jours d'une SAE entre ses enseignants** (WS501D) | Dure (restreint l'indispo « référent SAE ») | `data/config/sae_teacher_phases.yaml` |
+| **Liste explicite de dates pour une séance** (WRA505C conjointe) | Dure | `dates:` dans `session_date_windows` |
+| **Répartition alternée des enseignants d'un module** (WRA507D : BTO/JSA une séance sur deux) | — (ingestion) | `teacher_distribution` (`course_scheduling_rules.yaml`) |
 | Ordonnancement `before`/`after` par groupe étudiant (position moyenne) | Molle | `enforce_ordonnancement` |
+| **Ordonnancement strict « A fini avant que B commence », par cohorte** | Molle graduée (poids × semaines de chevauchement) | `strict_ordonnancement_weight` |
 | **Regroupement mensuel des interventions** (ARA, JHU : 1-2 semaines/mois) | Molle | `optimize_teacher_clustering`, `teacher_clustering_weight` |
 | **Ordre entre enseignants d'un module** (WRA505C : ALO puis AFR) | Molle | `optimize_teacher_order` |
 | Regroupement des évaluations sur une même semaine | Molle | `optimize_eval_clustering`, `eval_clustering_weight` |
@@ -278,7 +345,8 @@ l'export HTML pour afficher "Semaine 3 (7–11 sept. 2026)" plutôt qu'un index 
 
 - `data/config/groups.yaml` — groupes TD/TP + effectifs (BUT1 : 4 TD × 8 TP ; BUT2-DEV-FI : 2 TD × 4 TP ; BUT3-DEV-FI : 1 TD × 2 TP ; FC : 1 TD × 1 TP, nommés TD EF/TP E et TD GH/TP G)
 - `data/config/rooms.yaml` — inventaire réel bâtiment H (H.005–H.205, A.018) + règles d'affectation par module
-- `data/config/course_scheduling_rules.yaml` — démarrage minimum, **fenêtres de dates par séance**, **ordre entre enseignants d'un module**
+- `data/config/course_scheduling_rules.yaml` — démarrage minimum, **borne de fin par cours**, **fenêtres de dates par séance** (plage continue ou liste explicite), **ordre entre enseignants d'un module**, **SAE planifiées par le solveur**
+- `data/config/sae_teacher_phases.yaml` — qui encadre une SAE et quand (WS501D) : restreint l'indisponibilité « référent SAE » aux seuls jours réellement concernés
 - `data/config/double_sessions.yaml` — blocs de N créneaux collés (`max_blocks` pour n'en former qu'un seul, ex. WRA308M)
 - `data/config/teacher_availability.yaml` — dispos profs + poids initiaux
 - `contraintes/00_INDEX.md` — provenance de chaque fichier et **liste des arbitrages humains**

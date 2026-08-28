@@ -4,6 +4,7 @@ import { DayStrip, todayIndex } from "../components/DayStrip";
 import { SemesterAgenda } from "../components/SemesterAgenda";
 import { SessionGrid } from "../components/SessionGrid";
 import { ShareBar } from "../components/ShareBar";
+import { TeacherLinksList } from "../components/TeacherLinksList";
 import { WeekBar } from "../components/WeekBar";
 import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
@@ -38,6 +39,11 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
   const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, route.sem));
   const [mobileDay, setMobileDay] = useState(todayIndex());
   const narrow = useNarrowScreen();
+  // Bascule "un enseignant" / "tous les liens" — retour utilisateur
+  // 27/08/2026 : « ajoute moi une vue simple avec tous les lien de tous
+  // les prof ». N'a de sens que côté planification (readOnly = déjà le
+  // lien d'UN seul enseignant, rien à lister).
+  const [showAllLinks, setShowAllLinks] = useState(false);
 
   useEffect(() => {
     if (route.prof && route.prof !== code) setCode(route.prof);
@@ -67,8 +73,16 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
 
   return (
     <section className="view">
-      {!readOnly && (
-        <div className="panel controls">
+      <div className="panel controls">
+        {/* Sélecteur d'enseignant caché en lecture seule (le lien personnel
+            désigne déjà UN seul enseignant, pas de raison d'en changer) —
+            mais la barre de semaines reste, elle : sans elle, un enseignant
+            ouvrant son lien perso était bloqué sur une seule semaine dans la
+            grille, sans aucun moyen de parcourir le reste du semestre
+            (retour utilisateur 27/08/2026 : « on ne peut pas consulter
+            toutes les semaine[s] »). C'était un oubli, pas une intention —
+            rien dans `.weekfield` ci-dessous n'est propre au mode édition. */}
+        {!readOnly && !showAllLinks && (
           <label>
             Enseignant
             <select value={code} onChange={(e) => handleChangeTeacher(e.target.value)}>
@@ -80,6 +94,8 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
               ))}
             </select>
           </label>
+        )}
+        {!showAllLinks && (
           <div className="field weekfield">
             <WeekBar
               weekRows={payload.weekRows}
@@ -88,26 +104,47 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
               onSelect={setDisplayWeek}
             />
           </div>
-        </div>
+        )}
+        {!readOnly && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => setShowAllLinks((v) => !v)}
+          >
+            {showAllLinks ? "← Revenir au planning" : "Tous les liens"}
+          </button>
+        )}
+      </div>
+
+      {showAllLinks ? (
+        <TeacherLinksList payload={payload} />
+      ) : (
+        <>{/* le reste de la vue continue ci-dessous */}
+
+      {/* Partage/mail/callout de conformité : utiles côté planification
+          (on y prépare l'envoi du lien à CE prof), hors de propos une fois
+          que c'est LUI qui regarde sa propre page via ce même lien — retiré
+          en lecture seule pour ne garder que l'essentiel demandé (barre des
+          semaines + planning), cf. commentaire plus bas sur `.layout`. */}
+      {!readOnly && (
+        <ShareBar
+          onCopyLink={() => personalLink}
+          onDownloadIcs={() =>
+            downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
+          }
+          extra={
+            <a
+              className="btn btn--ghost btn--sm"
+              href={mailtoForTeacher(payload, code, allItems, personalLink)}
+              title={payload.teacherEmails[code] || "Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml"}
+            >
+              Écrire{payload.teacherEmails[code] ? "" : " ⚠"}
+            </a>
+          }
+        />
       )}
 
-      <ShareBar
-        onCopyLink={() => personalLink}
-        onDownloadIcs={() =>
-          downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
-        }
-        extra={
-          <a
-            className="btn btn--ghost btn--sm"
-            href={mailtoForTeacher(payload, code, allItems, personalLink)}
-            title={payload.teacherEmails[code] || "Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml"}
-          >
-            Écrire{payload.teacherEmails[code] ? "" : " ⚠"}
-          </a>
-        }
-      />
-
-      {info && (() => {
+      {!readOnly && info && (() => {
         // Compromis MOU (encadrement SAE ce jour-là, `--no-sae-supervisor-hard`)
         // distingué d'une vraie indisponibilité déclarée non respectée —
         // sinon un enseignant référent SAE ressort à tort comme "en échec"
@@ -140,65 +177,101 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
 
       {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
 
-      <div className="layout">
+      {/* Lecture seule : l'essentiel demandé (retour utilisateur
+          27/08/2026, verbatim : « juste l'essentiel c'est à dire la barre
+          des semaine et le planing qui fit bien l'écran ») — la grille
+          seule, en pleine largeur, sans le partage `.layout` à 2 colonnes
+          (qui réserverait une colonne de 300px vide à droite dès qu'il n'y
+          a plus de second panneau à côté) ni les panneaux annexes
+          (contraintes brutes, agenda du semestre en liste à part) : parcourir
+          les semaines dans CETTE grille couvre déjà « voir tous ses cours du
+          semestre », ce que demandait le message précédent. Ces panneaux
+          restent tels quels côté planification (non readOnly). */}
+      {readOnly ? (
         <div className="panel">
-          <h3>
-            {payload.teacherLabels[code] ?? code} —{" "}
-            {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
-          </h3>
+          <div className="section-header">
+            <h3>{payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}</h3>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm no-print"
+              onClick={() =>
+                downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
+              }
+            >
+              Agenda .ics
+            </button>
+          </div>
           {solverWeek === null ? (
             <p className="muted">Semaine bloquée (vacances/fermeture).</p>
           ) : (
             <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} />
           )}
         </div>
+      ) : (
+        <>
+          <div className="layout">
+            <div className="panel">
+              <h3>
+                {payload.teacherLabels[code] ?? code} —{" "}
+                {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
+              </h3>
+              {solverWeek === null ? (
+                <p className="muted">Semaine bloquée (vacances/fermeture).</p>
+              ) : (
+                <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} />
+              )}
+            </div>
 
-        {info && (info.rawIndisponibilites || info.rawDisponibilites || info.rawContraintes || info.violations.length > 0) && (
-          <div className="panel">
-            <h3>Sa contrainte, telle que déclarée</h3>
-            {info.rawIndisponibilites && (
-              <>
-                <div className="raw-label">Indisponibilités déclarées</div>
-                <div className="raw">{info.rawIndisponibilites}</div>
-              </>
-            )}
-            {info.rawDisponibilites && (
-              <>
-                <div className="raw-label">Disponibilités déclarées</div>
-                <div className="raw">{info.rawDisponibilites}</div>
-              </>
-            )}
-            {info.rawContraintes && (
-              <>
-                <div className="raw-label">Contraintes / progression</div>
-                <div className="raw">{info.rawContraintes}</div>
-              </>
-            )}
-            {info.violations.length > 0 && (
-              <>
-                <div className="raw-label">Violations détectées</div>
-                <div className="slotlist">
-                  {info.violations.map((v, i) => (
-                    <span
-                      key={i}
-                      className={`slotchip${v.reason === "sae_supervision" ? " sae" : ""}`}
-                      title={v.reason === "sae_supervision" ? "Compromis accepté : encadrement SAE ce jour-là (objectif mou)" : "Indisponibilité déclarée non respectée"}
-                    >
-                      {v.course_code} —{" "}
-                      {v.date ?? `sem.${(v.week ?? 0) + 1} ${DAY_LABELS[v.day ?? 0]} ${SLOT_TIMES[v.slot ?? 0]?.label ?? ""}`}
-                    </span>
-                  ))}
-                </div>
-              </>
+            {info && (info.rawIndisponibilites || info.rawDisponibilites || info.rawContraintes || info.violations.length > 0) && (
+              <div className="panel">
+                <h3>Sa contrainte, telle que déclarée</h3>
+                {info.rawIndisponibilites && (
+                  <>
+                    <div className="raw-label">Indisponibilités déclarées</div>
+                    <div className="raw">{info.rawIndisponibilites}</div>
+                  </>
+                )}
+                {info.rawDisponibilites && (
+                  <>
+                    <div className="raw-label">Disponibilités déclarées</div>
+                    <div className="raw">{info.rawDisponibilites}</div>
+                  </>
+                )}
+                {info.rawContraintes && (
+                  <>
+                    <div className="raw-label">Contraintes / progression</div>
+                    <div className="raw">{info.rawContraintes}</div>
+                  </>
+                )}
+                {info.violations.length > 0 && (
+                  <>
+                    <div className="raw-label">Violations détectées</div>
+                    <div className="slotlist">
+                      {info.violations.map((v, i) => (
+                        <span
+                          key={i}
+                          className={`slotchip${v.reason === "sae_supervision" ? " sae" : ""}`}
+                          title={v.reason === "sae_supervision" ? "Compromis accepté : encadrement SAE ce jour-là (objectif mou)" : "Indisponibilité déclarée non respectée"}
+                        >
+                          {v.course_code} —{" "}
+                          {v.date ?? `sem.${(v.week ?? 0) + 1} ${DAY_LABELS[v.day ?? 0]} ${SLOT_TIMES[v.slot ?? 0]?.label ?? ""}`}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      <div className="panel">
-        <h3>Toutes ses interventions du semestre</h3>
-        <SemesterAgenda payload={payload} items={allItems} />
-      </div>
+          <div className="panel">
+            <h3>Toutes ses interventions du semestre</h3>
+            <SemesterAgenda payload={payload} items={allItems} />
+          </div>
+        </>
+      )}
+        </>
+      )}
     </section>
   );
 }

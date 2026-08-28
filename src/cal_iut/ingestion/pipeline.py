@@ -12,6 +12,7 @@ from cal_iut.ingestion.config_loader import (
     load_groups,
     load_rooms,
     load_teacher_availability,
+    load_teacher_distributions,
     load_teacher_duos,
 )
 from cal_iut.ingestion.fetch import fetch_all_exports_sync
@@ -124,6 +125,7 @@ def run_ingestion(
     teachers_avail = load_teacher_availability(config_dir)
     double_session_rules = load_double_sessions(config_dir)
     duos = load_teacher_duos(config_dir)
+    teacher_distributions = load_teacher_distributions(config_dir)
     sessions = expand_all_sessions(
         courses,
         groups,
@@ -131,6 +133,7 @@ def run_ingestion(
         semestre=semestre,
         double_session_rules=double_session_rules,
         duos=duos,
+        teacher_distributions=teacher_distributions,
     )
     if semestre_group:
         wanted = SEMESTRE_GROUPS[semestre_group]

@@ -283,6 +283,113 @@ def add_pedagogical_sequence_constraints(
         _add_eval_after_cohort_content_constraints(model, sessions, session_starts, groups)
 
 
+def cohort_sequence_pairs(
+    sessions: list[SessionToPlace],
+    groups: list[Group],
+    *,
+    cross_granularity_only: bool = True,
+) -> list[tuple[str, str]]:
+    """
+    Paires `(id_avant, id_apres)` de l'ordre pédagogique **tel qu'un étudiant
+    le vit**, tous types de séance confondus.
+
+    `add_pedagogical_sequence_constraints` n'ordonne que les séances partageant
+    le MÊME `group_id` brut. Or un CM porte le groupe `promo` et un TD/TP porte
+    un sous-groupe : deux granularités différentes, donc **aucune relation
+    d'ordre entre un CM et les TD/TP qui l'entourent dans `progression.json`**.
+    Bug réel mesuré sur le run `odd26` (2389 placements) : 790 paires
+    CM↔TD/TP hors ordre, dont `WR103` CM-1 (ordre 1) en semaine 3 alors que le
+    TD-1 (ordre 2) était en semaine 1 — exactement le défaut remonté par
+    l'utilisateur le 25/08/2026 (« des CM dans les séances qui n'étaient pas
+    présents avant les premiers TD »).
+
+    On raisonne ici par COHORTE réelle (`build_student_cohorts` : promo + TD
+    parent + son TP), c'est-à-dire par ensemble de séances qu'un même étudiant
+    suit effectivement. Deux sous-groupes TP peuvent donc toujours avancer à
+    des rythmes légèrement différents — ce qui reste explicitement accepté
+    (cf. `add_pedagogical_sequence_constraints`) — mais l'ordre vu par CHAQUE
+    étudiant, lui, devient vérifiable.
+
+    `cross_granularity_only=True` (défaut) ne rend que les paires dont les
+    `group_ids` diffèrent : les autres sont déjà couvertes par la contrainte
+    dure existante, les ré-imposer ne ferait que grossir le modèle.
+    """
+    from cal_iut.solver.resources import build_student_cohorts
+
+    cohorts = build_student_cohorts(groups) if groups else {}
+    if not cohorts:
+        return []
+
+    by_course: dict[tuple[str, str], list[SessionToPlace]] = defaultdict(list)
+    for session in sessions:
+        if session.sequence_order is not None:
+            by_course[(session.course_code, session.semestre)].append(session)
+
+    pairs: set[tuple[str, str]] = set()
+    for course_sessions in by_course.values():
+        for cohort_ids in cohorts.values():
+            visible = [s for s in course_sessions if cohort_ids.intersection(s.group_ids)]
+            if len(visible) < 2:
+                continue
+            ordered = sorted(visible, key=lambda s: (s.sequence_order or 0, s.id))
+            for prev, nxt in zip(ordered, ordered[1:]):
+                if (prev.sequence_order or 0) >= (nxt.sequence_order or 0):
+                    continue
+                if cross_granularity_only and set(prev.group_ids) == set(nxt.group_ids):
+                    continue
+                pairs.add((prev.id, nxt.id))
+    return sorted(pairs)
+
+
+def add_cohort_sequence_constraints(
+    model: cp_model.CpModel,
+    sessions: list[SessionToPlace],
+    session_starts: dict[str, cp_model.IntVar],
+    groups: list[Group] | None,
+    *,
+    soft_weight: int = 0,
+    penalties: list | None = None,
+) -> int:
+    """
+    Version DURE de `cohort_sequence_pairs`, applicable dès lors que les deux
+    séances d'une paire sont dans le même modèle (étage 3 : une semaine à la
+    fois, ou modèle joint). Les paires dont un seul membre est présent sont
+    ignorées : c'est l'étage 2 (`assign_weeks`) qui porte la relation
+    inter-semaines, en pénalité graduée.
+
+    Dure par défaut parce que le sous-problème est petit : ordonner deux séances
+    déjà en NoOverlap dans la même semaine ne coûte presque rien, alors que la
+    tentative abandonnée le 05/08/2026 (cf.
+    `add_pedagogical_sequence_constraints`) posait la contrainte à l'échelle du
+    SEMESTRE, où elle rendait 5 semaines infaisables.
+
+    `soft_weight > 0` bascule en pénalité (les violations sont alors comptées
+    dans `penalties`, à fournir par l'appelant) : filet de sécurité si une
+    semaine particulièrement chargée s'avère infaisable UNIQUEMENT à cause de
+    cette règle. Une séance mal ordonnée reste très préférable à une semaine
+    entière non placée.
+    """
+    if not groups:
+        return 0
+    count = 0
+    for index, (before, after) in enumerate(cohort_sequence_pairs(sessions, groups)):
+        if before not in session_starts or after not in session_starts:
+            continue
+        count += 1
+        if soft_weight <= 0:
+            model.add(session_starts[before] < session_starts[after])
+            continue
+        ok = model.new_bool_var(f"cohordok_{index}")
+        model.add(session_starts[before] < session_starts[after]).only_enforce_if(ok)
+        model.add(session_starts[before] >= session_starts[after]).only_enforce_if(ok.Not())
+        if penalties is not None:
+            pen = model.new_int_var(0, soft_weight, f"cohordpen_{index}")
+            model.add(pen == 0).only_enforce_if(ok)
+            model.add(pen == soft_weight).only_enforce_if(ok.Not())
+            penalties.append(pen)
+    return count
+
+
 def _add_eval_after_cohort_content_constraints(
     model: cp_model.CpModel,
     sessions: list[SessionToPlace],
@@ -479,6 +586,14 @@ def add_course_min_week_constraints(
         model.add(start >= min_week * slots_per_week)
 
 
+def _window_label(rule: SessionDateWindowRule) -> str:
+    """Libellé lisible d'une fenêtre, pour les avertissements — une règle
+    à `only_dates` n'a ni début ni fin et affichait sinon "None..None"."""
+    if rule.only_dates:
+        return "dates " + ", ".join(rule.only_dates)
+    return f"{rule.start_date}..{rule.end_date}"
+
+
 def add_session_date_window_constraints(
     model: cp_model.CpModel,
     sessions: list[SessionToPlace],
@@ -516,11 +631,14 @@ def add_session_date_window_constraints(
     for rule in rules:
         start_date = date.fromisoformat(rule.start_date) if rule.start_date else None
         end_date = date.fromisoformat(rule.end_date) if rule.end_date else None
+        only_dates = {date.fromisoformat(d) for d in rule.only_dates}
         allowed: set[int] = set()
         for rel in range(weeks):
             for day in range(DAYS_PER_WEEK):
                 d = calendar.week_day_to_date(week_offset + rel, day)
                 if d is None or d in calendar.blocked_dates or d in calendar.holidays:
+                    continue
+                if only_dates and d not in only_dates:
                     continue
                 if start_date and d < start_date:
                     continue
@@ -534,8 +652,8 @@ def add_session_date_window_constraints(
             continue
         if not allowed:
             warnings.warn(
-                f"{rule.course_code} : la fenêtre {rule.start_date}..{rule.end_date} ne "
-                "contient aucun jour enseignable de l'horizon — contrainte ignorée.",
+                f"{rule.course_code} : la fenêtre {_window_label(rule)} ne contient "
+                "aucun jour enseignable de l'horizon — contrainte ignorée.",
                 stacklevel=2,
             )
             continue
@@ -549,7 +667,7 @@ def add_session_date_window_constraints(
             if not valid:
                 warnings.warn(
                     f"{rule.course_code} : aucune place de {duration} créneau(x) dans la "
-                    f"fenêtre {rule.start_date}..{rule.end_date} — contrainte ignorée "
+                    f"fenêtre {_window_label(rule)} — contrainte ignorée "
                     f"pour la séance {session.id}.",
                     stacklevel=2,
                 )
@@ -858,7 +976,7 @@ def add_sae_sanctuarization_constraints(
     blocked_by_group = blocked_by_group or {}
 
     for session in sessions:
-        if session.course_code.upper().startswith("WS"):
+        if session.is_unplaced_sae:
             continue
         blocked_days = set(blocked_by_parcours.get(session.parcours) or ())
         for gid in session.group_ids:
@@ -1021,6 +1139,32 @@ def add_teacher_availability_constraints(
                         base = rel * slots_per_week + day * SLOTS_PER_DAY
                         for slot in range(SLOTS_PER_DAY):
                             model.add(session_starts[session.id] != base + slot)
+
+            # Indisponibilités à une DATE et un HORAIRE précis
+            # (`TeacherDateSlotRule`) — ex. pré-rentrée BUT2 FC alternants du
+            # 3 septembre 2026, 9h30-12h30 : Florent Libbrecht et Anthony Froli
+            # doivent y être, sans pour autant perdre leur après-midi.
+            #
+            # `_forbid_slot_for_duration` et non un simple `!=` : sans lui, un
+            # bloc de 3h démarrant AVANT le créneau interdit le recouvrirait
+            # quand même — l'enseignant serait en cours à l'heure où on le veut
+            # ailleurs.
+            for regle in teacher_avail.forbidden_date_slots:
+                if not calendar:
+                    break
+                mapped = calendar.date_to_week_day(date.fromisoformat(regle.date))
+                if mapped is None:
+                    continue
+                abs_week, day = mapped
+                rel = abs_week - week_offset
+                if not (0 <= rel < weeks):
+                    continue
+                base = rel * slots_per_week + day * SLOTS_PER_DAY
+                for slot in regle.slots:
+                    if 0 <= slot < SLOTS_PER_DAY:
+                        _forbid_slot_for_duration(
+                            model, session_starts[session.id], base + slot, duration
+                        )
 
             # Indisponibilités à parité de semaine (ex. TCA)
             if teacher_avail.week_parity_rules:

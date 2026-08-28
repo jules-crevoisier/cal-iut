@@ -36,6 +36,7 @@ from cal_iut.models.session import SessionToPlace
 from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
 from cal_iut.solver.constraints import (
     add_blocked_calendar_constraints,
+    add_cohort_sequence_constraints,
     add_course_min_week_constraints,
     add_duo_synchronized_rare_room_constraints,
     add_duration_domain_constraints,
@@ -131,8 +132,12 @@ class SolverConfig:
     # (`weekly_cap_exceptions` dans `course_scheduling_rules.yaml`,
     # `WeeklyCapException` — parcours + semaine civile précise seulement),
     # qui ne touche pas cette valeur par défaut. Cf. docs/DATA.md §62.
-    fi_weekly_cap_slots: int = 22  # 33h/semaine = 22 créneaux de 1h30 (dur, strict)
-    fc_weekly_cap_slots: int = 23  # ~35h/semaine = 23 créneaux de 1h30 max
+    # Même valeur que le solveur décomposé — cf. `decomposed.FI_WEEKLY_CAP_SLOTS`
+    # pour l'historique et l'arbitrage (23 créneaux = 34h30, au-dessus des 33h
+    # de la règle ; mesuré indispensable à la faisabilité le 26/08/2026).
+    # Avoir eu deux valeurs distinctes ici et là a masqué le problème dix jours.
+    fi_weekly_cap_slots: int = 23
+    fc_weekly_cap_slots: int = 23
     # Horizon étendu réservé aux alternants uniquement (`solve_decomposed`
     # seulement, cf. `decomposed.py::assign_weeks` pour le détail) — None =
     # comportement inchangé, tous les parcours bornés à `weeks`. Retour
@@ -176,7 +181,18 @@ class SolverConfig:
     # machine (cf. `decomposed.default_num_workers`). Remplace le `8` codé en
     # dur, qui n'exploitait que la moitié d'un CPU 16 threads.
     num_workers: int | None = None
-    random_seed: int = 2027  # déterminisme : même graine à chaque palier/run
+    # Dernier recours du solveur décomposé (cf. `decomposed.solve_decomposed`) :
+    # None = valeurs éprouvées (300 s x 8 graines par semaine en échec). Les
+    # abaisser fait échouer un run difficile PLUS VITE, ce qui est préférable
+    # quand on relance en boucle sur des graines différentes
+    # (`scripts/solve_until_ok.py`) — la variance de graine domine le budget.
+    last_resort_seconds: float | None = None
+    last_resort_seeds: int = 8
+    # Tours de la boucle de retour étage 3 -> étage 2 (coupes de Benders
+    # logiques, cf. `decomposed._cuts_from_failed_weeks`). 0 = l'étage 2 décide
+    # une fois pour toutes, sans jamais apprendre de ses échecs.
+    benders_rounds: int = 3
+    random_seed: int = 2027  # même graine à chaque palier d'un même run
     data_root: Path | None = None
     # Résolution en paliers (`solve_tiered`) : fraction de `time_limit_seconds`
     # allouée à chaque palier (ordonnancement, densification S1, confort). La
@@ -324,7 +340,20 @@ class TimetableSolver:
             blocked_by_group = sae_blocked_days_by_group(
                 unlocked, sae_days_by_course, sae_group_labels, groups
             )
-        unlocked = [s for s in unlocked if not s.course_code.upper().startswith("WS")]
+        # cf. `solve_decomposed` : mêmes règles, une SAE déclarée dans
+        # `solver_scheduled_sae` (ex. WSA501D) reste à planifier.
+        from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
+        from cal_iut.solver.decomposed import _tag_scheduled_sae
+
+        scheduled_sae = load_solver_scheduled_sae(
+            (self.config.data_root or Path(__file__).resolve().parents[3]) / "data" / "config"
+        )
+        unlocked = [
+            _tag_scheduled_sae(s, scheduled_sae)
+            for s in unlocked
+            if not s.course_code.upper().startswith("WS")
+            or (s.course_code.upper(), s.semestre) in scheduled_sae
+        ]
         if not unlocked:
             return None
 
@@ -365,6 +394,13 @@ class TimetableSolver:
 
         if self.config.enforce_sequence:
             add_pedagogical_sequence_constraints(model, unlocked, session_starts, groups)
+            # Ordre pédagogique vu par l'étudiant, toutes granularités
+            # confondues (CM promo ↔ TD/TP sous-groupe) — cf.
+            # `constraints.py::cohort_sequence_pairs`. Le modèle joint place
+            # tout le semestre d'un coup : il peut donc porter cette relation
+            # en dur, contrairement au décomposé où elle est graduée à
+            # l'étage 2 puis dure à l'étage 3.
+            add_cohort_sequence_constraints(model, unlocked, session_starts, groups)
 
         if self.config.enforce_calendar:
             add_blocked_calendar_constraints(
@@ -930,6 +966,9 @@ class TimetableSolver:
                 enforce_sae_supervisor_availability=self.config.enforce_sae_supervisor_availability,
                 sae_supervisor_weight=self.config.sae_supervisor_weight,
                 spread_weight=self.config.spread_weight,
+                last_resort_seconds=self.config.last_resort_seconds,
+                last_resort_seeds=self.config.last_resort_seeds,
+                benders_rounds=self.config.benders_rounds,
             )
             if not result.status.startswith("PARTIAL_WEEKS_FAILED"):
                 return result

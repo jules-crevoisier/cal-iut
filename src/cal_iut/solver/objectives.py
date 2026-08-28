@@ -317,12 +317,14 @@ def _link_on_day(
 def add_teacher_monthly_clustering_penalties(
     model: cp_model.CpModel,
     sessions: list[SessionToPlace],
-    session_starts: dict[str, cp_model.IntVar],
+    session_starts: dict[str, cp_model.IntVar] | None,
     availability: list[TeacherAvailability],
     calendar: AcademicCalendar,
     week_offset: int,
     weeks: int,
     weight: int,
+    *,
+    week_vars: dict[str, cp_model.IntVar] | None = None,
 ) -> list[cp_model.LinearExprT]:
     """
     Regroupe les interventions d'un enseignant sur peu de semaines par mois
@@ -342,6 +344,14 @@ def add_teacher_monthly_clustering_penalties(
 
     Le mois est celui du LUNDI de la semaine solveur, pour qu'une semaine à
     cheval sur deux mois compte dans un seul et même mois.
+
+    `week_vars` : variables de SEMAINE déjà existantes (étage 2 du solveur
+    décomposé, `assign_weeks`). Fournies, elles remplacent la division
+    `créneau // 30` qu'il faudrait sinon reconstruire — et surtout elles
+    permettent à cet objectif d'exister en mode `--decomposed`, où il était
+    purement absent : mesuré sur le run `odd26`, ARA intervenait 15 semaines
+    distinctes et JHU 14, alors que tous deux demandent 1 à 2 semaines par
+    mois (soit ~10 au plus sur la période). Cf. docs/DATA.md §63.
     """
     if weight <= 0:
         return []
@@ -368,6 +378,8 @@ def add_teacher_monthly_clustering_penalties(
     week_var_cache: dict[str, cp_model.IntVar] = {}
 
     def week_var(session_id: str) -> cp_model.IntVar:
+        if week_vars is not None:
+            return week_vars[session_id]
         cached = week_var_cache.get(session_id)
         if cached is None:
             cached = model.new_int_var(0, max_week, f"clwk_{session_id}")
@@ -519,7 +531,7 @@ def add_sae_supervisor_soft_penalties(
 
     penalties: list[cp_model.LinearExprT] = []
     for session in sessions:
-        if session.course_code.upper().startswith("WS"):
+        if session.is_unplaced_sae:
             continue
         for teacher_code in session.teacher_codes:
             blocked_times = blocked_times_by_teacher.get(teacher_code)
@@ -546,5 +558,132 @@ def add_sae_supervisor_soft_penalties(
             model.add(pen == weight).only_enforce_if(hit)
             model.add(pen == 0).only_enforce_if(hit.Not())
             penalties.append(pen)
+
+    return penalties
+
+
+def add_cm_spread_penalties(
+    model: cp_model.CpModel,
+    sessions: list[SessionToPlace],
+    session_starts: dict[str, cp_model.IntVar],
+    groups: list,
+    weeks: int,
+    weight: int,
+    threshold: int = 2,
+) -> list[cp_model.IntVar]:
+    """
+    Pénalise, PAR PROMOTION et par jour, les créneaux de CM au-delà de
+    `threshold` sur une même journée — retour utilisateur (27/08/2026, en
+    regardant le run réel) : « pour les S1 c'est juste impossible ils ont des
+    journées entières de CM, c'est trop chiant ». Une journée BUT1 vue en
+    production : 6 CM d'affilée, 5 matières différentes, aucun TD/TP entre
+    les deux.
+
+    Molle, pas une interdiction : un cours peut légitimement avoir deux CM la
+    même semaine sans qu'ils tombent forcément sur des jours différents (pas
+    assez de jours disponibles certaines semaines très chargées) — le but
+    est de DÉCOURAGER la concentration, pas de la rendre impossible et
+    risquer de faire échouer une semaine par ailleurs correcte.
+
+    Regroupé par PROMOTION (`group.kind == "promo"`), pas par groupe brut :
+    c'est la promo entière qui vit un CM, la cohorte concernée est donc la
+    promotion, jamais un TD/TP.
+    """
+    if weight <= 0:
+        return []
+
+    promo_ids = {g.id for g in groups if getattr(g, "kind", None) == "promo"}
+    by_promo: dict[str, list[SessionToPlace]] = defaultdict(list)
+    for s in sessions:
+        if str(getattr(s.session_type, "value", s.session_type)) != "CM":
+            continue
+        for gid in s.group_ids:
+            if gid in promo_ids:
+                by_promo[gid].append(s)
+
+    slots_per_week = DAYS_PER_WEEK * SLOTS_PER_DAY
+    penalties: list[cp_model.IntVar] = []
+    for promo_id, cm_sessions in by_promo.items():
+        if len(cm_sessions) <= threshold:
+            continue
+        for week in range(weeks):
+            for day in range(DAYS_PER_WEEK):
+                day_base = week * slots_per_week + day * SLOTS_PER_DAY
+                day_end = day_base + SLOTS_PER_DAY - 1
+                on_day: list[cp_model.IntVar] = []
+                for s in cm_sessions:
+                    ind = model.new_bool_var(f"cmspread_{promo_id}_{s.id}_w{week}_d{day}")
+                    start = session_starts[s.id]
+                    model.add(start >= day_base).only_enforce_if(ind)
+                    model.add(start <= day_end).only_enforce_if(ind)
+                    before = model.new_bool_var(f"cmspread_bef_{promo_id}_{s.id}_w{week}_d{day}")
+                    after = model.new_bool_var(f"cmspread_aft_{promo_id}_{s.id}_w{week}_d{day}")
+                    model.add(start <= day_base - 1).only_enforce_if(before)
+                    model.add(start >= day_end + 1).only_enforce_if(after)
+                    model.add_bool_or([before, after]).only_enforce_if(ind.Not())
+                    on_day.append(ind)
+
+                count = model.new_int_var(0, len(on_day), f"cmspread_cnt_{promo_id}_w{week}_d{day}")
+                model.add(count == sum(on_day))
+                excess = model.new_int_var(0, len(on_day), f"cmspread_exc_{promo_id}_w{week}_d{day}")
+                model.add_max_equality(excess, [0, count - threshold])
+                pen = model.new_int_var(0, weight * len(on_day), f"cmspread_pen_{promo_id}_w{week}_d{day}")
+                model.add(pen == excess * weight)
+                penalties.append(pen)
+
+    return penalties
+
+
+def add_course_grouping_penalties(
+    model: cp_model.CpModel,
+    sessions: list[SessionToPlace],
+    session_starts: dict[str, cp_model.IntVar],
+    course_pairs: list[tuple[str, str]],
+    weight: int,
+) -> list[cp_model.IntVar]:
+    """
+    Pénalise, pour une paire de cours donnée et un groupe partagé, deux
+    séances tombant sur des jours DIFFÉRENTS la même semaine — l'inverse
+    de `add_cm_spread_penalties` : ici on encourage le REGROUPEMENT.
+
+    Retour utilisateur (27/08/2026) : pour les alternants BUT3-DEV-FC, WRA507D
+    et WSA501D devraient si possible former des journées complètes plutôt que
+    d'étaler leurs séances — la présence à l'IUT de ces étudiants est limitée
+    à quelques jours par mois, autant les remplir plutôt que les fragmenter.
+
+    Suppose `session_starts` local à UNE semaine (`num_weeks == 1`, le cas
+    d'une régénération ciblée) : le jour se lit directement par division
+    entière du créneau, sans repasser par le numéro de semaine.
+
+    `course_pairs` : liste de `(code_a, code_b)`. Seules les paires de
+    séances qui partagent au moins un groupe brut sont comparées — sans quoi
+    la pénalité comparerait des séances vécues par des étudiants différents.
+    """
+    if weight <= 0 or not course_pairs:
+        return []
+
+    penalties: list[cp_model.IntVar] = []
+    for code_a, code_b in course_pairs:
+        a_sessions = [s for s in sessions if s.course_code == code_a]
+        b_sessions = [s for s in sessions if s.course_code == code_b]
+        if not a_sessions or not b_sessions:
+            continue
+        for sa in a_sessions:
+            for sb in b_sessions:
+                if not (set(sa.group_ids) & set(sb.group_ids)):
+                    continue
+                day_a = model.new_int_var(0, DAYS_PER_WEEK - 1, f"grp_daya_{sa.id}_{sb.id}")
+                day_b = model.new_int_var(0, DAYS_PER_WEEK - 1, f"grp_dayb_{sa.id}_{sb.id}")
+                model.add_division_equality(day_a, session_starts[sa.id], SLOTS_PER_DAY)
+                model.add_division_equality(day_b, session_starts[sb.id], SLOTS_PER_DAY)
+
+                diff = model.new_bool_var(f"grp_diff_{sa.id}_{sb.id}")
+                model.add(day_a != day_b).only_enforce_if(diff)
+                model.add(day_a == day_b).only_enforce_if(diff.Not())
+
+                pen = model.new_int_var(0, weight, f"grp_pen_{sa.id}_{sb.id}")
+                model.add(pen == weight).only_enforce_if(diff)
+                model.add(pen == 0).only_enforce_if(diff.Not())
+                penalties.append(pen)
 
     return penalties

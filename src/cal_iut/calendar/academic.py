@@ -178,9 +178,37 @@ class AcademicCalendar:
         return blocked
 
 
+# Date NUMÉRIQUE française ("23/09/26", "7/10/2026") — présente dans le CSV
+# CONTRAINTES ENSEIGNANTS depuis la mise à jour du 25/08/2026 (Valérie Mariot :
+# "mercredi 23/09/26 toute la journée - mercredi 7/10/26"). Sans ce format, le
+# fragment ne livrait que son nom de jour et était lu comme une indisponibilité
+# RÉCURRENTE ("tous les mercredis de l'année") au lieu de deux dates isolées —
+# bug réel, cf. `scripts/build_contraintes.py::_tokenize`.
+_NUMERIC_DATE_RE = re.compile(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{2,4})(?!\d)")
+
+
+def _parse_numeric_fr_date(text: str) -> date | None:
+    m = _NUMERIC_DATE_RE.search(text)
+    if not m:
+        return None
+    day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if year < 100:
+        # Année sur 2 chiffres : l'outil ne couvre que l'année universitaire
+        # 2026-2027, pas de fenêtre glissante à inventer.
+        year += 2000
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
 def parse_french_date(text: str, default_year: int | None = None) -> date | None:
     text = text.strip().lower()
     text = text.replace("é", "e").replace("è", "e").replace("ê", "e").replace("û", "u").replace("ô", "o")
+
+    numeric = _parse_numeric_fr_date(text)
+    if numeric is not None:
+        return numeric
 
     m = re.search(
         r"(lundi|mardi|mercredi|jeudi|vendredi)?\s*(\d{1,2})\s+"

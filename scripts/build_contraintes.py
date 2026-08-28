@@ -44,6 +44,13 @@ _DATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Date NUMÉRIQUE ("23/09/26", "7/10/2026") : apparue dans le CSV CONTRAINTES
+# ENSEIGNANTS le 25/08/2026 (Valérie Mariot). Sans ce format, `_tokenize` ne
+# voyait plus qu'un nom de jour et produisait un token RÉCURRENT
+# ("tous les mercredis") au lieu de deux dates isolées — bug réel : VMA se
+# retrouvait indisponible tous les mercredis de l'année universitaire.
+_NUMERIC_DATE_RE = re.compile(r"(?<!\d)(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{2,4})(?!\d)")
+
 
 def find_source(fragment: str) -> Path:
     """Retrouve un fichier source par fragment de nom (les vrais noms portent
@@ -58,6 +65,17 @@ def parse_fr_date(text: str, default_year: int | None = None) -> tuple[date | No
     """"lundi 26 octobre 2026" -> (date(2026,10,26), "lundi"). Année déduite du
     mois si absente (sept.-déc. = 2026, janv.-août = 2027, calage année
     universitaire)."""
+    numeric = _NUMERIC_DATE_RE.search(text)
+    if numeric:
+        day, month, year = (int(numeric.group(i)) for i in (1, 2, 3))
+        if year < 100:
+            year += 2000  # année universitaire 2026-2027 uniquement
+        jour = next((d for d in DAY_FR if d in text.lower()), None)
+        try:
+            return date(year, month, day), jour
+        except ValueError:
+            return None, None
+
     m = _DATE_RE.search(text)
     if not m:
         return None, None
@@ -540,10 +558,20 @@ def _parse_volumes(text: str) -> dict[str, int]:
 
 def _parse_teachers(text: str) -> list[str]:
     """"AFR : FROLI ANTHONYAHA : HARAOUBIA AMINE" -> ["AFR", "AHA"] (les
-    trigrammes sont concaténés sans séparateur dans l'export)."""
+    trigrammes sont concaténés sans séparateur dans l'export).
+
+    Pas de `\\b` devant le trigramme : c'est justement le cas concaténé qui le
+    rendait faux. Sur "ALO : LOIZON ARIANESLO : LOIZON Sébastien" (WS501D), le
+    "SLO" collé à "ARIANE" ne commence à aucune frontière de mot — Sébastien
+    Loizon disparaissait donc silencieusement des enseignants de cette SAE et
+    n'était jamais compté comme référent indisponible ces jours-là. Bug réel
+    trouvé le 25/08/2026 en implémentant le plan d'Ariane Loizon, qui lui
+    confie 9 séances. Le deux-points suffit à ancrer la recherche : le
+    trigramme est toujours les 3 majuscules qui le précèdent immédiatement.
+    """
     if not text or text.strip().lower() in {"aucun", ""}:
         return []
-    return re.findall(r"\b([A-Z]{3})\s*:", text)
+    return list(dict.fromkeys(re.findall(r"([A-Z]{3})\s*:", text)))
 
 
 def build_dates_sae() -> dict:
@@ -626,6 +654,25 @@ def build_dates_sae() -> dict:
 
 _SEMESTRE_TO_BUT = {"S1": "BUT1", "S2": "BUT1", "S3": "BUT2", "S4": "BUT2", "S5": "BUT3", "S6": "BUT3"}
 
+# Événements ANNULÉS après l'export du fichier source "Dates MMI ... DATES OK".
+# Le CSV fait foi tant qu'il est à jour ; quand une annulation arrive par un
+# autre canal (retour utilisateur), elle est câblée ici plutôt qu'éditée dans
+# le CSV — la prochaine réexportation de la feuille Google écraserait la
+# correction, et on perdrait la trace de la décision.
+# Clé = (date ISO, fragment de motif), casse ignorée sur le motif.
+_CANCELLED_FIXED_EVENTS: set[tuple[str, str]] = {
+    # Retour utilisateur (25/08/2026) : « on peut retirer l'heure de VSS le
+    # 17/09, c'est annulé, donc on peut la remettre normal. » Le créneau
+    # 9h30-11h du 17/09/2026 (Amphi GMP/GEII, S1) redevient donc plaçable.
+    ("2026-09-17", "vss"),
+}
+
+
+def _is_cancelled(day: date, motif: str) -> bool:
+    iso = day.isoformat()
+    low = (motif or "").lower()
+    return any(d == iso and fragment in low for d, fragment in _CANCELLED_FIXED_EVENTS)
+
 
 def _parcours_from_but_column(value: str) -> list[str]:
     """"S5-DEV-FC" -> ["BUT3-DEV-FC"] ; "S1" -> ["BUT1"] ; "ADMIN" -> []."""
@@ -648,10 +695,49 @@ def _hhmm(text: str) -> int | None:
     return int(m.group(1)) * 60 + (int(m.group(2)) if m.group(2) else 0)
 
 
+def _evenements_supplementaires() -> list[dict]:
+    """Événements annoncés APRÈS l'export de l'établissement.
+
+    `contraintes/10_dates_fixes.json` est regénéré à chaque build depuis le CSV :
+    une ligne ajoutée à la main y serait effacée sans prévenir, et modifier le
+    CSV de l'établissement le ferait diverger de la version officielle. D'où ce
+    fichier de configuration, fusionné ici — cf.
+    `data/config/evenements_supplementaires.yaml`, qui porte pour chaque entrée
+    qui l'a demandée et quand.
+    """
+    chemin = ROOT / "data" / "config" / "evenements_supplementaires.yaml"
+    if not chemin.exists():
+        return []
+    import yaml
+
+    data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+    resultat: list[dict] = []
+    for entree in data.get("evenements", []) or []:
+        resultat.append({
+            "date": str(entree["date"]),
+            "debut": entree.get("debut"),
+            "fin": entree.get("fin"),
+            "debut_minutes": _hhmm(entree.get("debut") or ""),
+            "fin_minutes": _hhmm(entree.get("fin") or ""),
+            "salle": entree.get("salle"),
+            "parcours": list(entree.get("parcours") or []),
+            "parcours_source": "config",
+            "motif": str(entree.get("motif") or ""),
+            # Trace de l'origine : sans elle, impossible de savoir plus tard si
+            # l'établissement a fini par intégrer l'événement à son export (et
+            # donc si la ligne locale fait doublon).
+            "source": "config",
+            "demande_par": entree.get("demande_par"),
+            "le": entree.get("le"),
+        })
+    return resultat
+
+
 def build_dates_fixes() -> dict:
     path = find_source("Dates MMI")
     events: list[dict] = []
     a_fixer: list[dict] = []
+    annules: list[dict] = []
 
     with path.open(encoding="utf-8", newline="") as fh:
         for row in csv.DictReader(fh):
@@ -669,8 +755,14 @@ def build_dates_fixes() -> dict:
                 })
                 continue
 
+            day = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            if _is_cancelled(day, motif):
+                annules.append({"date": day.isoformat(), "motif": motif,
+                                "raison": "annulé (retour utilisateur), cf. _CANCELLED_FIXED_EVENTS"})
+                continue
+
             events.append({
-                "date": date(int(m.group(3)), int(m.group(2)), int(m.group(1))).isoformat(),
+                "date": day.isoformat(),
                 "debut": (row.get("HEURE DE DÉBUT") or "").strip() or None,
                 "fin": (row.get("HEURE DE FIN") or "").strip() or None,
                 "debut_minutes": _hhmm(row.get("HEURE DE DÉBUT") or ""),
@@ -681,6 +773,8 @@ def build_dates_fixes() -> dict:
                 "motif": motif,
             })
 
+    supplementaires = _evenements_supplementaires()
+    events.extend(supplementaires)
     events.sort(key=lambda e: (e["date"], e["debut_minutes"] or 0))
     return {
         "source": path.name,
@@ -692,6 +786,7 @@ def build_dates_fixes() -> dict:
         ),
         "evenements": events,
         "a_fixer": a_fixer,
+        "annules": annules,
     }
 
 
@@ -822,6 +917,21 @@ Arbitrages utilisateur du 10/08/2026 câblés dans ce script :
 9. WRA505C : ALO avant AFR en objectif mou.
 10. WRA308M : bloc de 4h30 sur les 3 derniers TD uniquement.
 11. WR100BU : fenêtres de dates dures par séance.
+
+Arbitrages utilisateur du 25/08/2026 (mise à jour des sources) :
+12. VSS du 17/09/2026 (9h30-11h, Amphi GMP/GEII, S1) ANNULÉ — retiré des
+    événements bloquants (`_CANCELLED_FIXED_EVENTS`), le créneau redevient
+    plaçable. Le CSV source n'a pas été édité (une réexportation de la feuille
+    Google l'écraserait).
+13. WS501D : le plan enseignant d'Ariane Loizon est désormais APPLIQUÉ
+    (annule et remplace l'arbitrage n°8), cf. `data/config/sae_teacher_phases.yaml`.
+    Les 9 séances de Sébastien Loizon, demandées « entre le 26 et le 30
+    octobre », tombaient dans la pause pédagogique de la Toussaint (IUT fermé).
+    Ariane Loizon a confirmé le 26/08/2026 qu'il s'agissait de la semaine
+    PRÉCÉDENTE : du 19 au 23 octobre 2026.
+14. VMA : "mercredi 23/09/26 - mercredi 7/10/26" sont deux DATES isolées, pas
+    une indisponibilité récurrente le mercredi (format numérique désormais
+    reconnu par `parse_fr_date`).
 """
 
 

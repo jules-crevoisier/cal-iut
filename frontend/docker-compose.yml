@@ -1,0 +1,21 @@
+# Confort local uniquement — pour tester l'image avant de pousser vers
+# Dokploy (qui, lui, gère son propre réseau entre services : y définir
+# BACKEND_URL vers le nom du service backend là-bas, ex.
+# `http://cal-iut-api:8000`, pas `host.docker.internal`).
+#
+#   docker compose up --build
+#   → http://localhost:8080  (proxie vers le backend déjà lancé sur la
+#     machine hôte, cf. BACKEND_URL ci-dessous)
+
+services:
+  frontend:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      # `host.docker.internal` : passerelle vers l'hôte depuis un conteneur
+      # Docker Desktop (Windows/Mac) — atteint le `cal-iut serve` lancé en
+      # local sur 127.0.0.1:8000. Sous Docker Engine pur (Linux), remplacer
+      # par l'IP du pont docker0, ou lancer le backend dans un conteneur
+      # sur le même réseau.
+      BACKEND_URL: http://host.docker.internal:8000

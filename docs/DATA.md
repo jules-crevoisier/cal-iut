@@ -4253,3 +4253,924 @@ n'existe plus). Run complet PAS relancé (demande explicite de l'utilisateur,
 "on ne relance pas tout de suite") — la vérification réelle de cette
 dérogation ciblée (résout-elle WR106 sans reproduire l'effet de bord
 systémique du relevé global ?) reste à faire sur le prochain run.
+
+
+## 63. Sources rafraîchies + audit complet du solveur : 6 règles documentées mais jamais appliquées en `--decomposed` (25/08/2026)
+
+Point de départ : mise à jour des sources (`CONTRAINTES ENSEIGNANTS ... (1).csv`,
+`maquette.json`, `voeux EDT 2026-2027.pdf`) et retour utilisateur —
+« l'ordonnancement n'est pas bon, on a eu des exemples de matières qui devaient
+être finies pour commencer, des CM dans les séances qui n'étaient pas présents
+avant les premiers TD ».
+
+### 63.1 Ce qui a été MESURÉ sur le run `odd26` avant de toucher au code
+
+| Mesure | Valeur | Commentaire |
+|---|---|---|
+| Paires CM ↔ TD/TP hors ordre, par cohorte | **790 / 3652** | Jamais contraintes, jamais vérifiées |
+| Relations `before`/`after`, critère « moyenne » | 13 / 89 | Le seul critère modélisé |
+| Relations `before`/`after`, critère strict « A fini avant B » | **89 / 89** | Aucun module n'était réellement terminé avant le suivant |
+| WSA501D placée | **0 / 34** | Filtrée par le test « le code commence par WS » |
+| WR100BU TD n°1 (fenêtre 1-15 sept.) | placé du **21 au 25 sept.** | Fenêtre jamais appliquée en `--decomposed` |
+| WR100BU TD n°3 (fenêtre ≤ 15 oct.) | placé jusqu'au **3 déc.** | idem |
+| ARA (demande : 1-2 semaines/mois) | **15 semaines distinctes** | Objectif absent en `--decomposed` |
+| JHU (« condenser les interventions ») | **14 semaines distinctes** | idem |
+| WRA507D (doit finir en janvier) | jusqu'au **8-12 mars 2027** | Aucun mécanisme de borne haute |
+
+### 63.2 Cause racine du désordre CM/TD/TP : deux objectifs qui se contredisaient
+
+`add_pedagogical_sequence_constraints` n'ordonne que les séances partageant le
+MÊME `group_id` brut. Or un CM porte le groupe `promo` et un TD/TP un
+sous-groupe : **aucune relation d'ordre n'existait entre eux**. Le contrôle
+`pedagogical_order` du tableau de bord reproduisait fidèlement cette limite —
+il affichait donc « 0 séance hors ordre » pendant que 790 paires l'étaient.
+
+Pire, le lissage de l'étage 2 poussait ACTIVEMENT dans le mauvais sens : il
+étalait chaque cours *par type de séance*. Pour WR106 (progression réelle
+TD1-4, TP1-4, CM1, TP5-7, CM2+3), les 3 CM visaient ~1/6, ~1/2 et ~5/6 de
+l'horizon et les 7 TP visaient les mêmes positions — le CM d'ordre 9 était donc
+tiré vers le milieu du semestre exactement là où se trouvait le TP d'ordre 5.
+
+Corrigé des deux côtés plutôt qu'à coups de poids :
+
+- **`cohort_sequence_pairs`** (`solver/constraints.py`) : paires
+  `(avant, après)` de l'ordre pédagogique tel qu'un ÉTUDIANT le vit, par
+  cohorte réelle (`build_student_cohorts` = promo + TD parent + son TP), toutes
+  granularités confondues. 796 paires sur le run complet, celles déjà couvertes
+  par la contrainte existante étant écartées.
+- **Étage 3** (`solve_week_detail`) : contrainte DURE
+  (`add_cohort_sequence_constraints`) — ordonner deux séances déjà en NoOverlap
+  dans la même semaine ne coûte presque rien. La tentative abandonnée du
+  05/08/2026 posait la même barrière à l'échelle du SEMESTRE, d'où son échec.
+- **Étage 2** (`assign_weeks`) : pénalité MOLLE et **graduée**,
+  `poids × nombre de semaines de retard` (`cohort_order_weight`, défaut 60). Un
+  booléen tout-ou-rien laisse toutes les violations équivalentes et ne donne
+  aucun gradient — c'est précisément ce qui avait fait échouer le relevé de
+  poids du 12/08/2026 sur l'ordonnancement inter-matières.
+- **Lissage** (`assign_weeks`) : la semaine visée vient désormais du rang dans
+  la progression COMPLÈTE du cours, plus du rang parmi les séances du même
+  type. Les deux objectifs tirent enfin dans le même sens.
+- **Rééquilibrage** : `_build_sequence_neighbors` connaît ces paires, sinon il
+  aurait défait après coup ce que l'étage 2 venait d'obtenir (même patron que le
+  bug §60 sur les évaluations).
+
+### 63.3 « Matières finies avant de commencer » : critère strict, gradué
+
+Le critère « moyenne » existant (barycentre de A avant celui de B) est
+structurellement incapable de traduire la demande : sur `odd26` il était à 13/89
+pendant que le critère strict était à 89/89 (ex. WR102/WR101 : A = semaines
+3→19, B = semaines 1→13 ; moyenne satisfaite, modules entrelacés tout le
+semestre).
+
+Ajouté — **en plus**, pas en remplacement — un terme
+`strict_ordonnancement_weight` (défaut 50) qui pénalise le CHEVAUCHEMENT en
+semaines entre `max(A)` et `min(B)`, par cohorte réelle. Volontairement plus
+modeste que `ordonnancement_weight` (400) : ~90 couples × un chevauchement
+initial de 10 à 19 semaines écraseraient sinon tous les autres objectifs.
+Arbitrage utilisateur explicite : « strict par cohorte, mou très pondéré » —
+jamais dur, une séparation totale de deux modules étalés sur tout le semestre
+n'étant pas toujours physiquement possible.
+
+Nouveau contrôle `ordonnancement_strict` au tableau de bord, qui rapporte
+l'AMPLEUR du chevauchement (moyenne et pire cas), pas seulement son existence.
+
+### 63.4 Six règles documentées « dures » ou « actives » mais absentes du mode réellement utilisé
+
+Le mode `--decomposed` est celui des runs réels. En auditant ligne à ligne ce
+que le modèle joint pose et ce que le décomposé pose, six règles manquaient :
+
+| Règle | Statut avant | Correctif |
+|---|---|---|
+| `session_date_windows` (WR100BU) | **jamais posée** | Étage 2 (borne la semaine) + étage 3 (borne le jour) |
+| Regroupement mensuel (ARA, JHU) | **jamais posé** | `add_teacher_monthly_clustering_penalties` branché sur `week_var` (étage 2) |
+| Ordre enseignant d'un module (WRA505C) | **jamais posé** | `add_course_teacher_order_penalties` sur `week_var` (étage 2) |
+| Ordre CM ↔ TD/TP par cohorte | inexistant partout | cf. §63.2 |
+| Borne de FIN par cours | inexistant | nouveau `CourseMaxWeekRule` / `max_week_rules` |
+| SAE sans dates à planifier quand même | inexistant | nouveau `solver_scheduled_sae` |
+
+Les trois premières étaient annoncées dans le README et dans
+`contraintes/00_INDEX.md`. C'est la catégorie de défaut la plus coûteuse : une
+règle qu'on croit appliquée n'est jamais re-vérifiée.
+
+### 63.5 Trois bugs de données trouvés en implémentant
+
+1. **VMA — dates numériques.** Le CSV mis à jour écrit
+   « mercredi 23/09/26 toute la journée - mercredi 7/10/26 ». `parse_fr_date` ne
+   connaissait que les mois en toutes lettres : le fragment ne livrait plus que
+   son nom de jour et devenait un token `recurrent_hebdomadaire` — Valérie
+   Mariot se retrouvait indisponible **tous les mercredis de l'année** au lieu
+   de deux jours. Format numérique ajouté dans `parse_fr_date` et
+   `parse_french_date`.
+2. **SLO — trigramme perdu.** `_parse_teachers` ancrait sa recherche sur une
+   frontière de mot. Sur « ALO : LOIZON ARIANESLO : LOIZON Sébastien » (les
+   trigrammes sont concaténés dans l'export), le « SLO » collé à « ARIANE » ne
+   commence à aucune frontière de mot : **Sébastien Loizon n'a jamais compté
+   comme référent de la SAE WS501D**. La frontière retirée, l'extraction est
+   ancrée sur le deux-points. Effet plus large que WS501D : WS103 passe de 1 à 3
+   co-enseignants, WS105 de 1 à 3, WS104 de 1 à 2.
+3. **Second enseignant à zéro sur un cours fusionné.** `_teacher_for_group`
+   comparait un compteur de SÉANCES aux volumes `block.td`/`block.tp` de la
+   maquette, qui sont en CRÉNEAUX. Invisible tant qu'aucun cours fusionné
+   n'avait deux enseignants en partage séquentiel — WSA501D (34 TD, JSA 17 /
+   BTO 17) devenu 17 blocs de 3h donnait **34 créneaux à JSA et 0 à BTO**.
+   Corrigé en comptant les créneaux consommés (`slots_before`).
+
+### 63.6 WS501D : le plan d'Ariane Loizon, enfin appliqué
+
+L'arbitrage n°8 du 10/08/2026 ignorait ce plan. Il est désormais appliqué via
+`data/config/sae_teacher_phases.yaml` (nouveau modèle `SaeTeacherPhase`), qui ne
+change AUCUNE date de SAE — le fichier officiel reste seul maître — mais dit
+QUI encadre QUAND :
+
+```
+FME  19-22 oct.      (10 TD « avant le 23 octobre »)
+SLO  19-23 oct.      (9 TD)
+FME  12 nov.-15 jan. (5 TD)
+ALO  12 nov.-15 jan. (5 TD)
+```
+
+**Contradiction relevée, puis tranchée à la source.** « Entre le 26 et le 30
+octobre » tombe intégralement dans la pause pédagogique de la Toussaint (IUT
+fermé), et le fichier « DATES SAE » n'a aucune fenêtre à ces dates — il saute du
+19-22 octobre au 5-6 novembre. La phase avait été décalée provisoirement au
+2-6 novembre, la question étant posée à Ariane Loizon.
+
+**Réponse le 26/08/2026** (via Kyllian Bresson) : c'était la semaine PRÉCÉDENTE,
+du 19 au 23 octobre. Corrigé. Les jours réellement retenus restent ceux du
+fichier officiel (19-22 octobre, le 23 n'étant pas un jour de SAE WS501D) : une
+phase ne dit que QUI encadre, elle n'ajoute jamais de jour de SAE.
+
+Conséquence à connaître : les 10 TD de Fabrice Meuzeret « avant le 23 octobre »
+et les 9 de Sébastien Loizon partagent désormais la même semaine de 4 jours.
+C'est l'organisation interne de la SAE, décidée par ses enseignants — le solveur
+ne la planifie pas, il n'en tire que leurs indisponibilités.
+
+Effet mesurable : `sae_supervisor_dates_by_teacher` faisait jusqu'ici de tout
+enseignant listé sur une SAE un indisponible sur TOUS ses jours. ALO cumulait
+22 jours bloqués sur la seule WS501D alors qu'elle n'y intervient qu'en fin de
+module — au détriment de la WRA505C, qu'elle demande justement de commencer
+tôt. Elle passe à 6 jours. Un enseignant sans phase déclarée garde tous les
+jours : on ne libère jamais quelqu'un par omission.
+
+**Séance conjointe** (« une séance où Fabrice a les DEV en WS501D et où moi j'ai
+les Créa Comm en WRA505C en même temps ») : la séance d'ordre 17 de la WRA505C
+— la dernière portée par ALO — est bornée aux 6 dates qui sont à la fois jour de
+SAE WS501D et jour de présence IUT des alternants CREACOM-FC (26/27 nov.,
+17/18 déc., 7/8 janv.). Liste **dérivée** des deux calendriers, pas choisie. A
+nécessité un champ `dates:` (liste explicite) sur `SessionDateWindowRule`, la
+plage continue existante ne pouvant pas exprimer des jours épars, et un champ
+`exclure` sur les phases pour qu'ALO soit bien libérée ces jours-là.
+
+**Non modélisé** : la demi-journée de PTUT mensuelle commune DEV/CREACOM.
+`SessionType.PTUT` n'est émis par aucune progression — il n'y a rien à
+contraindre tant que le volume et le porteur ne sont pas décidés.
+
+### 63.7 WSA501D et WRA507D (BUT3-DEV-FC)
+
+WSA501D est la seule SAE marquée `dates_indeterminees: true` : aucune date au
+fichier officiel, donc rien à sanctuariser et, jusqu'ici, 0 séance sur 34.
+Demande utilisateur : la placer, en cours de **3h minimum et 4h30 maximum**,
+étalés sur tout le semestre. Trois mécanismes :
+
+- `solver_scheduled_sae` (nouveau) la sort du filtre « le code commence par
+  WS ». Liste EXPLICITE, jamais déduite de l'absence de dates — une SAE sans
+  date est le plus souvent une donnée à réclamer.
+- `double_sessions.yaml` la découpe en **17 blocs de 3h** : 34 étant pair, il
+  n'y a aucun reliquat de 1h30, alors qu'un découpage en blocs de 4h30 en
+  laisserait un, sous le minimum demandé.
+- `SessionToPlace.is_unplaced_sae` remplace le test sur le préfixe partout où
+  il servait à exempter les SAE de la sanctuarisation : une SAE que le solveur
+  place doit, elle, respecter les jours des AUTRES SAE de son parcours.
+
+Arithmétique vérifiée avant de promettre quoi que ce soit : BUT3-DEV-FC a 10
+semaines de présence IUT (31 août → 12 mars), soit 223 créneaux utilisables une
+fois retirés les jours de WSA502D, pour 207 à placer (173 ressources + 34
+WSA501D). Ça tient, à 93 % de saturation.
+
+`WRA507D` doit finir « environ en janvier » (il allait jusqu'au 8-12 mars) :
+nouveau `max_week_rules`, borne dure semaine-index 18 (25-29 janvier 2027). Les
+8 premières semaines de présence offrent 177 créneaux pour les 173 de
+ressources — seule la SAE a vocation à occuper février et mars.
+
+### 63.8 Vœux EDT « projet Webdocumentaire » (BUT2-DEV-FI S3)
+
+`voeux EDT 2026-2027.pdf` (Anthony Rageul) demande : WR308D CM + TD 1-3 en
+septembre, WR304D/WR311D/WR301D en octobre-novembre, WR308D TP en décembre,
+WS302D CM 1-2 « vers la moitié » de la SAE et CM 3-4 « à la toute fin ».
+
+Traduit en fenêtres DURES pour WR308D seulement (volumes faibles, dates sans
+ambiguïté), et en simple **plancher** `min_week: 4` pour les trois autres.
+Raison : les confiner AUSSI par le haut à fin novembre concentrerait 38 séances
+par cohorte sur 7 semaines dont une entièrement sanctuarisée par WS303D — et le
+document est un vœu, qui précise lui-même que « la répartition CM, TD, TP est à
+revoir en fonction et avec l'absence de Jérôme Thomas ».
+
+Le document annonce « TD 1 à 3 » et « TP 1 à 4 » quand la maquette porte 5 TD et
+3 TP : la fenêtre de septembre ne vise donc que les TD d'ordre 3-5, celle de
+décembre les 3 TP réels. Les CM de WS302D ne sont pas modélisés — cette SAE
+reste organisée par ses enseignants.
+
+### 63.9 Autres mises à jour de sources
+
+- **VSS du 17/09/2026 annulé** (retour utilisateur) : nouveau mécanisme
+  `_CANCELLED_FIXED_EVENTS` dans `build_contraintes.py`, plutôt qu'une édition
+  du CSV source qu'une réexportation de la feuille Google écraserait.
+  L'événement reste tracé dans `10_dates_fixes.json > annules`, et la ligne
+  codée en dur dans `INSTITUTIONAL_EVENTS` (export HTML) a été retirée.
+- **KBR** apparaît pour la première fois dans le CSV (« si possible débuter ses
+  cours à partir de 9h30 ») : la règle était déjà câblée dans
+  `teacher_availability.yaml` depuis le 06/08/2026, la source la confirme
+  simplement. Son indisponibilité du vendredi 20 novembre 10h-11h est traitée
+  comme une journée entière (grain actuel de `forbidden_dates`) — légèrement
+  plus large que la donnée, signalé plutôt que corrigé au forceps.
+- **KNG** ajoute le jeudi à ses disponibilités : déjà couvert par
+  `_REFINED_DISPO_TOKENS` (« jeudi à partir de 14h »).
+- **maquette.json** : TPA rejoint WS302D (remplacement de Jérôme Thomas), WS104
+  et WR504D voient leurs volumes redistribués, WRA408M perd ARA.
+
+### 63.9bis Répartition alternée des enseignants (WRA507D)
+
+Retour utilisateur en cours de chantier : « il y a eu un prof qui s'est rajouté
+[sur la WRA507D], il faut donc découper les cours pour les attribuer au prof et
+si on peut faire en sorte d'alterner les profs entre les cours ce serait bien ».
+La maquette rafraîchie partage effectivement ses 34 TD en 17 pour BTO et 17 pour
+JSA, là où BTO les portait seul.
+
+Le découpage par défaut (`_teacher_for_group`) donne des blocs CONTIGUS — les 17
+premières séances à l'un, les 17 dernières à l'autre. C'est le bon modèle pour
+WRA505C (Ariane Loizon au début, Anthony Froli à la fin) mais pas ici. Nouveau
+modèle `TeacherDistributionRule` avec `mode: alterne`, déclaré dans
+`course_scheduling_rules.yaml`, qui fait tourner les enseignants séance après
+séance **à volume maquette inchangé** : la rotation saute un enseignant dès que
+son quota (compté en créneaux de 1h30, pas en séances — un bloc collé consomme
+sa durée) est épuisé.
+
+Bénéfice secondaire mesurable sur la faisabilité : BTO n'est disponible que le
+mercredi et le jeudi matin. Un bloc de 17 séances consécutives l'obligeait à
+tout caser dans une demi-période, à ~2 séances par semaine sur ses seuls
+créneaux ; une séance sur deux étalée sur tout le semestre est bien plus
+respirable pour l'étage 2.
+
+Appliqué aussi à WSA501D (même paire, même parcours, même semestre) : ses 17
+blocs de 3h alternent 9/8, l'écart d'une unité étant le plus proche possible du
+partage 17/17 en créneaux sans dépasser le quota de l'un des deux.
+
+### 63.9ter Le vrai coupable de la fiabilité : le jeudi après-midi, testé une fois par an au lieu d'une fois par semaine
+
+Le premier run complet avec tous les correctifs ci-dessus tournait encore après
+1 h 55 sans converger. Plutôt que d'attendre, diagnostic en trois temps.
+
+**1. Ce n'est pas l'ordre par cohorte.** Étage 3 relancé semaine par semaine,
+avec puis sans `add_cohort_sequence_constraints` : **exactement les mêmes 7
+semaines échouent** dans les deux cas. Les échecs sont `INFEASIBLE` en 0,1 s —
+prouvés par le présolveur, donc pas une question de budget de recherche.
+
+**2. Ce n'est aucune des nouvelles règles.** Les groupes de contraintes ajoutés
+un par un sur les semaines fautives (durées → NoOverlap → séquence pédagogique →
+ordre cohorte → jeudi PAC → calendrier → fenêtres de dates → événements →
+dispos profs → présence FC → SAE → duos) : la bascule se produit sur
+**`+dispos profs`**, une règle qui n'a pas bougé.
+
+**3. Un seul enseignant.** Retrait des disponibilités d'un prof à la fois sur la
+semaine 16 : retirer **AHA (Amine Haraoubia)** suffit à la rendre `OPTIMAL`.
+
+Le compte est exact. AHA est indisponible le mercredi. L'étage 2 le crédite donc
+de 24 créneaux (30 − 6) en semaine 16 et lui en assigne 22, sous son plafond.
+Mais ses 22 séances de cette semaine sont **toutes en formation initiale**, et le
+jeudi après-midi est réservé aux PAC : il ne dispose en réalité que de 21
+créneaux. Infaisable d'un créneau, et aucune durée de calcul ne pouvait le
+rattraper — seul le rééquilibrage pouvait, d'où les heures passées à déplacer des
+séances.
+
+La cause est un test ANNUEL là où il faut un test HEBDOMADAIRE :
+
+```python
+fi_only_teachers = {tc for tc, ts in by_teacher.items()
+                    if all("FC" not in s.parcours for s in ts)}
+```
+
+« Cet enseignant a-t-il au moins une séance FC dans TOUT le semestre ? » AHA en a
+une. Il conservait donc le jeudi après-midi dans le calcul de capacité de
+**toutes** ses semaines, y compris celles où il n'a que des séances FI. Le
+mécanisme (introduit le 08/08/2026) était juste dans son intention ; son critère
+ne l'était pas.
+
+Corrigé en posant **deux plafonds** au lieu d'un test approximatif, sur les mêmes
+variables indicatrices donc à coût quasi nul :
+
+| Plafond | Porte sur | Capacité de référence |
+|---|---|---|
+| 1 | toutes les séances de l'enseignant | jeudi après-midi **inclus** |
+| 2 | ses seules séances **FI** | jeudi après-midi **exclu** |
+
+Exact quelle que soit la répartition FI/FC réelle de la semaine, et sans jamais
+sous-estimer la capacité d'un enseignant réellement mixte (le plafond 2 n'est
+posé que s'il est effectivement plus contraignant).
+
+Leçon de méthode : les trois quarts du temps de ce chantier sont partis dans un
+run qu'on regardait tourner. Les vingt minutes de bisection qui ont suivi ont
+donné la réponse exacte. Devant une semaine `INFEASIBLE` en 0 s, la bonne réaction
+est de bisecter les groupes de contraintes, pas d'allonger le budget.
+
+**Constat à traiter, découvert au passage : l'étage 2 n'est pas reproductible.**
+Deux exécutions consécutives d'`assign_weeks` sur EXACTEMENT les mêmes données et
+la même graine (`random_seed=2027`) produisent des affectations différentes —
+d'où des semaines qui échouent dans un run et pas dans le suivant. Constaté
+directement pendant ce diagnostic : trois exécutions successives ont donné
+`{6: 260, ...}`, `{6: 251, ...}` puis `{6: 248, ...}`, et le jeu de semaines en
+échec changeait avec.
+
+La cause n'est pas la graine mais la LIMITE DE TEMPS : `max_time_in_seconds`
+combiné à `num_search_workers = 16` rend CP-SAT non déterministe par
+construction — le résultat dépend de quel worker a fini quoi avant l'échéance.
+OR-Tools ne garantit la reproductibilité qu'avec `max_deterministic_time`, dont
+l'unité n'est pas la seconde et demanderait donc une recalibration complète des
+budgets (étage 2, étage 3, retries, dernier recours). Pas fait ici : c'est un
+chantier à part, à décider explicitement, et le README annonce aujourd'hui un
+déterminisme qui ne porte en réalité que sur l'ORDRE d'application des semaines
+(§ « Vitesse : parallélisme »), pas sur le contenu de la solution.
+
+### 63.9quater Le plafond de 22 annulé en §62 n'avait jamais été annulé sur le chemin réellement utilisé
+
+Trouvé en lisant le tableau de bord du premier run complet réussi : le contrôle
+`weekly_cap` affichait « 14 cohorte(s) au-dessus du plafond », toutes à 23 pour
+un plafond de 22.
+
+Le §62 (14/08/2026) conclut noir sur blanc : « Toutes les valeurs par défaut
+(`fi_cap_slots` / `fi_weekly_cap_slots`) revenues à 22 — le relevé global
+n'existe plus nulle part. » C'était vrai pour `assign_weeks` (22) et pour
+`SolverConfig.fi_weekly_cap_slots` (22). Mais **`solve_decomposed` gardait
+`fi_cap_slots: int = 23`** — et c'est lui qui passe la valeur à `assign_weeks`,
+écrasant son défaut. Tous les runs complets depuis le 14/08/2026 tournaient donc
+au plafond que §62 avait explicitement annulé après l'avoir mesuré nuisible
+(2381 → 2134 séances placées sur 5 runs).
+
+Deux enseignements, et c'est le même que celui du §63.4 :
+
+- une valeur par défaut « corrigée » à un seul endroit d'une chaîne d'appel ne
+  l'est pas ; il faut vérifier le point d'entrée réellement utilisé ;
+- le tableau de bord signalait le problème depuis dix jours. Un contrôle rouge
+  qu'on n'explique pas est un bug non diagnostiqué, pas un faux positif.
+
+Corrigé : `fi_cap_slots = 22` dans `solve_decomposed`. La dérogation ciblée
+(`weekly_cap_exceptions`, §62) reste le seul moyen de dépasser 22, pour un
+(parcours, semaine) nommé.
+
+### 63.10 Nouveaux contrôles au tableau de bord
+
+Cinq règles n'avaient aucun verdict recalculé — donc aucun moyen de savoir
+qu'elles étaient violées :
+
+- `cohort_pedagogical_order` — ordre vu par l'étudiant, toutes granularités ;
+- `ordonnancement_strict` — ampleur du chevauchement entre modules ordonnés ;
+- `session_date_windows` — fenêtres de dates réellement respectées ;
+- `course_max_week` — bornes de fin de module ;
+- `sae_solver_scheduled` — volume des SAE que le solveur doit placer.
+
+20 tests dans `tests/test_ordonnancement_2026_08_25.py`, un par défaut mesuré.
+
+
+## 64. Un audit systématique, et une prise en main possible sans l'auteur (26/08/2026)
+
+Deux demandes utilisateur au terme de la session du 25/08 : « cela fait beaucoup
+de bugs que tu trouves, il faudrait auditer tout cela pour essayer de trouver
+tous les bugs possibles », et « pour les années et semestres prochains, d'autres
+personnes doivent pouvoir faire fonctionner cela ».
+
+### 64.1 Pourquoi les tests ne suffisaient pas
+
+Les six règles trouvées absentes du mode `--decomposed` (§63.4) partagent un
+trait qui explique qu'aucun test ne les ait vues : **chaque fonction de
+contrainte marchait parfaitement**. `add_session_date_window_constraints` était
+testée, correcte, et couverte. Elle n'était simplement jamais appelée sur le
+chemin qui produit les emplois du temps réels.
+
+Un test unitaire répond à « cette fonction fait-elle ce qu'elle promet ? ».
+Aucune batterie de tests unitaires ne répond à « cette promesse est-elle tenue
+par le système ? ». D'où un module dédié.
+
+### 64.2 Les quatre familles
+
+`cal-iut audit` ne résout rien : il relit, recompte et confronte. Le classement
+suit les défauts réellement rencontrés, pas une taxonomie théorique.
+
+| Famille | Ce qui se passe | Exemple vécu | Contrôles |
+|---|---|---|---|
+| **Règle déclarée qui ne s'applique pas** | La règle existe, est documentée, testée — et jamais posée | fenêtres de dates, regroupement mensuel, ordre enseignants, plafond de 22 | `couverture.*` |
+| **Règle qui pointe dans le vide** | Un identifiant erroné ne lève rien, la règle est ignorée | un code de cours mal orthographié dans un YAML | `config.*` |
+| **Donnée source mal comprise** | Le parseur produit quelque chose de plausible et faux | « mercredi 23/09/26 » lu comme « tous les mercredis » | `donnees.*` |
+| **Impossibilité arithmétique** | Le compte ne tombe pas juste, découvert après des heures | 22 créneaux FI pour 21 disponibles hors jeudi PAC | `capacite.*` |
+
+Le contrôle le plus utile est `couverture.regle_absente_du_decompose` : il
+compare les contraintes posées par le modèle joint à celles posées par le
+décomposé, et signale toute présence d'un seul côté. Il aurait trouvé les six
+règles manquantes en une seconde, là où il a fallu une relecture ligne à ligne.
+
+C'est volontairement un contrôle TEXTUEL, avec ses limites assumées : il ne
+prouve pas l'équivalence des deux chemins (elle n'existe pas, ils sont
+structurés différemment), il fait remonter à l'écran ce qu'un humain doit
+trancher. Les ré-implémentations en ligne (un plafond, un poids d'objectif, un
+test direct sur `week_var`) sont déclarées avec leur marqueur propre dans la
+table `equivalents`.
+
+### 64.3 Le registre des règles, et ce qu'il refuse de cacher
+
+`coverage_audit.REGLES` liste les règles métier **promises** — par le README,
+par une configuration, par un commentaire de `SolverConfig` — chacune avec le
+contrôle qui la vérifie sur un résultat réel. La liste est écrite à la main :
+la déduire du code reviendrait à demander au code de se noter lui-même.
+
+Une règle sans contrôle n'est pas « probablement bonne », c'est **un bug qui
+n'a pas encore été remarqué**. L'audit les affiche donc explicitement. Au
+démarrage, 8 règles étaient dans ce cas ; six contrôles ont été ajoutés à
+`_rule_checks` dans la foulée :
+
+| Contrôle ajouté | Ce qu'il vérifie | État sur le run analysé |
+|---|---|---|
+| `teacher_monthly_clustering` | Semaines distinctes par enseignant vs 1-2/mois demandées | ARA 12, JHU 8 |
+| `course_teacher_order` | Semaine moyenne de chaque enseignant d'un module | ALO 6,2 puis AFR 19,4 |
+| `alternance_presence` | Aucune séance FC hors semaine de présence IUT | OK |
+| `teacher_availability` | Indisponibilités et listes blanches réellement respectées | OK |
+| `duo_rare_room` | Les deux séances d'un épisode de duo au même créneau | OK |
+| `double_sessions` | Un bloc de 3h ne déborde pas sur le jour suivant | OK |
+
+Restent deux règles sans contrôle *sur le résultat*, et c'est justifié : la
+répartition alternée des enseignants et les phases de SAE se vérifient à
+l'ingestion, pas dans l'emploi du temps produit. Un test empêche cette liste de
+regrossir sans que personne ne s'en aperçoive.
+
+### 64.4 L'audit de capacité : dire l'impossible AVANT de calculer
+
+`capacity_audit` recompte trois choses sans jamais lancer CP-SAT :
+
+1. volume d'une cohorte vs jours où ses étudiants sont présents ;
+2. volume d'un enseignant vs ses disponibilités déclarées sur l'année ;
+3. **volume de FORMATION INITIALE d'un enseignant vs ses créneaux hors jeudi
+   après-midi** — le compte, faux d'une unité, qui a coûté deux heures de calcul
+   le 25/08 (§63.9ter).
+
+Ce sont des bornes supérieures : un dépassement signalé est une impossibilité
+CERTAINE. L'inverse n'est pas vrai, et l'audit ne le prétend pas — passer ce
+contrôle ne garantit pas la faisabilité.
+
+### 64.5 Précision avant exhaustivité
+
+Un audit qui crie à tort cesse d'être lu. La première version produisait cinq
+faux positifs, tous corrigés avant d'aller plus loin :
+
+- 59 modules « sans séance » : c'étaient S2/S4/S6, hors périmètre déclaré ;
+- KBR « indisponible les 5 jours » : il ne commence qu'à 9h30, soit un créneau
+  bloqué par jour — le critère comptait des jours touchés, pas des jours pleins ;
+- ARA « contrainte non interprétée » sur « 1 ou 2 semaines /mois » : la
+  formulation EST reprise, par le champ structuré `monthly_cluster_max_weeks` ;
+- `add_s1_integration_week_lock` « absent du décomposé » : il y est
+  ré-implémenté en ligne, le marqueur cherchait un nom de fonction ;
+- 18 SAE « sans dates » : mêmes semestres hors périmètre.
+
+La moitié des tests de `tests/test_audit.py` vérifie que l'audit **se tait** sur
+des situations normales. C'est aussi important que le reste.
+
+L'audit a également révélé une fragilité chez lui-même : il plantait sur une
+configuration incomplète (`groups.yaml` absent). Un outil de diagnostic doit
+survivre exactement aux situations qu'il est censé diagnostiquer.
+
+### 64.6 Prise en main sans l'auteur
+
+Trois commandes, et `GUIDE.md` qui les enchaîne pour quelqu'un qui n'ouvrira
+jamais le code :
+
+- **`cal-iut doctor`** — état de l'installation, et surtout : *quelle commande
+  taper maintenant*. C'est la commande de secours quand on ne sait plus où on en
+  est. Elle regarde l'INSTALLATION là où l'audit regarde le CONTENU : on ne peut
+  pas auditer ce qui n'est pas encore installé.
+- **`cal-iut refresh`** — télécharge maquette et progression depuis le serveur
+  MMI, **montre ce qui change avant d'écrire quoi que ce soit**, et n'applique
+  qu'avec `--ecrire` en sauvegardant l'ancienne version dans `data/sauvegardes/`.
+  Le diff est MÉTIER (modules ajoutés, volumes ou enseignants modifiés) : un
+  diff textuel sur un JSON d'une seule ligne n'apprend rien. Les horodatages de
+  commentaires, qui bougent seuls, sont explicitement exclus de la comparaison —
+  les signaler noierait les vrais changements.
+- **`cal-iut annee`** — déroule contraintes → séances → audit → résolution, et
+  s'arrête à la première étape qui coince avec une phrase en français.
+
+Exigence tenue et testée : **aucune trace Python n'atteint l'utilisateur**.
+Réseau coupé → on lui apprend `--depuis <dossier>` pour repartir de fichiers
+reçus par mail. JSON corrompu → on lui dit que le fichier a probablement été
+ouvert dans un tableur. Fichier manquant → on le nomme.
+
+Un bug trouvé en écrivant ces tests : sous Windows, un nom de fichier contenant
+« É » peut être stocké en forme décomposée (E + accent combinant). Le docteur
+annonçait « fichier manquant » sur des fichiers bien présents. La comparaison
+est désormais insensible aux accents et à la casse.
+
+### 64.7 La boucle de résolution
+
+`scripts/solve_until_ok.py` relance avec des graines différentes et garde le
+**meilleur** run selon un score lexicographique — séances manquantes, puis ordre
+CM/TD/TP cassé, puis chevauchement des modules ordonnés, puis trous. L'ordre
+traduit une hiérarchie métier, pas une somme pondérée : une séance non placée ne
+se rattrape par aucune amélioration de confort.
+
+Justification : le solveur n'est pas reproductible (§63.9ter). Relancer avec une
+autre graine est le levier le plus efficace pour sortir d'un échec local, et
+c'est déjà la stratégie interne de `_solve_week_with_retry` — appliquée ici à
+l'échelle du run entier.
+
+Deux réglages ont été rendus pilotables pour que la boucle soit efficace :
+
+- `--last-resort-seconds` / `--last-resort-seeds` : le dernier recours coûtait
+  jusqu'à 40 minutes par semaine en échec (8 graines × 300 s). En boucle, dix
+  tentatives courtes valent mieux qu'une qui s'acharne.
+- `--attempts` : `cal-iut solve` relançait TOUT le pipeline 3 fois en interne,
+  triplant la durée de chaque tentative sans apporter de diversité
+  supplémentaire — la boucle extérieure fait déjà ce travail, en journalisant.
+
+Chaque tentative est consignée dans `data/generated/solve_runs.jsonl`.
+
+
+## 65. Chercher les bugs qu'on ne connaît pas : 8 défauts réels trouvés par exploration (26/08/2026)
+
+Remarque de l'utilisateur après la session d'audit : « tu as fait des tests sur
+ce que tu connais, il faut explorer pour trouver les bugs ». Elle est juste.
+Les 229 tests d'alors encodaient tous un défaut DÉJÀ rencontré — de la
+non-régression, aveugle sur l'inconnu.
+
+Trois techniques ont été employées, aucune ne partant de ce qu'on savait.
+
+| Technique | Ce qu'elle cherche | Outil |
+|---|---|---|
+| **Propriétés** | Un invariant vrai pour TOUTE entrée valide ; les entrées sont fabriquées, y compris celles auxquelles personne ne pense | Hypothesis |
+| **Relations métamorphiques** | Des propriétés entre DEUX exécutions : « retirer une séance ne rend jamais infaisable », « contraindre plus ne débloque jamais » | — |
+| **Vérificateur indépendant** | Recontrôler chaque solution avec du code qui ne partage rien avec le solveur — sinon les deux se trompent ensemble | — |
+
+### 65.1 Le plus grave : quatre double-réservations de salle EN PRODUCTION
+
+Le run `odd26`, celui qui servait de référence, envoyait **quatre fois deux
+groupes dans la même pièce au même créneau** (H.007, H.008, H.201, H.203).
+
+Cause : la branche « salle de duo » d'`assign_rooms` prenait sa salle sans
+jamais consulter `room_schedule`. Une séance ordinaire traitée plus tôt pouvait
+déjà l'occuper. C'est exactement le défaut corrigé le 06/08/2026 sur la branche
+voisine `same_room` — il subsistait trois lignes plus haut.
+
+Pourquoi personne ne l'avait vu : le tableau de bord vérifiait la CAPACITÉ des
+salles, jamais leur OCCUPATION. La règle « une salle n'accueille qu'un cours à
+la fois » était trop évidente pour qu'on pense à la contrôler. Nouveau contrôle
+`room_double_booking`. Vérifié sur les données réelles : **4 collisions → 0, et
+aucune séance privée de salle**.
+
+Le correctif retombe sur la sélection normale quand la salle de duo est prise :
+le duo perd sa salle dédiée — un désagrément — là où le conflit envoyait deux
+groupes au même endroit.
+
+### 65.2 L'édition manuelle acceptait deux superpositions
+
+`validate_move` est la porte par laquelle un humain peut casser un planning
+valide. Elle répondait « OK » dans deux cas :
+
+1. **La durée était ignorée.** La comparaison portait sur le créneau de DÉPART :
+   un bloc de 3h occupant les créneaux 3 et 4 restait invisible pour qui
+   déposait une séance sur le créneau 4.
+2. **La cohorte était ignorée.** Les `group_ids` bruts étaient comparés : poser
+   un TD sur le créneau du CM de sa propre promotion ne levait aucun conflit,
+   alors que ce sont les mêmes étudiants. Le solveur, lui, raisonne par cohorte
+   (`build_student_cohorts`) depuis toujours — la validation manuelle n'avait
+   jamais suivi.
+
+Corrigé en comparant des INTERVALLES occupés et en passant par les cohortes
+réelles. `validate_move` reçoit désormais `sessions_by_id` et `groups`.
+
+### 65.3 La mesure de qualité était fausse — et elle pilote l'apprentissage
+
+`compute_quality` produit LE nombre de trous du projet, affiché partout et
+réinjecté dans `feedback/weights.py` pour ajuster les poids de l'objectif.
+Personne ne la vérifiait. Deux défauts :
+
+- **Trous surcomptés.** Seul le créneau de départ d'une séance était
+  enregistré : un bloc de 3h aux créneaux 3-4 suivi d'un cours au créneau 5 —
+  donc sans la moindre interruption — comptait pour un trou. Tous les cours en
+  blocs (WR110, WR104, WR106, WRA308M, WSA501D) étaient concernés.
+- **« Journées isolées » toujours à zéro.** La mesure agrégeait par JOUR DE LA
+  SEMAINE sur tout le semestre : elle ne se déclenchait que si un groupe n'avait
+  qu'une seule séance de toute l'année un lundi. Trois lundis à un seul cours
+  renvoyaient 0. La mesure n'a jamais rien signalé depuis sa création.
+
+### 65.4 L'export CSV n'était pas exploitable
+
+Trois défauts, invisibles depuis le code, immédiats pour qui ouvre le fichier :
+
+- **aucune date** — seulement un numéro de semaine interne, à convertir soi-même ;
+- **un numéro de semaine faux** : `week = index + 1` donnait « semaine 1 » là où
+  l'interface affiche « Semaine 2 ». Deux exports du même planning se
+  contredisaient d'une semaine ;
+- **un tri alphabétique sur le libellé du jour** : « Jeudi » sortait avant
+  « Lundi » dans le tableur.
+
+L'export porte maintenant `date` (ISO), le numéro de semaine DÉPARTEMENT (celui
+de l'interface), l'index solveur pour la traçabilité, et un tri chronologique.
+
+### 65.5 Deux pièges latents, signalés plutôt que corrigés au forceps
+
+- **Un événement à 13h00 ne bloque rien** : la grille n'a aucun créneau entre
+  12h30 et 14h. C'est correct — on n'y place rien — mais silencieux : un
+  « 13h00 Conseil » saisi sans heure de fin aurait l'air pris en compte.
+  Aucun événement réel n'est dans ce cas ; contrôle `donnees.evenement_sans_creneau`
+  ajouté pour le jour où.
+- **Un seul amphi ordinaire pour deux promotions qui en ont besoin.** BUT1 (120
+  étudiants) et BUT2-DEV-FI (56) ne tiennent que dans H.018 (150) ; la salle
+  suivante fait 36 places. Or **le solveur ne modélise pas les salles du tout** :
+  rien ne l'empêche de programmer les deux CM au même créneau, auquel cas
+  l'affectation retombe sur la salle d'examen puis, silencieusement, sur une
+  salle trop petite. 95 séances concernées. Contrôle `capacite.salles_rares`.
+
+### 65.6 Ce que l'exploration a trouvé SAIN
+
+Aussi important que les défauts, et à consigner pour ne pas y revenir :
+
+- **le calendrier** — 17 propriétés d'aller-retour date ↔ (semaine, jour), y
+  compris les bords, week-ends, fériés et index hors bornes : aucun écart ;
+- **la fusion maquette + progression** — 0 écart de volume sur les 182 modules,
+  et 0 progression incohérente avec ses volumes ;
+- **le périmètre des groupes** — chaque TP a un TD parent, les périmètres ne
+  traversent jamais deux parcours, les liens sont symétriques ;
+- **la boucle de feedback** — séparateurs cohérents entre écriture et lecture.
+
+### 65.7 Un test de propriété ne vaut que si ses entrées sont atteignables
+
+Le premier générateur de plannings aléatoires produisait des situations
+impossibles — trois CM simultanés pour la même promotion, se disputant les deux
+amphis — et « trouvait » ainsi des violations de capacité qui n'étaient que la
+conséquence d'une entrée que le solveur n'aurait jamais produite.
+
+Corrigé en imposant au générateur les mêmes invariants que le solveur (pas deux
+séances d'une même cohorte ni d'un même enseignant au même créneau). C'est le
+piège classique de ce style de test : un faux positif coûte plus cher qu'un test
+absent, parce qu'il fait perdre confiance dans tout le reste.
+
+### 65.8 Accessibilité : un seul attribut `aria-*` dans toute l'application
+
+Même méthode appliquée à l'interface. L'application React comptait exactement
+**un** attribut `aria-*` : sa structure n'existait que visuellement.
+
+- la recherche globale n'était pas annoncée comme boîte de dialogue, ne piégeait
+  pas le focus (la tabulation partait derrière, invisible et inatteignable à la
+  souris), ne le restituait pas à la fermeture, et son nombre de résultats
+  n'existait que pour l'œil ;
+- les huit onglets étaient huit boutons indifférenciés — rien ne disait lequel
+  était actif ;
+- le bouton « × » de fermeture se lisait « signe multiplication ».
+
+Ajoutés : `role="tab"`/`aria-selected`, `role="dialog"`/`aria-modal` avec piège
+et restitution du focus, `role="listbox"`/`option` et annonce `aria-live` du
+nombre de résultats, lien d'évitement, focus visible au clavier, cibles tactiles
+de 44 px, respect de `prefers-reduced-motion`. Pour un établissement public, le
+RGAA n'est pas une option.
+
+
+## 66. Le reliquat de 3,5 % : rendre l'information à l'étage 2, et assumer le reste à la main (26/08/2026)
+
+Le meilleur run atteint **2321 séances placées sur 2406 — 96,5 %**. Les 85
+restantes ne tiennent ni à un manque de temps de calcul, ni à un manque de
+capacité. Ce qui a été mesuré avant de conclure :
+
+| Hypothèse testée | Mesure | Verdict |
+|---|---|---|
+| Manque de capacité globale | cohorte la plus chargée à **69 %** d'occupation | écartée |
+| Horizon trop court | l'étendre ne change **rien** | écartée |
+| Manque de temps CP-SAT | **8 semaines sur 24 prouvées infaisables en 0,0-0,1 s**, zéro timeout | écartée |
+| Mauvais réglage de l'étage 2 | plafond 22/23, marge physique 0 à 4, pénalité d'inconfort : tout dans le bruit (4,3 à 6,3 semaines KO, variance de 3 à 6 à configuration identique) | écartée |
+
+Le diagnostic décisif est ailleurs, et il est **combinatoire** : sur une semaine
+en échec, la cohorte BUT3-DEV-FC seule est OPTIMAL, l'enseignant Barthélémy
+Tomasina seul est OPTIMAL, **les deux ensemble sont INFEASIBLE**. Ses blocs de
+3h, cantonnés au mercredi et au jeudi matin, repoussent les autres séances vers
+des jours où les enseignants partagés avec les CREACOM-FC sont déjà pris.
+
+### 66.1 Le défaut d'architecture, énoncé simplement
+
+L'étage 2 (`assign_weeks`) répartit les séances en semaines à partir de
+**comptages** par ressource : tant de créneaux pour cette cohorte, tant pour cet
+enseignant, sous plafond hebdomadaire. L'étage 3 (`solve_week_detail`) doit
+ensuite trouver un **horaire réel** où rien ne se chevauche et où chaque
+enseignant tombe sur ses propres créneaux.
+
+Les deux ne sont pas équivalents. Un comptage sous plafond ne garantit aucune
+disposition réalisable — c'est la faiblesse connue de toute décomposition à deux
+étages (cf. §14). Et jusqu'ici, **rien ne remontait** : l'étage 3 échouait, le
+rééquilibrage déplaçait quelques séances au jugé, et l'étage 2 reproposait
+indéfiniment des répartitions de la même famille, sans jamais apprendre ce qui
+venait d'être démontré impossible.
+
+### 66.2 La coupe : rendre à l'étage 2 ce que l'étage 3 a prouvé
+
+Correctif implémenté : une **décomposition de Benders logique**. Quand l'étage 3
+prouve qu'une semaine est infaisable, on réinjecte cette preuve dans l'étage 2
+sous forme d'interdiction explicite, et on recommence.
+
+```
+somme(indicateurs « cette séance est en semaine w ») <= |S| - 1
+```
+
+soit, en français : « ces séances-là, **toutes ensemble** dans cette semaine-là,
+c'est impossible — trouve autre chose ».
+
+Deux précautions font toute la valeur de la chose (`_cuts_from_failed_weeks`) :
+
+- **Ne couper que le PROUVÉ.** Une semaine simplement trop lente (`UNKNOWN`) n'a
+  rien démontré ; l'interdire écarterait peut-être la bonne solution. Seul un
+  `INFEASIBLE` produit une coupe. Coût négligeable puisque ces preuves tombent
+  en 0,1 s.
+- **Couper le plus PETIT sous-ensemble possible.** Interdire les 250 séances
+  d'une semaine n'apprend presque rien : l'étage 2 déplace une séance et
+  recommence. On cherche donc la cohorte responsable — celle qui, seule, rend
+  déjà la semaine infaisable — et on ne coupe qu'elle. La coupe devient
+  beaucoup plus contraignante, donc beaucoup plus informative.
+
+Une coupe est **valide par construction** : elle n'exclut jamais une solution
+réalisable, puisqu'elle ne décrit qu'une combinaison démontrée impossible.
+Réglable par `--benders-rounds` (0 restaure le comportement d'avant).
+
+### 66.3 Ce que la mesure a donné
+
+<!-- RESULTAT -->
+
+### 66.4 Assumer le reliquat : l'onglet « À placer »
+
+Décision de l'utilisateur, prise en connaissance des mesures ci-dessus :
+accepter le reliquat et le placer à la main, **à condition que l'interface le
+permette**. C'est ce que fait le nouvel onglet.
+
+Avant, ces séances **disparaissaient sans bruit**. Elles n'existaient dans
+aucune vue, aucun export, aucun compteur : le planning avait l'air complet alors
+qu'il manquait des heures d'enseignement. C'était le pire des trois états
+possibles — pire qu'un échec visible, et pire qu'un placement imparfait.
+
+Trois routes, et un principe : **on ne demande jamais à la personne de deviner
+un créneau.**
+
+| Route | Ce qu'elle fait |
+|---|---|
+| `GET /placements/manquantes` | Inventaire, calculé **par différence** (séances à placer moins séances placées) plutôt que lu dans un champ du solveur — il reste ainsi juste quelle que soit la raison de l'absence : reprise de run partiel, régénération interrompue, correction manuelle |
+| `GET /placements/{id}/creneaux-libres` | Créneaux où la séance **peut réellement** aller — même moteur que les suggestions du glisser-déposer, mais balayant tout l'horizon : une séance jamais placée n'a pas de position d'origine autour de laquelle chercher |
+| `POST /placements/{id}/placer` | Pose la séance. `PATCH /placements/{id}` ne sait que DÉPLACER : il cherche la séance dans le planning et rend 404 si elle n'y est pas — précisément le cas de toutes celles-ci |
+
+Le placement repasse par **exactement** les mêmes contrôles, dans le même
+ordre, que le glisser-déposer : règles institutionnelles d'abord (jeudi PAC,
+jours SAE sanctuarisés, événements du planning officiel, ordre pédagogique,
+indisponibilités enseignantes déclarées, synchronisation duo — jamais
+contournables, même en forçant), conflits de ressources ensuite (groupe,
+enseignant, salle — contournables via `force`, un humain pouvant avoir une
+bonne raison ponctuelle). Une porte neuve vers le planning ne doit pas laisser
+passer ce que la porte voisine interdit.
+
+Côté écran : chaque séance se déplie sur des créneaux déjà vérifiés, présentés
+en clair — « mercredi 14 octobre, 09h30, salle H.104 » — et un seul bouton
+« Placer ici ». Les trigrammes enseignants sont résolus en « Prénom NOM » : la
+personne qui reprendra ce travail l'an prochain n'a pas à connaître le
+glossaire. Une phrase indique le motif probable de la difficulté (bloc long,
+plusieurs enseignants à réunir, disponibilités restreintes), toujours annoncée
+comme probable — CP-SAT ne rend aucune justification d'infaisabilité, et tout
+ce qui serait présenté comme une certitude serait inventé.
+
+Quand aucun créneau ne convient, l'écran ne se contente pas de rester vide : il
+nomme les deux issues réelles — régénérer la semaine entière (elle réarrange
+les autres cours pour faire de la place) ou assouplir une contrainte dans les
+fichiers de configuration.
+
+
+## 67. Six défauts réels trouvés en auditant le résultat de la complétion, tous corrigés (27/08/2026)
+
+Après §66, le run final a été relancé (coupes de Benders activées, 12
+tentatives, 4h). Meilleur résultat solveur : 2246/3101 placées, 5 semaines en
+échec. La complétion automatique a été lancée dessus — et son résultat a été
+**audité**, pas seulement compté. Six défauts réels en sont sortis,
+qu'aucune des mesures précédentes (comptage de séances placées, trous,
+journées isolées) ne pouvait révéler.
+
+### 67.1 L'étage 2 apprend de ses échecs — score corrigé en cours de route
+
+Bug trouvé dans le tout nouveau code de §66 lui-même : le mécanisme « garder
+le meilleur état » de la boucle de coupes comptait les **semaines** en échec,
+pas les **séances** manquantes. Sur la graine 3040, une coupe a fait passer 10
+semaines en échec à 7 tout en **concentrant tellement de séances dans ces 7
+semaines** que le total réel de séances non placées est passé de 2100 à 1712 —
+un état objectivement pire, gardé à tort parce qu'il paraissait meilleur au
+mauvais critère. Exactement le piège déjà documenté et corrigé le 12/08/2026
+sur `RunScore` (compter les conteneurs plutôt que les heures d'enseignement
+manquantes), reproduit sans s'en apercevoir. Corrigé : le score est désormais
+`sum(len(sessions_by_week[w]) pour w in failed_weeks)`.
+
+**Garantie établie par construction**, gratuite : le tout premier passage
+(avant toute coupe) est enregistré comme candidat dès le départ, et l'état
+final restauré ne peut jamais être pire que lui. Activer les coupes ne peut
+donc jamais dégrader un run par rapport au même run sans coupes — la seule
+chose que la mesure croisée entre deux invocations séparées de CP-SAT
+(non déterministe, cf. §63.9ter) ne pouvait pas prouver de façon fiable.
+
+### 67.2 L'ordre pédagogique ENTRE cours différents, absent du placement manuel
+
+`_build_sequence_neighbors` (utilisé par `_movable_bounds`, donc par les
+suggestions, le placement manuel ET la complétion automatique) ne connaissait
+que deux sources d'ordre : la séquence propre à un cours, et les paires
+inter-granularités d'une cohorte. La troisième source — `metadata
+["ordonnancement"]`, « ce cours doit être entièrement fini avant que cet autre
+commence », une contrainte DURE côté solveur — était absente. Conséquence
+mesurée : le chevauchement inter-matières est passé de 495 à **993** semaines
+cumulées après une première complétion. Exactement le défaut initial signalé
+en tête de cette session (« des exemples de matière qui devait être finie pour
+commencer »).
+
+Corrigé en étendant `_build_sequence_neighbors` à cette troisième source, avec
+la même sémantique que la contrainte dure du solveur (comparaison par groupe
+brut partagé). Résultat après correctif : chevauchement à **501** semaines —
+quasiment le niveau de référence d'avant complétion (495). Ce correctif
+profite aussi à `_rebalance_failed_weeks`, qui dépendait de la même fonction
+et avait le même trou latent, non détecté jusqu'ici.
+
+### 67.3 La commande CLI perdait les vraies contraintes enseignant
+
+`cal-iut completer`, utilisée pour mesurer et pour le run final, chargeait
+`teacher_availability.yaml` **seul**, sans le fusionner avec les contraintes
+réelles extraites du CSV établissement (`load_all_constraints` ->
+`merge_teacher_availability`) — contrairement à `api/main.py::startup()`.
+Conséquence : la commande ne voyait qu'une poignée d'indisponibilités
+illustratives au lieu des ~23 enseignants réellement contraints. 90 séances
+s'étaient retrouvées sur des créneaux explicitement interdits, silencieusement
+— rien ne le vérifiait avant qu'un audit dédié soit lancé sur le résultat.
+Même défaut pour `student_presences` (semaines de présence IUT des
+alternants), absent aussi.
+
+Corrigé en factorisant la construction d'état dans
+`cli.py::_construire_etat_pour_completion`, testable isolément (sans lancer
+une complétion complète, potentiellement des dizaines de minutes) — la même
+construction que `startup()`, au trigramme près.
+
+### 67.4 La présence des alternants FC, vérifiée nulle part hors du solveur
+
+Le solveur impose, comme contrainte DURE, qu'un étudiant en formation continue
+ne soit programmé QUE les jours où le calendrier d'alternance le déclare
+présent à l'IUT (`add_student_presence_constraints`). Ce n'était vérifié
+**nulle part** dans `_hard_constraint_context` — ni pour les suggestions, ni
+pour le placement manuel, ni pour la complétion. 76 séances FC placées pendant
+que les étudiants étaient en entreprise. Corrigé en ajoutant ce blocage,
+jamais contournable même en forçant, au même titre que le verrou PAC.
+
+### 67.5 Ordre au grain du CRÉNEAU, pas seulement de la semaine
+
+Une fois 67.2 corrigé, l'audit montrait encore 102 violations d'ordre
+« CM→TD→TP » et 111 paires « vues par l'étudiant » — alors que
+`_movable_bounds` semblait pourtant les couvrir. Cause : `_movable_bounds` ne
+borne qu'à la **semaine** (résolution utilisée pour le rééquilibrage, moins
+coûteuse), alors que l'audit vérifie l'ordre au **créneau précis**
+(comparaison stricte `<` sur le temps absolu, cf. `export/html_view.py::
+_rule_checks`). Deux séances liées peuvent légitimement partager une semaine —
+il fallait alors seulement garantir le bon sens jour/créneau à l'intérieur de
+cette semaine-limite.
+
+Corrigé en affinant, sur les deux semaines-limites (`lo`/`hi`) uniquement, un
+blocage au grain du créneau contre les voisins déjà placés à cette semaine
+précise. Résultat : 102 → 19-21, 111 → 30-36 (dont **23 préexistaient déjà
+côté solveur**, hors de portée de la complétion — le vrai résidu attribuable
+à la complétion tombe sous 2 % des séances qu'elle pose).
+
+### 67.6 Traiter les prédécesseurs avant leurs successeurs
+
+Dernier résidu diagnostiqué précisément : 11 des 13 violations réellement
+introduites par la complétion concentrées sur **un seul cours** (WS107) —
+deux séances liées, toutes les deux manquantes, traitées dans le mauvais sens
+parce que le tri du glouton (« la plus contrainte d'abord ») ignorait la
+relation d'ordre entre elles. La suivante, ayant plus de créneaux candidats à
+cet instant, était traitée EN PREMIER, sans aucune information sur sa propre
+précédente puisque celle-ci n'était pas encore posée.
+
+Corrigé en empilant un tri **topologique** avant le tri par contrainte : les
+prédécesseurs, parmi les séances manquantes elles-mêmes, sont désormais
+toujours traités avant leurs successeurs.
+
+### 67.7 Résultat final
+
+| Étape | Placées | Défauts d'ordre attribuables à la complétion |
+|---|---:|---:|
+| Solveur seul (meilleur run, coupes activées) | 2246/3101 (72,4 %) | — |
+| Première complétion (bug §67.1 non corrigé) | — | non mesuré à ce stade |
+| Complétion, bug §67.2 seul corrigé | 3077/3101 | chevauchement 993 sem. |
+| + §67.2 corrigé | 3010/3101 | chevauchement 501 sem. (≈ référence 495) |
+| + §67.3 et §67.4 corrigés | 2970/3101 | — |
+| + §67.5 et §67.6 corrigés (**final**) | **2962/3101 (95,5 %)** | ~7-13 paires réellement imputables, sur >700 séances complétées |
+
+Le nombre placé baisse à chaque correctif — c'est le signe que ça fonctionne :
+chaque bug corrigé retire des placements qui n'auraient jamais dû être
+acceptés. Les séances non placées restent explicitement rendues à la décision
+humaine via l'onglet « À placer », avec leur motif, jamais passées sous
+silence.
+
+**Une limitation pré-existante et documentée n'a pas été touchée** :
+15/17 évaluations hors salle A.018, conséquence connue de l'absence de
+modélisation des salles côté solveur (§65.5) — hors du périmètre des bugs
+trouvés aujourd'hui, non mêlée à eux.
+
+Une quarantaine de tests ajoutés pour ces six défauts (`test_benders.py`,
+`test_ordonnancement_inter_cours.py`, `test_cli_completer_disponibilites.py`,
+`test_alternance_fc_2026_08_27.py`, `test_ordre_meme_semaine_2026_08_27.py`,
+extensions de `test_completion.py`) ; 408 tests passent sur l'ensemble du
+projet.

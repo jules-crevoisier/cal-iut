@@ -2115,9 +2115,80 @@
     "bloque": true,
     "hors_service": false,
     "progression": {
-      "definie": false,
-      "nb_seances": 0,
-      "seances": []
+      "definie": true,
+      "nb_seances": 14,
+      "seances": [
+        {
+          "ordre": 1,
+          "type": "CM",
+          "eval": false
+        },
+        {
+          "ordre": 2,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 3,
+          "type": "CM",
+          "eval": false
+        },
+        {
+          "ordre": 4,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 5,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 6,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 7,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 8,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 9,
+          "type": "CM",
+          "eval": false
+        },
+        {
+          "ordre": 10,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 11,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 12,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 13,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 14,
+          "type": "CM",
+          "eval": true
+        }
+      ]
     },
     "ordonnancement_relatif": [],
     "commentaire_edt": null
@@ -2605,11 +2676,11 @@
       {
         "block": "block1",
         "cm": 3,
-        "td": 16,
-        "tp": 16,
+        "td": 12,
+        "tp": 10,
         "ptut": 3,
-        "nbGpTd": 4,
-        "nbGpTp": 8,
+        "nbGpTd": 1,
+        "nbGpTp": 2,
         "code": "KBR",
         "nom": "BRESSON",
         "prenom": "KYLLIAN"
@@ -2617,11 +2688,11 @@
       {
         "block": "block1",
         "cm": 0,
-        "td": 16,
-        "tp": 16,
+        "td": 12,
+        "tp": 10,
         "ptut": 3,
-        "nbGpTd": 4,
-        "nbGpTp": 8,
+        "nbGpTd": 1,
+        "nbGpTp": 2,
         "code": "KNG",
         "nom": "NGO",
         "prenom": "KEVIN"
@@ -2629,14 +2700,26 @@
       {
         "block": "block1",
         "cm": 0,
-        "td": 16,
-        "tp": 8,
+        "td": 12,
+        "tp": 10,
         "ptut": 3,
-        "nbGpTd": 4,
-        "nbGpTp": 8,
+        "nbGpTd": 1,
+        "nbGpTp": 2,
         "code": "FLI",
         "nom": "LIBBRECHT",
         "prenom": "FLORENT"
+      },
+      {
+        "block": "block1",
+        "cm": 0,
+        "td": 12,
+        "tp": 10,
+        "ptut": null,
+        "nbGpTd": 1,
+        "nbGpTp": 2,
+        "code": "MGR",
+        "nom": "GRENIER",
+        "prenom": "Mathis"
       }
     ],
     "mode_repartition_suggere": "repartition_inegale (a verifier manuellement)",
@@ -7778,9 +7861,9 @@
       {
         "block": "block1",
         "cm": 0,
-        "td": 12,
-        "tp": 12,
-        "ptut": 13.33,
+        "td": 8,
+        "tp": 8,
+        "ptut": 0,
         "nbGpTd": 2,
         "nbGpTp": 4,
         "code": "KBR",
@@ -7790,17 +7873,29 @@
       {
         "block": "block1",
         "cm": 4,
-        "td": 12,
-        "tp": 16,
-        "ptut": 13.34,
+        "td": 8,
+        "tp": 12,
+        "ptut": 0,
         "nbGpTd": 2,
         "nbGpTp": 4,
         "code": "ARA",
         "nom": "RAGEUL",
         "prenom": "ANTHONY"
+      },
+      {
+        "block": null,
+        "cm": 0,
+        "td": 8,
+        "tp": 8,
+        "ptut": null,
+        "nbGpTd": 2,
+        "nbGpTp": 4,
+        "code": "TPA",
+        "nom": "PAVIE",
+        "prenom": "THOMAS"
       }
     ],
-    "mode_repartition_suggere": "repartition_inegale (a verifier manuellement)",
+    "mode_repartition_suggere": "tournant_ou_mixte (blocks differents, a verifier)",
     "groupes_total_module": {
       "td": 2,
       "tp": 4
@@ -8331,7 +8426,7 @@
         "cm": 0,
         "td": 22,
         "tp": 0,
-        "ptut": 30,
+        "ptut": 0,
         "nbGpTd": 1,
         "nbGpTp": 1,
         "code": "AFR",
@@ -9697,21 +9792,9 @@
         "code": "KBR",
         "nom": "BRESSON",
         "prenom": "KYLLIAN"
-      },
-      {
-        "block": "block1",
-        "cm": 0,
-        "td": 0,
-        "tp": 0,
-        "ptut": 0,
-        "nbGpTd": 0,
-        "nbGpTp": 0,
-        "code": "ARA",
-        "nom": "RAGEUL",
-        "prenom": "ANTHONY"
       }
     ],
-    "mode_repartition_suggere": "repartition_inegale (a verifier manuellement)",
+    "mode_repartition_suggere": "solo",
     "groupes_total_module": {
       "td": 1,
       "tp": 1
@@ -10773,10 +10856,10 @@
       {
         "block": "block1",
         "cm": 0,
-        "td": 4,
-        "tp": 3,
+        "td": 0,
+        "tp": 5,
         "ptut": 0,
-        "nbGpTd": 1,
+        "nbGpTd": 0,
         "nbGpTp": 1,
         "code": "KBR",
         "nom": "BRESSON",
@@ -10785,8 +10868,8 @@
       {
         "block": "block1",
         "cm": 0,
-        "td": 4,
-        "tp": 7,
+        "td": 8,
+        "tp": 5,
         "ptut": 0,
         "nbGpTd": 1,
         "nbGpTp": 1,
@@ -10804,9 +10887,75 @@
     "bloque": true,
     "hors_service": false,
     "progression": {
-      "definie": false,
-      "nb_seances": 0,
-      "seances": []
+      "definie": true,
+      "nb_seances": 13,
+      "seances": [
+        {
+          "ordre": 1,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 2,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 3,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 4,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 5,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 6,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 7,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 8,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 9,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 10,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 11,
+          "type": "TP",
+          "eval": false
+        },
+        {
+          "ordre": 12,
+          "type": "TD",
+          "eval": false
+        },
+        {
+          "ordre": 13,
+          "type": "TD",
+          "eval": false
+        }
+      ]
     },
     "ordonnancement_relatif": [],
     "commentaire_edt": "UPDATE_OMEGA"
@@ -12047,9 +12196,9 @@
     "parcours": "BUT3-DEV-FC",
     "is_admin_non_enseignement": false,
     "lead": {
-      "code": "FME",
-      "nom": "MEUZERET",
-      "prenom": "FABRICE"
+      "code": "JSA",
+      "nom": "SABATER",
+      "prenom": "JULES"
     },
     "volumes_etudiant_seances": {
       "cm": 0,
@@ -12060,7 +12209,7 @@
       {
         "block": "block1",
         "cm": 0,
-        "td": 34,
+        "td": 17,
         "tp": 0,
         "ptut": null,
         "nbGpTd": 1,
@@ -12068,9 +12217,21 @@
         "code": "BTO",
         "nom": "TOMASINA",
         "prenom": "Barthélémy"
+      },
+      {
+        "block": "block1",
+        "cm": 0,
+        "td": 17,
+        "tp": 0,
+        "ptut": null,
+        "nbGpTd": 1,
+        "nbGpTp": 1,
+        "code": "JSA",
+        "nom": "SABATER",
+        "prenom": "JULES"
       }
     ],
-    "mode_repartition_suggere": "solo",
+    "mode_repartition_suggere": "symetrique_ou_tournant (volumes identiques, verifier si rotation ou blocs fixes)",
     "groupes_total_module": {
       "td": 1,
       "tp": 1
@@ -12123,9 +12284,9 @@
         "ptut": 0,
         "nbGpTd": 1,
         "nbGpTp": 1,
-        "code": "JSA",
-        "nom": "SABATER",
-        "prenom": "JULES"
+        "code": "BTO",
+        "nom": "TOMASINA",
+        "prenom": "Barthélémy"
       }
     ],
     "mode_repartition_suggere": "symetrique_ou_tournant (volumes identiques, verifier si rotation ou blocs fixes)",

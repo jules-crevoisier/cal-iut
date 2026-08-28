@@ -20,6 +20,19 @@ export interface TodoItem {
 export function buildTodoList(payload: AppPayload): TodoItem[] {
   const items: TodoItem[] = [];
 
+  // En TÊTE, avant les questions de confort : une séance non placée est une
+  // heure d'enseignement qui n'aura pas lieu. Rien d'autre dans cette liste
+  // n'a ce poids. Chaque ligne renvoie vers l'onglet « À placer », le seul
+  // endroit d'où on peut la rattraper.
+  for (const s of payload.seancesNonPlacees ?? []) {
+    items.push({
+      sev: "bad",
+      title: `${s.code} — séance non placée`,
+      sub: `${s.type} · ${s.groupes.join(", ")} · ${s.profs.join(", ")}`,
+      route: { vue: "aplacer" },
+    });
+  }
+
   for (const t of payload.teachers) {
     for (const v of t.violations) {
       const when = v.date

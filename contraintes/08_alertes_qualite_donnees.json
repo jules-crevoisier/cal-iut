@@ -69,18 +69,15 @@
     "liste": [
       "PRP: somme nbGpTd des profs (2) != groupes.td declare (1)",
       "PRP: somme nbGpTp des profs (2) != groupes.tp declare (1)",
-      "WS104: somme nbGpTd des profs (12) != groupes.td declare (4)",
-      "WS104: somme nbGpTp des profs (24) != groupes.tp declare (8)",
       "WR203: somme nbGpTd des profs (8) != groupes.td declare (4)",
       "WR203: somme nbGpTp des profs (16) != groupes.tp declare (8)",
       "WR312D: somme nbGpTd des profs (4) != groupes.td declare (2)",
       "WR312D: somme nbGpTp des profs (8) != groupes.tp declare (4)",
-      "WS302D: somme nbGpTd des profs (4) != groupes.td declare (2)",
-      "WS302D: somme nbGpTp des profs (8) != groupes.tp declare (4)",
+      "WS302D: somme nbGpTd des profs (6) != groupes.td declare (2)",
+      "WS302D: somme nbGpTp des profs (12) != groupes.tp declare (4)",
       "WS3PJ: somme nbGpTd des profs (28) != groupes.td declare (2)",
       "WS3PJ: somme nbGpTp des profs (56) != groupes.tp declare (4)",
       "WSA402M: somme nbGpTd des profs (2) != groupes.td declare (1)",
-      "WR504D: somme nbGpTd des profs (2) != groupes.td declare (1)",
       "WR506D: somme nbGpTd des profs (2) != groupes.td declare (1)",
       "WR506D: somme nbGpTp des profs (4) != groupes.tp declare (2)",
       "WR507D: somme nbGpTd des profs (2) != groupes.td declare (1)",
@@ -88,6 +85,8 @@
       "WRA505C: somme nbGpTp des profs (2) != groupes.tp declare (1)",
       "WRA506C: somme nbGpTd des profs (2) != groupes.td declare (1)",
       "WRA506C: somme nbGpTp des profs (2) != groupes.tp declare (1)",
+      "WRA507D: somme nbGpTd des profs (2) != groupes.td declare (1)",
+      "WRA507D: somme nbGpTp des profs (2) != groupes.tp declare (1)",
       "WRA508C: somme nbGpTd des profs (2) != groupes.td declare (1)",
       "WRA508C: somme nbGpTp des profs (2) != groupes.tp declare (1)",
       "WS501D: somme nbGpTd des profs (2) != groupes.td declare (1)",
@@ -160,7 +159,7 @@
     }
   ],
   "points_ouverts_hors_fichiers_sources": [
-    "22 enseignants ont une ligne de contraintes ; 38 apparaissent dans la maquette. Les 18 sans ligne sont presumes sans contrainte connue, a confirmer plutot que suppose : AGT, APE, CGA, CRA, DGA, DVO, FME, HKO, JBA, JSA, JTH, KBR, MGO, MTH, OCH, OLA, SLO, VPR",
+    "23 enseignants ont une ligne de contraintes ; 39 apparaissent dans la maquette. Les 18 sans ligne sont presumes sans contrainte connue, a confirmer plutot que suppose : AGT, APE, CGA, CRA, DGA, DVO, FME, HKO, JBA, JSA, JTH, MGO, MGR, MTH, OCH, OLA, SLO, VPR",
     "Aucun fichier source ne couvre les salles : la section 'rooms' de 01_regles_generales.json et data/config/rooms.yaml viennent de la conversation preparatoire, pas d'un fichier officiel.",
     "S2/S4/S6 sont hors perimetre pour 2026-2027 (arbitrage utilisateur 10/08/2026) : le fichier DATES SAE ne date que les SAE de S1/S3/S5.",
     "BUT2-DEV-FC (S3/S4-DEV-FC) est gele cette annee (effectif alternants insuffisant, cf. 'Maquette 2026 BUT2 S3-DEV-FC.docx') : aucun module dans la maquette, le solveur l'ignore naturellement."

@@ -162,8 +162,24 @@ export interface AppException {
 }
 
 /** Retour complet de `GET /app-state`. */
+/**
+ * Une séance que le solveur n'a pas su placer. Sans cette liste, elle
+ * disparaissait de toutes les vues et de tous les compteurs — le planning avait
+ * l'air complet alors qu'il manquait des heures (cf. docs/DATA.md §66).
+ */
+export interface SeanceNonPlacee {
+  id: string;
+  code: string;
+  nom: string;
+  type: string;
+  parcours: string;
+  groupes: string[];
+  profs: string[];
+}
+
 export interface AppPayload {
   status: string | null;
+  seancesNonPlacees?: SeanceNonPlacee[];
   objective: number | null;
   quality: AppQuality | null;
 

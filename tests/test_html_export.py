@@ -109,7 +109,13 @@ def test_build_payload_includes_rule_checks_and_institutional_calendar() -> None
     payload = build_payload(timetable, subset, groups, calendar=calendar, semestre="S1")
 
     rule_ids = {c["id"] for c in payload["ruleChecks"]}
-    assert {"weekly_cap", "thursday_pac", "eval_room", "s1_integration_lock", "pedagogical_order"} <= rule_ids
+    assert {"weekly_cap", "thursday_pac", "s1_integration_lock", "pedagogical_order"} <= rule_ids
+    # `eval_room` ne figure PAS ici, volontairement : ce run n'attribue aucune
+    # salle, et le contrôle ne se prononce plus dans ce cas (cf. docs/DATA.md
+    # §65.7 — il annonçait « 16/16 évaluations hors A.018 », un faux échec qui
+    # détournait l'attention du vrai problème). Un contrôle qui crie à tort
+    # finit ignoré.
+    assert "eval_room" not in rule_ids
     for check in payload["ruleChecks"]:
         assert check["status"] in ("pass", "fail", "info")
 

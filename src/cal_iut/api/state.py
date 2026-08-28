@@ -25,6 +25,10 @@ class AppState:
     groups: list[Group] = field(default_factory=list)
     rooms: list[Room] = field(default_factory=list)
     room_rules: list[RoomAssignmentRule] = field(default_factory=list)
+    # Salles réservées par des tiers (`data/config/salles_reservees.yaml`) —
+    # {room_id: {index de créneau}}. Le solveur ne modélise pas les salles :
+    # c'est l'attribution qui doit les éviter, jamais le modèle.
+    room_reservations: dict[str, set[int]] = field(default_factory=dict)
     teacher_availability: list[TeacherAvailability] = field(default_factory=list)
     teacher_duos: list[TeacherDuo] = field(default_factory=list)
     calendar: AcademicCalendar = field(default_factory=build_default_calendar_2026_2027)

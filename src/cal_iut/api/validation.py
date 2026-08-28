@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from cal_iut.calendar.academic import AcademicCalendar, semester_week_offset, week_status
-from cal_iut.models.entities import TeacherAvailability
+from cal_iut.models.entities import Group, TeacherAvailability
 from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
 from cal_iut.solver.cpsat import PlacedSession
 
@@ -15,6 +15,36 @@ class ValidationResult:
     soft_warnings: list[str]
 
 
+def _duration_of(session_id: str, sessions_by_id: dict[str, object] | None) -> int:
+    if not sessions_by_id:
+        return 1
+    return max(1, int(getattr(sessions_by_id.get(session_id), "duration_slots", 1) or 1))
+
+
+def _cohort_conflict(
+    group_ids: list[str],
+    other_group_ids: list[str],
+    groups: list[Group] | None,
+) -> bool:
+    """Ces deux séances sont-elles vues par les MÊMES étudiants ?
+
+    Comparer les `group_ids` bruts ne suffit pas : un CM porte le groupe
+    `promo` et un TD un sous-groupe, ils n'ont donc aucun identifiant commun
+    alors que ce sont les mêmes étudiants. C'est la notion de COHORTE que le
+    solveur utilise déjà (`build_student_cohorts`), et qui manquait ici.
+    """
+    if _overlap(group_ids, other_group_ids):
+        return True
+    if not groups:
+        return False
+    from cal_iut.solver.resources import build_student_cohorts
+
+    for cohort_ids in build_student_cohorts(groups).values():
+        if cohort_ids.intersection(group_ids) and cohort_ids.intersection(other_group_ids):
+            return True
+    return False
+
+
 def validate_move(
     session_id: str,
     week: int,
@@ -24,7 +54,26 @@ def validate_move(
     group_ids: list[str],
     teacher_codes: list[str],
     room_id: str | None = None,
+    sessions_by_id: dict[str, object] | None = None,
+    groups: list[Group] | None = None,
 ) -> ValidationResult:
+    """
+    Vérifie qu'un déplacement manuel ne crée pas de conflit dur.
+
+    Deux défauts corrigés le 26/08/2026, trouvés en explorant ce module :
+
+    1. **La durée était ignorée.** La comparaison portait sur le créneau de
+       DÉPART uniquement : un bloc de 3h occupant les créneaux 3 et 4 restait
+       invisible pour qui déposait une séance sur le créneau 4. L'interface
+       répondait « OK » et deux cours se superposaient.
+    2. **La cohorte était ignorée.** `group_ids` bruts : déposer un TD sur le
+       créneau du CM de sa propre promotion ne levait aucun conflit, alors que
+       ce sont les mêmes étudiants.
+
+    `sessions_by_id` et `groups` sont facultatifs pour ne pas casser les
+    appelants existants, mais les deux vérifications ci-dessus n'ont lieu que
+    s'ils sont fournis — l'API les passe systématiquement.
+    """
     hard: list[str] = []
     soft: list[str] = []
 
@@ -33,20 +82,29 @@ def validate_move(
     if slot < 0 or slot >= SLOTS_PER_DAY:
         hard.append("Créneau invalide")
 
-    time_idx = _time_index(week, day, slot)
+    duration = _duration_of(session_id, sessions_by_id)
+    if slot + duration > SLOTS_PER_DAY:
+        hard.append(
+            f"La séance dure {duration} créneaux et déborderait sur le jour suivant"
+        )
+
+    debut = _time_index(week, day, slot)
+    occupes = set(range(debut, debut + duration))
 
     for placement in timetable:
         if placement.session_id == session_id:
             continue
-        other_idx = _time_index(placement.week, placement.day, placement.slot)
-        if other_idx != time_idx:
+        autre_debut = _time_index(placement.week, placement.day, placement.slot)
+        autre_duree = _duration_of(placement.session_id, sessions_by_id)
+        if occupes.isdisjoint(range(autre_debut, autre_debut + autre_duree)):
             continue
 
-        if _overlap(group_ids, placement.group_ids):
-            hard.append(
-                f"Conflit groupe : {placement.course_code} "
-                f"(sem. {placement.week + 1}, {_day_name(placement.day)} {_slot_label(placement.slot)})"
-            )
+        quand = (
+            f"sem. {placement.week + 1}, {_day_name(placement.day)} "
+            f"{_slot_label(placement.slot)}"
+        )
+        if _cohort_conflict(group_ids, placement.group_ids, groups):
+            hard.append(f"Conflit groupe : {placement.course_code} ({quand})")
 
         if _overlap(teacher_codes, placement.teacher_codes):
             hard.append(
@@ -132,6 +190,16 @@ def _teacher_free_at(
         forbidden_dates = avail.metadata.get("forbidden_dates") or []
         if d is not None and d.isoformat() in forbidden_dates:
             return False
+
+        # Date ET horaire précis (`TeacherDateSlotRule`) : le cinquième
+        # mécanisme, ajouté le 26/08/2026. Répliqué ici comme les quatre autres
+        # — la validation manuelle ne doit jamais être plus permissive que le
+        # solveur.
+        if d is not None:
+            iso = d.isoformat()
+            for regle in getattr(avail, "forbidden_date_slots", []) or []:
+                if regle.date == iso and slot in regle.slots:
+                    return False
         if avail.allowed_slots and (day, slot) not in {tuple(p) for p in avail.allowed_slots}:
             return False
         if avail.allowed_dates and (d is None or d.isoformat() not in set(avail.allowed_dates)):
@@ -159,6 +227,15 @@ def suggest_alternative_slots(
     max_suggestions: int = 3,
     extra_blocked: set[tuple[int, int, int]] | None = None,
     allowed_weeks: set[int] | None = None,
+    # Sans ces deux-là, la suggestion est PLUS PERMISSIVE que le placement :
+    # `validate_move` ignore alors la durée des séances et la cohorte
+    # étudiante, exactement les deux défauts corrigés le 26/08/2026 côté
+    # glisser-déposer (cf. docs/DATA.md §65.2). Mesuré sur le run réel :
+    # 649 créneaux proposés sur 918 étaient refusés au moment de poser la
+    # séance. Un outil qui propose ce qu'il refuse ensuite est pire
+    # qu'inutile — il fait perdre confiance dans tout le reste.
+    sessions_by_id: dict[str, object] | None = None,
+    groups: list[object] | None = None,
 ) -> list[SlotSuggestion]:
     """
     Propose jusqu'à `max_suggestions` créneaux FUTURS où déplacer cette
@@ -206,7 +283,10 @@ def suggest_alternative_slots(
                     return suggestions
                 if extra_blocked and (week, day, slot) in extra_blocked:
                     continue
-                result = validate_move(session_id, week, day, slot, timetable, group_ids, teacher_codes, room_id)
+                result = validate_move(
+                    session_id, week, day, slot, timetable, group_ids, teacher_codes, room_id,
+                    sessions_by_id=sessions_by_id, groups=groups,
+                )
                 if not result.valid:
                     continue
                 if not _teacher_free_at(teacher_codes, week, day, slot, d, teacher_availability, calendar, week_offset):

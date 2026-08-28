@@ -57,6 +57,7 @@ interface CellEvent {
   placement: Placement;
   span: boolean;
   tpIndex: 0 | 1 | null;
+  dur: number;
 }
 
 const DAY_COUNT = 5;
@@ -77,18 +78,19 @@ function classify(
 ): CellEvent | null {
   const gids = placement.group_ids;
   const type = placement.session_type;
+  const dur = Math.max(1, placement.duration_slots || 1);
 
   if (type === "CM" || gids.some((id) => id.includes("-promo"))) {
-    return { placement, span: true, tpIndex: null };
+    return { placement, span: true, tpIndex: null, dur };
   }
   if (type === "TD" || gids.includes(tdId)) {
-    return { placement, span: true, tpIndex: null };
+    return { placement, span: true, tpIndex: null, dur };
   }
   if (gids.includes(tpA)) {
-    return { placement, span: false, tpIndex: 0 };
+    return { placement, span: false, tpIndex: 0, dur };
   }
   if (gids.includes(tpB)) {
-    return { placement, span: false, tpIndex: 1 };
+    return { placement, span: false, tpIndex: 1, dur };
   }
   return null;
 }
@@ -159,7 +161,14 @@ export function TdWeekGrid({
       const event = classify(p, tdGroupId, tpA, tpB);
       if (!event) continue;
       if (p.day < 0 || p.day >= DAY_COUNT || p.slot < 0 || p.slot >= SLOT_COUNT) continue;
-      cells[p.slot][p.day].push(event);
+      // Retour utilisateur (27/08/2026) : « affiche-le comme 2 blocs de
+      // 1h30 » — pas UNE cellule fusionnée (`rowSpan`), mais le MÊME chip
+      // répété sur chacun de ses créneaux (`duration_slots`), exactement le
+      // patron déjà utilisé par `SessionGrid`/`PromoView` pour ce même cas.
+      const dur = Math.max(1, event.dur);
+      for (let k = 0; k < dur && p.slot + k < SLOT_COUNT; k++) {
+        cells[p.slot + k][p.day].push(event);
+      }
     }
     return cells;
   }, [placements, displayWeek, tdGroupId, tpA, tpB]);
@@ -227,11 +236,28 @@ export function TdWeekGrid({
         </thead>
         <tbody>
           {Array.from({ length: SLOT_COUNT }, (_, slot) => (
-            <tr key={slot} className={slot === 2 ? "td-grid-before-lunch" : undefined}>
-              <th scope="row" className="td-grid-slotlabel">
-                {SLOT_TIMES[slot].label}
-              </th>
-              {days.map((day) => {
+            <Fragment key={slot}>
+              {/* Séparateur de pause déjeuner rendu EN LIGNE, entre les
+                  créneaux du matin et de l'après-midi — auparavant un `<p>`
+                  posé après `</table>` (`.lunch-marker`), donc visuellement
+                  détaché de la grille plutôt qu'à l'endroit où la pause a
+                  réellement lieu (retour utilisateur 27/08/2026 : « le
+                  séparateur de pause déjeuné est en dehors du tableaux »).
+                  Même motif que `SessionGrid.tsx` (`.sessiongrid-pause`),
+                  juste avec `colSpan=2` par jour (2 colonnes TP ici). */}
+              {slot === 3 && (
+                <tr className="sessiongrid-pause">
+                  <td className="td-grid-slotlabel">12h30–14h</td>
+                  {days.map((day) => (
+                    <td key={day} colSpan={2} />
+                  ))}
+                </tr>
+              )}
+              <tr className={slot === 2 ? "td-grid-before-lunch" : undefined}>
+                <th scope="row" className="td-grid-slotlabel">
+                  {SLOT_TIMES[slot].label}
+                </th>
+                {days.map((day) => {
                 const events = grid[slot][day];
                 const spans = events.filter((e) => e.span);
                 const left = events.filter((e) => !e.span && e.tpIndex === 0);
@@ -368,12 +394,11 @@ export function TdWeekGrid({
                   </Fragment>
                 );
               })}
-            </tr>
+              </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
-
-      <p className="lunch-marker">Pause déjeuner 12h30 – 14h00</p>
 
       {hover && (
         <div className="td-hover" style={{ left: hover.x + 12, top: hover.y + 12 }}>
