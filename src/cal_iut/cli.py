@@ -591,6 +591,19 @@ def cmd_load_run(args: argparse.Namespace) -> int:
 
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
+    from dotenv import load_dotenv
+
+    # Charge `.env` à la racine du projet (mot de passe partagé, clé Resend,
+    # URL publique...) — jamais commité (cf. .gitignore), pratique pour un
+    # lancement local sans repositionner chaque variable à la main à chaque
+    # fois. Volontairement PAS appelé au niveau du module `api/main.py` :
+    # les tests l'importent directement (`TestClient(app)`, sans passer par
+    # `cal-iut serve`) et ne doivent jamais lire un `.env` local — sinon une
+    # vraie clé Resend qui y traînerait changerait silencieusement le
+    # comportement des tests qui vérifient justement le cas "non configuré".
+    # `override=False` (défaut) : une variable déjà présente dans
+    # l'environnement réel garde la priorité, `.env` ne fait que COMPLÉTER.
+    load_dotenv()
 
     uvicorn.run(
         "cal_iut.api.main:app",

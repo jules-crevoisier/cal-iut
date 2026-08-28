@@ -16,6 +16,7 @@ dependencies = [
     "alembic>=1.13",
     "openpyxl>=3.1",
     "python-dateutil>=2.9",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

@@ -2,8 +2,18 @@
 # Dokploy, ou directement comme déploiement Docker Compose dans Dokploy si
 # tu préfères ce mode au mode "Dockerfile x2 services".
 #
+# Local :
+#   cp .env.example .env   # puis remplir les valeurs
 #   docker compose up --build
 #   → http://localhost:8080
+#
+# Dokploy : AUCUNE valeur ici, tout passe par `${VAR}` — Docker Compose lit
+# ces variables dans l'environnement du process qui lance `docker compose`
+# (ou un `.env` à côté de ce fichier, jamais commité), qui est exactement ce
+# que Dokploy pose quand tu renseignes ses variables d'environnement pour ce
+# service. Une variable non définie donne une valeur vide, PAS une erreur
+# silencieuse : `CAL_IUT_PASSWORD` vide fait toujours répondre 503 partout
+# (cf. api/auth.py), jamais un accès libre par défaut.
 
 services:
   backend:
@@ -11,25 +21,20 @@ services:
     expose:
       - "8000"
     environment:
-      # OBLIGATOIRE — sans lui, TOUTE l'API répond 503 (cf. api/auth.py,
-      # blocage volontaire plutôt qu'un accès libre par défaut). Change
-      # cette valeur avant un vrai déploiement.
-      CAL_IUT_PASSWORD: cal-iut-2026
-      # Optionnel — sans lui, un secret est généré au premier démarrage et
+      # OBLIGATOIRE — sans elle, TOUTE l'API répond 503 (cf. api/auth.py).
+      CAL_IUT_PASSWORD: ${CAL_IUT_PASSWORD}
+      # Optionnel — sans elle, un secret est généré au premier démarrage et
       # écrit dans le volume `cal-iut-data` (donc stable tant que ce volume
-      # existe). Le fixer explicitement évite de perdre les liens
-      # enseignants déjà envoyés si le volume est un jour recréé.
-      # CAL_IUT_SECRET_KEY: change-moi-aussi
-      #
+      # existe). La fixer explicitement évite de perdre la validité des
+      # liens enseignants déjà envoyés si ce volume est un jour recréé.
+      CAL_IUT_SECRET_KEY: ${CAL_IUT_SECRET_KEY}
       # Envoi automatique du lien perso par mail (`POST /mail/teacher-links/
-      # send`, cf. api/mailer.py) — les trois suivants sont à définir dans
-      # les variables d'environnement de Dokploy, PAS ici (secrets, jamais
-      # commités). Sans `RESEND_API_KEY`/`CAL_IUT_PUBLIC_URL`, le bouton
-      # d'envoi reste visible mais chaque tentative échoue avec un message
-      # explicite plutôt qu'un envoi silencieux ou un lien cassé.
-      # RESEND_API_KEY: re_xxxxxxxx
-      # RESEND_FROM: cal-iut@nexkeep.fr
-      # CAL_IUT_PUBLIC_URL: https://cal-iut-mmi.srko.fr
+      # send`, cf. api/mailer.py). Sans `RESEND_API_KEY`/`CAL_IUT_PUBLIC_URL`,
+      # le bouton d'envoi reste visible mais chaque tentative échoue avec un
+      # message explicite plutôt qu'un envoi silencieux ou un lien cassé.
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM: ${RESEND_FROM}
+      CAL_IUT_PUBLIC_URL: ${CAL_IUT_PUBLIC_URL}
     volumes:
       # Named volume : seedé UNE fois depuis data/cal-iut.db baké dans
       # l'image (cf. Dockerfile), puis les écritures ultérieures
