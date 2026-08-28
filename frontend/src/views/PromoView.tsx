@@ -19,24 +19,54 @@
  *    l'alphabétique brut ("les groupe [FC] sont mis après les fi").
  */
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
+import type { SeanceAPlacer } from "../api/client";
 import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { placerAvecConfirmation } from "../utils/placement";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { compareParcoursForDisplay } from "../utils/years";
 import { WeekBar } from "../components/WeekBar";
 
 interface PromoViewProps {
   payload: AppPayload;
+  /** Séance choisie dans « À placer », à poser directement sur cette
+   * grille — `undefined`/absent = comportement normal (lecture seule),
+   * inchangé (App.tsx ne les passe que depuis cette vue-là, la Vue Promo
+   * reste utilisable seule ailleurs si jamais réutilisée). */
+  placementActif?: SeanceAPlacer | null;
+  onAnnulerPlacement?: () => void;
+  onPlaced?: () => void;
 }
 
-export function PromoView({ payload }: PromoViewProps) {
+export function PromoView({ payload, placementActif = null, onAnnulerPlacement, onPlaced }: PromoViewProps) {
   const [displayWeek, setDisplayWeek] = useState(0);
   const [day, setDay] = useState(0);
   const [teacherFilter, setTeacherFilter] = useState("");
+  const [enCoursPlacement, setEnCoursPlacement] = useState<string | null>(null);
+  const [erreurPlacement, setErreurPlacement] = useState<string | null>(null);
+  const [annonce, setAnnonce] = useState("");
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
+
+  // À l'activation d'un placement (arrivée depuis « À placer »), saute
+  // directement sur sa première semaine idéale plutôt que de laisser la
+  // personne chercher — la Vue Promo reste sur cette semaine/jour tant
+  // qu'elle navigue elle-même ensuite (pas de re-saut à chaque re-rendu).
+  useEffect(() => {
+    if (!placementActif) return;
+    const semaineIdeale = placementActif.semaines_possibles[0];
+    if (semaineIdeale === undefined) return;
+    const idx = payload.weekRows.findIndex((w) => w.weekIndex === semaineIdeale);
+    if (idx >= 0) setDisplayWeek(idx);
+    setErreurPlacement(null);
+    // Volontairement déclenché seulement par un CHANGEMENT de séance
+    // active (nouvelle sélection depuis « À placer »), pas par la
+    // navigation ultérieure dans `payload.weekRows`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placementActif?.session_id]);
 
   const teacherCodes = useMemo(
     () =>
@@ -122,8 +152,48 @@ export function PromoView({ payload }: PromoViewProps) {
   const dayEvents =
     solverWeek === null ? undefined : payload.eventRows.find((e) => e.w === solverWeek && e.d === day)?.labels;
 
+  const placerIci = async (slot: number) => {
+    if (!placementActif || solverWeek === null) return;
+    const cle = `${solverWeek}-${day}-${slot}`;
+    setEnCoursPlacement(cle);
+    setErreurPlacement(null);
+    const resultat = await placerAvecConfirmation(placementActif.session_id, { week: solverWeek, day, slot });
+    setEnCoursPlacement(null);
+    if (resultat.ok) {
+      setAnnonce(`${placementActif.course_code} placé ${DAY_LABELS[day]} ${SLOT_TIMES[slot].label}.`);
+      onPlaced?.();
+    } else {
+      setErreurPlacement(resultat.message);
+    }
+  };
+
   return (
     <section className="view">
+      <p role="status" aria-live="polite" className="sr-only">
+        {annonce}
+      </p>
+
+      {placementActif && (
+        <div className="panel promo-placement-actif">
+          <div>
+            <strong>Placement en cours : {placementActif.course_code}</strong>
+            <span className="muted">
+              {" "}
+              — {placementActif.session_type} · {placementActif.groupes_libelles.join(", ")} · cliquez une case
+              libre de la colonne {placementActif.parcours} ci-dessous.
+            </span>
+          </div>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onAnnulerPlacement}>
+            Annuler
+          </button>
+        </div>
+      )}
+      {erreurPlacement && (
+        <div className="panel promo-placement-erreur">
+          <p className="alerte">{erreurPlacement}</p>
+        </div>
+      )}
+
       <div className="panel controls">
         <div className="field weekfield">
           <WeekBar weekRows={payload.weekRows} countByWeekIndex={countByWeek} selected={displayWeek} onSelect={setDisplayWeek} />
@@ -215,9 +285,35 @@ export function PromoView({ payload }: PromoViewProps) {
                           )
                           .map((e) => e.label);
 
+                        // Cellule cible pour un placement en cours — seules les
+                        // colonnes du BON parcours sont proposées (le solveur
+                        // n'affecte jamais une séance en dehors du sien, offrir
+                        // les autres colonnes serait juste un clic pour rien).
+                        const eligible = Boolean(placementActif) && colParcours[i] === placementActif?.parcours;
+                        const cleCellule = `${solverWeek}-${day}-${s}`;
+                        const placementProps = eligible
+                          ? {
+                              role: "button" as const,
+                              tabIndex: 0,
+                              onClick: () => void placerIci(s),
+                              onKeyDown: (e: ReactKeyboardEvent) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  void placerIci(s);
+                                }
+                              },
+                            }
+                          : {};
+                        const eligibleClass = eligible ? " promocell--placeable" : "";
+
                         if (entries.length) {
                           return (
-                            <td key={c} className={cellClass}>
+                            <td key={c} className={cellClass + eligibleClass} {...placementProps}>
+                              {eligible && (
+                                <div className="promocell-poser">
+                                  {enCoursPlacement === cleCellule ? "Placement…" : "+ poser ici (conflit possible)"}
+                                </div>
+                              )}
                               {entries.map((r) => {
                                 const highlighted = teacherFilter && r.te.includes(teacherFilter);
                                 const teacherNames = r.te.map((tc) => payload.teacherLabels[tc] ?? tc).join(", ");
@@ -287,7 +383,15 @@ export function PromoView({ payload }: PromoViewProps) {
                             </td>
                           );
                         }
-                        return <td key={c} className={cellClass} />;
+                        return (
+                          <td key={c} className={cellClass + eligibleClass} {...placementProps}>
+                            {eligible && (
+                              <div className="promocell-poser">
+                                {enCoursPlacement === cleCellule ? "Placement…" : "+ poser ici"}
+                              </div>
+                            )}
+                          </td>
+                        );
                       })}
                     </tr>
                   </Fragment>

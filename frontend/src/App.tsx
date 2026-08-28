@@ -534,7 +534,9 @@ export function App() {
             Pas de `appPayload` requis : cet écran interroge le serveur
             directement, et doit rester accessible même quand le planning
             est trop incomplet pour que les autres vues aient du sens. */}
-        {activeTab === "aplacer" && !readOnlyTarget && <APlacerView onPlacement={() => void loadTimetable()} />}
+        {activeTab === "aplacer" && !readOnlyTarget && (
+          <APlacerView onPlacement={() => void loadTimetable()} payload={appPayload} />
+        )}
           </main>
         </div>
       </div>

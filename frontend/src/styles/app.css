@@ -1598,6 +1598,39 @@ table.promo-grid th.grp-band { background: color-mix(in srgb, var(--pc) 20%, var
 table.promo-grid td.promocell { background: color-mix(in srgb, var(--pc, var(--surface-2)) 6%, var(--surface-2)); }
 table.promo-grid .grp-first { border-left: 3px solid var(--pc); }
 
+/* Placement direct depuis « À placer » (retour utilisateur 28/08/2026) —
+   les cases du BON parcours deviennent cliquables ; les autres restent en
+   lecture seule normale, pas de changement visuel pour elles. */
+table.promo-grid td.promocell--placeable {
+  cursor: pointer;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+table.promo-grid td.promocell--placeable:hover,
+table.promo-grid td.promocell--placeable:focus-visible {
+  background: var(--accent-soft);
+}
+.promocell-poser {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: center;
+  padding: 2px 0;
+}
+
+.promo-placement-actif {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.promo-placement-erreur {
+  padding: 10px 16px;
+}
+
 .promo-chip {
   border-radius: 7px;
   padding: 4px 6px;
