@@ -8,8 +8,16 @@
 # 2 enseignants sur un même créneau/module, on les place dans 2 salles Celcat
 # distinctes mais physiquement collées/communicantes : H.007+H.008, H.201+H.203,
 # H.017+H.022 (H.022 = local de rangement attenant au Studio, sert de salle
-# fantôme). Elles sont donc modélisées ici comme des salles bookables séparées
-# (pas de salle "fusionnée" fictive, pour ne pas risquer un double-booking).
+# fantôme). Elles restent donc modélisées comme des salles bookables séparées
+# pour ce cas-là (2 enseignants, 2 salles).
+#
+# Salle "fusion" (28/08/2026) : H.007+H.008 et H.201+H.203 sont EN PLUS
+# modélisées comme une salle combinée à part entière (`room_type: combined`,
+# `combines: [...]`) — pour le cas où c'est UN SEUL cours trop grand pour une
+# moitié seule, pas deux enseignants synchronisés. Le double-booking entre la
+# salle fusionnée et ses moitiés est bloqué par construction, cf.
+# `solver/rooms.py::_build_conflict_map`/`_is_free` — la crainte du
+# commentaire d'origine (double-booking) est donc levée pour ce mécanisme-là.
 rooms:
   # --- RDC ---
   - id: h005
@@ -32,15 +40,36 @@ rooms:
 
   - id: h007
     label: H.007
-    capacity: 30
+    # 30 -> 15 (retour utilisateur 28/08/2026 : « la 05 06 07 08 sont toutes
+    # les salle de tp donc environ 15 »), même correction que H.006 le
+    # 28/08/2026 (au-dessus). Reste réservable seule, cloison fermée — pour
+    # un TD trop grand, cf. la salle fusionnée `h007_h008` ci-dessous.
+    capacity: 15
     room_type: tp_standard
     equipment: [cloison_amovible_h008]  # ouvrable -> 1 salle TD avec H.008
 
   - id: h008
     label: H.008
-    capacity: 30
+    capacity: 15
     room_type: tp_standard
     equipment: [cloison_amovible_h007]
+
+  - id: h007_h008
+    label: H.007-008
+    # Salle "fusion" (retour utilisateur 28/08/2026 : « la 07 08 sont
+    # collées et peuvent s'ouvrir pour faire qu'une salle donc on peut
+    # mettre un TD dedans ») — bookable comme UNE salle à part entière ;
+    # occuper H.007 OU H.008 individuellement la bloque aussi, et
+    # inversement (cf. `combines` + `solver/rooms.py::_build_conflict_map`).
+    # `combined`, pas `standard` : priorité volontairement basse (dernier
+    # recours des règles TD ci-dessous) plutôt qu'au même rang que les
+    # vraies salles standard — sinon elle serait choisie AVANT elles dès
+    # qu'une petite salle suffit (30 < 35, tri "best fit"), immobilisant
+    # deux salles pour rien.
+    capacity: 30
+    room_type: combined
+    combines: [h007, h008]
+    equipment: []
 
   - id: h009
     label: H.009 (Design)
@@ -116,9 +145,25 @@ rooms:
     room_type: standard
     equipment: [cloison_ouverte_h201]
 
+  - id: h201_h203
+    label: H.201-203
+    # Même scénario que H.007-008 (retour utilisateur 28/08/2026 : « c'est
+    # le même scénario pour la 201 et 203 »), capacité 35+35 — priorité
+    # basse (`combined`), dernier recours, cf. commentaire sur h007_h008.
+    capacity: 70
+    room_type: combined
+    combines: [h201, h203]
+    equipment: []
+
   - id: h205
     label: H.205 (VR/Réseaux)
-    capacity: 16
+    # 16 -> 35 (retour utilisateur 28/08/2026 : « elle peut accueillir des
+    # TD mais exceptionnellement, elle est priorisée en VR réseaux dev et
+    # game dev ») — la capacité "chaises dans la pièce" est bien 35, mais
+    # elle reste un TOUT DERNIER recours pour un TD générique (cf. règle TD
+    # plus bas) : les cours VR/réseaux/dev gardent leur priorité via la
+    # règle `["*D"]` existante (préférée à égalité avec `tp_standard`).
+    capacity: 35
     room_type: tp_vr_reseaux
     equipment: [baie_serveurs, imprimante_3d, pc_puissants, casques_vr]
 
@@ -141,7 +186,12 @@ room_assignment_rules:
 
   - session_types: [TD]
     preferred_room_types: [standard]
-    fallback_room_types: [tp_standard, tp_mac]
+    # `combined` (H.007-008/H.201-203) et `tp_vr_reseaux` (H.205) en TOUT
+    # dernier recours (retour utilisateur 28/08/2026) : jamais préférées à
+    # une vraie salle standard/TP libre, seulement quand rien d'autre ne
+    # convient — H.205 reste par ailleurs prioritaire pour les cours
+    # VR/réseaux/dev via la règle `["*D"]` plus bas, indépendante de celle-ci.
+    fallback_room_types: [tp_standard, tp_mac, combined, tp_vr_reseaux]
 
   - session_types: [TP]
     preferred_room_types: [tp_standard, standard]
@@ -154,12 +204,22 @@ room_assignment_rules:
   # émises en TD, cf. cohorte à groupe unique) viseraient les salles
   # `standard` — toutes à 35 places, donc largement surdimensionnées.
   # `tp_standard` en préféré + tri "best fit" (cf. `assign_rooms`) fait
-  # tomber H.005 (15 places) en premier choix, H.006/007/008 (30) ensuite.
+  # tomber H.005 en premier choix (capacité identique à H.006/007/008
+  # depuis le 28/08/2026 — toutes à 15 désormais —, mais H.005 gagne les
+  # égalités en restant déclarée en premier dans ce fichier), H.006/007/008
+  # ensuite si H.005 est déjà prise à ce créneau.
   # WRA501D (Anglais) volontairement EXCLU : il garde la salle attitrée
   # d'anglais via la règle ci-dessous, qui matche après (dernière règle
   # gagnante, cf. `_find_matching_rule`).
+  #
+  # WSA501D (SAE, seule SAE effectivement placée par le solveur, cf.
+  # `load_solver_scheduled_sae`) AJOUTÉE le 28/08/2026 (retour utilisateur :
+  # « on a des cours la première semaine où on n'y est pas [en H.005] alors
+  # que je vois que c'est possible ») — code préfixé WS, pas WR, donc absent
+  # de la liste WRA5* d'origine ; retombait sur la règle TD/TP générique
+  # (`standard`), atterrissant en H.104 malgré H.005 libre au même créneau.
   - course_code_patterns:
-      ["WRA502D", "WRA503D", "WRA504D", "WRA505D", "WRA506D", "WRA507D", "WRA508D", "WRA509D", "WRA510D"]
+      ["WRA502D", "WRA503D", "WRA504D", "WRA505D", "WRA506D", "WRA507D", "WRA508D", "WRA509D", "WRA510D", "WSA501D"]
     session_types: [TD, TP]
     preferred_room_types: [tp_standard, standard]
     fallback_room_types: [tp_mac, td_design]

@@ -66,7 +66,7 @@ from cal_iut.models.group_scope import expand_group_filter, related_group_ids
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.cpsat import PlacedSession, SolverConfig, TimetableSolver
 from cal_iut.solver.quality import compute_quality
-from cal_iut.solver.rooms import PlacedSessionWithRoom, assign_rooms, parse_room_rules
+from cal_iut.solver.rooms import PlacedSessionWithRoom, _build_conflict_map, assign_rooms, parse_room_rules
 
 def _export_semestre(state) -> str:
     """Semestre servant de référence temporelle à l'export (dates, numéros de
@@ -1224,7 +1224,10 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         if resolved_room is not None:
             target_room_id = resolved_room.id
 
-    result = validate_move(session_id, body.week, body.day, body.slot, _as_placed(state.timetable), match.group_ids, match.teacher_codes, target_room_id)
+    result = validate_move(
+        session_id, body.week, body.day, body.slot, _as_placed(state.timetable), match.group_ids, match.teacher_codes,
+        target_room_id, conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+    )
     suggestions, note = ([], None) if result.valid else _suggestions_for(state, session_id, match)
     return ValidationResponse(valid=result.valid, hard_conflicts=result.hard_conflicts, soft_warnings=result.soft_warnings, suggestions=suggestions, suggestions_note=note)
 
@@ -1289,6 +1292,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         # étudiante (un TD posé sur le CM de sa promo passait sans conflit).
         sessions_by_id=state.sessions_by_id,
         groups=state.groups,
+        conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
     )
 
     if not validation.valid and not body.force:
@@ -1645,11 +1649,13 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     else:
         salle = _resolve_room(state, session, body.week, body.day, body.slot, None)
 
+    salle_id = getattr(salle, "id", None)
     validation = validate_move(
         session_id, body.week, body.day, body.slot, _as_placed(state.timetable),
         list(session.group_ids or []), list(session.teacher_codes or []),
-        getattr(salle, "id", None),
+        salle_id,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
+        conflicting_room_ids=_build_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
     )
     if not validation.valid and not body.force:
         raise HTTPException(409, detail={

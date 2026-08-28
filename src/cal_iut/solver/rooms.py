@@ -218,6 +218,44 @@ def _duo_room_overrides(
     return overrides
 
 
+def _build_conflict_map(rooms: list[Room]) -> dict[str, set[str]]:
+    """
+    Salles combinées (retour utilisateur 28/08/2026 : « H.007+H.008 [...] sont
+    collées et peuvent s'ouvrir pour faire qu'une salle » — même scénario pour
+    H.201/H.203) : `Room.combines` déclare, sur la salle FUSIONNÉE (ex.
+    "h007_h008"), les salles individuelles qu'elle recouvre physiquement.
+    Occuper l'une bloque forcément l'autre — mais deux salles individuelles
+    d'une même paire (H.007 et H.008) restent, elles, réservables en même
+    temps INDÉPENDAMMENT (cloison fermée) : c'est même tout l'intérêt du
+    "hack Celcat" déjà en place pour les duos synchronisés (2 enseignants =
+    2 salles Celcat distinctes). Le conflit ne remonte donc QUE entre la
+    salle fusionnée et chacune de ses composantes, jamais entre les deux
+    composantes elles-mêmes.
+    """
+    conflicts: dict[str, set[str]] = {r.id: set() for r in rooms}
+    for r in rooms:
+        for other_id in r.combines:
+            conflicts.setdefault(r.id, set()).add(other_id)
+            conflicts.setdefault(other_id, set()).add(r.id)
+    return conflicts
+
+
+def _is_free(
+    room_schedule: dict[str, set[int]],
+    conflicts: dict[str, set[str]],
+    room_id: str,
+    window: list[int] | set[int],
+) -> bool:
+    window_set = window if isinstance(window, set) else set(window)
+    if not room_schedule[room_id].isdisjoint(window_set):
+        return False
+    return all(
+        room_schedule[other_id].isdisjoint(window_set)
+        for other_id in conflicts.get(room_id, ())
+        if other_id in room_schedule
+    )
+
+
 def assign_rooms(
     placements: list[PlacedSession],
     sessions_by_id: dict[str, object],
@@ -249,6 +287,7 @@ def assign_rooms(
     room_schedule: dict[str, set[int]] = {
         r.id: set(reserved.get(r.id, ())) if reserved else set() for r in rooms
     }
+    conflicts = _build_conflict_map(rooms)
     course_cm_room: dict[str, str] = dict(course_cm_room_seed or {})
     results: list[PlacedSessionWithRoom] = []
 
@@ -306,7 +345,7 @@ def assign_rooms(
             # plutôt que de garantir la salle de duo au prix d'un conflit
             # physique. Le duo perd alors sa salle dédiée — un désagrément —
             # là où le double-booking envoie deux groupes au même endroit.
-            if room_schedule[duo_room.id].isdisjoint(duo_slots):
+            if _is_free(room_schedule, conflicts, duo_room.id, duo_slots):
                 room_schedule[duo_room.id].update(duo_slots)
                 results.append(_with_room(placement, duo_room))
                 continue
@@ -336,7 +375,7 @@ def assign_rooms(
         if same_room and st_value == "CM" and not is_eval and course_code in course_cm_room:
             room_id = course_cm_room[course_code]
             room = next((r for r in rooms if r.id == room_id), None)
-            if room is not None and room_schedule[room.id].isdisjoint(occupied):
+            if room is not None and _is_free(room_schedule, conflicts, room.id, occupied):
                 room_schedule[room.id].update(occupied)
                 results.append(_with_room(placement, room))
                 continue
@@ -377,7 +416,7 @@ def assign_rooms(
                     r
                     for r in rooms
                     if r.capacity >= needed
-                    and room_schedule[r.id].isdisjoint(window)
+                    and _is_free(room_schedule, conflicts, r.id, window)
                     and not (reserve_amphi and r.room_type == RoomType.AMPHI)
                 ],
                 key=lambda r: (_room_priority(r, preferred, fallback), r.capacity),
@@ -399,7 +438,7 @@ def assign_rooms(
             # sans explication, et rien ne disait qu'elle pouvait sous-doter
             # une séance.
             return sorted(
-                [r for r in rooms if room_schedule[r.id].isdisjoint(window)],
+                [r for r in rooms if _is_free(room_schedule, conflicts, r.id, window)],
                 key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),
             )
 
@@ -465,6 +504,7 @@ def find_room_for_slot(
     room_schedule: dict[str, set[int]] = {
         r.id: set(reserved.get(r.id, ())) if reserved else set() for r in rooms
     }
+    conflicts = _build_conflict_map(rooms)
     for p in timetable:
         if p.session_id == session.id:
             continue
@@ -476,7 +516,7 @@ def find_room_for_slot(
         p_base = p.week * slots_per_week + p.day * SLOTS_PER_DAY + p.slot
         room_schedule[room_id].update(range(p_base, p_base + other_duration))
 
-    if prefer_room_id and prefer_room_id in room_schedule and room_schedule[prefer_room_id].isdisjoint(occupied_target):
+    if prefer_room_id and prefer_room_id in room_schedule and _is_free(room_schedule, conflicts, prefer_room_id, occupied_target):
         preferred_room = next((r for r in rooms if r.id == prefer_room_id), None)
         if preferred_room is not None:
             return preferred_room
@@ -496,14 +536,14 @@ def find_room_for_slot(
         [
             r for r in rooms
             if r.capacity >= needed
-            and room_schedule[r.id].isdisjoint(occupied_target)
+            and _is_free(room_schedule, conflicts, r.id, occupied_target)
             and not (reserve_amphi and r.room_type == RoomType.AMPHI)
         ],
         key=lambda r: _room_priority(r, preferred, fallback),
     )
     if not candidates:
         candidates = sorted(
-            [r for r in rooms if room_schedule[r.id].isdisjoint(occupied_target)],
+            [r for r in rooms if _is_free(room_schedule, conflicts, r.id, occupied_target)],
             key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),
         )
     return candidates[0] if candidates else None

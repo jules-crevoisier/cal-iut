@@ -37,6 +37,7 @@ def load_rooms(config_dir: Path) -> list[Room]:
             capacity=item["capacity"],
             room_type=RoomType(item["room_type"]),
             equipment=item.get("equipment", []),
+            combines=item.get("combines", []),
         )
         for item in data.get("rooms", [])
     ]
