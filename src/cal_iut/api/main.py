@@ -1040,7 +1040,9 @@ def ics_groupe(group_id: str) -> Response:
     )
 
 
-def _check_move_editable(state: object, session_id: str, source_week: int, dest_week: int) -> None:
+def _check_move_editable(
+    state: object, session_id: str, source_week: int, dest_week: int, *, force: bool = False
+) -> None:
     """
     Rejette un déplacement (manuel, glisser-déposer) touchant une semaine
     passée ou en cours — que ce soit la semaine SOURCE ou DESTINATION. Ce
@@ -1048,7 +1050,21 @@ def _check_move_editable(state: object, session_id: str, source_week: int, dest_
     /placements/{id}`), seule la régénération par lot (`/regen/week`) le
     faisait — retrofit nécessaire : un simple glisser-déposer aurait pu
     déplacer une séance déjà passée sans qu'aucun garde-fou ne l'empêche.
+
+    CONTOURNABLE via `force` depuis le 29/08/2026 (retour utilisateur :
+    « il faut que les séances soient modifiables à tout moment pour
+    l'instant en forçant, on est en train de tester donc on va unlock cela,
+    mais ce sera sûrement à remettre par la suite »). Le cas qui l'a rendu
+    nécessaire : un vacataire signale son indisponibilité le samedi pour la
+    semaine qui commence le lundi — or le week-end bascule déjà sur cette
+    semaine-là (`current_relative_week`), qui devient donc non modifiable
+    au moment PRÉCIS où il faut la corriger.
+
+    Le garde-fou reste actif par défaut : forcer est un geste explicite,
+    jamais le comportement normal.
     """
+    if force:
+        return
     session = state.sessions_by_id.get(session_id)
     semestre = session.semestre if session else resolve_semestre(state)
     for w in {source_week, dest_week}:
@@ -1408,7 +1424,7 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     state = get_state()
     match = _find_placement(state, session_id)
     session = state.sessions_by_id.get(session_id)
-    _check_move_editable(state, session_id, match.week, body.week)
+    _check_move_editable(state, session_id, match.week, body.week, force=body.force)
 
     # Règles institutionnelles/pédagogiques : contrôlées ICI, sur le
     # déplacement réellement demandé — pas seulement utilisées pour filtrer
@@ -1455,7 +1471,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
     if session and session.locked and not body.lock:
         raise HTTPException(409, "Session is locked")
 
-    _check_move_editable(state, session_id, match.week, body.week)
+    _check_move_editable(state, session_id, match.week, body.week, force=body.force)
 
     # Règles institutionnelles (PAC, fin de semestre FI, présence alternant
     # FC, événement planning officiel, SAE sanctuarisée) : JAMAIS
@@ -1618,13 +1634,26 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     match = _find_placement(state, session_id)
     session = state.sessions_by_id.get(session_id)
 
+    # Retrait de salle : `room_id` vide. Aucun conflit ni capacité à vérifier
+    # — on n'occupe plus rien.
+    if not body.room_id.strip():
+        _check_move_editable(state, session_id, match.week, match.week, force=body.force)
+        match.room_id, match.room_label = None, None
+        if state.current_run_id:
+            get_repo().update_current_placement(
+                session_id, match.week, match.day, match.slot, None, None,
+                session.locked if session else False,
+                run_id=state.current_run_id, course_code=match.course_code,
+            )
+        return _to_placement(match, state.sessions_by_id)
+
     salle = next((r for r in state.rooms if r.id == body.room_id), None)
     if salle is None:
         raise HTTPException(404, f"Salle {body.room_id} inconnue")
 
     # Même garde-fou "on ne réécrit pas le passé" que le déplacement — la
     # semaine ne bouge pas, on la passe donc des deux côtés.
-    _check_move_editable(state, session_id, match.week, match.week)
+    _check_move_editable(state, session_id, match.week, match.week, force=body.force)
 
     # Occupation de la salle calculée DIRECTEMENT plutôt qu'en filtrant les
     # messages de `validate_move` : celui-ci juge la position ENTIÈRE
@@ -2153,8 +2182,11 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
             "que le placement.",
         )
 
+    # Même verrou que le déplacement, et même contournement par `force`
+    # (cf. `_check_move_editable`) : poser une séance manquante dans la
+    # semaine en cours doit rester possible quand on corrige à chaud.
     statut = week_status(state.calendar, session.semestre, body.week)
-    if statut != "future":
+    if statut != "future" and not body.force:
         raise HTTPException(409, f"Semaine {body.week + 1} non modifiable (statut : {statut})")
 
     # `force` contourne la synchro duo depuis le 28/08/2026 (retour

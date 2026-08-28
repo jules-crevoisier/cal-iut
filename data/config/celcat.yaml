@@ -136,11 +136,111 @@ types_seance:
   CM: null   # À CONFIRMER
   PTUT: null # À CONFIRMER
 
-# --- Modules : notre code cours -> code module Celcat (ex. TSBZ2520) ---
-# VIDE volontairement : la liste fournie (`export/LISTE DES MODULES MMI 28
-# AOUT 2026.pdf`) est un PDF SCANNÉ, sans texte extractible — impossible d'en
-# tirer la correspondance de façon fiable, et l'inventer serait le meilleur
-# moyen de créer des séances fausses dans l'outil qui sert aussi à PAYER les
-# enseignants. À compléter à la main (ou depuis un export texte/CSV de cette
-# liste). L'outil affiche précisément les codes manquants avant tout envoi.
-modules: {}
+# --- Modules : notre code cours -> code module Celcat ---
+# Extrait de `export/Liste_modules_MMI.txt` (29/08/2026). La liste indexe
+# parfois le module SANS le suffixe de parcours que nous utilisons (« WR301 »
+# chez eux, « WR301D » chez nous) : le rapprochement retire ce suffixe en
+# dernier recours, jamais avant d'avoir essayé la correspondance exacte.
+#
+# Ne contient QUE les correspondances SANS ambiguïté. Les cas à plusieurs
+# codes Celcat possibles sont listés en commentaire plus bas, à trancher à la
+# main : Celcat sert aussi à payer les enseignants, y rattacher une séance au
+# mauvais module n'est pas une erreur d'affichage.
+modules:
+  WR101: "TSBZ1M01"  # Anglais
+  WR102: "TSBZ1202"  # Anglais renforcé
+  WR103: "TSBZ1103"  # Ergo. Accessi.
+  WR104: "TSBZ1104"  # Cult. Numérique
+  WR105: "TSBZ1M05"  # Strat. de Comm.
+  WR106: "TSBZ1M06"  # Expression Comm.
+  WR107: "TSBZ1307"  # Ecrit. Multimédia
+  WR108: "TSBZ1308"  # Prod. Graphique
+  WR109: "TSBZ1M09"  # Cult. Artistique
+  WR110: "TSBZ1310"  # Prod. Audiovisuel
+  WR112: "TSBZ1412"  # Intégration
+  WR113: "TSBZ1413"  # Développement Web
+  WR115: "TSBZ1415"  # Hébergement
+  WR116: "TSBZ1M16"  # Traitement Info
+  WR117: "TSBZ1517"  # Gestion de Projet
+  WR118: "TSBZ1M18"  # Eco. Droit du Num.
+  WR119: "TSBZ1519"  # PPP
+  WR120: "TSBZ1520"  # Soutien
+  WR301D: "TSBZ301D"  # Anglais
+  WR302D: "TSBZ302D"  # Anglais renforcé
+  WR303D: "TSBZ303D"  # Design d'expérience
+  WR304D: "TSBZ304D"  # Culture numérique
+  WR306D: "TSBZ306D"  # Référencement
+  WR307D: "TSBZ307D"  # Expression comm
+  WR308D: "TSBZ308D"  # Ecriture
+  WR310D: "TSBZ310D"  # Culture artistique
+  WR311D: "TSBZ311D"  # Audiovisuel motion
+  WR501D: "TSBZ5010"  # Anglais
+  WR502D: "TSBZ5020"  # Management qualité
+  WR503D: "TSBZ5030"  # Entrepreneuriat
+  WR504D: "TSBZ5040"  # PPP
+  WR505D: "TSB1505D"  # Dvpt front avancé
+  WR506D: "TSB1506D"  # Dvpt back avancé
+  WR507D: "TSB1507D"  # Dispo interactifs
+  WR508D: "TSB1508D"  # Hébergem cybersecu
+  WR509D: "TSB1509D"  # IOT
+  WR510D: "TSB1510D"  # Applications mobil
+  WRA301M: "TSBZC01M"  # Anglais
+  WRA302M: "TSBZC02M"  # Anglais Renforcé
+  WRA303M: "TSBZC03M"  # Design d'exp
+  WRA304M: "TSBZC04M"  # Culture numérique
+  WRA305M: "TSBZC05M"  # Stratégies de com
+  WRA306M: "TSBZC06M"  # Référencement
+  WRA308M: "TSBZC08M"  # Écrit. multimédia
+  WRA309M: "TSBZC09M"  # Créat. / design
+  WRA310M: "TSBZC10M"  # Culture artistiq.
+  WRA311M: "TSBZC11M"  # Pilotage projet
+  WRA312M: "TSBZC12M"  # Dév Front
+  WRA314M: "TSBZC14M"  # Gest. contenus
+  WRA315M: "TSBZC15M"  # traitement info
+  WRA316M: "TSBZC16M"  # Gestion de projet
+  WRA317M: "TSBZC17M"  # Eco. gest. droit
+  WRA318M: "TSBZC18M"  # PPP
+  WRA501C: "TSBZE01C"  # Anglais
+  WRA501D: "TSBZE010"  # Anglais
+  WRA502C: "TSBZE02C"  # Management
+  WRA502D: "TSBZE020"  # Manag qualité
+  WRA503C: "TSBZE03C"  # Entrepreneuriat
+  WRA503D: "TSBZE030"  # Entrepreneuriat
+  WRA504C: "TSBZE04C"  # PPP
+  WRA504D: "TSBZE040"  # PPP
+  WRA505C: "TSBZE05C"  # Dir Artistique
+  WRA505D: "TSBZE05D"  # Dév Front
+  WRA506C: "TSBZE06C"  # Com visuelle
+  WRA506D: "TSBZE06D"  # Dév Back
+  WRA507C: "TSBZE07C"  # Concept narrative
+  WRA507D: "TSBZE07D"  # Dispo interactifs
+  WRA508C: "TSBZE08C"  # Game Development
+  WRA508D: "TSBZE08D"  # Héberg et cyber
+  WRA509D: "TSBZE09D"  # IA avancée
+  WRA510D: "TSBZE10D"  # Dev avancé AI
+
+# --- À TRANCHER : plusieurs codes Celcat pour le même module ---------------
+# Deux familles de doublons dans la liste fournie :
+#   - préfixe « TSB2… » vs « TSBZ… » (même numéro, même libellé) ;
+#   - suffixe « …0 » vs « …D » (ex. TSBZ3140 / TSBZ314D), où l'un des deux
+#     libellés porte souvent une coquille (« Déploiemet »), ce qui suggère
+#     une entrée héritée devenue obsolète — mais ce n'est qu'une hypothèse.
+# Rien n'est choisi ici : reporter le bon code dans `modules:` ci-dessus.
+#   WR305D: TSB2305D (Strat) | TSBZ305D (Strat)
+#   WR309D: TSB2309D (Création) | TSBZ309D (Création)
+#   WR312D: TSBZ3120 (Développement Front) | TSBZ312D (Développement Front)
+#   WR313D: TSB2313D (Développement Back) | TSBZ313D (Développement Back)
+#   WR314D: TSBZ3140 (Dépl. de services) | TSBZ314D (Déploiemet services)
+#   WR315D: TSBZ3150 (Maths) | TSBZ315D (Maths)
+#   WR316D: TSBZ3160 (Gestion de projet) | TSBZ316D (Gestion de projet)
+#   WR317D: TSBZ3170 (Eco/Droit) | TSBZ317D (Eco/Droit)
+#   WR318D: TSBZ3180 (PPP) | TSBZ318D (PPP)
+#   WR319D: TSB2319D (Symfony) | TSBZ319D (Symfony)
+
+# --- ABSENTS de la liste fournie ------------------------------------------
+# Aucun code Celcat trouvé, même en retirant le suffixe. À récupérer.
+#   WR100BU
+#   WRA307M
+#   WRA313M
+#   WRA319M
+#   WSA501D
