@@ -20,6 +20,16 @@ services:
       # existe). Le fixer explicitement évite de perdre les liens
       # enseignants déjà envoyés si le volume est un jour recréé.
       # CAL_IUT_SECRET_KEY: change-moi-aussi
+      #
+      # Envoi automatique du lien perso par mail (`POST /mail/teacher-links/
+      # send`, cf. api/mailer.py) — les trois suivants sont à définir dans
+      # les variables d'environnement de Dokploy, PAS ici (secrets, jamais
+      # commités). Sans `RESEND_API_KEY`/`CAL_IUT_PUBLIC_URL`, le bouton
+      # d'envoi reste visible mais chaque tentative échoue avec un message
+      # explicite plutôt qu'un envoi silencieux ou un lien cassé.
+      # RESEND_API_KEY: re_xxxxxxxx
+      # RESEND_FROM: cal-iut@nexkeep.fr
+      # CAL_IUT_PUBLIC_URL: https://cal-iut-mmi.srko.fr
     volumes:
       # Named volume : seedé UNE fois depuis data/cal-iut.db baké dans
       # l'image (cf. Dockerfile), puis les écritures ultérieures

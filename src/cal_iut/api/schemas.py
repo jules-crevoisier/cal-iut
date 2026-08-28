@@ -279,3 +279,34 @@ class CompletionResponse(BaseModel):
     placees: list[SeancePlaceeAutoResponse] = []
     refusees: list[SeanceRefuseeResponse] = []
     resume: str = ""
+
+
+class TeacherMailPreviewResponse(BaseModel):
+    """Une ligne de l'annuaire d'envoi — `email=None` : pas d'adresse connue
+    dans `teacher_contacts.yaml`, cet enseignant ne peut pas être sélectionné
+    à l'envoi (affiché quand même, pour que l'absence soit visible plutôt que
+    silencieuse)."""
+
+    code: str
+    name: str
+    email: str | None = None
+    sent_at: str | None = None
+
+
+class TeacherMailPreviewListResponse(BaseModel):
+    configured: bool
+    teachers: list[TeacherMailPreviewResponse] = []
+
+
+class SendTeacherMailsRequest(BaseModel):
+    codes: list[str]
+
+
+class TeacherMailSendResultResponse(BaseModel):
+    code: str
+    ok: bool
+    error: str | None = None
+
+
+class SendTeacherMailsResponse(BaseModel):
+    results: list[TeacherMailSendResultResponse] = []

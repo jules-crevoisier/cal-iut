@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from datetime import date as _date
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import auth
+from cal_iut.api import auth, mailer
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
@@ -36,8 +36,13 @@ from cal_iut.api.schemas import (
     SeancePlaceeAutoResponse,
     SeanceRefuseeResponse,
     SeancesAPlacerResponse,
+    SendTeacherMailsRequest,
+    SendTeacherMailsResponse,
     SlotSuggestionResponse,
     SolveRequest,
+    TeacherMailPreviewListResponse,
+    TeacherMailPreviewResponse,
+    TeacherMailSendResultResponse,
     TimetableResponse,
     ValidationResponse,
     WeightsResponse,
@@ -140,8 +145,8 @@ app.add_middleware(
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
     "/app-state", "/corrections", "/diff", "/exceptions", "/export",
-    "/feedback", "/ingest", "/legacy", "/meta", "/placements", "/regen",
-    "/sessions", "/solve", "/timetable", "/weeks", "/weights",
+    "/feedback", "/ingest", "/legacy", "/mail", "/meta", "/placements",
+    "/regen", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
 )
 
 
@@ -165,6 +170,18 @@ async def require_auth(request: Request, call_next):
     if auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
         return await call_next(request)
     return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
+
+
+def require_admin_session(request: Request) -> None:
+    """Garde-fou supplémentaire pour `/mail/*` : la vraie session (mot de
+    passe partagé) est exigée, un simple jeton prof ne suffit PAS ici — à
+    la différence du reste de `_PROTECTED_PREFIXES`. Un jeton prof donne un
+    accès en LECTURE à son propre planning (limite déjà documentée,
+    `auth.py`), mais ne doit jamais pouvoir, à lui seul, déclencher un envoi
+    de mail à TOUS les collègues (`require_auth` a déjà laissé passer la
+    requête à ce stade — ceci resserre spécifiquement pour cette action)."""
+    if not auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
+        raise HTTPException(401, "Session administrateur requise pour cette action.")
 
 
 @app.post("/auth/login")
@@ -933,18 +950,30 @@ def _resolve_room(state: object, session: object, week: int, day: int, slot: int
     )
 
 
-def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[int, int, int]], set[int]]:
+def _hard_constraint_context(
+    state: object, session: object
+) -> tuple[set[tuple[int, int, int]], set[tuple[int, int, int]], set[int]]:
     """
-    `(extra_blocked, allowed_weeks)` pour une séance donnée — verrou jeudi
-    PAC, jours SAE sanctuarisés, événements du planning officiel à horaire
-    précis, ordre pédagogique. Réutilisé à la fois pour filtrer les
-    suggestions ET pour bloquer RÉELLEMENT un déplacement qui violerait une
-    de ces règles (cf. `_institutional_violations`, appelé depuis
-    `move_session`/`validate_placement` — retour utilisateur : "vérifie bien
+    `(extra_blocked, extra_blocked_pedago, allowed_weeks)` pour une séance
+    donnée — verrou jeudi PAC, jours SAE sanctuarisés, événements du planning
+    officiel à horaire précis, ordre pédagogique. Réutilisé à la fois pour
+    filtrer les suggestions ET pour bloquer RÉELLEMENT un déplacement qui
+    violerait une de ces règles (cf. `_institutional_violations`/
+    `_pedagogical_order_violations`, appelés depuis `move_session`/
+    `validate_placement`/`placer_seance` — retour utilisateur : "vérifie bien
     toutes les contraintes avant que ça s'effectue". Avant ce correctif,
     ces règles ne servaient qu'à filtrer les suggestions ; un glisser-déposer
     direct sur une case arbitraire — hors suggestion — pouvait les violer
     sans qu'aucun garde-fou serveur ne l'empêche).
+
+    `extra_blocked` (PAC, fin de semestre FI, présence alternant FC,
+    événement planning officiel, SAE sanctuarisée) reste JAMAIS contournable.
+    `extra_blocked_pedago`/`allowed_weeks` (ordre pédagogique CM/TD/TP) sont
+    séparés depuis le 28/08/2026 (retour utilisateur : « on veut que si on
+    appuie sur forcer cela soit bon et que le placement se fasse ») — un
+    humain qui force ici sait qu'il place sciemment une séance hors de
+    l'ordre de contenu attendu, à la différence des verrous institutionnels
+    ci-dessus, qui n'ont jamais de bonne raison d'être cassés.
     """
     semestre = session.semestre
     from cal_iut.ingestion.planning_loader import (
@@ -1060,6 +1089,7 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
 
     preds, succs = neighbors.get(session.id, ([], []))
     placement_by_id = {p.session_id: p for p in state.timetable}
+    extra_blocked_pedago: set[tuple[int, int, int]] = set()
     temps_preds_a_lo = [
         placement_by_id[pid].day * _SPD + placement_by_id[pid].slot
         for pid in preds
@@ -1070,7 +1100,7 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
         for day in range(_DPW):
             for slot in range(_SPD):
                 if day * _SPD + slot <= seuil:
-                    extra_blocked.add((lo, day, slot))
+                    extra_blocked_pedago.add((lo, day, slot))
     temps_succs_a_hi = [
         placement_by_id[sid].day * _SPD + placement_by_id[sid].slot
         for sid in succs
@@ -1081,34 +1111,60 @@ def _hard_constraint_context(state: object, session: object) -> tuple[set[tuple[
         for day in range(_DPW):
             for slot in range(_SPD):
                 if day * _SPD + slot >= seuil:
-                    extra_blocked.add((hi, day, slot))
+                    extra_blocked_pedago.add((hi, day, slot))
 
-    return extra_blocked, allowed_weeks
+    return extra_blocked, extra_blocked_pedago, allowed_weeks
 
 
 def _institutional_violations(
     week: int, day: int, slot: int,
-    extra_blocked: set[tuple[int, int, int]], allowed_weeks: set[int],
+    extra_blocked: set[tuple[int, int, int]],
 ) -> list[str]:
     """
-    Violations JAMAIS contournables via `force` (règles institutionnelles/
-    pédagogiques dures) — distinct des conflits de ressources groupe/
-    enseignant/salle, qui eux restent force-ables (un humain peut avoir une
-    bonne raison de les outrepasser ponctuellement ; casser le verrou PAC,
-    la sanctuarisation SAE ou l'ordre pédagogique n'en a jamais une bonne).
+    Violations JAMAIS contournables via `force` (verrous institutionnels durs :
+    jeudi PAC, fin de semestre FI, présence IUT d'un alternant FC, événement
+    du planning officiel à horaire précis, journée SAE sanctuarisée) —
+    distinct des conflits de ressources groupe/enseignant/salle (force-ables,
+    un humain peut avoir une bonne raison de les outrepasser ponctuellement)
+    ET de l'ordre pédagogique (`_pedagogical_order_violations`, lui aussi
+    force-able depuis le 28/08/2026) : casser un verrou institutionnel n'a
+    jamais de bonne raison, casser l'ordre pédagogique peut légitimement en
+    avoir une (retour utilisateur explicite).
     """
     violations: list[str] = []
     if (week, day, slot) in extra_blocked:
         violations.append(
-            "Créneau institutionnellement bloqué (jeudi après-midi PAC, journée SAE "
-            "sanctuarisée, événement du planning officiel à cet horaire précis, présence "
-            "IUT d'un alternant, ou ordre pédagogique au créneau précis avec une séance "
-            "voisine déjà placée dans la même semaine) — non modifiable, même en forçant."
+            "Créneau institutionnellement bloqué (jeudi après-midi PAC, fin de semestre, "
+            "journée SAE sanctuarisée, événement du planning officiel à cet horaire précis, "
+            "ou présence IUT d'un alternant) — non modifiable, même en forçant."
+        )
+    return violations
+
+
+def _pedagogical_order_violations(
+    week: int, day: int, slot: int,
+    extra_blocked_pedago: set[tuple[int, int, int]], allowed_weeks: set[int],
+) -> list[str]:
+    """
+    Violations d'ordre pédagogique (CM/TD/TP doivent rester dans le bon
+    ordre de contenu par rapport à leurs voisins de séquence) — contournables
+    via `force` depuis le 28/08/2026 (retour utilisateur : « on veut que si
+    on appuie sur forcer cela soit bon et que le placement se fasse »), à la
+    différence des verrous institutionnels (`_institutional_violations`),
+    qui eux restent définitivement non contournables. Un humain qui force
+    ici sait qu'il place sciemment une séance hors de l'ordre de contenu
+    attendu (ex. avant le TD qui doit la précéder).
+    """
+    violations: list[str] = []
+    if (week, day, slot) in extra_blocked_pedago:
+        violations.append(
+            "Ordre pédagogique : ce créneau précis contredit une séance voisine du "
+            "même cours déjà placée dans la même semaine (contenu attendu avant/après)."
         )
     if allowed_weeks and week not in allowed_weeks:
         violations.append(
-            "Cette semaine violerait l'ordre pédagogique avec une séance voisine du "
-            "même cours (contenu attendu avant/après) — non modifiable, même en forçant."
+            "Ordre pédagogique : cette semaine contredit une séance voisine du "
+            "même cours (contenu attendu avant/après)."
         )
     return violations
 
@@ -1169,16 +1225,21 @@ def _suggestions_for(state: object, session_id: str, match: object) -> tuple[lis
     if _is_duo_synced(session, state.teacher_duos):
         return [], _DUO_SYNC_NOTE
 
-    extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
+    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
     original_room_id = getattr(match, "room_id", None)
     # `room_id=None` ici volontairement : le conflit de salle n'écarte plus un
     # candidat au 1er passage, il est résolu séparément ci-dessous (une salle
     # DIFFÉRENTE peut très bien convenir même si l'ancienne est prise).
+    #
+    # `extra_blocked_pedago` reste exclu ici même si l'ordre pédagogique est
+    # devenu force-able (28/08/2026) : une SUGGESTION doit rester un créneau
+    # ne nécessitant AUCUN forçage — sinon on proposerait à l'utilisateur, en
+    # candidat "propre", un créneau qu'il faudrait ensuite forcer quand même.
     raw = suggest_alternative_slots(
         session_id, match.group_ids, match.teacher_codes, _as_placed(state.timetable),
         state.calendar, session.semestre, teacher_availability=state.teacher_availability,
         room_id=None, search_from_week=match.week, max_suggestions=8,
-        extra_blocked=extra_blocked, allowed_weeks=allowed_weeks,
+        extra_blocked=extra_blocked | extra_blocked_pedago, allowed_weeks=allowed_weeks,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
     )
 
@@ -1209,11 +1270,17 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     if session and _is_duo_synced(session, state.teacher_duos):
         return ValidationResponse(valid=False, hard_conflicts=[_DUO_SYNC_NOTE], soft_warnings=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
     if session:
-        extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
-        institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked, allowed_weeks)
+        extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+        institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
         institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
-        if institutional:
-            return ValidationResponse(valid=False, hard_conflicts=institutional, soft_warnings=[], suggestions=[], suggestions_note=None)
+        # L'ordre pédagogique est signalé ici (dry-run, avant décision de
+        # l'utilisateur) même si `body.force` n'est pas encore posé — c'est
+        # ce qui déclenche la modale de confirmation côté front ; le forçage
+        # réel n'intervient qu'au vrai déplacement (`move_session`/
+        # `placer_seance`), pas dans cette prévisualisation.
+        pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+        if institutional or pedago:
+            return ValidationResponse(valid=False, hard_conflicts=institutional + pedago, soft_warnings=[], suggestions=[], suggestions_note=None)
 
     # Même résolution de salle que `move_session` — sinon un dry-run
     # pourrait signaler un conflit que le déplacement réel n'aurait pas
@@ -1243,33 +1310,48 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
 
     _check_move_editable(state, session_id, match.week, body.week)
 
-    # Règles institutionnelles/pédagogiques : JAMAIS contournables via
-    # `force` (un humain peut avoir une bonne raison ponctuelle de forcer un
-    # conflit de ressources ; casser le verrou PAC, la sanctuarisation SAE
-    # ou l'ordre pédagogique n'en a jamais une bonne). Retour utilisateur :
-    # "vérifie bien toutes les contraintes avant que ça s'effectue" — avant
-    # ce correctif, ces règles ne servaient qu'à filtrer les suggestions, un
+    # Règles institutionnelles (PAC, fin de semestre FI, présence alternant
+    # FC, événement planning officiel, SAE sanctuarisée) : JAMAIS
+    # contournables via `force` (un humain peut avoir une bonne raison
+    # ponctuelle de forcer un conflit de ressources ; casser un de ces
+    # verrous n'en a jamais une bonne). Retour utilisateur : "vérifie bien
+    # toutes les contraintes avant que ça s'effectue" — avant ce correctif,
+    # ces règles ne servaient qu'à filtrer les suggestions, un
     # glisser-déposer direct sur une case arbitraire (hors suggestion)
     # pouvait les violer sans aucun garde-fou serveur.
     #
     # La synchro duo (WR110/112/113) EST contournable via `force` depuis le
     # 28/08/2026 (retour utilisateur : « il faut que je puisse forcer ») —
     # à la différence des règles ci-dessus, c'est une optimisation de
-    # confort, pas une contrainte réglementaire.
+    # confort, pas une contrainte réglementaire. L'ordre pédagogique EST
+    # AUSSI contournable via `force` depuis le 28/08/2026 (retour
+    # utilisateur : « on veut que si on appuie sur forcer cela soit bon et
+    # que le placement se fasse ») — cf. `_pedagogical_order_violations`,
+    # vérifié séparément plus bas, après le bloc institutionnel ci-dessous.
     if session and _is_duo_synced(session, state.teacher_duos) and not body.force:
         raise HTTPException(409, detail={
             "message": "Conflit", "hard_conflicts": [_DUO_SYNC_NOTE],
             "soft_warnings": [], "suggestions": [], "suggestions_note": _DUO_SYNC_NOTE,
         })
     if session:
-        extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
-        institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked, allowed_weeks)
+        extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+        institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
         institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if institutional:
             raise HTTPException(409, detail={
                 "message": "Conflit", "hard_conflicts": institutional,
                 "soft_warnings": [], "suggestions": [], "suggestions_note": None,
             })
+        # Ordre pédagogique : contournable via `force` depuis le 28/08/2026
+        # (cf. `_pedagogical_order_violations`), à la différence du bloc
+        # institutionnel ci-dessus.
+        if not body.force:
+            pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+            if pedago:
+                raise HTTPException(409, detail={
+                    "message": "Conflit", "hard_conflicts": pedago,
+                    "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+                })
 
     # Résolution de salle : garde l'actuelle si elle est encore libre à ce
     # créneau, recalcule sinon (retour utilisateur : "si on modifie [le
@@ -1420,13 +1502,22 @@ def _noms_enseignants(state: object) -> dict[str, str]:
     return noms
 
 
-def _raison_non_placee(state: object, session: object) -> str:
+def _raison_non_placee(state: object, session: object, allowed_weeks: set[int], n_semaines: int) -> str:
     """Ce qui rend cette séance difficile, en une phrase.
 
     Un inventaire qui dit seulement « 85 séances manquantes » n'aide personne à
     les placer. On donne le motif le plus probable, annoncé comme tel : CP-SAT
     ne rend aucune justification d'infaisabilité, tout ce qui serait présenté
     comme une certitude serait inventé.
+
+    Une fenêtre d'ordre pédagogique très étroite (1-2 semaines valides sur un
+    horizon bien plus long) passe maintenant AVANT le motif "disponibilités
+    enseignant" — trouvé le 28/08/2026 sur WR106-S1-CM-1 (retour utilisateur) :
+    ce message accusait à tort la dispo de MRI (dont il existait bien UNE
+    entrée quelque part dans `state.teacher_availability`, sans rapport avec
+    ce blocage précis) alors que la vraie cause était deux TP voisins placés
+    une semaine "en avance" par rapport à leurs pairs, réduisant la fenêtre
+    pédagogiquement valide à une seule semaine déjà saturée pour le groupe.
     """
     motifs: list[str] = []
     duree = session.duration_slots or 1
@@ -1434,10 +1525,20 @@ def _raison_non_placee(state: object, session: object) -> str:
         motifs.append(f"bloc de {_LIBELLES_DUREE.get(duree, '?')} d'affilée à caser")
     if len(session.teacher_codes or []) > 1:
         motifs.append("plusieurs enseignants à réunir sur le même créneau")
-    for code in session.teacher_codes or []:
-        if any(a.teacher_code == code for a in (state.teacher_availability or [])):
-            motifs.append(f"disponibilités restreintes déclarées pour {code}")
-            break
+    fenetre_etroite = 0 < len(allowed_weeks) <= 2 < n_semaines
+    if fenetre_etroite:
+        libelle_fenetre = "une seule semaine" if len(allowed_weeks) == 1 else "deux semaines"
+        motifs.insert(
+            0,
+            f"ordre pédagogique très contraint par des séances voisines (fenêtre réduite à "
+            f"{libelle_fenetre}) — un placement manuel avec « Forcer » peut débloquer, si "
+            "le contenu le permet",
+        )
+    else:
+        for code in session.teacher_codes or []:
+            if any(a.teacher_code == code for a in (state.teacher_availability or [])):
+                motifs.append(f"disponibilités restreintes déclarées pour {code}")
+                break
     if not motifs:
         motifs.append("semaine saturée pour ce groupe ou cet enseignant")
     return "Probablement : " + ", ".join(motifs) + "."
@@ -1517,7 +1618,7 @@ def seances_manquantes() -> SeancesAPlacerResponse:
             enseignants_libelles=[noms.get(c, c) for c in (session.teacher_codes or [])],
             sequence_order=session.sequence_order,
             semaines_possibles=sorted(semaines_ok),
-            raison=_raison_non_placee(state, session),
+            raison=_raison_non_placee(state, session, semaines_ok, n_semaines),
         ))
 
     manquantes.sort(key=lambda m: (m.parcours, m.course_code, m.sequence_order or 0))
@@ -1554,14 +1655,18 @@ def creneaux_libres(session_id: str, depuis_semaine: int = 0, maximum: int = 12)
     if _is_duo_synced(session, state.teacher_duos):
         return CreneauxLibresResponse(session_id=session_id, creneaux=[], note=_DUO_SYNC_NOTE)
 
-    extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
+    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+    # Les candidats proposés ici évitent aussi `extra_blocked_pedago` : une
+    # suggestion doit rester un créneau ne nécessitant AUCUN forçage, même
+    # si l'ordre pédagogique est devenu force-able (28/08/2026, cf. note
+    # ci-dessous pour le cas où ça laisse zéro candidat).
     brutes = suggest_alternative_slots(
         session_id, list(session.group_ids or []), list(session.teacher_codes or []),
         _as_placed(state.timetable), state.calendar, session.semestre,
         teacher_availability=state.teacher_availability, room_id=None,
         search_from_week=depuis_semaine,
         max_weeks=len(state.calendar.teaching_mondays),
-        max_suggestions=maximum, extra_blocked=extra_blocked, allowed_weeks=allowed_weeks,
+        max_suggestions=maximum, extra_blocked=extra_blocked | extra_blocked_pedago, allowed_weeks=allowed_weeks,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
     )
 
@@ -1585,12 +1690,34 @@ def creneaux_libres(session_id: str, depuis_semaine: int = 0, maximum: int = 12)
 
     note = None
     if not creneaux:
-        note = (
-            "Aucun créneau ne respecte toutes les règles pour cette séance. "
-            "Deux pistes : régénérer une semaine entière (elle réarrange les "
-            "autres cours pour faire de la place), ou assouplir une contrainte "
-            "dans les fichiers de configuration."
+        # Un deuxième balayage, SANS exclure `extra_blocked_pedago`, dit si
+        # l'ordre pédagogique est la seule chose qui manque — dans ce cas
+        # (28/08/2026) un placement manuel avec `force: true` peut réussir
+        # là où aucune suggestion "propre" n'existe.
+        forcable = suggest_alternative_slots(
+            session_id, list(session.group_ids or []), list(session.teacher_codes or []),
+            _as_placed(state.timetable), state.calendar, session.semestre,
+            teacher_availability=state.teacher_availability, room_id=None,
+            search_from_week=depuis_semaine,
+            max_weeks=len(state.calendar.teaching_mondays),
+            max_suggestions=1, extra_blocked=extra_blocked, allowed_weeks=None,
+            sessions_by_id=state.sessions_by_id, groups=state.groups,
         )
+        if forcable:
+            note = (
+                "Aucun créneau ne respecte l'ordre pédagogique pour cette séance, mais "
+                "d'autres existent une fois l'ordre pédagogique ignoré : posez-la à la "
+                "main sur une case libre et confirmez « Forcer le placement » — ça "
+                "fonctionnera, en plaçant sciemment cette séance hors de l'ordre de "
+                "contenu attendu."
+            )
+        else:
+            note = (
+                "Aucun créneau ne respecte toutes les règles pour cette séance, même en "
+                "forçant l'ordre pédagogique. Deux pistes : régénérer une semaine entière "
+                "(elle réarrange les autres cours pour faire de la place), ou assouplir "
+                "une contrainte dans les fichiers de configuration."
+            )
     return CreneauxLibresResponse(session_id=session_id, creneaux=creneaux, note=note)
 
 
@@ -1622,10 +1749,13 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
         raise HTTPException(409, f"Semaine {body.week + 1} non modifiable (statut : {statut})")
 
     # `force` contourne la synchro duo depuis le 28/08/2026 (retour
-    # utilisateur : « il faut que je puisse forcer ») — jusque-là jamais
-    # contournable au même titre que PAC/SAE/ordre pédagogique (cf.
-    # commentaire dans `move_session` ci-dessus, écrit AVANT ce retour).
-    # Contrairement à ces règles institutionnelles, une synchro duo est une
+    # utilisateur : « il faut que je puisse forcer ») et l'ordre pédagogique
+    # depuis le même jour, plus tard (retour utilisateur : « on veut que si
+    # on appuie sur forcer cela soit bon et que le placement se fasse »,
+    # cf. `_pedagogical_order_violations` plus bas) — jusque-là jamais
+    # contournables, au même titre que PAC/SAE (cf. commentaire dans
+    # `move_session` ci-dessus). Contrairement au bloc institutionnel
+    # ci-dessous (toujours non contournable), une synchro duo est une
     # optimisation de confort (garder deux moitiés de cours alignées), pas
     # une contrainte réglementaire — un humain qui force ici sait qu'il
     # désynchronise sciemment le binôme.
@@ -1635,14 +1765,24 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
             "soft_warnings": [], "suggestions": [], "suggestions_note": _DUO_SYNC_NOTE,
         })
 
-    extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
-    institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked, allowed_weeks)
+    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+    institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
     institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
     if institutional:
         raise HTTPException(409, detail={
             "message": "Conflit", "hard_conflicts": institutional,
             "soft_warnings": [], "suggestions": [], "suggestions_note": None,
         })
+    # Ordre pédagogique : contournable via `force` depuis le 28/08/2026 (cf.
+    # `_pedagogical_order_violations`), à la différence du bloc institutionnel
+    # ci-dessus.
+    if not body.force:
+        pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+        if pedago:
+            raise HTTPException(409, detail={
+                "message": "Conflit", "hard_conflicts": pedago,
+                "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+            })
 
     if body.room_id:
         salle = next((r for r in state.rooms if r.id == body.room_id), None)
@@ -1734,13 +1874,17 @@ def completer() -> CompletionResponse:
             # Déplacer une moitié de duo sans l'autre casse la synchronisation
             # salle rare : jamais automatiquement.
             return []
-        extra_blocked, allowed_weeks = _hard_constraint_context(state, session)
+        extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+        # La complétion automatique n'a personne pour DÉCIDER de forcer
+        # l'ordre pédagogique (28/08/2026) : elle continue donc à l'exclure
+        # comme un verrou institutionnel, au même titre que la synchro duo
+        # ci-dessus — seul un placement manuel confirmé par un humain force.
         brutes = suggest_alternative_slots(
             session.id, list(session.group_ids or []), list(session.teacher_codes or []),
             _as_placed(state.timetable), state.calendar, session.semestre,
             teacher_availability=state.teacher_availability, room_id=None,
             search_from_week=0, max_weeks=horizon, max_suggestions=25,
-            extra_blocked=extra_blocked, allowed_weeks=allowed_weeks,
+            extra_blocked=extra_blocked | extra_blocked_pedago, allowed_weeks=allowed_weeks,
             sessions_by_id=state.sessions_by_id, groups=state.groups,
         )
         return [(b.week, b.day, b.slot) for b in brutes]
@@ -1783,6 +1927,88 @@ def completer() -> CompletionResponse:
         ],
         resume=rapport.resume(),
     )
+
+
+def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[str, str]:
+    """`(subject, body)` — même texte que le brouillon `mailto:` existant
+    (`frontend/src/utils/mailto.ts`), pour que le contenu reste identique
+    qu'un enseignant reçoive son lien via le mail auto ou via le bouton
+    « Écrire » manuel de l'annuaire."""
+    items = [p for p in state.timetable if code in (p.teacher_codes or [])]
+    sessions_by_id = state.sessions_by_id
+    hours = sum((sessions_by_id[p.session_id].duration_slots or 1) if p.session_id in sessions_by_id else 1 for p in items) * 1.5
+    hours_label = f"{hours:g}".replace(".", ",")
+    body = (
+        f"Bonjour {name},\n\n"
+        f"Voici votre emploi du temps : {link}\n\n"
+        f"Il compte {len(items)} séance(s), soit {hours_label} h.\n"
+        "Le lien ouvre directement votre planning ; un bouton permet d'exporter\n"
+        "les séances vers votre agenda personnel (fichier .ics).\n\n"
+        "Cordialement,"
+    )
+    return "Votre emploi du temps MMI", body
+
+
+@app.get("/mail/teacher-links", response_model=TeacherMailPreviewListResponse, dependencies=[Depends(require_admin_session)])
+def mail_teacher_links_preview() -> TeacherMailPreviewListResponse:
+    """Annuaire d'envoi : un enseignant par ligne, adresse connue ou non
+    (affichée quand même — absence visible plutôt que silencieuse, même
+    principe que le bouton « Écrire » existant), et date du dernier envoi
+    si déjà contacté (garde-fou contre un ré-envoi accidentel, l'écran
+    d'envoi peut alors avertir avant de laisser cocher à nouveau)."""
+    state = get_state()
+    from cal_iut.ingestion.config_loader import load_teacher_contacts
+
+    contacts = load_teacher_contacts(state.config_dir)
+    noms = _noms_enseignants(state)
+    codes = sorted({code for p in state.timetable for code in (p.teacher_codes or [])})
+    log = mailer.sent_log()
+    return TeacherMailPreviewListResponse(
+        configured=mailer.is_configured(),
+        teachers=[
+            TeacherMailPreviewResponse(
+                code=code,
+                name=noms.get(code, code),
+                email=contacts.get(code),
+                sent_at=log.get(code, {}).get("sent_at"),
+            )
+            for code in codes
+        ],
+    )
+
+
+@app.post("/mail/teacher-links/send", response_model=SendTeacherMailsResponse, dependencies=[Depends(require_admin_session)])
+def mail_teacher_links_send(body: SendTeacherMailsRequest) -> SendTeacherMailsResponse:
+    """Envoie le lien personnel à chaque code de `body.codes` — sélection
+    TOUJOURS explicite depuis l'écran d'envoi, jamais un "tout le monde" par
+    défaut côté serveur (retour utilisateur 25/08/2026, principe déjà
+    appliqué ailleurs dans l'app : chaque ambiguïté se pose à l'utilisateur).
+    Un échec sur UN enseignant n'interrompt pas les suivants — le rapport
+    dit qui a réussi, qui a échoué, et pourquoi, jamais une réussite globale
+    qui masquerait un échec partiel."""
+    state = get_state()
+    from cal_iut.ingestion.config_loader import load_teacher_contacts
+
+    contacts = load_teacher_contacts(state.config_dir)
+    noms = _noms_enseignants(state)
+    resultats: list[TeacherMailSendResultResponse] = []
+    for code in body.codes:
+        email = contacts.get(code)
+        if not email:
+            resultats.append(TeacherMailSendResultResponse(code=code, ok=False, error="Aucune adresse connue pour ce trigramme."))
+            continue
+        try:
+            token = auth.make_teacher_token(code)
+            link = mailer.personal_link(code, f"{code}.{token}")
+            subject, texte = _teacher_mail_text(state, code, noms.get(code, code), link)
+            message_id = mailer.send_email(email, subject, texte)
+            mailer.record_sent(code, message_id)
+            resultats.append(TeacherMailSendResultResponse(code=code, ok=True))
+        except mailer.MailerNotConfigured as exc:
+            resultats.append(TeacherMailSendResultResponse(code=code, ok=False, error=str(exc)))
+        except Exception as exc:  # noqa: BLE001 — un envoi individuel raté ne doit jamais interrompre les autres
+            resultats.append(TeacherMailSendResultResponse(code=code, ok=False, error=str(exc)))
+    return SendTeacherMailsResponse(results=resultats)
 
 
 def _find_placement(state: object, session_id: str) -> PlacedSessionWithRoom:

@@ -56,6 +56,7 @@ from cal_iut.api.main import (  # noqa: E402
     _hard_constraint_context,
     _institutional_violations,
     _is_duo_synced,
+    _pedagogical_order_violations,
     _resolve_room,
 )
 from cal_iut.api.state import get_state  # noqa: E402
@@ -262,7 +263,12 @@ def relocaliser(
         ))
 
     try:
-        extra_blocked, allowed_weeks = _hard_constraint_context(etat, session)
+        extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(etat, session)
+        # Script automatique, sans humain pour décider de forcer : l'ordre
+        # pédagogique (devenu force-able le 28/08/2026 dans l'API, cf.
+        # `main.py::_pedagogical_order_violations`) reste exclu ici comme un
+        # verrou dur, au même titre que PAC/SAE/etc.
+        extra_blocked = extra_blocked | extra_blocked_pedago
         if allowed_weeks_override is not None:
             allowed_weeks = allowed_weeks_override
         horizon = len(etat.calendar.teaching_mondays)
@@ -466,8 +472,16 @@ def _permuter(etat, sid_a: str, sid_b: str) -> bool:
 
     def _essayer(sid, session, pos, salle_pref):
         w, d, sl = pos
-        extra_blocked, allowed_weeks = _hard_constraint_context(etat, session)
-        if _institutional_violations(w, d, sl, extra_blocked, allowed_weeks):
+        extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(etat, session)
+        if _institutional_violations(w, d, sl, extra_blocked):
+            return None
+        # Script automatique, sans humain pour décider de forcer : l'ordre
+        # pédagogique reste vérifié ici (devenu force-able le 28/08/2026 côté
+        # API, cf. `main.py::_pedagogical_order_violations`) — seul le lien
+        # ENTRE `sid_a` et `sid_b` en est absent (les deux sont retirés du
+        # planning au moment de cet appel, donc invisibles l'un pour l'autre
+        # comme voisins), les AUTRES voisins de séquence restent contraignants.
+        if _pedagogical_order_violations(w, d, sl, extra_blocked_pedago, allowed_weeks):
             return None
         if not _semaine_respecte_plafond(etat, session, w):
             return None

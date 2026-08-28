@@ -2491,3 +2491,77 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 .confirmmodal-actions .btn {
   min-height: 44px;
 }
+
+.mailmodal {
+  width: min(640px, 100%);
+  max-height: min(80vh, 720px);
+}
+
+.mailmodal-err {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.mailmodal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.mailmodal-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.mailmodal-row:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.08));
+}
+
+.mailmodal-row--disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.mailmodal-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+
+.mailmodal-name {
+  font-size: 0.9rem;
+}
+
+.mailmodal-email {
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.mailmodal-status {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.mailmodal-ok {
+  color: var(--success, var(--primary));
+}
+
+@media (max-width: 640px) {
+  .mailmodal-row {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "check name" ". email" ". status";
+  }
+  .mailmodal-row input[type="checkbox"] { grid-area: check; }
+  .mailmodal-name { grid-area: name; }
+  .mailmodal-email { grid-area: email; text-align: left; }
+  .mailmodal-status { grid-area: status; }
+}

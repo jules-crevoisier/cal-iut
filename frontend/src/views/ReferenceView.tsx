@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { SendTeacherMailsModal } from "../components/SendTeacherMailsModal";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
@@ -130,6 +131,7 @@ function CalendarTimeline({ payload }: { payload: AppPayload }) {
 }
 
 function LinksDirectory({ payload }: { payload: AppPayload }) {
+  const [showMailModal, setShowMailModal] = useState(false);
   const teacherCodes = useMemo(
     () =>
       Object.keys(payload.teacherLabels).sort((a, b) =>
@@ -196,7 +198,11 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
         <button type="button" className="btn btn--ghost btn--sm" onClick={() => downloadDirectoryCsv(allRows())}>
           Télécharger l'annuaire (.csv)
         </button>
+        <button type="button" className="btn btn--accent btn--sm" onClick={() => setShowMailModal(true)}>
+          Envoyer les liens par mail
+        </button>
       </div>
+      {showMailModal && <SendTeacherMailsModal onClose={() => setShowMailModal(false)} />}
 
       <h4>Enseignants</h4>
       <div className="ref-table-wrap">

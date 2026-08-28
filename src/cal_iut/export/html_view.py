@@ -1327,14 +1327,22 @@ def build_payload(
         # fichier source officiel ne les porte. Vide = le brouillon s'ouvre sans
         # destinataire, à compléter.
         "teacherEmails": teacher_contacts or {},
-        # Jeton d'accès (`<trigramme>.<hmac>`) intégré au lien personnel par
-        # le front (`buildLink`) — seul moyen pour un enseignant d'accéder à
-        # SA page sans taper le mot de passe partagé, cf. `api/auth.py`. Ce
-        # payload n'est lui-même atteignable qu'une fois authentifié (ou
-        # déjà via un jeton valide) : distribuer les jetons de tout le monde
-        # à qui consulte l'annuaire (Référentiel > Liens & partage) est
-        # attendu, pas une fuite.
-        "teacherTokens": {code: make_teacher_token(code) for code in teacher_labels},
+        # Jeton d'accès complet, déjà au format `<trigramme>.<hmac>` attendu
+        # par `verify_teacher_access_param` (cf. `api/auth.py`) — intégré tel
+        # quel au lien personnel par le front (`buildLink`, `t: payload.
+        # teacherTokens[code]`), seul moyen pour un enseignant d'accéder à SA
+        # page sans taper le mot de passe partagé. Bug réel trouvé le
+        # 28/08/2026 en vérifiant un lien avant envoi par mail : cette valeur
+        # ne portait AVANT que le hmac seul (`make_teacher_token(code)`),
+        # jamais le trigramme devant le point — `verify_teacher_access_param`
+        # exige ce format pour retrouver À QUI le jeton appartient, donc
+        # `"." not in value` faisait échouer la vérification à coup sûr ;
+        # tout lien personnel généré jusqu'ici renvoyait sur l'écran de mot
+        # de passe au lieu du planning. Ce payload n'est lui-même atteignable
+        # qu'une fois authentifié (ou déjà via un jeton valide) : distribuer
+        # les jetons de tout le monde à qui consulte l'annuaire (Référentiel
+        # > Liens & partage) est attendu, pas une fuite.
+        "teacherTokens": {code: f"{code}.{make_teacher_token(code)}" for code in teacher_labels},
         "ruleChecks": rule_checks,
         "institutionalCalendar": INSTITUTIONAL_EVENTS,
         "rooms": _room_catalog(rooms, rows) if rooms else [],

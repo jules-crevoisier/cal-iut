@@ -151,10 +151,10 @@ def test_un_parcours_non_fc_n_est_jamais_restreint(client):
     etat.sessions_by_id[fi.id] = fi
 
     etat.student_presences = [_PRESENCE]
-    avec_presence_fc, _ = _hard_constraint_context(etat, fi)
+    avec_presence_fc, _, _ = _hard_constraint_context(etat, fi)
 
     etat.student_presences = []
-    sans_presence_fc, _ = _hard_constraint_context(etat, fi)
+    sans_presence_fc, _, _ = _hard_constraint_context(etat, fi)
 
     assert avec_presence_fc == sans_presence_fc, (
         "la déclaration de présence FC d'un AUTRE parcours modifie les blocages d'un FI"
