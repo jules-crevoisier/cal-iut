@@ -11,6 +11,7 @@ import {
   fetchFeedbackAnalysis,
   fetchMeta,
   fetchTimetable,
+  type SeanceAPlacer,
 } from "./api/client";
 import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
@@ -99,6 +100,12 @@ export function App() {
   const [roomId, setRoomId] = useState("");
 
   const [selected, setSelected] = useState<Placement | null>(null);
+  // Séance choisie dans « À placer » pour être posée directement sur la
+  // grille de la Vue Promo (retour utilisateur 28/08/2026 : « il faudrait
+  // la vue promo où le planning s'affiche et qu'on puisse les placer
+  // directement dessus »). `null` = pas de placement en cours, la Vue
+  // Promo reste en lecture seule normale.
+  const [placementActif, setPlacementActif] = useState<SeanceAPlacer | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -522,7 +529,17 @@ export function App() {
         {activeTab === "prof" && appPayload && (
           <EnseignantView payload={appPayload} route={route} setRoute={setRoute} readOnly={readOnlyTarget === "prof"} />
         )}
-        {activeTab === "promo" && appPayload && !readOnlyTarget && <PromoView payload={appPayload} />}
+        {activeTab === "promo" && appPayload && !readOnlyTarget && (
+          <PromoView
+            payload={appPayload}
+            placementActif={placementActif}
+            onAnnulerPlacement={() => setPlacementActif(null)}
+            onPlaced={() => {
+              setPlacementActif(null);
+              void loadTimetable();
+            }}
+          />
+        )}
         {activeTab === "reference" && appPayload && !readOnlyTarget && (
           <ReferenceView payload={appPayload} setRoute={setRoute} />
         )}
@@ -534,7 +551,15 @@ export function App() {
             Pas de `appPayload` requis : cet écran interroge le serveur
             directement, et doit rester accessible même quand le planning
             est trop incomplet pour que les autres vues aient du sens. */}
-        {activeTab === "aplacer" && !readOnlyTarget && <APlacerView onPlacement={() => void loadTimetable()} />}
+        {activeTab === "aplacer" && !readOnlyTarget && (
+          <APlacerView
+            onPlacement={() => void loadTimetable()}
+            onChoisirSurPromo={(seance) => {
+              setPlacementActif(seance);
+              setRoute({ vue: "promo" });
+            }}
+          />
+        )}
           </main>
         </div>
       </div>

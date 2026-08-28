@@ -25,6 +25,7 @@ import {
   type SeanceAPlacer,
   type SeancesAPlacer,
 } from "../api/client";
+import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HORAIRES = ["08h00", "09h30", "11h00", "14h00", "15h30", "17h00"];
@@ -39,78 +40,15 @@ function dateLisible(iso: string): string {
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 }
 
-/** Le serveur renvoie le détail structuré d'un conflit (`hard_conflicts`/
- * `soft_warnings`) comme `detail` JSON d'un 409 — `request()` le rejette en
- * `Error(JSON.stringify(detail))` (cf. api/client.ts) faute de type d'erreur
- * dédié. On le re-parse ici plutôt que d'ajouter un mécanisme d'erreur
- * générique juste pour cet écran. `null` = pas un conflit structuré (panne
- * réseau, autre message serveur) — dans ce cas pas de proposition de forçage. */
-function detailConflit(e: unknown): { hard_conflicts: string[]; soft_warnings: string[] } | null {
-  if (!(e instanceof Error)) return null;
-  try {
-    const d = JSON.parse(e.message) as { hard_conflicts?: unknown; soft_warnings?: unknown };
-    if (Array.isArray(d.hard_conflicts)) {
-      return {
-        hard_conflicts: d.hard_conflicts as string[],
-        soft_warnings: Array.isArray(d.soft_warnings) ? (d.soft_warnings as string[]) : [],
-      };
-    }
-  } catch {
-    /* pas un détail structuré */
-  }
-  return null;
-}
-
-/** Placement à un créneau choisi À LA MAIN (donc potentiellement hors des
- * suggestions déjà validées) — retour utilisateur 28/08/2026 : « cela va
- * être fait à la main et ne respectera pas toutes les contraintes ». Même
- * logique que le glisser-déposer (`utils/moveSession.ts::performMove`) :
- * essai normal, et seulement si ça bute sur un conflit RESSOURCE
- * (contournable), popup de confirmation puis nouvel essai avec `force`. Les
- * règles institutionnelles (PAC, SAE, ordre pédagogique...) restent NON
- * contournables — le serveur les rejette même avec `force`, cf.
- * `placer_seance` (api/main.py) ; dans ce cas la popup ne s'affiche pas, le
- * message d'échec du serveur est montré tel quel. */
-async function placerAvecConfirmation(
-  sessionId: string,
-  cible: { week: number; day: number; slot: number },
-): Promise<{ ok: true } | { ok: false; message: string }> {
-  try {
-    await placerSeance(sessionId, cible);
-    return { ok: true };
-  } catch (e) {
-    const detail = detailConflit(e);
-    if (!detail) {
-      return { ok: false, message: e instanceof Error ? e.message : "Erreur de placement" };
-    }
-    const forcer = window.confirm(
-      `Conflit détecté :\n${[...detail.hard_conflicts, ...detail.soft_warnings].join("\n")}\n\nForcer le placement quand même ?`,
-    );
-    if (!forcer) return { ok: false, message: "Placement annulé." };
-    try {
-      await placerSeance(sessionId, { ...cible, force: true });
-      return { ok: true };
-    } catch (e2) {
-      // Un second échec malgré `force` = règle institutionnelle non
-      // contournable (ex. ordre pédagogique) — le message reste structuré
-      // de la même façon, on le reparse pour ne pas afficher le JSON brut.
-      const detail2 = detailConflit(e2);
-      const message = detail2
-        ? [...detail2.hard_conflicts, ...detail2.soft_warnings].join(" · ")
-        : e2 instanceof Error
-          ? e2.message
-          : "Erreur de placement (forcé)";
-      return { ok: false, message };
-    }
-  }
-}
-
 interface APlacerViewProps {
   /** Rechargement du planning après un placement réussi. */
   onPlacement: () => void;
+  /** Bascule vers la Vue Promo avec CETTE séance active pour un placement
+   * visuel directement sur la grille (retour utilisateur 28/08/2026). */
+  onChoisirSurPromo: (seance: SeanceAPlacer) => void;
 }
 
-export function APlacerView({ onPlacement }: APlacerViewProps) {
+export function APlacerView({ onPlacement, onChoisirSurPromo }: APlacerViewProps) {
   const [inventaire, setInventaire] = useState<SeancesAPlacer | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(true);
@@ -268,6 +206,7 @@ export function APlacerView({ onPlacement }: APlacerViewProps) {
                 recharger();
                 onPlacement();
               }}
+              onChoisirSurPromo={onChoisirSurPromo}
             />
           ))}
         </div>
@@ -280,10 +219,12 @@ function CarteSeance({
   seance,
   version,
   onPlace,
+  onChoisirSurPromo,
 }: {
   seance: SeanceAPlacer;
   version: number;
   onPlace: () => void;
+  onChoisirSurPromo: (seance: SeanceAPlacer) => void;
 }) {
   const [ouverte, setOuverte] = useState(false);
   const [creneaux, setCreneaux] = useState<CreneauLibre[] | null>(null);
@@ -435,6 +376,9 @@ function CarteSeance({
               risque), celui-ci un choix explicite avec confirmation en cas
               de conflit (`placerAvecConfirmation`). */}
           <div className="aplacer-manuel">
+            <button type="button" className="btn btn--primary btn--sm" onClick={() => onChoisirSurPromo(seance)}>
+              Placer sur la grille (Vue Promo)
+            </button>
             <button
               type="button"
               className="btn btn--ghost btn--sm"
