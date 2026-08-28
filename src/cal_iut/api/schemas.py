@@ -52,6 +52,11 @@ class ChangeRoomRequest(BaseModel):
     {id}/salle`) — retour utilisateur 28/08/2026 : « on va vouloir sur la vue
     promo modifier uniquement les salles »."""
 
+    # Chaîne VIDE = retirer la salle (retour utilisateur 29/08/2026 : « s'il
+    # n'y a pas la salle de CM disponible il faut laisser la salle vide, elle
+    # sera rentrée par la suite »). Une salle absente est un manque visible
+    # que l'équipe complète ; une mauvaise salle passe inaperçue jusqu'au jour
+    # J.
     room_id: str
     force: bool = False
 

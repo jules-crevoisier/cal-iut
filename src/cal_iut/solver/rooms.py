@@ -437,6 +437,20 @@ def assign_rooms(
             # Trouvé par test de propriété le 26/08/2026 : la branche existait
             # sans explication, et rien ne disait qu'elle pouvait sous-doter
             # une séance.
+            #
+            # EXCEPTION pour les CM (retour utilisateur 29/08/2026) : « les CM
+            # ne doivent pas se retrouver dans des salles comme ça, elles sont
+            # trop petites ; s'il n'y a pas la salle de CM disponible, il faut
+            # laisser la salle vide, elle sera rentrée par la suite ». Un CM
+            # réunit une promotion entière : le repli « la plus grande salle
+            # libre » lui donnait des salles de TD fusionnées (H.201-203), ce
+            # qui n'est pas rattrapable sur place le jour même — alors qu'une
+            # salle VIDE est un manque visible, que l'équipe complète à la
+            # main. C'est l'inverse de l'arbitrage retenu pour les TD/TP
+            # ci-dessus, et c'est voulu : le coût d'une salle trop petite
+            # n'est pas le même pour 15 étudiants que pour une promotion.
+            if st_value == "CM":
+                return []
             return sorted(
                 [r for r in rooms if _is_free(room_schedule, conflicts, r.id, window)],
                 key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),
