@@ -10,9 +10,9 @@ import type { AppException, AppPayload } from "../types/app";
 
 const BASE = "";
 
-// Jeton d'accès personnel (`<trigramme>.<hmac>`, cf. api/auth.py) — posé une
-// fois au démarrage (App.tsx, lu depuis `route.t`) quand la page est ouverte
-// via un lien enseignant, puis rejoué sur CHAQUE appel API pour contourner
+// Code du lien personnel (prof ou groupe, public — cf. api/auth.py) — posé
+// une fois au démarrage (App.tsx, lu depuis `route.t`) quand la page est
+// ouverte via un tel lien, puis rejoué sur CHAQUE appel API pour contourner
 // le mot de passe partagé sans jamais avoir à le taper (retour utilisateur
 // 28/08/2026). `null` = comportement normal, rien n'est ajouté aux requêtes.
 let accessToken: string | null = null;

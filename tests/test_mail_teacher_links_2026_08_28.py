@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from cal_iut.api import auth, mailer
+from cal_iut.api import mailer
 from cal_iut.api.main import app
 from cal_iut.api.state import get_state
 from cal_iut.calendar.academic import build_default_calendar_2026_2027
@@ -78,14 +78,13 @@ def session_admin():
     client.post("/auth/logout")
 
 
-def test_un_jeton_prof_seul_est_refuse_sur_mail(etat_avec_seance) -> None:
-    """Garde-fou supplémentaire (`require_admin_session`) : un jeton prof
-    valide passe `require_auth` mais ne doit PAS suffire ici, à la différence
-    du reste de `_PROTECTED_PREFIXES` — sinon un enseignant pourrait
-    déclencher un envoi de mail à tous ses collègues avec son seul lien
-    perso."""
-    jeton = f"KBR.{auth.make_teacher_token('KBR')}"
-    reponse = client.get(f"/mail/teacher-links?t={jeton}")
+def test_un_lien_perso_seul_est_refuse_sur_mail(etat_avec_seance) -> None:
+    """Garde-fou supplémentaire (`require_admin_session`) : le paramètre `t`
+    d'un lien personnel (public, cf. `api/auth.py`) passe `require_auth`
+    mais ne doit PAS suffire ici, à la différence du reste de
+    `_PROTECTED_PREFIXES` — sinon N'IMPORTE QUI avec un lien perso pourrait
+    déclencher un envoi de mail en masse à tous les collègues."""
+    reponse = client.get("/mail/teacher-links?t=KBR")
     assert reponse.status_code == 401
 
 
@@ -110,7 +109,7 @@ def test_envoi_reussi_journalise_et_reapparait_comme_deja_envoye(etat_avec_seanc
         lambda config_dir: {"KBR": "kyllian.bresson@univ-reims.fr"},
     )
     monkeypatch.setattr(mailer, "send_email", lambda to, subject, text: "msg_123")
-    monkeypatch.setattr(mailer, "personal_link", lambda code, token: "https://example.test/#vue=prof")
+    monkeypatch.setattr(mailer, "personal_link", lambda code: "https://example.test/#vue=prof")
 
     reponse = client.post("/mail/teacher-links/send", json={"codes": ["KBR"]})
     assert reponse.status_code == 200, reponse.text
@@ -161,7 +160,7 @@ def test_un_echec_n_interrompt_pas_les_autres_envois(etat_avec_seance, session_a
         return "msg_ok"
 
     monkeypatch.setattr(mailer, "send_email", _send)
-    monkeypatch.setattr(mailer, "personal_link", lambda code, token: "https://example.test/#vue=prof")
+    monkeypatch.setattr(mailer, "personal_link", lambda code: "https://example.test/#vue=prof")
 
     reponse = client.post("/mail/teacher-links/send", json={"codes": ["KBR", "XYZ"]})
     resultats = {r["code"]: r for r in reponse.json()["results"]}

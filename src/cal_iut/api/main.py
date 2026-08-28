@@ -166,7 +166,10 @@ async def require_auth(request: Request, call_next):
         # bloque l'entrée »).
         return JSONResponse(status_code=503, content={"detail": "Authentification non configurée (CAL_IUT_PASSWORD absent)."})
 
-    if auth.verify_teacher_access_param(request.query_params.get("t")):
+    # Lien personnel (prof ou groupe) — public depuis le 28/08/2026, cf.
+    # docstring de `auth.py` pour l'historique (jeton HMAC d'abord, puis
+    # "on s'en fiche on veut qu'il soit public" en retour utilisateur final).
+    if auth.verify_personal_link_param(request.query_params.get("t")):
         return await call_next(request)
     if auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
         return await call_next(request)
@@ -2066,8 +2069,7 @@ def mail_teacher_links_send(body: SendTeacherMailsRequest) -> SendTeacherMailsRe
             resultats.append(TeacherMailSendResultResponse(code=code, ok=False, error="Aucune adresse connue pour ce trigramme."))
             continue
         try:
-            token = auth.make_teacher_token(code)
-            link = mailer.personal_link(code, f"{code}.{token}")
+            link = mailer.personal_link(code)
             subject, texte = _teacher_mail_text(state, code, noms.get(code, code), link)
             message_id = mailer.send_email(email, subject, texte)
             mailer.record_sent(code, message_id)

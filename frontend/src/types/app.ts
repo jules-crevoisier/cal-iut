@@ -206,9 +206,12 @@ export interface AppPayload {
   teachers: TeacherInfo[];
   teacherLabels: Record<string, string>;
   teacherEmails: Record<string, string>;
-  /** Jeton d'accès personnel (`<trigramme>.<hmac>`) — cf. api/auth.py,
-   * intégré au lien perso par `buildLink` pour éviter le mot de passe. */
+  /** Paramètre `t` du lien perso — public depuis le 28/08/2026 (cf.
+   * api/auth.py), associe chaque code à lui-même, plus un jeton signé.
+   * Intégré par `buildLink` pour éviter le mot de passe. */
   teacherTokens: Record<string, string>;
+  /** Même chose pour le lien perso d'un GROUPE d'étudiants. */
+  groupTokens: Record<string, string>;
 
   ruleChecks: RuleCheck[];
   institutionalCalendar: InstitutionalEvent[];

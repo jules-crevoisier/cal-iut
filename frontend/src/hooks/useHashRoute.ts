@@ -27,12 +27,12 @@ export interface Route {
   groupe: string;
   sem: number | null;
   mode: "prof" | "groupe" | "";
-  /** Jeton d'accès (`<trigramme>.<hmac>`) — seul moyen pour un lien
-   * personnel enseignant de contourner le mot de passe partagé, cf.
-   * `api/auth.py` (retour utilisateur 28/08/2026). Jamais envoyé au
-   * serveur par LE FRAGMENT lui-même (comme le reste du routage), mais lu
-   * une fois au démarrage (App.tsx) pour être rejoué en paramètre de
-   * requête sur chaque appel API (`api/client.ts::setAccessToken`). */
+  /** Code du lien personnel (prof ou groupe) — public depuis le
+   * 28/08/2026 (`api/auth.py`), seul moyen pour un lien personnel de
+   * contourner le mot de passe partagé. Jamais envoyé au serveur par LE
+   * FRAGMENT lui-même (comme le reste du routage), mais lu une fois au
+   * démarrage (App.tsx) pour être rejoué en paramètre de requête sur
+   * chaque appel API (`api/client.ts::setAccessToken`). */
   t: string;
 }
 
