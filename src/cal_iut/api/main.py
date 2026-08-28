@@ -29,6 +29,8 @@ from cal_iut.api.schemas import (
     QualityResponse,
     RegenRequest,
     RegenResultResponse,
+    CelcatEntreeResponse,
+    CelcatPlanResponse,
     ChangeRoomRequest,
     CompletionResponse,
     CreneauLibreResponse,
@@ -147,7 +149,7 @@ app.add_middleware(
 # buildés, favicon...) reste servi sans authentification : sans ça, le
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
-    "/app-state", "/corrections", "/diff", "/exceptions", "/export",
+    "/app-state", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/placements",
     "/regen", "/rooms", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
 )
@@ -1734,6 +1736,101 @@ def creer_salle(body: CreateRoomRequest) -> RoomMeta:
     custom_rooms.add_custom_room(salle)
     state.rooms = state.rooms + [salle]
     return RoomMeta(id=salle.id, label=salle.label, capacity=salle.capacity, room_type=salle.room_type.value)
+
+
+def _entrees_celcat(state) -> list:
+    """Traduit TOUT le planning courant en entrées Celcat (cf.
+    `celcat/mapping.py`). Pure lecture : ne touche ni à Celcat, ni au
+    journal de synchronisation."""
+    from cal_iut.celcat.mapping import entree_pour_placement, load_celcat_config
+
+    cfg = load_celcat_config(state.config_dir)
+    libelle_groupe = {g.id: g.label for g in state.groups}
+    entrees = []
+    for p in state.timetable:
+        session = state.sessions_by_id.get(p.session_id)
+        entrees.append(entree_pour_placement(
+            cfg,
+            session_id=p.session_id,
+            course_code=p.course_code,
+            session_type=str(getattr(getattr(session, "session_type", None), "value", "")) if session else "",
+            week=p.week, day=p.day, slot=p.slot,
+            duration_slots=max(1, getattr(session, "duration_slots", 1) or 1) if session else 1,
+            teacher_codes=list(p.teacher_codes or []),
+            room_id=getattr(p, "room_id", None),
+            groupe=", ".join(libelle_groupe.get(g, g) for g in (p.group_ids or [])),
+        ))
+    return entrees
+
+
+@app.get("/celcat/plan", response_model=CelcatPlanResponse, dependencies=[Depends(require_admin_session)])
+def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
+    """Ce qui serait saisi dans Celcat, sans rien y envoyer.
+
+    `semaines` : indices solveur séparés par des virgules (ex. « 2,3,4 »).
+    Vide = toutes les semaines du planning — utile pour voir l'état général,
+    mais on saisit en pratique par lots (retour utilisateur : « ajuster le
+    nombre de semaines que l'on met »).
+
+    Réservé à la session admin : lance rien, mais expose le planning complet
+    et l'état de la saisie, qui n'ont rien à faire derrière un lien public.
+    """
+    from cal_iut.celcat.driver import PilotePlaywright
+    from cal_iut.celcat.sync import construire_plan
+
+    state = get_state()
+    entrees = _entrees_celcat(state)
+    if semaines.strip():
+        try:
+            voulues = {int(x) for x in semaines.split(",") if x.strip()}
+        except ValueError:
+            raise HTTPException(400, "Paramètre `semaines` invalide : indices séparés par des virgules.") from None
+    else:
+        voulues = {e.semaine for e in entrees}
+
+    plan = construire_plan(entrees, voulues)
+
+    motifs: dict[str, int] = {}
+    for e in plan.bloquees:
+        for b in e.bloquants:
+            # Motif générique (sans le nom de la séance) : ce qu'on veut
+            # montrer c'est « 95 CM sans code », pas 95 lignes distinctes.
+            motifs[b] = motifs.get(b, 0) + 1
+
+    action_par_id = {}
+    for e in plan.a_creer:
+        action_par_id[e.session_id] = "creer"
+    for e in plan.a_modifier:
+        action_par_id[e.session_id] = "modifier"
+    for e in plan.inchangees:
+        action_par_id[e.session_id] = "inchangee"
+    for e in plan.bloquees:
+        action_par_id[e.session_id] = "bloquee"
+
+    # Les bloquées d'abord : c'est ce sur quoi il y a à agir.
+    ordre = {"bloquee": 0, "creer": 1, "modifier": 2, "inchangee": 3}
+    toutes = plan.bloquees + plan.a_creer + plan.a_modifier + plan.inchangees
+    toutes.sort(key=lambda e: (ordre[action_par_id[e.session_id]], e.semaine, e.jour, e.heure_debut))
+
+    pret, message = PilotePlaywright.disponible()
+    return CelcatPlanResponse(
+        semaines=sorted(voulues),
+        a_creer=len(plan.a_creer), a_modifier=len(plan.a_modifier),
+        a_supprimer=len(plan.a_supprimer), inchangees=len(plan.inchangees),
+        bloquees=len(plan.bloquees),
+        resume=plan.resume(),
+        motifs_blocage=dict(sorted(motifs.items(), key=lambda kv: -kv[1])),
+        entrees=[
+            CelcatEntreeResponse(
+                session_id=e.session_id, course_code=e.course_code, semaine=e.semaine,
+                jour=e.jour, heure_debut=e.heure_debut, heure_fin=e.heure_fin,
+                salle=e.salle, groupe=e.groupe,
+                action=action_par_id[e.session_id], bloquants=e.bloquants,
+            )
+            for e in toutes[:max(0, limite)]
+        ],
+        pilote_pret=pret, pilote_message=message,
+    )
 
 
 @app.get("/corrections")

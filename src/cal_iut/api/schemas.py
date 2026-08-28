@@ -351,3 +351,35 @@ class ForcagePedagogiqueResponse(BaseModel):
 
     session_id: str
     etait_en_attente: bool
+
+
+class CelcatEntreeResponse(BaseModel):
+    session_id: str
+    course_code: str
+    semaine: int
+    jour: int
+    heure_debut: str
+    heure_fin: str
+    salle: str | None = None
+    groupe: str = ""
+    action: str  # "creer" | "modifier" | "inchangee" | "bloquee"
+    bloquants: list[str] = []
+
+
+class CelcatPlanResponse(BaseModel):
+    """État de préparation de la saisie Celcat, SANS rien y avoir envoyé."""
+
+    semaines: list[int] = []
+    a_creer: int = 0
+    a_modifier: int = 0
+    a_supprimer: int = 0
+    inchangees: int = 0
+    bloquees: int = 0
+    resume: str = ""
+    # Motif -> nombre de séances concernées : c'est ce qui dit quoi
+    # compléter dans `data/config/celcat.yaml` avant de pouvoir lancer.
+    motifs_blocage: dict[str, int] = {}
+    entrees: list[CelcatEntreeResponse] = []
+    # Le pilote réel est-il utilisable (Playwright installé, URL renseignée) ?
+    pilote_pret: bool = False
+    pilote_message: str = ""
