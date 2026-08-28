@@ -14,6 +14,7 @@
  */
 
 export interface ConfirmRequest {
+  title: string;
   message: string;
   confirmLabel: string;
   cancelLabel: string;
@@ -33,7 +34,7 @@ export function registerConfirmListener(fn: Listener): () => void {
 
 export function confirmAsync(
   message: string,
-  options?: { confirmLabel?: string; cancelLabel?: string },
+  options?: { title?: string; confirmLabel?: string; cancelLabel?: string },
 ): Promise<boolean> {
   return new Promise((resolve) => {
     // Une seule confirmation à la fois : une précédente encore ouverte est
@@ -41,6 +42,12 @@ export function confirmAsync(
     if (pendingResolve) pendingResolve(false);
     pendingResolve = resolve;
     listener?.({
+      // "Conflit détecté" par défaut : couvre tous les appels existants
+      // (glisser-déposer, placement manuel) sans les modifier. Un appel
+      // pour un cas non conflictuel (ex. confirmer un envoi de mail,
+      // retour utilisateur 28/08/2026 : « je veux des vrais popup de
+      // confirmation ») passe son propre `title`.
+      title: options?.title ?? "Conflit détecté",
       message,
       confirmLabel: options?.confirmLabel ?? "Forcer quand même",
       cancelLabel: options?.cancelLabel ?? "Annuler",

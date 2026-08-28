@@ -30,7 +30,7 @@ export function ConfirmModal() {
         aria-labelledby="confirmmodal-titre"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="confirmmodal-titre">Conflit détecté</h3>
+        <h3 id="confirmmodal-titre">{request.title}</h3>
         <p className="confirmmodal-message">{request.message}</p>
         <div className="confirmmodal-actions">
           <button type="button" className="btn btn--ghost" autoFocus onClick={() => resolveConfirm(false)}>
