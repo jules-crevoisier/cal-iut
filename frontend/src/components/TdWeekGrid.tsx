@@ -4,27 +4,21 @@
  *
  * Bandes jour (SAE sanctuarisée, férié/vacances, PAC jeudi PM, événement du
  * planning officiel) : mêmes données et même priorité que `SessionGrid`
- * (Groupe/Enseignant/Promo, lecture seule) — jusqu'ici jamais portées ici,
- * la Vue Semaine éditable montrait des cases vides là où le HTML affiche
- * "SAE", "Vacances/Férié" ou l'intitulé d'un événement (retour utilisateur
- * 11/08/2026 : "on ne voit pas les sae et les dates sur le planning", cf.
- * docs/DATA.md §56). Même classes CSS que `SessionGrid`
+ * (Groupe/Enseignant/Promo, lecture seule) — même classes CSS
  * (`.sessiongrid-holiday/-pac/-sae/-event`), réutilisées telles quelles.
  *
- * Glisser-déposer natif (HTML5 drag & drop) : cette grille — pourtant la vue
- * PAR DÉFAUT ("Par groupe TD") — n'avait AUCUN moyen de déplacer une séance
- * (ni glisser-déposer, ni formulaire dans le panneau latéral) — retour
- * utilisateur 11/08/2026 : "l'interface ne permet pas la modification pour
- * l'instant fix cela", cf. docs/DATA.md. Même flux que `TimetableCalendar`
- * (validation -> confirmation si conflit -> déplacement forcé ou non),
- * factorisé dans `utils/moveSession.ts::performMove` pour ne pas dupliquer
- * cette logique entre les deux vues.
+ * Lecture seule (retour utilisateur 28/08/2026 : « on enlève la
+ * possibilité de drag and drop dans vue semaine [...] on veut que cela
+ * soit possible dans vue promo par contre »). Le glisser-déposer HTML5 qui
+ * vivait ici (via `utils/moveSession.ts::performMove`, ajouté le
+ * 11/08/2026) a été retiré ; il vit maintenant dans `PromoView.tsx`.
+ * Cliquer une séance ouvre toujours son détail (`onSelect`, panneau
+ * latéral) — seul le déplacement disparaît d'ici.
  */
 import { Fragment, useMemo, useState } from "react";
 
 import type { GroupMeta, Placement } from "../types";
 import type { AppPayload } from "../types/app";
-import { performMove } from "../utils/moveSession";
 import { dayName, slotLabel, SLOT_TIMES } from "../utils/slots";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { shortGroupLabel } from "../utils/years";
@@ -36,13 +30,11 @@ interface TdWeekGridProps {
   groups: GroupMeta[];
   groupLabels: Record<string, string>;
   onSelect: (p: Placement | null) => void;
-  onPlacementUpdated: (p: Placement) => void;
-  onError: (msg: string) => void;
   /** Optionnel : sans lui, la grille reste fonctionnelle mais sans bandes
       SAE/férié/PAC/événement (ex. avant le premier chargement de `/app-state`). */
   payload?: AppPayload | null;
   parcours?: string;
-  /** Un seul jour affiché (lecture/édition mobile, cf. `DayStrip`) ; absent = les 5 jours. */
+  /** Un seul jour affiché (lecture mobile, cf. `DayStrip`) ; absent = les 5 jours. */
   onlyDay?: number | null;
 }
 
@@ -102,15 +94,11 @@ export function TdWeekGrid({
   groups,
   groupLabels,
   onSelect,
-  onPlacementUpdated,
-  onError,
   payload,
   parcours = "",
   onlyDay = null,
 }: TdWeekGridProps) {
   const [hover, setHover] = useState<{ placement: Placement; x: number; y: number } | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
   const days = onlyDay === null ? [0, 1, 2, 3, 4] : [onlyDay];
   const tpPair = resolveTpPair(tdGroupId, groups);
   const tpA = tpPair?.[0] ?? "";
@@ -173,32 +161,6 @@ export function TdWeekGrid({
     return cells;
   }, [placements, displayWeek, tdGroupId, tpA, tpB]);
 
-  const handleDrop = async (day: number, slot: number) => {
-    setDropTarget(null);
-    const sessionId = draggingId;
-    setDraggingId(null);
-    if (!sessionId) return;
-    const placement = placements.find((p) => p.session_id === sessionId);
-    if (!placement || placement.locked) return;
-    if (placement.day === day && placement.slot === slot && placement.week === displayWeek) return;
-    await performMove(sessionId, { week: displayWeek, day, slot }, placement, onPlacementUpdated, onError);
-  };
-
-  const dropHandlers = (day: number, slot: number) => ({
-    onDragOver: (e: React.DragEvent) => {
-      if (!draggingId) return;
-      e.preventDefault();
-      if (dropTarget?.day !== day || dropTarget?.slot !== slot) setDropTarget({ day, slot });
-    },
-    onDragLeave: () => setDropTarget((cur) => (cur?.day === day && cur?.slot === slot ? null : cur)),
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault();
-      void handleDrop(day, slot);
-    },
-  });
-
-  const isDropHover = (day: number, slot: number) => dropTarget?.day === day && dropTarget?.slot === slot;
-
   if (!tpPair) {
     return (
       <div className="empty-state">
@@ -238,13 +200,10 @@ export function TdWeekGrid({
           {Array.from({ length: SLOT_COUNT }, (_, slot) => (
             <Fragment key={slot}>
               {/* Séparateur de pause déjeuner rendu EN LIGNE, entre les
-                  créneaux du matin et de l'après-midi — auparavant un `<p>`
-                  posé après `</table>` (`.lunch-marker`), donc visuellement
-                  détaché de la grille plutôt qu'à l'endroit où la pause a
-                  réellement lieu (retour utilisateur 27/08/2026 : « le
-                  séparateur de pause déjeuné est en dehors du tableaux »).
-                  Même motif que `SessionGrid.tsx` (`.sessiongrid-pause`),
-                  juste avec `colSpan=2` par jour (2 colonnes TP ici). */}
+                  créneaux du matin et de l'après-midi (retour utilisateur
+                  27/08/2026), même motif que `SessionGrid.tsx`
+                  (`.sessiongrid-pause`), juste avec `colSpan=2` par jour
+                  (2 colonnes TP ici). */}
               {slot === 3 && (
                 <tr className="sessiongrid-pause">
                   <td className="td-grid-slotlabel">12h30–14h</td>
@@ -266,15 +225,13 @@ export function TdWeekGrid({
                 const primarySpan = spans[0];
                 const hasSpan = Boolean(primarySpan);
                 const conflict = spans.length > 1 || (hasSpan && (left.length > 0 || right.length > 0));
-                const hoverCls = isDropHover(day, slot) ? " dropzone-hover" : "";
 
                 if (hasSpan) {
                   return (
                     <td
                       key={day}
                       colSpan={2}
-                      className={`td-grid-cell td-grid-cell--span${conflict ? " td-grid-cell--conflict" : ""}${hoverCls}`}
-                      {...dropHandlers(day, slot)}
+                      className={`td-grid-cell td-grid-cell--span${conflict ? " td-grid-cell--conflict" : ""}`}
                     >
                       <SessionBlock
                         key={primarySpan.placement.session_id}
@@ -282,9 +239,6 @@ export function TdWeekGrid({
                         groupLabels={groupLabels}
                         onSelect={onSelect}
                         onHover={setHover}
-                        dragging={draggingId === primarySpan.placement.session_id}
-                        onDragStart={setDraggingId}
-                        onDragEnd={() => setDraggingId(null)}
                       />
                       {conflict && <span className="td-conflict-flag">conflit</span>}
                     </td>
@@ -294,11 +248,7 @@ export function TdWeekGrid({
                 // Bande jour (aucune vraie séance ici) — même priorité que
                 // `SessionGrid` : férié/vacances > PAC (jeudi PM, FI) > SAE
                 // sanctuarisée > événement à horaire précis > événement
-                // indicatif (jour entier). Toujours une cible de dépose
-                // valide (une séance peut très bien être déplacée VERS un
-                // jour aujourd'hui vide) sauf férié/PAC/SAE, non modifiables
-                // même en forçant côté serveur — inutile d'y proposer une
-                // dépose qui échouera systématiquement.
+                // indicatif (jour entier).
                 if (!left.length && !right.length) {
                   const bands = bandsByDay[day];
                   const isPacLock = showPac && day === 3 && slot >= 3;
@@ -332,7 +282,7 @@ export function TdWeekGrid({
                   }
                   if (eventsHere) {
                     return (
-                      <td key={day} colSpan={2} className={`td-grid-cell${hoverCls}`} {...dropHandlers(day, slot)}>
+                      <td key={day} colSpan={2} className="td-grid-cell">
                         <div className="sessiongrid-event">
                           {eventsHere.map((e) => (
                             <span key={e} className="label">
@@ -345,7 +295,7 @@ export function TdWeekGrid({
                   }
                   if (bands.dayEvent) {
                     return (
-                      <td key={day} colSpan={2} className={`td-grid-cell${hoverCls}`} {...dropHandlers(day, slot)}>
+                      <td key={day} colSpan={2} className="td-grid-cell">
                         <div className="sessiongrid-event">
                           {bands.dayEvent.map((e) => (
                             <span key={e} className="label">
@@ -356,14 +306,12 @@ export function TdWeekGrid({
                       </td>
                     );
                   }
-                  return (
-                    <td key={day} colSpan={2} className={`td-grid-cell${hoverCls}`} {...dropHandlers(day, slot)} />
-                  );
+                  return <td key={day} colSpan={2} className="td-grid-cell" />;
                 }
 
                 return (
                   <Fragment key={day}>
-                    <td className={`td-grid-cell${hoverCls}`} {...dropHandlers(day, slot)}>
+                    <td className="td-grid-cell">
                       {left.map((e) => (
                         <SessionBlock
                           key={e.placement.session_id}
@@ -371,13 +319,10 @@ export function TdWeekGrid({
                           groupLabels={groupLabels}
                           onSelect={onSelect}
                           onHover={setHover}
-                          dragging={draggingId === e.placement.session_id}
-                          onDragStart={setDraggingId}
-                          onDragEnd={() => setDraggingId(null)}
                         />
                       ))}
                     </td>
-                    <td className={`td-grid-cell${hoverCls}`} {...dropHandlers(day, slot)}>
+                    <td className="td-grid-cell">
                       {right.map((e) => (
                         <SessionBlock
                           key={e.placement.session_id}
@@ -385,9 +330,6 @@ export function TdWeekGrid({
                           groupLabels={groupLabels}
                           onSelect={onSelect}
                           onHover={setHover}
-                          dragging={draggingId === e.placement.session_id}
-                          onDragStart={setDraggingId}
-                          onDragEnd={() => setDraggingId(null)}
                         />
                       ))}
                     </td>
@@ -424,17 +366,11 @@ function SessionBlock({
   groupLabels,
   onSelect,
   onHover,
-  dragging,
-  onDragStart,
-  onDragEnd,
 }: {
   event: CellEvent;
   groupLabels: Record<string, string>;
   onSelect: (p: Placement | null) => void;
   onHover: (v: { placement: Placement; x: number; y: number } | null) => void;
-  dragging: boolean;
-  onDragStart: (sessionId: string) => void;
-  onDragEnd: () => void;
 }) {
   const p = event.placement;
   const short = shortGroupLabel(p.group_ids, groupLabels);
@@ -443,14 +379,8 @@ function SessionBlock({
   return (
     <button
       type="button"
-      draggable={!p.locked}
-      className={`td-block type-${typeClass} ${event.span ? "td-block--span" : ""} ${p.is_eval ? "eval" : ""} ${p.locked ? "locked" : ""} ${dragging ? "dragging" : ""}`}
+      className={`td-block type-${typeClass} ${event.span ? "td-block--span" : ""} ${p.is_eval ? "eval" : ""} ${p.locked ? "locked" : ""}`}
       onClick={() => onSelect(p)}
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = "move";
-        onDragStart(p.session_id);
-      }}
-      onDragEnd={onDragEnd}
       onMouseEnter={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}
       onMouseLeave={() => onHover(null)}

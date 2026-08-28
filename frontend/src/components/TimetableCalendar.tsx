@@ -1,33 +1,37 @@
 import { useCallback, useRef } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
+// Toujours nécessaire même en lecture seule : `eventClick` (clic sur une
+// séance pour voir son détail) en dépend, pas seulement le glisser-déposer
+// désactivé ci-dessous (`editable={false}`).
 import interactionPlugin from "@fullcalendar/interaction";
-import type { EventDropArg, EventClickArg } from "@fullcalendar/core";
+import type { EventClickArg } from "@fullcalendar/core";
 import frLocale from "@fullcalendar/core/locales/fr";
 
 import type { Placement } from "../types";
-import { dateToPlacement, weekStartDate } from "../utils/slots";
+import { weekStartDate } from "../utils/slots";
 import { placementsToEvents } from "../utils/events";
-import { performMove } from "../utils/moveSession";
 
 interface TimetableCalendarProps {
   placements: Placement[];
   displayWeek: number;
   weekDates: string[];
   groupLabels?: Record<string, string>;
-  onPlacementUpdated: (p: Placement) => void;
   onSelect: (p: Placement | null) => void;
-  onError: (msg: string) => void;
 }
 
+/** Lecture seule (retour utilisateur 28/08/2026 : « on enlève la
+ * possibilité de drag and drop dans vue semaine ») — utilisée pour les
+ * vues par enseignant/salle de la Vue Semaine. Le glisser-déposer qui
+ * vivait ici (`interactionPlugin`/`editable`/`eventDrop`, via
+ * `utils/moveSession.ts::performMove`) a été retiré ; il vit maintenant
+ * dans `PromoView.tsx`. Cliquer une séance ouvre toujours son détail. */
 export function TimetableCalendar({
   placements,
   displayWeek,
   weekDates,
   groupLabels = {},
-  onPlacementUpdated,
   onSelect,
-  onError,
 }: TimetableCalendarProps) {
   const calendarRef = useRef<FullCalendar>(null);
   const events = placementsToEvents(placements, displayWeek, weekDates, groupLabels);
@@ -39,28 +43,6 @@ export function TimetableCalendar({
       onSelect(p);
     },
     [placements, onSelect],
-  );
-
-  const handleEventDrop = useCallback(
-    async (info: EventDropArg) => {
-      const sessionId = info.event.id;
-      const placement = placements.find((p) => p.session_id === sessionId);
-      if (!placement || placement.locked) {
-        info.revert();
-        return;
-      }
-
-      const start = info.event.start;
-      if (!start) {
-        info.revert();
-        return;
-      }
-
-      const target = dateToPlacement(weekDates, start, displayWeek);
-      const ok = await performMove(sessionId, target, placement, onPlacementUpdated, onError);
-      if (!ok) info.revert();
-    },
-    [placements, displayWeek, onPlacementUpdated, onError],
   );
 
   return (
@@ -82,11 +64,9 @@ export function TimetableCalendar({
         height="auto"
         expandRows
         nowIndicator={false}
-        editable
-        eventDurationEditable={false}
+        editable={false}
         events={events}
         eventClick={handleEventClick}
-        eventDrop={handleEventDrop}
         slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
         eventContent={(arg) => (
           <div className="fc-custom-event">

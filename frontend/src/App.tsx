@@ -7,7 +7,6 @@ import {
   exportJson,
   extractTeachers,
   fetchAppState,
-  fetchCorrections,
   fetchDiff,
   fetchFeedbackAnalysis,
   fetchMeta,
@@ -20,8 +19,6 @@ import { GlobalSearch } from "./components/GlobalSearch";
 import { LoginGate } from "./components/LoginGate";
 import { PageHeader } from "./components/PageHeader";
 import { SideNav } from "./components/SideNav";
-import { QualityPanel } from "./components/QualityPanel";
-import { RegenPanel } from "./components/RegenPanel";
 import { SessionPanel } from "./components/SessionPanel";
 import { TdWeekGrid } from "./components/TdWeekGrid";
 import { TimetableCalendar } from "./components/TimetableCalendar";
@@ -36,7 +33,6 @@ import type {
   GroupMeta,
   MetaResponse,
   Placement,
-  Quality,
   RoomMeta,
   ViewMode,
   YearMeta,
@@ -87,8 +83,12 @@ export function App() {
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [appPayload, setAppPayload] = useState<AppPayload | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const [quality, setQuality] = useState<Quality | null>(null);
-  const [correctionsCount, setCorrectionsCount] = useState(0);
+  // Vue Promo montre TOUT (aucun filtre groupe/enseignant/salle, contrairement
+  // à `placements` ci-dessus, filtré par le Toolbar de Vue Semaine) — sans sa
+  // propre liste, le glisser-déposer n'y trouverait sa cible que par hasard
+  // (seulement si elle appartient au filtre Vue Semaine du moment). Retour
+  // utilisateur 28/08/2026 : glisser-déposer déplacé de Vue Semaine à Vue Promo.
+  const [promoPlacements, setPromoPlacements] = useState<Placement[]>([]);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [analysis, setAnalysis] = useState<FeedbackAnalysis | null>(null);
 
@@ -159,15 +159,6 @@ export function App() {
     }
   }, []);
 
-  const refreshCorrections = useCallback(async () => {
-    try {
-      const c = await fetchCorrections();
-      setCorrectionsCount(c.length);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   useEffect(() => {
     // Lien perso (readOnlyTarget) : le jeton fait le travail d'auth tout
     // seul, peu importe `authentifie` (qui reste `false`, ces liens n'ont
@@ -186,42 +177,40 @@ export function App() {
         room_id: viewMode === "room" && roomId ? roomId : undefined,
       });
       setPlacements(data.placements);
-      setQuality(data.quality);
       await refreshDiff();
-      await refreshCorrections();
     } catch {
       /* no timetable */
     }
-  }, [viewMode, groupId, teacherCode, roomId, refreshDiff, refreshCorrections]);
+  }, [viewMode, groupId, teacherCode, roomId, refreshDiff]);
 
   useEffect(() => {
     void loadTimetable();
   }, [loadTimetable]);
 
+  const loadPromoTimetable = useCallback(async () => {
+    try {
+      const data = await fetchTimetable({});
+      setPromoPlacements(data.placements);
+    } catch {
+      /* pas encore de planning */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "promo" && !readOnlyTarget) void loadPromoTimetable();
+  }, [activeTab, readOnlyTarget, loadPromoTimetable]);
+
   // `handleIngest`/`handleSolve` (boutons "Charger données"/"Générer"/
   // "Recalculer tout" du Toolbar) retirés (retour utilisateur 27/08/2026) —
   // génération toujours faite en CLI. `loading`/`setNotice`/`setError`
-  // restent utilisés par la régénération ciblée (RegenPanel) et les autres
-  // actions encore présentes.
+  // restent utilisées par les actions encore présentes (verrouillage,
+  // panneau de diff/export...).
 
   const handlePlacementUpdated = (updated: Placement) => {
     setPlacements((prev) => prev.map((p) => (p.session_id === updated.session_id ? updated : p)));
+    setPromoPlacements((prev) => prev.map((p) => (p.session_id === updated.session_id ? updated : p)));
     setSelected(updated);
     void refreshDiff();
-    void refreshCorrections();
-    void refreshAppState();
-  };
-
-  // `RegenPanel` (régénération ciblée d'UNE semaine) ne renvoie que les
-  // séances de la (des) semaine(s) touchée(s) — remplace juste ces
-  // entrées-là par `session_id`, laisse le reste du planning intact (c'est
-  // tout l'intérêt d'une régénération ciblée par rapport à un `/solve`
-  // complet, cf. docs/DATA.md).
-  const handleRegenerated = (updated: Placement[]) => {
-    const byId = new Map(updated.map((p) => [p.session_id, p]));
-    setPlacements((prev) => prev.map((p) => byId.get(p.session_id) ?? p));
-    void refreshDiff();
-    void refreshCorrections();
     void refreshAppState();
   };
 
@@ -286,8 +275,8 @@ export function App() {
   // semaine bloquée franchie (Toussaint ici). Même traduction déjà utilisée
   // correctement dans `PromoView.tsx` (`solverWeek`), reprise ici pour
   // `visiblePlacements` et tout ce qui est passé à `TdWeekGrid`/
-  // `TimetableCalendar`/`RegenPanel` (qui, eux, attendent bien l'index
-  // solveur — `RegenPanel.week` régénère CETTE semaine côté serveur, un
+  // `TimetableCalendar` (qui, lui, attend bien l'index solveur) et
+  // `visiblePlacements` ci-dessous — un
   // mauvais index y aurait régénéré la MAUVAISE semaine).
   const solverWeek = weekRows[displayWeek]?.weekIndex ?? null;
   const visiblePlacements = solverWeek === null ? [] : placements.filter((p) => p.week === solverWeek);
@@ -495,8 +484,6 @@ export function App() {
                     groups={groups}
                     groupLabels={groupLabels}
                     onSelect={setSelected}
-                    onPlacementUpdated={handlePlacementUpdated}
-                    onError={(msg) => setNotice(msg)}
                     payload={appPayload}
                     parcours={parcours}
                     onlyDay={narrow ? mobileDay : null}
@@ -507,27 +494,17 @@ export function App() {
                     displayWeek={solverWeek}
                     weekDates={weekDates}
                     groupLabels={groupLabels}
-                    onPlacementUpdated={handlePlacementUpdated}
                     onSelect={setSelected}
-                    onError={(msg) => setNotice(msg)}
                   />
                 )}
               </section>
 
               <aside className="sidebar">
-                <QualityPanel quality={quality} correctionsCount={correctionsCount} />
-                {appPayload && solverWeek !== null && (
-                  <RegenPanel
-                    week={solverWeek}
-                    weekLabel={appPayload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
-                    weekStatus={appPayload.weekStatus}
-                    teacherCodes={teachers}
-                    teacherLabels={appPayload.teacherLabels}
-                    rooms={rooms}
-                    onRegenerated={handleRegenerated}
-                    onNotice={setNotice}
-                  />
-                )}
+                {/* QualityPanel (indicateurs trous/isolés/déséquilibre) et
+                    RegenPanel (régénération ciblée) retirés de Vue Semaine
+                    (retour utilisateur 28/08/2026 : « on enlève la
+                    régénération ciblée [...] tu peux aussi enlever les
+                    indicateurs »). */}
                 <DiffPanel
                   diff={diff}
                   analysis={analysis}
@@ -560,7 +537,14 @@ export function App() {
         {activeTab === "prof" && appPayload && (
           <EnseignantView payload={appPayload} route={route} setRoute={setRoute} readOnly={readOnlyTarget === "prof"} />
         )}
-        {activeTab === "promo" && appPayload && !readOnlyTarget && <PromoView payload={appPayload} />}
+        {activeTab === "promo" && appPayload && !readOnlyTarget && (
+          <PromoView
+            payload={appPayload}
+            placements={promoPlacements}
+            onPlacementUpdated={handlePlacementUpdated}
+            onError={(msg) => setNotice(msg)}
+          />
+        )}
         {activeTab === "reference" && appPayload && !readOnlyTarget && (
           <ReferenceView payload={appPayload} setRoute={setRoute} />
         )}
