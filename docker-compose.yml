@@ -1,0 +1,36 @@
+# Stack complète (front + backend) — utilisable en local pour tester avant
+# Dokploy, ou directement comme déploiement Docker Compose dans Dokploy si
+# tu préfères ce mode au mode "Dockerfile x2 services".
+#
+#   docker compose up --build
+#   → http://localhost:8080
+
+services:
+  backend:
+    build: .
+    expose:
+      - "8000"
+    volumes:
+      # Named volume : seedé UNE fois depuis data/cal-iut.db baké dans
+      # l'image (cf. Dockerfile), puis les écritures ultérieures
+      # (glisser-déposer, régénération...) y survivent aux redémarrages.
+      - cal-iut-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  cal-iut-data:
