@@ -23,6 +23,11 @@ dependencies = [
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
+    # Tests de propriétés (7 fichiers `*_invariants.py`, `test_proprietes.py`).
+    # N'était PAS déclaré jusqu'au 28/08/2026 : présent seulement dans le venv
+    # local, donc une installation propre ne pouvait pas lancer la suite. Trouvé
+    # par la toute première exécution de la CI.
+    "hypothesis>=6.100",
     "ruff>=0.5",
 ]
 
