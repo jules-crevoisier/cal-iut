@@ -9,6 +9,7 @@ from cal_iut.ingestion.config_loader import (
     load_additional_courses,
     load_course_corrections,
     load_double_sessions,
+    load_seances_annulees,
     load_groups,
     load_rooms,
     load_teacher_availability,
@@ -139,6 +140,12 @@ def run_ingestion(
         wanted = SEMESTRE_GROUPS[semestre_group]
         sessions = [s for s in sessions if s.semestre in wanted]
 
+    # Séances explicitement annulées : retirées ICI, avant que le solveur,
+    # l'inventaire « À placer » ou l'API ne les voient. Les retirer plus tard
+    # les ferait réapparaître à chaque ré-ingestion (donc à chaque
+    # redémarrage du serveur, cf. `api/main.py::_try_restore_latest`).
+    sessions = retirer_seances_annulees(sessions, load_seances_annulees(config_dir))
+
     requested = set(SEMESTRE_GROUPS[semestre_group]) if semestre_group else ({semestre} if semestre else set())
     out_of_scope = out_of_scope_semestres(requested)
     if out_of_scope:
@@ -175,3 +182,19 @@ def run_ingestion(
         stats["courses_filtered"] = len(filtered_courses)
 
     return IngestionResult(courses=courses, sessions=sessions, stats=stats)
+
+
+def retirer_seances_annulees(
+    sessions: list[SessionToPlace], annulees: set[str]
+) -> list[SessionToPlace]:
+    """Retire les séances déclarées annulées (cf.
+    `config_loader.load_seances_annulees`).
+
+    Un identifiant devenu obsolète — la maquette a changé, la séance n'existe
+    plus sous ce nom — est ignoré sans bruit plutôt que de faire échouer
+    l'ingestion entière : le fichier survit aux régénérations, il finira par
+    contenir des entrées périmées.
+    """
+    if not annulees:
+        return sessions
+    return [s for s in sessions if s.id not in annulees]

@@ -347,6 +347,17 @@ def _try_restore_latest(state: object) -> None:
         state.sessions_by_id = {s.id: s for s in result.sessions}
 
         current = repo.db.query(CurrentPlacement).filter_by(run_id=run.id).all()
+        # Un placement dont la séance n'existe PLUS après ré-ingestion est un
+        # fantôme : séance annulée (`seances_annulees.yaml`) ou disparue de la
+        # maquette. Le garder l'afficherait sans groupe ni enseignant, il
+        # occuperait une salle dans les contrôles de conflit, et il
+        # reviendrait à chaque redémarrage. On le retire de la base au
+        # passage, sinon la ligne morte survit indéfiniment.
+        orphelins = [c for c in current if c.session_id not in state.sessions_by_id]
+        if orphelins:
+            for c in orphelins:
+                repo.remove_current_placement(c.session_id)
+            current = [c for c in current if c.session_id in state.sessions_by_id]
         if current:
             state.timetable = [
                 PlacedSessionWithRoom(
@@ -355,8 +366,8 @@ def _try_restore_latest(state: object) -> None:
                     day=c.day,
                     slot=c.slot,
                     course_code=c.course_code,
-                    group_ids=state.sessions_by_id[c.session_id].group_ids if c.session_id in state.sessions_by_id else [],
-                    teacher_codes=state.sessions_by_id[c.session_id].teacher_codes if c.session_id in state.sessions_by_id else [],
+                    group_ids=state.sessions_by_id[c.session_id].group_ids,
+                    teacher_codes=state.sessions_by_id[c.session_id].teacher_codes,
                     room_id=c.room_id,
                     room_label=c.room_label,
                 )

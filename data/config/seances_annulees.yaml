@@ -1,0 +1,73 @@
+# Séances ANNULÉES : des heures qui n'auront pas lieu.
+#
+# À ne pas confondre avec un retrait du planning. Une séance simplement
+# dépointée redevient une séance « à placer » : elle réapparaît dans
+# l'inventaire, dans « À traiter », et au prochain placement automatique.
+# Déclarée ici, elle cesse d'exister dès l'INGESTION — donc elle ne revient
+# pas au redémarrage du serveur, qui ré-ingère à chaque fois.
+#
+# Ce fichier, et pas un appel d'API, parce que la maquette distante
+# continuera d'annoncer ces heures : c'est la seule forme qui survive à un
+# `cal-iut fetch`.
+#
+# Chaque entrée porte QUI l'a demandée et QUAND. Dans un an, une annulation
+# sans justification est soit supprimée à tort, soit conservée à tort — même
+# principe que `evenements_supplementaires.yaml`.
+#
+# Champs :
+#   session_id   identifiant exact de la séance (cf. data/generated/sessions.json)
+#   motif        pourquoi elle n'aura pas lieu, en clair
+#   demande_par  qui l'a demandé
+#   le           date de la demande (ISO)
+
+annulees:
+  # Les quatre dernières 1h30 de TD de WR104, une par groupe. Chaque groupe
+  # avait deux séances de 3h puis ce reliquat isolé de 1h30, plusieurs
+  # semaines plus tard.
+  #
+  # Martial Martin, 29/08/2026 : « la dernière 1,5h de TD éparpillée le 25
+  # janvier pour AB, le 18 novembre pour CD, le 4 novembre pour EF, le 7
+  # octobre pour GH ; le mieux est de les supprimer, je ne vais pas pouvoir
+  # en faire quelque chose. »
+  #
+  # Les dates citées désignent le LUNDI de la semaine ; les séances tombent
+  # le mercredi (AB : 27/01 et non 25/01). Identifiées par leur STRUCTURE —
+  # la troisième et dernière séance de chaque groupe, la seule de 1h30 —
+  # plutôt que par la date, pour éviter de supprimer la mauvaise.
+  - session_id: WR104-S1-TD-3-but1-td-ab
+    motif: "Reliquat isolé de 1h30 (mer. 27/01/2027), inexploitable pédagogiquement"
+    demande_par: "Martial Martin"
+    le: "2026-08-29"
+
+  - session_id: WR104-S1-TD-3-but1-td-cd
+    motif: "Reliquat isolé de 1h30 (mer. 18/11/2026), inexploitable pédagogiquement"
+    demande_par: "Martial Martin"
+    le: "2026-08-29"
+
+  - session_id: WR104-S1-TD-3-but1-td-ef
+    motif: "Reliquat isolé de 1h30 (mer. 04/11/2026), inexploitable pédagogiquement"
+    demande_par: "Martial Martin"
+    le: "2026-08-29"
+
+  - session_id: WR104-S1-TD-3-but1-td-gh
+    motif: "Reliquat isolé de 1h30 (mer. 07/10/2026), inexploitable pédagogiquement"
+    demande_par: "Martial Martin"
+    le: "2026-08-29"
+
+  # Journée du 16/09/2026 : Martial Martin y avait 6h de CM d'affilée (CM-2 à
+  # CM-5), plus un TD de 3h. « Physiquement, je ne peux pas y arriver et je
+  # pense que les étudiants ne suivront rien. Peux-tu conserver seulement un
+  # créneau de 3h en continu [...] récupérer 3h plus tard quand tu peux, ou
+  # juste conserver 1,5h à positionner en novembre pour faire un DS ? »
+  #
+  # CM-2 et CM-3 restent (08h-11h, les 3h continues demandées).
+  # CM-4 a été DÉPLACÉ au mercredi 11/11/2026 08h00 — c'est le « 1,5h en
+  # novembre » de sa troisième option.
+  # CM-5 est annulé : aucun créneau valide dans TOUT le reste du semestre
+  # (756 refus d'ordre pédagogique, 513 indisponibilités MMA, 361 verrou PAC
+  # jeudi après-midi — zéro créneau valide). Le déplacer était impossible,
+  # le laisser aurait maintenu la journée qu'il signale.
+  - session_id: WR104-S1-CM-5
+    motif: "16/09 : 6h de CM d'affilée ramenées à 3h ; CM-4 reporté au 11/11, CM-5 sans créneau valide"
+    demande_par: "Martial Martin"
+    le: "2026-08-29"
