@@ -26,3 +26,6 @@ data/state/mail_log.json
 data/state/forced_pending.json
 data/state/custom_rooms.json
 data/state/celcat_sync.json
+# Destinataires des notifications : donnee personnelle, et propre a
+# chaque deploiement (cf. api/notifications.py).
+data/state/notifications.json

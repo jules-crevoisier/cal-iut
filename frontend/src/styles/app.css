@@ -1442,6 +1442,72 @@ h1, h2, h3 {
 
 /* Édition (modale semaine par parcours uniquement — les vues Groupe et
    Enseignant passent la même grille sans `edition`, donc sans ces états). */
+/* --- Réglage des notifications (onglet Référence) ---------------------- */
+.notif-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0 8px;
+}
+.notif-champ > span:first-child {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.notif-champ textarea,
+.notif-champ select {
+  font: inherit;
+  /* 16px minimum : en dessous, iOS zoome à la mise au point. */
+  font-size: max(16px, 0.9rem);
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  width: 100%;
+}
+.notif-aide {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.notif-evenements {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 16px 0 8px;
+}
+.notif-evenements legend {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0 6px;
+}
+.notif-case {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 44px : cible tactile confortable, la case seule fait 16px. */
+  min-height: 44px;
+  cursor: pointer;
+}
+.notif-case input {
+  width: 18px;
+  height: 18px;
+}
+.notif-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0 4px;
+}
+.notif-ok {
+  color: var(--teal);
+  font-size: 0.85rem;
+}
+.notif-alerte {
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
 /* Salle manquante : signalée, jamais silencieuse. Couleur d'alerte plutôt
    qu'un simple tiret — sur une grille dense, un vide ne se voit pas. */
 .sessiongrid-block .room--absente,

@@ -9,6 +9,7 @@ import { copyToClipboard } from "../utils/clipboard";
 import { confirmAsync } from "../utils/confirmDialog";
 import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { downloadIcs, sessionsWithDates } from "../utils/ics";
+import { NotificationsPanel } from "../components/NotificationsPanel";
 
 type SubTab = "salles" | "cours" | "calendrier" | "liens";
 
@@ -33,7 +34,15 @@ export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
       {sub === "salles" && <RoomsTable payload={payload} />}
       {sub === "cours" && <CoursesTable payload={payload} setRoute={setRoute} />}
       {sub === "calendrier" && <CalendarTimeline payload={payload} />}
-      {sub === "liens" && <LinksDirectory payload={payload} />}
+      {sub === "liens" && (
+        <>
+          <LinksDirectory payload={payload} />
+          {/* Sous « Liens & partage » : c'est déjà d'ici que partent les mails
+              aux enseignants, donc l'endroit où l'on vient chercher ce qui
+              part par mail. */}
+          <NotificationsPanel />
+        </>
+      )}
     </section>
   );
 }

@@ -27,6 +27,8 @@ from cal_iut.api.schemas import (
     LoginRequest,
     MetaResponse,
     MoveSessionRequest,
+    NotificationConfigRequest,
+    NotificationConfigResponse,
     PlacementResponse,
     QualityResponse,
     RegenRequest,
@@ -152,7 +154,8 @@ app.add_middleware(
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
     "/app-state", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
-    "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/placements",
+    "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
+    "/placements",
     "/regen", "/rooms", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
 )
 
@@ -1667,6 +1670,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
                 },
             )
 
+    _notifier("deplacement", f"{match.course_code} → {_ou(match)}")
     return _to_placement(match, state.sessions_by_id)
 
 
@@ -1763,6 +1767,7 @@ def echanger_placements(body: EchangeRequest) -> EchangeResponse:
                 run_id=state.current_run_id, course_code=placement.course_code,
             )
 
+    _notifier("echange", f"{a.course_code} ({_ou(a)}) ⇄ {b.course_code} ({_ou(b)})")
     return EchangeResponse(placements=[_to_placement(a, state.sessions_by_id), _to_placement(b, state.sessions_by_id)])
 
 
@@ -1915,6 +1920,8 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
                 "quoi_faire": "Relancer une génération avant de modifier le planning.",
             })
 
+    if not getattr(match, "room_id", None):
+        _notifier("sans_salle", f"{match.course_code} ({_ou(match)}) n'a plus de salle")
     return _to_placement(match, state.sessions_by_id)
 
 
@@ -2482,6 +2489,7 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
                 "quoi_faire": "Relancer une génération avant de modifier le planning.",
             })
 
+    _notifier("placement", f"{place.course_code} posée {_ou(place)}")
     return _to_placement(place, state.sessions_by_id)
 
 
@@ -2734,6 +2742,61 @@ def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[
     return "Votre emploi du temps MMI", texte, html_body
 
 
+@app.get("/notifications", response_model=NotificationConfigResponse,
+         dependencies=[Depends(require_admin_session)])
+def lire_notifications() -> NotificationConfigResponse:
+    """Réglage des notifications. Admin seulement : la liste des
+    destinataires est une donnée personnelle, elle n'a rien à faire dans un
+    lien public (cf. `_CLES_PRIVEES_PAYLOAD`, même principe)."""
+    from cal_iut.api import mailer, notifications
+
+    cfg = notifications.config()
+    return NotificationConfigResponse(
+        destinataires=cfg["destinataires"],
+        evenements=cfg["evenements"],
+        delai_minutes=cfg["delai_minutes"],
+        libelles=dict(notifications.EVENEMENTS),
+        en_attente=notifications.en_attente(),
+        mail_configure=mailer.is_configured(),
+    )
+
+
+@app.put("/notifications", response_model=NotificationConfigResponse,
+         dependencies=[Depends(require_admin_session)])
+def ecrire_notifications(body: NotificationConfigRequest) -> NotificationConfigResponse:
+    from cal_iut.api import notifications
+
+    try:
+        notifications.enregistrer_config(body.model_dump(exclude_none=True))
+    except ValueError as exc:
+        # 400 et pas 500 : c'est une saisie à corriger, et le message dit
+        # laquelle (adresse invalide, événement inconnu).
+        raise HTTPException(400, str(exc)) from exc
+    return lire_notifications()
+
+
+@app.post("/notifications/test", dependencies=[Depends(require_admin_session)])
+def tester_notifications() -> dict[str, object]:
+    """Envoie un résumé de test aux destinataires enregistrés — le seul moyen
+    de vérifier que la configuration marche sans attendre qu'un vrai
+    changement se produise."""
+    from cal_iut.api import notifications
+
+    cfg = notifications.config()
+    if not cfg["destinataires"]:
+        raise HTTPException(400, "Aucun destinataire enregistré.")
+    actifs = [c for c, ok in cfg["evenements"].items() if ok]
+    if not actifs:
+        raise HTTPException(400, "Aucun événement suivi : rien ne partirait.")
+    # On passe par la file normale pour tester le chemin réel, pas un raccourci.
+    with_evenement = actifs[0]
+    notifications._file.append(("test", with_evenement, "Message de test — la configuration fonctionne."))
+    envoye = notifications.vider_file()
+    if not envoye:
+        raise HTTPException(502, "L'envoi a échoué (RESEND_API_KEY manquante ou service indisponible).")
+    return {"envoye_a": cfg["destinataires"]}
+
+
 @app.get("/mail/pixel/{code}.gif")
 def mail_pixel(code: str) -> Response:
     """Pixel de suivi d'ouverture — appelé par le client mail de
@@ -2832,6 +2895,27 @@ def mail_teacher_links_send(body: SendTeacherMailsRequest) -> SendTeacherMailsRe
         except Exception as exc:  # noqa: BLE001 — un envoi individuel raté ne doit jamais interrompre les autres
             resultats.append(TeacherMailSendResultResponse(code=code, ok=False, error=str(exc)))
     return SendTeacherMailsResponse(results=resultats)
+
+
+def _notifier(evenement: str, texte: str) -> None:
+    """Signale une modification du planning, sans jamais faire échouer
+    l'appelant : une notification est un à-côté, le déplacement de séance
+    qui l'a déclenchée doit aboutir même si le mail casse."""
+    try:
+        from cal_iut.api import notifications
+
+        notifications.signaler(evenement, texte)
+        notifications.envoyer_si_temps_ecoule()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _ou(placement: object) -> str:
+    jours = ("lundi", "mardi", "mercredi", "jeudi", "vendredi")
+    heures = ("8h", "9h30", "11h", "14h", "15h30", "17h")
+    jour = jours[placement.day] if 0 <= placement.day < 5 else "?"
+    heure = heures[placement.slot] if 0 <= placement.slot < 6 else "?"
+    return f"S{placement.week + 1} {jour} {heure}"
 
 
 def _find_placement(state: object, session_id: str) -> PlacedSessionWithRoom:

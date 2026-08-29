@@ -2,6 +2,7 @@ import type {
   DiffResponse,
   FeedbackAnalysis,
   MetaResponse,
+  NotificationConfig,
   Placement,
   TimetableResponse,
   ValidationResponse,
@@ -323,6 +324,22 @@ export function echangerPlacements(
     method: "POST",
     body: JSON.stringify({ session_a: sessionA, session_b: sessionB, force }),
   });
+}
+
+export function lireNotifications(): Promise<NotificationConfig> {
+  return request<NotificationConfig>("/notifications");
+}
+
+export function ecrireNotifications(patch: {
+  destinataires?: string[];
+  evenements?: Record<string, boolean>;
+  delai_minutes?: number;
+}): Promise<NotificationConfig> {
+  return request<NotificationConfig>("/notifications", { method: "PUT", body: JSON.stringify(patch) });
+}
+
+export function testerNotifications(): Promise<{ envoye_a: string[] }> {
+  return request<{ envoye_a: string[] }>("/notifications/test", { method: "POST" });
 }
 
 export function changerSalle(

@@ -150,6 +150,31 @@ class PlacementResponse(BaseModel):
     duration_slots: int = 1
 
 
+class NotificationConfigRequest(BaseModel):
+    """Reglage des notifications (`PUT /notifications`) — retour utilisateur
+    29/08/2026 : « fais en sorte que l'on puisse configurer pour quoi les
+    mails partent dans l'interface, et que l'on puisse modifier l'email et en
+    ajouter plusieurs en meme temps ». Champs tous optionnels : l'interface
+    peut n'envoyer que ce qu'elle modifie."""
+
+    destinataires: list[str] | None = None
+    evenements: dict[str, bool] | None = None
+    # Fenetre de regroupement. 0 = envoi immediat ; au-dela, les evenements
+    # d'une meme rafale sont resumes en un seul mail.
+    delai_minutes: int | None = None
+
+
+class NotificationConfigResponse(BaseModel):
+    destinataires: list[str]
+    evenements: dict[str, bool]
+    delai_minutes: int
+    # Libelles des evenements, pour que l'interface n'ait pas a les
+    # redupliquer (et a diverger le jour ou l'un change).
+    libelles: dict[str, str]
+    en_attente: int
+    mail_configure: bool
+
+
 class EchangeRequest(BaseModel):
     """Echange de place entre deux seances (`POST /placements/echanger`) —
     retour utilisateur 29/08/2026 : « si l'on fait un glisser-deposer d'un
