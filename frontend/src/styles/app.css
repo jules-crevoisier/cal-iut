@@ -1440,6 +1440,27 @@ h1, h2, h3 {
 .sessiongrid-block.eval { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
 .sessiongrid-block.locked { opacity: 0.75; }
 
+/* Édition (modale semaine par parcours uniquement — les vues Groupe et
+   Enseignant passent la même grille sans `edition`, donc sans ces états). */
+.sessiongrid-block--draggable { cursor: grab; }
+.sessiongrid-block--draggable:active { cursor: grabbing; }
+.sessiongrid-block.dragging { opacity: 0.35; }
+
+/* Séance survolée pendant un glisser : déposer ici ÉCHANGE les deux places.
+   Repère volontairement différent de `.dropzone-hover` (trait plein, pas
+   pointillé) — ce n'est pas le même geste : la case déplace, la séance
+   échange. */
+.sessiongrid-block.swap-target {
+  outline: 2px solid var(--accent2);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent2) 22%, transparent);
+}
+
+.sessiongrid-cell.dropzone-hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
 /* Nom du cours + salle en tête, mis en avant à égalité — retour utilisateur
    28/08/2026 : le nom prime sur le code (« WSA501D ça me parle pas »), et la
    salle mérite la même importance que le nom (« 95% du temps c'est pour
@@ -1908,52 +1929,22 @@ table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.
   flex: 1;
 }
 
+/* Cases plus hautes qu'en vue admin : ici la grille a tout l'écran pour
+   elle, et c'est sur ces cartes qu'on lit les infos du cours avant de le
+   déplacer. */
+.parcoursmodal-corps .sessiongrid-cell {
+  height: 76px;
+}
+
 .parcoursmodal-aide {
   color: var(--muted);
   font-size: 0.78rem;
   margin: 0;
 }
 
-/* Grille jours x créneaux : c'est ce que la Vue Promo ne montre pas, et
-   c'est précisément ce qu'il faut pour déplacer une séance d'un JOUR à
-   l'autre (retour utilisateur 29/08/2026). */
-.parcours-grid {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.parcours-grid th,
-.parcours-grid td {
-  border: 1px solid var(--line);
-  padding: 3px;
-  vertical-align: top;
-}
-
-.parcours-grid th {
-  background: var(--surface-2);
-  font-size: 0.74rem;
-  font-weight: 600;
-}
-
-.parcours-grid .timecol {
-  width: 76px;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  color: var(--muted);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.parcours-grid td.dropzone-hover {
-  outline: 2px dashed var(--accent);
-  outline-offset: -2px;
-}
-
 @media (max-width: 900px) {
   .parcoursmodal { max-height: calc(100dvh - 16px); }
-  .parcours-grid .timecol { width: 54px; font-size: 0.62rem; }
-  .parcours-grid th, .parcours-grid td { padding: 2px; }
+  .parcoursmodal-corps .sessiongrid-cell { height: 64px; }
 }
 table.promo-grid td.promocell.dropzone-hover {
   outline: 2px dashed var(--accent);
