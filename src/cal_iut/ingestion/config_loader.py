@@ -172,6 +172,37 @@ def load_teacher_duos(config_dir: Path) -> list[TeacherDuo]:
     return duos
 
 
+def load_seances_annulees(config_dir: Path) -> set[str]:
+    """Identifiants des séances qui n'auront pas lieu (cf.
+    `seances_annulees.yaml`).
+
+    Rendu comme un ENSEMBLE d'identifiants : le retrait se fait à
+    l'ingestion (`pipeline.retirer_seances_annulees`), donc avant que
+    quiconque — solveur, inventaire « À placer », API — ne les voie. Une
+    séance seulement dépointée du planning redeviendrait « à placer » et
+    reviendrait au redémarrage suivant.
+
+    `motif` est OBLIGATOIRE : dans un an, une annulation sans justification
+    est soit supprimée à tort, soit conservée à tort.
+    """
+    path = config_dir / "seances_annulees.yaml"
+    if not path.exists():
+        return set()
+    data = load_yaml(path) or {}
+    annulees: set[str] = set()
+    for item in data.get("annulees") or []:
+        session_id = str(item.get("session_id") or "").strip()
+        if not session_id:
+            raise ValueError(
+                f"{path.name} : une entrée sans `session_id` — elle donnerait une "
+                "annulation qu'on croit faite et qui ne l'est pas."
+            )
+        if not str(item.get("motif") or "").strip():
+            raise ValueError(f"{path.name} : `{session_id}` sans `motif`.")
+        annulees.add(session_id)
+    return annulees
+
+
 def load_double_sessions(config_dir: Path) -> list[DoubleSessionRule]:
     """Règles de fusion de séances collées (cf. double_sessions.yaml)."""
     path = config_dir / "double_sessions.yaml"
