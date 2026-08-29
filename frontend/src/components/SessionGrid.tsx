@@ -11,6 +11,7 @@
  */
 
 import { Fragment, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 
 import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
@@ -19,6 +20,27 @@ import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 
 const SLOT_COUNT = 6;
 const ALL_DAYS = [0, 1, 2, 3, 4];
+
+/**
+ * Glisser-déposer optionnel — fourni uniquement par la modale semaine par
+ * parcours (`ParcoursWeekModal`). Absent partout ailleurs : les vues Groupe
+ * et Enseignant restent en lecture seule, comme avant.
+ *
+ * Deux dépôts distincts et volontairement différents : sur une CASE, la
+ * séance se déplace ; sur une SÉANCE, les deux échangent leurs places.
+ */
+export interface EditionGrille {
+  draggingId: string | null;
+  cibleCase: { day: number; slot: number } | null;
+  cibleEchange: string | null;
+  estGlissable: (sessionId: string) => boolean;
+  onDebutGlisser: (sessionId: string) => void;
+  onFinGlisser: () => void;
+  onSurvolCase: (cible: { day: number; slot: number } | null) => void;
+  onSurvolSeance: (sessionId: string | null) => void;
+  onDeposerCase: (day: number, slot: number) => void;
+  onDeposerSeance: (sessionId: string) => void;
+}
 
 interface SessionGridProps {
   payload: AppPayload;
@@ -36,6 +58,8 @@ interface SessionGridProps {
    *  promotions — cf. `groupLabelWithParcours`. */
   showPromo?: boolean;
   onSelect?: (row: AppRow) => void;
+  /** Absent = grille en lecture seule (comportement historique). */
+  edition?: EditionGrille;
 }
 
 export function SessionGrid({
@@ -48,9 +72,35 @@ export function SessionGrid({
   onlyDay = null,
   showPromo = false,
   onSelect,
+  edition,
 }: SessionGridProps) {
   const [hover, setHover] = useState<{ row: AppRow; x: number; y: number } | null>(null);
   const days = onlyDay === null ? ALL_DAYS : [onlyDay];
+
+  /** Props d'une case : classe de base + zone de dépôt quand la grille est
+   *  éditable. Factorisé parce que la grille rend HUIT variantes de case
+   *  (séances, sous-colonnes TP, férié, PAC, SAE, événement, jour entier,
+   *  vide) — les oublier une par une ferait des trous où le dépôt ne marche
+   *  pas, sans que rien ne le signale. */
+  const propsCase = (d: number, s: number) => {
+    const survol = edition?.cibleCase?.day === d && edition?.cibleCase?.slot === s;
+    if (!edition) return { className: "sessiongrid-cell" };
+    return {
+      className: `sessiongrid-cell${survol ? " dropzone-hover" : ""}`,
+      onDragOver: (e: ReactDragEvent) => {
+        if (!edition.draggingId) return;
+        e.preventDefault();
+        if (!survol) edition.onSurvolCase({ day: d, slot: s });
+      },
+      onDragLeave: () => {
+        if (survol) edition.onSurvolCase(null);
+      },
+      onDrop: (e: ReactDragEvent) => {
+        e.preventDefault();
+        edition.onDeposerCase(d, s);
+      },
+    };
+  };
 
   const byCell = new Map<string, AppRow[]>();
   const byCellLeft = new Map<string, AppRow[]>();
@@ -139,7 +189,7 @@ export function SessionGrid({
 
                   if (shared.length) {
                     return (
-                      <td key={d} className="sessiongrid-cell">
+                      <td key={d} {...propsCase(d, s)}>
                         {/* Wrapper DÉDIÉ pour la mise en page flex (lecture
                             seule : carte(s) étirée(s) sur toute la case) —
                             jamais sur le <td> lui-même. Bug réel trouvé le
@@ -152,7 +202,7 @@ export function SessionGrid({
                             visuellement. */}
                         <div className="sessiongrid-cell-inner">
                           {shared.map((r) => (
-                            <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} />
+                            <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} edition={edition} />
                           ))}
                         </div>
                       </td>
@@ -160,16 +210,16 @@ export function SessionGrid({
                   }
                   if (split && (left.length || right.length)) {
                     return (
-                      <td key={d} className="sessiongrid-cell">
+                      <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-subcols">
                           <div>
                             {left.map((r) => (
-                              <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} />
+                              <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} edition={edition} />
                             ))}
                           </div>
                           <div>
                             {right.map((r) => (
-                              <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} />
+                              <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} edition={edition} />
                             ))}
                           </div>
                         </div>
@@ -178,7 +228,7 @@ export function SessionGrid({
                   }
                   if (holiday) {
                     return (
-                      <td key={d} className="sessiongrid-cell">
+                      <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-holiday">
                           <span className="title">{holiday.kind === "vacances" ? "Vacances" : "Férié"}</span>
                           <span className="label">{holiday.label}</span>
@@ -188,14 +238,14 @@ export function SessionGrid({
                   }
                   if (isPacLock) {
                     return (
-                      <td key={d} className="sessiongrid-cell">
+                      <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-pac">PAC</div>
                       </td>
                     );
                   }
                   if (sae) {
                     return (
-                      <td key={d} className="sessiongrid-cell">
+                      <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-sae">
                           <span className="title">SAE</span>
                           <span className="codes">{sae.join(", ")}</span>
@@ -205,7 +255,7 @@ export function SessionGrid({
                   }
                   if (eventsAtSlot) {
                     return (
-                      <td key={d} className="sessiongrid-cell">
+                      <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-event">
                           {eventsAtSlot.map((e) => (
                             <span key={e} className="label">
@@ -218,7 +268,7 @@ export function SessionGrid({
                   }
                   if (dayEvent) {
                     return (
-                      <td key={d} className="sessiongrid-cell">
+                      <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-event">
                           {dayEvent.map((e) => (
                             <span key={e} className="label">
@@ -229,7 +279,7 @@ export function SessionGrid({
                       </td>
                     );
                   }
-                  return <td key={d} className="sessiongrid-cell" />;
+                  return <td key={d} {...propsCase(d, s)} />;
                 })}
               </tr>
             </Fragment>
@@ -273,13 +323,37 @@ function SessionBlock({
   showPromo,
   onSelect,
   onHover,
+  edition,
 }: {
   row: AppRow;
   payload: AppPayload;
   showPromo: boolean;
   onSelect?: (row: AppRow) => void;
   onHover: (v: { row: AppRow; x: number; y: number } | null) => void;
+  edition?: EditionGrille;
 }) {
+  const glissable = Boolean(edition?.estGlissable(row.id));
+  const cibleEchange = edition?.cibleEchange === row.id;
+  // `stopPropagation` : sans lui, la CASE en dessous traiterait aussi le
+  // dépôt, et ferait un déplacement en plus de l'échange.
+  const propsEchange =
+    edition && edition.draggingId && edition.draggingId !== row.id
+      ? {
+          onDragOver: (e: ReactDragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!cibleEchange) edition.onSurvolSeance(row.id);
+          },
+          onDragLeave: () => {
+            if (cibleEchange) edition.onSurvolSeance(null);
+          },
+          onDrop: (e: ReactDragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            edition.onDeposerSeance(row.id);
+          },
+        }
+      : {};
   // Avec la promotion, le libellé COMPLET est gardé (« BUT1 TD AB ») : c'est
   // le préfixe TD/TP qui distingue un groupe de TD d'un groupe de TP, et sans
   // lui « BUT1 AB » ne dit plus de quoi il s'agit.
@@ -289,7 +363,20 @@ function SessionBlock({
   return (
     <button
       type="button"
-      className={`sessiongrid-block type-${row.t.toLowerCase()} ${row.ev ? "eval" : ""} ${row.locked ? "locked" : ""}`}
+      draggable={glissable}
+      onDragStart={
+        glissable
+          ? (e) => {
+              e.dataTransfer.effectAllowed = "move";
+              edition?.onDebutGlisser(row.id);
+            }
+          : undefined
+      }
+      onDragEnd={edition ? () => edition.onFinGlisser() : undefined}
+      {...propsEchange}
+      className={`sessiongrid-block type-${row.t.toLowerCase()} ${row.ev ? "eval" : ""} ${row.locked ? "locked" : ""}${
+        glissable ? " sessiongrid-block--draggable" : ""
+      }${edition?.draggingId === row.id ? " dragging" : ""}${cibleEchange ? " swap-target" : ""}`}
       onClick={() => onSelect?.(row)}
       onMouseEnter={(e) => onHover({ row, x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => onHover({ row, x: e.clientX, y: e.clientY })}

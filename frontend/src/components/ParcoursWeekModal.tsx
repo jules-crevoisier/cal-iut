@@ -10,27 +10,32 @@
  * (colonnes = groupes), donc son glisser-déposer ne sait déplacer une
  * séance qu'à l'intérieur de ce jour. Il n'existait AUCUN moyen, dans toute
  * l'application, de déplacer un cours d'un jour à un autre. Ici les
- * colonnes sont les 5 jours et les lignes les 6 créneaux : le geste manquant
- * devient le geste naturel.
+ * colonnes sont les 5 jours et les lignes les 6 créneaux : le geste
+ * manquant devient le geste naturel.
+ *
+ * La grille est `SessionGrid`, celle des vues Groupe/Enseignant, rendue
+ * éditable (`edition`) — PAS un tableau parallèle. Une copie recommençait à
+ * dériver dès le premier jour (retour utilisateur : « le style du tableau
+ * dans la popup n'est pas bon [...] il faut toutes les infos sur les cours »)
+ * et perdait au passage les cartes complètes, l'infobulle, les bandes
+ * férié/PAC/SAE/événement et la pause déjeuner.
  *
  * Deux gestes distincts, volontairement :
- * - déposer sur une case VIDE   -> déplacement,
- * - déposer sur une SÉANCE      -> échange des deux places
+ * - déposer sur une CASE   -> déplacement,
+ * - déposer sur une SÉANCE -> échange des deux places
  *   (`POST /placements/echanger`, qui juge les deux positions finales
  *   ensemble au lieu d'enchaîner deux déplacements forcés).
  */
 
 import { useEffect, useMemo, useState } from "react";
-import type { DragEvent as ReactDragEvent } from "react";
 
 import type { Placement } from "../types";
-import type { AppPayload, AppRow } from "../types/app";
+import type { AppPayload } from "../types/app";
+import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import { performMove, performSwap } from "../utils/moveSession";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
-
-const SLOT_COUNT = 6;
-const DAYS = [0, 1, 2, 3, 4];
+import { DayStrip, todayIndex } from "./DayStrip";
+import { SessionGrid, type EditionGrille } from "./SessionGrid";
 
 interface ParcoursWeekModalProps {
   payload: AppPayload;
@@ -55,9 +60,11 @@ export function ParcoursWeekModal({
 }: ParcoursWeekModalProps) {
   const [semaineAffichee, setSemaineAffichee] = useState(weekIndex);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [cible, setCible] = useState<{ day: number; slot: number } | null>(null);
+  const [cibleCase, setCibleCase] = useState<{ day: number; slot: number } | null>(null);
   const [cibleEchange, setCibleEchange] = useState<string | null>(null);
   const [annonce, setAnnonce] = useState("");
+  const narrow = useNarrowScreen();
+  const [mobileDay, setMobileDay] = useState(todayIndex());
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -69,47 +76,38 @@ export function ParcoursWeekModal({
 
   const solverWeek = payload.weekRows[semaineAffichee]?.weekIndex ?? null;
 
-  // Groupes de ce parcours, cohortes comprises : un CM de promo doit
+  // Groupes de ce parcours, groupe promo compris : un CM de promotion doit
   // apparaître ici au même titre qu'un TP, sinon la semaine affichée est
   // fausse par omission.
-  const groupesDuParcours = useMemo(() => {
-    const ids = Object.keys(payload.groupLabels).filter((gid) => payload.groupParcours[gid] === parcours);
-    return new Set(ids);
-  }, [payload.groupLabels, payload.groupParcours, parcours]);
+  const groupesDuParcours = useMemo(
+    () => new Set(Object.keys(payload.groupLabels).filter((gid) => payload.groupParcours[gid] === parcours)),
+    [payload.groupLabels, payload.groupParcours, parcours],
+  );
 
-  const parCase = useMemo(() => {
-    const m = new Map<string, AppRow[]>();
-    if (solverWeek === null) return m;
-    for (const r of payload.rows) {
-      if (r.w !== solverWeek) continue;
-      if (!r.g.some((gid) => groupesDuParcours.has(gid))) continue;
-      const duree = Math.max(1, r.dur || 1);
-      for (let k = 0; k < duree; k++) {
-        const cle = `${r.d}-${r.s + k}`;
-        if (!m.has(cle)) m.set(cle, []);
-        m.get(cle)!.push(r);
-      }
-    }
-    return m;
-  }, [payload.rows, solverWeek, groupesDuParcours]);
+  const rowsSemaine = useMemo(
+    () =>
+      solverWeek === null
+        ? []
+        : payload.rows.filter((r) => r.w === solverWeek && r.g.some((gid) => groupesDuParcours.has(gid))),
+    [payload.rows, solverWeek, groupesDuParcours],
+  );
 
-  const bandes = useMemo(() => {
-    if (solverWeek === null) return new Map<number, string>();
-    const m = new Map<number, string>();
-    for (const d of DAYS) {
-      if (payload.holidayRows.some((h) => h.w === solverWeek && h.d === d)) m.set(d, "sessiongrid-holiday");
-      else if (payload.saeRows.some((s) => s.w === solverWeek && s.d === d)) m.set(d, "sessiongrid-sae");
-      else if (payload.eventRows.some((e) => e.w === solverWeek && e.d === d)) m.set(d, "sessiongrid-event");
-    }
-    return m;
-  }, [payload.holidayRows, payload.saeRows, payload.eventRows, solverWeek]);
+  const placementsParId = useMemo(
+    () => new Map(placements.map((p) => [p.session_id, p])),
+    [placements],
+  );
+
+  const reinitialiserGlisser = () => {
+    setDraggingId(null);
+    setCibleCase(null);
+    setCibleEchange(null);
+  };
 
   const deplacer = async (jour: number, creneau: number) => {
-    setCible(null);
     const sessionId = draggingId;
-    setDraggingId(null);
+    reinitialiserGlisser();
     if (!sessionId || solverWeek === null) return;
-    const placement = placements.find((p) => p.session_id === sessionId);
+    const placement = placementsParId.get(sessionId);
     if (!placement) return;
     if (placement.locked) {
       onError("Séance verrouillée : la déverrouiller avant de la déplacer.");
@@ -127,61 +125,38 @@ export function ParcoursWeekModal({
   };
 
   const echanger = async (cibleId: string) => {
-    setCibleEchange(null);
     const sourceId = draggingId;
-    setDraggingId(null);
+    reinitialiserGlisser();
     if (!sourceId || sourceId === cibleId) return;
-    const source = placements.find((p) => p.session_id === sourceId);
-    const autre = placements.find((p) => p.session_id === cibleId);
+    const source = placementsParId.get(sourceId);
+    const autre = placementsParId.get(cibleId);
     if (!source || !autre) return;
     if (source.locked || autre.locked) {
       onError("Séance verrouillée : la déverrouiller avant d'échanger.");
       return;
     }
-    const ok = await performSwap(
-      sourceId,
-      cibleId,
-      source.course_code,
-      autre.course_code,
-      onPlacementUpdated,
-      onError,
-    );
+    const ok = await performSwap(sourceId, cibleId, source.course_code, autre.course_code, onPlacementUpdated, onError);
     if (ok) setAnnonce(`${source.course_code} et ${autre.course_code} ont échangé leurs places.`);
   };
 
-  const caseHandlers = (jour: number, creneau: number) => ({
-    onDragOver: (e: ReactDragEvent) => {
-      if (!draggingId) return;
-      e.preventDefault();
-      if (cible?.day !== jour || cible?.slot !== creneau) setCible({ day: jour, slot: creneau });
+  const edition: EditionGrille = {
+    draggingId,
+    cibleCase,
+    cibleEchange,
+    estGlissable: (id) => {
+      const p = placementsParId.get(id);
+      return Boolean(p) && !p?.locked;
     },
-    onDragLeave: () => setCible((cur) => (cur?.day === jour && cur?.slot === creneau ? null : cur)),
-    onDrop: (e: ReactDragEvent) => {
-      e.preventDefault();
-      void deplacer(jour, creneau);
-    },
-  });
-
-  const echangeHandlers = (cibleId: string) =>
-    draggingId && draggingId !== cibleId
-      ? {
-          // `stopPropagation` : sans lui, la case en dessous traiterait AUSSI
-          // le dépôt, et ferait un déplacement en plus de l'échange.
-          onDragOver: (e: ReactDragEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (cibleEchange !== cibleId) setCibleEchange(cibleId);
-          },
-          onDragLeave: () => setCibleEchange((cur) => (cur === cibleId ? null : cur)),
-          onDrop: (e: ReactDragEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            void echanger(cibleId);
-          },
-        }
-      : {};
+    onDebutGlisser: setDraggingId,
+    onFinGlisser: reinitialiserGlisser,
+    onSurvolCase: setCibleCase,
+    onSurvolSeance: setCibleEchange,
+    onDeposerCase: (d, s) => void deplacer(d, s),
+    onDeposerSeance: (id) => void echanger(id),
+  };
 
   const semaine = payload.weekRows[semaineAffichee];
+  const derniere = payload.weekRows.length - 1;
 
   return (
     <div className="parcoursmodal-overlay" role="presentation" onClick={onClose}>
@@ -211,8 +186,8 @@ export function ParcoursWeekModal({
             <button
               type="button"
               className="btn btn--ghost btn--sm"
-              onClick={() => setSemaineAffichee((w) => Math.min(payload.weekRows.length - 1, w + 1))}
-              disabled={semaineAffichee >= payload.weekRows.length - 1}
+              onClick={() => setSemaineAffichee((w) => Math.min(derniere, w + 1))}
+              disabled={semaineAffichee >= derniere}
             >
               Semaine suivante →
             </button>
@@ -223,82 +198,25 @@ export function ParcoursWeekModal({
         </div>
 
         <p className="parcoursmodal-aide">
-          Glisser une séance sur une case vide la déplace · la glisser sur une autre séance échange leurs places.
+          Glisser une séance sur une case libre la déplace · la glisser sur une autre séance échange leurs places.
         </p>
+
+        {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
 
         <div className="parcoursmodal-corps">
           {solverWeek === null ? (
             <p className="muted">Semaine bloquée (vacances/fermeture) — rien à afficher.</p>
           ) : (
-            <table className="parcours-grid">
-              <thead>
-                <tr>
-                  <th className="timecol" />
-                  {DAYS.map((d) => {
-                    const date = dateForWeekDay(payload, solverWeek, d);
-                    return (
-                      <th key={d} className={bandes.get(d) ?? ""}>
-                        {DAY_LABELS[d]}
-                        {date ? ` ${formatShortDate(date)}` : ""}
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: SLOT_COUNT }, (_, s) => (
-                  <tr key={s}>
-                    <td className="timecol">{SLOT_TIMES[s].label}</td>
-                    {DAYS.map((d) => {
-                      const entrees = parCase.get(`${d}-${s}`) ?? [];
-                      const survol = cible?.day === d && cible?.slot === s;
-                      return (
-                        <td key={d} className={survol ? "dropzone-hover" : ""} {...caseHandlers(d, s)}>
-                          {entrees.map((r) => {
-                            const source = placements.find((p) => p.session_id === r.id);
-                            const glissable = Boolean(source) && !source?.locked;
-                            const groupes = r.g.map((g) => payload.groupLabels[g] ?? g).join("/");
-                            return (
-                              <div
-                                key={r.id}
-                                draggable={glissable}
-                                onDragStart={
-                                  glissable
-                                    ? (e) => {
-                                        e.dataTransfer.effectAllowed = "move";
-                                        setDraggingId(r.id);
-                                      }
-                                    : undefined
-                                }
-                                onDragEnd={() => {
-                                  setDraggingId(null);
-                                  setCibleEchange(null);
-                                }}
-                                {...echangeHandlers(r.id)}
-                                className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${
-                                  glissable ? "promo-chip--draggable" : ""
-                                } ${draggingId === r.id ? "dragging" : ""} ${
-                                  cibleEchange === r.id ? "swap-target" : ""
-                                }`}
-                                title={`${r.n || r.c} · ${r.te.map((t) => payload.teacherLabels[t] ?? t).join(", ")}`}
-                              >
-                                <span className="code">{r.c}</span>
-                                <span className="ty">
-                                  {r.t}
-                                  {r.ev ? " · éval" : ""}
-                                  {groupes ? ` · ${groupes}` : ""}
-                                </span>
-                                {r.r && <span className="rm">{r.r}</span>}
-                              </div>
-                            );
-                          })}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <SessionGrid
+              payload={payload}
+              rows={rowsSemaine}
+              week={solverWeek}
+              parcours={parcours}
+              showPac={!parcours.includes("FC")}
+              onlyDay={narrow ? mobileDay : null}
+              showPromo
+              edition={edition}
+            />
           )}
         </div>
       </div>
