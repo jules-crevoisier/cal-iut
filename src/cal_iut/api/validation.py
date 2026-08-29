@@ -61,6 +61,12 @@ def validate_move(
     # aussi ressortir en conflit pour "h007"/"h008" pris individuellement,
     # et réciproquement. Vide/absent = comportement d'avant, inchangé.
     conflicting_room_ids: set[str] | None = None,
+    # Séances à IGNORER dans l'occupation, en plus de `session_id`. Sert à
+    # l'échange de deux séances (`POST /placements/echanger`) : chacune doit
+    # être jugée sur la place LIBÉRÉE par l'autre. Sans cela, tout échange
+    # entre deux séances du même groupe serait refusé, chacune voyant l'autre
+    # exactement là où elle veut aller.
+    ignore_session_ids: set[str] | None = None,
 ) -> ValidationResult:
     """
     Vérifie qu'un déplacement manuel ne crée pas de conflit dur.
@@ -96,8 +102,9 @@ def validate_move(
     debut = _time_index(week, day, slot)
     occupes = set(range(debut, debut + duration))
 
+    a_ignorer = {session_id} | (ignore_session_ids or set())
     for placement in timetable:
-        if placement.session_id == session_id:
+        if placement.session_id in a_ignorer:
             continue
         autre_debut = _time_index(placement.week, placement.day, placement.slot)
         autre_duree = _duration_of(placement.session_id, sessions_by_id)

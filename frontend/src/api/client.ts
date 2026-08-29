@@ -311,6 +311,20 @@ export function creerSalle(body: { label: string; capacity: number }): Promise<{
  * salles »). Endpoint distinct de `movePlacement` : celui-ci refait tous les
  * contrôles de POSITION, qui peuvent refuser à tort une séance déjà posée à
  * une position limite (cf. api/main.py::changer_salle). */
+/** Échange de place entre deux séances (`POST /placements/echanger`) — cf.
+ * `utils/moveSession.ts::performSwap` pour le pourquoi d'un endpoint dédié
+ * plutôt que deux déplacements enchaînés. */
+export function echangerPlacements(
+  sessionA: string,
+  sessionB: string,
+  force = false,
+): Promise<{ placements: Placement[] }> {
+  return request<{ placements: Placement[] }>("/placements/echanger", {
+    method: "POST",
+    body: JSON.stringify({ session_a: sessionA, session_b: sessionB, force }),
+  });
+}
+
 export function changerSalle(
   sessionId: string,
   body: { room_id: string; force?: boolean },

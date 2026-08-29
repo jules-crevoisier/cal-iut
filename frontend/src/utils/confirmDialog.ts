@@ -16,7 +16,11 @@
 export interface ConfirmRequest {
   title: string;
   message: string;
-  confirmLabel: string;
+  /** `null` = rien a confirmer : la modale n'affiche qu'un bouton de
+   *  fermeture. Sert aux obstacles que « Forcer » ne leve pas (cf.
+   *  `alerterAsync`) — proposer un bouton qui echouera est pire que ne rien
+   *  proposer. */
+  confirmLabel: string | null;
   cancelLabel: string;
 }
 
@@ -51,6 +55,28 @@ export function confirmAsync(
       message,
       confirmLabel: options?.confirmLabel ?? "Forcer quand même",
       cancelLabel: options?.cancelLabel ?? "Annuler",
+    });
+  });
+}
+
+/**
+ * Message SANS choix — l'action est impossible, pas discutable.
+ *
+ * Ajoute le 29/08/2026 : sur une indisponibilite enseignant declaree, la
+ * modale proposait « Forcer le deplacement », le serveur refusait quand
+ * meme (ces verrous-la ignorent `force`), et il ne restait qu'une discrete
+ * notice d'erreur. Mieux vaut dire tout de suite que ce n'est pas
+ * negociable, et pourquoi.
+ */
+export function alerterAsync(message: string, options?: { title?: string; cancelLabel?: string }): Promise<void> {
+  return new Promise((resolve) => {
+    if (pendingResolve) pendingResolve(false);
+    pendingResolve = () => resolve();
+    listener?.({
+      title: options?.title ?? "Impossible",
+      message,
+      confirmLabel: null,
+      cancelLabel: options?.cancelLabel ?? "J'ai compris",
     });
   });
 }

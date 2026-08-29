@@ -36,9 +36,13 @@ export function ConfirmModal() {
           <button type="button" className="btn btn--ghost" autoFocus onClick={() => resolveConfirm(false)}>
             {request.cancelLabel}
           </button>
-          <button type="button" className="btn btn--accent" onClick={() => resolveConfirm(true)}>
-            {request.confirmLabel}
-          </button>
+          {/* Pas de bouton d'action quand il n'y a rien a forcer : cf.
+              `alerterAsync` dans utils/confirmDialog.ts. */}
+          {request.confirmLabel !== null && (
+            <button type="button" className="btn btn--accent" onClick={() => resolveConfirm(true)}>
+              {request.confirmLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

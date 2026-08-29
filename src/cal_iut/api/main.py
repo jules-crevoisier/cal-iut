@@ -15,6 +15,8 @@ from cal_iut.api import auth, custom_rooms, forced_pending, mailer
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
+    EchangeRequest,
+    EchangeResponse,
     DiffResponse,
     ExceptionCreateRequest,
     ExceptionResponse,
@@ -1454,7 +1456,7 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     # les suggestions (retour utilisateur : "vérifie bien toutes les
     # contraintes avant que ça s'effectue"). Jamais contournables.
     if session and _is_duo_synced(session, state.teacher_duos):
-        return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + [_DUO_SYNC_NOTE], soft_warnings=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
+        return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + [_DUO_SYNC_NOTE], soft_warnings=[], blocking_conflicts=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
     if session:
         extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
         institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
@@ -1466,7 +1468,16 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         # `placer_seance`), pas dans cette prévisualisation.
         pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
         if institutional or pedago:
-            return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + institutional + pedago, soft_warnings=[], suggestions=[], suggestions_note=None)
+            # `institutional` seul est BLOQUANT : ni `force` ni rien d'autre
+            # ne le lève côté `move_session`. L'ordre pédagogique et le
+            # verrou de semaine, eux, sont négociables.
+            return ValidationResponse(
+                valid=False,
+                hard_conflicts=verrou_semaine + institutional + pedago,
+                soft_warnings=[],
+                blocking_conflicts=list(institutional),
+                suggestions=[], suggestions_note=None,
+            )
 
     # Même résolution de salle que `move_session` — sinon un dry-run
     # pourrait signaler un conflit que le déplacement réel n'aurait pas
@@ -1497,7 +1508,13 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     conflits = verrou_semaine + result.hard_conflicts
     valide = not conflits
     suggestions, note = ([], None) if valide else _suggestions_for(state, session_id, match)
-    return ValidationResponse(valid=valide, hard_conflicts=conflits, soft_warnings=result.soft_warnings, suggestions=suggestions, suggestions_note=note)
+    # Arrivé ici, rien n'est bloquant : les conflits restants sont des
+    # conflits de RESSOURCE (groupe, enseignant, salle), qu'un humain peut
+    # avoir une bonne raison ponctuelle de forcer.
+    return ValidationResponse(
+        valid=valide, hard_conflicts=conflits, soft_warnings=result.soft_warnings,
+        blocking_conflicts=[], suggestions=suggestions, suggestions_note=note,
+    )
 
 
 @app.patch("/placements/{session_id}")
@@ -1540,7 +1557,8 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if institutional:
             raise HTTPException(409, detail={
-                "message": "Conflit", "hard_conflicts": institutional,
+                "message": "Déplacement impossible", "hard_conflicts": institutional,
+                "blocking_conflicts": institutional,
                 "soft_warnings": [], "suggestions": [], "suggestions_note": None,
             })
         # Ordre pédagogique : contournable via `force` depuis le 28/08/2026
@@ -1650,6 +1668,140 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             )
 
     return _to_placement(match, state.sessions_by_id)
+
+
+@app.post("/placements/echanger", response_model=EchangeResponse)
+def echanger_placements(body: EchangeRequest) -> EchangeResponse:
+    """Échange la place de deux séances, en une seule décision.
+
+    Retour utilisateur 29/08/2026 : « si l'on fait un glisser-déposer d'un
+    cours sur un autre, cela nous propose un échange de cours tout en
+    vérifiant pareil ». Faire cet échange par DEUX appels à
+    `PATCH /placements/{id}` serait faux : le premier déplacement pose
+    forcément la séance sur une case encore occupée par l'autre, donc il
+    faudrait forcer — et le forçage sauterait justement les vérifications
+    qu'on veut garder. Ici les deux positions finales sont jugées ENSEMBLE,
+    chacune sur la place libérée par l'autre (`ignore_session_ids`).
+
+    Tout ou rien : si l'échange est refusé, les deux séances restent
+    exactement où elles étaient. Un échange à moitié appliqué laisserait le
+    planning dans un état que personne n'a demandé.
+    """
+    state = get_state()
+    if body.session_a == body.session_b:
+        raise HTTPException(400, "Une séance ne s'échange pas avec elle-même.")
+
+    a = _find_placement(state, body.session_a)
+    b = _find_placement(state, body.session_b)
+    seance_a = state.sessions_by_id.get(body.session_a)
+    seance_b = state.sessions_by_id.get(body.session_b)
+    for identifiant, seance in ((body.session_a, seance_a), (body.session_b, seance_b)):
+        if seance is not None and seance.locked:
+            raise HTTPException(409, f"Séance {identifiant} verrouillée : la déverrouiller d'abord.")
+
+    pos_a = (a.week, a.day, a.slot)
+    pos_b = (b.week, b.day, b.slot)
+    salle_a = getattr(a, "room_id", None)
+    salle_b = getattr(b, "room_id", None)
+
+    def _restaurer() -> None:
+        a.week, a.day, a.slot = pos_a
+        b.week, b.day, b.slot = pos_b
+
+    # Positions échangées AVANT les contrôles : c'est l'état final qu'il faut
+    # juger, pas un état intermédiaire qui n'existera jamais.
+    a.week, a.day, a.slot = pos_b
+    b.week, b.day, b.slot = pos_a
+    ignorees = {body.session_a, body.session_b}
+    try:
+        durs, bloquants, doux = _controler_echange(state, [(a, seance_a, salle_a), (b, seance_b, salle_b)], ignorees, body.force)
+    except Exception:
+        _restaurer()
+        raise
+
+    if bloquants or (durs and not body.force):
+        _restaurer()
+        raise HTTPException(409, detail={
+            "message": "Échange impossible" if bloquants else "Conflit",
+            "hard_conflicts": durs,
+            "blocking_conflicts": bloquants,
+            "soft_warnings": doux,
+            "suggestions": [],
+            "suggestions_note": None,
+        })
+
+    # Salles recalculées une fois l'échange posé : `_resolve_room` lit
+    # `state.timetable`, qui reflète désormais les positions finales — chaque
+    # séance garde donc sa salle si elle y est encore libre, et en retrouve
+    # une adaptée sinon (même règle que `move_session`).
+    for placement, seance, salle_prefere in ((a, seance_a, salle_a), (b, seance_b, salle_b)):
+        if seance is None or not salle_prefere:
+            continue
+        salle = _resolve_room(state, seance, placement.week, placement.day, placement.slot, salle_prefere)
+        if salle is not None:
+            placement.room_id, placement.room_label = salle.id, salle.label
+
+    repo = get_repo() if state.current_run_id else None
+    for placement, seance, ancienne in ((a, seance_a, pos_a), (b, seance_b, pos_b)):
+        propose = {"week": ancienne[0], "day": ancienne[1], "slot": ancienne[2]}
+        manuel = {"week": placement.week, "day": placement.day, "slot": placement.slot}
+        if seance is not None:
+            forced_pending.sync_after_move(placement.session_id, placement.week, placement.day, placement.slot, False)
+        state.corrections.append({
+            "session_id": placement.session_id, "proposed": propose,
+            "manual": manuel, "locked": False, "forced": body.force,
+        })
+        if repo is not None:
+            repo.save_correction(
+                state.current_run_id, placement.session_id, propose, manuel, False, body.force,
+                placement.course_code, placement.teacher_codes,
+            )
+            repo.update_current_placement(
+                placement.session_id, placement.week, placement.day, placement.slot,
+                getattr(placement, "room_id", None), getattr(placement, "room_label", None),
+                seance.locked if seance else False,
+                run_id=state.current_run_id, course_code=placement.course_code,
+            )
+
+    return EchangeResponse(placements=[_to_placement(a, state.sessions_by_id), _to_placement(b, state.sessions_by_id)])
+
+
+def _controler_echange(
+    state: object, cibles: list, ignorees: set[str], force: bool
+) -> tuple[list[str], list[str], list[str]]:
+    """Tous les contrôles d'un déplacement, appliqués aux DEUX séances.
+
+    Rend `(durs, bloquants, doux)` — `bloquants` est le sous-ensemble de
+    `durs` que `force` ne lève pas (verrous institutionnels, indisponibilité
+    enseignant déclarée), exactement la même distinction que
+    `validate_placement`, pour que l'interface décide de la même façon des
+    deux côtés.
+    """
+    durs: list[str] = []
+    bloquants: list[str] = []
+    doux: list[str] = []
+    for placement, seance, salle in cibles:
+        durs += _semaines_non_modifiables(state, placement.session_id, placement.week, placement.week, force=force)
+        if seance is not None:
+            extra_bloque, extra_bloque_pedago, semaines_permises = _hard_constraint_context(state, seance)
+            institutionnels = _institutional_violations(placement.week, placement.day, placement.slot, extra_bloque)
+            institutionnels += _teacher_availability_violations(state, seance, placement.week, placement.day, placement.slot)
+            bloquants += institutionnels
+            durs += institutionnels
+            durs += _pedagogical_order_violations(
+                placement.week, placement.day, placement.slot, extra_bloque_pedago, semaines_permises
+            )
+        resultat = validate_move(
+            placement.session_id, placement.week, placement.day, placement.slot,
+            _as_placed(state.timetable), placement.group_ids, placement.teacher_codes, salle,
+            sessions_by_id=state.sessions_by_id,
+            groups=state.groups,
+            conflicting_room_ids=_build_conflict_map(state.rooms).get(salle, set()) if salle else None,
+            ignore_session_ids=ignorees,
+        )
+        durs += resultat.hard_conflicts
+        doux += resultat.soft_warnings
+    return durs, bloquants, doux
 
 
 @app.patch("/placements/{session_id}/salle", response_model=PlacementResponse)
@@ -2249,7 +2401,11 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
     if institutional:
         raise HTTPException(409, detail={
-            "message": "Conflit", "hard_conflicts": institutional,
+            "message": "Placement impossible", "hard_conflicts": institutional,
+            # Non contournables, meme avec `force` : l'interface ne doit donc
+            # pas proposer « Forcer » ici (cf. `ValidationResponse.
+            # blocking_conflicts`, meme distinction).
+            "blocking_conflicts": institutional,
             "soft_warnings": [], "suggestions": [], "suggestions_note": None,
         })
     # Ordre pédagogique : contournable via `force` depuis le 28/08/2026 (cf.

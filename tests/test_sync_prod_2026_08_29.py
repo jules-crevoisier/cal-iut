@@ -188,3 +188,50 @@ def test_une_url_sans_mot_de_passe_ne_suffit_pas(monkeypatch) -> None:
 def test_une_instance_non_connectee_le_dit_clairement() -> None:
     with pytest.raises(SyncError, match="non connectée"):
         Instance(url="https://exemple.invalid", mot_de_passe="x").client
+
+
+# --------------------------------------------------------------------------
+# Le sens inverse : ramener la production en local
+# --------------------------------------------------------------------------
+
+
+def test_inverser_echange_les_deux_cotes() -> None:
+    """Le sens PROD -> LOCAL réutilise `pousser` sur une comparaison
+    retournée, plutôt qu'un second chemin à maintenir."""
+    comp = comparer({"s1": (2, 0, 0, "h111")}, {"s1": (5, 1, 2, "h101")})
+    inverse = comp.inverser()
+    assert inverse.differences[0].local == (5, 1, 2, "h101")
+    assert inverse.differences[0].distant == (2, 0, 0, "h111")
+
+
+def test_inverser_conserve_le_nombre_d_identiques() -> None:
+    comp = comparer({"a": (1, 0, 0, None), "b": (1, 0, 1, None)}, {"a": (1, 0, 0, None), "b": (2, 0, 1, None)})
+    assert comp.inverser().identiques == comp.identiques == 1
+
+
+def test_inverser_inverse_aussi_le_sens_des_absences() -> None:
+    """Une séance absente en prod devient, vue de l'autre côté, une séance
+    absente en local — et reste donc ignorée par `pousser` dans les deux
+    sens : créer ou supprimer une séance demande une décision humaine."""
+    comp = comparer({"local_seul": (1, 0, 0, None)}, {})
+    assert [d.genre for d in comp.differences] == ["absente_en_prod"]
+    assert [d.genre for d in comp.inverser().differences] == ["absente_en_local"]
+
+
+def test_le_sens_inverse_applique_bien_les_positions_de_production() -> None:
+    """Le cas réel du 29/08/2026 : quelqu'un réorganise la semaine en cours
+    directement en ligne, et le poste local doit se remettre à jour sans
+    écraser ce travail."""
+    cible, faux = _cible()
+    comp = comparer({"s1": (2, 0, 0, "h111")}, {"s1": (5, 1, 2, "h101")})
+    pousser(cible, comp.inverser(), appliquer=True)
+    corps = dict(faux.appels[0][1])
+    assert (corps["week"], corps["day"], corps["slot"]) == (5, 1, 2)
+    assert faux.appels[-1][1]["room_id"] == "h101"
+
+
+def test_une_comparaison_inversee_deux_fois_revient_a_l_original() -> None:
+    comp = comparer({"s1": (2, 0, 0, "h111")}, {"s1": (5, 1, 2, "h101")})
+    aller_retour = comp.inverser().inverser()
+    assert aller_retour.differences[0].local == comp.differences[0].local
+    assert aller_retour.differences[0].distant == comp.differences[0].distant
