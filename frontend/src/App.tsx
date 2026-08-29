@@ -552,6 +552,7 @@ export function App() {
         {activeTab === "promo" && appPayload && !readOnlyTarget && (
           <PromoView
             payload={appPayload}
+            route={route}
             placements={promoPlacements}
             onPlacementUpdated={handlePlacementUpdated}
             onError={(msg) => setNotice(msg)}

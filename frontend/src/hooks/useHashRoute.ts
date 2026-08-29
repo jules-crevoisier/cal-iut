@@ -26,6 +26,10 @@ export interface Route {
   prof: string;
   groupe: string;
   sem: number | null;
+  /** Jour (0 = lundi) — utilisé par la Vue Promo, qui affiche un jour à la
+   *  fois : sans lui, un lien « telle séance, tel créneau » ouvre le bon
+   *  écran mais pas le bon jour. */
+  jour: number | null;
   mode: "prof" | "groupe" | "";
   /** Code du lien personnel (prof ou groupe) — public depuis le
    * 28/08/2026 (`api/auth.py`), seul moyen pour un lien personnel de
@@ -36,7 +40,7 @@ export interface Route {
   t: string;
 }
 
-const EMPTY_ROUTE: Route = { vue: "", prof: "", groupe: "", sem: null, mode: "", t: "" };
+const EMPTY_ROUTE: Route = { vue: "", prof: "", groupe: "", sem: null, jour: null, mode: "", t: "" };
 
 function readHash(): Route {
   const raw = (window.location.hash || "").replace(/^#/, "");
@@ -46,6 +50,7 @@ function readHash(): Route {
     prof: params.get("prof") || "",
     groupe: params.get("groupe") || "",
     sem: params.get("sem") ? Number(params.get("sem")) : null,
+    jour: params.get("jour") !== null ? Number(params.get("jour")) : null,
     mode: (params.get("mode") as Route["mode"]) || "",
     t: params.get("t") || "",
   };

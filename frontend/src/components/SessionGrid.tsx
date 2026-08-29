@@ -390,7 +390,14 @@ function SessionBlock({
           rétrogradé en petit sous le nom plutôt qu'en tête. */}
       <span className="head">
         <span className="name">{row.n || row.c}</span>
-        {row.r && <span className="room">{row.r}</span>}
+        {/* Salle absente = manque VISIBLE, pas un vide discret. Un CM dont
+            aucune grande salle n'était libre reste volontairement sans salle
+            (cf. `solver/rooms.py::_pick`) ; encore faut-il le remarquer. */}
+        {row.r ? (
+          <span className="room">{row.r}</span>
+        ) : (
+          <span className="room room--absente">salle à définir</span>
+        )}
       </span>
       <span className="meta">
         <span className="code">{row.c}</span> · {row.t}
