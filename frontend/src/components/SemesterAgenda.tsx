@@ -2,16 +2,21 @@ import type { AppPayload } from "../types/app";
 import type { IcsSession } from "../utils/ics";
 import { formatSessionDate } from "../utils/weekDates";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { groupLabelWithParcours } from "../utils/years";
 
 interface SemesterAgendaProps {
   payload: AppPayload;
   items: IcsSession[];
+  /** Préfixe chaque groupe de sa promotion — vrai en Vue Enseignant, où le
+   *  même libellé de groupe existe dans plusieurs promotions (cf.
+   *  `groupLabelWithParcours`). */
+  showPromo?: boolean;
 }
 
 /** Liste chronologique de toutes les interventions du semestre, groupées par
  * semaine — portage de `renderTeacherAgenda` depuis la page HTML/JS, réutilisé
  * ici pour les enseignants ET les groupes étudiants. */
-export function SemesterAgenda({ payload, items }: SemesterAgendaProps) {
+export function SemesterAgenda({ payload, items, showPromo = false }: SemesterAgendaProps) {
   if (!items.length) {
     return <p className="muted">Aucune séance placée.</p>;
   }
@@ -38,7 +43,9 @@ export function SemesterAgenda({ payload, items }: SemesterAgendaProps) {
             <div className="agenda-chips">
               {list.map((it) => {
                 const end = SLOT_TIMES[Math.min(5, it.s + (it.dur || 1) - 1)].label.split("–")[1];
-                const groups = it.g.map((g) => payload.groupLabels[g] ?? g).join(", ");
+                const groups = showPromo
+                  ? groupLabelWithParcours(it.g, payload.groupLabels, payload.groupParcours)
+                  : it.g.map((g) => payload.groupLabels[g] ?? g).join(", ");
                 return (
                   <span key={it.id} className="agenda-chip">
                     {formatSessionDate(it.date, DAY_LABELS[it.d])} {SLOT_TIMES[it.s].label.split("–")[0]}–{end} ·{" "}

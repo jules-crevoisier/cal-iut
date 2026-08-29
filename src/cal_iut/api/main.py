@@ -1063,14 +1063,34 @@ def _check_move_editable(
     Le garde-fou reste actif par défaut : forcer est un geste explicite,
     jamais le comportement normal.
     """
+    motifs = _semaines_non_modifiables(state, session_id, source_week, dest_week, force=force)
+    if motifs:
+        raise HTTPException(409, motifs[0])
+
+
+def _semaines_non_modifiables(
+    state: object, session_id: str, source_week: int, dest_week: int, *, force: bool = False
+) -> list[str]:
+    """Les motifs de `_check_move_editable`, RENDUS au lieu d'être levés.
+
+    Existe pour la vérification à blanc (`validate_placement`), qui doit
+    DÉCRIRE un obstacle et non le refuser : côté navigateur, une erreur HTTP
+    sur la validation sort par le `catch` de `performMove` et n'atteint
+    jamais la modale « Forcer le déplacement ». Le glisser-déposer de la Vue
+    Promo ne faisait donc plus rien du tout sur la semaine EN COURS, sans
+    même dire pourquoi (retour utilisateur 29/08/2026). Un motif rendu ici
+    devient un `hard_conflict` ordinaire, donc forçable — ce que le verrou de
+    semaine est explicitement censé être.
+    """
     if force:
-        return
+        return []
     session = state.sessions_by_id.get(session_id)
     semestre = session.semestre if session else resolve_semestre(state)
-    for w in {source_week, dest_week}:
-        status = week_status(state.calendar, semestre, w)
-        if status != "future":
-            raise HTTPException(409, f"Semaine {w + 1} non modifiable (statut : {status})")
+    return [
+        f"Semaine {w + 1} non modifiable (statut : {status})"
+        for w in sorted({source_week, dest_week})
+        if (status := week_status(state.calendar, semestre, w)) != "future"
+    ]
 
 
 def _is_duo_synced(session: object, duos: list) -> bool:
@@ -1424,14 +1444,17 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     state = get_state()
     match = _find_placement(state, session_id)
     session = state.sessions_by_id.get(session_id)
-    _check_move_editable(state, session_id, match.week, body.week, force=body.force)
+    # RENDU, jamais levé : cet endpoint est un dry-run (cf.
+    # `_semaines_non_modifiables`). Un 409 ici casse le glisser-déposer au
+    # lieu de proposer le forçage.
+    verrou_semaine = _semaines_non_modifiables(state, session_id, match.week, body.week, force=body.force)
 
     # Règles institutionnelles/pédagogiques : contrôlées ICI, sur le
     # déplacement réellement demandé — pas seulement utilisées pour filtrer
     # les suggestions (retour utilisateur : "vérifie bien toutes les
     # contraintes avant que ça s'effectue"). Jamais contournables.
     if session and _is_duo_synced(session, state.teacher_duos):
-        return ValidationResponse(valid=False, hard_conflicts=[_DUO_SYNC_NOTE], soft_warnings=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
+        return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + [_DUO_SYNC_NOTE], soft_warnings=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
     if session:
         extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
         institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
@@ -1443,7 +1466,7 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         # `placer_seance`), pas dans cette prévisualisation.
         pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
         if institutional or pedago:
-            return ValidationResponse(valid=False, hard_conflicts=institutional + pedago, soft_warnings=[], suggestions=[], suggestions_note=None)
+            return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + institutional + pedago, soft_warnings=[], suggestions=[], suggestions_note=None)
 
     # Même résolution de salle que `move_session` — sinon un dry-run
     # pourrait signaler un conflit que le déplacement réel n'aurait pas
@@ -1471,8 +1494,10 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         groups=state.groups,
         conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
     )
-    suggestions, note = ([], None) if result.valid else _suggestions_for(state, session_id, match)
-    return ValidationResponse(valid=result.valid, hard_conflicts=result.hard_conflicts, soft_warnings=result.soft_warnings, suggestions=suggestions, suggestions_note=note)
+    conflits = verrou_semaine + result.hard_conflicts
+    valide = not conflits
+    suggestions, note = ([], None) if valide else _suggestions_for(state, session_id, match)
+    return ValidationResponse(valid=valide, hard_conflicts=conflits, soft_warnings=result.soft_warnings, suggestions=suggestions, suggestions_note=note)
 
 
 @app.patch("/placements/{session_id}")

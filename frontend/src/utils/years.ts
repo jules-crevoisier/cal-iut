@@ -53,3 +53,40 @@ export function shortGroupLabel(groupIds: string[], labelsById: Record<string, s
     )
     .join("/");
 }
+
+/**
+ * Libellé de groupe PRÉFIXÉ DU PARCOURS — « BUT1 TD AB » plutôt que « TD AB ».
+ *
+ * Nécessaire dans la Vue Enseignant (retour utilisateur 29/08/2026 : « dans la
+ * vue des profs on a l'info TP AB par exemple mais on n'a pas avec quelle
+ * promo »). Les libellés de groupe se répètent d'une promotion à l'autre — il
+ * existe un « TP A » en BUT1, en BUT2-DEV-FI, en BUT3-CREACOM-FC… Un
+ * enseignant qui intervient sur plusieurs années ne peut donc pas savoir, du
+ * seul libellé, devant qui il se trouve.
+ *
+ * Inutile dans les vues Groupe/Promo, où la promotion est déjà choisie en
+ * haut de l'écran : d'où le passage explicite par un paramètre, plutôt qu'un
+ * ajout partout.
+ *
+ * Le parcours n'est PAS répété quand le libellé le porte déjà (groupe
+ * « Promo BUT1 » -> « Promo BUT1 », jamais « BUT1 Promo BUT1 »). La
+ * comparaison ignore tirets et espaces : le parcours s'écrit
+ * « BUT2-DEV-FI » alors que le libellé du groupe promo dit
+ * « Promo BUT2 DEV-FI » — même chose, ponctuation près.
+ */
+export function groupLabelWithParcours(
+  groupIds: string[],
+  labelsById: Record<string, string>,
+  parcoursById: Record<string, string>,
+): string {
+  if (!groupIds.length) return "";
+  const compact = (s: string) => s.toUpperCase().replace(/[\s-]+/g, "");
+  return groupIds
+    .map((id) => {
+      const label = labelsById[id] ?? id;
+      const parcours = parcoursById[id];
+      if (!parcours || compact(label).includes(compact(parcours))) return label;
+      return `${parcours} ${label}`;
+    })
+    .join(", ");
+}
