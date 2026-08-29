@@ -1,6 +1,7 @@
 """Point d'entrée CLI."""
 
 import argparse
+import os
 import json
 import sys
 from pathlib import Path
@@ -589,6 +590,75 @@ def cmd_load_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_prod(args: argparse.Namespace) -> int:
+    """Compare / tire / pousse le planning entre le poste local et la
+    production. Cf. `cal_iut/sync/prod.py` pour le pourquoi de chaque choix.
+    """
+    from dotenv import load_dotenv
+
+    from cal_iut.sync.prod import (
+        Instance,
+        SyncError,
+        comparer,
+        planning_local_depuis_db,
+        pousser,
+        prod_depuis_env,
+    )
+
+    load_dotenv()
+    try:
+        distante = prod_depuis_env()
+    except SyncError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    try:
+        with distante:
+            if args.local_url:
+                with Instance(args.local_url, os.environ.get("CAL_IUT_PASSWORD", "")) as locale:
+                    plan_local = locale.planning()
+            else:
+                plan_local = planning_local_depuis_db()
+            plan_prod = distante.planning()
+            comp = comparer(plan_local, plan_prod)
+            print(f"local : {len(plan_local)} séances | production : {len(plan_prod)} séances")
+            print(comp.resume())
+            for genre, items in sorted(comp.par_genre().items()):
+                print(f"\n  --- {genre.replace('_', ' ')} ({len(items)}) ---")
+                for d in items[: args.detail]:
+                    print(f"    {d.session_id:44s} local={d.local}  prod={d.distant}")
+                if len(items) > args.detail:
+                    print(f"    … et {len(items) - args.detail} autre(s)")
+
+            if args.action == "diff":
+                return 0
+
+            if args.action == "pull":
+                print(
+                    "\n`pull` n'est pas automatisé : ramener la production en local revient à "
+                    "écraser le travail local en cours.\n"
+                    "Pour le faire sciemment : arrêter le serveur local, puis copier la base "
+                    "de production récupérée depuis Dokploy vers `data/state/cal-iut.db`."
+                )
+                return 0
+
+            # action == "push"
+            res = pousser(distante, comp, appliquer=args.appliquer)
+            if not args.appliquer:
+                print(f"\nSIMULATION — {len(res.appliquees)} séance(s) seraient poussées en production.")
+                print("Relancer avec `--appliquer` pour envoyer réellement.")
+                if res.ignorees:
+                    print(f"{len(res.ignorees)} ignorée(s) (présentes d'un seul côté : décision humaine).")
+                return 0
+            print("\n" + res.resume())
+            for sid, motif in res.echecs[:15]:
+                print(f"  ÉCHEC {sid} : {motif}")
+            return 1 if res.echecs else 0
+    except SyncError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
     from dotenv import load_dotenv
@@ -1043,6 +1113,26 @@ def main() -> int:
         default="odd",
     )
     load_run_parser.set_defaults(func=cmd_load_run)
+
+    prod_parser = sub.add_parser(
+        "prod",
+        help="Comparer / pousser le planning vers la production (cf. sync/prod.py)",
+    )
+    prod_parser.add_argument("action", choices=["diff", "push", "pull"], help="diff = ne change rien")
+    # Par défaut, le local est lu DIRECTEMENT dans SQLite : le serveur local
+    # n'a pas à tourner pour savoir ce qui diffère de la production, et c'est
+    # exactement la même source que celle que l'API sert.
+    prod_parser.add_argument(
+        "--local-url",
+        default=None,
+        help="lire le local via une API en marche plutôt que dans data/state/cal-iut.db",
+    )
+    prod_parser.add_argument(
+        "--appliquer", action="store_true",
+        help="push : envoyer RÉELLEMENT (sans ce drapeau, simple simulation)",
+    )
+    prod_parser.add_argument("--detail", type=int, default=10, help="lignes affichées par catégorie")
+    prod_parser.set_defaults(func=cmd_prod)
 
     serve_parser = sub.add_parser("serve", help="Démarrer l'API FastAPI")
     serve_parser.add_argument("--host", default="127.0.0.1")

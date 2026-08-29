@@ -124,6 +124,26 @@ cal-iut serve                                          # API + frontend
 `--weeks` n'est pas plafonné : la fin de semestre n'est pas une contrainte dure
 (front-loading uniquement), on peut monter au-delà si besoin.
 
+### Synchronisation avec la production
+
+La production tourne sur son propre volume Docker : un redéploiement ne
+réécrit JAMAIS sa base (c'est ce qui protège les modifications faites en
+ligne). Les corrections faites en local ne partent donc pas toutes seules.
+
+```powershell
+cal-iut prod diff              # ce qui diffère, sans rien changer nulle part
+cal-iut prod push              # SIMULATION : dit ce qui serait poussé
+cal-iut prod push --appliquer  # envoie réellement
+```
+
+Le local est lu directement dans `data/state/cal-iut.db` (le serveur local n'a
+pas besoin de tourner) ; la production est lue et écrite via son API, avec les
+mêmes contrôles qu'une modification faite à la main. Renseigner
+`CAL_IUT_PROD_URL` et `CAL_IUT_PROD_PASSWORD` dans `.env` (cf. `.env.example`).
+
+Les séances présentes d'un seul côté ne sont jamais créées ni supprimées à
+distance : elles sont listées, la décision reste humaine.
+
 ### Pourquoi `--weeks 24 --fi-max-week 18` et pas les valeurs par défaut
 
 Avec le calendrier 2026-2027, **BUT3-CREACOM-FC ne tient pas dans l'horizon

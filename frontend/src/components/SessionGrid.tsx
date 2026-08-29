@@ -14,6 +14,7 @@ import { Fragment, useState } from "react";
 
 import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { groupLabelWithParcours } from "../utils/years";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 
 const SLOT_COUNT = 6;
@@ -30,6 +31,10 @@ interface SessionGridProps {
   split?: [string, string];
   /** Un seul jour affiché (lecture mobile) ; absent = les 5 jours. */
   onlyDay?: number | null;
+  /** Préfixe chaque groupe de sa promotion (« BUT1 TP A »). Vrai en Vue
+   *  Enseignant, où le même libellé de groupe existe dans plusieurs
+   *  promotions — cf. `groupLabelWithParcours`. */
+  showPromo?: boolean;
   onSelect?: (row: AppRow) => void;
 }
 
@@ -41,6 +46,7 @@ export function SessionGrid({
   showPac = false,
   split,
   onlyDay = null,
+  showPromo = false,
   onSelect,
 }: SessionGridProps) {
   const [hover, setHover] = useState<{ row: AppRow; x: number; y: number } | null>(null);
@@ -146,7 +152,7 @@ export function SessionGrid({
                             visuellement. */}
                         <div className="sessiongrid-cell-inner">
                           {shared.map((r) => (
-                            <SessionBlock key={r.id} row={r} payload={payload} onSelect={onSelect} onHover={setHover} />
+                            <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} />
                           ))}
                         </div>
                       </td>
@@ -158,12 +164,12 @@ export function SessionGrid({
                         <div className="sessiongrid-subcols">
                           <div>
                             {left.map((r) => (
-                              <SessionBlock key={r.id} row={r} payload={payload} onSelect={onSelect} onHover={setHover} />
+                              <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} />
                             ))}
                           </div>
                           <div>
                             {right.map((r) => (
-                              <SessionBlock key={r.id} row={r} payload={payload} onSelect={onSelect} onHover={setHover} />
+                              <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} />
                             ))}
                           </div>
                         </div>
@@ -238,7 +244,12 @@ export function SessionGrid({
             {hover.row.c} · {hover.row.t}
             {hover.row.ev ? " · Éval" : ""}
           </div>
-          <div>Groupe : {hover.row.g.map((g) => payload.groupLabels[g] ?? g).join(", ")}</div>
+          <div>
+            Groupe :{" "}
+            {showPromo
+              ? groupLabelWithParcours(hover.row.g, payload.groupLabels, payload.groupParcours)
+              : hover.row.g.map((g) => payload.groupLabels[g] ?? g).join(", ")}
+          </div>
           <div>Prof : {hover.row.te.map((t) => payload.teacherLabels[t] ?? t).join(", ") || "—"}</div>
           <div>Salle : {hover.row.r || "—"}</div>
           <div>
@@ -259,17 +270,22 @@ function push(map: Map<string, AppRow[]>, key: string, row: AppRow): void {
 function SessionBlock({
   row,
   payload,
+  showPromo,
   onSelect,
   onHover,
 }: {
   row: AppRow;
   payload: AppPayload;
+  showPromo: boolean;
   onSelect?: (row: AppRow) => void;
   onHover: (v: { row: AppRow; x: number; y: number } | null) => void;
 }) {
-  const groupShort = row.g
-    .map((g) => (payload.groupLabels[g] ?? g).replace(/^(TD|TP|Promo)\s+/i, "").trim())
-    .join("/");
+  // Avec la promotion, le libellé COMPLET est gardé (« BUT1 TD AB ») : c'est
+  // le préfixe TD/TP qui distingue un groupe de TD d'un groupe de TP, et sans
+  // lui « BUT1 AB » ne dit plus de quoi il s'agit.
+  const groupShort = showPromo
+    ? groupLabelWithParcours(row.g, payload.groupLabels, payload.groupParcours)
+    : row.g.map((g) => (payload.groupLabels[g] ?? g).replace(/^(TD|TP|Promo)\s+/i, "").trim()).join("/");
   return (
     <button
       type="button"

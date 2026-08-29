@@ -231,7 +231,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
           {solverWeek === null ? (
             <p className="muted">Semaine bloquée (vacances/fermeture).</p>
           ) : (
-            <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} />
+            <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} showPromo />
           )}
         </div>
       ) : (
@@ -245,7 +245,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
               {solverWeek === null ? (
                 <p className="muted">Semaine bloquée (vacances/fermeture).</p>
               ) : (
-                <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} />
+                <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} showPromo />
               )}
             </div>
 
@@ -293,7 +293,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
 
           <div className="panel">
             <h3>Toutes ses interventions du semestre</h3>
-            <SemesterAgenda payload={payload} items={allItems} />
+            <SemesterAgenda payload={payload} items={allItems} showPromo />
           </div>
         </>
       )}
