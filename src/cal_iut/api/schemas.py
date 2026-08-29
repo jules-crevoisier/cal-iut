@@ -83,6 +83,13 @@ class ValidationResponse(BaseModel):
     valid: bool
     hard_conflicts: list[str]
     soft_warnings: list[str]
+    # Sous-ensemble de `hard_conflicts` que `force` NE PEUT PAS lever
+    # (indisponibilite enseignant declaree, verrou PAC/SAE/evenement
+    # institutionnel). Ajoute le 29/08/2026 : l'interface proposait
+    # « Forcer le deplacement » sur ces obstacles-la aussi, le bouton
+    # echouait en 409 et la personne ne comprenait pas pourquoi. Vide =
+    # tout ce qui reste est negociable par un humain.
+    blocking_conflicts: list[str] = Field(default_factory=list)
     suggestions: list[SlotSuggestionResponse] = Field(default_factory=list)
     suggestions_note: str | None = None
 
@@ -141,6 +148,21 @@ class PlacementResponse(BaseModel):
     # champ, une séance de 3h (`duration_slots=2`, ex. WSA501D) n'occupait
     # visuellement qu'UN seul créneau de 1h30, jamais les deux.
     duration_slots: int = 1
+
+
+class EchangeRequest(BaseModel):
+    """Echange de place entre deux seances (`POST /placements/echanger`) —
+    retour utilisateur 29/08/2026 : « si l'on fait un glisser-deposer d'un
+    cours sur un autre, cela nous propose un echange de cours tout en
+    verifiant pareil »."""
+
+    session_a: str
+    session_b: str
+    force: bool = False
+
+
+class EchangeResponse(BaseModel):
+    placements: list[PlacementResponse]
 
 
 class QualityResponse(BaseModel):

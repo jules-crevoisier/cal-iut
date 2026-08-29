@@ -15,7 +15,7 @@
  */
 
 import { placerSeance } from "../api/client";
-import { confirmAsync } from "./confirmDialog";
+import { alerterAsync, confirmAsync } from "./confirmDialog";
 
 /** Le serveur renvoie le détail structuré d'un conflit (`hard_conflicts`/
  * `soft_warnings`) comme `detail` JSON d'un 409 — `request()` le rejette en
@@ -23,14 +23,23 @@ import { confirmAsync } from "./confirmDialog";
  * dédié. On le re-parse ici plutôt que d'ajouter un mécanisme d'erreur
  * générique. `null` = pas un conflit structuré (panne réseau, autre message
  * serveur) — dans ce cas pas de proposition de forçage. */
-export function detailConflit(e: unknown): { hard_conflicts: string[]; soft_warnings: string[] } | null {
+export function detailConflit(
+  e: unknown,
+): { hard_conflicts: string[]; soft_warnings: string[]; blocking_conflicts: string[] } | null {
   if (!(e instanceof Error)) return null;
   try {
-    const d = JSON.parse(e.message) as { hard_conflicts?: unknown; soft_warnings?: unknown };
+    const d = JSON.parse(e.message) as {
+      hard_conflicts?: unknown;
+      soft_warnings?: unknown;
+      blocking_conflicts?: unknown;
+    };
     if (Array.isArray(d.hard_conflicts)) {
       return {
         hard_conflicts: d.hard_conflicts as string[],
         soft_warnings: Array.isArray(d.soft_warnings) ? (d.soft_warnings as string[]) : [],
+        // Ce que « Forcer » ne lèvera pas — absent des serveurs antérieurs
+        // au 29/08/2026, d'où le repli sur une liste vide.
+        blocking_conflicts: Array.isArray(d.blocking_conflicts) ? (d.blocking_conflicts as string[]) : [],
       };
     }
   } catch {
@@ -53,6 +62,12 @@ export async function placerAvecConfirmation(
     }
     // Modale interne, pas `window.confirm` — cf. utils/confirmDialog.ts
     // (retour utilisateur 28/08/2026, popups navigateur désactivées).
+    // Obstacle non contournable (indisponibilité enseignant, verrou
+    // PAC/SAE) : on le dit, au lieu de proposer un forçage qui échouera.
+    if (detail.blocking_conflicts.length > 0) {
+      await alerterAsync(detail.blocking_conflicts.join(String.fromCharCode(10)), { title: "Placement impossible" });
+      return { ok: false, message: detail.blocking_conflicts.join(" · ") };
+    }
     const forcer = await confirmAsync([...detail.hard_conflicts, ...detail.soft_warnings].join("\n"), {
       confirmLabel: "Forcer le placement",
     });

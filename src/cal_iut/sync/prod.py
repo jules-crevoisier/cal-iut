@@ -106,6 +106,19 @@ class Comparaison:
             groupes.setdefault(d.genre, []).append(d)
         return groupes
 
+    def inverser(self) -> Comparaison:
+        """La même comparaison vue de l'autre côté.
+
+        Permet de RAMENER la production en local avec exactement le même code
+        que pour l'envoyer (`pousser`), au lieu d'un second chemin à
+        maintenir : les deux sens ont les mêmes pièges (échanges passant par
+        un état intermédiaire en conflit, séances présentes d'un seul côté).
+        """
+        return Comparaison(
+            differences=[Difference(d.session_id, d.distant, d.local) for d in self.differences],
+            identiques=self.identiques,
+        )
+
     def resume(self) -> str:
         g = self.par_genre()
         if not self.differences:

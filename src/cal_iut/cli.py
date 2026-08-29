@@ -634,6 +634,23 @@ def cmd_prod(args: argparse.Namespace) -> int:
                 return 0
 
             if args.action == "pull":
+                # Sens inverse, MÊME code : on applique en local ce que la
+                # production porte (cf. `Comparaison.inverser`). Utile dès que
+                # quelqu'un modifie le planning en ligne — ce qui est le cas
+                # normal, pas l'exception.
+                locale = Instance(args.local_url or "http://127.0.0.1:8000", os.environ.get("CAL_IUT_PASSWORD", ""))
+                with locale:
+                    res = pousser(locale, comp.inverser(), appliquer=args.appliquer)
+                if not args.appliquer:
+                    print(f"\nSIMULATION — {len(res.appliquees)} séance(s) seraient ramenées en local.")
+                    print("Relancer avec `--appliquer` pour appliquer réellement.")
+                    return 0
+                print("\n" + res.resume())
+                for sid, motif in res.echecs[:15]:
+                    print(f"  ÉCHEC {sid} : {motif}")
+                return 1 if res.echecs else 0
+
+            if args.action == "pull-fichier":
                 print(
                     "\n`pull` n'est pas automatisé : ramener la production en local revient à "
                     "écraser le travail local en cours.\n"
@@ -1118,7 +1135,11 @@ def main() -> int:
         "prod",
         help="Comparer / pousser le planning vers la production (cf. sync/prod.py)",
     )
-    prod_parser.add_argument("action", choices=["diff", "push", "pull"], help="diff = ne change rien")
+    prod_parser.add_argument(
+        "action",
+        choices=["diff", "push", "pull", "pull-fichier"],
+        help="diff = ne change rien ; push = local -> prod ; pull = prod -> local",
+    )
     # Par défaut, le local est lu DIRECTEMENT dans SQLite : le serveur local
     # n'a pas à tourner pour savoir ce qui diffère de la production, et c'est
     # exactement la même source que celle que l'API sert.

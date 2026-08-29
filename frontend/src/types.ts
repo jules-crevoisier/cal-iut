@@ -95,6 +95,11 @@ export interface ValidationResponse {
   valid: boolean;
   hard_conflicts: string[];
   soft_warnings: string[];
+  /** Sous-ensemble de `hard_conflicts` que « Forcer » ne peut PAS lever
+   *  (indisponibilite enseignant declaree, verrou PAC/SAE/evenement). Vide =
+   *  tout le reste est negociable. Absent des serveurs anterieurs au
+   *  29/08/2026, d'ou l'optionalite. */
+  blocking_conflicts?: string[];
 }
 
 export type ViewMode = "group" | "teacher" | "room";

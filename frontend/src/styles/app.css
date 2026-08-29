@@ -1835,6 +1835,126 @@ table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.
 .promo-chip--draggable { cursor: grab; }
 .promo-chip--draggable:active { cursor: grabbing; }
 .promo-chip.dragging { opacity: 0.35; }
+
+/* Séance survolée pendant un glisser : déposer ici ÉCHANGE les deux places
+   (retour utilisateur 29/08/2026). Repère volontairement différent de
+   `.dropzone-hover` (trait plein, pas pointillé) — ce n'est pas le même
+   geste : la case vide déplace, la séance échange. */
+/* Intitulé de parcours cliquable : ouvre sa semaine complète. Reprend
+   exactement l'apparence du texte qu'il remplace — la grille est déjà dense,
+   seul le survol signale qu'il est cliquable (même parti pris que
+   `.promo-chip-salle-btn`). */
+.grp-band-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.grp-band-btn:hover,
+.grp-band-btn:focus-visible {
+  text-decoration: underline dotted;
+}
+
+.parcoursmodal-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.promo-chip.swap-target {
+  outline: 2px solid var(--accent2);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent2) 22%, transparent);
+}
+
+/* --- Modale semaine par parcours (clic sur l'intitulé en Vue Promo) ------ */
+.parcoursmodal-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  z-index: 60;
+}
+
+.parcoursmodal {
+  width: min(1400px, 100%);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.parcoursmodal-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.parcoursmodal-entete h3 {
+  margin: 0;
+}
+
+.parcoursmodal-corps {
+  overflow: auto;
+  flex: 1;
+}
+
+.parcoursmodal-aide {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+/* Grille jours x créneaux : c'est ce que la Vue Promo ne montre pas, et
+   c'est précisément ce qu'il faut pour déplacer une séance d'un JOUR à
+   l'autre (retour utilisateur 29/08/2026). */
+.parcours-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.parcours-grid th,
+.parcours-grid td {
+  border: 1px solid var(--line);
+  padding: 3px;
+  vertical-align: top;
+}
+
+.parcours-grid th {
+  background: var(--surface-2);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.parcours-grid .timecol {
+  width: 76px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.parcours-grid td.dropzone-hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+@media (max-width: 900px) {
+  .parcoursmodal { max-height: calc(100dvh - 16px); }
+  .parcours-grid .timecol { width: 54px; font-size: 0.62rem; }
+  .parcours-grid th, .parcours-grid td { padding: 2px; }
+}
 table.promo-grid td.promocell.dropzone-hover {
   outline: 2px dashed var(--accent);
   outline-offset: -2px;

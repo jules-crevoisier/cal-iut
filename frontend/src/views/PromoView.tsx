@@ -28,7 +28,8 @@ import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { confirmAsync } from "../utils/confirmDialog";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
-import { performMove } from "../utils/moveSession";
+import { ParcoursWeekModal } from "../components/ParcoursWeekModal";
+import { performMove, performSwap } from "../utils/moveSession";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { compareParcoursForDisplay } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
@@ -71,6 +72,13 @@ export function PromoView({
   const [erreurPlacement, setErreurPlacement] = useState<string | null>(null);
   const [annonce, setAnnonce] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // Séance SURVOLÉE par le glisser en cours : déposer dessus propose un
+  // échange plutôt qu'un déplacement (retour utilisateur 29/08/2026).
+  const [cibleEchange, setCibleEchange] = useState<string | null>(null);
+  // Parcours dont la semaine complète est ouverte en modale — c'est le seul
+  // endroit de l'application où l'on peut déplacer une séance d'un JOUR à un
+  // autre (la Vue Promo, elle, n'affiche qu'un jour à la fois).
+  const [parcoursOuvert, setParcoursOuvert] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
   const dragEnabled = Boolean(placements && onPlacementUpdated && onError);
 
@@ -256,6 +264,43 @@ export function PromoView({
     await performMove(sessionId, { week: solverWeek, day: targetDay, slot }, placement, onPlacementUpdated, onError);
   };
 
+  /** Dépôt SUR une séance : les deux échangent leurs places. Un seul appel
+   *  serveur, qui juge les deux positions finales ensemble — cf.
+   *  `utils/moveSession.ts::performSwap`. */
+  const handleSwap = async (cibleId: string) => {
+    setCibleEchange(null);
+    const sourceId = draggingId;
+    setDraggingId(null);
+    if (!sourceId || sourceId === cibleId || !placements || !onPlacementUpdated || !onError) return;
+    const source = placements.find((p) => p.session_id === sourceId);
+    const cible = placements.find((p) => p.session_id === cibleId);
+    if (!source || !cible) return;
+    if (source.locked || cible.locked) {
+      onError("Séance verrouillée : la déverrouiller avant d'échanger.");
+      return;
+    }
+    await performSwap(sourceId, cibleId, source.course_code, cible.course_code, onPlacementUpdated, onError);
+  };
+
+  /** Handlers posés sur la SÉANCE (pas la case) : `stopPropagation` pour que
+   *  la case en dessous ne traite pas aussi le dépôt comme un déplacement. */
+  const echangeHandlers = (cibleId: string) =>
+    dragEnabled && draggingId && draggingId !== cibleId
+      ? {
+          onDragOver: (e: ReactDragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (cibleEchange !== cibleId) setCibleEchange(cibleId);
+          },
+          onDragLeave: () => setCibleEchange((cur) => (cur === cibleId ? null : cur)),
+          onDrop: (e: ReactDragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void handleSwap(cibleId);
+          },
+        }
+      : {};
+
   const dropHandlers = (targetDay: number, slot: number) =>
     dragEnabled
       ? {
@@ -350,7 +395,21 @@ export function PromoView({
                   <th className="timecol" rowSpan={2} />
                   {colGroups.map((g, gi) => (
                     <th key={g.parcours} colSpan={g.cols.length} className={`grp-band pc${gi % 6}`}>
-                      {g.parcours}
+                      {/* Cliquable seulement quand l'édition est possible :
+                          en lecture seule (lien public), la modale n'aurait
+                          rien à proposer. */}
+                      {dragEnabled ? (
+                        <button
+                          type="button"
+                          className="grp-band-btn"
+                          onClick={() => setParcoursOuvert(g.parcours)}
+                          title={`Ouvrir la semaine complète de ${g.parcours} (déplacement entre jours)`}
+                        >
+                          {g.parcours}
+                        </button>
+                      ) : (
+                        g.parcours
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -459,8 +518,16 @@ export function PromoView({
                                           }
                                         : undefined
                                     }
-                                    onDragEnd={draggableHere ? () => setDraggingId(null) : undefined}
-                                    className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${highlighted ? "chip-highlight" : ""} ${draggableHere ? "promo-chip--draggable" : ""} ${draggingId === r.id ? "dragging" : ""}`}
+                                    onDragEnd={
+                                      draggableHere
+                                        ? () => {
+                                            setDraggingId(null);
+                                            setCibleEchange(null);
+                                          }
+                                        : undefined
+                                    }
+                                    {...echangeHandlers(r.id)}
+                                    className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${highlighted ? "chip-highlight" : ""} ${draggableHere ? "promo-chip--draggable" : ""} ${draggingId === r.id ? "dragging" : ""} ${cibleEchange === r.id ? "swap-target" : ""}`}
                                   >
                                     <span className="code">{r.c}</span>
                                     <span className="ty">
@@ -592,6 +659,18 @@ export function PromoView({
           </div>
         )}
       </div>
+
+      {parcoursOuvert && placements && onPlacementUpdated && onError && (
+        <ParcoursWeekModal
+          payload={payload}
+          parcours={parcoursOuvert}
+          weekIndex={displayWeek}
+          placements={placements}
+          onClose={() => setParcoursOuvert(null)}
+          onPlacementUpdated={onPlacementUpdated}
+          onError={onError}
+        />
+      )}
 
       {creationSallePour && (
         <NewRoomModal
