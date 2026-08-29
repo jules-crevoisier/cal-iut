@@ -8,13 +8,16 @@
 #
 # `correct_teacher_code` doit déjà exister ailleurs dans le jeu de données
 # (nom/prénom résolus par recoupement automatique, jamais ressaisis à la main).
-teacher_corrections:
-  - course_code: WRA304M
-    semestre: S3
-    parcours: BUT2-CREACOM-FC
-    wrong_teacher_code: ARA
-    correct_teacher_code: JTH
-    note: >
-      Confirmé (retour utilisateur) : WRA304M "Culture numérique" est
-      enseigné par Jérôme Thomas (JTH), pas Anthony Rageul (ARA) — la
-      maquette source distante a le mauvais enseignant sur ce module.
+# RETIRÉE le 29/08/2026. Elle inversait WRA304M vers Jérôme Thomas (JTH) au
+# motif que la maquette distante se trompait. La situation s'est inversée :
+# retour de Kyllian Bresson, « JTH Jérôme Thomas est encore assigné sur le
+# module WRA304M, alors qu'il a quitté la formation. C'est ARA Anthony Rageul
+# qui reprend ce module ». Vérifié à la source : `contraintes/maquette.json`
+# ET `contraintes_update/maquette.json` (octet pour octet identiques) donnent
+# tous deux ARA en responsable ET en intervenant. C'était donc CETTE
+# correction qui contredisait PREVISIO, pas l'inverse.
+#
+# Trois séances tombaient sur des créneaux où ARA enseignait déjà : elles ont
+# été déplacées AVANT le retrait, pour que le changement n'introduise aucun
+# conflit d'enseignant.
+teacher_corrections: []

@@ -11,7 +11,7 @@ import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { downloadIcs, sessionsWithDates } from "../utils/ics";
 import { NotificationsPanel } from "../components/NotificationsPanel";
 
-type SubTab = "salles" | "cours" | "calendrier" | "liens";
+type SubTab = "salles" | "cours" | "calendrier" | "liens" | "notifications";
 
 interface ReferenceViewProps {
   payload: AppPayload;
@@ -24,9 +24,17 @@ export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
   return (
     <section className="view">
       <div className="subtabbar">
-        {(["salles", "cours", "calendrier", "liens"] as SubTab[]).map((s) => (
+        {(["salles", "cours", "calendrier", "liens", "notifications"] as SubTab[]).map((s) => (
           <button key={s} type="button" className={`subtabbtn ${sub === s ? "active" : ""}`} onClick={() => setSub(s)}>
-            {s === "salles" ? "Salles" : s === "cours" ? "Cours" : s === "calendrier" ? "Calendrier" : "Liens & partage"}
+            {s === "salles"
+              ? "Salles"
+              : s === "cours"
+                ? "Cours"
+                : s === "calendrier"
+                  ? "Calendrier"
+                  : s === "liens"
+                    ? "Liens & partage"
+                    : "Notifications"}
           </button>
         ))}
       </div>
@@ -34,15 +42,11 @@ export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
       {sub === "salles" && <RoomsTable payload={payload} />}
       {sub === "cours" && <CoursesTable payload={payload} setRoute={setRoute} />}
       {sub === "calendrier" && <CalendarTimeline payload={payload} />}
-      {sub === "liens" && (
-        <>
-          <LinksDirectory payload={payload} />
-          {/* Sous « Liens & partage » : c'est déjà d'ici que partent les mails
-              aux enseignants, donc l'endroit où l'on vient chercher ce qui
-              part par mail. */}
-          <NotificationsPanel />
-        </>
-      )}
+      {sub === "liens" && <LinksDirectory payload={payload} />}
+      {/* Sous-onglet À PART, pas au pied de l'annuaire des liens : sous un
+          long tableau, le panneau était déployé mais introuvable — ce qui,
+          pour la personne qui le cherche, revient au même. */}
+      {sub === "notifications" && <NotificationsPanel />}
     </section>
   );
 }
