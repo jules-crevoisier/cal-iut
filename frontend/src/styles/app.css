@@ -1442,6 +1442,15 @@ h1, h2, h3 {
 
 /* Édition (modale semaine par parcours uniquement — les vues Groupe et
    Enseignant passent la même grille sans `edition`, donc sans ces états). */
+/* Salle manquante : signalée, jamais silencieuse. Couleur d'alerte plutôt
+   qu'un simple tiret — sur une grille dense, un vide ne se voit pas. */
+.sessiongrid-block .room--absente,
+.promo-chip .rm--absente {
+  color: var(--danger);
+  font-style: italic;
+  font-weight: 600;
+}
+
 .sessiongrid-block--draggable { cursor: grab; }
 .sessiongrid-block--draggable:active { cursor: grabbing; }
 .sessiongrid-block.dragging { opacity: 0.35; }

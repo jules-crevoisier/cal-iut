@@ -33,6 +33,28 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
     });
   }
 
+  // Juste après les non-placées, et avant les questions de confort : une
+  // séance sans salle est un cours que personne ne sait où suivre. Le cas
+  // n'est PAS accidentel — un CM dont aucune grande salle n'est libre reste
+  // volontairement sans salle plutôt que d'atterrir dans une salle de 15
+  // places (retour utilisateur 29/08/2026 : « il faut laisser la salle vide,
+  // elle sera rentrée par la suite »). Encore faut-il que « par la suite »
+  // soit visible quelque part : sans cette liste, une salle vide ne se
+  // remarque qu'en tombant dessus dans la grille.
+  for (const r of payload.rows) {
+    if (r.r) continue;
+    const groupes = r.g.map((g) => payload.groupLabels[g] ?? g).join(", ");
+    items.push({
+      sev: "bad",
+      title: `${r.c} — aucune salle`,
+      sub: `${r.t} · ${groupes} · ${payload.weekLabels[r.w] ?? `Semaine ${r.w + 1}`} · ${DAY_LABELS[r.d]} ${
+        SLOT_TIMES[r.s]?.label ?? ""
+      }`,
+      // Vue Promo : le seul écran d'où la salle se change directement.
+      route: { vue: "promo", sem: r.w, jour: r.d },
+    });
+  }
+
   for (const t of payload.teachers) {
     for (const v of t.violations) {
       const when = v.date

@@ -24,6 +24,7 @@ import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent }
 
 import { changerSalle, type SeanceAPlacer } from "../api/client";
 import type { Placement } from "../types";
+import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { confirmAsync } from "../utils/confirmDialog";
@@ -36,6 +37,10 @@ import { NewRoomModal } from "../components/NewRoomModal";
 import { WeekBar } from "../components/WeekBar";
 
 interface PromoViewProps {
+  /** Position demandée par un lien ou par « À traiter » (semaine + jour).
+   *  Sans elle, une ligne « WR106 — aucune salle, mardi 11h » ouvrait bien
+   *  la Vue Promo mais laissait chercher le bon jour à la main. */
+  route?: Route;
   payload: AppPayload;
   /** Séance choisie dans « À placer », à poser directement sur cette
    * grille — `undefined`/absent = comportement normal (lecture seule),
@@ -58,6 +63,7 @@ interface PromoViewProps {
 
 export function PromoView({
   payload,
+  route,
   placementActif = null,
   onAnnulerPlacement,
   onPlaced,
@@ -129,6 +135,17 @@ export function PromoView({
       setSalleEnCours(false);
     }
   };
+
+  // Suit la route quand elle change (clic depuis « À traiter »), sans
+  // reprendre la main sur la navigation manuelle ensuite.
+  useEffect(() => {
+    if (route?.sem === null || route?.sem === undefined) return;
+    const idx = payload.weekRows.findIndex((w) => w.weekIndex === route.sem);
+    if (idx >= 0) setDisplayWeek(idx);
+    if (route.jour !== null && route.jour !== undefined) setDay(route.jour);
+    // Volontairement déclenché par la ROUTE seule.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route?.sem, route?.jour]);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
 
@@ -570,7 +587,7 @@ export function PromoView({
                                     ) : roomEditEnabled ? (
                                       <button
                                         type="button"
-                                        className="rm promo-chip-salle-btn"
+                                        className={`rm promo-chip-salle-btn${r.r ? "" : " rm--absente"}`}
                                         title="Changer la salle"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -578,10 +595,12 @@ export function PromoView({
                                         }}
                                         onMouseDown={(e) => e.stopPropagation()}
                                       >
-                                        {r.r || "—"}
+                                        {r.r || "salle à définir"}
                                       </button>
                                     ) : (
-                                      <span className="rm">{r.r || "—"}</span>
+                                      <span className={`rm${r.r ? "" : " rm--absente"}`}>
+                                        {r.r || "salle à définir"}
+                                      </span>
                                     )}
                                     <span className="te">{teacherNames || "—"}</span>
                                   </div>
