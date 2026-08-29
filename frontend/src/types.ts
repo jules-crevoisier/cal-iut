@@ -102,6 +102,19 @@ export interface ValidationResponse {
   blocking_conflicts?: string[];
 }
 
+/** Réglage des notifications par mail (`GET/PUT /notifications`). */
+export interface NotificationConfig {
+  destinataires: string[];
+  evenements: Record<string, boolean>;
+  delai_minutes: number;
+  /** Libellés fournis par le serveur : l'interface ne les redéclare pas, ils
+   *  divergeraient le jour où l'un change. */
+  libelles: Record<string, string>;
+  en_attente: number;
+  /** Faux = RESEND_API_KEY absente : les réglages sont gardés mais rien ne part. */
+  mail_configure: boolean;
+}
+
 export type ViewMode = "group" | "teacher" | "room";
 
 export interface CalendarEventExtended {
