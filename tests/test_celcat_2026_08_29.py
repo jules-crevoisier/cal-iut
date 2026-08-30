@@ -258,3 +258,56 @@ def test_le_resultat_dit_ce_qui_a_ete_fait() -> None:
     res = ResultatSaisie(creees=["a"], modifiees=["b"], echecs=[("c", "boum")])
     texte = res.resume()
     assert "1 créée" in texte and "1 modifiée" in texte and "1 en échec" in texte
+
+
+# --- Accès réseau : Celcat vit derrière le VPN AnyConnect de l'URCA -------
+# Retour utilisateur 31/08/2026 : « on doit se connecter par VPN au réseau
+# pour que cela fonctionne, c'est un client AnyConnect ». Ce qui compte
+# n'est pas de monter le VPN — c'est que la saisie ne CLIQUE JAMAIS dans le
+# vide quand il n'est pas là.
+
+
+def test_saisie_refuse_de_demarrer_sans_reseau(cfg):
+    """Rien ne doit partir vers Celcat si le VPN n'est pas monté."""
+    from cal_iut.celcat.driver import AccesPerdu
+
+    plan = sync.construire_plan([_entree(cfg)], {2})
+    pilote = PiloteSimule()
+    saisie = SaisieCelcat(pilote, _rythme_instantane(), verifier_acces=lambda: False)
+    with pytest.raises(AccesPerdu):
+        saisie.executer(plan, "user", "mdp")
+    assert pilote.actions == [], "aucune action ne doit avoir été tentée"
+
+
+def test_saisie_sarrete_quand_le_reseau_tombe_en_cours(cfg):
+    """Une coupure en cours n'accumule pas les échecs : on s'arrête net."""
+    joignable = {"oui": True}
+
+    class PiloteQuiPerdLeReseau(PiloteSimule):
+        def creer_seance(self, entree):
+            joignable["oui"] = False
+            raise RuntimeError("page morte")
+
+    plan = sync.construire_plan([_entree(cfg)], {2})
+    res = SaisieCelcat(
+        PiloteQuiPerdLeReseau(), _rythme_instantane(), verifier_acces=lambda: joignable["oui"]
+    ).executer(plan, "user", "mdp")
+    assert res.interrompu and res.acces_perdu
+    assert len(res.echecs) == 1, "on s'arrête à la première, on n'enchaîne pas"
+    assert "injoignable" in res.resume()
+
+
+def test_diagnostic_distingue_vpn_absent_et_service_en_panne():
+    """Un nom qui ne résout pas et un service muet n'appellent pas le même
+    geste : le message doit le dire."""
+    from cal_iut.celcat import reseau
+
+    d = reseau.verifier("https://celcat-qui-nexiste-pas.invalid/")
+    assert not d and d.vpn_monte is False
+    assert "VPN" in d.detail
+
+
+def test_aucun_secret_dans_les_messages_de_vpn():
+    from cal_iut.celcat import reseau
+
+    assert "hunter2" not in reseau._sans_secret("échec pour hunter2 ici", "hunter2")
