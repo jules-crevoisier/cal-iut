@@ -4,6 +4,7 @@ import { DayStrip, todayIndex } from "../components/DayStrip";
 import { SemesterAgenda } from "../components/SemesterAgenda";
 import { SessionGrid } from "../components/SessionGrid";
 import { ShareBar } from "../components/ShareBar";
+import { usePreferences } from "../utils/preferences";
 import { TeacherLinksList } from "../components/TeacherLinksList";
 import { WeekBar } from "../components/WeekBar";
 import { useNarrowScreen } from "../hooks/useNarrowScreen";
@@ -60,6 +61,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
   );
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
   const rowsThisWeek = solverWeek === null ? [] : allItems.filter((r) => r.w === solverWeek);
+  const couleursParMatiere = usePreferences().couleursParMatiere;
 
   // Heures, pas un compte de séances — retour utilisateur 28/08/2026 (relayé
   // depuis Discord, idée de Jordan) : « le nombre d'heure total de la
@@ -143,6 +145,13 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
             downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
           }
           onCopySubscribeLink={() => subscribeUrl("prof", code, payload.teacherTokens[code] ?? "")}
+          imageEdt={() => ({
+            titre: payload.teacherLabels[code] ?? code,
+            sousTitre: payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`,
+            rows: rowsThisWeek,
+            payload,
+            couleursParMatiere,
+          })}
           extra={
             <a
               className="btn btn--ghost btn--sm"

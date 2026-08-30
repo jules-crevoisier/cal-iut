@@ -17,7 +17,7 @@ import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { ConfirmModal } from "./components/ConfirmModal";
-import { ecrirePreferences, lirePreferences, type Preferences } from "./utils/preferences";
+import { ContextePreferences, ecrirePreferences, lirePreferences, type Preferences } from "./utils/preferences";
 import { PreferencesModal } from "./components/PreferencesModal";
 import { LoginGate } from "./components/LoginGate";
 import { PageHeader } from "./components/PageHeader";
@@ -350,6 +350,10 @@ export function App() {
   }
 
   return (
+    // Fournit la préférence à TOUT l'écran. Sans ce fournisseur, chaque
+    // grille relisait `localStorage` de son côté et le clic ne repeignait
+    // rien (retour utilisateur 30/08/2026).
+    <ContextePreferences.Provider value={prefs}>
     <div className={`app ${readOnlyTarget ? "read-only-mode" : ""}`}>
       {/* Lien d'évitement : premier élément focusable de la page, il permet à
           qui navigue au clavier de sauter la navigation pour atteindre
@@ -399,7 +403,7 @@ export function App() {
           {!readOnlyTarget && appPayload && (
             <>
               <PageHeader payload={appPayload} />
-              <BasculeCouleurs prefs={prefs} setPrefs={setPrefs} />
+              <ReglageCouleurs prefs={prefs} setPrefs={setPrefs} />
             </>
           )}
 
@@ -421,7 +425,7 @@ export function App() {
                     }`}
               </h1>
               <p>Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.</p>
-              <BasculeCouleurs prefs={prefs} setPrefs={setPrefs} />
+              <ReglageCouleurs prefs={prefs} setPrefs={setPrefs} />
             </header>
           )}
 
@@ -605,13 +609,20 @@ export function App() {
         />
       )}
     </div>
+    </ContextePreferences.Provider>
   );
 }
 
 
-/** Bascule « couleurs par matière », gardée accessible après le premier
- *  choix : une préférence qu'on ne peut plus changer est un piège. */
-function BasculeCouleurs({
+/** Réglage des couleurs, gardé accessible après le premier choix : une
+ *  préférence qu'on ne peut plus changer est un piège.
+ *
+ *  Un `<select>` et non une bascule maison — retour utilisateur 30/08/2026 :
+ *  « le sélecteur n'est pas du tout dans la DA du reste, fais juste un select
+ *  au pire ». Il reprend exactement le patron `label > select` de la barre
+ *  d'outils, donc son style suit celui de l'application sans rien de
+ *  spécifique à maintenir. */
+function ReglageCouleurs({
   prefs,
   setPrefs,
 }: {
@@ -619,16 +630,21 @@ function BasculeCouleurs({
   setPrefs: (p: Preferences) => void;
 }) {
   return (
-    <button
-      type="button"
-      className="prefs-bascule"
-      aria-pressed={prefs.couleursParMatiere}
-      onClick={() =>
-        setPrefs(ecrirePreferences({ couleursParMatiere: !prefs.couleursParMatiere, repondu: true }))
-      }
-    >
-      <span className="pastille" aria-hidden="true" />
-      {prefs.couleursParMatiere ? "Couleurs par matière" : "Couleurs par type de séance"}
-    </button>
+    <div className="prefs-reglage toolbar-controls">
+      <label>
+        Couleurs
+        <select
+          value={prefs.couleursParMatiere ? "matiere" : "type"}
+          onChange={(e) =>
+            setPrefs(
+              ecrirePreferences({ couleursParMatiere: e.target.value === "matiere", repondu: true }),
+            )
+          }
+        >
+          <option value="type">Par type de séance</option>
+          <option value="matiere">Par matière</option>
+        </select>
+      </label>
+    </div>
   );
 }

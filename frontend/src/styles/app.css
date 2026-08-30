@@ -3021,7 +3021,9 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
    Ne s'applique que sous `.couleurs-matiere` : sans l'option, les règles
    `type-cm` / `type-td` / `type-tp` gardent la main, à l'identique. */
 .couleurs-matiere .sessiongrid-block,
-.couleurs-matiere .promo-chip {
+.couleurs-matiere .promo-chip,
+.couleurs-matiere .td-block,
+.agenda-chip.couleurs-matiere {
   /* `--variante-matiere` (0, 1 ou 2) sépare deux matières de teintes
      voisines : sans elle, 96 écrans sur 234 portaient deux couleurs
      indistinguables ; avec, il en reste 26. Cf. `utils/couleursMatiere.ts`
@@ -3035,7 +3037,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 }
 
 .couleurs-matiere .sessiongrid-block.eval,
-.couleurs-matiere .promo-chip.eval {
+.couleurs-matiere .promo-chip.eval,
+.couleurs-matiere .td-block.eval {
   /* L'évaluation reste reconnaissable : la teinte de la matière est gardée,
      mais le liseré passe en trait double pour la distinguer sans écraser
      l'information de matière. */
@@ -3049,7 +3052,9 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
    sombres à quelqu'un qui a choisi le thème clair sur un système sombre. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .couleurs-matiere .sessiongrid-block,
-  :root:not([data-theme="light"]) .couleurs-matiere .promo-chip {
+  :root:not([data-theme="light"]) .couleurs-matiere .promo-chip,
+  :root:not([data-theme="light"]) .couleurs-matiere .td-block,
+    :root:not([data-theme="light"]) .agenda-chip.couleurs-matiere {
     background: hsl(
       var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
     );
@@ -3060,7 +3065,9 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 }
 
 :root[data-theme="dark"] .couleurs-matiere .sessiongrid-block,
-:root[data-theme="dark"] .couleurs-matiere .promo-chip {
+:root[data-theme="dark"] .couleurs-matiere .promo-chip,
+:root[data-theme="dark"] .couleurs-matiere .td-block,
+:root[data-theme="dark"] .agenda-chip.couleurs-matiere {
   background: hsl(
     var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
   );
@@ -3111,29 +3118,19 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   margin: 10px 0 0;
 }
 
-/* --- Bouton de bascule, gardé accessible après le premier choix --------- */
-.prefs-bascule {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 12px;
-  /* 44px de haut : cible tactile confortable, la barre se manie au pouce. */
+/* --- Réglage des couleurs, gardé accessible après le premier choix ------
+   Rien de spécifique ici : le bloc porte `toolbar-controls`, donc son
+   `label > select` hérite exactement du style de la barre d'outils. Une
+   bascule maison avait été essayée d'abord — retour utilisateur : « pas du
+   tout dans la DA du reste ». Un composant de plus à styler, c'est un
+   composant de plus à voir dériver. */
+.prefs-reglage {
+  margin: 0 0 12px;
+}
+
+.prefs-reglage select {
+  /* 16px minimum : en dessous, iOS zoome à la mise au point. La barre se
+     manie au pouce, ce zoom involontaire est particulièrement pénible. */
+  font-size: max(16px, 0.875rem);
   min-height: 44px;
-  font: inherit;
-  font-size: 0.78rem;
-  color: var(--ink);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.prefs-bascule:hover,
-.prefs-bascule:focus-visible {
-  border-color: var(--accent);
-}
-.prefs-bascule .pastille {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  background: linear-gradient(135deg, hsl(215 62% 55%), hsl(285 62% 60%), hsl(35 70% 55%));
 }

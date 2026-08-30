@@ -32,7 +32,7 @@ import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 import { ParcoursWeekModal } from "../components/ParcoursWeekModal";
 import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
 import { performMove, performSwap } from "../utils/moveSession";
-import { lirePreferences } from "../utils/preferences";
+import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { compareParcoursForDisplay } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
@@ -87,7 +87,7 @@ export function PromoView({
   // endroit de l'application où l'on peut déplacer une séance d'un JOUR à un
   // autre (la Vue Promo, elle, n'affiche qu'un jour à la fois).
   const [parcoursOuvert, setParcoursOuvert] = useState<string | null>(null);
-  const couleursParMatiere = lirePreferences().couleursParMatiere;
+  const couleursParMatiere = usePreferences().couleursParMatiere;
   const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
   const dragEnabled = Boolean(placements && onPlacementUpdated && onError);
 

@@ -2,6 +2,8 @@ import type { AppPayload } from "../types/app";
 import type { IcsSession } from "../utils/ics";
 import { formatSessionDate } from "../utils/weekDates";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
+import { usePreferences } from "../utils/preferences";
 import { groupLabelWithParcours } from "../utils/years";
 
 interface SemesterAgendaProps {
@@ -21,6 +23,7 @@ export function SemesterAgenda({ payload, items, showPromo = false }: SemesterAg
     return <p className="muted">Aucune séance placée.</p>;
   }
 
+  const couleursParMatiere = usePreferences().couleursParMatiere;
   const byWeek = new Map<number, IcsSession[]>();
   for (const it of items) {
     if (!byWeek.has(it.w)) byWeek.set(it.w, []);
@@ -47,7 +50,14 @@ export function SemesterAgenda({ payload, items, showPromo = false }: SemesterAg
                   ? groupLabelWithParcours(it.g, payload.groupLabels, payload.groupParcours)
                   : it.g.map((g) => payload.groupLabels[g] ?? g).join(", ");
                 return (
-                  <span key={it.id} className="agenda-chip">
+                  <span
+                    key={it.id}
+                    className={`agenda-chip${couleursParMatiere ? " couleurs-matiere" : ""}`}
+                    style={{
+                      ["--teinte-matiere" as string]: String(teinteMatiere(it.c)),
+                      ["--variante-matiere" as string]: String(varianteMatiere(it.c)),
+                    }}
+                  >
                     {formatSessionDate(it.date, DAY_LABELS[it.d])} {SLOT_TIMES[it.s].label.split("–")[0]}–{end} ·{" "}
                     {it.c}
                     {groups ? ` · ${groups}` : ""}

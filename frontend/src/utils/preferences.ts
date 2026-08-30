@@ -13,10 +13,17 @@
  * n'apporterait rien et alourdirait chaque appel. Il survit à la fermeture
  * de l'onglet exactement pareil.
  *
- * Le stockage peut ÉCHOUER (navigation privée, cookies bloqués, quota) :
- * chaque accès est donc protégé, et l'échec se traduit par « on garde les
- * valeurs par défaut », jamais par une page cassée.
+ * UNE SEULE SOURCE DE VÉRITÉ (corrigé le 30/08/2026, retour utilisateur :
+ * « j'ai pas l'impression que cela se mette à jour quand je clique »). La
+ * première version laissait chaque grille relire `localStorage` de son côté
+ * pendant que le bouton, lui, vivait dans l'état de React : deux sources qui
+ * divergent dès que l'écriture échoue (navigation privée, quota) — le
+ * réglage changeait à l'écran sans que rien ne se repeigne. Le contexte
+ * ci-dessous est désormais le seul point de lecture ; `localStorage` ne sert
+ * plus qu'à retrouver la valeur au chargement suivant.
  */
+
+import { createContext, useContext } from "react";
 
 const CLE = "cal-iut:preferences:v1";
 
@@ -54,4 +61,13 @@ export function ecrirePreferences(patch: Partial<Preferences>): Preferences {
     /* réglage perdu à la fermeture, mais l'écran reste utilisable */
   }
   return suivant;
+}
+
+/** Valeur courante, partagée par tout l'écran. Fournie une fois dans
+ *  `App.tsx` ; c'est elle que lisent les grilles, jamais `localStorage`
+ *  directement — sinon un clic peut changer l'une sans l'autre. */
+export const ContextePreferences = createContext<Preferences>(DEFAUTS);
+
+export function usePreferences(): Preferences {
+  return useContext(ContextePreferences);
 }

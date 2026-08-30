@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { copyToClipboard } from "../utils/clipboard";
+import { construireSvg, nomFichierImage, svgVersPng, type OptionsImage } from "../utils/imageEdt";
 
 interface ShareBarProps {
   onCopyLink: () => string;
@@ -10,13 +11,79 @@ interface ShareBarProps {
    * pourrait peut-être faire un lien qui s'update automatique ? ». Optionnel
    * : absent tant que l'appelant n'a pas de code/jeton pour construire l'URL. */
   onCopySubscribeLink?: () => string;
+  /** De quoi dessiner l'image de la semaine affichée. Absent = pas de bouton
+   *  image : mieux vaut ne rien proposer qu'un bouton qui produit une image
+   *  vide (retour utilisateur 30/08/2026). */
+  imageEdt?: () => OptionsImage;
   extra?: React.ReactNode;
 }
 
 /** Barre "Copier son lien / Agenda .ics / Imprimer", commune aux vues Groupe et Enseignant. */
-export function ShareBar({ onCopyLink, onDownloadIcs, onCopySubscribeLink, extra }: ShareBarProps) {
+export function ShareBar({ onCopyLink, onDownloadIcs, onCopySubscribeLink, imageEdt, extra }: ShareBarProps) {
   const [copied, setCopied] = useState(false);
   const [subscribeCopied, setSubscribeCopied] = useState(false);
+  const [imageEnCours, setImageEnCours] = useState(false);
+  const [erreurImage, setErreurImage] = useState<string | null>(null);
+
+  /** Rend l'image de la semaine affichée. Isolé parce que le téléchargement
+   *  ET le partage en ont besoin, et qu'un rendu qui échoue ne doit rien
+   *  laisser derrière lui (URL d'objet, état bloqué). */
+  const rendreImage = async () => {
+    const options = imageEdt!();
+    const png = await svgVersPng(construireSvg(options));
+    return { png, nom: nomFichierImage(options.titre, options.sousTitre) };
+  };
+
+  const telechargerImage = async () => {
+    setImageEnCours(true);
+    setErreurImage(null);
+    try {
+      const { png, nom } = await rendreImage();
+      const url = URL.createObjectURL(png);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nom;
+      a.click();
+      // Révoqué APRÈS le clic : révoquer trop tôt annule le téléchargement
+      // sur certains navigateurs, sans message.
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+      setErreurImage(e instanceof Error ? e.message : "Export impossible");
+    } finally {
+      setImageEnCours(false);
+    }
+  };
+
+  const partager = async () => {
+    setImageEnCours(true);
+    setErreurImage(null);
+    try {
+      const { png, nom } = await rendreImage();
+      const fichier = new File([png], nom, { type: "image/png" });
+      // `canShare` AVANT `share` : sur ordinateur, l'API existe souvent sans
+      // accepter les fichiers, et `share` échouerait après avoir fait
+      // attendre. Dans ce cas on retombe sur le téléchargement, qui rend le
+      // même service.
+      if (navigator.canShare?.({ files: [fichier] })) {
+        await navigator.share({ files: [fichier], title: nom });
+      } else {
+        const url = URL.createObjectURL(png);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = nom;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }
+    } catch (e) {
+      // Fermer la feuille de partage lève `AbortError` : ce n'est pas une
+      // erreur, c'est un choix.
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        setErreurImage(e instanceof Error ? e.message : "Partage impossible");
+      }
+    } finally {
+      setImageEnCours(false);
+    }
+  };
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(onCopyLink());
@@ -53,10 +120,33 @@ export function ShareBar({ onCopyLink, onDownloadIcs, onCopySubscribeLink, extra
           {subscribeCopied ? "Copié ✓" : "Lien d'abonnement"}
         </button>
       )}
+      {imageEdt && (
+        <>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => void telechargerImage()}
+            disabled={imageEnCours}
+            title="Image PNG de la semaine affichée, prête à envoyer"
+          >
+            {imageEnCours ? "…" : "Exporter en image"}
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => void partager()}
+            disabled={imageEnCours}
+            title="Partager l'image de la semaine (téléchargement si le partage n'est pas disponible)"
+          >
+            Partager
+          </button>
+        </>
+      )}
       <button type="button" className="btn btn--ghost btn--sm" onClick={() => window.print()}>
         Imprimer
       </button>
       {extra}
+      {erreurImage && <span className="sharebar-erreur">{erreurImage}</span>}
     </div>
   );
 }
