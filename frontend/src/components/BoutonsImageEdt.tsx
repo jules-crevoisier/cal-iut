@@ -1,19 +1,31 @@
 /**
  * « Exporter en image » et « Partager », à côté du lien d'abonnement.
  *
- * Retour utilisateur 30/08/2026 : « un bouton à côté du lien d'abonnement
- * qui permette d'exporter cela en image » puis « et un bouton partager »,
- * enfin « je ne vois pas les boutons de photo en prod ».
+ * Retours successifs du 30/08/2026 : « un bouton à côté du lien
+ * d'abonnement qui permette d'exporter cela en image », « et un bouton
+ * partager », « je ne vois pas les boutons de photo en prod », puis :
+ * « le lien partager, je pensais à un partage comme sur les RS où tu
+ * partages l'image, ça te propose mail / WhatsApp / Discord etc. »
  *
- * Ils étaient dans `ShareBar`, qui ne s'affiche QUE côté planification
- * (`!readOnly`) — donc invisibles sur les liens personnels, c'est-à-dire
- * précisément là où quelqu'un veut partager son emploi du temps. D'où ce
- * composant à part, posé aux DEUX endroits : la barre de partage côté admin,
- * et l'en-tête du planning en lecture seule, à côté du lien d'abonnement
- * comme demandé.
+ * **Cette feuille-là n'existe que sur mobile.** `navigator.share` avec des
+ * FICHIERS est implémenté sur Android et iOS ; sur ordinateur, Chrome et
+ * Edge ne partagent que du texte et une URL, et Firefox ne partage rien du
+ * tout. La première version retombait donc en silence sur un téléchargement
+ * — techniquement correct, mais ce n'est pas ce qu'on demande quand on dit
+ * « partager ».
+ *
+ * D'où deux comportements, choisis AU CLIC selon ce que l'appareil sait
+ * vraiment faire :
+ *
+ * - mobile : la vraie feuille système, avec WhatsApp, Discord, Mail… ;
+ * - ordinateur : un petit menu, dont **Copier l'image**. C'est l'équivalent
+ *   réel : on colle ensuite directement dans Discord, WhatsApp Web ou un
+ *   mail avec Ctrl+V. Un `mailto:` ne sait pas porter de pièce jointe, il
+ *   ne remplace donc pas le presse-papiers — il est proposé à côté, pas à
+ *   la place.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { construireSvg, nomFichierImage, svgVersPng, type OptionsImage } from "../utils/imageEdt";
 
@@ -23,14 +35,41 @@ interface BoutonsImageEdtProps {
   options: () => OptionsImage;
 }
 
+/** Le presse-papiers image demande `ClipboardItem`, un contexte sécurisé et
+ *  un geste utilisateur. Absent de Firefox à ce jour — on ne propose donc
+ *  l'option que si elle marchera vraiment. */
+function presspapiersImagePossible(): boolean {
+  return typeof ClipboardItem !== "undefined" && Boolean(navigator.clipboard?.write);
+}
+
 export function BoutonsImageEdt({ options }: BoutonsImageEdtProps) {
   const [enCours, setEnCours] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
+  const conteneur = useRef<HTMLSpanElement>(null);
+
+  // Referme le menu au clic ailleurs et à Échap : un menu qu'on ne peut
+  // fermer qu'en rechargeant la page est un piège.
+  useEffect(() => {
+    if (!menu) return;
+    const dehors = (e: MouseEvent) => {
+      if (!conteneur.current?.contains(e.target as Node)) setMenu(false);
+    };
+    const echap = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(false);
+    };
+    document.addEventListener("mousedown", dehors);
+    document.addEventListener("keydown", echap);
+    return () => {
+      document.removeEventListener("mousedown", dehors);
+      document.removeEventListener("keydown", echap);
+    };
+  }, [menu]);
 
   const rendre = async () => {
     const o = options();
     const png = await svgVersPng(construireSvg(o));
-    return { png, nom: nomFichierImage(o.titre, o.sousTitre) };
+    return { png, nom: nomFichierImage(o.titre, o.sousTitre), titre: `${o.titre} — ${o.sousTitre}` };
   };
 
   const telecharger = (png: Blob, nom: string) => {
@@ -44,66 +83,109 @@ export function BoutonsImageEdt({ options }: BoutonsImageEdtProps) {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
-  const exporter = async () => {
+  const avecImage = async (quoi: (r: Awaited<ReturnType<typeof rendre>>) => Promise<void> | void) => {
     setEnCours(true);
-    setErreur(null);
+    setMessage(null);
     try {
-      const { png, nom } = await rendre();
-      telecharger(png, nom);
-    } catch (e) {
-      setErreur(e instanceof Error ? e.message : "Export impossible");
-    } finally {
-      setEnCours(false);
-    }
-  };
-
-  const partager = async () => {
-    setEnCours(true);
-    setErreur(null);
-    try {
-      const { png, nom } = await rendre();
-      const fichier = new File([png], nom, { type: "image/png" });
-      // `canShare` AVANT `share` : sur ordinateur l'API existe souvent sans
-      // accepter les fichiers, et `share` échouerait après avoir fait
-      // attendre. On retombe alors sur le téléchargement, qui rend le même
-      // service.
-      if (navigator.canShare?.({ files: [fichier] })) {
-        await navigator.share({ files: [fichier], title: nom });
-      } else {
-        telecharger(png, nom);
-      }
+      await quoi(await rendre());
     } catch (e) {
       // Fermer la feuille de partage lève `AbortError` : c'est un choix, pas
       // une erreur — l'afficher comme telle serait mensonger.
       if (!(e instanceof DOMException && e.name === "AbortError")) {
-        setErreur(e instanceof Error ? e.message : "Partage impossible");
+        setMessage(e instanceof Error ? e.message : "Opération impossible");
       }
     } finally {
       setEnCours(false);
+      setMenu(false);
     }
   };
 
+  const partager = async () => {
+    setMessage(null);
+    const o = options();
+    // Un fichier factice suffit à interroger l'appareil : inutile de
+    // fabriquer l'image entière pour découvrir qu'il ne saura pas la
+    // partager.
+    const sonde = new File([new Blob([""], { type: "image/png" })], "e.png", { type: "image/png" });
+    if (navigator.canShare?.({ files: [sonde] })) {
+      await avecImage(async ({ png, nom, titre }) => {
+        await navigator.share({ files: [new File([png], nom, { type: "image/png" })], title: titre });
+      });
+      return;
+    }
+    void o;
+    setMenu((v) => !v);
+  };
+
+  const copier = () =>
+    avecImage(async ({ png }) => {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      setMessage("Image copiée — collez-la avec Ctrl+V");
+    });
+
+  const parMail = () =>
+    avecImage(async ({ png, nom, titre }) => {
+      // `mailto:` ne peut PAS porter de pièce jointe : on met l'image dans le
+      // presse-papiers d'abord quand c'est possible, et on le dit. Promettre
+      // un mail avec l'image attachée serait faux.
+      if (presspapiersImagePossible()) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      }
+      const corps = presspapiersImagePossible()
+        ? "L'image de l'emploi du temps est dans le presse-papiers : collez-la ici avec Ctrl+V."
+        : "Emploi du temps en pièce jointe (à joindre depuis le fichier téléchargé).";
+      if (!presspapiersImagePossible()) telecharger(png, nom);
+      window.location.href = `mailto:?subject=${encodeURIComponent(titre)}&body=${encodeURIComponent(corps)}`;
+    });
+
   return (
-    <>
+    <span className="boutons-image" ref={conteneur}>
       <button
         type="button"
         className="btn btn--ghost btn--sm"
-        onClick={() => void exporter()}
+        onClick={() => void avecImage(({ png, nom }) => telecharger(png, nom))}
         disabled={enCours}
         title="Image PNG de la semaine affichée, prête à envoyer"
       >
         {enCours ? "…" : "Exporter en image"}
       </button>
+
       <button
         type="button"
         className="btn btn--ghost btn--sm"
         onClick={() => void partager()}
         disabled={enCours}
-        title="Partager l'image de la semaine (téléchargement si le partage n'est pas disponible sur l'appareil)"
+        aria-expanded={menu}
+        aria-haspopup="menu"
+        title="Partager l'image de la semaine"
       >
         Partager
       </button>
-      {erreur && <span className="sharebar-erreur">{erreur}</span>}
-    </>
+
+      {menu && (
+        <div className="boutons-image-menu" role="menu">
+          {presspapiersImagePossible() && (
+            <button type="button" role="menuitem" onClick={() => void copier()}>
+              Copier l'image
+              <span>à coller dans Discord, WhatsApp, un mail…</span>
+            </button>
+          )}
+          <button type="button" role="menuitem" onClick={() => void parMail()}>
+            Envoyer par mail
+            <span>ouvre votre messagerie</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => void avecImage(({ png, nom }) => telecharger(png, nom))}
+          >
+            Télécharger l'image
+            <span>fichier PNG</span>
+          </button>
+        </div>
+      )}
+
+      {message && <span className="sharebar-erreur">{message}</span>}
+    </span>
   );
 }

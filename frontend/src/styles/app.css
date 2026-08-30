@@ -3122,3 +3122,72 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   font-size: max(16px, 0.875rem);
   min-height: 44px;
 }
+
+/* --- Menu de partage de l'image ---------------------------------------
+   Sur mobile, `navigator.share` ouvre la feuille système et ce menu ne
+   s'affiche jamais. Sur ordinateur, cette feuille n'existe pas pour les
+   fichiers : ce menu est son équivalent, et « Copier l'image » en est
+   l'option utile — on colle ensuite dans Discord ou WhatsApp Web. */
+.boutons-image {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.boutons-image-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.boutons-image-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  /* 44px : cible tactile confortable — ce menu s'ouvre aussi sur les
+     tablettes, où `navigator.share` n'accepte pas toujours les fichiers. */
+  min-height: 44px;
+  padding: 10px 14px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.boutons-image-menu button + button {
+  border-top: 1px solid var(--border);
+}
+
+.boutons-image-menu button:hover,
+.boutons-image-menu button:focus-visible {
+  background: var(--surface-2);
+}
+
+.boutons-image-menu span {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+@media (max-width: 560px) {
+  /* Ancré à droite, un menu de 260px déborde d'un écran étroit : on le
+     laisse partir vers la gauche. */
+  .boutons-image-menu {
+    right: auto;
+    left: 0;
+    min-width: min(260px, calc(100vw - 32px));
+  }
+}
