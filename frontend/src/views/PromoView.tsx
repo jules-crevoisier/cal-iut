@@ -543,6 +543,26 @@ export function PromoView({
                                 // ça ici, le contenu affiché reste `payload.rows`.
                                 const source = placements?.find((p) => p.session_id === r.id);
                                 const draggableHere = dragEnabled && !!source && !source.locked;
+                                // Salle : l'état VIVANT des placements prime sur
+                                // `payload.rows`. Changer une salle mettait bien à jour
+                                // `placements` sur-le-champ, mais le libellé affiché,
+                                // lui, venait du payload — rechargé seulement par
+                                // l'appel asynchrone de 550 Ko qui suit. L'ancienne
+                                // salle restait donc à l'écran (retour utilisateur
+                                // 31/08/2026 : « le changement de salle n'est pas pris
+                                // en compte, l'ancienne est toujours là »).
+                                //
+                                // `payload.rows` reste la source quand les deux
+                                // s'accordent : lui seul porte le suffixe
+                                // « (Évaluation) » des CM d'examen, que
+                                // `room_label` n'a pas.
+                                const salleDuPayload = sallesTriees.find(
+                                  (s2) => s2.label === (r.r ?? "").replace(/\s*\([^)]*\)\s*$/, ""),
+                                );
+                                const salleAffichee =
+                                  !source || source.room_id === (salleDuPayload?.id ?? null)
+                                    ? r.r
+                                    : source.room_label ?? "";
                                 return (
                                   <div
                                     key={r.id}
@@ -584,7 +604,7 @@ export function PromoView({
                                         className="rm promo-chip-salle"
                                         autoFocus
                                         disabled={salleEnCours}
-                                        defaultValue={sallesTriees.find((s2) => s2.label === r.r)?.id ?? ""}
+                                        defaultValue={source?.room_id ?? salleDuPayload?.id ?? ""}
                                         onClick={(e) => e.stopPropagation()}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onChange={(e) => {
@@ -608,7 +628,7 @@ export function PromoView({
                                     ) : roomEditEnabled ? (
                                       <button
                                         type="button"
-                                        className={`rm promo-chip-salle-btn${r.r ? "" : " rm--absente"}`}
+                                        className={`rm promo-chip-salle-btn${salleAffichee ? "" : " rm--absente"}`}
                                         title="Changer la salle"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -616,11 +636,11 @@ export function PromoView({
                                         }}
                                         onMouseDown={(e) => e.stopPropagation()}
                                       >
-                                        {r.r || "salle à définir"}
+                                        {salleAffichee || "salle à définir"}
                                       </button>
                                     ) : (
-                                      <span className={`rm${r.r ? "" : " rm--absente"}`}>
-                                        {r.r || "salle à définir"}
+                                      <span className={`rm${salleAffichee ? "" : " rm--absente"}`}>
+                                        {salleAffichee || "salle à définir"}
                                       </span>
                                     )}
                                     <span className="te">{teacherNames || "—"}</span>
