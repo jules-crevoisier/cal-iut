@@ -683,10 +683,17 @@ def cmd_celcat_reseau(args: argparse.Namespace) -> int:
     saisie refuse de démarrer, il faut pouvoir vérifier le réseau SEUL,
     sans risquer d'envoyer quoi que ce soit à Celcat.
     """
+    from dotenv import load_dotenv
+
     from cal_iut.celcat import reseau
 
-    exe = reseau.chemin_vpncli()
-    print(f"client AnyConnect : {exe or 'introuvable'}")
+    # Même raison que `cmd_serve` : l'URL et les identifiants Celcat vivent
+    # dans `.env`, jamais dans le dépôt. `override=False` par défaut, donc
+    # une variable déjà posée dans l'environnement réel garde la priorité.
+    load_dotenv()
+
+    outil, exe = reseau.client_disponible()
+    print(f"client VPN        : {outil or 'aucun'}{f' ({exe})' if exe else ''}")
     print(f"état du VPN       : {reseau.etat_vpn()}")
 
     url = args.url or os.environ.get("CELCAT_URL", "")
@@ -695,12 +702,19 @@ def cmd_celcat_reseau(args: argparse.Namespace) -> int:
         print("URL de Celcat inconnue : passez --url, ou renseignez CELCAT_URL dans .env.")
         return 1
 
-    if args.connecter:
+    # L'accès DIRECT d'abord, toujours — y compris avec `--connecter`. Sur
+    # place, à l'IUT, Celcat répond sans VPN : monter un tunnel inutile
+    # ralentirait la saisie et exposerait à une coupure pour rien.
+    diagnostic = reseau.verifier(url)
+    print(f"accès direct      : {'OK' if diagnostic else 'NON'} — {diagnostic.detail}")
+
+    if not diagnostic and args.connecter:
         montage = reseau.connecter()
         print(f"montage du VPN    : {montage.detail}")
+        if montage:
+            diagnostic = reseau.verifier(url)
+            print(f"accès via le VPN  : {'OK' if diagnostic else 'NON'} — {diagnostic.detail}")
 
-    diagnostic = reseau.verifier(url)
-    print(f"accès à Celcat    : {'OK' if diagnostic else 'NON'} — {diagnostic.detail}")
     return 0 if diagnostic else 1
 
 

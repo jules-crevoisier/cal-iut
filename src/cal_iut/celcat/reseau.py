@@ -46,6 +46,17 @@ CHEMINS_VPNCLI = (
     Path(r"C:\Program Files\Cisco\Cisco Secure Client\vpncli.exe"),
 )
 
+# Le serveur de production est un conteneur Linux : il n'y a pas de `.exe`
+# Cisco, et il n'y en aura pas — Cisco ne distribue pas AnyConnect pour ce
+# cas. OpenConnect, libre, parle le MÊME protocole ; c'est le client des
+# machines Linux. La détection couvre donc les deux mondes, sans quoi ce
+# module serait utilisable seulement depuis le poste Windows.
+CHEMINS_OPENCONNECT = (
+    Path("/usr/sbin/openconnect"),
+    Path("/usr/bin/openconnect"),
+    Path("/usr/local/sbin/openconnect"),
+)
+
 PASSERELLE_DEFAUT = "vpn.univ-reims.fr"
 
 
@@ -68,6 +79,28 @@ def chemin_vpncli() -> Path | None:
         if chemin.exists():
             return chemin
     return None
+
+
+def chemin_openconnect() -> Path | None:
+    depuis_le_path = shutil.which("openconnect")
+    if depuis_le_path:
+        return Path(depuis_le_path)
+    for chemin in CHEMINS_OPENCONNECT:
+        if chemin.exists():
+            return chemin
+    return None
+
+
+def client_disponible() -> tuple[str, Path] | tuple[None, None]:
+    """Quel client VPN cette machine a-t-elle ? AnyConnect sur le poste,
+    OpenConnect sur un serveur Linux — même protocole, même passerelle."""
+    exe = chemin_vpncli()
+    if exe is not None:
+        return "anyconnect", exe
+    exe = chemin_openconnect()
+    if exe is not None:
+        return "openconnect", exe
+    return None, None
 
 
 def _hote_et_port(url: str) -> tuple[str, int]:
@@ -110,9 +143,22 @@ def verifier(url: str, *, delai: float = 4.0) -> Diagnostic:
 
 def etat_vpn() -> str:
     """« connecté », « déconnecté », ou une explication."""
-    exe = chemin_vpncli()
-    if exe is None:
-        return "client AnyConnect introuvable"
+    outil, exe = client_disponible()
+    if outil is None:
+        return "aucun client VPN (ni AnyConnect ni OpenConnect)"
+    if outil == "openconnect":
+        # OpenConnect n'expose aucune commande d'état : il tourne, ou pas.
+        # Son processus est donc la seule source de vérité disponible.
+        try:
+            actif = (
+                subprocess.run(
+                    ["pgrep", "-x", "openconnect"], capture_output=True, text=True, timeout=10
+                ).returncode
+                == 0
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return "état indéterminé (openconnect)"
+        return "connecté" if actif else "déconnecté"
     try:
         sortie = subprocess.run(
             [str(exe), "state"], capture_output=True, text=True, timeout=30
@@ -142,20 +188,33 @@ def connecter(
     Le délai est volontairement long : si la passerelle demande une
     validation sur téléphone, c'est le temps qu'il faut pour l'accorder.
     """
-    exe = chemin_vpncli()
-    if exe is None:
-        return Diagnostic(False, "Client AnyConnect introuvable — montez le VPN à la main.")
+    outil, exe = client_disponible()
+    if outil is None:
+        return Diagnostic(
+            False,
+            "Aucun client VPN. Sur Windows : AnyConnect. Sur un serveur Linux : "
+            "`apt install openconnect` (même protocole, même passerelle).",
+        )
 
     passerelle = passerelle or os.environ.get("VPN_PASSERELLE") or PASSERELLE_DEFAUT
-    utilisateur = utilisateur or os.environ.get("VPN_UTILISATEUR") or ""
-    mot_de_passe = mot_de_passe or os.environ.get("VPN_MOT_DE_PASSE") or ""
+    # Le VPN et Celcat partagent le même compte (indiqué le 31/08/2026) :
+    # les clés VPN_* ne servent qu'à DÉROGER à ce cas normal. Les répéter
+    # serait deux endroits à corriger le jour du changement de mot de passe.
+    utilisateur = utilisateur or os.environ.get("VPN_UTILISATEUR") or os.environ.get("CELCAT_UTILISATEUR") or ""
+    mot_de_passe = (
+        mot_de_passe or os.environ.get("VPN_MOT_DE_PASSE") or os.environ.get("CELCAT_MOT_DE_PASSE") or ""
+    )
     groupe = groupe if groupe is not None else os.environ.get("VPN_GROUPE", "")
     code = code if code is not None else os.environ.get("VPN_CODE", "")
     if not utilisateur or not mot_de_passe:
         return Diagnostic(
             False,
-            "VPN_UTILISATEUR / VPN_MOT_DE_PASSE absents de l'environnement (.env).",
+            "Identifiants absents de l'environnement (.env) : renseignez "
+            "CELCAT_UTILISATEUR / CELCAT_MOT_DE_PASSE (ou VPN_* pour un compte distinct).",
         )
+
+    if outil == "openconnect":
+        return _connecter_openconnect(exe, passerelle, utilisateur, mot_de_passe, groupe, delai)
 
     # `vpncli` pose ses questions dans l'ordre : groupe (si la passerelle en
     # propose plusieurs), identifiant, mot de passe, éventuel second facteur,
@@ -180,12 +239,54 @@ def connecter(
     return Diagnostic(False, f"VPN non monté. {_sans_secret(acheve.stdout, mot_de_passe, code)}")
 
 
-def deconnecter() -> str:
-    exe = chemin_vpncli()
-    if exe is None:
-        return "client AnyConnect introuvable"
+def _connecter_openconnect(
+    exe: Path, passerelle: str, utilisateur: str, mot_de_passe: str, groupe: str, delai: float
+) -> Diagnostic:
+    """Montage du VPN côté serveur Linux.
+
+    AVERTISSEMENT DE DÉPLOIEMENT. OpenConnect a besoin de `/dev/net/tun` et
+    de la capacité `NET_ADMIN`, et la passerelle pousse en général un tunnel
+    COMPLET : monter ce VPN dans le conteneur de l'application détournerait
+    tout son trafic sortant, et couperait le site public. Il doit donc
+    tourner dans un conteneur DÉDIÉ à la saisie, jamais dans celui qui sert
+    l'application.
+    """
+    commande = [
+        str(exe),
+        "--protocol=anyconnect",
+        f"--user={utilisateur}",
+        "--passwd-on-stdin",
+        "--background",
+        "--non-inter",  # rien à demander : ni bannière, ni confirmation
+        passerelle if "//" in passerelle else f"https://{passerelle}",
+    ]
+    if groupe:
+        commande.insert(-1, f"--authgroup={groupe}")
     try:
-        subprocess.run([str(exe), "disconnect"], capture_output=True, text=True, timeout=60)
+        acheve = subprocess.run(
+            commande, input=f"{mot_de_passe}\n", capture_output=True, text=True, timeout=delai
+        )
+    except subprocess.TimeoutExpired:
+        return Diagnostic(False, f"OpenConnect abandonné après {delai:.0f} s.")
+    except OSError as exc:
+        return Diagnostic(False, f"Lancement d'openconnect impossible : {exc}")
+    if acheve.returncode == 0:
+        return Diagnostic(True, f"VPN monté sur {passerelle} (openconnect).", vpn_monte=True)
+    return Diagnostic(
+        False,
+        "OpenConnect a échoué. "
+        + _sans_secret(acheve.stderr or acheve.stdout, mot_de_passe)
+        + " — vérifiez /dev/net/tun et la capacité NET_ADMIN du conteneur.",
+    )
+
+
+def deconnecter() -> str:
+    outil, exe = client_disponible()
+    if outil is None:
+        return "aucun client VPN"
+    commande = [str(exe), "disconnect"] if outil == "anyconnect" else ["pkill", "-x", "openconnect"]
+    try:
+        subprocess.run(commande, capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return f"déconnexion impossible ({exc})"
     return etat_vpn()
@@ -201,7 +302,15 @@ def _sans_secret(texte: str, *secrets: str) -> str:
 
 
 def exiger_acces(url: str, *, monter_le_vpn: bool = False) -> Diagnostic:
-    """Garantit l'accès, ou lève. C'est le point d'entrée de la saisie."""
+    """Garantit l'accès, ou lève. C'est le point d'entrée de la saisie.
+
+    L'accès DIRECT est toujours essayé en premier, même quand le montage
+    automatique est demandé : sur place, à l'IUT, Celcat répond sans VPN, et
+    monter un tunnel dont personne n'a besoin ne ferait que ralentir la
+    saisie et risquer une coupure inutile (retour utilisateur 31/08/2026 :
+    « toujours tester si on peut accéder à Celcat sans le VPN au cas où on
+    soit sur site, avant de passer par le VPN »).
+    """
     diagnostic = verifier(url)
     if diagnostic:
         return diagnostic

@@ -24,6 +24,7 @@ Deux garde-fous structurels en attendant :
 
 from __future__ import annotations
 
+import os
 import random
 import time
 from dataclasses import dataclass, field
@@ -113,7 +114,18 @@ class PilotePlaywright:
     de module. Chaque `À ADAPTER` correspond à un élément du formulaire
     Celcat qu'il faut voir une fois pour le renseigner."""
 
-    URL_CONNEXION = ""  # À ADAPTER : URL de connexion Celcat de l'URCA
+    # Celcat de l'URCA (fourni le 31/08/2026). Surchargeable par `CELCAT_URL`
+    # plutôt que figé : l'adresse d'un intranet change sans prévenir, et on ne
+    # veut pas redéployer pour ça.
+    URL_CONNEXION = os.environ.get("CELCAT_URL", "https://celcat-lv.univ-reims.fr/")
+
+    # Celcat retrouve mal un enseignant par son PRÉNOM (constaté par
+    # l'utilisateur le 31/08/2026 : « pour trouver un enseignant il faut
+    # chercher par son nom d'abord »). La recherche se fait donc sur le NOM,
+    # le prénom ne servant qu'à départager deux homonymes. Ne concerne que
+    # les enseignants dont le code Celcat vaut « 0 » dans `celcat.yaml` :
+    # pour les 80 autres, le code numérique évite toute recherche.
+    CHERCHER_ENSEIGNANT_PAR = "nom"
 
     def __init__(self, rythme: Rythme, *, visible: bool = True) -> None:
         self.rythme = rythme
@@ -134,7 +146,7 @@ class PilotePlaywright:
                 "`playwright install chromium`."
             )
         if not PilotePlaywright.URL_CONNEXION:
-            return False, "URL de connexion Celcat non renseignée (cf. celcat/driver.py)."
+            return False, "URL de connexion Celcat non renseignée (CELCAT_URL)."
         return True, ""
 
     def ouvrir_session(self, identifiant: str, mot_de_passe: str) -> None:
