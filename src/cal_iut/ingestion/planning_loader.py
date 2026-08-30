@@ -130,6 +130,92 @@ def _load_json(path: Path) -> dict | None:
         return None
 
 
+def load_sae_corrections(config_dir: Path) -> tuple[dict[str, set[date]], dict[str, set[date]]]:
+    """`(ajouts, retraits)` par code de module, lus de `sae_corrections.yaml`.
+
+    Ce fichier existe parce que `contraintes/09_dates_sae.json` est
+    RÉGÉNÉRÉ depuis le CSV de l'établissement : une retouche à la main y
+    serait effacée au premier rebuild.
+
+    `motif` obligatoire, dates strictement ISO, et une même date ne peut
+    être à la fois ajoutée et retirée — le résultat dépendrait sinon de
+    l'ordre d'application, ce qui est indéfendable pour une donnée qui
+    décide si des étudiants ont cours ou non.
+    """
+    import yaml
+
+    chemin = config_dir / "sae_corrections.yaml"
+    if not chemin.exists():
+        return {}, {}
+    data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+    ajouts: dict[str, set[date]] = {}
+    retraits: dict[str, set[date]] = {}
+
+    def _dates(valeurs, code: str) -> set[date]:
+        lues: set[date] = set()
+        for brute in valeurs or []:
+            try:
+                lues.add(date.fromisoformat(str(brute)))
+            except ValueError as exc:
+                raise ValueError(
+                    f"sae_corrections.yaml : date invalide « {brute} » pour {code} "
+                    "(format attendu : AAAA-MM-JJ)."
+                ) from exc
+        return lues
+
+    for entree in data.get("corrections") or []:
+        code = str(entree.get("course_code") or "").strip()
+        if not code:
+            raise ValueError("sae_corrections.yaml : une entrée sans `course_code`.")
+        if not str(entree.get("motif") or "").strip():
+            raise ValueError(f"sae_corrections.yaml : `{code}` sans `motif`.")
+        a = _dates(entree.get("ajouter"), code)
+        r = _dates(entree.get("retirer"), code)
+        if a & r:
+            raise ValueError(
+                f"sae_corrections.yaml : {code} — {sorted(a & r)} figure à la fois "
+                "en `ajouter` et en `retirer`."
+            )
+        if a:
+            ajouts.setdefault(code, set()).update(a)
+        if r:
+            retraits.setdefault(code, set()).update(r)
+    return ajouts, retraits
+
+
+def appliquer_corrections_sae(
+    fenetres: list, ajouts: dict[str, set[date]], retraits: dict[str, set[date]]
+) -> list:
+    """Fusionne les corrections dans les fenêtres SAE.
+
+    Une fenêtre vidée de toutes ses dates est SUPPRIMÉE, pas conservée
+    vide : sinon la journée continuerait d'apparaître comme « journée SAE »
+    à l'écran alors qu'elle a été rendue aux cours classiques.
+    """
+    if not ajouts and not retraits:
+        return fenetres
+
+    resultat = []
+    for fenetre in fenetres:
+        a_retirer: set[date] = set()
+        for code in fenetre.course_codes:
+            a_retirer |= retraits.get(code, set())
+        gardees = [d for d in fenetre.dates if d not in a_retirer]
+        if not gardees:
+            continue
+        fenetre.dates = gardees
+        resultat.append(fenetre)
+
+    for code, dates in ajouts.items():
+        deja = {d for f in resultat if code in f.course_codes for d in f.dates}
+        nouvelles = sorted(dates - deja)
+        if nouvelles:
+            resultat.append(
+                SaeWindow(label=f"{code} (correction locale)", course_codes=[code], dates=nouvelles)
+            )
+    return resultat
+
+
 def load_sae_windows(data_root: Path, semestres: Iterable[str] | None = None) -> list[SaeWindow]:
     """Fenêtres SAE de `contraintes/09_dates_sae.json`, filtrées par semestre."""
     data = _load_json(data_root / "contraintes" / _SAE_PATH)
@@ -214,6 +300,11 @@ def load_mmi_planning_for_semestres(
     """
     wanted = list(dict.fromkeys(s for s in semestres if s))
     windows = load_sae_windows(data_root, wanted or None)
+    # Corrections locales par-dessus le fichier régénéré (cf.
+    # `load_sae_corrections`) : c'est la seule forme qui survive à un
+    # `build_contraintes.py`.
+    ajouts, retraits = load_sae_corrections(data_root / "data" / "config")
+    windows = appliquer_corrections_sae(windows, ajouts, retraits)
     fixed = load_fixed_events(data_root)
 
     events: dict[date, list[str]] = {}
