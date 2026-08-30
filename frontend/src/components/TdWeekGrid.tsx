@@ -21,7 +21,9 @@ import type { GroupMeta, Placement } from "../types";
 import type { AppPayload } from "../types/app";
 import { dayName, slotLabel, SLOT_TIMES } from "../utils/slots";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
+import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
 import { positionInfobulle } from "../utils/infobulle";
+import { usePreferences } from "../utils/preferences";
 import { shortGroupLabel } from "../utils/years";
 
 interface TdWeekGridProps {
@@ -99,7 +101,8 @@ export function TdWeekGrid({
   parcours = "",
   onlyDay = null,
 }: TdWeekGridProps) {
-  const [hover, setHover] = useState<{ placement: Placement; x: number; y: number } | null>(null);
+  const [hover, setHover] = useState<{ placement: Placement; x: number; y: number } | null>(null);
+  const couleursParMatiere = usePreferences().couleursParMatiere;
   const days = onlyDay === null ? [0, 1, 2, 3, 4] : [onlyDay];
   const tpPair = resolveTpPair(tdGroupId, groups);
   const tpA = tpPair?.[0] ?? "";
@@ -172,7 +175,7 @@ export function TdWeekGrid({
 
   return (
     <div className="td-grid-wrap">
-      <table className="td-grid">
+      <table className={`td-grid${couleursParMatiere ? " couleurs-matiere" : ""}`}>
         <thead>
           <tr>
             <th className="td-grid-corner" scope="col">
@@ -381,6 +384,10 @@ function SessionBlock({
   return (
     <button
       type="button"
+      style={{
+        ["--teinte-matiere" as string]: String(teinteMatiere(p.course_code)),
+        ["--variante-matiere" as string]: String(varianteMatiere(p.course_code)),
+      }}
       className={`td-block type-${typeClass} ${event.span ? "td-block--span" : ""} ${p.is_eval ? "eval" : ""} ${p.locked ? "locked" : ""}`}
       onClick={() => onSelect(p)}
       onMouseEnter={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}

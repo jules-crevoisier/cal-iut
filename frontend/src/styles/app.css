@@ -3021,7 +3021,9 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
    Ne s'applique que sous `.couleurs-matiere` : sans l'option, les règles
    `type-cm` / `type-td` / `type-tp` gardent la main, à l'identique. */
 .couleurs-matiere .sessiongrid-block,
-.couleurs-matiere .promo-chip {
+.couleurs-matiere .promo-chip,
+.couleurs-matiere .td-block,
+.agenda-chip.couleurs-matiere {
   /* `--variante-matiere` (0, 1 ou 2) sépare deux matières de teintes
      voisines : sans elle, 96 écrans sur 234 portaient deux couleurs
      indistinguables ; avec, il en reste 26. Cf. `utils/couleursMatiere.ts`
@@ -3035,7 +3037,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 }
 
 .couleurs-matiere .sessiongrid-block.eval,
-.couleurs-matiere .promo-chip.eval {
+.couleurs-matiere .promo-chip.eval,
+.couleurs-matiere .td-block.eval {
   /* L'évaluation reste reconnaissable : la teinte de la matière est gardée,
      mais le liseré passe en trait double pour la distinguer sans écraser
      l'information de matière. */
@@ -3049,7 +3052,9 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
    sombres à quelqu'un qui a choisi le thème clair sur un système sombre. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .couleurs-matiere .sessiongrid-block,
-  :root:not([data-theme="light"]) .couleurs-matiere .promo-chip {
+  :root:not([data-theme="light"]) .couleurs-matiere .promo-chip,
+  :root:not([data-theme="light"]) .couleurs-matiere .td-block,
+    :root:not([data-theme="light"]) .agenda-chip.couleurs-matiere {
     background: hsl(
       var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
     );
@@ -3060,7 +3065,9 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 }
 
 :root[data-theme="dark"] .couleurs-matiere .sessiongrid-block,
-:root[data-theme="dark"] .couleurs-matiere .promo-chip {
+:root[data-theme="dark"] .couleurs-matiere .promo-chip,
+:root[data-theme="dark"] .couleurs-matiere .td-block,
+:root[data-theme="dark"] .agenda-chip.couleurs-matiere {
   background: hsl(
     var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
   );
