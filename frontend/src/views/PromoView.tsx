@@ -119,7 +119,14 @@ export function PromoView({
         // titre suit ce qui est RÉELLEMENT en cause — annoncer « Salle déjà
         // occupée » pour un simple souci de capacité enverrait chercher un
         // conflit d'occupation qui n'existe pas.
-        const titre = detail.hard_conflicts.length ? "Salle déjà occupée" : "Attention à la capacité";
+        // Le verrou de semaine arrive par le même canal depuis le 31/08/2026 :
+        // il se dit lui-même, il ne s'annonce pas « Salle déjà occupée ».
+        const verrou = detail.hard_conflicts.some((m) => m.includes("non modifiable"));
+        const titre = verrou
+          ? "Semaine déjà en cours"
+          : detail.hard_conflicts.length
+            ? "Salle déjà occupée"
+            : "Attention à la capacité";
         const forcer = await confirmAsync(
           [...detail.hard_conflicts, ...detail.soft_warnings].join("\n"),
           { title: titre, confirmLabel: "Mettre quand même cette salle" },
