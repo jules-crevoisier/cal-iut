@@ -1209,6 +1209,27 @@ def _hard_constraint_context(
 
     extra_blocked: set[tuple[int, int, int]] = set()
 
+    # Jours FÉRIÉS et fermetures (vacances, journées bloquées). Le solveur
+    # les respecte depuis toujours (`constraints.py::
+    # add_blocked_calendar_constraints`), mais ce chemin MANUEL ne les
+    # regardait pas : un glisser-déposer pouvait poser un cours le 11
+    # novembre, et c'est exactement ce qui est arrivé — une seule séance de
+    # tout le planning, repérée par Kyllian Bresson le 30/08/2026 alors
+    # qu'elle était déjà en production.
+    #
+    # Même famille de défaut que celui du 26/08 (les règles
+    # institutionnelles ne servaient qu'à filtrer les suggestions) : une
+    # contrainte que le solveur honore, mais qu'une porte manuelle
+    # contourne sans que rien ne l'arrête.
+    for week in range(n_weeks):
+        for jour in range(5):
+            jour_reel = state.calendar.week_day_to_date(week_offset + week, jour)
+            if jour_reel is None:
+                continue
+            if jour_reel in state.calendar.holidays or jour_reel in state.calendar.blocked_dates:
+                for slot in range(6):
+                    extra_blocked.add((week, jour, slot))
+
     # Jeudi après-midi réservé aux PAC — jamais pour la FC.
     if "FC" not in session.parcours:
         for week in range(n_weeks):
@@ -1334,9 +1355,27 @@ def _hard_constraint_context(
     return extra_blocked, extra_blocked_pedago, allowed_weeks
 
 
+def _libelle_jour_ferme(state: object, semestre: str, week: int, day: int) -> str | None:
+    """« férié (11/11/2026) » plutôt qu'un motif générique — sans la date, la
+    personne qui lit le refus ne sait pas quoi vérifier."""
+    try:
+        offset = semester_week_offset(state.calendar, semestre)
+        jour = state.calendar.week_day_to_date(offset + week, day)
+    except Exception:  # noqa: BLE001
+        return None
+    if jour is None:
+        return None
+    if jour in state.calendar.holidays:
+        return f"Jour férié ({jour.strftime('%d/%m/%Y')}) : l'IUT est fermé."
+    if jour in state.calendar.blocked_dates:
+        return f"Journée fermée ({jour.strftime('%d/%m/%Y')}) : vacances ou fermeture déclarée."
+    return None
+
+
 def _institutional_violations(
     week: int, day: int, slot: int,
     extra_blocked: set[tuple[int, int, int]],
+    libelle_calendrier: str | None = None,
 ) -> list[str]:
     """
     Violations JAMAIS contournables via `force` (verrous institutionnels durs :
@@ -1351,10 +1390,16 @@ def _institutional_violations(
     """
     violations: list[str] = []
     if (week, day, slot) in extra_blocked:
+        # Le motif NOMME la cause quand on la connaît : « Jour férié
+        # (11/11/2026) » se vérifie d'un coup d'œil, « créneau
+        # institutionnellement bloqué » laisse chercher.
         violations.append(
-            "Créneau institutionnellement bloqué (jeudi après-midi PAC, fin de semestre, "
-            "journée SAE sanctuarisée, événement du planning officiel à cet horaire précis, "
-            "ou présence IUT d'un alternant) — non modifiable, même en forçant."
+            libelle_calendrier
+            or (
+                "Créneau institutionnellement bloqué (jeudi après-midi PAC, fin de semestre, "
+                "journée SAE sanctuarisée, événement du planning officiel à cet horaire précis, "
+                "ou présence IUT d'un alternant) — non modifiable, même en forçant."
+            )
         )
     return violations
 
@@ -1492,7 +1537,10 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + [_DUO_SYNC_NOTE], soft_warnings=[], blocking_conflicts=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
     if session:
         extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-        institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
+        institutional = _institutional_violations(
+            body.week, body.day, body.slot, extra_blocked,
+            _libelle_jour_ferme(state, session.semestre, body.week, body.day),
+        )
         institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         # L'ordre pédagogique est signalé ici (dry-run, avant décision de
         # l'utilisateur) même si `body.force` n'est pas encore posé — c'est
@@ -1586,7 +1634,10 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         })
     if session:
         extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-        institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
+        institutional = _institutional_violations(
+            body.week, body.day, body.slot, extra_blocked,
+            _libelle_jour_ferme(state, session.semestre, body.week, body.day),
+        )
         institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if institutional:
             raise HTTPException(409, detail={
@@ -1819,7 +1870,10 @@ def _controler_echange(
         durs += _semaines_non_modifiables(state, placement.session_id, placement.week, placement.week, force=force)
         if seance is not None:
             extra_bloque, extra_bloque_pedago, semaines_permises = _hard_constraint_context(state, seance)
-            institutionnels = _institutional_violations(placement.week, placement.day, placement.slot, extra_bloque)
+            institutionnels = _institutional_violations(
+                placement.week, placement.day, placement.slot, extra_bloque,
+                _libelle_jour_ferme(state, seance.semestre, placement.week, placement.day),
+            )
             institutionnels += _teacher_availability_violations(state, seance, placement.week, placement.day, placement.slot)
             bloquants += institutionnels
             durs += institutionnels
@@ -2434,7 +2488,10 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
         })
 
     extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-    institutional = _institutional_violations(body.week, body.day, body.slot, extra_blocked)
+    institutional = _institutional_violations(
+        body.week, body.day, body.slot, extra_blocked,
+        _libelle_jour_ferme(state, session.semestre, body.week, body.day),
+    )
     institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
     if institutional:
         raise HTTPException(409, detail={

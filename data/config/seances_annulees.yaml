@@ -71,3 +71,25 @@ annulees:
     motif: "16/09 : 6h de CM d'affilée ramenées à 3h ; CM-4 reporté au 11/11, CM-5 sans créneau valide"
     demande_par: "Martial Martin"
     le: "2026-08-29"
+
+  # CM-4 : je l'avais reporté au mercredi 11 novembre 2026 — un JOUR FÉRIÉ
+  # (Armistice). Erreur repérée par Kyllian Bresson le 30/08/2026 : « l'outil
+  # parle du 11 novembre qui est un jour férié ». C'était la seule séance de
+  # tout le planning posée ce jour-là ; le contrôle des fériés manquait au
+  # déplacement manuel, il est ajouté par ailleurs.
+  #
+  # Une fois le férié écarté, il ne reste QUATRE créneaux valides sur toute
+  # l'année pour cette séance : mardi 08/09 08h, mercredi 09/09 08h — tous
+  # deux AVANT le CM-1 du 09/09, donc à contresens du contenu — et mercredi
+  # 16/09 à 11h ou 14h, c'est-à-dire précisément la journée que Martial
+  # Martin demandait d'alléger. Les refus viennent de l'ordre pédagogique
+  # (704) et de ses propres indisponibilités déclarées (546).
+  #
+  # « Récupérer 3h plus tard » et « 1,5h en novembre pour un DS » sont donc
+  # tous deux impossibles en l'état. On retient sa première option :
+  # « redonner les autres heures de CM à des collègues ». RÉVERSIBLE — il
+  # suffit de retirer cette entrée pour que la séance revienne.
+  - session_id: WR104-S1-CM-4
+    motif: "16/09 allégé : aucun créneau valide hors du 16/09 lui-même (ordre pédagogique + indisponibilités MMA)"
+    demande_par: "Martial Martin"
+    le: "2026-08-30"
