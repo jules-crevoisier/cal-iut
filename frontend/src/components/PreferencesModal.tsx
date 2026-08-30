@@ -14,7 +14,7 @@
  * pas grand-chose tant qu'on ne l'a pas vu.
  */
 
-import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
+import { couleursMatiere } from "../utils/couleursMatiere";
 
 interface PreferencesModalProps {
   onChoix: (couleursParMatiere: boolean) => void;
@@ -49,10 +49,7 @@ export function PreferencesModal({ onChoix }: PreferencesModalProps) {
                 <span
                   key={c.code}
                   className="promo-chip"
-                  style={{
-                    ["--teinte-matiere" as string]: String(teinteMatiere(c.code)),
-                    ["--variante-matiere" as string]: String(varianteMatiere(c.code)),
-                  }}
+                  style={couleursMatiere(c.code) as React.CSSProperties}
                 >
                   <span className="code">{c.code}</span>
                   <span className="ty">{c.type}</span>

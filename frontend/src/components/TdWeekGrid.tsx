@@ -21,7 +21,7 @@ import type { GroupMeta, Placement } from "../types";
 import type { AppPayload } from "../types/app";
 import { dayName, slotLabel, SLOT_TIMES } from "../utils/slots";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
-import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
+import { couleursMatiere } from "../utils/couleursMatiere";
 import { positionInfobulle } from "../utils/infobulle";
 import { usePreferences } from "../utils/preferences";
 import { shortGroupLabel } from "../utils/years";
@@ -384,10 +384,7 @@ function SessionBlock({
   return (
     <button
       type="button"
-      style={{
-        ["--teinte-matiere" as string]: String(teinteMatiere(p.course_code)),
-        ["--variante-matiere" as string]: String(varianteMatiere(p.course_code)),
-      }}
+      style={couleursMatiere(p.course_code) as React.CSSProperties}
       className={`td-block type-${typeClass} ${event.span ? "td-block--span" : ""} ${p.is_eval ? "eval" : ""} ${p.locked ? "locked" : ""}`}
       onClick={() => onSelect(p)}
       onMouseEnter={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}

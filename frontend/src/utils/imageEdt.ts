@@ -19,7 +19,7 @@
  * de repli sans prévenir.
  */
 
-import { teinteMatiere, varianteMatiere } from "./couleursMatiere";
+import { couleursMatiere } from "./couleursMatiere";
 import { DAY_LABELS, SLOT_TIMES } from "./slots";
 import type { AppPayload, AppRow } from "../types/app";
 
@@ -80,12 +80,11 @@ function couleursSeance(r: AppRow, parMatiere: boolean): { fond: string; barre: 
     const [fond, barre] = parType[r.t] ?? ["#f1f2f5", "#8b93a3"];
     return { fond, barre };
   }
-  const teinte = teinteMatiere(r.c);
-  const variante = varianteMatiere(r.c);
-  return {
-    fond: `hsl(${teinte} ${64 - variante * 10}% ${95 - variante * 5}%)`,
-    barre: `hsl(${teinte} ${62 - variante * 8}% ${48 - variante * 7}%)`,
-  };
+  // Mêmes couleurs QUE L'ÉCRAN, prises à la même source : dupliquer les
+  // formules ici les aurait fait diverger au premier ajustement, et l'image
+  // aurait fini par mentir sur ce qu'on voit.
+  const c = couleursMatiere(r.c);
+  return { fond: c["--matiere-fond"], barre: c["--matiere-barre"] };
 }
 
 export function construireSvg(options: OptionsImage): string {
