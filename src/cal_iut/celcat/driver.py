@@ -167,6 +167,14 @@ class PilotePlaywright:
             self._playwright.stop()
 
 
+class AccesPerdu(RuntimeError):
+    """Celcat est devenu injoignable — typiquement le VPN qui tombe.
+
+    Distinct d'un échec de séance : celui-ci est isolé et n'arrête rien,
+    celui-là invalide tout ce qui suivrait.
+    """
+
+
 @dataclass
 class ResultatSaisie:
     creees: list[str] = field(default_factory=list)
@@ -177,6 +185,9 @@ class ResultatSaisie:
     # laisserait un Celcat à moitié rempli sans savoir où ça s'est arrêté.
     echecs: list[tuple[str, str]] = field(default_factory=list)
     interrompu: bool = False
+    # Interrompu PARCE QUE Celcat est devenu injoignable — à distinguer
+    # d'un arrêt demandé par l'utilisateur : ici, il reste du travail.
+    acces_perdu: bool = False
 
     def resume(self) -> str:
         base = (
@@ -186,7 +197,11 @@ class ResultatSaisie:
         if self.echecs:
             base += f", {len(self.echecs)} en échec"
         if self.interrompu:
-            base += " — INTERROMPU avant la fin"
+            base += (
+                " — INTERROMPU : Celcat est devenu injoignable (VPN ?)"
+                if self.acces_perdu
+                else " — INTERROMPU avant la fin"
+            )
         return base + "."
 
 
@@ -198,13 +213,20 @@ class SaisieCelcat:
     qu'exécuter, dans un ordre stable et à une cadence crédible.
     """
 
-    def __init__(self, pilote, rythme: Rythme, *, journaliser=None) -> None:
+    def __init__(self, pilote, rythme: Rythme, *, journaliser=None, verifier_acces=None) -> None:
         self.pilote = pilote
         self.rythme = rythme
         # Appelé après CHAQUE saisie réussie : c'est ce qui permet de
         # reprendre là où on s'est arrêté si la session est coupée en
         # cours de route, plutôt que de tout re-saisir.
         self.journaliser = journaliser
+        # Rend True tant que Celcat est joignable (cf. `celcat/reseau.py`).
+        # Celcat vit derrière le VPN de l'URCA, et une coupure ne se voit
+        # pas : les pages cessent simplement de répondre. Sans ce contrôle,
+        # le pilote continuerait à cliquer dans le vide et accumulerait des
+        # échecs — inacceptable sur un outil qui alimente la paie. Absent
+        # (tests, pilote simulé), rien ne change.
+        self.verifier_acces = verifier_acces
 
     def executer(self, plan, identifiant: str, mot_de_passe: str, *, doit_continuer=None) -> ResultatSaisie:
         """`doit_continuer` : fonction sans argument rendant False pour
@@ -215,6 +237,14 @@ class SaisieCelcat:
             raise ValueError(
                 f"{len(plan.bloquees)} séance(s) non saisissable(s) : corrigez-les avant "
                 "de lancer la saisie (rien n'a été envoyé à Celcat)."
+            )
+
+        # Contrôle AVANT d'ouvrir la session : rien de pire que d'échouer à
+        # la trentième séance sur un VPN qui n'était pas monté au départ.
+        if self.verifier_acces and not self.verifier_acces():
+            raise AccesPerdu(
+                "Celcat n'est pas joignable : montez le VPN URCA avant de lancer la saisie "
+                "(rien n'a été envoyé)."
             )
 
         self.pilote.ouvrir_session(identifiant, mot_de_passe)
@@ -228,6 +258,10 @@ class SaisieCelcat:
             for (groupe, semaine), entrees in _par_groupe_semaine(plan.a_creer + plan.a_modifier):
                 if doit_continuer and not doit_continuer():
                     resultat.interrompu = True
+                    return resultat
+                if self.verifier_acces and not self.verifier_acces():
+                    resultat.interrompu = True
+                    resultat.acces_perdu = True
                     return resultat
                 self.pilote.choisir_groupe(groupe, semaine)
                 self.rythme.apres_action()
@@ -247,6 +281,15 @@ class SaisieCelcat:
                             self.journaliser(entree)
                     except Exception as exc:  # noqa: BLE001 — un échec isolé ne doit pas tout arrêter
                         resultat.echecs.append((entree.session_id, str(exc)))
+                        # ...sauf si c'est le réseau qui a lâché : les
+                        # suivantes échoueraient toutes, et chaque tentative
+                        # sur une page morte risque de cliquer à côté. On
+                        # s'arrête là, en laissant `echecs` et le journal
+                        # dire exactement où reprendre.
+                        if self.verifier_acces and not self.verifier_acces():
+                            resultat.interrompu = True
+                            resultat.acces_perdu = True
+                            return resultat
                     faites += 1
                     self.rythme.apres_seance(faites)
                 self.rythme.apres_groupe()

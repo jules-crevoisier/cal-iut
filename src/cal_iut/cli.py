@@ -676,6 +676,34 @@ def cmd_prod(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_celcat_reseau(args: argparse.Namespace) -> int:
+    """Diagnostic d'accès à Celcat, qui vit derrière le VPN de l'URCA.
+
+    Une commande à part, et pas un contrôle noyé dans la saisie : quand la
+    saisie refuse de démarrer, il faut pouvoir vérifier le réseau SEUL,
+    sans risquer d'envoyer quoi que ce soit à Celcat.
+    """
+    from cal_iut.celcat import reseau
+
+    exe = reseau.chemin_vpncli()
+    print(f"client AnyConnect : {exe or 'introuvable'}")
+    print(f"état du VPN       : {reseau.etat_vpn()}")
+
+    url = args.url or os.environ.get("CELCAT_URL", "")
+    if not url:
+        print()
+        print("URL de Celcat inconnue : passez --url, ou renseignez CELCAT_URL dans .env.")
+        return 1
+
+    if args.connecter:
+        montage = reseau.connecter()
+        print(f"montage du VPN    : {montage.detail}")
+
+    diagnostic = reseau.verifier(url)
+    print(f"accès à Celcat    : {'OK' if diagnostic else 'NON'} — {diagnostic.detail}")
+    return 0 if diagnostic else 1
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
     from dotenv import load_dotenv
@@ -1154,6 +1182,17 @@ def main() -> int:
     )
     prod_parser.add_argument("--detail", type=int, default=10, help="lignes affichées par catégorie")
     prod_parser.set_defaults(func=cmd_prod)
+
+    reseau_parser = sub.add_parser(
+        "celcat-reseau", help="Vérifier l'accès à Celcat (VPN AnyConnect)"
+    )
+    reseau_parser.add_argument("--url", help="URL de Celcat (defaut : CELCAT_URL du .env)")
+    reseau_parser.add_argument(
+        "--connecter",
+        action="store_true",
+        help="tenter de monter le VPN (identifiants VPN_* du .env) avant de vérifier",
+    )
+    reseau_parser.set_defaults(func=cmd_celcat_reseau)
 
     serve_parser = sub.add_parser("serve", help="Démarrer l'API FastAPI")
     serve_parser.add_argument("--host", default="127.0.0.1")
