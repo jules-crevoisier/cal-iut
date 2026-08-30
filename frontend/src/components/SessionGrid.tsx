@@ -16,7 +16,7 @@ import type { DragEvent as ReactDragEvent } from "react";
 import type { AppPayload, AppRow } from "../types/app";
 import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
 import { positionInfobulle } from "../utils/infobulle";
-import { lirePreferences } from "../utils/preferences";
+import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { groupLabelWithParcours } from "../utils/years";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
@@ -79,9 +79,9 @@ export function SessionGrid({
 }: SessionGridProps) {
   const [hover, setHover] = useState<{ row: AppRow; x: number; y: number } | null>(null);
   const days = onlyDay === null ? ALL_DAYS : [onlyDay];
-  // Relu à chaque rendu plutôt que mémorisé : le réglage peut changer dans
-  // une autre partie de l'écran, et une valeur figée y survivrait.
-  const couleursParMatiere = lirePreferences().couleursParMatiere;
+  // Depuis le contexte, jamais depuis `localStorage` : c'est ce qui fait
+  // que la grille se repeint au clic (cf. `utils/preferences.ts`).
+  const couleursParMatiere = usePreferences().couleursParMatiere;
 
   /** Props d'une case : classe de base + zone de dépôt quand la grille est
    *  éditable. Factorisé parce que la grille rend HUIT variantes de case

@@ -3111,29 +3111,19 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   margin: 10px 0 0;
 }
 
-/* --- Bouton de bascule, gardé accessible après le premier choix --------- */
-.prefs-bascule {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 12px;
-  /* 44px de haut : cible tactile confortable, la barre se manie au pouce. */
+/* --- Réglage des couleurs, gardé accessible après le premier choix ------
+   Rien de spécifique ici : le bloc porte `toolbar-controls`, donc son
+   `label > select` hérite exactement du style de la barre d'outils. Une
+   bascule maison avait été essayée d'abord — retour utilisateur : « pas du
+   tout dans la DA du reste ». Un composant de plus à styler, c'est un
+   composant de plus à voir dériver. */
+.prefs-reglage {
+  margin: 0 0 12px;
+}
+
+.prefs-reglage select {
+  /* 16px minimum : en dessous, iOS zoome à la mise au point. La barre se
+     manie au pouce, ce zoom involontaire est particulièrement pénible. */
+  font-size: max(16px, 0.875rem);
   min-height: 44px;
-  font: inherit;
-  font-size: 0.78rem;
-  color: var(--ink);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.prefs-bascule:hover,
-.prefs-bascule:focus-visible {
-  border-color: var(--accent);
-}
-.prefs-bascule .pastille {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  background: linear-gradient(135deg, hsl(215 62% 55%), hsl(285 62% 60%), hsl(35 70% 55%));
 }
