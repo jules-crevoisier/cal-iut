@@ -3028,12 +3028,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
      voisines : sans elle, 96 écrans sur 234 portaient deux couleurs
      indistinguables ; avec, il en reste 26. Cf. `utils/couleursMatiere.ts`
      pour la mesure. */
-  border-left-color: hsl(
-    var(--teinte-matiere) calc(62% - var(--variante-matiere) * 8%) calc(48% - var(--variante-matiere) * 7%)
-  );
-  background: hsl(
-    var(--teinte-matiere) calc(64% - var(--variante-matiere) * 10%) calc(95% - var(--variante-matiere) * 5%)
-  );
+  border-left-color: var(--matiere-barre);
+  background: var(--matiere-fond);
 }
 
 .couleurs-matiere .sessiongrid-block.eval,
@@ -3055,12 +3051,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   :root:not([data-theme="light"]) .couleurs-matiere .promo-chip,
   :root:not([data-theme="light"]) .couleurs-matiere .td-block,
     :root:not([data-theme="light"]) .agenda-chip.couleurs-matiere {
-    background: hsl(
-      var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
-    );
-    border-left-color: hsl(
-      var(--teinte-matiere) calc(58% - var(--variante-matiere) * 6%) calc(58% + var(--variante-matiere) * 6%)
-    );
+    background: var(--matiere-fond-sombre);
+    border-left-color: var(--matiere-barre-sombre);
   }
 }
 
@@ -3068,12 +3060,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 :root[data-theme="dark"] .couleurs-matiere .promo-chip,
 :root[data-theme="dark"] .couleurs-matiere .td-block,
 :root[data-theme="dark"] .agenda-chip.couleurs-matiere {
-  background: hsl(
-    var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
-  );
-  border-left-color: hsl(
-    var(--teinte-matiere) calc(58% - var(--variante-matiere) * 6%) calc(58% + var(--variante-matiere) * 6%)
-  );
+  background: var(--matiere-fond-sombre);
+  border-left-color: var(--matiere-barre-sombre);
 }
 
 /* --- Modale de préférence (premier affichage) --------------------------- */

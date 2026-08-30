@@ -22,11 +22,16 @@ interface ToolbarProps {
   teachers: string[];
   rooms: RoomMeta[];
   loading: boolean;
+  /** Couleurs par matiere. Ici et non dans un bandeau a part :
+   *  c'est un reglage d'affichage comme les autres, il appartient a la
+   *  barre qui les porte tous. */
+  couleursParMatiere: boolean;
   onYearChange: (v: number) => void;
   onParcoursChange: (v: string) => void;
   onSemestreChange: (v: string) => void;
   onWeekChange: (v: number) => void;
   onViewModeChange: (v: ViewMode) => void;
+  onCouleursChange: (parMatiere: boolean) => void;
   onGroupChange: (v: string) => void;
   onTeacherChange: (v: string) => void;
   onRoomChange: (v: string) => void;
@@ -152,6 +157,17 @@ export function Toolbar(props: ToolbarProps) {
             <option value="group">Par groupe TD</option>
             <option value="teacher">Par enseignant</option>
             <option value="room">Par salle</option>
+          </select>
+        </label>
+
+        <label>
+          Couleurs
+          <select
+            value={props.couleursParMatiere ? "matiere" : "type"}
+            onChange={(e) => props.onCouleursChange(e.target.value === "matiere")}
+          >
+            <option value="type">Par type de séance</option>
+            <option value="matiere">Par matière</option>
           </select>
         </label>
 

@@ -30,7 +30,7 @@ import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { confirmAsync } from "../utils/confirmDialog";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 import { ParcoursWeekModal } from "../components/ParcoursWeekModal";
-import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
+import { couleursMatiere } from "../utils/couleursMatiere";
 import { performMove, performSwap } from "../utils/moveSession";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
@@ -547,10 +547,7 @@ export function PromoView({
                                         : undefined
                                     }
                                     {...echangeHandlers(r.id)}
-                                    style={{
-                                      ["--teinte-matiere" as string]: String(teinteMatiere(r.c)),
-                                      ["--variante-matiere" as string]: String(varianteMatiere(r.c)),
-                                    }}
+                                    style={couleursMatiere(r.c) as React.CSSProperties}
                                     className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${highlighted ? "chip-highlight" : ""} ${draggableHere ? "promo-chip--draggable" : ""} ${draggingId === r.id ? "dragging" : ""} ${cibleEchange === r.id ? "swap-target" : ""}`}
                                   >
                                     <span className="code">{r.c}</span>

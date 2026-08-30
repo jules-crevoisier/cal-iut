@@ -14,7 +14,7 @@ import { Fragment, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 
 import type { AppPayload, AppRow } from "../types/app";
-import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
+import { couleursMatiere } from "../utils/couleursMatiere";
 import { positionInfobulle } from "../utils/infobulle";
 import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
@@ -383,10 +383,7 @@ function SessionBlock({
       }
       onDragEnd={edition ? () => edition.onFinGlisser() : undefined}
       {...propsEchange}
-      style={{
-        ["--teinte-matiere" as string]: String(teinteMatiere(row.c)),
-        ["--variante-matiere" as string]: String(varianteMatiere(row.c)),
-      }}
+      style={couleursMatiere(row.c) as React.CSSProperties}
       className={`sessiongrid-block type-${row.t.toLowerCase()} ${row.ev ? "eval" : ""} ${row.locked ? "locked" : ""}${
         glissable ? " sessiongrid-block--draggable" : ""
       }${edition?.draggingId === row.id ? " dragging" : ""}${cibleEchange ? " swap-target" : ""}`}

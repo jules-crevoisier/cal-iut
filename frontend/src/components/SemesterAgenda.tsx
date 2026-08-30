@@ -2,7 +2,7 @@ import type { AppPayload } from "../types/app";
 import type { IcsSession } from "../utils/ics";
 import { formatSessionDate } from "../utils/weekDates";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
+import { couleursMatiere } from "../utils/couleursMatiere";
 import { usePreferences } from "../utils/preferences";
 import { groupLabelWithParcours } from "../utils/years";
 
@@ -53,10 +53,7 @@ export function SemesterAgenda({ payload, items, showPromo = false }: SemesterAg
                   <span
                     key={it.id}
                     className={`agenda-chip${couleursParMatiere ? " couleurs-matiere" : ""}`}
-                    style={{
-                      ["--teinte-matiere" as string]: String(teinteMatiere(it.c)),
-                      ["--variante-matiere" as string]: String(varianteMatiere(it.c)),
-                    }}
+                    style={couleursMatiere(it.c) as React.CSSProperties}
                   >
                     {formatSessionDate(it.date, DAY_LABELS[it.d])} {SLOT_TIMES[it.s].label.split("–")[0]}–{end} ·{" "}
                     {it.c}

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DayStrip, todayIndex } from "../components/DayStrip";
 import { SemesterAgenda } from "../components/SemesterAgenda";
 import { SessionGrid } from "../components/SessionGrid";
+import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
 import { ShareBar } from "../components/ShareBar";
 import { usePreferences } from "../utils/preferences";
 import { TeacherLinksList } from "../components/TeacherLinksList";
@@ -226,6 +227,18 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
               >
                 {abonnementCopie ? "Copié ✓" : "Lien d'abonnement"}
               </button>
+              {/* À CÔTÉ du lien d'abonnement, comme demandé — et surtout
+                  visible ici : c'est la page que reçoit la personne, donc
+                  celle depuis laquelle elle voudra partager. */}
+              <BoutonsImageEdt
+                options={() => ({
+                  titre: payload.teacherLabels[code] ?? code,
+                  sousTitre: payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`,
+                  rows: rowsThisWeek,
+                  payload,
+                  couleursParMatiere,
+                })}
+              />
               <button
                 type="button"
                 className="btn btn--ghost btn--sm"

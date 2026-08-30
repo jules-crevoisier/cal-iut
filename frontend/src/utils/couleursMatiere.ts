@@ -87,3 +87,29 @@ export function teinteMatiere(codeCours: string): number {
 export function varianteMatiere(codeCours: string): number {
   return (hachage(codeCours) >>> 24) % VARIANTES;
 }
+
+/**
+ * Les quatre couleurs finales d'une matière, à poser telles quelles.
+ *
+ * Calculées ICI et non en CSS. La première version écrivait
+ * `hsl(var(--teinte) calc(62% - var(--variante) * 8%) ...)` : une
+ * multiplication `pourcentage × nombre` sur des valeurs substituées à
+ * l'exécution, à l'intérieur d'une fonction de couleur. Valide sur le
+ * papier, mais si un seul maillon est rejeté, le navigateur jette la
+ * déclaration ENTIÈRE sans rien dire — et le cours garde sa couleur
+ * précédente. C'est le symptôme signalé le 30/08/2026 : « les couleurs
+ * marchent pas dans vue promo et la vue semaine ».
+ *
+ * Les deux thèmes sont produits d'un coup : le JavaScript ne sait pas quel
+ * thème est actif, mais le CSS, lui, n'a plus qu'à choisir la bonne paire.
+ */
+export function couleursMatiere(codeCours: string): Record<string, string> {
+  const t = teinteMatiere(codeCours);
+  const v = varianteMatiere(codeCours);
+  return {
+    "--matiere-fond": `hsl(${t}, ${64 - v * 10}%, ${95 - v * 5}%)`,
+    "--matiere-barre": `hsl(${t}, ${62 - v * 8}%, ${48 - v * 7}%)`,
+    "--matiere-fond-sombre": `hsl(${t}, ${38 - v * 6}%, ${20 + v * 5}%)`,
+    "--matiere-barre-sombre": `hsl(${t}, ${58 - v * 6}%, ${58 + v * 6}%)`,
+  };
+}

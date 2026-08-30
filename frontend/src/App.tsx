@@ -400,12 +400,11 @@ export function App() {
             ☰, lui-même masqué par CSS dès 1024px (audit a11y du
             27/08/2026). */}
         <div className="app-content" ref={appContentRef}>
-          {!readOnlyTarget && appPayload && (
-            <>
-              <PageHeader payload={appPayload} />
-              <ReglageCouleurs prefs={prefs} setPrefs={setPrefs} />
-            </>
-          )}
+          {/* Le reglage des couleurs vit dans la barre d'outils cote admin
+              (cf. `Toolbar`) : un bandeau de plus entre l'en-tete et le
+              contenu etait mal place et sans rapport avec le reste
+              (retour utilisateur 30/08/2026). */}
+          {!readOnlyTarget && appPayload && <PageHeader payload={appPayload} />}
 
           {readOnlyTarget && appPayload && (
             <header className="readonly-banner">
@@ -474,6 +473,10 @@ export function App() {
               onSemestreChange={handleSemestreChange}
               onWeekChange={setDisplayWeek}
               onViewModeChange={setViewMode}
+              couleursParMatiere={prefs.couleursParMatiere}
+              onCouleursChange={(parMatiere) =>
+                setPrefs(ecrirePreferences({ couleursParMatiere: parMatiere, repondu: true }))
+              }
               onGroupChange={setGroupId}
               onTeacherChange={setTeacherCode}
               onRoomChange={setRoomId}
