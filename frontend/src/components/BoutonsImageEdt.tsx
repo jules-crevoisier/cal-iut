@@ -140,16 +140,10 @@ export function BoutonsImageEdt({ options }: BoutonsImageEdtProps) {
 
   return (
     <span className="boutons-image" ref={conteneur}>
-      <button
-        type="button"
-        className="btn btn--ghost btn--sm"
-        onClick={() => void avecImage(({ png, nom }) => telecharger(png, nom))}
-        disabled={enCours}
-        title="Image PNG de la semaine affichée, prête à envoyer"
-      >
-        {enCours ? "…" : "Exporter en image"}
-      </button>
-
+      {/* Un seul bouton : « Exporter en image » doublonnait avec l'entrée
+          « Télécharger l'image » du menu ci-dessous, et sur mobile la
+          feuille système propose déjà d'enregistrer (retour utilisateur
+          30/08/2026). */}
       <button
         type="button"
         className="btn btn--ghost btn--sm"
@@ -157,9 +151,9 @@ export function BoutonsImageEdt({ options }: BoutonsImageEdtProps) {
         disabled={enCours}
         aria-expanded={menu}
         aria-haspopup="menu"
-        title="Partager l'image de la semaine"
+        title="Partager l'image de la semaine — WhatsApp, Discord, mail, ou téléchargement"
       >
-        Partager
+        {enCours ? "…" : "Partager"}
       </button>
 
       {menu && (

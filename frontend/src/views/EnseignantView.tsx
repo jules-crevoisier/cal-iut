@@ -13,7 +13,7 @@ import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { copyToClipboard } from "../utils/clipboard";
-import { downloadIcs, sessionsWithDates, subscribeUrl } from "../utils/ics";
+import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 
@@ -142,9 +142,6 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
       {!readOnly && (
         <ShareBar
           onCopyLink={() => personalLink}
-          onDownloadIcs={() =>
-            downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
-          }
           onCopySubscribeLink={() => subscribeUrl("prof", code, payload.teacherTokens[code] ?? "")}
           imageEdt={() => ({
             titre: payload.teacherLabels[code] ?? code,
@@ -225,7 +222,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
                 }}
                 title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
               >
-                {abonnementCopie ? "Copié ✓" : "Lien d'abonnement"}
+                {abonnementCopie ? "Copié ✓" : "Lien agenda"}
               </button>
               {/* À CÔTÉ du lien d'abonnement, comme demandé — et surtout
                   visible ici : c'est la page que reçoit la personne, donc
@@ -239,15 +236,6 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
                   couleursParMatiere,
                 })}
               />
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() =>
-                  downloadIcs(allItems, payload.teacherLabels[code] ?? code, code, payload.groupLabels, payload.teacherLabels)
-                }
-              >
-                Agenda .ics
-              </button>
             </div>
           </div>
           {solverWeek === null ? (

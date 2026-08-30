@@ -6,7 +6,6 @@ import type { OptionsImage } from "../utils/imageEdt";
 
 interface ShareBarProps {
   onCopyLink: () => string;
-  onDownloadIcs: () => void;
   /** Lien d'abonnement .ics (flux qui se remet à jour tout seul dans l'appli
    * agenda, contrairement au fichier téléchargé une fois) — retour
    * utilisateur 28/08/2026 (relayé depuis Discord) : « pour le ics on
@@ -21,8 +20,14 @@ interface ShareBarProps {
   extra?: React.ReactNode;
 }
 
-/** Barre "Copier son lien / Agenda .ics / Imprimer", commune aux vues Groupe et Enseignant. */
-export function ShareBar({ onCopyLink, onDownloadIcs, onCopySubscribeLink, imageEdt, extra }: ShareBarProps) {
+/** Barre "Copier son lien / Lien agenda / Partager / Imprimer", commune aux
+ *  vues Groupe et Enseignant.
+ *
+ *  Le TÉLÉCHARGEMENT .ics a été retiré le 30/08/2026 : c'est un fichier
+ *  figé au moment du clic, que le lien d'abonnement remplace
+ *  avantageusement puisqu'il se remet à jour tout seul dans l'agenda. En
+ *  garder deux obligeait à expliquer lequel choisir. */
+export function ShareBar({ onCopyLink, onCopySubscribeLink, imageEdt, extra }: ShareBarProps) {
   const [copied, setCopied] = useState(false);
   const [subscribeCopied, setSubscribeCopied] = useState(false);
 
@@ -48,9 +53,6 @@ export function ShareBar({ onCopyLink, onDownloadIcs, onCopySubscribeLink, image
       <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
         {copied ? "Copié ✓" : "Copier son lien"}
       </button>
-      <button type="button" className="btn btn--ghost btn--sm" onClick={onDownloadIcs}>
-        Agenda .ics
-      </button>
       {onCopySubscribeLink && (
         <button
           type="button"
@@ -58,7 +60,7 @@ export function ShareBar({ onCopyLink, onDownloadIcs, onCopySubscribeLink, image
           onClick={handleCopySubscribe}
           title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook (« ajouter un agenda par URL ») — se remet à jour tout seul, pas besoin de re-télécharger."
         >
-          {subscribeCopied ? "Copié ✓" : "Lien d'abonnement"}
+          {subscribeCopied ? "Copié ✓" : "Lien agenda"}
         </button>
       )}
       {imageEdt && <BoutonsImageEdt options={imageEdt} />}
