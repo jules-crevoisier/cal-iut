@@ -1913,10 +1913,26 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     match = _find_placement(state, session_id)
     session = state.sessions_by_id.get(session_id)
 
+    # Verrou de semaine, en motifs plutôt qu'en exception. `_check_move_editable`
+    # lève un 409 dont le `detail` est une simple CHAÎNE, que le frontend ne
+    # sait pas relire : `detailConflit` attend la forme structurée, ne la
+    # trouve pas, et le changement échouait en silence derrière un discret
+    # message — retour utilisateur 31/08/2026 : « je clique sur une autre
+    # salle et ça change pas, ça réaffiche la salle du début ». Le motif est
+    # donc joint aux conflits de salle, dans le même format : l'utilisateur
+    # voit ce qui bloque et peut confirmer.
+    verrous = _semaines_non_modifiables(state, session_id, match.week, match.week, force=body.force)
+
     # Retrait de salle : `room_id` vide. Aucun conflit ni capacité à vérifier
     # — on n'occupe plus rien.
     if not body.room_id.strip():
-        _check_move_editable(state, session_id, match.week, match.week, force=body.force)
+        if verrous:
+            raise HTTPException(409, detail={
+                "message": "Semaine non modifiable",
+                "hard_conflicts": verrous,
+                "soft_warnings": [],
+                "suggestions": [], "suggestions_note": None,
+            })
         match.room_id, match.room_label = None, None
         if state.current_run_id:
             get_repo().update_current_placement(
@@ -1929,10 +1945,6 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     salle = next((r for r in state.rooms if r.id == body.room_id), None)
     if salle is None:
         raise HTTPException(404, f"Salle {body.room_id} inconnue")
-
-    # Même garde-fou "on ne réécrit pas le passé" que le déplacement — la
-    # semaine ne bouge pas, on la passe donc des deux côtés.
-    _check_move_editable(state, session_id, match.week, match.week, force=body.force)
 
     # Occupation de la salle calculée DIRECTEMENT plutôt qu'en filtrant les
     # messages de `validate_move` : celui-ci juge la position ENTIÈRE
@@ -1977,8 +1989,8 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
             f"pour un effectif de {effectif}."
         )
 
-    if (occupants or avertissements) and not body.force:
-        conflits = (
+    if (occupants or avertissements or verrous) and not body.force:
+        conflits = verrous + (
             [f"Conflit salle : {', '.join(sorted(set(occupants)))} occupe(nt) déjà {salle.label} à ce créneau."]
             if occupants else []
         )
