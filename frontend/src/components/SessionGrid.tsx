@@ -14,6 +14,9 @@ import { Fragment, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 
 import type { AppPayload, AppRow } from "../types/app";
+import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
+import { positionInfobulle } from "../utils/infobulle";
+import { lirePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { groupLabelWithParcours } from "../utils/years";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
@@ -76,6 +79,9 @@ export function SessionGrid({
 }: SessionGridProps) {
   const [hover, setHover] = useState<{ row: AppRow; x: number; y: number } | null>(null);
   const days = onlyDay === null ? ALL_DAYS : [onlyDay];
+  // Relu à chaque rendu plutôt que mémorisé : le réglage peut changer dans
+  // une autre partie de l'écran, et une valeur figée y survivrait.
+  const couleursParMatiere = lirePreferences().couleursParMatiere;
 
   /** Props d'une case : classe de base + zone de dépôt quand la grille est
    *  éditable. Factorisé parce que la grille rend HUIT variantes de case
@@ -147,7 +153,7 @@ export function SessionGrid({
 
   return (
     <div className="sessiongrid-wrap">
-      <table className="sessiongrid">
+      <table className={`sessiongrid${couleursParMatiere ? " couleurs-matiere" : ""}`}>
         <thead>
           <tr>
             <th className="sessiongrid-corner" />
@@ -287,8 +293,11 @@ export function SessionGrid({
         </tbody>
       </table>
 
+      {/* Position BORNÉE à l'écran : au doigt, près du bord droit, la boîte
+          sortait du cadre et rien ne permettait de la ramener (retour
+          utilisateur 30/08/2026). */}
       {hover && (
-        <div className="sessiongrid-hover" style={{ left: hover.x + 12, top: hover.y + 12 }}>
+        <div className="sessiongrid-hover" style={positionInfobulle(hover.x, hover.y)}>
           <strong>{hover.row.n || hover.row.c}</strong>
           <div>
             {hover.row.c} · {hover.row.t}
@@ -374,6 +383,10 @@ function SessionBlock({
       }
       onDragEnd={edition ? () => edition.onFinGlisser() : undefined}
       {...propsEchange}
+      style={{
+        ["--teinte-matiere" as string]: String(teinteMatiere(row.c)),
+        ["--variante-matiere" as string]: String(varianteMatiere(row.c)),
+      }}
       className={`sessiongrid-block type-${row.t.toLowerCase()} ${row.ev ? "eval" : ""} ${row.locked ? "locked" : ""}${
         glissable ? " sessiongrid-block--draggable" : ""
       }${edition?.draggingId === row.id ? " dragging" : ""}${cibleEchange ? " swap-target" : ""}`}

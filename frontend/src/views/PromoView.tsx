@@ -30,7 +30,9 @@ import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { confirmAsync } from "../utils/confirmDialog";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 import { ParcoursWeekModal } from "../components/ParcoursWeekModal";
+import { teinteMatiere, varianteMatiere } from "../utils/couleursMatiere";
 import { performMove, performSwap } from "../utils/moveSession";
+import { lirePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { compareParcoursForDisplay } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
@@ -85,6 +87,7 @@ export function PromoView({
   // endroit de l'application où l'on peut déplacer une séance d'un JOUR à un
   // autre (la Vue Promo, elle, n'affiche qu'un jour à la fois).
   const [parcoursOuvert, setParcoursOuvert] = useState<string | null>(null);
+  const couleursParMatiere = lirePreferences().couleursParMatiere;
   const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
   const dragEnabled = Boolean(placements && onPlacementUpdated && onError);
 
@@ -406,7 +409,7 @@ export function PromoView({
           <p className="muted">Semaine bloquée (vacances/fermeture).</p>
         ) : (
           <div className="ref-table-wrap">
-            <table className={`promo-grid ${teacherFilter ? "teacher-filter" : ""}`}>
+            <table className={`promo-grid ${teacherFilter ? "teacher-filter" : ""}${couleursParMatiere ? " couleurs-matiere" : ""}`}>
               <thead>
                 <tr>
                   <th className="timecol" rowSpan={2} />
@@ -544,6 +547,10 @@ export function PromoView({
                                         : undefined
                                     }
                                     {...echangeHandlers(r.id)}
+                                    style={{
+                                      ["--teinte-matiere" as string]: String(teinteMatiere(r.c)),
+                                      ["--variante-matiere" as string]: String(varianteMatiere(r.c)),
+                                    }}
                                     className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${highlighted ? "chip-highlight" : ""} ${draggableHere ? "promo-chip--draggable" : ""} ${draggingId === r.id ? "dragging" : ""} ${cibleEchange === r.id ? "swap-target" : ""}`}
                                   >
                                     <span className="code">{r.c}</span>

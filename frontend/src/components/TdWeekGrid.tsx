@@ -21,6 +21,7 @@ import type { GroupMeta, Placement } from "../types";
 import type { AppPayload } from "../types/app";
 import { dayName, slotLabel, SLOT_TIMES } from "../utils/slots";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
+import { positionInfobulle } from "../utils/infobulle";
 import { shortGroupLabel } from "../utils/years";
 
 interface TdWeekGridProps {
@@ -342,8 +343,9 @@ export function TdWeekGrid({
         </tbody>
       </table>
 
+      {/* Position bornée à l'écran, cf. `utils/infobulle.ts`. */}
       {hover && (
-        <div className="td-hover" style={{ left: hover.x + 12, top: hover.y + 12 }}>
+        <div className="td-hover" style={positionInfobulle(hover.x, hover.y)}>
           <strong>{hover.placement.course_name || hover.placement.course_code}</strong>
           <div>
             {hover.placement.course_code} · {hover.placement.session_type}
