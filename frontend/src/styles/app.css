@@ -3011,3 +3011,129 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   .mailmodal-email { grid-area: email; text-align: left; }
   .mailmodal-status { grid-area: status; }
 }
+
+/* --- Une couleur par matière (option, cf. utils/preferences.ts) ---------
+   La teinte arrive par `--teinte-matiere`, calculée depuis le code du cours
+   (`utils/couleursMatiere.ts`). Saturation et luminosité restent ICI : elles
+   seules dépendent du thème, et une couleur figée en JavaScript serait
+   illisible dans l'un des deux.
+
+   Ne s'applique que sous `.couleurs-matiere` : sans l'option, les règles
+   `type-cm` / `type-td` / `type-tp` gardent la main, à l'identique. */
+.couleurs-matiere .sessiongrid-block,
+.couleurs-matiere .promo-chip {
+  /* `--variante-matiere` (0, 1 ou 2) sépare deux matières de teintes
+     voisines : sans elle, 96 écrans sur 234 portaient deux couleurs
+     indistinguables ; avec, il en reste 26. Cf. `utils/couleursMatiere.ts`
+     pour la mesure. */
+  border-left-color: hsl(
+    var(--teinte-matiere) calc(62% - var(--variante-matiere) * 8%) calc(48% - var(--variante-matiere) * 7%)
+  );
+  background: hsl(
+    var(--teinte-matiere) calc(64% - var(--variante-matiere) * 10%) calc(95% - var(--variante-matiere) * 5%)
+  );
+}
+
+.couleurs-matiere .sessiongrid-block.eval,
+.couleurs-matiere .promo-chip.eval {
+  /* L'évaluation reste reconnaissable : la teinte de la matière est gardée,
+     mais le liseré passe en trait double pour la distinguer sans écraser
+     l'information de matière. */
+  border-left-style: double;
+  border-left-width: 5px;
+}
+
+/* Trois états, comme le reste du fichier : le thème système par défaut
+   (aucun `data-theme` posé), et les deux choix explicites. Une simple
+   `@media (prefers-color-scheme: dark)` non gardée donnerait des couleurs
+   sombres à quelqu'un qui a choisi le thème clair sur un système sombre. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .couleurs-matiere .sessiongrid-block,
+  :root:not([data-theme="light"]) .couleurs-matiere .promo-chip {
+    background: hsl(
+      var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
+    );
+    border-left-color: hsl(
+      var(--teinte-matiere) calc(58% - var(--variante-matiere) * 6%) calc(58% + var(--variante-matiere) * 6%)
+    );
+  }
+}
+
+:root[data-theme="dark"] .couleurs-matiere .sessiongrid-block,
+:root[data-theme="dark"] .couleurs-matiere .promo-chip {
+  background: hsl(
+    var(--teinte-matiere) calc(38% - var(--variante-matiere) * 6%) calc(20% + var(--variante-matiere) * 5%)
+  );
+  border-left-color: hsl(
+    var(--teinte-matiere) calc(58% - var(--variante-matiere) * 6%) calc(58% + var(--variante-matiere) * 6%)
+  );
+}
+
+/* --- Modale de préférence (premier affichage) --------------------------- */
+.prefsmodal {
+  max-width: 560px;
+}
+
+.prefs-apercus {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 14px 0 4px;
+}
+
+@media (min-width: 560px) {
+  .prefs-apercus { grid-template-columns: 1fr 1fr; }
+}
+
+.prefs-apercu {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.prefs-apercu-titre {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.prefs-apercu-grille {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prefs-note {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin: 10px 0 0;
+}
+
+/* --- Bouton de bascule, gardé accessible après le premier choix --------- */
+.prefs-bascule {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  /* 44px de haut : cible tactile confortable, la barre se manie au pouce. */
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.prefs-bascule:hover,
+.prefs-bascule:focus-visible {
+  border-color: var(--accent);
+}
+.prefs-bascule .pastille {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, hsl(215 62% 55%), hsl(285 62% 60%), hsl(35 70% 55%));
+}

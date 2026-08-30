@@ -17,6 +17,8 @@ import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { ConfirmModal } from "./components/ConfirmModal";
+import { ecrirePreferences, lirePreferences, type Preferences } from "./utils/preferences";
+import { PreferencesModal } from "./components/PreferencesModal";
 import { LoginGate } from "./components/LoginGate";
 import { PageHeader } from "./components/PageHeader";
 import { SideNav } from "./components/SideNav";
@@ -81,6 +83,11 @@ export function App() {
   const narrow = useNarrowScreen();
   const [mobileDay, setMobileDay] = useState(todayIndex());
 
+  // Préférence d'affichage, gardée sur l'appareil (cf.
+  // `utils/preferences.ts`). Dans l'état de React plutôt que relue à
+  // chaque rendu : c'est ce qui fait que la bascule repeint la grille
+  // immédiatement, sans recharger la page.
+  const [prefs, setPrefs] = useState<Preferences>(() => lirePreferences());
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [appPayload, setAppPayload] = useState<AppPayload | null>(null);
   const [placements, setPlacements] = useState<Placement[]>([]);
@@ -389,7 +396,12 @@ export function App() {
             ☰, lui-même masqué par CSS dès 1024px (audit a11y du
             27/08/2026). */}
         <div className="app-content" ref={appContentRef}>
-          {!readOnlyTarget && appPayload && <PageHeader payload={appPayload} />}
+          {!readOnlyTarget && appPayload && (
+            <>
+              <PageHeader payload={appPayload} />
+              <BasculeCouleurs prefs={prefs} setPrefs={setPrefs} />
+            </>
+          )}
 
           {readOnlyTarget && appPayload && (
             <header className="readonly-banner">
@@ -409,6 +421,7 @@ export function App() {
                     }`}
               </h1>
               <p>Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.</p>
+              <BasculeCouleurs prefs={prefs} setPrefs={setPrefs} />
             </header>
           )}
 
@@ -581,6 +594,41 @@ export function App() {
       )}
       {/* Une seule instance pour toute l'app — cf. utils/confirmDialog.ts. */}
       <ConfirmModal />
+      {/* Posée une seule fois par appareil : c'est `repondu` qui ferme la
+          question, pas la valeur choisie — sinon elle reviendrait à chaque
+          visite de qui a répondu « non ». */}
+      {!prefs.repondu && (
+        <PreferencesModal
+          onChoix={(couleursParMatiere) =>
+            setPrefs(ecrirePreferences({ couleursParMatiere, repondu: true }))
+          }
+        />
+      )}
     </div>
+  );
+}
+
+
+/** Bascule « couleurs par matière », gardée accessible après le premier
+ *  choix : une préférence qu'on ne peut plus changer est un piège. */
+function BasculeCouleurs({
+  prefs,
+  setPrefs,
+}: {
+  prefs: Preferences;
+  setPrefs: (p: Preferences) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="prefs-bascule"
+      aria-pressed={prefs.couleursParMatiere}
+      onClick={() =>
+        setPrefs(ecrirePreferences({ couleursParMatiere: !prefs.couleursParMatiere, repondu: true }))
+      }
+    >
+      <span className="pastille" aria-hidden="true" />
+      {prefs.couleursParMatiere ? "Couleurs par matière" : "Couleurs par type de séance"}
+    </button>
   );
 }
