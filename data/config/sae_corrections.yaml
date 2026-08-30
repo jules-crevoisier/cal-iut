@@ -1,0 +1,57 @@
+# Corrections des journées SAE, appliquées PAR-DESSUS
+# `contraintes/09_dates_sae.json`.
+#
+# Ce fichier existe parce que `09_dates_sae.json` est RÉGÉNÉRÉ par
+# `scripts/build_contraintes.py` depuis le CSV de l'établissement : une
+# retouche à la main y serait effacée au premier rebuild. Même mécanique que
+# `evenements_supplementaires.yaml` et `course_corrections.yaml`.
+#
+# Le SENS d'une correction compte autant que son contenu :
+#   ajouter  -> la journée est SANCTUARISÉE : aucun cours classique n'y sera
+#               placé, elle est réservée à la SAE ;
+#   retirer  -> la journée est RENDUE aux cours classiques.
+# Se tromper de sens laisse soit des étudiants sans cours, soit une SAE sans
+# intervenant.
+#
+# Champs :
+#   course_code  code du module de SAE
+#   ajouter      dates ISO à sanctuariser
+#   retirer      dates ISO à rendre aux cours classiques
+#   motif        pourquoi, en clair
+#   demande_par / le  traçabilité
+
+corrections:
+  # WSA501C — « Création engagée et communication d'acceptabilité »,
+  # BUT3-CREACOM-FC, assurée par Marc Nino (MNI), vacataire.
+  #
+  # Le fichier de l'établissement et les disponibilités déclarées de Marc
+  # Nino ne coïncidaient pas : DEUX journées de SAE (23 et 25 novembre)
+  # tombaient des jours où il n'est pas disponible, pendant que trois de ses
+  # disponibilités (24-25 septembre, 4 novembre) n'étaient pas réservées et
+  # se sont retrouvées remplies de cours classiques.
+  #
+  # Vérifié auprès de lui par Kyllian Bresson le 30/08/2026 : « il faut bien
+  # lui réserver le jeudi 24 septembre, le vendredi 25 septembre et le
+  # mercredi 4 novembre, car il n'est pas disponible le lundi 23, le mardi 24
+  # et le mercredi 25 novembre. Donc les étudiants n'ont pas de séance de SAE
+  # sur cette période, il faut donc placer des cours classiques sur ces
+  # jours. »
+  #
+  # Après correction, les 10 journées de SAE correspondent EXACTEMENT à ses
+  # 10 dates de disponibilité — un test le vérifie
+  # (`test_sae_corrections_2026_08_30.py`).
+  - course_code: WSA501C
+    ajouter:
+      - "2026-09-24"   # jeudi
+      - "2026-09-25"   # vendredi
+      - "2026-11-04"   # mercredi, complète la fenêtre du 2-3 novembre
+    retirer:
+      - "2026-11-23"   # lundi   — Marc Nino indisponible
+      - "2026-11-24"   # mardi   — Marc Nino indisponible
+      - "2026-11-25"   # mercredi — Marc Nino indisponible
+    motif: >
+      Les journées SAE de l'établissement ne coïncidaient pas avec les
+      disponibilités déclarées du vacataire : 3 journées réservées sans lui,
+      3 de ses disponibilités laissées aux cours classiques.
+    demande_par: "Marc Nino, via Kyllian Bresson"
+    le: "2026-08-30"
