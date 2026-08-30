@@ -40,6 +40,18 @@ export function compareParcoursForDisplay(pa: string, pb: string): number {
   return pa.localeCompare(pb, "fr");
 }
 
+/**
+ * Lettres d'un groupe, sans son préfixe : « TP A » -> « A », « TD GH » -> « GH ».
+ *
+ * Sert à ORDONNER les colonnes de la Vue Promo. Comparer les libellés
+ * entiers donnerait un résultat faux : « TD GH » passerait avant « TP A »
+ * parce que « TD » précède « TP » alphabétiquement, alors que ce sont les
+ * lettres de groupe qui portent l'ordre attendu.
+ */
+export function lettresGroupe(label: string): string {
+  return label.replace(/^(TD|TP|Promo)\s+/i, "").trim().toUpperCase();
+}
+
 export function shortGroupLabel(groupIds: string[], labelsById: Record<string, string>): string {
   if (!groupIds.length) return "";
   const labels = groupIds.map((id) => labelsById[id] ?? id);

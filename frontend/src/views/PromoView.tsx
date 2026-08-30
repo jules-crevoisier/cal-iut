@@ -34,7 +34,7 @@ import { couleursMatiere } from "../utils/couleursMatiere";
 import { performMove, performSwap } from "../utils/moveSession";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
-import { compareParcoursForDisplay } from "../utils/years";
+import { lettresGroupe } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { WeekBar } from "../components/WeekBar";
 
@@ -179,7 +179,7 @@ export function PromoView({
 
   const { cols, colGroups, colCohorts, colParcours } = useMemo(() => {
     const allGroupIds = Object.keys(payload.groupLabels);
-    const allParcoursList = [...new Set(Object.values(payload.groupParcours))].sort(compareParcoursForDisplay);
+    const allParcoursList = [...new Set(Object.values(payload.groupParcours))];
 
     const groups = allParcoursList
       .map((pc) => {
@@ -189,10 +189,27 @@ export function PromoView({
           : allGroupIds.filter((gid) => payload.groupParcours[gid] === pc && payload.groupKind[gid] !== "promo");
         return {
           parcours: pc,
-          cols: leaf.sort((a, b) => (payload.groupLabels[a] ?? a).localeCompare(payload.groupLabels[b] ?? b, "fr")),
+          cols: leaf.sort((a, b) =>
+            lettresGroupe(payload.groupLabels[a] ?? a).localeCompare(lettresGroupe(payload.groupLabels[b] ?? b), "fr"),
+          ),
         };
       })
       .filter((g) => g.cols.length);
+
+    // Année d'abord, puis LETTRES du premier groupe — et non le nom du
+    // parcours. Retour utilisateur 30/08/2026 : en BUT3 les colonnes
+    // sortaient « A, B, GH, EF », parce que « CREACOM » précède « DEV »
+    // alphabétiquement. Trier sur les lettres donne « A, B, EF, GH », qui
+    // se lit sans surprise — et garde au passage les FI avant les FC,
+    // puisque leurs groupes commencent aux premières lettres.
+    groups.sort((a, b) => {
+      const annee = (pc: string) => /^BUT(\d)/.exec(pc)?.[1] ?? "9";
+      if (annee(a.parcours) !== annee(b.parcours)) {
+        return annee(a.parcours).localeCompare(annee(b.parcours));
+      }
+      const premiere = (g: typeof a) => lettresGroupe(payload.groupLabels[g.cols[0]] ?? g.cols[0]);
+      return premiere(a).localeCompare(premiere(b), "fr") || a.parcours.localeCompare(b.parcours, "fr");
+    });
 
     const flatCols = groups.flatMap((g) => g.cols);
     return {

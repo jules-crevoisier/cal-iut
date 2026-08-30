@@ -67,6 +67,17 @@ annulees:
   # (756 refus d'ordre pédagogique, 513 indisponibilités MMA, 361 verrou PAC
   # jeudi après-midi — zéro créneau valide). Le déplacer était impossible,
   # le laisser aurait maintenu la journée qu'il signale.
+  # CONFIRMÉ le 30/08/2026 après mesure, malgré une réticence initiale
+  # (« je ne suis pas trop pour »). Le chiffre `cm` de la maquette compte des
+  # SÉANCES, pas des heures : vérifié sur cinq autres modules où il égale
+  # exactement le nombre de CM générés (WR106 3=3, WR105 6=6, WR109 2=2,
+  # WR119 4=4, WR103 3=3). WR104 en déclare 5 ; il en reste 3. Le déficit de
+  # DEUX séances est donc réel et assumé, pas un effet de bord.
+  #
+  # Les deux autres options de Martial Martin étaient impossibles : sur tout
+  # le semestre, CM-4 et CM-5 n'ont que quatre créneaux valides — deux avant
+  # le CM-1 (à contresens du contenu) et deux le 16/09, précisément la
+  # journée qu'il demandait d'alléger.
   - session_id: WR104-S1-CM-5
     motif: "16/09 : 6h de CM d'affilée ramenées à 3h ; CM-4 reporté au 11/11, CM-5 sans créneau valide"
     demande_par: "Martial Martin"
