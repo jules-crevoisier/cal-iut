@@ -311,3 +311,52 @@ def test_aucun_secret_dans_les_messages_de_vpn():
     from cal_iut.celcat import reseau
 
     assert "hunter2" not in reseau._sans_secret("échec pour hunter2 ici", "hunter2")
+
+
+def test_acces_direct_essaye_avant_de_monter_le_vpn(monkeypatch):
+    """Sur site, Celcat répond sans VPN : on ne monte rien pour rien.
+
+    Retour utilisateur 31/08/2026 : « toujours tester si on peut accéder à
+    Celcat sans le VPN au cas où on soit sur site, avant de passer par le
+    VPN ».
+    """
+    from cal_iut.celcat import reseau
+
+    tentatives = []
+    monkeypatch.setattr(
+        reseau, "verifier", lambda url, **kw: reseau.Diagnostic(True, "sur site", vpn_monte=None)
+    )
+    monkeypatch.setattr(
+        reseau, "connecter", lambda **kw: tentatives.append("vpn") or reseau.Diagnostic(True, "")
+    )
+    assert reseau.exiger_acces("https://celcat-lv.univ-reims.fr/", monter_le_vpn=True)
+    assert tentatives == [], "aucun VPN ne doit être monté quand l'accès direct marche"
+
+
+def test_le_vpn_est_monte_seulement_si_l_acces_direct_echoue(monkeypatch):
+    from cal_iut.celcat import reseau
+
+    etats = iter(
+        [reseau.Diagnostic(False, "pas de DNS", vpn_monte=False), reseau.Diagnostic(True, "ok")]
+    )
+    tentatives = []
+    monkeypatch.setattr(reseau, "verifier", lambda url, **kw: next(etats))
+    monkeypatch.setattr(
+        reseau,
+        "connecter",
+        lambda **kw: (tentatives.append("vpn"), reseau.Diagnostic(True, "monté"))[1],
+    )
+    assert reseau.exiger_acces("https://celcat-lv.univ-reims.fr/", monter_le_vpn=True)
+    assert tentatives == ["vpn"]
+
+
+def test_client_vpn_detecte_openconnect_sur_linux(monkeypatch):
+    """Le serveur de production est un conteneur Linux : pas de .exe Cisco."""
+    from pathlib import Path
+
+    from cal_iut.celcat import reseau
+
+    monkeypatch.setattr(reseau, "chemin_vpncli", lambda: None)
+    monkeypatch.setattr(reseau, "chemin_openconnect", lambda: Path("/usr/sbin/openconnect"))
+    outil, chemin = reseau.client_disponible()
+    assert outil == "openconnect" and chemin == Path("/usr/sbin/openconnect")
