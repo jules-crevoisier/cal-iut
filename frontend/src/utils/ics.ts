@@ -30,11 +30,38 @@ function icsStamp(date: Date, hhmm: string): string {
   const d = new Date(date);
   d.setHours(h, m, 0, 0);
   const p = (n: number) => String(n).padStart(2, "0");
-  // Heure LOCALE sans suffixe Z : les horaires de l'IUT sont des heures
-  // locales, les convertir en UTC les décalerait d'une heure selon la
-  // période de l'année.
+  // Heure locale écrite telle quelle : c'est le `TZID=Europe/Paris` posé sur
+  // DTSTART/DTEND qui dit au client quel décalage appliquer, et le
+  // VTIMEZONE qui porte les deux bascules été/hiver. Sans lui, cette même
+  // écriture était une heure FLOTTANTE, que Google lisait comme de l'UTC —
+  // les 2 heures d'écart signalées par David Annebicque le 29/08/2026.
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
 }
+
+/** Fuseau publié dans le fichier. Écrit à la main (et non dérivé de l'API
+ *  Intl) : un VTIMEZONE demande les RRULE de bascule, que le navigateur
+ *  n'expose pas. */
+const TZID = "Europe/Paris";
+const VTIMEZONE = [
+  "BEGIN:VTIMEZONE",
+  `TZID:${TZID}`,
+  "X-LIC-LOCATION:Europe/Paris",
+  "BEGIN:DAYLIGHT",
+  "TZOFFSETFROM:+0100",
+  "TZOFFSETTO:+0200",
+  "TZNAME:CEST",
+  "DTSTART:19700329T020000",
+  "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3",
+  "END:DAYLIGHT",
+  "BEGIN:STANDARD",
+  "TZOFFSETFROM:+0200",
+  "TZOFFSETTO:+0100",
+  "TZNAME:CET",
+  "DTSTART:19701025T030000",
+  "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10",
+  "END:STANDARD",
+  "END:VTIMEZONE",
+];
 
 export function buildIcs(
   items: IcsSession[],
@@ -50,6 +77,8 @@ export function buildIcs(
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${icsEscape("Planning MMI — " + calendarName)}`,
+    `X-WR-TIMEZONE:${TZID}`,
+    ...VTIMEZONE,
   ];
   for (const it of items) {
     if (!it.date) continue;
@@ -59,10 +88,15 @@ export function buildIcs(
     const teachers = it.te.map((t) => teacherLabels[t] || t).join(", ");
     lines.push(
       "BEGIN:VEVENT",
-      `UID:${uidPrefix}-${it.w}-${it.d}-${it.s}-${it.c}@cal-iut`,
+      // UID sur l'identifiant de SÉANCE, pas sur sa position. L'ancienne
+      // clé contenait semaine/jour/créneau : déplacer un cours changeait
+      // donc son UID, et un agenda y voyait un nouvel événement — l'ancien
+      // restait affiché à côté. C'est exactement le doublon que David
+      // Annebicque décrit (29/08/2026).
+      `UID:${uidPrefix}-${it.id}@cal-iut`,
       `DTSTAMP:${icsStamp(new Date(), "00:00")}`,
-      `DTSTART:${icsStamp(it.date, start)}`,
-      `DTEND:${icsStamp(it.date, end)}`,
+      `DTSTART;TZID=${TZID}:${icsStamp(it.date, start)}`,
+      `DTEND;TZID=${TZID}:${icsStamp(it.date, end)}`,
       `SUMMARY:${icsEscape(it.c + (groups ? " — " + groups : ""))}`,
       `LOCATION:${icsEscape(it.r || "")}`,
       `DESCRIPTION:${icsEscape(

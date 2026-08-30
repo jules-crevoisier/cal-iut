@@ -996,6 +996,21 @@ def _ics_items_for_placements(state: object, placements: list) -> list:
     from cal_iut.export.formatter import SLOT_TIMES as _ICS_SLOT_TIMES
 
     items = []
+    # Dates de dernière modification, lues en UNE fois : une requête par
+    # séance ferait des centaines d'allers-retours pour un flux d'agenda
+    # re-téléchargé toutes les six heures par chaque abonné.
+    modifie_le: dict[str, object] = {}
+    if state.current_run_id:
+        try:
+            from cal_iut.db.models import CurrentPlacement
+
+            modifie_le = {
+                row.session_id: row.updated_at
+                for row in get_repo().db.query(CurrentPlacement).filter_by(run_id=state.current_run_id).all()
+            }
+        except Exception:  # noqa: BLE001 — un flux sans horodatage vaut mieux que pas de flux
+            modifie_le = {}
+
     for p in placements:
         session = state.sessions_by_id.get(p.session_id)
         semestre = getattr(session, "semestre", None) or _export_semestre(state)
@@ -1010,6 +1025,10 @@ def _ics_items_for_placements(state: object, placements: list) -> list:
             room_label=getattr(p, "room_label", None),
             group_ids=list(p.group_ids or []),
             teacher_codes=list(p.teacher_codes or []),
+            # Alimente `SEQUENCE`/`LAST-MODIFIED` : sans elle, un agenda déjà
+            # abonné ne voit pas qu'une séance a bougé (retour de David
+            # Annebicque, 29/08/2026).
+            updated_at=modifie_le.get(p.session_id),
         ))
     return items
 
