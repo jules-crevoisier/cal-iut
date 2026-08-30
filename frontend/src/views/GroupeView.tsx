@@ -4,6 +4,7 @@ import { DayStrip, todayIndex } from "../components/DayStrip";
 import { SemesterAgenda } from "../components/SemesterAgenda";
 import { SessionGrid } from "../components/SessionGrid";
 import { ShareBar } from "../components/ShareBar";
+import { usePreferences } from "../utils/preferences";
 import { WeekBar } from "../components/WeekBar";
 import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
@@ -59,6 +60,7 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
   );
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
   const rowsThisWeek = solverWeek === null ? [] : allItems.filter((r) => r.w === solverWeek);
+  const couleursParMatiere = usePreferences().couleursParMatiere;
 
   // Heures, pas un compte de séances — retour utilisateur 28/08/2026 (relayé
   // depuis Discord, idée de Jordan) : « le nombre d'heure total de la
@@ -129,6 +131,13 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
           }
           onDownloadIcs={telechargerIcs}
           onCopySubscribeLink={() => subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? "")}
+          imageEdt={() => ({
+            titre: nomComplet,
+            sousTitre: payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`,
+            rows: rowsThisWeek,
+            payload,
+            couleursParMatiere,
+          })}
         />
       )}
 
