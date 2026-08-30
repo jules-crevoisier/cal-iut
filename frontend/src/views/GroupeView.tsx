@@ -12,7 +12,7 @@ import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { copyToClipboard } from "../utils/clipboard";
-import { downloadIcs, sessionsWithDates, subscribeUrl } from "../utils/ics";
+import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 
 interface GroupeViewProps {
   payload: AppPayload;
@@ -77,9 +77,6 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
     setRoute({ vue: "groupe", groupe: gid });
   };
 
-  const telechargerIcs = () =>
-    downloadIcs(allItems, payload.groupLabels[groupId] ?? groupId, groupId, payload.groupLabels, payload.teacherLabels);
-
   // Nom complet (parcours en préfixe) — retour utilisateur 28/08/2026 : « on
   // a pas le nom complet du groupe dessus ». Le libellé seul ("TD EF")
   // existe en double identique entre plusieurs parcours FC (cf.
@@ -130,7 +127,6 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
           onCopyLink={() =>
             buildLink({ vue: "groupe", groupe: groupId, mode: "groupe", t: payload.groupTokens[groupId] ?? "" })
           }
-          onDownloadIcs={telechargerIcs}
           onCopySubscribeLink={() => subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? "")}
           imageEdt={() => ({
             titre: nomComplet,
@@ -167,7 +163,7 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
                 }}
                 title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
               >
-                {abonnementCopie ? "Copié ✓" : "Lien d'abonnement"}
+                {abonnementCopie ? "Copié ✓" : "Lien agenda"}
               </button>
               {/* À CÔTÉ du lien d'abonnement, comme demandé — et surtout
                   visible ici : c'est la page que reçoit la personne, donc
@@ -181,9 +177,6 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
                   couleursParMatiere,
                 })}
               />
-              <button type="button" className="btn btn--ghost btn--sm" onClick={telechargerIcs}>
-                Agenda .ics
-              </button>
             </div>
           </div>
           {solverWeek === null ? (
