@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from cal_iut.api.main import app
 from cal_iut.api.state import get_state
+from conftest import creer_compte_actif_et_connecter
 
 _ACCEPT = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 _INIT = {
@@ -51,14 +52,16 @@ def test_should_return_503_when_mcp_token_env_is_empty(monkeypatch):
     assert reponse.status_code == 503
 
 
-def test_should_still_accept_site_login_when_mcp_token_env_is_unset(monkeypatch):
+def test_should_still_accept_site_login_when_mcp_token_env_is_unset(monkeypatch, db_isole):
+    # Ancien login au mot de passe partagé remplacé par un vrai compte
+    # (cutover comptes utilisateurs, 31/08/2026) — `db_isole` évite
+    # d'écrire ce compte de test dans la vraie `data/state/cal-iut.db`.
     monkeypatch.delenv("CAL_IUT_MCP_TOKEN", raising=False)
     client = TestClient(app)
-    reponse = client.post("/auth/login", json={"password": "test-password"})
-    assert reponse.status_code == 200
+    creer_compte_actif_et_connecter(client)
 
 
-def test_should_keep_app_state_reachable_when_mcp_token_env_is_unset(monkeypatch):
+def test_should_keep_app_state_reachable_when_mcp_token_env_is_unset(monkeypatch, db_isole):
     # `state.timetable` est un singleton global partagé par TOUT le
     # processus pytest — sans le vider explicitement ici, ce test dépend de
     # ce qu'un test complètement différent, exécuté avant lui dans la suite
@@ -74,7 +77,7 @@ def test_should_keep_app_state_reachable_when_mcp_token_env_is_unset(monkeypatch
     try:
         monkeypatch.delenv("CAL_IUT_MCP_TOKEN", raising=False)
         client = TestClient(app)
-        client.post("/auth/login", json={"password": "test-password"})
+        creer_compte_actif_et_connecter(client)
         reponse = client.get("/app-state")
         assert reponse.status_code != 401
         assert reponse.status_code != 503
@@ -82,26 +85,26 @@ def test_should_keep_app_state_reachable_when_mcp_token_env_is_unset(monkeypatch
         etat.timetable = ancien_timetable
 
 
-def test_should_return_401_when_bearer_is_missing_even_if_admin_cookie_is_valid(monkeypatch):
+def test_should_return_401_when_bearer_is_missing_even_if_admin_cookie_is_valid(monkeypatch, db_isole):
     monkeypatch.setenv("CAL_IUT_MCP_TOKEN", _TOKEN)
     client = TestClient(app)
-    client.post("/auth/login", json={"password": "test-password"})
+    creer_compte_actif_et_connecter(client, role="admin")
     reponse = _post_mcp(client)
     assert reponse.status_code == 401
 
 
-def test_should_return_401_when_bearer_is_malformed_even_if_admin_cookie_is_valid(monkeypatch):
+def test_should_return_401_when_bearer_is_malformed_even_if_admin_cookie_is_valid(monkeypatch, db_isole):
     monkeypatch.setenv("CAL_IUT_MCP_TOKEN", _TOKEN)
     client = TestClient(app)
-    client.post("/auth/login", json={"password": "test-password"})
+    creer_compte_actif_et_connecter(client, role="admin")
     reponse = _post_mcp(client, {"Authorization": f"Token {_TOKEN}"})
     assert reponse.status_code == 401
 
 
-def test_should_return_401_when_bearer_token_is_wrong_even_if_admin_cookie_is_valid(monkeypatch):
+def test_should_return_401_when_bearer_token_is_wrong_even_if_admin_cookie_is_valid(monkeypatch, db_isole):
     monkeypatch.setenv("CAL_IUT_MCP_TOKEN", _TOKEN)
     client = TestClient(app)
-    client.post("/auth/login", json={"password": "test-password"})
+    creer_compte_actif_et_connecter(client, role="admin")
     reponse = _post_mcp(client, {"Authorization": "Bearer wrong-token"})
     assert reponse.status_code == 401
 

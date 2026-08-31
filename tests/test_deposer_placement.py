@@ -18,6 +18,7 @@ from cal_iut.ingestion.config_loader import load_groups
 from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom
+from conftest import creer_compte_actif_et_connecter
 
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
@@ -53,7 +54,7 @@ def _place(s: SessionToPlace, day: int, slot: int, week: int = SEMAINE) -> Place
 
 
 @pytest.fixture
-def monter():
+def monter(db_isole):
     etat = get_state()
     ancien = {
         c: getattr(etat, c)
@@ -78,7 +79,7 @@ def monter():
         etat.courses = []
         etat.config_dir = ROOT / "data" / "config"
         client = TestClient(app)
-        client.post("/auth/login", json={"password": "test-password"})
+        creer_compte_actif_et_connecter(client)
         return client
 
     yield _monter
