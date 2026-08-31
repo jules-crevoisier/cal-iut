@@ -104,27 +104,52 @@ enseignants:
 #
 # PARTICULARITÉ signalée par l'utilisateur : « on n'a pas de salle 203 dans
 # notre Celcat, on utilise H.023 à la place, c'est la même chose ».
+# VÉRIFIÉ dans Celcat le 31/08/2026, salle par salle, en lecture seule
+# (rôle 985_consultation, base URCA_2026) : 19 des 21 libellés retrouvés à
+# l'identique. Les capacités relevées chez eux sont notées en commentaire —
+# elles ne concordent pas toujours avec les nôtres, mais ce sont les leurs
+# qui font foi pour un conflit côté Celcat.
 salles:
   h005: "H.005"  # H.005
   h006: "H.006"  # H.006
   h007: "H.007"  # H.007
-  h008: "H.008"  # H.008
-  h007_h008: ""  # H.007-008 : salle combinée, équivalent Celcat À CONFIRMER
-  h009: "H.009"  # H.009 (Design)
+  h008: "H.008"  # H.008 — Celcat : 15 places
+  h007_h008: ""  # H.007-008 : combinée chez nous. H.007 et H.008 existent
+                 # SÉPARÉMENT dans Celcat, aucune combinée trouvée : il
+                 # faudra saisir deux séances, ou trancher pour une seule.
+  h009: "H.009"  # H.009 (Design) — Celcat : 22 places
   h016: "H.016"  # H.016 (Salle Mac)
   h017: "H.017"  # H.017 (Studio)
-  h022: "H.022"  # H.022 (fantôme Studio)
-  h018: "H.018"  # H.018 (Amphi MMI)
-  h101: "H.101"  # H.101
+  h022: "H.022 studio"  # ATTENTION : le libellé Celcat porte « studio ».
+                        # « H.022 » seul ne remonte rien en recherche exacte.
+  h018: ""  # H.018 (Amphi MMI) INTROUVABLE dans Celcat le 31/08/2026 —
+            # ni « H.018 », ni « amphi » côté IUT de Troyes. Tant que ce
+            # champ est vide, l'outil refuse de pousser les CM qui s'y
+            # tiennent. À demander à Kyllian Bresson : sous quel nom
+            # l'amphi MMI est-il enregistré ?
+  h101: "H.101"  # H.101 — Celcat : 30 places
   h103: "H.103"  # H.103 (Anglais)
-  h104: "H.104"  # H.104
-  h105: "H.105"  # H.105
+  h104: "H.104"  # H.104 — Celcat : 0 place (fiche incomplète chez eux)
+  h105: "H.105"  # H.105 — Celcat : 30 places
   h111: "H.111"  # H.111
-  h201: "H.201"  # H.201
-  h203: "H.023"  # H.203 -> H.023 : la 203 n'existe pas dans Celcat
-  h201_h203: ""  # H.201-203 : salle combinée, équivalent Celcat À CONFIRMER
+  h201: "H.201"  # H.201 — Celcat : 10 places
+  h203: "H.023"  # H.203 -> H.023 : CONFIRMÉ, « H.203 » ne renvoie rien
+  h201_h203: ""  # H.201-203 : combinée chez nous, sans équivalent Celcat
   h205: "H.205"  # H.205 (VR/Réseaux)
-  a018: "A.018"  # A.018
+  a018: "A.018"  # A.018 — Celcat : 150 places
+
+# --- Groupes : convention de nommage Celcat ---
+# Relevée le 31/08/2026 (S1, S3, S5, en CM, TD et TP) :
+#     BUT MMI <semestre> <libellé du groupe> - <année de cohorte>
+# soit « BUT MMI S1 TD AB - 2024 ». Le suffixe est l'année d'ENTRÉE de la
+# cohorte, pas celle de la base : dans URCA_2026 les groupes s'appellent
+# encore « - 2024 ». Une recherche sans le suffixe les retrouve, ce qui
+# évite d'avoir à deviner l'année (cf. `celcat/navigateur.py`).
+# Le département Celcat est « T_MMI T29 ».
+groupes:
+  convention: "BUT MMI {semestre} {libelle} - {annee}"
+  annee_cohorte: "2024"
+  departement: "T_MMI"
 
 # --- Types de séance : le nôtre -> code Celcat ---
 # TD=4 et TP=6 relevés dans les scripts `.bat` existants. CM jamais observé
