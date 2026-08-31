@@ -29,7 +29,6 @@ import {
 } from "../api/client";
 import type { AppPayload } from "../types/app";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
-import { PromoView } from "./PromoView";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HORAIRES = ["08h00", "09h30", "11h00", "14h00", "15h30", "17h00"];
@@ -47,22 +46,24 @@ function dateLisible(iso: string): string {
 interface APlacerViewProps {
   /** Rechargement du planning après un placement réussi. */
   onPlacement: () => void;
-  /** Nécessaire pour la grille de placement direct (`PromoView` intégrée
-   * ci-dessous) — absent/`null` tant que le planning n'est pas résolu, le
-   * reste de l'écran (liste, sélecteur manuel) reste utilisable quand même
-   * (retour utilisateur 26/08/2026 : cet écran « doit rester accessible
-   * même quand le planning est trop incomplet pour que les autres vues
-   * aient du sens »). */
+  /** Nécessaire pour activer « Placer sur la grille ». Absent/`null` tant
+   *  que le planning n'est pas résolu, le reste (liste, sélecteur manuel)
+   *  reste utilisable. */
   payload: AppPayload | null;
+  /** `panneau` : encastré dans Vue Promo. `page` : écran autonome (secours
+   *  si le payload n'est pas encore là). */
+  variante?: "page" | "panneau";
+  onChoisirSurPromo?: (seance: SeanceAPlacer) => void;
+  onFermer?: () => void;
 }
 
-export function APlacerView({ onPlacement, payload }: APlacerViewProps) {
-  // Séance choisie pour un placement visuel direct sur la grille — vue
-  // intégrée ICI (pas une bascule vers l'onglet Vue Promo, retour
-  // utilisateur 28/08/2026 : « on peut pas avoir la vue dédiée dans à
-  // placer que cela soit bien » — la première version renvoyait vers
-  // l'onglet Vue Promo, ce qui sortait la personne de cet écran).
-  const [placementActif, setPlacementActif] = useState<SeanceAPlacer | null>(null);
+export function APlacerView({
+  onPlacement,
+  payload,
+  variante = "page",
+  onChoisirSurPromo,
+  onFermer,
+}: APlacerViewProps) {
   const [inventaire, setInventaire] = useState<SeancesAPlacer | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(true);
@@ -93,54 +94,50 @@ export function APlacerView({ onPlacement, payload }: APlacerViewProps) {
 
   useEffect(recharger, [recharger]);
 
+  const Tag = variante === "panneau" ? "aside" : "section";
+  const classe = variante === "panneau" ? "aplacer-panneau" : "view aplacer";
+
   if (chargement && !inventaire) {
     return (
-      <section className="view">
+      <Tag className={classe}>
         <div className="panel">
           <p className="muted">Recherche des séances non placées…</p>
         </div>
-      </section>
+      </Tag>
     );
   }
 
   if (erreur) {
     return (
-      <section className="view">
+      <Tag className={classe}>
         <div className="panel">
-          <h3>À placer</h3>
+          <h3>Séances à placer</h3>
           <p className="alerte">{erreur}</p>
           <button type="button" className="btn" onClick={recharger}>
             Réessayer
           </button>
         </div>
-      </section>
+      </Tag>
     );
   }
 
   const manquantes = inventaire?.manquantes ?? [];
 
   return (
-    <section className="view aplacer">
+    <Tag className={classe}>
       <p role="status" aria-live="polite" className="sr-only">
         {annonce}
       </p>
 
-      {placementActif && payload ? (
-        <PromoView
-          payload={payload}
-          placementActif={placementActif}
-          onAnnulerPlacement={() => setPlacementActif(null)}
-          onPlaced={() => {
-            setPlacementActif(null);
-            setVersion((v) => v + 1);
-            recharger();
-            onPlacement();
-          }}
-        />
-      ) : (
-        <>
       <div className="panel">
-        <h3>Séances à placer à la main</h3>
+        <div className="section-header">
+          <h3>Séances à placer à la main</h3>
+          {onFermer && (
+            <button type="button" className="btn btn--ghost btn--sm" onClick={onFermer}>
+              Masquer
+            </button>
+          )}
+        </div>
         <p className="muted">{inventaire?.resume}</p>
 
         {manquantes.length > 0 && (
@@ -247,15 +244,13 @@ export function APlacerView({ onPlacement, payload }: APlacerViewProps) {
                 recharger();
                 onPlacement();
               }}
-              onChoisirSurPromo={setPlacementActif}
-              payloadDisponible={Boolean(payload)}
+              onChoisirSurPromo={onChoisirSurPromo ?? (() => undefined)}
+              payloadDisponible={Boolean(payload) && Boolean(onChoisirSurPromo)}
             />
           ))}
         </div>
       )}
-        </>
-      )}
-    </section>
+    </Tag>
   );
 }
 

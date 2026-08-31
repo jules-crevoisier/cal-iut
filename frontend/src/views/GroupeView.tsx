@@ -8,30 +8,23 @@ import { CopyButton } from "../components/CopyButton";
 import { ShareBar } from "../components/ShareBar";
 import { usePreferences } from "../utils/preferences";
 import { WeekBar } from "../components/WeekBar";
+import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
+import { displayIndexForSolverWeek } from "../utils/weekDisplay";
 
 interface GroupeViewProps {
   payload: AppPayload;
   route: Route;
   setRoute: (patch: Partial<Route>) => void;
   readOnly?: boolean;
+  onOpenSearch?: () => void;
 }
 
-/** Index d'affichage (dans `weekRows`, vacances incluses) le plus proche
- * d'une semaine SOLVEUR donnée — sert à faire pointer la `WeekBar` au bon
- * endroit quand on arrive depuis un lien qui ne connaît que l'index solveur
- * (recherche, panneau « à traiter »). */
-function displayIndexForSolverWeek(payload: AppPayload, solverWeek: number | null): number {
-  if (solverWeek === null) return 0;
-  const idx = payload.weekRows.findIndex((w) => w.weekIndex === solverWeek);
-  return idx >= 0 ? idx : 0;
-}
-
-export function GroupeView({ payload, route, setRoute, readOnly = false }: GroupeViewProps) {
+export function GroupeView({ payload, route, setRoute, readOnly = false, onOpenSearch }: GroupeViewProps) {
   const groupIds = useMemo(
     () =>
       Object.keys(payload.groupLabels).sort((a, b) =>
@@ -70,6 +63,10 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
 
   const tpPair = payload.groupTpPair[groupId];
   const parcours = payload.groupParcours[groupId] ?? "";
+
+  if (!readOnly && route.groupe && !(route.groupe in payload.groupLabels)) {
+    return <FicheIntrouvable libelle="Groupe" id={route.groupe} onOpenSearch={onOpenSearch} />;
+  }
 
   const handleChangeGroup = (gid: string) => {
     setGroupId(gid);
@@ -135,6 +132,40 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
             couleursParMatiere,
           })}
         />
+      )}
+
+      {!readOnly && (
+        <div className="panel">
+          <h3>Profil</h3>
+          <p>
+            <strong>{nomComplet}</strong> <span className="mono muted">{groupId}</span>
+          </p>
+          <p className="muted">
+            {[
+              payload.groupKind[groupId],
+              payload.groupIsFc[groupId] ? "FC" : parcours.includes("FI") ? "FI" : "",
+              `${allItems.length} séance(s)`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {payload.groupCohort[groupId] && payload.groupCohort[groupId]!.length > 1 && (
+            <>
+              <div className="raw-label">Cohorte</div>
+              <p>
+                {payload.groupCohort[groupId]!.map((gid) => payload.groupLabels[gid] ?? gid).join(" · ")}
+              </p>
+            </>
+          )}
+          {tpPair && (
+            <>
+              <div className="raw-label">Paire TP</div>
+              <p>
+                {payload.groupLabels[tpPair[0]] ?? tpPair[0]} / {payload.groupLabels[tpPair[1]] ?? tpPair[1]}
+              </p>
+            </>
+          )}
+        </div>
       )}
 
       {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}

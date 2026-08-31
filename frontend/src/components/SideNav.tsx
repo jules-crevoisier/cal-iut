@@ -52,10 +52,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "À faire",
-    items: [
-      { id: "apf", label: "À traiter" },
-      { id: "aplacer", label: "À placer" },
-    ],
+    items: [{ id: "apf", label: "À traiter" }],
   },
 ];
 

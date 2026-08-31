@@ -53,24 +53,28 @@ export function buildSearchIndex(payload: AppPayload): SearchHit[] {
   }
 
   const seenCourse = new Set<string>();
-  for (const r of payload.rows) {
-    if (seenCourse.has(r.c)) continue;
-    seenCourse.add(r.c);
+  for (const c of payload.courses) {
+    if (seenCourse.has(c.code)) continue;
+    seenCourse.add(c.code);
+    const parcours = payload.courses
+      .filter((x) => x.code === c.code)
+      .map((x) => x.parcours)
+      .filter(Boolean);
     index.push({
       kind: "Cours",
-      label: r.c,
-      sub: r.n || "",
-      // Un cours n'a pas de vue dédiée : on ouvre la Vue Semaine sur le
-      // premier groupe/semaine où il apparaît.
-      route: { vue: "semaine", groupe: r.g[0] || "", sem: r.w },
+      label: c.code,
+      sub: [c.name, ...parcours].filter(Boolean).join(" · "),
+      route: { vue: "cours", cours: c.code },
     });
   }
 
-  const seenRoom = new Set<string>();
-  for (const r of payload.rows) {
-    if (!r.r || seenRoom.has(r.r)) continue;
-    seenRoom.add(r.r);
-    index.push({ kind: "Salle", label: r.r, sub: "voir son occupation", route: { vue: "reference" } });
+  for (const room of payload.rooms) {
+    index.push({
+      kind: "Salle",
+      label: room.label,
+      sub: room.id === room.label ? `${room.type} · cap. ${room.capacity}` : room.id,
+      route: { vue: "salle", salle: room.id },
+    });
   }
 
   return index;
