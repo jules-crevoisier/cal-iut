@@ -114,19 +114,18 @@ salles:
   h006: "H.006"  # H.006
   h007: "H.007"  # H.007
   h008: "H.008"  # H.008 — Celcat : 15 places
-  h007_h008: ""  # H.007-008 : combinée chez nous. H.007 et H.008 existent
-                 # SÉPARÉMENT dans Celcat, aucune combinée trouvée : il
-                 # faudra saisir deux séances, ou trancher pour une seule.
+  h007_h008: "H.007"  # H.007-008 : combinée chez nous, sans équivalent
+                 # Celcat (H.007 et H.008 existent séparément). Décision
+                 # utilisateur du 31/08/2026 : « pour les salle double on en
+                 # choisit une seul et on met le td dedant » — H.007 retenue
+                 # (la première des deux), pas H.008.
   h009: "H.009"  # H.009 (Design) — Celcat : 22 places
   h016: "H.016"  # H.016 (Salle Mac)
   h017: "H.017"  # H.017 (Studio)
   h022: "H.022 studio"  # ATTENTION : le libellé Celcat porte « studio ».
                         # « H.022 » seul ne remonte rien en recherche exacte.
-  h018: ""  # H.018 (Amphi MMI) INTROUVABLE dans Celcat le 31/08/2026 —
-            # ni « H.018 », ni « amphi » côté IUT de Troyes. Tant que ce
-            # champ est vide, l'outil refuse de pousser les CM qui s'y
-            # tiennent. À demander à Kyllian Bresson : sous quel nom
-            # l'amphi MMI est-il enregistré ?
+  h018: "Amphi 3 MMI"  # H.018 (Amphi MMI) — réponse Kyllian Bresson,
+            # 31/08/2026 : « la salle h18 cerait : Amphi 3 MMI ».
   h101: "H.101"  # H.101 — Celcat : 30 places
   h103: "H.103"  # H.103 (Anglais)
   h104: "H.104"  # H.104 — Celcat : 0 place (fiche incomplète chez eux)
@@ -134,7 +133,9 @@ salles:
   h111: "H.111"  # H.111
   h201: "H.201"  # H.201 — Celcat : 10 places
   h203: "H.023"  # H.203 -> H.023 : CONFIRMÉ, « H.203 » ne renvoie rien
-  h201_h203: ""  # H.201-203 : combinée chez nous, sans équivalent Celcat
+  h201_h203: "H.201"  # H.201-203 : combinée chez nous, sans équivalent
+              # Celcat — même décision que H.007-008 : une seule des deux
+              # retenue (H.201, pas H.023).
   h205: "H.205"  # H.205 (VR/Réseaux)
   a018: "A.018"  # A.018 — Celcat : 150 places
 
@@ -158,7 +159,16 @@ groupes:
 types_seance:
   TD: 4
   TP: 6
-  CM: null   # À CONFIRMER
+  CM: null   # À CONFIRMER — la catégorie « [CM] » EXISTE bien dans Celcat
+             # (confirmé le 01/09/2026, liste complète des 38 catégories
+             # d'événement, distincte de « [CM bénévole] » et
+             # « [CM Capacite] »), mais TD=4/TP=6 ci-dessus sont des INDEX
+             # DE POSITION dans un menu déroulant (hérités des .bat
+             # d'origine, bien trop petits pour être un `event_cat_id` réel
+             # — celui de « [CM bénévole] » est 845). Le formulaire de
+             # création n'a pas encore été rempli pour de vrai : vérifier
+             # avec quel type de valeur IL attend une catégorie avant de
+             # fixer ce champ. Cf. docs/CELCAT.md, incident du 01/09/2026.
   PTUT: null # À CONFIRMER
 
 # --- Modules : notre code cours -> code module Celcat ---

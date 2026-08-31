@@ -53,14 +53,20 @@ def test_le_studio_porte_son_nom_complet():
     assert CONFIG["salles"]["h022"] == "H.022 studio"
 
 
-def test_les_salles_sans_equivalent_celcat_sont_vides_et_non_devinees():
-    """Trois salles n'ont pas d'equivalent connu : l'amphi MMI, introuvable
-    le 31/08/2026, et les deux salles combinees. Les remplir au jugé ferait
-    partir des seances vers une salle qui n'est pas la bonne — dans un outil
-    qui alimente la paie, le vide est plus sûr qu'une supposition."""
-    assert CONFIG["salles"]["h018"] == ""
-    assert CONFIG["salles"]["h007_h008"] == ""
-    assert CONFIG["salles"]["h201_h203"] == ""
+def test_h018_pointe_desormais_vers_l_amphi_3_mmi():
+    """Trouvé introuvable le 31/08/2026 (ni « H.018 » ni « amphi » côté IUT
+    de Troyes), résolu le 01/09/2026 par réponse de Kyllian Bresson :
+    « la salle h18 cerait : Amphi 3 MMI »."""
+    assert CONFIG["salles"]["h018"] == "Amphi 3 MMI"
+
+
+def test_les_salles_combinees_pointent_vers_une_seule_moitie():
+    """H.007-008 et H.201-203 n'ont pas d'équivalent combiné dans Celcat.
+    Décision utilisateur du 31/08/2026 : « pour les salle double on en
+    choisit une seul et on met le td dedant » — une seule des deux
+    retenue à chaque fois, pas de saisie double, pas de vide deviné."""
+    assert CONFIG["salles"]["h007_h008"] == "H.007"
+    assert CONFIG["salles"]["h201_h203"] == "H.201"
 
 
 def test_la_203_pointe_bien_vers_la_023():

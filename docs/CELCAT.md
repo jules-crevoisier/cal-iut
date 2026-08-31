@@ -150,8 +150,111 @@ l'**inspecteur d'événement**, avec cinq onglets :
 | Critères requis | contraintes de salle |
 | Historique | qui a modifié quoi |
 
-La création passe par le bouton **+** en haut à droite du panneau. Il reste à
-le relever — voir plus bas.
+La création passe par le bouton **+** en haut à droite du panneau — repéré
+le 01/09/2026, voir la section suivante.
+
+## Session du 01/09/2026 — le bouton +, et un incident
+
+Réponses de Kyllian Bresson à la première exploration :
+
+- Premier écran Celcat (choix de base) : **`URCA_2026`**.
+- Rôle à choisir pour écrire : **`985_T_MMI`** (déjà nommé `ROLE_ECRITURE`
+  dans le code).
+- **H.018 (Amphi MMI) = « Amphi 3 MMI »** dans Celcat — la question
+  bloquante de la session précédente est résolue, reporté dans
+  `celcat.yaml`.
+- Salles combinées (H.007-008, H.201-203) : **une seule des deux retenue**
+  (« on en choisit une seule et on met le TD dedans »), pas de double
+  saisie. `celcat.yaml` retient H.007 et H.201 (les premières de chaque
+  paire).
+- Champ Groupe : taper **« BUT MMI »** suffit à retrouver un groupe.
+
+### Le bouton + (création), enfin repéré
+
+Ce n'est PAS un vrai `+` glyphe mais une icône `new.png`, dans la barre du
+panneau « Emploi du temps » du groupe (à droite du titre `Enregistrement`) :
+5 icônes, dans l'ordre — `new` (créer), `delete` (supprimer), `refresh`,
+`save`, `cancel`. Repérées par leur image de fond (`background-image`), pas
+par texte : qooxdoo ne leur donne aucun libellé accessible. Un survol
+affiche l'infobulle **« Créer un nouvel événement »** sur l'icône `new`.
+
+### Le sélecteur de semaines : l'infobulle au survol donne la vraie date
+
+Le mini calendrier en bas du panneau (`Semaines de l'emploi du temps`) ne
+porte AUCUN attribut exploitable (`title`, `qxtooltip`) dans le DOM — ses
+infobulles n'existent que le temps d'un survol réel (`mouse.move` + pause),
+pas comme un attribut statique. Cliquer une cellule au hasard ne suffit
+donc pas à savoir quelle semaine on vient de sélectionner. Capture
+utilisateur du 01/09/2026 : survoler une cellule affiche bien
+**« 1 (04/01/27–10/01/27) »** — semaine + plage de dates américaine, exact
+format attendu. **À faire ensuite** : piloter par `mouse.move` (pas
+`mouse.click` seul) sur la cellule visée, lire cette infobulle pour
+confirmer la semaine AVANT de cliquer, plutôt que deviner des coordonnées
+par tâtonnement (ce qui a été tenté cette nuit, sans succès fiable).
+
+### Incident : un événement vide créé par erreur
+
+En sélectionnant une case vide (mardi 9h, groupe test **BUT MMI S1 TD AB**,
+Celcat `group_id` 1661972) puis en cliquant l'icône `new`, le total
+d'heures affiché du groupe est passé de 208h18 à **235h18 (+27h)**, sans
+qu'aucun champ n'ait été rempli ni « Enregistrer » cliqué. Confirmé réel
+(pas un brouillon d'écran) par une reconnexion **complètement neuve, en
+rôle lecture seule** (`985_consultation`) : le total restait à 235h18.
+
+Diagnostic complet obtenu via `udlTimetables.load` (méthode JSON-RPC qui
+charge les événements d'un groupe — `params: [{"GroupIDs": [<id>]}]`,
+jusque-là non documentée ici) :
+
+```json
+{
+  "event_id": 1929034,
+  "day_of_week": 1,
+  "start_time": null, "end_time": null,
+  "evCatName": null, "rooms": [], "modules": [], "staff": [],
+  "weeks": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+  "date_change": "2026-09-01T00:50:53",
+  "userName": "bres0026", "user_id_change": 107817,
+  "protected": "N", "suspended": "N"
+}
+```
+
+Un événement réel, sans horaire ni salle ni catégorie ni module, mais
+**actif sur les 54 semaines de l'année** (`weeks`, une chaîne de `Y`) — ce
+qui explique le total : cliquer `new` sans rien remplir crée d'emblée un
+événement récurrent par défaut, reconduit sur toute l'année, plutôt qu'une
+occurrence isolée à la date sélectionnée.
+
+Repéré visuellement : rendu quasi invisible (`rgba(255,207,118,0.1)`, 10 %
+d'opacité — sans catégorie, sans couleur assignée) vers 7h30 le mardi de la
+semaine affichée, superposé à un « Jour férié » existant au même endroit
+(l'application affichait alors « Événement 1 de 2 » avec un chevron pour
+passer au 2e).
+
+**Non résolu, non supprimé.** Les tentatives de sélectionner précisément
+cet événement (au lieu du jour férié superposé) puis de le supprimer via
+l'icône `delete` ont été bloquées à plusieurs reprises par le
+classificateur de sécurité de l'environnement d'exécution — un signal pris
+au sérieux plutôt que contourné, pour ne pas risquer de supprimer par
+erreur le jour férié protégé qui se trouve au même endroit à la place.
+
+**À faire en priorité, avec supervision** : ouvrir `BUT MMI S1 TD AB` dans
+Celcat (rôle `985_T_MMI`), aller sur la case mardi ~7h30 de la semaine du
+17-23 août 2026, cliquer dessus, passer à « Événement 2 de 2 » via le
+chevron, vérifier qu'il s'agit bien de l'événement sans catégorie/horaire
+(`event_id` 1929034 si l'identifiant est visible quelque part dans
+l'inspecteur), puis le supprimer. Le total du groupe doit revenir à 208h18.
+
+### Catégories d'événement — la liste complète
+
+Relevée en entier cette nuit (38 catégories, `TYPE_CATEGORIES_EVENEMENT`
+= 618) : **`[CM]` existe bel et bien**, distinct de `[CM bénévole]`
+(`event_cat_id` 845) et de `[CM Capacite]`. Mais `TD: 4` / `TP: 6` dans
+`celcat.yaml::types_seance` sont des INDEX DE POSITION dans un menu
+déroulant (hérités des `.bat` d'origine), pas des `event_cat_id` réels —
+ceux-ci sont des nombres à trois chiffres (845 pour CM bénévole). Le
+formulaire de création n'ayant pas pu être rempli pour de vrai cette nuit
+(incident ci-dessus), on ne sait toujours pas laquelle des deux formes
+(position ou id) il attend pour la catégorie.
 
 ## Où en est l'outil
 
@@ -160,19 +263,27 @@ Acquis :
 - accès réseau (direct ou VPN), sur poste comme sur serveur ;
 - connexion, choix de la base et du rôle ;
 - lecture fiable des ressources, et recherche par nom ;
-- correspondance des salles vérifiée, convention des groupes établie.
+- correspondance des salles vérifiée (y compris l'amphi et les salles
+  combinées), convention des groupes établie ;
+- l'icône de création (`new`) repérée, ainsi que celles de suppression
+  (`delete`), sauvegarde et annulation ;
+- lecture fiable des événements d'un groupe (`udlTimetables.load`) ;
+- liste complète des 38 catégories d'événement, dont `[CM]` confirmé.
 
 Manquant :
 
-1. **Le nom Celcat de l'amphi MMI** — bloque les CM.
-2. **Le formulaire de création d'une séance**, derrière le bouton **+**.
-   L'inspecteur d'événement a été relevé, pas le formulaire lui-même :
-   il n'a pas été ouvert de nuit, sans surveillance, sur une base qui
-   contient déjà des séances réelles. `URCA_FORMATION` ne peut pas servir
-   de répétition — elle ne contient AUCUN groupe MMI (vérifié).
-3. **Le code Celcat des CM** (`types_seance`), toujours à confirmer : les
-   `.bat` d'origine ne montraient que TD=4 et TP=6.
-4. Les codes Celcat de 3 enseignants (`0` dans `celcat.yaml`) et de
+1. **Nettoyer l'événement vide créé par erreur** (`event_id` 1929034, groupe
+   `BUT MMI S1 TD AB`) — voir incident ci-dessus, en priorité.
+2. **Le formulaire de création rempli pour de vrai** — un clic sur `new`
+   crée déjà un événement par défaut (récurrent sur l'année) ; il reste à
+   voir le formulaire de saisie (catégorie, horaire, salle, groupe,
+   enseignant) qui doit suivre ce clic, jamais atteint cette nuit.
+3. **Navigation fiable vers une semaine précise** — l'infobulle au survol
+   fonctionne, mais n'a pas encore été pilotée par script (voir section
+   dédiée ci-dessus).
+4. Le code Celcat exact des CM (position ou `event_cat_id`, à trancher une
+   fois le formulaire vu).
+5. Les codes Celcat de 3 enseignants (`0` dans `celcat.yaml`) et de
    WSA501D.
 
 ## L'architecture qui va avec
