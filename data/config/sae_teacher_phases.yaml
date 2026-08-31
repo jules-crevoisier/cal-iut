@@ -93,3 +93,40 @@ phases:
           qu'elle y assure tiennent largement dans les 16 jours de la phase :
           la bloquer sur les 6 jours ci-dessus en plus serait une
           sur-approximation coûteuse pour la WRA505C.
+
+  # ---------------------------------------------------------------------
+  # WS103 (BUT1, resp. GLE) et WS102 (BUT1, resp. AFR) — Ariane Loizon y
+  # est listée comme intervenante, sans qu'aucune fenêtre précise n'ait
+  # jamais été demandée pour elle. Par défaut elle était donc bloquée sur
+  # les 26-27 novembre (WS103) et les 7-8 janvier (WS102) — exactement les
+  # deux dernières des six dates libérées de WS501D pour son TD conjoint
+  # avec WRA505C (cf. l'entrée WS501D ci-dessus).
+  #
+  # 31/08/2026 — retour utilisateur explicite, sans confirmation d'Ariane
+  # elle-même sur son emploi du temps réel dans WS103/WS102 : « c'est pas
+  # grave, on peut mettre des cours pendant les SAE ». À la différence de
+  # la correction WS501D (fondée sur son propre planning, confirmé par
+  # elle via Kyllian Bresson), celle-ci est une décision assumée plutôt
+  # qu'une donnée vérifiée — à corriger si jamais elle signale être
+  # réellement mobilisée ces jours-là.
+  - course_code: WS103
+    semestre: S1
+    teachers:
+      - teacher_code: ALO
+        debut: 2026-11-23
+        fin: 2026-11-27
+        exclure:
+          - 2026-11-26
+          - 2026-11-27
+        note: "Libéré sur décision utilisateur du 31/08/2026, pas sur confirmation d'Ariane — cf. commentaire ci-dessus."
+
+  - course_code: WS102
+    semestre: S1
+    teachers:
+      - teacher_code: ALO
+        debut: 2027-01-04
+        fin: 2027-01-08
+        exclure:
+          - 2027-01-07
+          - 2027-01-08
+        note: "Libéré sur décision utilisateur du 31/08/2026, pas sur confirmation d'Ariane — cf. commentaire ci-dessus."
