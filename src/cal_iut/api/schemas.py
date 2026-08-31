@@ -96,6 +96,21 @@ class ModifierSeancePersonnaliseeRequest(BaseModel):
     force: bool = False
 
 
+class PatchSeanceRequest(BaseModel):
+    """Overlay maquette : au moins un champ. La durée 3 (et au-delà) est
+    refusée en 400 par le handler — pas ici, pour ne pas renvoyer 422."""
+
+    teacher_codes: list[str] | None = None
+    session_type: str | None = None
+    duration_slots: int | None = None
+    week: int | None = None
+    day: int | None = None
+    slot: int | None = None
+    room_id: str | None = None
+    is_eval: bool | None = None
+    force: bool = False
+
+
 class ChangeRoomRequest(BaseModel):
     """Changement de salle SEULE, à créneau inchangé (`PATCH /placements/
     {id}/salle`) — retour utilisateur 28/08/2026 : « on va vouloir sur la vue

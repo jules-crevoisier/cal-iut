@@ -30,6 +30,17 @@ jobs:
       - name: Installer le projet
         run: pip install -e ".[dev]"
 
+      - name: Ingestion (génère data/generated/*.json)
+        # `data/generated/` est gitignoré (artefact de build local) — sans
+        # cette étape, un checkout frais comme celui de la CI n'a jamais ce
+        # dossier, et tout test qui le lit (ex.
+        # test_seances_annulees_2026_08_29.py) échoue systématiquement en
+        # CI tout en passant en local (où `cal-iut ingest` a déjà tourné au
+        # moins une fois). Repéré le 31/08/2026 : la CI passait ce test
+        # silencieusement en échec depuis son introduction, sans bloquer
+        # les merges (GitHub ne l'exige pas en required check).
+        run: python -m cal_iut.cli ingest
+
       - name: Tests
         # AUCUNE variable d'environnement d'authentification ici, volontairement.
         # `tests/conftest.py` les pose lui-même via `setdefault`, et les tests

@@ -405,6 +405,25 @@ export function modifierSeancePersonnalisee(sessionId: string, body: ModifierSea
   });
 }
 
+export interface PatchSeanceMaquetteBody {
+  session_type?: string;
+  teacher_codes?: string[];
+  duration_slots?: number;
+  week?: number;
+  day?: number;
+  slot?: number;
+  room_id?: string;
+  is_eval?: boolean;
+  force?: boolean;
+}
+
+export function modifierSeanceMaquette(sessionId: string, body: PatchSeanceMaquetteBody): Promise<Placement> {
+  return request<Placement>(`/placements/${encodeURIComponent(sessionId)}/seance`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 export function supprimerSeancePersonnalisee(sessionId: string): Promise<{ supprimee: boolean }> {
   return request<{ supprimee: boolean }>(`/placements/personnalisees/${encodeURIComponent(sessionId)}`, {
     method: "DELETE",

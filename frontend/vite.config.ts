@@ -13,6 +13,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/health": "http://127.0.0.1:8000",
+      "/mcp": "http://127.0.0.1:8000",
+      "/auth": "http://127.0.0.1:8000",
       "/meta": "http://127.0.0.1:8000",
       "/app-state": "http://127.0.0.1:8000",
       "/ingest": "http://127.0.0.1:8000",

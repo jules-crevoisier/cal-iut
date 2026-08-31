@@ -364,6 +364,28 @@ export function PromoView({
     await performMove(sessionId, { week: solverWeek, day: targetDay, slot }, placement, onPlacementUpdated, onError);
   };
 
+  const handleDropOnWeek = async (displayIndex: number) => {
+    const wr = payload.weekRows[displayIndex];
+    const sessionId = draggingId;
+    setDraggingId(null);
+    if (!sessionId || !placements || !onPlacementUpdated || !onError) return;
+    if (!wr || wr.weekIndex === null || wr.blocked) return;
+    const placement = placements.find((p) => p.session_id === sessionId);
+    if (!placement || placement.locked) return;
+    if (placement.week === wr.weekIndex) {
+      setDisplayWeek(displayIndex);
+      return;
+    }
+    const ok = await performMove(
+      sessionId,
+      { week: wr.weekIndex, day: placement.day, slot: placement.slot },
+      placement,
+      onPlacementUpdated,
+      onError,
+    );
+    if (ok) setDisplayWeek(displayIndex);
+  };
+
   /** Dépôt SUR une séance : les deux échangent leurs places. Un seul appel
    *  serveur, qui juge les deux positions finales ensemble — cf.
    *  `utils/moveSession.ts::performSwap`. */
@@ -482,7 +504,14 @@ export function PromoView({
 
       <div className="panel controls">
         <div className="field weekfield">
-          <WeekBar weekRows={payload.weekRows} countByWeekIndex={countByWeek} selected={displayWeek} onSelect={setDisplayWeek} />
+          <WeekBar
+            weekRows={payload.weekRows}
+            countByWeekIndex={countByWeek}
+            selected={displayWeek}
+            onSelect={setDisplayWeek}
+            dropEnabled={dragEnabled && Boolean(draggingId)}
+            onDropWeek={dragEnabled ? handleDropOnWeek : undefined}
+          />
         </div>
         <label>
           Enseignant
@@ -505,6 +534,11 @@ export function PromoView({
       {modaleSeance && (
         <CreerSeanceModal
           payload={payload}
+          mode={
+            modaleSeance && modaleSeance !== "creer" && !payload.rows.some((row) => row.id === modaleSeance.session_id && row.custom)
+              ? "maquette"
+              : undefined
+          }
           seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
           onCancel={() => setModaleSeance(null)}
           onCree={(placement) => {
@@ -713,10 +747,7 @@ export function PromoView({
                                       {r.ev ? " · éval" : ""}
                                       {durLabel}
                                     </span>
-                                    {/* Séance ajoutée manuellement (retour utilisateur
-                                        31/08/2026) : seule à proposer modifier/
-                                        supprimer, jamais une séance de la maquette. */}
-                                    {r.custom && seanceModaleEnabled && source && (
+                                    {seanceModaleEnabled && source && (
                                       <span className="promo-chip-custom">
                                         <button
                                           type="button"
@@ -730,6 +761,7 @@ export function PromoView({
                                         >
                                           ✎
                                         </button>
+                                        {r.custom && (
                                         <button
                                           type="button"
                                           className="promo-chip-custom-btn"
@@ -742,6 +774,7 @@ export function PromoView({
                                         >
                                           🗑
                                         </button>
+                                        )}
                                       </span>
                                     )}
                                     {/* Salle modifiable sur place (retour utilisateur

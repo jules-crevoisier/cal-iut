@@ -2,6 +2,7 @@
 
 import threading
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date as _date
 from pathlib import Path
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import auth, custom_rooms, custom_sessions, forced_pending, mailer
+from cal_iut.api import auth, custom_rooms, custom_sessions, forced_pending, mailer, session_overrides
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
@@ -29,6 +30,7 @@ from cal_iut.api.schemas import (
     MoveSessionRequest,
     NotificationConfigRequest,
     NotificationConfigResponse,
+    PatchSeanceRequest,
     PlacementResponse,
     QualityResponse,
     RegenRequest,
@@ -106,7 +108,22 @@ def _parcours_for_year(parcours_list: list[str], year: int) -> list[str]:
 CONFIG_DIR = Path(__file__).resolve().parents[3] / "data" / "config"
 FRONTEND_DIST = Path(__file__).resolve().parents[3] / "frontend" / "dist"
 
-app = FastAPI(title="cal-iut API", version="1.0.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Le session manager Streamable HTTP ne tourne PAS tout seul sur un
+    # sous-app monté : le lifespan de l'hôte doit l'ouvrir (docs MCP v2).
+    # `startup()` est appelé ICI plutôt qu'en `@app.on_event` : passer
+    # `lifespan=` à FastAPI remplace les handlers on_event, et sans cet
+    # appel le planning n'était plus restauré au démarrage.
+    from cal_iut.mcp.server import mcp
+
+    async with mcp.session_manager.run():
+        startup()
+        yield
+
+
+app = FastAPI(title="cal-iut API", version="1.0.0", lifespan=_lifespan)
 
 
 @dataclass
@@ -175,7 +192,7 @@ _PUBLIC_PATHS = frozenset({"/auth/login", "/auth/logout", "/auth/status", "/heal
 # donc être testée avant lui. Seul cas à ce jour : le pixel de suivi
 # d'ouverture des mails, chargé par le client mail de l'enseignant, qui ne
 # peut par nature présenter aucune session ni aucun lien perso.
-_PUBLIC_PREFIXES = ("/mail/pixel/",)
+_PUBLIC_PREFIXES = ("/mcp", "/mail/pixel/")
 
 
 def _verifier_couverture_auth() -> list[str]:
@@ -222,6 +239,11 @@ async def require_auth(request: Request, call_next):
     return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
 
 
+from cal_iut.mcp.auth import mcp_bearer_middleware
+
+app.middleware("http")(mcp_bearer_middleware)
+
+
 def require_admin_session(request: Request) -> None:
     """Garde-fou supplémentaire pour `/mail/*` : la vraie session (mot de
     passe partagé) est exigée, un simple jeton prof ne suffit PAS ici — à
@@ -257,7 +279,6 @@ def auth_status(request: Request) -> dict:
     return {"authenticated": auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE))}
 
 
-@app.on_event("startup")
 def startup() -> None:
     oublis = _verifier_couverture_auth()
     if oublis:
@@ -353,6 +374,7 @@ def _try_restore_latest(state: object) -> None:
         state.sessions, state.sessions_by_id = custom_sessions.merge_into(
             state.sessions, state.sessions_by_id
         )
+        session_overrides.apply_to(state.sessions_by_id)
 
         current = repo.db.query(CurrentPlacement).filter_by(run_id=run.id).all()
         # Un placement dont la séance n'existe PLUS après ré-ingestion est un
@@ -634,6 +656,7 @@ def ingest(body: IngestRequest) -> dict[str, object]:
     state.sessions, state.sessions_by_id = custom_sessions.merge_into(
         state.sessions, state.sessions_by_id
     )
+    session_overrides.apply_to(state.sessions_by_id)
     state.filter_parcours = body.parcours
     state.filter_semestre = body.semestre
     state.semestre_group = body.semestre_group
@@ -1764,6 +1787,33 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
 
     _notifier("deplacement", f"{match.course_code} → {_ou(match)}")
     return _to_placement(match, state.sessions_by_id)
+
+
+@app.patch("/placements/{session_id}/seance", response_model=PlacementResponse)
+def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> PlacementResponse:
+    """Overlay enseignant / type / durée sur une séance de maquette."""
+    from cal_iut.api.session_patch import appliquer_patch_seance
+
+    return appliquer_patch_seance(
+        session_id,
+        teacher_codes=body.teacher_codes,
+        session_type=body.session_type,
+        duration_slots=body.duration_slots,
+        week=body.week,
+        day=body.day,
+        slot=body.slot,
+        room_id=body.room_id,
+        is_eval=body.is_eval,
+        force=body.force,
+    )
+
+
+@app.post("/placements/{session_id}/deposer")
+def deposer_placement(session_id: str) -> dict[str, object]:
+    """Retire la séance du planning, la laisse dans le catalogue (À placer)."""
+    from cal_iut.api.deposer import deposer_seance
+
+    return deposer_seance(session_id)
 
 
 @app.post("/placements/echanger", response_model=EchangeResponse)
@@ -3316,6 +3366,30 @@ def _to_placement(p: PlacedSessionWithRoom, sessions_by_id: dict[str, SessionToP
         duration_slots=max(1, s.duration_slots) if s else 1,
     )
 
+
+from cal_iut.mcp.http_rpc import handle_mcp_post
+from cal_iut.mcp.server import MCP_ASGI
+
+
+@app.post("/mcp", include_in_schema=False)
+async def mcp_jsonrpc(request: Request):
+    """JSON-RPC MCP (initialize / tools) — Bearer via middleware, pas le cookie."""
+    return await handle_mcp_post(request)
+
+
+class _McpSlashFix:
+    """Starlette Mount('/mcp') laisse path='' pour POST/GET /mcp sans slash."""
+
+    def __init__(self, app: object) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: object, send: object) -> None:
+        if scope.get("type") == "http" and not scope.get("path"):
+            scope = {**scope, "path": "/"}
+        await self.app(scope, receive, send)
+
+
+app.mount("/mcp", _McpSlashFix(MCP_ASGI))
 
 if FRONTEND_DIST.exists():
     # Racine de l'app : le frontend React (retour utilisateur 11/08/2026,

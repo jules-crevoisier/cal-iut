@@ -14,7 +14,13 @@
  * s'affiche pas, le message d'échec du serveur est montré tel quel.
  */
 
-import { creerSeancePersonnalisee, placerSeance, type CreerSeanceBody } from "../api/client";
+import {
+  creerSeancePersonnalisee,
+  modifierSeanceMaquette,
+  placerSeance,
+  type CreerSeanceBody,
+  type PatchSeanceMaquetteBody,
+} from "../api/client";
 import type { Placement } from "../types";
 import { alerterAsync, confirmAsync } from "./confirmDialog";
 
@@ -122,6 +128,40 @@ export async function creerSeanceAvecConfirmation(
         : e2 instanceof Error
           ? e2.message
           : "Erreur de création (forcée)";
+      return { ok: false, message };
+    }
+  }
+}
+
+/** Même confirmer-puis-forcer pour l'overlay maquette (enseignant / type / durée). */
+export async function modifierSeanceMaquetteAvecConfirmation(
+  sessionId: string,
+  corps: PatchSeanceMaquetteBody,
+): Promise<{ ok: true; placement: Placement } | { ok: false; message: string }> {
+  try {
+    return { ok: true, placement: await modifierSeanceMaquette(sessionId, corps) };
+  } catch (e) {
+    const detail = detailConflit(e);
+    if (!detail) {
+      return { ok: false, message: e instanceof Error ? e.message : "Modification impossible" };
+    }
+    if (detail.blocking_conflicts.length > 0) {
+      await alerterAsync(detail.blocking_conflicts.join(String.fromCharCode(10)), { title: "Modification impossible" });
+      return { ok: false, message: detail.blocking_conflicts.join(" · ") };
+    }
+    const forcer = await confirmAsync([...detail.hard_conflicts, ...detail.soft_warnings].join("\n"), {
+      confirmLabel: "Enregistrer quand même",
+    });
+    if (!forcer) return { ok: false, message: "Modification annulée." };
+    try {
+      return { ok: true, placement: await modifierSeanceMaquette(sessionId, { ...corps, force: true }) };
+    } catch (e2) {
+      const detail2 = detailConflit(e2);
+      const message = detail2
+        ? [...detail2.hard_conflicts, ...detail2.soft_warnings].join(" · ")
+        : e2 instanceof Error
+          ? e2.message
+          : "Erreur de modification (forcée)";
       return { ok: false, message };
     }
   }

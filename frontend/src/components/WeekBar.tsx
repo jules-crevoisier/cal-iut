@@ -9,7 +9,7 @@
  * ne montrait ni la charge relative ni les dates, cf. docs/DATA.md).
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { WeekRow } from "../types/app";
 
@@ -25,9 +25,21 @@ interface WeekBarProps {
    * l'histogramme existant plutôt qu'un nouveau composant, `countByWeekIndex`
    * portant alors des heures au lieu d'un compte de séances). */
   unit?: "creneaux" | "heures";
+  /** Dépôt d'une séance déjà en cours de glisser : déplace vers cette
+   *  semaine (même jour / créneau). */
+  onDropWeek?: (displayIndex: number) => void;
+  dropEnabled?: boolean;
 }
 
-export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit = "creneaux" }: WeekBarProps) {
+export function WeekBar({
+  weekRows,
+  countByWeekIndex,
+  selected,
+  onSelect,
+  unit = "creneaux",
+  onDropWeek,
+  dropEnabled = false,
+}: WeekBarProps) {
   const counts = weekRows.map((wr) => (wr.weekIndex !== null ? countByWeekIndex.get(wr.weekIndex) ?? 0 : 0));
   const max = Math.max(1, ...counts);
   // Infobulle INTERNE (retour utilisateur 28/08/2026 : « internalise moi les
@@ -37,6 +49,8 @@ export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit =
   // survolée : la `.weekbar` défile horizontalement (`overflow-x: auto`),
   // un positionnement relatif au conteneur se décalerait au défilement.
   const [survol, setSurvol] = useState<{ texte: string; x: number; y: number } | null>(null);
+  const [dropCible, setDropCible] = useState<number | null>(null);
+  const ignorerClic = useRef(false);
 
   // Première / sélectionnée / dernière — mais jamais le même libellé deux
   // fois : quand la semaine choisie EST la première ou la dernière (cas le
@@ -59,7 +73,7 @@ export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit =
   };
 
   return (
-    <div className="weekbar-wrap">
+    <div className={"weekbar-wrap" + (dropEnabled ? " weekbar-drop-actif" : "")}>
       <div className="weekbar">
         {weekRows.map((wr, i) => {
           const count = counts[i];
@@ -72,19 +86,42 @@ export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit =
           // peu chargée. Une semaine à 0 créneau (non bloquée) est
           // maintenant à 0 % — seul le remplissage réel compte.
           const barHeight = wr.blocked ? 100 : count === 0 ? 0 : (count / max) * 100;
+          const accepteDepot = Boolean(onDropWeek) && !wr.blocked && wr.weekIndex !== null;
           return (
             <button
               key={wr.monday}
               type="button"
               aria-label={title}
-              className={"weekbar-bar" + (i === selected ? " active" : "") + (wr.blocked ? " blocked" : "")}
-              onClick={() => onSelect(i)}
+              className={
+                "weekbar-bar"
+                + (i === selected ? " active" : "")
+                + (wr.blocked ? " blocked" : "")
+                + (dropCible === i ? " drop-cible" : "")
+              }
+              onClick={() => {
+                if (ignorerClic.current) {
+                  ignorerClic.current = false;
+                  return;
+                }
+                onSelect(i);
+              }}
               onMouseEnter={(e) => montrer(e, title)}
               onMouseLeave={() => setSurvol(null)}
-              // Clavier aussi : l'infobulle native apparaissait au survol
-              // seulement, celle-ci suit aussi la navigation au clavier.
               onFocus={(e) => montrer(e, title)}
               onBlur={() => setSurvol(null)}
+              onDragOver={(e) => {
+                if (!accepteDepot) return;
+                e.preventDefault();
+                if (dropCible !== i) setDropCible(i);
+              }}
+              onDragLeave={() => setDropCible((cur) => (cur === i ? null : cur))}
+              onDrop={(e) => {
+                if (!accepteDepot || !onDropWeek) return;
+                e.preventDefault();
+                ignorerClic.current = true;
+                setDropCible(null);
+                onDropWeek(i);
+              }}
             >
               <span className="bar" style={{ height: `${barHeight}%` }} />
             </button>
