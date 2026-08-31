@@ -33,6 +33,7 @@ import httpx
 
 URL_ENV = "CAL_IUT_PROD_URL"
 MDP_ENV = "CAL_IUT_PROD_PASSWORD"
+EMAIL_ENV = "CAL_IUT_PROD_EMAIL"
 
 # Une séance, réduite à ce qui peut différer entre deux instances.
 Etat = tuple[int, int, int, str | None]  # (semaine, jour, créneau, room_id)
@@ -44,15 +45,20 @@ class SyncError(RuntimeError):
 
 @dataclass
 class Instance:
-    """Une instance cal-iut joignable par HTTP (locale ou distante)."""
+    """Une instance cal-iut joignable par HTTP (locale ou distante).
+
+    `email` — compte réel (comptes utilisateurs, cutover 31/08/2026,
+    remplace l'ancien mot de passe unique partagé) : le rôle associé doit
+    être `edit` ou plus, ces opérations appellent des routes de mutation."""
 
     url: str
     mot_de_passe: str
+    email: str
     _client: httpx.Client | None = field(default=None, repr=False)
 
     def __enter__(self) -> Instance:
         self._client = httpx.Client(base_url=self.url.rstrip("/"), timeout=30.0, follow_redirects=True)
-        r = self._client.post("/auth/login", json={"password": self.mot_de_passe})
+        r = self._client.post("/auth/login", json={"email": self.email, "password": self.mot_de_passe})
         if r.status_code != 200:
             raise SyncError(f"Connexion refusée sur {self.url} (HTTP {r.status_code}).")
         return self
@@ -143,12 +149,13 @@ def comparer(local: dict[str, Etat], distant: dict[str, Etat]) -> Comparaison:
 def prod_depuis_env() -> Instance:
     url = os.environ.get(URL_ENV)
     mdp = os.environ.get(MDP_ENV)
-    if not url or not mdp:
+    email = os.environ.get(EMAIL_ENV)
+    if not url or not mdp or not email:
         raise SyncError(
-            f"Production non configurée : renseigner {URL_ENV} et {MDP_ENV} "
+            f"Production non configurée : renseigner {URL_ENV}, {EMAIL_ENV} et {MDP_ENV} "
             "(par exemple dans le fichier `.env`, jamais commité)."
         )
-    return Instance(url=url, mot_de_passe=mdp)
+    return Instance(url=url, mot_de_passe=mdp, email=email)
 
 
 @dataclass

@@ -13,15 +13,19 @@ présence suffit désormais, pour les deux types de lien.
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from cal_iut.api import auth
+from cal_iut.api import accounts, auth
 from cal_iut.api.main import app
 from cal_iut.api.state import get_state
 from cal_iut.calendar.academic import build_default_calendar_2026_2027
+from cal_iut.db import session as db_session
+from cal_iut.db.models import User
+from cal_iut.db.session import get_db, init_db
 from cal_iut.ingestion.config_loader import load_groups
 from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
@@ -34,16 +38,55 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def _sans_session():
+def _sans_session(tmp_path):
     """Repart d'un client SANS cookie avant chaque test. Le `TestClient` est
     partagé par le module et conserve les cookies : un test qui se connecte
     laissait sa session active pour les suivants, si bien qu'un test censé
     vérifier l'accès PUBLIC recevait en réalité le payload admin — il
     passait isolément et échouait dans la suite complète. Chaque test
-    déclare donc désormais son authentification lui-même."""
+    déclare donc désormais son authentification lui-même.
+
+    Base de comptes isolée par test (31/08/2026, cutover comptes
+    utilisateurs) — même schéma que `test_comptes_utilisateurs.py::
+    _isolation` : les deux tests qui se connectent ici créent un vrai
+    compte admin, jamais dans la vraie `data/state/cal-iut.db` du dépôt."""
+    etat = get_state()
+    ancien_db_path = etat.db_path
+    db_path = tmp_path / f"auth_{uuid.uuid4().hex}.db"
+    db_session._engine = None
+    db_session._SessionLocal = None
+    init_db(db_path)
+    etat.db_path = db_path
     client.cookies.clear()
     yield
     client.cookies.clear()
+    etat.db_path = ancien_db_path
+    if db_session._engine:
+        db_session._engine.dispose()
+    db_session._engine = None
+    db_session._SessionLocal = None
+
+
+_ADMIN_MOT_DE_PASSE = "Motdepasse123"  # >= 10 caractères (min_length du contrat comptes)
+
+
+def _login_admin() -> None:
+    """Remplace l'ancien `client.post("/auth/login", json={"password": ...})`
+    (mot de passe partagé, supprimé) — crée un vrai compte admin actif
+    directement en base (adresse `accounts.ADMIN_EMAILS`) puis se connecte
+    avec le nouveau schéma `{email, password}`."""
+    email = next(iter(accounts.ADMIN_EMAILS))
+    db = get_db(get_state().db_path)
+    try:
+        db.add(User(
+            email=email, password_hash=accounts.hash_password(_ADMIN_MOT_DE_PASSE),
+            role="admin", status="active",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    reponse = client.post("/auth/login", json={"email": email, "password": _ADMIN_MOT_DE_PASSE})
+    assert reponse.status_code == 200, reponse.text
 
 
 def test_une_valeur_non_vide_authentifie() -> None:
@@ -114,8 +157,7 @@ def test_app_state_expose_le_code_en_clair_pour_profs_et_groupes(etat_avec_seanc
     """Le vrai producteur du payload (`html_view.build_payload`, via le vrai
     endpoint `/app-state`) — `teacherTokens`/`groupTokens` associent
     maintenant chaque code à lui-même, plus un jeton signé."""
-    reponse = client.post("/auth/login", json={"password": "test-password"})
-    assert reponse.status_code == 200
+    _login_admin()
     corps = client.get("/app-state").json()
     assert corps["teacherTokens"]["KBR"] == "KBR"
     assert corps["groupTokens"]["but1-td-ab"] == "but1-td-ab"
@@ -154,6 +196,6 @@ def test_une_session_admin_recoit_le_payload_complet(etat_avec_seance, monkeypat
         "cal_iut.ingestion.config_loader.load_teacher_contacts",
         lambda config_dir: {"KBR": "kyllian.bresson@univ-reims.fr"},
     )
-    assert client.post("/auth/login", json={"password": "test-password"}).status_code == 200
+    _login_admin()
     corps = client.get("/app-state").json()
     assert corps["teacherEmails"] == {"KBR": "kyllian.bresson@univ-reims.fr"}

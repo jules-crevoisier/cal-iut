@@ -124,6 +124,46 @@ class ObjectiveWeights(Base):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class User(Base):
+    """Compte utilisateur (email + mot de passe) — remplace le mot de passe
+    unique partagé (`CAL_IUT_PASSWORD`, `api/auth.py`). `role`/`status` sont
+    relus depuis cette table à CHAQUE requête (jamais mis en cache dans le
+    cookie de session) : un changement de rôle ou une désactivation prend
+    effet dès la requête suivante de l'utilisateur concerné."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(16), default="read_only")
+    status: Mapped[str] = mapped_column(String(32), default="pending_email")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    email_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    activated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    tokens: Mapped[list["EmailToken"]] = relationship(back_populates="user", foreign_keys="EmailToken.user_id")
+
+
+class EmailToken(Base):
+    """Jeton à usage unique (confirmation d'email ou réinitialisation de mot
+    de passe) — seul le hash SHA-256 est stocké, jamais la valeur brute
+    envoyée par mail (même logique qu'un mot de passe, cf. `password_hash`)."""
+
+    __tablename__ = "email_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    purpose: Mapped[str] = mapped_column(String(32))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="tokens", foreign_keys=[user_id])
+
+
 class TeacherPreference(Base):
     """Préférences apprises par enseignant/matière."""
 

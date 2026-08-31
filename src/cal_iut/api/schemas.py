@@ -1,10 +1,77 @@
 """Schémas API FastAPI."""
 
-from pydantic import BaseModel, Field
+import re
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
+
+# Vérification légère du format, pas RFC5322 complet : suffisante pour
+# rejeter une saisie clairement invalide avant qu'elle ne devienne un
+# compte `pending_email` inutilisable (cf. revue qualité du 31/08/2026 —
+# aucune validation de format n'existait, une adresse malformée passait
+# jusqu'à l'échec silencieux de l'envoi Resend). Pas de dépendance
+# `email-validator` ajoutée pour ça seul : ce regex suffit au besoin réel.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _valider_email(valeur: str) -> str:
+    valeur = valeur.strip()
+    if not _EMAIL_RE.match(valeur):
+        raise ValueError("Adresse email invalide.")
+    return valeur
 
 
 class LoginRequest(BaseModel):
+    email: str
     password: str
+
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=10)
+
+    _valider = field_validator("email")(_valider_email)
+
+
+class SignupResponse(BaseModel):
+    status: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+    _valider = field_validator("email")(_valider_email)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=10)
+
+
+class MeResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    status: str
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    status: str
+    created_at: str
+    email_confirmed_at: str | None = None
+    activated_at: str | None = None
+
+
+class AdminUserListResponse(BaseModel):
+    users: list[AdminUserResponse]
+
+
+class AdminUserUpdateRequest(BaseModel):
+    role: Literal["read_only", "edit", "admin"] | None = None
+    status: Literal["active", "disabled"] | None = None
 
 
 class IngestRequest(BaseModel):

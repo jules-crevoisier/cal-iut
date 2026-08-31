@@ -38,6 +38,8 @@ from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom
 
+from conftest import creer_compte_actif_et_connecter
+
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
 
@@ -58,7 +60,7 @@ def _semaine_jour_du(cible: date, calendrier, semestre: str = "S1") -> tuple[int
 
 
 @pytest.fixture
-def client():
+def client(db_isole):
     etat = get_state()
     ancien = {
         c: getattr(etat, c)
@@ -97,7 +99,7 @@ def client():
     etat.config_dir = ROOT / "data" / "config"
 
     c = TestClient(app)
-    c.post("/auth/login", json={"password": "test-password"})
+    creer_compte_actif_et_connecter(c)
     yield c
 
     for cle, valeur in ancien.items():
