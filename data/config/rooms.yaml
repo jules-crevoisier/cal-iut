@@ -341,6 +341,33 @@ room_assignment_rules:
     preferred_room_types: [tp_standard, tp_vr_reseaux]
     fallback_room_types: [standard]
 
+  # -- WRA507D (Dispositifs interactifs) / WSA501D (SAE associée) : game dev,
+  #    H.205 en priorité absolue -- retour utilisateur 31/08/2026 : « on veut
+  #    prioriser la 205 pour le game dev donc WRA507D et WSA501D ». Les deux
+  #    sont déjà couvertes par la règle WRA502D-WRA510D/WSA501D plus haut
+  #    (préférence tp_standard/standard, H.205 seulement en dernier recours
+  #    TP via la règle générique `["*D"]`) — celle-ci, placée après, gagne
+  #    pour ces deux modules précis sans toucher aux 8 autres du groupe.
+  - course_code_patterns: ["WRA507D", "WSA501D"]
+    session_types: [TD, TP]
+    preferred_room_types: [tp_vr_reseaux]
+    fallback_room_types: [tp_standard, standard]
+
+  # -- Cours de Guillaume Leulier (GLE) : H.009 en priorité -- retour
+  # utilisateur 31/08/2026 : « pour tous les cours de guillaume leulier on
+  # veut en prio la h009 ». Modules où il est LEAD (cf. progression.json) ;
+  # WR109 exclu, déjà couvert par la règle WR108/WR109 ci-dessus avec la
+  # même priorité (td_design = H.009). Les cours "Projet Ens."/"Stage"/
+  # "Alternance" où il n'apparaît qu'en co-enseignant parmi 10+ autres
+  # (WS3PJ, WSA411M, WS611D...) sont volontairement exclus : ce ne sont pas
+  # "ses" cours, et la règle s'appliquerait aussi aux séances des autres
+  # enseignants du module.
+  - course_code_patterns:
+      ["WS103", "WR209", "WR310D", "WRA319M", "WRA406M", "WSA401M", "WSA410M", "WRA506C", "WSA510C", "WRA602C"]
+    session_types: [TD, TP]
+    preferred_room_types: [td_design]
+    fallback_room_types: [tp_standard, standard]
+
   # -- Évaluations : A.018 obligatoire, quel que soit le module (règle dure,
   #    priorité maximale car placée en dernier -> gagne sur toute autre règle) --
   - is_eval: true
