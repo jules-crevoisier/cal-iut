@@ -4,6 +4,7 @@ import { DayStrip, todayIndex } from "../components/DayStrip";
 import { SemesterAgenda } from "../components/SemesterAgenda";
 import { SessionGrid } from "../components/SessionGrid";
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
+import { CopyButton } from "../components/CopyButton";
 import { ShareBar } from "../components/ShareBar";
 import { usePreferences } from "../utils/preferences";
 import { WeekBar } from "../components/WeekBar";
@@ -11,7 +12,6 @@ import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { copyToClipboard } from "../utils/clipboard";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 
 interface GroupeViewProps {
@@ -43,7 +43,6 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
   const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, route.sem));
   const [mobileDay, setMobileDay] = useState(todayIndex());
   const narrow = useNarrowScreen();
-  const [abonnementCopie, setAbonnementCopie] = useState(false);
 
   // Resynchronise depuis un lien externe (recherche, « à traiter ») qui ne
   // touche que la route sans démonter cette vue.
@@ -120,7 +119,7 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
           lien), hors de propos une fois que c'est LE groupe qui regarde sa
           propre page via ce même lien — retiré en lecture seule pour ne
           garder que l'essentiel (barre des semaines + planning), même
-          traitement que la vue Enseignant. Le bouton .ics reste accessible
+          traitement que la vue Enseignant. Le lien agenda reste accessible
           en lecture seule, déplacé dans l'en-tête du planning ci-dessous. */}
       {!readOnly && (
         <ShareBar
@@ -151,20 +150,11 @@ export function GroupeView({ payload, route, setRoute, readOnly = false }: Group
               {nomComplet} — {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
             </h3>
             <div className="section-header-actions no-print">
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  const ok = await copyToClipboard(subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? ""));
-                  if (ok) {
-                    setAbonnementCopie(true);
-                    setTimeout(() => setAbonnementCopie(false), 1400);
-                  }
-                }}
+              <CopyButton
+                text={() => subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? "")}
+                idleLabel="Lien agenda"
                 title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
-              >
-                {abonnementCopie ? "Copié ✓" : "Lien agenda"}
-              </button>
+              />
               {/* À CÔTÉ du lien d'abonnement, comme demandé — et surtout
                   visible ici : c'est la page que reçoit la personne, donc
                   celle depuis laquelle elle voudra partager. */}

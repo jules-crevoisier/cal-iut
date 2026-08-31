@@ -5,10 +5,10 @@ import { SendTeacherMailsModal } from "../components/SendTeacherMailsModal";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { copyToClipboard } from "../utils/clipboard";
+import { CopyButton } from "../components/CopyButton";
 import { confirmAsync } from "../utils/confirmDialog";
 import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
-import { downloadIcs, sessionsWithDates } from "../utils/ics";
+import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { NotificationsPanel } from "../components/NotificationsPanel";
 
 type SubTab = "salles" | "cours" | "calendrier" | "liens" | "notifications";
@@ -179,6 +179,8 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
 
   const teacherItems = teacherCodes.map((code) => ({
     code,
+    kind: "prof" as const,
+    token: payload.teacherTokens[code] ?? "",
     label: payload.teacherLabels[code] ?? code,
     items: sessionsWithDates(payload, payload.rows.filter((r) => r.te.includes(code))),
     link: buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" }),
@@ -190,6 +192,8 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
       const parcours = payload.groupParcours[gid];
       return {
         code: gid,
+        kind: "groupe" as const,
+        token: payload.groupTokens[gid] ?? "",
         // "TD GH" seul existe en double (BUT2-CREACOM-FC ET BUT3-CREACOM-FC,
         // labels identiques sinon) — le parcours en préfixe désambiguïse
         // partout où cette liste s'affiche à plat.
@@ -215,22 +219,18 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
       link: r.link,
     }));
 
-  const copyAll = async () => {
-    const text = [...teacherItems, ...groupItems].map((r) => `${r.label}\t${r.link}`).join("\n");
-    await copyToClipboard(text);
-  };
-
   return (
     <div className="panel">
       <p className="muted">
-        Un lien par destinataire, à transmettre tel quel : il ouvre le fichier directement sur SON planning, en
-        lecture seule. Le bouton <span className="mono">.ics</span> produit un fichier à importer dans son propre
-        agenda.
+        Un lien par destinataire, à transmettre tel quel : il ouvre directement SON planning, en lecture seule. Le
+        bouton « Lien agenda » copie l'URL à coller dans Google Agenda / Apple Calendrier / Outlook (« ajouter un
+        agenda par URL ») — le calendrier se remet à jour tout seul, sans re-télécharger de fichier.
       </p>
       <div className="linkactions">
-        <button type="button" className="btn btn--ghost btn--sm" onClick={copyAll}>
-          Copier tous les liens
-        </button>
+        <CopyButton
+          text={() => [...teacherItems, ...groupItems].map((r) => `${r.label}\t${r.link}`).join("\n")}
+          idleLabel="Copier tous les liens"
+        />
         <button type="button" className="btn btn--ghost btn--sm" onClick={() => downloadDirectoryCsv(allRows())}>
           Télécharger l'annuaire (.csv)
         </button>
@@ -255,7 +255,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           </thead>
           <tbody>
             {teacherItems.map((t) => (
-              <DirectoryRow key={t.code} row={t} payload={payload} showMail />
+              <DirectoryRow key={t.code} row={t} showMail />
             ))}
           </tbody>
         </table>
@@ -275,7 +275,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           </thead>
           <tbody>
             {groupItems.map((g) => (
-              <DirectoryRow key={g.code} row={g} payload={payload} />
+              <DirectoryRow key={g.code} row={g} />
             ))}
           </tbody>
         </table>
@@ -286,11 +286,17 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
 
 function DirectoryRow({
   row,
-  payload,
   showMail = false,
 }: {
-  row: { code: string; label: string; items: ReturnType<typeof sessionsWithDates>; link: string; mail: string };
-  payload: AppPayload;
+  row: {
+    code: string;
+    kind: "prof" | "groupe";
+    token: string;
+    label: string;
+    items: ReturnType<typeof sessionsWithDates>;
+    link: string;
+    mail: string;
+  };
   showMail?: boolean;
 }) {
   const hours = (row.items.reduce((n, it) => n + (it.dur || 1), 0) * 1.5).toLocaleString("fr-FR");
@@ -341,27 +347,24 @@ function DirectoryRow({
       <td>{row.items.length}</td>
       <td>{hours} h</td>
       <td>
-        <button type="button" className="subtabbtn small" onClick={() => copyToClipboard(row.link)}>
-          Copier
-        </button>
+        <CopyButton text={row.link} idleLabel="Copier" />
       </td>
       <td>
-        <button
-          type="button"
-          className="subtabbtn small"
-          onClick={() => downloadIcs(row.items, row.label, row.code, payload.groupLabels, payload.teacherLabels)}
-        >
-          .ics
-        </button>
+        <CopyButton
+          text={() => subscribeUrl(row.kind, row.code, row.token)}
+          idleLabel="Lien agenda"
+          title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook (« ajouter un agenda par URL ») — se remet à jour tout seul, pas besoin de re-télécharger."
+        />
       </td>
       {showMail && (
         <td>
           <button
             type="button"
-            className="subtabbtn small"
+            className={`btn btn--ghost btn--sm${etatEnvoi === "ok" ? " is-copied" : ""}${etatEnvoi === "echec" ? " is-copy-failed" : ""}${etatEnvoi === "envoi" ? " is-busy" : ""}`}
             onClick={envoyer}
             disabled={!row.mail || etatEnvoi === "envoi"}
             title={row.mail || "Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml"}
+            aria-live="polite"
           >
             {etatEnvoi === "envoi"
               ? "Envoi…"

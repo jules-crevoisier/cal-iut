@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
+import { CopyButton } from "./CopyButton";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { copyToClipboard } from "../utils/clipboard";
 
 interface TeacherLinksListProps {
   payload: AppPayload;
@@ -14,8 +14,6 @@ interface TeacherLinksListProps {
  * export CSV, + les groupes) reste dans Référentiel → Référence → Liens &
  * partage, pour qui a besoin de plus ; ici, juste la liste à copier vite. */
 export function TeacherLinksList({ payload }: TeacherLinksListProps) {
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-
   const teachers = useMemo(
     () =>
       Object.keys(payload.teacherLabels)
@@ -25,16 +23,8 @@ export function TeacherLinksList({ payload }: TeacherLinksListProps) {
           label: payload.teacherLabels[code] ?? code,
           link: buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" }),
         })),
-    [payload.teacherLabels],
+    [payload.teacherLabels, payload.teacherTokens],
   );
-
-  const handleCopy = async (code: string, link: string) => {
-    const ok = await copyToClipboard(link);
-    if (ok) {
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1400);
-    }
-  };
 
   return (
     <div className="panel">
@@ -46,9 +36,7 @@ export function TeacherLinksList({ payload }: TeacherLinksListProps) {
               {t.label} <span className="mono muted">{t.code}</span>
             </span>
             <input className="teacherlinks-input mono" type="text" readOnly value={t.link} onFocus={(e) => e.currentTarget.select()} />
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => handleCopy(t.code, t.link)}>
-              {copiedCode === t.code ? "Copié ✓" : "Copier"}
-            </button>
+            <CopyButton text={t.link} idleLabel="Copier" />
           </div>
         ))}
       </div>
