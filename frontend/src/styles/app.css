@@ -107,7 +107,8 @@ h1, h2, h3 {
 }
 
 .app {
-  min-height: 100vh;
+  min-height: 100dvh;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -188,6 +189,7 @@ h1, h2, h3 {
 
 .toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1089,8 +1091,88 @@ h1, h2, h3 {
   color: var(--text);
 }
 
+/* Reprise OBLIGATOIRE après le bloc desktop de `.sidenav` ci-dessus.
+   Le même tiroir était déjà écrit vers la ligne 272, mais `flex: 0 0 240px`,
+   `position: sticky` et `.navtoggle-bar { display: none }` viennent PLUS
+   TARD dans le fichier : à spécificité égale, ils gagnaient. Résultat sous
+   1024px : le menu restait une colonne de 240px dans le flex, le contenu
+   n'avait plus qu'~80px, et le bouton ☰ n'apparaissait pas. */
+@media (max-width: 1023.98px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .navtoggle-bar {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .navtoggle {
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: none;
+    background: none;
+    color: var(--text);
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  .sidenav {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(84vw, 300px);
+    flex: none;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+    z-index: 60;
+    box-shadow: var(--shadow);
+    align-self: auto;
+    height: 100dvh;
+  }
+
+  .sidenav.open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.2s ease, visibility 0s linear 0s;
+  }
+
+  .sidenav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 18, 26, 0.4);
+    z-index: 50;
+  }
+
+  .sidenav-close {
+    display: flex;
+    width: 44px;
+    height: 44px;
+  }
+
+  .navbtn {
+    min-height: 44px;
+  }
+
+  .app-main,
+  .view,
+  .panel {
+    min-width: 0;
+  }
+}
+
 .app-main {
   flex: 1;
+  min-width: 0;
   padding: 20px 24px 40px;
 }
 
@@ -1099,6 +1181,7 @@ h1, h2, h3 {
   flex-direction: column;
   gap: 18px;
   max-width: 1400px;
+  min-width: 0;
 }
 
 /* Lien personnel (prof/groupe) : pas de nav/barre latérale à partager
@@ -2058,6 +2141,14 @@ table.promo-grid.teacher-filter .promo-chip.chip-highlight {
   display: flex;
   gap: 6px;
   margin-bottom: 12px;
+  /* Même rangée, même ordre : sous 320px les 5 onglets ne tiennent
+     pas, donc on défile dedans au lieu d'élargir la page (audit
+     31/08/2026). `min-width: 0` est obligatoire : c'est un item de
+     `.view` (flex colonne), donc `min-width: auto` = largeur des
+     boutons bout à bout. */
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .subtabbtn {
@@ -2070,6 +2161,7 @@ table.promo-grid.teacher-filter .promo-chip.chip-highlight {
   background: var(--surface-2);
   color: var(--muted);
   cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .subtabbtn.active {
@@ -2092,6 +2184,7 @@ table.promo-grid.teacher-filter .promo-chip.chip-highlight {
 
 .ref-table-wrap {
   overflow-x: auto;
+  min-width: 0;
 }
 
 table.ref {
