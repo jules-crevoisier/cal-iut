@@ -541,6 +541,28 @@ plus de contradiction ; légère redondance sans conséquence entre "mardi
 après-midi" et "mardi" qui la couvre déjà). Vérifié le 05/08/2026 en
 rechargeant `load_all_constraints` — aucune trace de l'ancienne
 incohérence dans les données actuelles.
+  **CORRECTIF DU 31/08/2026** : cette "redondance sans conséquence" en avait
+  une, et une grosse. Le CSV source répète "mardi après-midi" PUIS "mardi"
+  seul ; le parseur lit ça comme DEUX indisponibilités distinctes, la
+  seconde couvrant tout le mardi. Combinée à "lundi toute la journée" et
+  "vendredi toute la journée", la donnée bloquait BTO les lundis et
+  vendredis toute l'année — bien au-delà de ce qu'il avait réellement
+  déclaré, et c'est justement ce qui a fini par produire un emploi du temps
+  irréalisable pour lui (73% de ses séances tombaient le mercredi, qu'il ne
+  peut pas faire). Kyllian Bresson a fait redonner à Barthélémy ses vraies
+  disponibilités : un code couleur par demi-journée (idéal / acceptable /
+  impossible), semaine par semaine, du 31 août au 23 octobre 2026. Elles
+  remplacent l'indisponibilité récurrente fautive via un nouveau mécanisme,
+  `cancelled_forbidden_slots` (`data/config/teacher_availability.yaml`,
+  `models/entities.py`) : une entrée YAML ne pouvait jusqu'ici que RESTREINDRE
+  (`merge_teacher_availability` unit YAML et JSON), jamais lever un blocage
+  reconduit depuis le JSON régénéré — indispensable dès qu'une source brute
+  s'avère fausse plutôt qu'incomplète. Vérifié par 7 tests
+  (`tests/test_disponibilites_bto_2026_08_31.py`) : le blocage récurrent
+  disparaît entièrement (0 `forbidden_slots`), les 29 dates précises le
+  remplacent, et le point de cohérence signalé par l'utilisateur (jeudi 22
+  octobre seul jour non-mercredi bloqué en entier sur les semaines 7-9) est
+  vérifié comme garde-fou contre une inversion jour/moment.
 
 
 

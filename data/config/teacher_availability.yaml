@@ -37,89 +37,150 @@ teachers:
         slots: [1, 2]
         note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Kyllian Bresson, 26/08/2026)"
 
-  # --- Barthélémy TOMASINA : matins de septembre ---------------------------
-  # Mail du 28/08/2026 (à Kyllian, Jules, Fabrice) : « Habituellement je
-  # commence les cours en novembre et je ne pensais pas avoir des cours en
-  # septembre. [...] concernant septembre, je suis indisponible tous les
-  # matins de ce mois. » Disponibilité annoncée à partir d'octobre : la
-  # restriction s'arrête donc au 30 septembre, elle n'est pas reconduite.
+  # --- Barthélémy TOMASINA : disponibilités réelles, semaines 2 à 9 -------
+  # Disponibilités transmises le 31/08/2026 par Kyllian Bresson, redonnées
+  # par Barthélémy lui-même après un premier passage raté (cf. ci-dessous) :
+  # code couleur bleu (idéal) / noir (acceptable) / rouge (impossible), du
+  # 31 août au 23 octobre 2026 (semaines 2 à 9).
   #
-  # Créneaux 0/1/2 = 8h-9h30, 9h30-11h, 11h-12h30. Ses après-midis restent
-  # ouverts (c'est explicitement ce qu'il propose), d'où un blocage par
-  # créneaux et non par journée entière.
+  # TROIS RÈGLES : aucun matin disponible avant le 5 octobre (sa formation
+  # bloque tout Sept.) ; le MERCREDI est impossible sur les huit semaines,
+  # matin ET après-midi, sans exception ; la semaine 2 (31 août-4 sept.) est
+  # entièrement exclue (rentrée / pré-rentrée).
   #
-  # Dates énumérées une à une : `forbidden_date_slots` est le seul des cinq
-  # mécanismes qui sache viser une date précise, il n'existe pas de forme
-  # « tout un mois ». Les 22 jours ci-dessous sont les jours de cours réels
-  # de septembre 2026, dérivés du calendrier (pas saisis à la main).
+  # Remplace l'ancienne indisponibilité 'matins de septembre seulement'
+  # (mail du 28/08/2026) : elle sous-estimait le blocage — les après-midis
+  # de plusieurs journées de septembre sont EUX AUSSI impossibles, la
+  # semaine 2 doit être exclue en entier, et 22 octobre (jeudi) est un
+  # blocage complet distinct du mercredi habituel.
+  #
+  # Les créneaux IDÉAUX (bleu, 7 demi-journées, toutes des matinées
+  # d'octobre : lundi/mardi/jeudi/vendredi S7, mardi/jeudi S8, mardi S9) ne
+  # sont PAS codés ici : rien dans le solveur ne sait aujourd'hui distinguer
+  # une préférence datée d'une simple disponibilité (`preferred_slots` est
+  # récurrent par jour de semaine, pas par date, et n'est de toute façon
+  # câblé dans aucun objectif — vérifié le 31/08/2026). Elles restent donc
+  # de la PROSE, pour un humain qui départage deux placements également
+  # valides : à moyens égaux, préférer un des créneaux idéaux ci-dessus.
   - teacher_code: BTO  # Barthélémy Tomasina (vacataire)
+    # Annule la (fausse) indisponibilité récurrente issue du questionnaire
+    # source : « lundi toute la journée - mardi après midi - mardi - jeudi
+    # après midi - vendredi toute la journée » — le CSV répète « mardi
+    # après-midi » puis « mardi » seul, que le parseur lit comme deux
+    # indisponibilités distinctes (mardi après-midi, PUIS mardi entier), ce
+    # qui bloquait par erreur tout le lundi et le vendredi toute l'année,
+    # bien au-delà de ce que Barthélémy a réellement déclaré. Les
+    # disponibilités précises ci-dessous les remplacent entièrement.
+    cancelled_forbidden_slots:
+      - [0, 0]
+      - [0, 1]
+      - [0, 2]
+      - [0, 3]
+      - [0, 4]
+      - [0, 5]  # lundi toute la journée (faux)
+      - [1, 0]
+      - [1, 1]
+      - [1, 2]
+      - [1, 3]
+      - [1, 4]
+      - [1, 5]  # mardi toute la journée (faux, doublon du CSV)
+      - [3, 3]
+      - [3, 4]
+      - [3, 5]  # jeudi après-midi (faux)
+      - [4, 0]
+      - [4, 1]
+      - [4, 2]
+      - [4, 3]
+      - [4, 4]
+      - [4, 5]  # vendredi toute la journée (faux)
     forbidden_date_slots:
+      - date: "2026-08-31"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S2 lundi — journée entière impossible"
       - date: "2026-09-01"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S2 mardi — journée entière impossible"
       - date: "2026-09-02"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S2 mercredi — journée entière impossible"
       - date: "2026-09-03"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S2 jeudi — journée entière impossible"
       - date: "2026-09-04"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S2 vendredi — journée entière impossible"
       - date: "2026-09-07"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S3 lundi — journée entière impossible"
       - date: "2026-09-08"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S3 mardi — matin impossible"
       - date: "2026-09-09"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S3 mercredi — journée entière impossible"
       - date: "2026-09-10"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S3 jeudi — matin impossible"
       - date: "2026-09-11"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S3 vendredi — matin impossible"
       - date: "2026-09-14"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S4 lundi — matin impossible"
       - date: "2026-09-15"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S4 mardi — journée entière impossible"
       - date: "2026-09-16"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S4 mercredi — journée entière impossible"
       - date: "2026-09-17"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S4 jeudi — matin impossible"
       - date: "2026-09-18"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S4 vendredi — matin impossible"
       - date: "2026-09-21"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S5 lundi — matin impossible"
       - date: "2026-09-22"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S5 mardi — matin impossible"
       - date: "2026-09-23"
-        slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S5 mercredi — journée entière impossible"
       - date: "2026-09-24"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S5 jeudi — matin impossible"
       - date: "2026-09-25"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S5 vendredi — matin impossible"
       - date: "2026-09-28"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S6 lundi — matin impossible"
       - date: "2026-09-29"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S6 mardi — matin impossible"
       - date: "2026-09-30"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S6 mercredi — journée entière impossible"
+      - date: "2026-10-01"
         slots: [0, 1, 2]
-        note: "Indisponible les matins de septembre (mail du 28/08/2026)"
+        note: "S6 jeudi — matin impossible"
+      - date: "2026-10-02"
+        slots: [0, 1, 2]
+        note: "S6 vendredi — matin impossible"
+      - date: "2026-10-07"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S7 mercredi — journée entière impossible"
+      - date: "2026-10-14"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S8 mercredi — journée entière impossible"
+      - date: "2026-10-21"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S9 mercredi — journée entière impossible"
+      - date: "2026-10-22"
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "S9 jeudi — journée entière impossible"
 
 # Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
