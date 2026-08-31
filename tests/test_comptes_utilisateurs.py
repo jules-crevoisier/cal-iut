@@ -255,6 +255,20 @@ def test_signup_normalise_l_email_en_minuscules_et_sans_espaces(monkeypatch) -> 
         db.close()
 
 
+def test_signup_avec_un_email_mal_forme_renvoie_422_propre() -> None:
+    """Régression du 31/08/2026 : le validateur d'email personnalisé
+    (`schemas.py::_valider_email`) lève un `ValueError` que Pydantic range
+    dans `ctx.error` — un objet Python brut, non sérialisable en JSON.
+    `_erreurs_validation_sans_secret` (`main.py`, ajouté pour caviarder les
+    mots de passe des erreurs 422) le renvoyait tel quel : 500 au lieu de
+    422 sur toute adresse malformée, découvert en testant CE correctif en
+    conditions réelles (prod), pas par un test — trou de couverture comblé
+    ici."""
+    reponse = client.post("/auth/signup", json={"email": "pas-un-email", "password": MOT_DE_PASSE})
+    assert reponse.status_code == 422, reponse.text
+    assert "ctx" not in reponse.json()["detail"][0]
+
+
 @pytest.mark.parametrize("statut_existant", ["active", "pending_admin_activation", "disabled"])
 def test_signup_avec_email_deja_confirme_renvoie_409(monkeypatch, statut_existant) -> None:
     _inserer_utilisateur("deja@example.test", status=statut_existant)
