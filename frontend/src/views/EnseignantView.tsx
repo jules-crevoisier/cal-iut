@@ -9,6 +9,7 @@ import { ShareBar } from "../components/ShareBar";
 import { usePreferences } from "../utils/preferences";
 import { TeacherLinksList } from "../components/TeacherLinksList";
 import { WeekBar } from "../components/WeekBar";
+import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
@@ -16,21 +17,17 @@ import type { AppPayload } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { displayIndexForSolverWeek } from "../utils/weekDisplay";
 
 interface EnseignantViewProps {
   payload: AppPayload;
   route: Route;
   setRoute: (patch: Partial<Route>) => void;
   readOnly?: boolean;
+  onOpenSearch?: () => void;
 }
 
-function displayIndexForSolverWeek(payload: AppPayload, solverWeek: number | null): number {
-  if (solverWeek === null) return 0;
-  const idx = payload.weekRows.findIndex((w) => w.weekIndex === solverWeek);
-  return idx >= 0 ? idx : 0;
-}
-
-export function EnseignantView({ payload, route, setRoute, readOnly = false }: EnseignantViewProps) {
+export function EnseignantView({ payload, route, setRoute, readOnly = false, onOpenSearch }: EnseignantViewProps) {
   const teacherCodes = useMemo(
     () =>
       Object.keys(payload.teacherLabels).sort((a, b) =>
@@ -70,6 +67,22 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
   for (const it of allItems) hoursByWeek.set(it.w, (hoursByWeek.get(it.w) ?? 0) + (it.dur || 1) * 1.5);
 
   const info = payload.teachers.find((t) => t.code === code);
+
+  if (!readOnly && route.prof && !(route.prof in payload.teacherLabels)) {
+    return <FicheIntrouvable libelle="Enseignant" id={route.prof} onOpenSearch={onOpenSearch} />;
+  }
+
+  const coursParCode = new Map<string, { nom: string; types: Set<string>; heures: number }>();
+  for (const it of allItems) {
+    const cur = coursParCode.get(it.c) ?? { nom: it.n, types: new Set<string>(), heures: 0 };
+    cur.types.add(it.t);
+    cur.heures += (it.dur || 1) * 1.5;
+    coursParCode.set(it.c, cur);
+  }
+  const manquantesProf = (payload.seancesNonPlacees ?? []).filter((s) => s.profs.includes(code));
+  const absences = payload.exceptions.filter(
+    (e) => e.kind === "teacher_absence" && e.active && e.teacher_code === code,
+  );
 
   const handleChangeTeacher = (next: string) => {
     setCode(next);
@@ -191,6 +204,94 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
           </div>
         );
       })()}
+
+      {!readOnly && !showAllLinks && (
+        <div className="panel">
+          <h3>Profil</h3>
+          <p>
+            <strong>{payload.teacherLabels[code] ?? code}</strong>{" "}
+            <span className="mono muted">{code}</span>
+            {payload.teacherEmails[code] ? ` · ${payload.teacherEmails[code]}` : ""}
+          </p>
+          <p className="muted">
+            {info?.nPlaced ?? allItems.length} séance(s) placée(s)
+            {manquantesProf.length > 0 ? ` · ${manquantesProf.length} non placée(s)` : ""}
+          </p>
+          {coursParCode.size > 0 && (
+            <div className="ref-table-wrap">
+              <table className="ref">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Matière</th>
+                    <th>Types</th>
+                    <th>Heures</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...coursParCode.entries()].map(([c, v]) => (
+                    <tr key={c}>
+                      <td className="mono">
+                        <button
+                          type="button"
+                          className="linklike"
+                          onClick={() => setRoute({ vue: "cours", cours: c })}
+                        >
+                          {c}
+                        </button>
+                      </td>
+                      <td>{v.nom}</td>
+                      <td>{[...v.types].join(", ")}</td>
+                      <td>{v.heures.toLocaleString("fr-FR")} h</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {manquantesProf.length > 0 && (
+            <>
+              <div className="raw-label">Non placées</div>
+              <ul>
+                {manquantesProf.map((s) => (
+                  <li key={s.id}>
+                    {s.code} {s.type} · {s.groupes.join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {info && info.forbiddenSlots.length > 0 && (
+            <>
+              <div className="raw-label">Créneaux interdits</div>
+              <p className="muted">
+                {info.forbiddenSlots
+                  .map(([d, s]) => `${DAY_LABELS[d] ?? d} ${SLOT_TIMES[s]?.label ?? s}`)
+                  .join(" · ")}
+              </p>
+            </>
+          )}
+          {info && info.forbiddenDates.length > 0 && (
+            <>
+              <div className="raw-label">Dates interdites</div>
+              <p className="muted">{info.forbiddenDates.join(" · ")}</p>
+            </>
+          )}
+          {absences.length > 0 && (
+            <>
+              <div className="raw-label">Absences</div>
+              <ul>
+                {absences.map((e) => (
+                  <li key={e.id}>
+                    {e.exception_date}
+                    {e.reason ? ` — ${e.reason}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
 

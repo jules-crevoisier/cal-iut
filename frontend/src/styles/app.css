@@ -930,13 +930,17 @@ h1, h2, h3 {
   display: flex;
   align-items: stretch;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .app-content {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 .navtoggle-bar {
@@ -1173,7 +1177,9 @@ h1, h2, h3 {
 .app-main {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   padding: 20px 24px 40px;
+  overflow-x: hidden;
 }
 
 .view {
@@ -1190,6 +1196,70 @@ h1, h2, h3 {
    l'emploi du temps ne prend pas toute la page »). */
 .read-only-mode .view {
   max-width: none;
+}
+
+/* Vue Promo : le plafond 1400px laissait une bande vide à ≥1440px alors
+   que la grille a déjà son propre défilement horizontal (cellules à
+   min-width: 92px, volontairement non étirées). `100%` (pas `none`) :
+   on remplit la colonne de contenu SANS laisser le tableau élargir la
+   page sous 1024px. */
+.view.promo {
+  max-width: 100%;
+  width: 100%;
+}
+
+.promo-avec-aplacer {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.promo-principal {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.view.promo .ref-table-wrap {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}
+
+.promo-aplacer-ouvrir {
+  margin-bottom: 4px;
+}
+
+@media (max-width: 1023.98px) {
+  .promo-avec-aplacer {
+    flex-direction: column;
+  }
+
+  .aplacer-panneau {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+  }
+
+  /* Le tableau promo (~20 colonnes × 92px) ne doit pas élargir le document :
+     on borne explicitement au viewport, padding de `.app-main` déduit. */
+  .view.promo .ref-table-wrap {
+    max-width: calc(100vw - 48px);
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Dans un flex ROW, `width: 0` + `flex: 1` force le rétrécissement
+     (sinon min-content du tableau gagne). */
+  .promo-principal {
+    width: 0;
+  }
 }
 
 .panel {
@@ -1995,6 +2065,33 @@ table.promo-grid td.promocell--placeable:focus-visible {
    chip la surchargerait. */
 .promo-chip .rm { color: var(--muted); display: block; }
 
+/* Séance ajoutée manuellement (retour utilisateur 31/08/2026) — deux petits
+   boutons modifier/supprimer, même densité que le reste de la chip (cf.
+   `.promo-chip-salle-btn` juste en dessous : même parti pris, une grille
+   déjà dense n'a pas la place pour de vraies cibles tactiles ici). */
+.promo-chip-custom {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0;
+}
+
+.promo-chip-custom-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.promo-chip-custom-btn:hover,
+.promo-chip-custom-btn:focus-visible {
+  color: var(--text);
+  opacity: 1;
+}
+
 .promo-chip-salle-btn {
   background: none;
   border: none;
@@ -2601,12 +2698,31 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 }
 
 /* ==========================================================================
-   Onglet « À placer » — placement manuel du reliquat du solveur
+   « À placer » — panneau dans Vue Promo (et secours page si pas de payload)
    ==========================================================================
    Écrit en 320 px d'abord : la personne qui rattrape des séances le fait
    souvent debout devant un planning affiché, téléphone à la main. Les cibles
    font 44 px minimum, rien ne déborde horizontalement, et chaque créneau
    proposé se lit d'un coup d'œil (date en clair, horaire, salle). */
+
+.aplacer-panneau {
+  flex: 0 0 min(360px, 32vw);
+  min-width: 0;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+@media (max-width: 1023.98px) {
+  .aplacer-panneau {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+  }
+}
 
 .aplacer-jauge {
   height: 8px;
@@ -2974,7 +3090,9 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   color: var(--muted);
 }
 
-.newroom-field input {
+.newroom-field input,
+.newroom-field select,
+.newroom-field textarea {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -2986,15 +3104,88 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   width: 100%;
 }
 
-.newroom-field input:focus-visible {
+.newroom-field textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.newroom-field input:focus-visible,
+.newroom-field select:focus-visible,
+.newroom-field textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: var(--accent);
 }
 
-.newroom-field input::placeholder {
+.newroom-field input::placeholder,
+.newroom-field textarea::placeholder {
   color: var(--muted);
   opacity: 0.7;
+}
+
+/* Modale « Nouvelle séance » : plus de champs qu'une salle, largeur et
+   grille adaptées — deux colonnes dès que la place le permet, jamais en
+   dessous de 360px (mobile-first, cf. CLAUDE.md). */
+.seancemodal {
+  width: min(560px, 100%);
+  max-height: min(85vh, 780px);
+  overflow-y: auto;
+}
+
+.seancemodal-grille {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 560px) {
+  .seancemodal-grille {
+    grid-template-columns: 1fr 1fr;
+  }
+  .seancemodal-grille .newroom-field--large {
+    grid-column: 1 / -1;
+  }
+}
+
+.newroom-field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.newroom-field--checkbox input {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  accent-color: var(--accent);
+}
+
+.newroom-field-groupes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.newroom-field-groupes label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+  min-height: 28px;
+}
+
+.newroom-field-groupes input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  accent-color: var(--accent);
 }
 
 .mailmodal {

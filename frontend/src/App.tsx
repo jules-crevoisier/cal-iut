@@ -43,11 +43,13 @@ import type {
 import type { AppPayload } from "./types/app";
 import { DEFAULT_YEARS, yearFromSemestre } from "./utils/years";
 import { ContraintesView } from "./views/ContraintesView";
+import { CoursView } from "./views/CoursView";
 import { EnseignantView } from "./views/EnseignantView";
 import { GroupeView } from "./views/GroupeView";
 import { PromoView } from "./views/PromoView";
 import { ReferenceView } from "./views/ReferenceView";
 import { APlacerView } from "./views/APlacerView";
+import { SalleView } from "./views/SalleView";
 import { TodoView } from "./views/TodoView";
 
 const DEFAULT_PARCOURS = "BUT1";
@@ -556,7 +558,7 @@ export function App() {
           </>
         )}
 
-        {activeTab !== "semaine" && !appPayload && (
+        {activeTab !== "semaine" && activeTab !== "promo" && !appPayload && (
           <div className="empty-state">
             <p>Aucun planning résolu.</p>
             <p className="muted">Générez un planning depuis la Vue Semaine pour voir cette page.</p>
@@ -564,10 +566,38 @@ export function App() {
         )}
 
         {activeTab === "groupe" && appPayload && (
-          <GroupeView payload={appPayload} route={route} setRoute={setRoute} readOnly={readOnlyTarget === "groupe"} />
+          <GroupeView
+            payload={appPayload}
+            route={route}
+            setRoute={setRoute}
+            readOnly={readOnlyTarget === "groupe"}
+            onOpenSearch={() => setSearch(true)}
+          />
         )}
         {activeTab === "prof" && appPayload && (
-          <EnseignantView payload={appPayload} route={route} setRoute={setRoute} readOnly={readOnlyTarget === "prof"} />
+          <EnseignantView
+            payload={appPayload}
+            route={route}
+            setRoute={setRoute}
+            readOnly={readOnlyTarget === "prof"}
+            onOpenSearch={() => setSearch(true)}
+          />
+        )}
+        {activeTab === "cours" && appPayload && !readOnlyTarget && (
+          <CoursView
+            payload={appPayload}
+            route={route}
+            setRoute={setRoute}
+            onOpenSearch={() => setSearch(true)}
+          />
+        )}
+        {activeTab === "salle" && appPayload && !readOnlyTarget && (
+          <SalleView
+            payload={appPayload}
+            route={route}
+            setRoute={setRoute}
+            onOpenSearch={() => setSearch(true)}
+          />
         )}
         {activeTab === "promo" && appPayload && !readOnlyTarget && (
           <PromoView
@@ -576,7 +606,20 @@ export function App() {
             placements={promoPlacements}
             onPlacementUpdated={handlePlacementUpdated}
             onError={(msg) => setNotice(msg)}
+            onSeanceChangee={() => {
+              void refreshAppState();
+              void loadPromoTimetable();
+            }}
+            setRoute={setRoute}
+            onAPlacerRefresh={() => {
+              void loadTimetable();
+              void loadPromoTimetable();
+              void refreshAppState();
+            }}
           />
+        )}
+        {activeTab === "promo" && !appPayload && !readOnlyTarget && (
+          <APlacerView onPlacement={() => void loadTimetable()} payload={null} />
         )}
         {activeTab === "reference" && appPayload && !readOnlyTarget && (
           <ReferenceView payload={appPayload} setRoute={setRoute} />
@@ -585,13 +628,6 @@ export function App() {
           <ContraintesView payload={appPayload} setRoute={setRoute} />
         )}
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
-        {/* Placement manuel du reliquat que le solveur n'a pas su placer.
-            Pas de `appPayload` requis : cet écran interroge le serveur
-            directement, et doit rester accessible même quand le planning
-            est trop incomplet pour que les autres vues aient du sens. */}
-        {activeTab === "aplacer" && !readOnlyTarget && (
-          <APlacerView onPlacement={() => void loadTimetable()} payload={appPayload} />
-        )}
           </main>
         </div>
       </div>

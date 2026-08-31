@@ -29,7 +29,7 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
       sev: "bad",
       title: `${s.code} — séance non placée`,
       sub: `${s.type} · ${s.groupes.join(", ")} · ${s.profs.join(", ")}`,
-      route: { vue: "aplacer" },
+      route: { vue: "promo", panel: "aplacer" },
     });
   }
 

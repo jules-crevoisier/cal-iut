@@ -39,7 +39,7 @@ export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
         ))}
       </div>
 
-      {sub === "salles" && <RoomsTable payload={payload} />}
+      {sub === "salles" && <RoomsTable payload={payload} setRoute={setRoute} />}
       {sub === "cours" && <CoursesTable payload={payload} setRoute={setRoute} />}
       {sub === "calendrier" && <CalendarTimeline payload={payload} />}
       {sub === "liens" && <LinksDirectory payload={payload} />}
@@ -51,7 +51,13 @@ export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
   );
 }
 
-function RoomsTable({ payload }: { payload: AppPayload }) {
+function RoomsTable({
+  payload,
+  setRoute,
+}: {
+  payload: AppPayload;
+  setRoute: (patch: Partial<Route>) => void;
+}) {
   return (
     <div className="panel ref-table-wrap">
       <table className="ref">
@@ -67,7 +73,16 @@ function RoomsTable({ payload }: { payload: AppPayload }) {
         <tbody>
           {payload.rooms.map((r) => (
             <tr key={r.id}>
-              <td>{r.label}</td>
+              <td>
+                <button
+                  type="button"
+                  className="linklike"
+                  onClick={() => setRoute({ vue: "salle", salle: r.id })}
+                  title="Ouvrir la fiche salle"
+                >
+                  {r.label}
+                </button>
+              </td>
               <td>{r.capacity}</td>
               <td>{r.type}</td>
               <td>{r.equipment.join(", ") || "—"}</td>
@@ -105,8 +120,8 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
                 <button
                   type="button"
                   className="linklike"
-                  onClick={() => setRoute({ vue: "semaine", groupe: "" })}
-                  title="Voir en Vue Semaine"
+                  onClick={() => setRoute({ vue: "cours", cours: c.code })}
+                  title="Ouvrir la fiche matière"
                 >
                   {c.code}
                 </button>

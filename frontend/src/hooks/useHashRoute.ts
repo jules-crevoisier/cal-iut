@@ -19,12 +19,19 @@ export type RouteView =
   | "reference"
   | "contraintes"
   | "apf"
-  | "aplacer";
+  | "aplacer"
+  | "salle"
+  | "cours";
+
+export type RoutePanel = "" | "aplacer";
 
 export interface Route {
   vue: RouteView | "";
   prof: string;
   groupe: string;
+  salle: string;
+  cours: string;
+  panel: RoutePanel;
   sem: number | null;
   /** Jour (0 = lundi) — utilisé par la Vue Promo, qui affiche un jour à la
    *  fois : sans lui, un lien « telle séance, tel créneau » ouvre le bon
@@ -40,20 +47,54 @@ export interface Route {
   t: string;
 }
 
-const EMPTY_ROUTE: Route = { vue: "", prof: "", groupe: "", sem: null, jour: null, mode: "", t: "" };
+const EMPTY_ROUTE: Route = {
+  vue: "",
+  prof: "",
+  groupe: "",
+  salle: "",
+  cours: "",
+  panel: "",
+  sem: null,
+  jour: null,
+  mode: "",
+  t: "",
+};
+
+const ENTITY_RESET: Pick<Route, "prof" | "groupe" | "salle" | "cours" | "panel"> = {
+  prof: "",
+  groupe: "",
+  salle: "",
+  cours: "",
+  panel: "",
+};
+
+function asPanel(value: string | null): RoutePanel {
+  return value === "aplacer" ? "aplacer" : "";
+}
+
+function canonicalize(route: Route): Route {
+  if (route.vue === "aplacer") {
+    return { ...route, vue: "promo", panel: "aplacer" };
+  }
+  return route;
+}
 
 function readHash(): Route {
   const raw = (window.location.hash || "").replace(/^#/, "");
   const params = new URLSearchParams(raw);
-  return {
-    vue: (params.get("vue") as RouteView) || "",
+  const vue = (params.get("vue") as RouteView) || "";
+  return canonicalize({
+    vue,
     prof: params.get("prof") || "",
     groupe: params.get("groupe") || "",
+    salle: params.get("salle") || "",
+    cours: params.get("cours") || "",
+    panel: asPanel(params.get("panel")),
     sem: params.get("sem") ? Number(params.get("sem")) : null,
     jour: params.get("jour") !== null ? Number(params.get("jour")) : null,
     mode: (params.get("mode") as Route["mode"]) || "",
     t: params.get("t") || "",
-  };
+  });
 }
 
 function toHash(route: Partial<Route>): string {
@@ -83,7 +124,9 @@ export function useHashRoute(): {
 
   const setRoute = useCallback((patch: Partial<Route>) => {
     setRouteState((prev) => {
-      const next = { ...prev, ...patch };
+      const base =
+        patch.vue !== undefined && patch.vue !== prev.vue ? { ...prev, ...ENTITY_RESET, ...patch } : { ...prev, ...patch };
+      const next = canonicalize(base);
       const hash = toHash(next);
       if (hash !== window.location.hash) {
         window.history.replaceState(null, "", hash);
