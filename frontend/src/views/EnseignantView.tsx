@@ -4,6 +4,7 @@ import { DayStrip, todayIndex } from "../components/DayStrip";
 import { SemesterAgenda } from "../components/SemesterAgenda";
 import { SessionGrid } from "../components/SessionGrid";
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
+import { CopyButton } from "../components/CopyButton";
 import { ShareBar } from "../components/ShareBar";
 import { usePreferences } from "../utils/preferences";
 import { TeacherLinksList } from "../components/TeacherLinksList";
@@ -12,7 +13,6 @@ import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { copyToClipboard } from "../utils/clipboard";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
@@ -47,7 +47,6 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
   // les prof ». N'a de sens que côté planification (readOnly = déjà le
   // lien d'UN seul enseignant, rien à lister).
   const [showAllLinks, setShowAllLinks] = useState(false);
-  const [abonnementCopie, setAbonnementCopie] = useState(false);
 
   useEffect(() => {
     if (route.prof && route.prof !== code) setCode(route.prof);
@@ -210,20 +209,11 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false }: E
           <div className="section-header">
             <h3>{payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}</h3>
             <div className="section-header-actions no-print">
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  const ok = await copyToClipboard(subscribeUrl("prof", code, payload.teacherTokens[code] ?? ""));
-                  if (ok) {
-                    setAbonnementCopie(true);
-                    setTimeout(() => setAbonnementCopie(false), 1400);
-                  }
-                }}
+              <CopyButton
+                text={() => subscribeUrl("prof", code, payload.teacherTokens[code] ?? "")}
+                idleLabel="Lien agenda"
                 title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
-              >
-                {abonnementCopie ? "Copié ✓" : "Lien agenda"}
-              </button>
+              />
               {/* À CÔTÉ du lien d'abonnement, comme demandé — et surtout
                   visible ici : c'est la page que reçoit la personne, donc
                   celle depuis laquelle elle voudra partager. */}

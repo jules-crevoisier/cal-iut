@@ -1,7 +1,5 @@
-import { useState } from "react";
-
-import { copyToClipboard } from "../utils/clipboard";
 import { BoutonsImageEdt } from "./BoutonsImageEdt";
+import { CopyButton } from "./CopyButton";
 import type { OptionsImage } from "../utils/imageEdt";
 
 interface ShareBarProps {
@@ -28,40 +26,15 @@ interface ShareBarProps {
  *  avantageusement puisqu'il se remet à jour tout seul dans l'agenda. En
  *  garder deux obligeait à expliquer lequel choisir. */
 export function ShareBar({ onCopyLink, onCopySubscribeLink, imageEdt, extra }: ShareBarProps) {
-  const [copied, setCopied] = useState(false);
-  const [subscribeCopied, setSubscribeCopied] = useState(false);
-
-  const handleCopy = async () => {
-    const ok = await copyToClipboard(onCopyLink());
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
-    }
-  };
-
-  const handleCopySubscribe = async () => {
-    if (!onCopySubscribeLink) return;
-    const ok = await copyToClipboard(onCopySubscribeLink());
-    if (ok) {
-      setSubscribeCopied(true);
-      setTimeout(() => setSubscribeCopied(false), 1400);
-    }
-  };
-
   return (
     <div className="sharebar no-print">
-      <button type="button" className="btn btn--ghost btn--sm" onClick={handleCopy}>
-        {copied ? "Copié ✓" : "Copier son lien"}
-      </button>
+      <CopyButton text={onCopyLink} idleLabel="Copier son lien" />
       {onCopySubscribeLink && (
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={handleCopySubscribe}
+        <CopyButton
+          text={onCopySubscribeLink}
+          idleLabel="Lien agenda"
           title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook (« ajouter un agenda par URL ») — se remet à jour tout seul, pas besoin de re-télécharger."
-        >
-          {subscribeCopied ? "Copié ✓" : "Lien agenda"}
-        </button>
+        />
       )}
       {imageEdt && <BoutonsImageEdt options={imageEdt} />}
       <button type="button" className="btn btn--ghost btn--sm" onClick={() => window.print()}>

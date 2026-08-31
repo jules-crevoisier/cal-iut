@@ -222,9 +222,9 @@ trous). Recommandé pour toute régénération après un ajustement mineur
 - **Vue Semaine** — édition manuelle (glisser-déposer, exceptions, régénération ciblée),
   FullCalendar + verrouillage, panneaux Qualité/Diff/Feedback.
 - **Vue Groupe** — calendrier lecture seule par groupe (TD 2 colonnes TP quand les
-  sous-groupes divergent) + agenda chronologique du semestre + `.ics`.
+  sous-groupes divergent) + agenda chronologique du semestre + lien agenda.
 - **Vue Enseignant** — calendrier + contrainte déclarée + violations recalculées +
-  agenda chronologique + `.ics` + bouton mailto.
+  agenda chronologique + lien agenda + bouton mailto.
 - **Vue Promo** — toutes les promotions sur une seule grille (un jour à la fois).
 - **Référence** — salles, cours, calendrier institutionnel, **Liens & partage**.
 - **Contraintes** — chaque règle (enseignant ou solveur) avec son verdict recalculé
@@ -253,8 +253,9 @@ identiquement que la page soit ouverte via `cal-iut serve` sur le réseau local
 ou (pour la variante `--format html`) reçue par mail. Il ouvre directement le
 planning de l'intéressé, sans les onglets d'édition ni les autres promotions.
 
-Chaque vue individuelle propose aussi l'export **.ics** (import dans l'agenda
-personnel) et l'impression (feuille de style dédiée, sans les contrôles
+Chaque vue individuelle propose aussi un **lien d'agenda** (URL à coller dans
+Google Agenda / Apple Calendrier / Outlook : le calendrier se remet à jour
+tout seul) et l'impression (feuille de style dédiée, sans les contrôles
 d'édition). Sur écran étroit (téléphone), la grille bascule automatiquement en
 lecture jour par jour.
 

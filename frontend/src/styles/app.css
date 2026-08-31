@@ -837,6 +837,26 @@ h1, h2, h3 {
   font-size: 0.75rem;
 }
 
+/* Retour visuel copie / envoi — le libellé « Copié ✓ » ne suffisait pas :
+   sur un tableau dense, la couleur se voit avant même de relire le bouton. */
+.btn.is-copied,
+.subtabbtn.is-copied {
+  background: var(--good-soft);
+  border-color: var(--good);
+  color: var(--good-text);
+}
+
+.btn.is-copy-failed,
+.subtabbtn.is-copy-failed {
+  background: var(--bad-soft);
+  border-color: var(--bad);
+  color: var(--bad-text);
+}
+
+.btn.is-busy {
+  opacity: 0.7;
+}
+
 .diff-summary {
   margin-bottom: 12px;
   font-size: 0.85rem;
@@ -3049,7 +3069,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .couleurs-matiere .sessiongrid-block,
   :root:not([data-theme="light"]) .couleurs-matiere .promo-chip,
-  :root:not([data-theme="light"]) .couleurs-matiere .td-block,
+  :root:not([data-theme="light"]) .couleurs-matiere .td-block,
+
     :root:not([data-theme="light"]) .agenda-chip.couleurs-matiere {
     background: var(--matiere-fond-sombre);
     border-left-color: var(--matiere-barre-sombre);
@@ -3058,7 +3079,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 
 :root[data-theme="dark"] .couleurs-matiere .sessiongrid-block,
 :root[data-theme="dark"] .couleurs-matiere .promo-chip,
-:root[data-theme="dark"] .couleurs-matiere .td-block,
+:root[data-theme="dark"] .couleurs-matiere .td-block,
+
 :root[data-theme="dark"] .agenda-chip.couleurs-matiere {
   background: var(--matiere-fond-sombre);
   border-left-color: var(--matiere-barre-sombre);
