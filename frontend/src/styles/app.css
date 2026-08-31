@@ -1221,6 +1221,16 @@ h1, h2, h3 {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
+  /* Rythme vertical perdu quand le panneau « à placer » a imbriqué tout le
+     contenu de Vue Promo dans ce conteneur : `.view` porte `gap: 18px`
+     entre ses enfants DIRECTS, mais la barre d'outils, les jours et le
+     tableau sont maintenant des petits-enfants — sans ce `gap` ici, ils
+     se touchaient (0px mesuré entre eux, retour utilisateur 31/08/2026 :
+     « revois un peu les espacements »). Même valeur que `.view`, pour
+     que rien ne distingue Vue Promo visuellement des autres vues. */
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .view.promo .ref-table-wrap {
@@ -1232,7 +1242,11 @@ h1, h2, h3 {
 }
 
 .promo-aplacer-ouvrir {
-  margin-bottom: 4px;
+  /* `.promo-principal` est maintenant un flex column (`gap: 18px` juste
+     au-dessus) : sans ceci, le bouton — un `<button>` sans largeur propre —
+     s'étirerait à la largeur du conteneur comme les `.panel` pleine
+     largeur qui l'entourent, perdant sa forme de pastille. */
+  align-self: flex-start;
 }
 
 @media (max-width: 1023.98px) {

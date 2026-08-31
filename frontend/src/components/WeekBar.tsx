@@ -38,6 +38,21 @@ export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit =
   // un positionnement relatif au conteneur se décalerait au défilement.
   const [survol, setSurvol] = useState<{ texte: string; x: number; y: number } | null>(null);
 
+  // Première / sélectionnée / dernière — mais jamais le même libellé deux
+  // fois : quand la semaine choisie EST la première ou la dernière (cas le
+  // plus courant à l'ouverture), afficher "Semaine 2 ... Semaine 2 ..."
+  // côte à côte lisait comme un bug d'affichage plutôt qu'une information
+  // (retour utilisateur 31/08/2026 : « revois un peu les espacements »).
+  const premiere = weekRows[0];
+  const derniere = weekRows[weekRows.length - 1];
+  const courante = weekRows[selected];
+  const captions: { key: string; label: string }[] = [];
+  if (premiere) captions.push({ key: "premiere", label: premiere.label });
+  if (courante && courante !== premiere) captions.push({ key: "courante", label: courante.label });
+  if (derniere && derniere !== premiere && derniere !== courante) {
+    captions.push({ key: "derniere", label: derniere.label });
+  }
+
   const montrer = (e: { currentTarget: HTMLElement }, texte: string) => {
     const r = e.currentTarget.getBoundingClientRect();
     setSurvol({ texte, x: r.left + r.width / 2, y: r.top });
@@ -81,11 +96,11 @@ export function WeekBar({ weekRows, countByWeekIndex, selected, onSelect, unit =
           {survol.texte}
         </div>
       )}
-      {weekRows.length > 0 && (
+      {captions.length > 0 && (
         <div className="weekbar-caption">
-          <span>{weekRows[0].label}</span>
-          <span>{weekRows[selected]?.label ?? ""}</span>
-          <span>{weekRows[weekRows.length - 1].label}</span>
+          {captions.map((c) => (
+            <span key={c.key}>{c.label}</span>
+          ))}
         </div>
       )}
     </div>
