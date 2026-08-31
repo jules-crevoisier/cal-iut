@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import auth, custom_rooms, forced_pending, mailer
+from cal_iut.api import auth, custom_rooms, custom_sessions, forced_pending, mailer
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     DiffEntryResponse,
@@ -37,6 +37,8 @@ from cal_iut.api.schemas import (
     CelcatPlanResponse,
     ChangeRoomRequest,
     CompletionResponse,
+    CreerSeanceRequest,
+    ModifierSeancePersonnaliseeRequest,
     CreneauLibreResponse,
     CreneauxLibresResponse,
     CreateRoomRequest,
@@ -75,7 +77,7 @@ from cal_iut.ingestion.config_loader import (
 )
 from cal_iut.ingestion.constraints_loader import load_all_constraints, merge_teacher_availability
 from cal_iut.ingestion.pipeline import SEMESTRE_GROUP_ANCHOR, run_ingestion
-from cal_iut.models.entities import Group
+from cal_iut.models.entities import Group, SessionType
 from cal_iut.models.group_scope import expand_group_filter, related_group_ids
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.cpsat import PlacedSession, SolverConfig, TimetableSolver
@@ -345,6 +347,12 @@ def _try_restore_latest(state: object) -> None:
         state.sessions = result.sessions
         state.courses = result.courses
         state.sessions_by_id = {s.id: s for s in result.sessions}
+        # Séances ajoutées depuis l'interface (volume persistant, cf.
+        # `api/custom_sessions.py`) — une ré-ingestion écrase `state.sessions`
+        # entièrement, elles disparaîtraient sinon jusqu'au prochain ajout.
+        state.sessions, state.sessions_by_id = custom_sessions.merge_into(
+            state.sessions, state.sessions_by_id
+        )
 
         current = repo.db.query(CurrentPlacement).filter_by(run_id=run.id).all()
         # Un placement dont la séance n'existe PLUS après ré-ingestion est un
@@ -623,6 +631,9 @@ def ingest(body: IngestRequest) -> dict[str, object]:
     state.sessions = result.sessions
     state.courses = result.courses
     state.sessions_by_id = {s.id: s for s in result.sessions}
+    state.sessions, state.sessions_by_id = custom_sessions.merge_into(
+        state.sessions, state.sessions_by_id
+    )
     state.filter_parcours = body.parcours
     state.filter_semestre = body.semestre
     state.semestre_group = body.semestre_group
@@ -2590,6 +2601,181 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
 
     _notifier("placement", f"{place.course_code} posée {_ou(place)}")
     return _to_placement(place, state.sessions_by_id)
+
+
+def _reference_cours(state: object, course_code: str, group_ids: list[str]) -> object:
+    """Retrouve une matière déjà connue par son code — jamais n'en invente
+    une. `group_ids` sert à choisir le bon `parcours` quand un même code
+    couvre plusieurs parcours (rare, mais `Course` est fusionnée par
+    parcours) : on prend celui du premier groupe demandé."""
+    code = course_code.strip().upper()
+    candidats = [c for c in state.courses if c.code.upper() == code]
+    if not candidats:
+        raise HTTPException(
+            404,
+            f"Aucune matière « {code} » connue — impossible d'y ajouter une séance "
+            "(ce système ajoute une séance à une matière existante, il n'en crée pas).",
+        )
+    if len(candidats) == 1:
+        return candidats[0]
+    parcours_du_groupe = next(
+        (g.parcours for g in state.groups if g.id == (group_ids[0] if group_ids else None)), None
+    )
+    return next((c for c in candidats if c.parcours == parcours_du_groupe), candidats[0])
+
+
+def _id_seance_personnalisee(course_code: str, semestre: str, session_type: str, group_ids: list[str]) -> str:
+    """Identifiant lisible et JAMAIS confondu avec une séance de maquette —
+    `CUSTOM<n>` là où la maquette écrit un numéro de séquence nu
+    (`WRA508C-S5-TD-11-...`) : les heuristiques d'ordre pédagogique qui
+    lisent `-TD-(\\d+)-` ailleurs dans le code ne doivent jamais confondre
+    une séance ajoutée à la main avec la Nième séance d'une progression
+    qu'elle ne suit pas."""
+    suffixe = "-".join(sorted(group_ids))
+    base = f"{course_code}-{semestre}-{session_type}-CUSTOM"
+    n = 1
+    state = get_state()
+    existants = set(state.sessions_by_id)
+    while f"{base}{n}-{suffixe}" in existants:
+        n += 1
+    return f"{base}{n}-{suffixe}"
+
+
+@app.post("/placements/personnalisees", response_model=PlacementResponse)
+def creer_seance_personnalisee(body: CreerSeanceRequest) -> PlacementResponse:
+    """Ajoute une séance à une matière existante et la place — retour
+    utilisateur 31/08/2026 (cf. `CreerSeanceRequest`). Délègue entièrement
+    à `placer_seance` pour le placement : mêmes contrôles institutionnels,
+    même ordre pédagogique, même résolution de salle, même persistance —
+    aucune règle dupliquée. Persiste la MÉTADONNÉE de la séance
+    (`api/custom_sessions.py`) seulement après un placement réussi : une
+    séance dont le placement échoue ne doit laisser AUCUNE trace, ni en
+    mémoire ni sur disque.
+    """
+    state = get_state()
+    try:
+        type_seance = SessionType(body.session_type.strip().upper())
+    except ValueError:
+        raise HTTPException(400, f"Type de séance inconnu : {body.session_type!r} (CM, TD, TP ou PTUT).") from None
+
+    inconnus = [g for g in body.group_ids if g not in {gr.id for gr in state.groups}]
+    if inconnus:
+        raise HTTPException(400, f"Groupe(s) inconnu(s) : {', '.join(inconnus)}")
+
+    reference = _reference_cours(state, body.course_code, body.group_ids)
+    session_id = _id_seance_personnalisee(reference.code, reference.semestre, type_seance.value, body.group_ids)
+
+    seance = SessionToPlace(
+        id=session_id,
+        course_code=reference.code,
+        course_name=reference.name,
+        semestre=reference.semestre,
+        parcours=reference.parcours,
+        annee=reference.annee,
+        session_type=type_seance,
+        group_ids=list(body.group_ids),
+        teacher_codes=[t.strip().upper() for t in body.teacher_codes if t.strip()],
+        duration_slots=body.duration_slots,
+        is_eval=body.is_eval,
+        metadata={"custom_session": True, "note": (body.note or "").strip()},
+    )
+    state.sessions.append(seance)
+    state.sessions_by_id[session_id] = seance
+
+    try:
+        resultat = placer_seance(
+            session_id,
+            MoveSessionRequest(
+                week=body.week, day=body.day, slot=body.slot,
+                room_id=body.room_id, lock=False, force=body.force,
+            ),
+        )
+    except HTTPException:
+        # Rien ne doit rester d'une séance dont le placement échoue — ni en
+        # mémoire, ni a fortiori sur disque (jamais tenté à ce stade).
+        state.sessions.remove(seance)
+        del state.sessions_by_id[session_id]
+        raise
+
+    custom_sessions.add_custom_session(seance)
+    return resultat
+
+
+@app.patch("/placements/personnalisees/{session_id}", response_model=PlacementResponse)
+def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnaliseeRequest) -> PlacementResponse:
+    """Modifie une séance créée par ce système — jamais une séance de la
+    maquette (rejeté avec un message explicite : `seances_annulees.yaml` +
+    `sae_corrections.yaml` sont les outils prévus pour celles-là, une
+    correction s'y annonce plutôt que de disparaître en silence)."""
+    state = get_state()
+    seance = state.sessions_by_id.get(session_id)
+    if seance is None or not seance.metadata.get("custom_session"):
+        raise HTTPException(
+            404,
+            f"Aucune séance personnalisée « {session_id} » — seules les séances créées "
+            "par ce système peuvent être modifiées ici.",
+        )
+
+    if body.session_type is not None:
+        try:
+            seance.session_type = SessionType(body.session_type.strip().upper())
+        except ValueError:
+            raise HTTPException(400, f"Type de séance inconnu : {body.session_type!r}.") from None
+    if body.group_ids is not None:
+        inconnus = [g for g in body.group_ids if g not in {gr.id for gr in state.groups}]
+        if inconnus:
+            raise HTTPException(400, f"Groupe(s) inconnu(s) : {', '.join(inconnus)}")
+        seance.group_ids = list(body.group_ids)
+    if body.teacher_codes is not None:
+        seance.teacher_codes = [t.strip().upper() for t in body.teacher_codes if t.strip()]
+    if body.duration_slots is not None:
+        seance.duration_slots = body.duration_slots
+    if body.is_eval is not None:
+        seance.is_eval = body.is_eval
+    if body.note is not None:
+        seance.metadata["note"] = body.note.strip()
+
+    repositionne = body.week is not None and body.day is not None and body.slot is not None
+    if repositionne:
+        resultat = move_session(
+            session_id,
+            MoveSessionRequest(
+                week=body.week, day=body.day, slot=body.slot,
+                room_id=body.room_id, lock=False, force=body.force,
+            ),
+        )
+    else:
+        match = _find_placement(state, session_id)
+        resultat = _to_placement(match, state.sessions_by_id)
+
+    custom_sessions.update_custom_session(seance)
+    return resultat
+
+
+@app.delete("/placements/personnalisees/{session_id}")
+def supprimer_seance_personnalisee(session_id: str) -> dict[str, bool]:
+    """Retire entièrement une séance créée par ce système — métadonnée,
+    placement courant et ligne en base. Jamais une séance de la maquette :
+    `seances_annulees.yaml` est l'outil prévu pour celle-là, avec sa
+    traçabilité (qui l'a demandé, quand) — une séance personnalisée n'a pas
+    besoin de cette indirection puisqu'elle n'existe QUE parce que quelqu'un
+    l'a créée ici."""
+    state = get_state()
+    seance = state.sessions_by_id.get(session_id)
+    if seance is None or not seance.metadata.get("custom_session"):
+        raise HTTPException(
+            404,
+            f"Aucune séance personnalisée « {session_id} » — seules les séances créées "
+            "par ce système peuvent être supprimées ici.",
+        )
+
+    state.timetable = [p for p in state.timetable if p.session_id != session_id]
+    state.sessions = [s for s in state.sessions if s.id != session_id]
+    del state.sessions_by_id[session_id]
+    if state.current_run_id:
+        get_repo().remove_current_placement(session_id)
+    custom_sessions.remove_custom_session(session_id)
+    return {"supprimee": True}
 
 
 @app.post("/placements/{session_id}/valider", response_model=ForcagePedagogiqueResponse)

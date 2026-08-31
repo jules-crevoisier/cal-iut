@@ -352,6 +352,65 @@ export function changerSalle(
   });
 }
 
+// ── Séances personnalisées : ajouter/modifier/supprimer une séance sur une
+// matière EXISTANTE (retour utilisateur 31/08/2026 : « il va falloir créer
+// un système où l'on peut créer des cours pour une matière [...] imaginons
+// dans une matière on veuille rajouter un CM éval ou un TD, il faut pouvoir
+// le faire »). Distinct du reliquat « À placer » : ici on ajoute une heure
+// que la maquette n'avait pas prévue, pas on place une heure qu'elle avait
+// déjà prévue. Un seul écran choisit tout, y compris le créneau — décision
+// explicite de l'utilisateur plutôt qu'un placement différé par clic sur la
+// grille. ──
+
+export interface CreerSeanceBody {
+  course_code: string;
+  session_type: string;
+  group_ids: string[];
+  teacher_codes: string[];
+  duration_slots: number;
+  is_eval: boolean;
+  note?: string;
+  week: number;
+  day: number;
+  slot: number;
+  room_id?: string | null;
+  force?: boolean;
+}
+
+export function creerSeancePersonnalisee(body: CreerSeanceBody): Promise<Placement> {
+  return request<Placement>("/placements/personnalisees", {
+    method: "POST",
+    body: JSON.stringify({ force: false, ...body }),
+  });
+}
+
+export interface ModifierSeanceBody {
+  session_type?: string;
+  group_ids?: string[];
+  teacher_codes?: string[];
+  duration_slots?: number;
+  is_eval?: boolean;
+  note?: string;
+  week?: number;
+  day?: number;
+  slot?: number;
+  room_id?: string | null;
+  force?: boolean;
+}
+
+export function modifierSeancePersonnalisee(sessionId: string, body: ModifierSeanceBody): Promise<Placement> {
+  return request<Placement>(`/placements/personnalisees/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function supprimerSeancePersonnalisee(sessionId: string): Promise<{ supprimee: boolean }> {
+  return request<{ supprimee: boolean }>(`/placements/personnalisees/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+}
+
 // ── Suivi des placements forcés (ordre pédagogique) — retour utilisateur
 // 28/08/2026 : « valider »/« revenir en arrière ». ──
 

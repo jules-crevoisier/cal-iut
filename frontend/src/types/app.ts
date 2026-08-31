@@ -24,6 +24,9 @@ export interface AppRow {
   ev: boolean; // is_eval
   dur: number; // duration_slots
   locked: boolean;
+  /** Séance ajoutée depuis l'interface, distincte de la maquette — seule à
+   * proposer modifier/supprimer (retour utilisateur 31/08/2026). */
+  custom: boolean;
 }
 
 export interface WeekRow {
