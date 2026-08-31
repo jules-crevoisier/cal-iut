@@ -121,7 +121,13 @@ export function App() {
   // historique, pour que les liens restent valides quelle que soit
   // l'interface qui les ouvre.
   const readOnlyTarget: RouteView | null =
-    route.mode === "prof" && route.prof ? "prof" : route.mode === "groupe" && route.groupe ? "groupe" : null;
+    route.mode === "prof" && route.prof
+      ? "prof"
+      : route.mode === "groupe" && route.groupe
+        ? "groupe"
+        : route.mode === "promo"
+          ? "promo"
+          : null;
   const activeTab: RouteView = readOnlyTarget ?? (route.vue || "semaine");
 
   // Mot de passe partagé (retour utilisateur 28/08/2026) — `null` = statut
@@ -413,17 +419,19 @@ export function App() {
               <h1>
                 {readOnlyTarget === "prof"
                   ? `Planning de ${appPayload.teacherLabels[route.prof] ?? route.prof}`
-                  : // Parcours en préfixe — retour utilisateur 28/08/2026 :
-                    // « pourquoi on a pas le nom complet du groupe dessus ».
-                    // Le libellé seul ("TD EF") existe en double identique
-                    // entre plusieurs parcours (cf. ReferenceView.tsx, même
-                    // correctif) : sans le parcours, impossible de savoir
-                    // lequel des deux ce lien désigne.
-                    `Planning — ${
-                      appPayload.groupParcours[route.groupe]
-                        ? `${appPayload.groupParcours[route.groupe]} · ${appPayload.groupLabels[route.groupe] ?? route.groupe}`
-                        : (appPayload.groupLabels[route.groupe] ?? route.groupe)
-                    }`}
+                  : readOnlyTarget === "promo"
+                    ? "Vue Promo — toutes les promotions"
+                    : // Parcours en préfixe — retour utilisateur 28/08/2026 :
+                      // « pourquoi on a pas le nom complet du groupe dessus ».
+                      // Le libellé seul ("TD EF") existe en double identique
+                      // entre plusieurs parcours (cf. ReferenceView.tsx, même
+                      // correctif) : sans le parcours, impossible de savoir
+                      // lequel des deux ce lien désigne.
+                      `Planning — ${
+                        appPayload.groupParcours[route.groupe]
+                          ? `${appPayload.groupParcours[route.groupe]} · ${appPayload.groupLabels[route.groupe] ?? route.groupe}`
+                          : (appPayload.groupLabels[route.groupe] ?? route.groupe)
+                      }`}
               </h1>
               <p>Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.</p>
               <ReglageCouleurs prefs={prefs} setPrefs={setPrefs} />
@@ -599,23 +607,33 @@ export function App() {
             onOpenSearch={() => setSearch(true)}
           />
         )}
-        {activeTab === "promo" && appPayload && !readOnlyTarget && (
+        {activeTab === "promo" && appPayload && (!readOnlyTarget || readOnlyTarget === "promo") && (
           <PromoView
             payload={appPayload}
             route={route}
-            placements={promoPlacements}
-            onPlacementUpdated={handlePlacementUpdated}
-            onError={(msg) => setNotice(msg)}
-            onSeanceChangee={() => {
-              void refreshAppState();
-              void loadPromoTimetable();
-            }}
-            setRoute={setRoute}
-            onAPlacerRefresh={() => {
-              void loadTimetable();
-              void loadPromoTimetable();
-              void refreshAppState();
-            }}
+            readOnly={readOnlyTarget === "promo"}
+            // Lien public (retour utilisateur 31/08/2026) : aucun de ces
+            // callbacks n'est passé — `readOnly` seul suffirait déjà (il
+            // coupe tout à l'intérieur du composant), mais ne pas les
+            // fournir du tout retire toute tentation d'appui sur eux si
+            // jamais ce garde-fou venait à être retiré par erreur plus tard.
+            {...(readOnlyTarget === "promo"
+              ? {}
+              : {
+                  placements: promoPlacements,
+                  onPlacementUpdated: handlePlacementUpdated,
+                  onError: (msg: string) => setNotice(msg),
+                  onSeanceChangee: () => {
+                    void refreshAppState();
+                    void loadPromoTimetable();
+                  },
+                  setRoute,
+                  onAPlacerRefresh: () => {
+                    void loadTimetable();
+                    void loadPromoTimetable();
+                    void refreshAppState();
+                  },
+                })}
           />
         )}
         {activeTab === "promo" && !appPayload && !readOnlyTarget && (

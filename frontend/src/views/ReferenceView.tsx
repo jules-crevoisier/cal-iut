@@ -253,6 +253,25 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           Envoyer les liens par mail
         </button>
       </div>
+
+      {/* Lien public, un seul, pas par destinataire — retour utilisateur
+          31/08/2026 : « un lien en plus ouvert à tout le monde [...] accès
+          à la vue promo ». Toutes les promotions, en lecture seule (aucun
+          glisser-déposer, aucune création de séance) : `readOnly` sur
+          `PromoView` coupe tout, même le panneau « Séances à placer ». */}
+      <div className="panel-liens-promo">
+        <div>
+          <strong>Vue Promo — accès public</strong>
+          <p className="muted small">
+            Un seul lien, pas par destinataire : toutes les promotions, en lecture seule. Personne n'a besoin du mot
+            de passe pour l'ouvrir.
+          </p>
+        </div>
+        <CopyButton
+          text={() => buildLink({ vue: "promo", mode: "promo", t: "promo" })}
+          idleLabel="Copier le lien"
+        />
+      </div>
       {showMailModal && <SendTeacherMailsModal onClose={() => setShowMailModal(false)} />}
 
       <h4>Enseignants</h4>
