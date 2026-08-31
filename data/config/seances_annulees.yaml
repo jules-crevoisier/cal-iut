@@ -104,3 +104,22 @@ annulees:
     motif: "16/09 allégé : aucun créneau valide hors du 16/09 lui-même (ordre pédagogique + indisponibilités MMA)"
     demande_par: "Martial Martin"
     le: "2026-08-30"
+
+  # Justine Hussenet (JHU), relais Kyllian Bresson, 31/08/2026 14h06 : « Ne
+  # souhaite plus assurer les CM pour les différents modules dans lequel
+  # elle intervient WR303D ; WRA303M ; WRA309M, il faut donc lui supprimer
+  # tous ses CM. » Vérification : seul WR303D a effectivement des CM à son
+  # nom (2 séances) — WRA303M et WRA309M n'ont aucun volume de CM au
+  # programme (volumes.cm = 0 dans progression.json), rien à faire dessus.
+  # Elle est seule enseignante déclarée sur WR303D (pas de co-intervenant) :
+  # décision utilisateur du 31/08/2026, le contenu est retiré plutôt que
+  # réassigné.
+  - session_id: WR303D-S3-CM-1
+    motif: "JHU ne souhaite plus assurer de CM (pas de co-intervenant déclaré sur WR303D)"
+    demande_par: "Justine Hussenet, via Kyllian Bresson"
+    le: "2026-08-31"
+
+  - session_id: WR303D-S3-CM-2
+    motif: "JHU ne souhaite plus assurer de CM (pas de co-intervenant déclaré sur WR303D)"
+    demande_par: "Justine Hussenet, via Kyllian Bresson"
+    le: "2026-08-31"

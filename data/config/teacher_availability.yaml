@@ -182,6 +182,30 @@ teachers:
         slots: [0, 1, 2, 3, 4, 5]
         note: "S9 jeudi — journée entière impossible"
 
+  # Julie Bastard (JBA), vacataire, relais Kyllian Bresson 31/08/2026
+  # 14h34 : « peut intervenir uniquement le vendredi après-midi par bloc de
+  # 3h donc 2 séances de 1h30 » — donc UNIQUEMENT vendredi 14h00-17h00
+  # (créneaux 3 et 4), jamais le reste de la semaine ni vendredi matin/17h.
+  # Absente de ce fichier jusqu'ici : aucune contrainte n'existait sur elle,
+  # d'où ses 32 séances WR312D dispersées sur toute la semaine avant
+  # correction.
+  - teacher_code: JBA  # Julie Bastard (vacataire)
+    # 31/08/2026 : recherche exhaustive sur les 23 vendredis du calendrier —
+    # seules 11 de ses 32 séances WR312D tiennent dans le seul bloc de 3h
+    # demandé (14h-17h), le reste des vendredis étant déjà occupé par
+    # d'autres cours sur les mêmes groupes (TP-C/TP-D/TD-CD) ou bloqué en
+    # fin de semestre. Décision utilisateur du 31/08/2026 : élargir à tout
+    # l'après-midi (14h-18h30, 3 séances max/vendredi) plutôt que d'ouvrir
+    # un second jour dans la semaine.
+    allowed_slots:
+      - [4, 3]   # vendredi 14h00-15h30
+      - [4, 4]   # vendredi 15h30-17h00
+      - [4, 5]   # vendredi 17h00-18h30
+    forbidden_date_slots:
+      - date: "2026-10-16"
+        slots: [3, 4, 5]
+        note: "Indisponible toute la semaine 8 (12-16 oct. 2026)"
+
 # Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
   gap_penalty: 100
