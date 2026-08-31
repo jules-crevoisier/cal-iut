@@ -1198,6 +1198,12 @@ def build_payload(
                 "ev": bool(session.is_eval),
                 "dur": max(1, session.duration_slots),
                 "locked": bool(session.locked),
+                # Séance ajoutée depuis l'interface (`api/custom_sessions.py`,
+                # retour utilisateur 31/08/2026) — distincte d'une séance de
+                # la maquette : c'est CE drapeau qui autorise le bouton
+                # modifier/supprimer en Vue Promo, jamais affiché sur une
+                # séance de la maquette.
+                "custom": bool(session.metadata.get("custom_session")),
             }
         )
 

@@ -14,7 +14,8 @@
  * s'affiche pas, le message d'échec du serveur est montré tel quel.
  */
 
-import { placerSeance } from "../api/client";
+import { creerSeancePersonnalisee, placerSeance, type CreerSeanceBody } from "../api/client";
+import type { Placement } from "../types";
 import { alerterAsync, confirmAsync } from "./confirmDialog";
 
 /** Le serveur renvoie le détail structuré d'un conflit (`hard_conflicts`/
@@ -85,6 +86,42 @@ export async function placerAvecConfirmation(
         : e2 instanceof Error
           ? e2.message
           : "Erreur de placement (forcé)";
+      return { ok: false, message };
+    }
+  }
+}
+
+/** Même logique confirmer-puis-forcer que `placerAvecConfirmation`, pour la
+ * création d'une séance personnalisée (retour utilisateur 31/08/2026) —
+ * `POST /placements/personnalisees` porte les mêmes trois catégories de
+ * réponse (succès, conflit forçable, verrou institutionnel). */
+export async function creerSeanceAvecConfirmation(
+  corps: CreerSeanceBody,
+): Promise<{ ok: true; placement: Placement } | { ok: false; message: string }> {
+  try {
+    return { ok: true, placement: await creerSeancePersonnalisee(corps) };
+  } catch (e) {
+    const detail = detailConflit(e);
+    if (!detail) {
+      return { ok: false, message: e instanceof Error ? e.message : "Création impossible" };
+    }
+    if (detail.blocking_conflicts.length > 0) {
+      await alerterAsync(detail.blocking_conflicts.join(String.fromCharCode(10)), { title: "Création impossible" });
+      return { ok: false, message: detail.blocking_conflicts.join(" · ") };
+    }
+    const forcer = await confirmAsync([...detail.hard_conflicts, ...detail.soft_warnings].join("\n"), {
+      confirmLabel: "Créer quand même",
+    });
+    if (!forcer) return { ok: false, message: "Création annulée." };
+    try {
+      return { ok: true, placement: await creerSeancePersonnalisee({ ...corps, force: true }) };
+    } catch (e2) {
+      const detail2 = detailConflit(e2);
+      const message = detail2
+        ? [...detail2.hard_conflicts, ...detail2.soft_warnings].join(" · ")
+        : e2 instanceof Error
+          ? e2.message
+          : "Erreur de création (forcée)";
       return { ok: false, message };
     }
   }

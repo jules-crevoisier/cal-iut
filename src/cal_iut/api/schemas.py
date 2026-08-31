@@ -47,6 +47,55 @@ class MoveSessionRequest(BaseModel):
     force: bool = False
 
 
+class CreerSeanceRequest(BaseModel):
+    """Ajouter une séance à une matière EXISTANTE et la placer dans le même
+    geste — retour utilisateur 31/08/2026 : « il va falloir créer un
+    système où l'on peut créer des cours pour une matière [...] imaginons
+    dans une matière on veuille rajouter un CM éval ou un TD, il faut
+    pouvoir le faire ».
+
+    `course_code` doit désigner une matière déjà connue (une entrée de
+    `state.courses`) : ce système AJOUTE une séance à un cours existant, il
+    n'invente jamais une matière depuis rien. `group_ids` sert aussi à
+    retrouver le bon `parcours` quand un code de cours en couvre plusieurs.
+    """
+
+    course_code: str
+    session_type: str  # "CM" | "TD" | "TP" | "PTUT"
+    group_ids: list[str] = Field(min_length=1)
+    teacher_codes: list[str] = Field(default_factory=list)
+    duration_slots: int = Field(default=1, ge=1, le=4)
+    is_eval: bool = False
+    note: str | None = None
+    # Emplacement — retour utilisateur explicite : un seul écran, la
+    # position se choisit dans le même formulaire, pas dans un second temps
+    # via glisser-déposer.
+    week: int = Field(ge=0)
+    day: int = Field(ge=0, le=4)
+    slot: int = Field(ge=0, le=5)
+    room_id: str | None = None
+    force: bool = False
+
+
+class ModifierSeancePersonnaliseeRequest(BaseModel):
+    """Modifie une séance personnalisée déjà créée. Tous les champs sont
+    optionnels : seuls ceux fournis changent. Fournir `week`/`day`/`slot`
+    replace ensemble (les trois ou aucun) et déclenche une revalidation
+    complète, exactement comme un déplacement normal."""
+
+    session_type: str | None = None
+    group_ids: list[str] | None = None
+    teacher_codes: list[str] | None = None
+    duration_slots: int | None = Field(default=None, ge=1, le=4)
+    is_eval: bool | None = None
+    note: str | None = None
+    week: int | None = Field(default=None, ge=0)
+    day: int | None = Field(default=None, ge=0, le=4)
+    slot: int | None = Field(default=None, ge=0, le=5)
+    room_id: str | None = None
+    force: bool = False
+
+
 class ChangeRoomRequest(BaseModel):
     """Changement de salle SEULE, à créneau inchangé (`PATCH /placements/
     {id}/salle`) — retour utilisateur 28/08/2026 : « on va vouloir sur la vue
