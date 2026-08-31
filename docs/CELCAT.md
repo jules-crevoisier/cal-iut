@@ -120,6 +120,39 @@ L'année est celle d'**entrée de la cohorte**, pas celle de la base : dans
 suffixe les retrouve, ce qui évite d'avoir à deviner. Département :
 `T_MMI T29`.
 
+## La vue emploi du temps
+
+Un double-clic sur un groupe ouvre son emploi du temps. Le titre porte le
+**code Celcat** du groupe : « BUT MMI S1 TD AB - 2024 **[6TSBZ1TD_1]** ». Ce
+code est plus stable que le libellé — c'est lui qu'il faudra mémoriser.
+
+En bas à gauche, un sélecteur de **semaines** en grille (Août → Juillet),
+avec des numéros de semaine et des infobulles du type « 4 (1/25/27-1/31/27) ».
+Les dates y sont au format américain.
+
+> **Celcat contient DÉJÀ nos groupes et leurs séances.** « BUT MMI S1 TD AB »
+> affiche 206 h 48 d'emploi du temps. La saisie n'écrit donc pas sur une page
+> blanche : elle doit comparer, créer, modifier, supprimer — ce que
+> `sync.construire_plan` fait déjà. Ne jamais créer en aveugle.
+
+Avec le rôle `985_consultation`, un bandeau annonce « Vous avez un accès en
+lecture seulement à cet emploi du temps ». Avec `985_T_MMI`, il disparaît :
+c'est le témoin le plus simple pour vérifier qu'on a bien les droits.
+
+Un double-clic sur une case vide n'ouvre PAS un formulaire de création mais
+l'**inspecteur d'événement**, avec cinq onglets :
+
+| onglet | ce qu'on y attend |
+|---|---|
+| Détails | date, horaire, durée, catégorie |
+| Ressources | enseignant, salle, groupe |
+| Remarques et personnaliser | libellés libres |
+| Critères requis | contraintes de salle |
+| Historique | qui a modifié quoi |
+
+La création passe par le bouton **+** en haut à droite du panneau. Il reste à
+le relever — voir plus bas.
+
 ## Où en est l'outil
 
 Acquis :
@@ -132,8 +165,11 @@ Acquis :
 Manquant :
 
 1. **Le nom Celcat de l'amphi MMI** — bloque les CM.
-2. **Le formulaire de création d'une séance** : jamais ouvert, faute de
-   vouloir écrire en lecture seule. À relever dans `URCA_FORMATION`.
+2. **Le formulaire de création d'une séance**, derrière le bouton **+**.
+   L'inspecteur d'événement a été relevé, pas le formulaire lui-même :
+   il n'a pas été ouvert de nuit, sans surveillance, sur une base qui
+   contient déjà des séances réelles. `URCA_FORMATION` ne peut pas servir
+   de répétition — elle ne contient AUCUN groupe MMI (vérifié).
 3. **Le code Celcat des CM** (`types_seance`), toujours à confirmer : les
    `.bat` d'origine ne montraient que TD=4 et TP=6.
 4. Les codes Celcat de 3 enseignants (`0` dans `celcat.yaml`) et de
