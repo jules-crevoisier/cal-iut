@@ -22,6 +22,28 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+/** Message d'erreur lisible depuis les trois formes que renvoie l'API :
+ * `{"detail": "texte"}` (la plupart des routes), `{"message": "texte"}`
+ * (comptes utilisateur — 400/403/409/503, cf. `api/main.py`, style choisi
+ * pour distinguer un conflit métier d'un problème de session), et
+ * `{"detail": [{"msg": "..."}]}` (422 de validation Pydantic — un tableau,
+ * jamais une chaîne). Sans ce dernier cas, un mot de passe trop court
+ * affichait `[object Object]`. */
+function messageErreur(body: unknown, repli: string): string {
+  if (body && typeof body === "object") {
+    const b = body as Record<string, unknown>;
+    if (typeof b.message === "string") return b.message;
+    if (typeof b.detail === "string") return b.detail;
+    if (Array.isArray(b.detail)) {
+      const msgs = b.detail
+        .map((e) => (e && typeof e === "object" && typeof (e as Record<string, unknown>).msg === "string" ? (e as Record<string, unknown>).msg : null))
+        .filter((m): m is string => !!m);
+      if (msgs.length) return msgs.join(" ");
+    }
+  }
+  return repli;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = accessToken
     ? `${BASE}${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(accessToken)}`
@@ -31,16 +53,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
+    const body = await res.json().catch(() => null);
+    throw new Error(messageErreur(body, res.statusText));
   }
   return res.json() as Promise<T>;
 }
 
-/** Mot de passe partagé — session posée en cookie httpOnly par le serveur,
- * jamais manipulée côté JS directement (cf. api/auth.py). */
-export async function login(password: string): Promise<void> {
-  await request("/auth/login", { method: "POST", body: JSON.stringify({ password }) });
+/** Système de comptes (31/08/2026, remplace le mot de passe partagé) —
+ * session posée en cookie httpOnly par le serveur, jamais manipulée côté JS
+ * directement (cf. api/accounts.py). */
+export interface MoiResponse {
+  id: number;
+  email: string;
+  role: "read_only" | "edit" | "admin";
+  status: "pending_email" | "pending_admin_activation" | "active" | "disabled";
+}
+
+export async function login(email: string, password: string): Promise<{ role: string; status: string }> {
+  return request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
 }
 
 export async function logout(): Promise<void> {
@@ -50,6 +80,54 @@ export async function logout(): Promise<void> {
 export async function checkAuthStatus(): Promise<boolean> {
   const r = await request<{ authenticated: boolean }>("/auth/status");
   return r.authenticated;
+}
+
+/** `null` = pas connecté (401) plutôt qu'une exception — App.tsx distingue
+ * ainsi "pas de session" de "erreur réseau" sans essayer/attraper partout. */
+export async function fetchMoi(): Promise<MoiResponse | null> {
+  try {
+    return await request<MoiResponse>("/auth/me");
+  } catch {
+    return null;
+  }
+}
+
+export async function signup(email: string, password: string): Promise<{ status: string }> {
+  return request("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) });
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  await request("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await request("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  role: "read_only" | "edit" | "admin";
+  status: "pending_email" | "pending_admin_activation" | "active" | "disabled";
+  created_at: string;
+  email_confirmed_at: string | null;
+  activated_at: string | null;
+}
+
+export async function adminListUsers(status?: string): Promise<AdminUser[]> {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  const r = await request<{ users: AdminUser[] }>(`/admin/users${q}`);
+  return r.users;
+}
+
+export async function adminUpdateUser(
+  id: number,
+  patch: { role?: string; status?: string },
+): Promise<AdminUser> {
+  return request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
 export function fetchMeta(): Promise<MetaResponse> {

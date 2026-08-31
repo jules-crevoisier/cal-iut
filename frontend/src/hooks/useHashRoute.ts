@@ -21,7 +21,17 @@ export type RouteView =
   | "apf"
   | "aplacer"
   | "salle"
-  | "cours";
+  | "cours"
+  | "comptes";
+
+/** Écrans du système de comptes (31/08/2026) — pré-authentification,
+ * distincts des `RouteView` (qui supposent une session active) : lus AVANT
+ * de savoir si quelqu'un est connecté. `confirme` est la cible du lien
+ * envoyé par mail (`GET /auth/confirm-email`, redirection serveur) ;
+ * `reinitialiser` celle du lien de mot de passe oublié — les deux portent
+ * un jeton dans le fragment, jamais envoyé au serveur autrement que via le
+ * paramètre `token` de leur propre requête POST. */
+export type RouteCompte = "" | "inscription" | "mot-de-passe-oublie" | "confirme" | "reinitialiser";
 
 export type RoutePanel = "" | "aplacer";
 
@@ -51,6 +61,16 @@ export interface Route {
    * démarrage (App.tsx) pour être rejoué en paramètre de requête sur
    * chaque appel API (`api/client.ts::setAccessToken`). */
   t: string;
+  /** Écran de compte à afficher (inscription/reset/confirmation) — lu
+   * indépendamment de `vue`, avant de savoir si une session existe. */
+  compte: RouteCompte;
+  /** Résultat de `GET /auth/confirm-email` (redirection serveur,
+   * `#compte=confirme&statut=ok|erreur`) — jamais posé par le frontend
+   * lui-même. */
+  statut: "" | "ok" | "erreur";
+  /** Jeton de réinitialisation de mot de passe (`#compte=reinitialiser
+   * &token=...`, lien envoyé par mail) — à usage unique côté serveur. */
+  token: string;
 }
 
 const EMPTY_ROUTE: Route = {
@@ -64,14 +84,20 @@ const EMPTY_ROUTE: Route = {
   jour: null,
   mode: "",
   t: "",
+  compte: "",
+  statut: "",
+  token: "",
 };
 
-const ENTITY_RESET: Pick<Route, "prof" | "groupe" | "salle" | "cours" | "panel"> = {
+const ENTITY_RESET: Pick<Route, "prof" | "groupe" | "salle" | "cours" | "panel" | "compte" | "statut" | "token"> = {
   prof: "",
   groupe: "",
   salle: "",
   cours: "",
   panel: "",
+  compte: "",
+  statut: "",
+  token: "",
 };
 
 function asPanel(value: string | null): RoutePanel {
@@ -100,6 +126,9 @@ function readHash(): Route {
     jour: params.get("jour") !== null ? Number(params.get("jour")) : null,
     mode: (params.get("mode") as Route["mode"]) || "",
     t: params.get("t") || "",
+    compte: (params.get("compte") as RouteCompte) || "",
+    statut: (params.get("statut") as Route["statut"]) || "",
+    token: params.get("token") || "",
   });
 }
 

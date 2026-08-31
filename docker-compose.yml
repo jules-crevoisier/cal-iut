@@ -35,6 +35,8 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       RESEND_FROM: ${RESEND_FROM}
       CAL_IUT_PUBLIC_URL: ${CAL_IUT_PUBLIC_URL}
+      # MCP distant (`POST /mcp`) — absent ou vide → 503, login site inchangé.
+      CAL_IUT_MCP_TOKEN: ${CAL_IUT_MCP_TOKEN}
     volumes:
       # `data/state/` SEULEMENT (pas `data/` en entier) — sépare la config
       # (rafraîchie à chaque déploiement, hors du volume) de l'état

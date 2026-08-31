@@ -3080,6 +3080,102 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   margin-top: 4px;
 }
 
+.loginpanel-aide {
+  align-self: flex-start;
+  margin: -4px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.loginpanel-liens {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.loginpanel-lien {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 8px 0;
+  min-height: 32px;
+}
+
+.loginpanel-lien:hover {
+  text-decoration: underline;
+}
+
+.loginpanel-lien:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ══════════════ Gestion des comptes (AdminUsersView) ══════════════ */
+
+.btn--danger {
+  background: var(--bad-soft);
+  border-color: var(--bad);
+  color: var(--bad-text);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--bad);
+  color: #fff;
+}
+
+.admin-users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-users-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.admin-users-identite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-users-identite strong {
+  word-break: break-all;
+}
+
+.admin-users-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-users-actions select {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 6px 8px;
+}
+
 /* ══════════════ Modale de confirmation (ConfirmModal) ══════════════
    Remplace `window.confirm` pour le forçage sur conflit (glisser-déposer,
    placement manuel) — retour utilisateur 28/08/2026 : un bloqueur de

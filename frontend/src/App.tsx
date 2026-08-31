@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   applyFeedback,
-  checkAuthStatus,
   exportCsvUrl,
   exportJson,
   extractTeachers,
@@ -10,22 +9,30 @@ import {
   fetchDiff,
   fetchFeedbackAnalysis,
   fetchMeta,
+  fetchMoi,
   fetchTimetable,
   setAccessToken,
 } from "./api/client";
+import type { MoiResponse } from "./api/client";
+import { AccountPendingGate } from "./components/AccountPendingGate";
 import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
+import { EmailConfirmedPage } from "./components/EmailConfirmedPage";
+import { ForgotPasswordPage } from "./components/ForgotPasswordPage";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { ConfirmModal } from "./components/ConfirmModal";
 import { ContextePreferences, ecrirePreferences, lirePreferences, type Preferences } from "./utils/preferences";
 import { PreferencesModal } from "./components/PreferencesModal";
 import { LoginGate } from "./components/LoginGate";
 import { PageHeader } from "./components/PageHeader";
+import { ResetPasswordPage } from "./components/ResetPasswordPage";
 import { SideNav } from "./components/SideNav";
 import { SessionPanel } from "./components/SessionPanel";
+import { SignupPage } from "./components/SignupPage";
 import { TdWeekGrid } from "./components/TdWeekGrid";
 import { TimetableCalendar } from "./components/TimetableCalendar";
 import { Toolbar } from "./components/Toolbar";
+import { AdminUsersView } from "./views/AdminUsersView";
 import { buildTodoList } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -130,10 +137,14 @@ export function App() {
           : null;
   const activeTab: RouteView = readOnlyTarget ?? (route.vue || "semaine");
 
-  // Mot de passe partagé (retour utilisateur 28/08/2026) — `null` = statut
-  // pas encore connu (évite un flash du formulaire avant la première
-  // réponse de `/auth/status`, endpoint jamais bloqué lui-même).
-  const [authentifie, setAuthentifie] = useState<boolean | null>(null);
+  // Système de comptes (31/08/2026, remplace le mot de passe partagé) —
+  // `undefined` = statut pas encore connu (évite un flash du formulaire
+  // avant la première réponse de `GET /auth/me`), `null` = pas de session,
+  // sinon le compte connecté (actif ou non — `moi.status` distingue).
+  const [moi, setMoi] = useState<MoiResponse | null | undefined>(undefined);
+  const rafraichirMoi = useCallback(() => {
+    fetchMoi().then(setMoi).catch(() => setMoi(null));
+  }, []);
 
   // Code du lien personnel (`route.t`, prof ou groupe) — posé AVANT tout
   // appel API (cf. api/client.ts::setAccessToken) : sans cet ordre, les
@@ -143,10 +154,8 @@ export function App() {
   }, [route.t]);
 
   useEffect(() => {
-    checkAuthStatus()
-      .then(setAuthentifie)
-      .catch(() => setAuthentifie(false));
-  }, []);
+    rafraichirMoi();
+  }, [rafraichirMoi]);
 
   const refreshMeta = useCallback(async () => {
     try {
@@ -177,14 +186,14 @@ export function App() {
 
   useEffect(() => {
     // Lien perso (readOnlyTarget) : le paramètre `t` fait le travail d'auth
-    // tout seul (public depuis le 28/08/2026), peu importe `authentifie`
-    // (qui reste `false`, ces liens n'ont jamais la session admin). Sinon,
-    // attend une session confirmée — partir plus tôt ne ferait qu'échouer
-    // en 401 pour rien.
-    if (!readOnlyTarget && authentifie !== true) return;
+    // tout seul (public depuis le 28/08/2026), peu importe `moi` (qui reste
+    // `null`, ces liens n'ont jamais de session compte). Sinon, attend un
+    // compte ACTIF — partir plus tôt (compte en attente d'activation)
+    // échouerait en 403 pour rien.
+    if (!readOnlyTarget && moi?.status !== "active") return;
     void refreshMeta();
     void refreshAppState();
-  }, [refreshMeta, refreshAppState, readOnlyTarget, authentifie]);
+  }, [refreshMeta, refreshAppState, readOnlyTarget, moi]);
 
   const loadTimetable = useCallback(async () => {
     try {
@@ -345,16 +354,49 @@ export function App() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [search, navOpen, readOnlyTarget]);
 
-  // Mot de passe requis avant TOUT le reste — sauf lien perso (readOnlyTarget),
+  // Écrans du système de comptes (31/08/2026) — lus AVANT de savoir si une
+  // session existe : inscription/mot de passe oublié sont volontairement
+  // accessibles sans être connecté, et confirmation/réinitialisation sont
+  // atteintes depuis un lien de mail, jamais depuis la nav.
+  const retourConnexion = () => setRoute({ compte: "" });
+  if (!readOnlyTarget && route.compte === "inscription") {
+    return <SignupPage onRetourConnexion={retourConnexion} />;
+  }
+  if (!readOnlyTarget && route.compte === "mot-de-passe-oublie") {
+    return <ForgotPasswordPage onRetourConnexion={retourConnexion} />;
+  }
+  if (!readOnlyTarget && route.compte === "confirme") {
+    return (
+      <EmailConfirmedPage
+        statut={route.statut}
+        onOuvrirInscription={() => setRoute({ compte: "inscription" })}
+        onRetourConnexion={retourConnexion}
+      />
+    );
+  }
+  if (!readOnlyTarget && route.compte === "reinitialiser") {
+    return <ResetPasswordPage token={route.token} onRetourConnexion={retourConnexion} />;
+  }
+
+  // Compte requis avant TOUT le reste — sauf lien perso (readOnlyTarget),
   // qui n'entre jamais dans ce couloir (retour utilisateur 28/08/2026 :
   // « uniquement les prof ai accès a leur lien sans mot de passe »).
-  // `authentifie === null` : statut pas encore connu, écran neutre plutôt
+  // `moi === undefined` : statut pas encore connu, écran neutre plutôt
   // qu'un flash du formulaire suivi d'un flash de l'app.
-  if (!readOnlyTarget && authentifie === false) {
-    return <LoginGate onSuccess={() => setAuthentifie(true)} />;
+  if (!readOnlyTarget && moi === null) {
+    return (
+      <LoginGate
+        onSuccess={rafraichirMoi}
+        onOuvrirInscription={() => setRoute({ compte: "inscription" })}
+        onOuvrirMotDePasseOublie={() => setRoute({ compte: "mot-de-passe-oublie" })}
+      />
+    );
   }
-  if (!readOnlyTarget && authentifie === null) {
+  if (!readOnlyTarget && moi === undefined) {
     return <div className="app" aria-busy="true" />;
+  }
+  if (!readOnlyTarget && moi !== null && moi !== undefined && moi.status !== "active") {
+    return <AccountPendingGate email={moi.email} onDeconnecte={() => setMoi(null)} />;
   }
 
   return (
@@ -397,6 +439,7 @@ export function App() {
               todoHasBad={todoHasBad}
               open={navOpen}
               onClose={() => setNavOpen(false)}
+              estAdmin={moi?.role === "admin"}
             />
           </>
         )}
@@ -646,6 +689,7 @@ export function App() {
           <ContraintesView payload={appPayload} setRoute={setRoute} />
         )}
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
+        {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
           </main>
         </div>
       </div>
