@@ -222,6 +222,14 @@ class NotificationConfigResponse(BaseModel):
     libelles: dict[str, str]
     en_attente: int
     mail_configure: bool
+    # Diagnostic PRÉCIS de ce qui manque — sans eux, un message ne citant
+    # que RESEND_API_KEY a fait chercher dans la mauvaise direction alors
+    # que c'était CAL_IUT_PUBLIC_URL l'absent (retour utilisateur
+    # 31/08/2026 : « j'ai bien la key dans le env »). `mail_configure`
+    # reste le booléen simple pour le reste du code qui n'a besoin que de
+    # oui/non.
+    mail_a_la_clef_api: bool
+    mail_a_url_publique: bool
 
 
 class EchangeRequest(BaseModel):
@@ -429,6 +437,13 @@ class TeacherMailPreviewResponse(BaseModel):
 
 class TeacherMailPreviewListResponse(BaseModel):
     configured: bool
+    # Même précision que `NotificationConfigResponse` — retour utilisateur
+    # 31/08/2026 : un message qui ne nomme pas la variable manquante fait
+    # chercher au mauvais endroit. Pas de défaut, comme `configured` : un
+    # oubli à la construction doit échouer bruyamment, jamais laisser
+    # croire que tout est en place.
+    a_la_clef_api: bool
+    a_url_publique: bool
     teachers: list[TeacherMailPreviewResponse] = []
 
 

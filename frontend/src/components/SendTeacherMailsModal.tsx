@@ -20,7 +20,15 @@ interface SendTeacherMailsModalProps {
  * pour qu'un ré-envoi accidentel demande un geste conscient. */
 export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
   const [state, setState] = useState<
-    { status: "loading" } | { status: "error"; message: string } | { status: "ready"; configured: boolean; teachers: TeacherMailPreview[] }
+    | { status: "loading" }
+    | { status: "error"; message: string }
+    | {
+        status: "ready";
+        configured: boolean;
+        aLaClefApi: boolean;
+        aUrlPublique: boolean;
+        teachers: TeacherMailPreview[];
+      }
   >({ status: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
@@ -47,7 +55,13 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
   useEffect(() => {
     fetchTeacherMailPreview()
       .then((data) => {
-        setState({ status: "ready", configured: data.configured, teachers: data.teachers });
+        setState({
+          status: "ready",
+          configured: data.configured,
+          aLaClefApi: data.a_la_clef_api,
+          aUrlPublique: data.a_url_publique,
+          teachers: data.teachers,
+        });
         // Pré-coché : adresse connue ET jamais encore contacté — pas les
         // deux autres cas (pas d'adresse : rien à cocher ; déjà envoyé :
         // geste conscient requis pour renvoyer).
@@ -76,7 +90,13 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
       // Rafraîchit les dates d'envoi affichées sans refermer la fenêtre —
       // l'utilisateur doit voir le résultat avant de partir.
       const data = await fetchTeacherMailPreview();
-      setState({ status: "ready", configured: data.configured, teachers: data.teachers });
+      setState({
+        status: "ready",
+        configured: data.configured,
+        aLaClefApi: data.a_la_clef_api,
+        aUrlPublique: data.a_url_publique,
+        teachers: data.teachers,
+      });
     } catch (err) {
       setState({ status: "error", message: err instanceof Error ? err.message : "Erreur d'envoi" });
     } finally {
@@ -100,9 +120,21 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
 
         {state.status === "ready" && !state.configured && (
           <p className="mailmodal-err">
-            Envoi non configuré côté serveur (variables d'environnement <span className="mono">RESEND_API_KEY</span>{" "}
-            / <span className="mono">CAL_IUT_PUBLIC_URL</span> absentes). Les cases restent affichées mais chaque
-            envoi échouera tant que ce n'est pas réglé.
+            {/* Nommer précisément ce qui manque — retour utilisateur
+                31/08/2026 : « j'ai bien la key dans le env » alors que
+                c'était CAL_IUT_PUBLIC_URL l'absente, jamais nommée avant
+                ce correctif. */}
+            Envoi non configuré côté serveur : il manque{" "}
+            {!state.aLaClefApi && !state.aUrlPublique ? (
+              <>
+                <span className="mono">RESEND_API_KEY</span> et <span className="mono">CAL_IUT_PUBLIC_URL</span>
+              </>
+            ) : !state.aLaClefApi ? (
+              <span className="mono">RESEND_API_KEY</span>
+            ) : (
+              <span className="mono">CAL_IUT_PUBLIC_URL</span>
+            )}{" "}
+            côté serveur. Les cases restent affichées mais chaque envoi échouera tant que ce n'est pas réglé.
           </p>
         )}
 

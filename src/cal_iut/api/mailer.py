@@ -53,8 +53,16 @@ class MailerNotConfigured(Exception):
     erreur explicite remontée jusqu'à l'utilisateur."""
 
 
+def has_api_key() -> bool:
+    return bool(os.environ.get(_API_KEY_ENV))
+
+
+def has_public_url() -> bool:
+    return bool(os.environ.get(_PUBLIC_URL_ENV))
+
+
 def is_configured() -> bool:
-    return bool(os.environ.get(_API_KEY_ENV)) and bool(os.environ.get(_PUBLIC_URL_ENV))
+    return has_api_key() and has_public_url()
 
 
 def public_base_url() -> str:

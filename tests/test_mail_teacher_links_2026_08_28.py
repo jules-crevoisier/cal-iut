@@ -101,7 +101,29 @@ def test_previsualisation_liste_les_profs_avec_et_sans_adresse(etat_avec_seance,
     )
     corps = client.get("/mail/teacher-links").json()
     assert corps["configured"] is False  # RESEND_API_KEY/CAL_IUT_PUBLIC_URL absents en test
+    # Les DEUX manquent ici : le diagnostic précis doit le dire, pas juste
+    # « configured: false » (retour utilisateur 31/08/2026, cf. ci-dessous).
+    assert corps["a_la_clef_api"] is False
+    assert corps["a_url_publique"] is False
     assert any(t["code"] == "KBR" and t["email"] == "kyllian.bresson@univ-reims.fr" for t in corps["teachers"])
+
+
+def test_diagnostic_precis_distingue_laquelle_des_deux_variables_manque(
+    etat_avec_seance, session_admin, monkeypatch
+) -> None:
+    """Retour utilisateur 31/08/2026 : « j'ai bien la key dans le env [...]
+    et les autres mail partent » — RESEND_API_KEY était bien présente,
+    CAL_IUT_PUBLIC_URL ne l'était pas, et le message de l'interface ne
+    nommait que la première. `configured` seul ne permet pas de distinguer
+    ce cas d'une clé manquante : `a_la_clef_api`/`a_url_publique` si."""
+    monkeypatch.setattr("cal_iut.ingestion.config_loader.load_teacher_contacts", lambda config_dir: {})
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_present")
+    monkeypatch.delenv("CAL_IUT_PUBLIC_URL", raising=False)
+
+    corps = client.get("/mail/teacher-links").json()
+    assert corps["configured"] is False
+    assert corps["a_la_clef_api"] is True
+    assert corps["a_url_publique"] is False
 
 
 def test_envoi_reussi_journalise_et_reapparait_comme_deja_envoye(etat_avec_seance, session_admin, monkeypatch) -> None:
