@@ -1,5 +1,6 @@
 import { BoutonsImageEdt } from "./BoutonsImageEdt";
 import { CopyButton } from "./CopyButton";
+import { OpenLinkButton } from "./OpenLinkButton";
 import type { OptionsImage } from "../utils/imageEdt";
 
 interface ShareBarProps {
@@ -26,9 +27,13 @@ interface ShareBarProps {
  *  avantageusement puisqu'il se remet à jour tout seul dans l'agenda. En
  *  garder deux obligeait à expliquer lequel choisir. */
 export function ShareBar({ onCopyLink, onCopySubscribeLink, imageEdt, extra }: ShareBarProps) {
+  const lienPerso = onCopyLink();
   return (
     <div className="sharebar no-print">
-      <CopyButton text={onCopyLink} idleLabel="Copier son lien" />
+      <span className="lien-boutons">
+        <CopyButton text={onCopyLink} idleLabel="Copier son lien" />
+        <OpenLinkButton href={lienPerso} />
+      </span>
       {onCopySubscribeLink && (
         <CopyButton
           text={onCopySubscribeLink}

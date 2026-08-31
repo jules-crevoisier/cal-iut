@@ -6,6 +6,7 @@ import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { CopyButton } from "../components/CopyButton";
+import { OpenLinkButton } from "../components/OpenLinkButton";
 import { confirmAsync } from "../utils/confirmDialog";
 import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
@@ -234,6 +235,8 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
       link: r.link,
     }));
 
+  const lienPromo = buildLink({ vue: "promo", mode: "promo", t: "promo" });
+
   return (
     <div className="panel">
       <p className="muted">
@@ -267,10 +270,10 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
             de passe pour l'ouvrir.
           </p>
         </div>
-        <CopyButton
-          text={() => buildLink({ vue: "promo", mode: "promo", t: "promo" })}
-          idleLabel="Copier le lien"
-        />
+        <span className="lien-boutons">
+          <CopyButton text={lienPromo} idleLabel="Copier le lien" />
+          <OpenLinkButton href={lienPromo} />
+        </span>
       </div>
       {showMailModal && <SendTeacherMailsModal onClose={() => setShowMailModal(false)} />}
 
@@ -381,7 +384,10 @@ function DirectoryRow({
       <td>{row.items.length}</td>
       <td>{hours} h</td>
       <td>
-        <CopyButton text={row.link} idleLabel="Copier" />
+        <span className="lien-boutons">
+          <CopyButton text={row.link} idleLabel="Copier" />
+          <OpenLinkButton href={row.link} />
+        </span>
       </td>
       <td>
         <CopyButton
