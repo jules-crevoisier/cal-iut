@@ -1,31 +1,23 @@
 # Session
-goal: Search lands on admin fiches (matière / prof / salle / groupe) with all known data + week grid; À placer moves into Vue Promo; Promo uses full width on large screens.
-out_of_scope: personal links (mode=prof/groupe) stay essential-only; no design duel; no cell stretching; no multi-day Promo; no new backend data invented.
-users: admin desktop (operate); mobile already has drawer; personal-link audience unchanged.
-branch: feature/search-fiches-promo
-design_pick: da_now (existing panels / tokens)
-inspiration: skip (DA locked)
+goal: MCP has the same live catalog a Promo admin sees, plus a repo skill; Claude can place/move/swap/unplace/room/patch seance/custom exactly like the UI, after a visible plan.
+out_of_scope: WhatsApp inbox; inventing a replacement teacher; personal-link chrome; design duel; solver/regen/ingest/mails as MCP tools; writing YAML under data/config; silent force of PAC/SAE/declared indispo.
+users: admin (Kyllian) on desktop + Claude.ai / Cursor on https://cal-iut-mmi.srko.fr/mcp
+branch: feature/mcp-edt-agent
+design_pick: da_now (MCP + skill, no new visual world)
+inspiration: skip
 locked:
-- Search kinds stay Enseignant / Groupe / Cours / Salle. Index from full catalogs (teachers, groups, courses, rooms), not only placed rows — so unplaced courses and unused rooms still appear.
-- Click → full page fiche (hash): vue=prof&prof=CODE | vue=salle&salle=ID | vue=cours&cours=CODE | vue=groupe&groupe=ID (groupe still hidden from SideNav).
-- Fiche layout (admin only): identity header + all existing payload facts + week grid below. Same DA as current panels.
-- Prof fiche = enrich EnseignantView (keep WeekBar + SessionGrid). Add better course list, volumes, constraints/dispos/violations, unplaced for that teacher, contacts/link already there.
-- Matière fiche (new): name/code, type volumes, teachers, groups, rooms used, placed vs missing sessions, constraints that mention the course if any, week grid filtered to that course.
-- Salle fiche (new): label, capacity, type, equipment, combined-with, occupation week grid, sessions using it, empty slots that week.
-- Groupe fiche = enrich GroupeView the same way (search already lands there).
-- Failure: unknown id → fiche with “introuvable” + link back to search; empty week is a real empty week, not a wrong filter.
-- À placer tab removed from SideNav. Placement lives as a panel in Vue Promo (list of manquantes + click séance then click cell — reuse existing placer / force / valider / undo).
-- Deep links #vue=aplacer and À traiter items redirect to vue=promo with panel open.
-- Promo large screen: lift .view max-width:1400px for Promo only; keep one-day + horizontal scroll; do not stretch cell min-widths.
+- Context live via MCP (not only a local skill): inspect returns sessions AND catalog slices (teachers, rooms, groups, weeks, unplaced, constraints/availability relevant to the filter). Same source as /app-state, never raw YAML dumps of secrets (celcat passwords, mail keys).
+- Context durable via a repo skill (`.cursor/skills/cal-iut-edt/SKILL.md`): IUT MMI slots, weekIndex vs label, hard vs forceable vs blocking, how to call inspect/plan/apply, how to read the MCP journal. Claude.ai still works from MCP tools alone.
+- Tools stay inspect / plan / apply. Plan is dry-run with ok | blocked | soft warning. Apply only if confirm=true, ops non-empty, plan_id matches if given, no blocked items.
+- Apply ops = human Promo actions: place, move (week/day/slot), swap, unplace, salle, patch seance (teachers, type, duration 1|2, week/day/slot, room, is_eval on CM), custom create/patch/delete. Same conflict stack as REST. Never invent teachers.
+- Force: only when the plan item already showed a forceable conflict and the human confirmed apply. Never force blocking_conflicts (PAC/SAE/institutional/declared indispo). Soft prefs = warnings in the plan.
+- Journal: each successful apply appends data/state/mcp_journal.json (gitignored). inspect can return it. Persistence of the EDT itself is the same SQLite + overlays + custom_sessions as the UI so the next regen/week/solve generation sees the new placements — no separate solver constraint type.
 open:
 - none
 acceptance:
-- Search “WR106” opens matière fiche with name, volumes, teachers, sessions; week grid shows that course, not a blank Semaine.
-- Search a teacher opens enriched Enseignant fiche (courses list + constraints + grid).
-- Search a room opens salle fiche with occupation grid, not Référence catalog.
-- Search a group still opens groupe fiche (enriched).
-- Rooms/courses with 0 placements still appear in search.
-- SideNav has no “À placer”. Vue Promo shows the à-placer panel; placing a session updates other views.
-- #vue=aplacer opens Promo with that panel.
-- Promo at ≥1440px uses full content width (no 1400 cap); cells not stretched; 320px still no page overflow.
-- mode=prof / mode=groupe unchanged (no new fiche chrome).
+- inspect without filter is too big to be the default; with teacher_code or course_code returns sessions + matching catalog (labels, rooms usable, unplaced for that course/teacher).
+- inspect of WRA507C lists those sessions with week/day/slot/room/teachers; catalog includes week labels and rooms.
+- plan+apply can place, move across weeks, swap, unplace, change room, patch teachers/type/duration/eval, create a custom session — 409 structured if blocked; force only on confirm after a forceable warning.
+- apply writes mcp_journal.json; a second inspect shows that entry; timetable/overlays match the UI APIs.
+- Unauthenticated / wrong token cannot mutate. No MCP token → 503.
+- Skill file exists in the repo and names the tools, journal, and hard vs forceable rules. No new Promo UI.

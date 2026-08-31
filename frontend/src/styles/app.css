@@ -1400,6 +1400,16 @@ h1, h2, h3 {
   background: transparent;
 }
 
+.weekbar-wrap.weekbar-drop-actif .weekbar-bar:not(.blocked) {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -1px;
+}
+
+.weekbar-bar.drop-cible {
+  box-shadow: 0 0 0 2px var(--accent) inset;
+  background: color-mix(in srgb, var(--accent) 22%, var(--accent-soft));
+}
+
 /* Infobulle interne de la barre des semaines — remplace l'attribut `title`
    natif (lent, non stylable, invisible au toucher). `position: fixed` +
    coordonnées calculées au survol : la `.weekbar` défile horizontalement,
@@ -3218,6 +3228,79 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   font-size: 0.85rem;
   color: var(--text);
   min-height: 28px;
+}
+
+.teacher-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.teacher-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  align-items: center;
+}
+
+.teacher-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px 2px 10px;
+  font-size: 0.85rem;
+}
+
+.teacher-picker-chip button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0 2px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.teacher-picker-recherche {
+  position: relative;
+}
+
+.teacher-picker-liste {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.teacher-picker-liste [role="option"] {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.teacher-picker-liste [role="option"]:hover {
+  background: var(--accent-soft);
+}
+
+.teacher-picker-vide {
+  padding: 8px 12px;
 }
 
 .newroom-field-groupes input {

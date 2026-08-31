@@ -44,3 +44,17 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
     monkeypatch.setattr(forced_pending, "_path", lambda: tmp_path / "forced_pending.json")
     monkeypatch.setattr(custom_rooms, "_path", lambda: tmp_path / "custom_rooms.json")
     monkeypatch.setattr(custom_sessions, "_path", lambda: tmp_path / "custom_sessions.json")
+    # Overlay maquette (PATCH /placements/{id}/seance) — le module n'existe
+    # pas encore au moment du TDD ; dès qu'il est là, l'isoler comme le reste.
+    try:
+        from cal_iut.api import session_overrides
+    except ImportError:
+        session_overrides = None
+    if session_overrides is not None:
+        monkeypatch.setattr(session_overrides, "_path", lambda: tmp_path / "session_overrides.json")
+    try:
+        from cal_iut.mcp import journal as mcp_journal
+    except ImportError:
+        mcp_journal = None
+    if mcp_journal is not None:
+        monkeypatch.setattr(mcp_journal, "_path", lambda: tmp_path / "mcp_journal.json")

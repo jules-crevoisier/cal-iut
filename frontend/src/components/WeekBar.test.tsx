@@ -5,7 +5,7 @@
  * sélectionnée ÉTAIT la première : "Semaine 2 ... Semaine 2 ... Semaine 29"
  * se lisait comme un bug d'affichage plutôt qu'une information.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { WeekBar } from "./WeekBar";
@@ -48,3 +48,13 @@ describe("WeekBar caption", () => {
     expect(screen.getAllByText("Semaine 2 (31 août–4 sept. 2026)")).toHaveLength(1);
   });
 });
+
+describe("WeekBar drop onto another week", () => {
+  it("should call onDropWeek with the target display index", () => {
+    const onDropWeek = vi.fn();
+    render(<WeekBar {...baseProps} selected={0} onDropWeek={onDropWeek} />);
+    fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }));
+    expect(onDropWeek).toHaveBeenCalledWith(1);
+  });
+});
+

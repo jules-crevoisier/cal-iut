@@ -5,7 +5,8 @@ import { modifierSeancePersonnalisee } from "../api/client";
 import type { Placement } from "../types";
 import type { AppPayload } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { creerSeanceAvecConfirmation } from "../utils/placement";
+import { creerSeanceAvecConfirmation, modifierSeanceMaquetteAvecConfirmation } from "../utils/placement";
+import { TeacherPicker } from "./TeacherPicker";
 
 const TYPES = ["CM", "TD", "TP", "PTUT"] as const;
 const DUREES = [
@@ -19,6 +20,8 @@ interface CreerSeanceModalProps {
    * création. Les deux partagent le même formulaire — retour utilisateur
    * 31/08/2026 : « création + suppression + modification complète ». */
   seanceExistante?: Placement | null;
+  /** Overlay maquette : enseignant / type / durée / salle / semaine, PATCH /seance. */
+  mode?: "maquette" | "custom";
   /** Matière/groupe(s) déjà connus quand on ouvre depuis une ligne précise
    * (ex. Vue Promo, colonne d'un groupe) — pré-remplit sans forcer. */
   suggestion?: { courseCode?: string; groupId?: string; week?: number; day?: number } | null;
@@ -39,10 +42,12 @@ interface CreerSeanceModalProps {
 export function CreerSeanceModal({
   payload,
   seanceExistante = null,
+  mode,
   suggestion = null,
   onCree,
   onCancel,
 }: CreerSeanceModalProps) {
+  const modeMaquette = mode === "maquette";
   const coursTries = useMemo(
     () => [...payload.courses].sort((a, b) => a.code.localeCompare(b.code, "fr")),
     [payload.courses],
@@ -61,9 +66,7 @@ export function CreerSeanceModal({
   const [groupIds, setGroupIds] = useState<string[]>(
     seanceExistante?.group_ids ?? (suggestion?.groupId ? [suggestion.groupId] : []),
   );
-  const [teacherCodes, setTeacherCodes] = useState(
-    (seanceExistante?.teacher_codes ?? []).join(", "),
-  );
+  const [teacherCodes, setTeacherCodes] = useState<string[]>(seanceExistante?.teacher_codes ?? []);
   const [dureeSlots, setDureeSlots] = useState(seanceExistante?.duration_slots ?? 1);
   const [isEval, setIsEval] = useState(seanceExistante?.is_eval ?? false);
   const [note, setNote] = useState("");
@@ -82,9 +85,6 @@ export function CreerSeanceModal({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onCancel]);
 
-  // Les groupes cochables se limitent au parcours de la matière choisie —
-  // cocher un groupe hors sujet n'aurait aucun sens et compliquerait la
-  // liste pour rien.
   const groupesDuParcours = useMemo(() => {
     if (!courseChoisi) return [];
     return Object.keys(payload.groupLabels)
@@ -101,7 +101,35 @@ export function CreerSeanceModal({
     setGroupIds((prev) => (prev.includes(gid) ? prev.filter((g) => g !== gid) : [...prev, gid]));
   };
 
+  const changerType = (type: string) => {
+    setSessionType(type);
+    if (type !== "CM") setIsEval(false);
+  };
+
   const valider = async () => {
+    if (modeMaquette && seanceExistante) {
+      setEnCours(true);
+      setErreur(null);
+      const salleOrigine = seanceExistante.room_id ?? "";
+      const resultat = await modifierSeanceMaquetteAvecConfirmation(seanceExistante.session_id, {
+        session_type: sessionType,
+        teacher_codes: teacherCodes,
+        duration_slots: dureeSlots,
+        week,
+        day,
+        slot,
+        ...(roomId !== salleOrigine ? { room_id: roomId } : {}),
+        ...(sessionType === "CM" || seanceExistante.is_eval ? { is_eval: sessionType === "CM" && isEval } : {}),
+      });
+      setEnCours(false);
+      if (resultat.ok) {
+        onCree(resultat.placement);
+      } else {
+        setErreur(resultat.message);
+      }
+      return;
+    }
+
     if (!courseChoisi) {
       setErreur("Choisissez une matière.");
       return;
@@ -113,17 +141,12 @@ export function CreerSeanceModal({
     setEnCours(true);
     setErreur(null);
 
-    const enseignants = teacherCodes
-      .split(",")
-      .map((t) => t.trim().toUpperCase())
-      .filter(Boolean);
-
     if (seanceExistante) {
       try {
         const placement = await modifierSeancePersonnalisee(seanceExistante.session_id, {
           session_type: sessionType,
           group_ids: groupIds,
-          teacher_codes: enseignants,
+          teacher_codes: teacherCodes,
           duration_slots: dureeSlots,
           is_eval: isEval,
           note,
@@ -145,7 +168,7 @@ export function CreerSeanceModal({
       course_code: courseChoisi.code,
       session_type: sessionType,
       group_ids: groupIds,
-      teacher_codes: enseignants,
+      teacher_codes: teacherCodes,
       duration_slots: dureeSlots,
       is_eval: isEval,
       note,
@@ -163,6 +186,8 @@ export function CreerSeanceModal({
     }
   };
 
+  const montrerEval = !modeMaquette || sessionType === "CM";
+
   return (
     <div className="confirmmodal-overlay" role="presentation" onClick={onCancel}>
       <form
@@ -178,12 +203,15 @@ export function CreerSeanceModal({
       >
         <h3 id="seancemodal-titre">{seanceExistante ? "Modifier la séance" : "Nouvelle séance"}</h3>
         <p className="muted small">
-          {seanceExistante
-            ? "Cette séance a été ajoutée manuellement — elle reste modifiable et supprimable ici."
-            : "Ajoute une heure à une matière existante et la place directement, comme un déplacement manuel."}
+          {modeMaquette
+            ? "Type, durée, salle et semaine — recherche d'enseignant, évaluation si c'est un CM."
+            : seanceExistante
+              ? "Cette séance a été ajoutée manuellement — elle reste modifiable et supprimable ici."
+              : "Ajoute une heure à une matière existante et la place directement, comme un déplacement manuel."}
         </p>
 
         <div className="seancemodal-grille">
+          {!modeMaquette && (
           <label className="newroom-field newroom-field--large">
             Matière
             <select value={courseCode} disabled={!!seanceExistante} onChange={(e) => setCourseCode(e.target.value)}>
@@ -194,10 +222,11 @@ export function CreerSeanceModal({
               ))}
             </select>
           </label>
+          )}
 
           <label className="newroom-field">
             Type
-            <select value={sessionType} onChange={(e) => setSessionType(e.target.value)}>
+            <select value={sessionType} onChange={(e) => changerType(e.target.value)}>
               {TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
@@ -217,6 +246,7 @@ export function CreerSeanceModal({
             </select>
           </label>
 
+          {!modeMaquette && (
           <div className="newroom-field newroom-field--large">
             Groupe(s)
             <div className="newroom-field-groupes">
@@ -229,22 +259,21 @@ export function CreerSeanceModal({
               ))}
             </div>
           </div>
+          )}
 
-          <label className="newroom-field">
+          <div className="newroom-field newroom-field--large">
             Enseignant(s)
-            <input
-              type="text"
-              value={teacherCodes}
-              placeholder="ex. MRI, JSA"
-              onChange={(e) => setTeacherCodes(e.target.value)}
-            />
-          </label>
+            <TeacherPicker selected={teacherCodes} labels={payload.teacherLabels} onChange={setTeacherCodes} />
+          </div>
 
+          {montrerEval && (
           <label className="newroom-field newroom-field--checkbox">
             <input type="checkbox" checked={isEval} onChange={(e) => setIsEval(e.target.checked)} />
             Évaluation
           </label>
+          )}
 
+          {!modeMaquette && (
           <label className="newroom-field newroom-field--large">
             Note (optionnel)
             <textarea
@@ -254,6 +283,7 @@ export function CreerSeanceModal({
               onChange={(e) => setNote(e.target.value)}
             />
           </label>
+          )}
 
           <label className="newroom-field">
             Semaine
