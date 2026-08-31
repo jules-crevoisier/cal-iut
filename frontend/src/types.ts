@@ -111,8 +111,14 @@ export interface NotificationConfig {
    *  divergeraient le jour où l'un change. */
   libelles: Record<string, string>;
   en_attente: number;
-  /** Faux = RESEND_API_KEY absente : les réglages sont gardés mais rien ne part. */
+  /** Faux = RESEND_API_KEY et/ou CAL_IUT_PUBLIC_URL absente(s) : les
+   *  réglages sont gardés mais rien ne part. Le détail de LAQUELLE manque
+   *  est dans les deux champs suivants (retour utilisateur 31/08/2026 :
+   *  un message ne citant que la clé a fait chercher au mauvais endroit
+   *  quand c'était l'URL publique l'absente). */
   mail_configure: boolean;
+  mail_a_la_clef_api: boolean;
+  mail_a_url_publique: boolean;
 }
 
 export type ViewMode = "group" | "teacher" | "room";

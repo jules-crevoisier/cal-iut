@@ -3043,6 +3043,8 @@ def lire_notifications() -> NotificationConfigResponse:
         libelles=dict(notifications.EVENEMENTS),
         en_attente=notifications.en_attente(),
         mail_configure=mailer.is_configured(),
+        mail_a_la_clef_api=mailer.has_api_key(),
+        mail_a_url_publique=mailer.has_public_url(),
     )
 
 
@@ -3136,6 +3138,8 @@ def mail_teacher_links_preview() -> TeacherMailPreviewListResponse:
     log = mailer.sent_log()
     return TeacherMailPreviewListResponse(
         configured=mailer.is_configured(),
+        a_la_clef_api=mailer.has_api_key(),
+        a_url_publique=mailer.has_public_url(),
         teachers=[
             TeacherMailPreviewResponse(
                 code=code,

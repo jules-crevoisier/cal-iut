@@ -478,6 +478,11 @@ export function apercuMailProf(code: string): Promise<{ subject: string; text: s
 
 export interface TeacherMailPreviewList {
   configured: boolean;
+  /** Détail de ce qui manque quand `configured` est faux (retour
+   * utilisateur 31/08/2026) — un message qui ne nomme pas la variable
+   * absente fait chercher au mauvais endroit. */
+  a_la_clef_api: boolean;
+  a_url_publique: boolean;
   teachers: TeacherMailPreview[];
 }
 

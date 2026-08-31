@@ -79,8 +79,24 @@ export function NotificationsPanel() {
 
       {!cfg.mail_configure && (
         <p className="notif-alerte">
-          L'envoi de mails n'est pas configuré sur ce serveur (<span className="mono">RESEND_API_KEY</span>{" "}
-          manquante) : les réglages ci-dessous seront gardés, mais rien ne partira.
+          {/* Les DEUX variables sont nécessaires (`mailer.is_configured()`)
+              — n'en citer qu'une a fait chercher dans la mauvaise direction
+              (retour utilisateur 31/08/2026 : « j'ai bien la key dans le
+              env » — RESEND_API_KEY était bien présente, CAL_IUT_PUBLIC_URL
+              ne l'était pas, et le message ne le disait pas). On nomme
+              maintenant précisément ce qui manque, pas les deux par
+              défaut. */}
+          L'envoi de mails n'est pas configuré sur ce serveur : il manque{" "}
+          {!cfg.mail_a_la_clef_api && !cfg.mail_a_url_publique ? (
+            <>
+              <span className="mono">RESEND_API_KEY</span> et <span className="mono">CAL_IUT_PUBLIC_URL</span>
+            </>
+          ) : !cfg.mail_a_la_clef_api ? (
+            <span className="mono">RESEND_API_KEY</span>
+          ) : (
+            <span className="mono">CAL_IUT_PUBLIC_URL</span>
+          )}{" "}
+          côté serveur — les réglages ci-dessous seront gardés, mais rien ne partira.
         </p>
       )}
 
