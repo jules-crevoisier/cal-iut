@@ -218,6 +218,10 @@ h1, h2, h3 {
   background: var(--surface-2);
 }
 
+a.btn {
+  text-decoration: none;
+}
+
 .btn--primary {
   background: var(--primary);
   border-color: var(--primary);
@@ -839,6 +843,22 @@ h1, h2, h3 {
   font-size: 0.75rem;
 }
 
+.btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.lien-boutons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Retour visuel copie / envoi — le libellé « Copié ✓ » ne suffisait pas :
    sur un tableau dense, la couleur se voit avant même de relire le bouton. */
 .btn.is-copied,
@@ -1064,6 +1084,35 @@ h1, h2, h3 {
 .searchopenbtn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.sidenav-compte {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.sidenav-compte-email {
+  padding: 6px 10px 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidenav-logout {
+  color: var(--muted);
+}
+
+.mcp-key-brut {
+  word-break: break-all;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
 }
 
 .kbd {

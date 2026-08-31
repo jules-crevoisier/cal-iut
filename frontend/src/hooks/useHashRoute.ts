@@ -22,7 +22,8 @@ export type RouteView =
   | "aplacer"
   | "salle"
   | "cours"
-  | "comptes";
+  | "comptes"
+  | "mcp";
 
 /** Écrans du système de comptes (31/08/2026) — pré-authentification,
  * distincts des `RouteView` (qui supposent une session active) : lus AVANT

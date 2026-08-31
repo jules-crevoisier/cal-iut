@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from cal_iut.db.models import EmailToken, User
+from cal_iut.db.models import EmailToken, McpKey, User
 
 
 class AccountRepository:
@@ -108,4 +108,48 @@ class AccountRepository:
             )
             .update({EmailToken.used_at: now}, synchronize_session=False)
         )
+        self.db.commit()
+
+    def list_active_mcp_keys(self, user_id: int) -> list[McpKey]:
+        return (
+            self.db.query(McpKey)
+            .filter(McpKey.user_id == user_id, McpKey.revoked_at.is_(None))
+            .order_by(McpKey.id)
+            .all()
+        )
+
+    def count_active_mcp_keys(self, user_id: int) -> int:
+        return (
+            self.db.query(McpKey)
+            .filter(McpKey.user_id == user_id, McpKey.revoked_at.is_(None))
+            .count()
+        )
+
+    def create_mcp_key(self, user_id: int, token_hash: str, prefix: str) -> McpKey:
+        cle = McpKey(user_id=user_id, token_hash=token_hash, prefix=prefix)
+        self.db.add(cle)
+        self.db.commit()
+        self.db.refresh(cle)
+        return cle
+
+    def get_mcp_key_for_user(self, key_id: int, user_id: int) -> McpKey | None:
+        return (
+            self.db.query(McpKey)
+            .filter(McpKey.id == key_id, McpKey.user_id == user_id, McpKey.revoked_at.is_(None))
+            .first()
+        )
+
+    def revoke_mcp_key(self, cle: McpKey) -> None:
+        cle.revoked_at = datetime.now(UTC)
+        self.db.commit()
+
+    def get_active_mcp_key_by_hash(self, token_hash: str) -> McpKey | None:
+        return (
+            self.db.query(McpKey)
+            .filter(McpKey.token_hash == token_hash, McpKey.revoked_at.is_(None))
+            .first()
+        )
+
+    def touch_mcp_key(self, cle: McpKey) -> None:
+        cle.last_used_at = datetime.now(UTC)
         self.db.commit()

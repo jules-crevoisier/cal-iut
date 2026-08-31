@@ -144,6 +144,7 @@ class User(Base):
     activated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     tokens: Mapped[list["EmailToken"]] = relationship(back_populates="user", foreign_keys="EmailToken.user_id")
+    mcp_keys: Mapped[list["McpKey"]] = relationship(back_populates="user")
 
 
 class EmailToken(Base):
@@ -162,6 +163,24 @@ class EmailToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     user: Mapped["User"] = relationship(back_populates="tokens", foreign_keys=[user_id])
+
+
+class McpKey(Base):
+    """Clé Bearer MCP d'un compte — seul le hash SHA-256 est stocké, jamais
+    la valeur brute (affichée une seule fois à la génération). `prefix` est
+    le début visible dans l'UI pour reconnaître une clé sans la révéler."""
+
+    __tablename__ = "mcp_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    prefix: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="mcp_keys")
 
 
 class TeacherPreference(Base):

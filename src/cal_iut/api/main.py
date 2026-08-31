@@ -35,6 +35,9 @@ from cal_iut.api.schemas import (
     LoginRequest,
     MeResponse,
     MetaResponse,
+    McpKeyCreatedResponse,
+    McpKeyListResponse,
+    McpKeyResponse,
     MoveSessionRequest,
     NotificationConfigRequest,
     NotificationConfigResponse,
@@ -219,6 +222,7 @@ _PROTECTED_PREFIXES = (
     "/admin", "/app-state", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
+    "/auth/mcp-keys",
     "/regen", "/rooms", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
 )
 
@@ -468,6 +472,52 @@ def auth_reset_password(body: ResetPasswordRequest) -> dict:
 def auth_me(request: Request) -> MeResponse:
     user = accounts.get_current_user(request)
     return MeResponse(id=user.id, email=user.email, role=user.role, status=user.status)
+
+
+def _mcp_key_to_response(cle: object, *, token: str | None = None) -> McpKeyResponse | McpKeyCreatedResponse:
+    base = {
+        "id": cle.id,
+        "prefix": cle.prefix,
+        "created_at": cle.created_at.isoformat() if cle.created_at else "",
+        "last_used_at": cle.last_used_at.isoformat() if cle.last_used_at else None,
+    }
+    if token is not None:
+        return McpKeyCreatedResponse(token=token, **base)
+    return McpKeyResponse(**base)
+
+
+@app.get("/auth/mcp-keys", response_model=McpKeyListResponse, dependencies=[Depends(accounts.require_role("read_only"))])
+def auth_list_mcp_keys(request: Request) -> McpKeyListResponse:
+    user: User = request.state.user
+    repo = _account_repo()
+    return McpKeyListResponse(keys=[_mcp_key_to_response(c) for c in repo.list_active_mcp_keys(user.id)])
+
+
+@app.post("/auth/mcp-keys", response_model=McpKeyCreatedResponse, dependencies=[Depends(accounts.require_role("read_only"))])
+def auth_create_mcp_key(request: Request) -> McpKeyCreatedResponse | JSONResponse:
+    from cal_iut.api.mcp_keys import MCP_MAX_ACTIVE_KEYS, generate_raw_mcp_token, hash_mcp_token, visible_prefix
+
+    user: User = request.state.user
+    repo = _account_repo()
+    if repo.count_active_mcp_keys(user.id) >= MCP_MAX_ACTIVE_KEYS:
+        return JSONResponse(
+            status_code=409,
+            content={"message": f"Limite de {MCP_MAX_ACTIVE_KEYS} clés MCP atteinte. Révoquez-en une d'abord."},
+        )
+    brut = generate_raw_mcp_token()
+    cle = repo.create_mcp_key(user.id, hash_mcp_token(brut), visible_prefix(brut))
+    return _mcp_key_to_response(cle, token=brut)
+
+
+@app.delete("/auth/mcp-keys/{key_id}", dependencies=[Depends(accounts.require_role("read_only"))])
+def auth_revoke_mcp_key(key_id: int, request: Request) -> dict:
+    user: User = request.state.user
+    repo = _account_repo()
+    cle = repo.get_mcp_key_for_user(key_id, user.id)
+    if cle is None:
+        return JSONResponse(status_code=404, content={"message": "Clé introuvable."})
+    repo.revoke_mcp_key(cle)
+    return {"ok": True}
 
 
 @app.get("/admin/users", response_model=AdminUserListResponse, dependencies=[Depends(accounts.require_role("admin"))])

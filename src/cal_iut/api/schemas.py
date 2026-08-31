@@ -55,6 +55,21 @@ class MeResponse(BaseModel):
     status: str
 
 
+class McpKeyResponse(BaseModel):
+    id: int
+    prefix: str
+    created_at: str
+    last_used_at: str | None = None
+
+
+class McpKeyCreatedResponse(McpKeyResponse):
+    token: str
+
+
+class McpKeyListResponse(BaseModel):
+    keys: list[McpKeyResponse]
+
+
 class AdminUserResponse(BaseModel):
     id: int
     email: str

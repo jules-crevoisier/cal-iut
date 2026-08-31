@@ -107,6 +107,30 @@ export async function resetPassword(token: string, newPassword: string): Promise
   });
 }
 
+export interface McpKey {
+  id: number;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface McpKeyCreated extends McpKey {
+  token: string;
+}
+
+export async function listMcpKeys(): Promise<McpKey[]> {
+  const r = await request<{ keys: McpKey[] }>("/auth/mcp-keys");
+  return r.keys;
+}
+
+export async function createMcpKey(): Promise<McpKeyCreated> {
+  return request("/auth/mcp-keys", { method: "POST" });
+}
+
+export async function revokeMcpKey(id: number): Promise<void> {
+  await request(`/auth/mcp-keys/${id}`, { method: "DELETE" });
+}
+
 export interface AdminUser {
   id: number;
   email: string;
