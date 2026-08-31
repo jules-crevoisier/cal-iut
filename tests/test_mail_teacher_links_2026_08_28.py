@@ -24,6 +24,8 @@ from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom
 
+from conftest import creer_compte_actif_et_connecter
+
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
 
@@ -70,13 +72,15 @@ def etat_avec_seance():
 
 
 @pytest.fixture
-def session_admin():
-    """Connecte le client `TestClient` module-level avec une vraie session
-    (mot de passe), nécessaire pour `require_admin_session`."""
-    reponse = client.post("/auth/login", json={"password": "test-password"})
-    assert reponse.status_code == 200
+def session_admin(db_isole):
+    """Connecte le client `TestClient` module-level avec un vrai compte
+    admin actif (comptes utilisateurs, cutover 31/08/2026 — remplace
+    l'ancienne session au mot de passe partagé), nécessaire pour les routes
+    `Depends(accounts.require_role("admin"))`."""
+    creer_compte_actif_et_connecter(client, role="admin")
     yield
     client.post("/auth/logout")
+    client.cookies.clear()
 
 
 def test_un_lien_perso_seul_est_refuse_sur_mail(etat_avec_seance) -> None:

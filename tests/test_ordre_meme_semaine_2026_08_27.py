@@ -28,6 +28,8 @@ from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom
 
+from conftest import creer_compte_actif_et_connecter
+
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
 GROUPE = "but1-td-ab"
@@ -42,7 +44,7 @@ def _seance(sid: str, ordre: int) -> SessionToPlace:
 
 
 @pytest.fixture
-def client():
+def client(db_isole):
     etat = get_state()
     ancien = {
         "sessions": etat.sessions, "sessions_by_id": etat.sessions_by_id,
@@ -92,9 +94,10 @@ def client():
     etat.student_presences = []
 
     client = TestClient(app)
-    # Mot de passe partagé (src/cal_iut/api/auth.py, retour utilisateur
-    # 28/08/2026) — sans ce login, chaque appel de ce client tomberait en 401.
-    client.post("/auth/login", json={"password": "test-password"})
+    # Compte de test (comptes utilisateurs, cutover 31/08/2026, remplace
+    # l'ancien mot de passe partagé) — sans ce login, chaque appel de ce
+    # client tomberait en 401.
+    creer_compte_actif_et_connecter(client)
     yield client
 
     for cle, valeur in ancien.items():

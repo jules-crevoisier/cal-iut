@@ -29,6 +29,73 @@ def auth_password() -> str:
     return os.environ["CAL_IUT_PASSWORD"]
 
 
+@pytest.fixture
+def db_isole(tmp_path):
+    """Bascule `state.db_path` vers un fichier SQLite temporaire pour la
+    durée du test, puis restaure à la fin — à demander explicitement
+    (paramètre de fixture, ex. `def client(db_isole):`) dans tout test qui
+    appelle `creer_compte_actif_et_connecter`, sans quoi ce compte de test
+    atterrirait dans la vraie `data/state/cal-iut.db` du dépôt (committée,
+    cf. `.gitignore` : `!data/state/cal-iut.db`)."""
+    import uuid
+
+    from cal_iut.api.state import get_state
+    from cal_iut.db import session as db_session
+    from cal_iut.db.session import init_db
+
+    etat = get_state()
+    ancien_db_path = etat.db_path
+    db_path = tmp_path / f"isole_{uuid.uuid4().hex}.db"
+    db_session._engine = None
+    db_session._SessionLocal = None
+    init_db(db_path)
+    etat.db_path = db_path
+    yield
+    etat.db_path = ancien_db_path
+    if db_session._engine:
+        db_session._engine.dispose()
+    db_session._engine = None
+    db_session._SessionLocal = None
+
+
+def creer_compte_actif_et_connecter(client, role: str = "edit") -> None:
+    """Remplace l'ancien login au mot de passe partagé (`CAL_IUT_PASSWORD`,
+    supprimé le 31/08/2026 par le cutover comptes utilisateurs, cf.
+    `api/accounts.py`) dans les fixtures qui montent un état de test à la
+    main : crée un compte ACTIF du rôle donné dans `state.db_path` COURANT
+    (à la fixture appelante de l'isoler d'abord vers un `tmp_path`, sans
+    quoi ce compte de test atterrirait dans la vraie `data/state/cal-iut.db`
+    du dépôt — cf. `tests/test_comptes_utilisateurs.py::_isolation` pour le
+    patron), puis connecte `client` avec.
+
+    Email tiré au sort (uuid) : ce même helper peut être appelé plusieurs
+    fois dans la même base (plusieurs tests d'un même fichier partageant un
+    `db_path` non ré-isolé par test) sans jamais entrer en collision avec la
+    contrainte `unique=True` de `User.email`.
+    """
+    import uuid
+
+    from cal_iut.api import accounts
+    from cal_iut.api.state import get_state
+    from cal_iut.db.models import User
+    from cal_iut.db.session import get_db, init_db
+
+    etat = get_state()
+    init_db(etat.db_path)
+    email = f"test-{role}-{uuid.uuid4().hex}@example.test"
+    db = get_db(etat.db_path)
+    try:
+        db.add(User(
+            email=email, password_hash=accounts.hash_password("Motdepasse123"),
+            role=role, status="active",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    reponse = client.post("/auth/login", json={"email": email, "password": "Motdepasse123"})
+    assert reponse.status_code == 200, reponse.text
+
+
 @pytest.fixture(autouse=True)
 def _fichiers_etat_isoles(tmp_path, monkeypatch):
     """Isole TOUS les petits fichiers JSON d'état persisté (`api/mailer.py`,

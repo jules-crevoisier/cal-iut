@@ -1,5 +1,7 @@
 """API REST FastAPI — générateur d'emplois du temps IUT MMI Troyes."""
 
+import hashlib
+import sys
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -8,13 +10,17 @@ from datetime import date as _date
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import auth, custom_rooms, custom_sessions, forced_pending, mailer, session_overrides
+from cal_iut.api import accounts, auth, custom_rooms, custom_sessions, forced_pending, mailer, session_overrides
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
+    AdminUserListResponse,
+    AdminUserResponse,
+    AdminUserUpdateRequest,
     DiffEntryResponse,
     EchangeRequest,
     EchangeResponse,
@@ -23,9 +29,11 @@ from cal_iut.api.schemas import (
     ExceptionResponse,
     FeedbackAnalysisResponse,
     ForcagePedagogiqueResponse,
+    ForgotPasswordRequest,
     GroupMeta,
     IngestRequest,
     LoginRequest,
+    MeResponse,
     MetaResponse,
     MoveSessionRequest,
     NotificationConfigRequest,
@@ -35,6 +43,7 @@ from cal_iut.api.schemas import (
     QualityResponse,
     RegenRequest,
     RegenResultResponse,
+    ResetPasswordRequest,
     CelcatEntreeResponse,
     CelcatPlanResponse,
     ChangeRoomRequest,
@@ -51,6 +60,8 @@ from cal_iut.api.schemas import (
     SeancesAPlacerResponse,
     SendTeacherMailsRequest,
     SendTeacherMailsResponse,
+    SignupRequest,
+    SignupResponse,
     SlotSuggestionResponse,
     SolveRequest,
     TeacherMailPreviewListResponse,
@@ -64,7 +75,9 @@ from cal_iut.api.schemas import (
 from cal_iut.api.state import get_repo, get_state
 from cal_iut.api.validation import suggest_alternative_slots, validate_move
 from cal_iut.calendar.academic import semester_week_offset, week_status
-from cal_iut.db.models import CurrentPlacement
+from cal_iut.db.accounts_repository import AccountRepository
+from cal_iut.db.models import CurrentPlacement, User
+from cal_iut.db.session import get_db
 from cal_iut.export.formatter import build_export_rows, to_csv, to_json
 from cal_iut.export.html_view import build_and_render
 from cal_iut.feedback.weights import analyze_corrections, apply_learned_weights
@@ -125,6 +138,29 @@ async def _lifespan(_app: FastAPI):
 
 app = FastAPI(title="cal-iut API", version="1.0.0", lifespan=_lifespan)
 
+# Revue qualité du 31/08/2026 (système de comptes) : un mot de passe trop
+# court (`Field(min_length=10)`) déclenche une 422 dont le corps par défaut
+# de FastAPI/Pydantic renvoie le champ `input` = LA VALEUR SOUMISE TELLE
+# QUELLE — le mot de passe en clair repart donc dans la réponse HTTP,
+# capturable par les devtools, un historique de requêtes, ou un futur
+# middleware de logs. Les champs sensibles sont donc caviardés avant que le
+# corps d'erreur ne quitte le serveur, sans toucher au reste du
+# comportement de validation (toujours 422, toujours le même message côté
+# type d'erreur).
+_CHAMPS_SENSIBLES_VALIDATION = {"password", "new_password"}
+
+
+@app.exception_handler(RequestValidationError)
+async def _erreurs_validation_sans_secret(request: Request, exc: RequestValidationError) -> JSONResponse:
+    erreurs = []
+    for erreur in exc.errors():
+        erreur = dict(erreur)
+        if any(str(segment) in _CHAMPS_SENSIBLES_VALIDATION for segment in erreur.get("loc", ())):
+            erreur.pop("input", None)
+            erreur["msg"] = "Valeur invalide."
+        erreurs.append(erreur)
+    return JSONResponse(status_code=422, content={"detail": erreurs})
+
 
 @dataclass
 class SolveJob:
@@ -172,7 +208,7 @@ app.add_middleware(
 # buildés, favicon...) reste servi sans authentification : sans ça, le
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
-    "/app-state", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
+    "/admin", "/app-state", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/regen", "/rooms", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
@@ -186,7 +222,11 @@ _PROTECTED_PREFIXES = (
 # dont le chemin ne commençait par aucun préfixe connu devenait public en
 # silence, sans que rien ne le signale (trouvé par l'utilisateur, pas par le
 # code). Un oubli doit casser bruyamment, jamais ouvrir l'accès.
-_PUBLIC_PATHS = frozenset({"/auth/login", "/auth/logout", "/auth/status", "/health"})
+_PUBLIC_PATHS = frozenset({
+    "/auth/login", "/auth/logout", "/auth/status", "/health",
+    "/auth/signup", "/auth/confirm-email", "/auth/forgot-password",
+    "/auth/reset-password", "/auth/me",
+})
 
 # Préfixes publics qui tombent DANS un préfixe protégé — l'exception doit
 # donc être testée avant lui. Seul cas à ce jour : le pixel de suivi
@@ -212,6 +252,10 @@ def _verifier_couverture_auth() -> list[str]:
     return sorted(oublis)
 
 
+def _account_repo() -> AccountRepository:
+    return AccountRepository(get_db(get_state().db_path))
+
+
 @app.middleware("http")
 async def require_auth(request: Request, call_next):
     path = request.url.path
@@ -220,63 +264,266 @@ async def require_auth(request: Request, call_next):
     if not path.startswith(_PROTECTED_PREFIXES):
         return await call_next(request)
 
-    password = auth.get_password()
-    if not password:
-        # Volontairement un blocage total, pas un accès libre — un
-        # `CAL_IUT_PASSWORD` non configuré à un vrai déploiement est une
-        # erreur de configuration, jamais silencieusement "pas de mot de
-        # passe" (retour utilisateur : « met moi un mot de passe... qui
-        # bloque l'entrée »).
-        return JSONResponse(status_code=503, content={"detail": "Authentification non configurée (CAL_IUT_PASSWORD absent)."})
-
     # Lien personnel (prof ou groupe) — public depuis le 28/08/2026, cf.
     # docstring de `auth.py` pour l'historique (jeton HMAC d'abord, puis
     # "on s'en fiche on veut qu'il soit public" en retour utilisateur final).
     if auth.verify_personal_link_param(request.query_params.get("t")):
         return await call_next(request)
-    if auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
-        return await call_next(request)
-    return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
+
+    user_id = accounts.verify_account_session_token(request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE))
+    if user_id is None:
+        return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
+    user = _account_repo().get_by_id(user_id)
+    if user is None:
+        return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
+    if user.status != "active":
+        # Rôle et permissions précis restent du ressort de `require_role`
+        # (Depends par route) — ce contrôle ICI ne fait que le PLANCHER
+        # commun à toute route protégée : un compte encore en attente
+        # d'activation admin, ou désactivé, ne doit accéder à RIEN de
+        # protégé, même en lecture.
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Compte en attente d'activation.", "status": user.status},
+        )
+    request.state.user = user
+    return await call_next(request)
 
 
 from cal_iut.mcp.auth import mcp_bearer_middleware
 
 app.middleware("http")(mcp_bearer_middleware)
 
+# `require_admin_session` (mot de passe partagé, `auth.verify_session_token`)
+# a existé ici avant le système de comptes du 31/08/2026 — remplacé
+# partout par `Depends(require_role("admin"))`, plus aucun appelant : cf.
+# rebase de la branche comptes-utilisateurs sur celle-ci, aucune route ne
+# référence plus `require_admin_session` après fusion (vérifié par grep).
 
-def require_admin_session(request: Request) -> None:
-    """Garde-fou supplémentaire pour `/mail/*` : la vraie session (mot de
-    passe partagé) est exigée, un simple jeton prof ne suffit PAS ici — à
-    la différence du reste de `_PROTECTED_PREFIXES`. Un jeton prof donne un
-    accès en LECTURE à son propre planning (limite déjà documentée,
-    `auth.py`), mais ne doit jamais pouvoir, à lui seul, déclencher un envoi
-    de mail à TOUS les collègues (`require_auth` a déjà laissé passer la
-    requête à ce stade — ceci resserre spécifiquement pour cette action)."""
-    if not auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
-        raise HTTPException(401, "Session administrateur requise pour cette action.")
+
+@app.post("/auth/signup", response_model=SignupResponse, status_code=201)
+def auth_signup(body: SignupRequest) -> SignupResponse | JSONResponse:
+    # Vérifié EN PREMIER, avant toute écriture en base : un compte qu'aucun
+    # mail de confirmation ne pourra jamais atteindre resterait bloqué en
+    # `pending_email` pour toujours — même philosophie que l'ancien
+    # `CAL_IUT_PASSWORD` absent (`api/auth.py`, historique) : un oubli de
+    # configuration doit être visible, jamais confondu avec "ça a marché".
+    # Corps `{"message": ...}` à PLAT, cf. `admin_update_user` pour pourquoi
+    # `JSONResponse` directement plutôt que `HTTPException(detail=...)`.
+    if not mailer.is_configured():
+        return JSONResponse(
+            status_code=503,
+            content={"message": "Envoi d'email non configuré (RESEND_API_KEY/CAL_IUT_PUBLIC_URL absent)."},
+        )
+
+    email = accounts.normalize_email(body.email)
+    repo = _account_repo()
+    existing = repo.get_by_email(email)
+    if existing is not None and existing.status != "pending_email":
+        return JSONResponse(status_code=409, content={"message": "Un compte existe déjà pour cet email."})
+
+    if existing is None:
+        user = repo.create_pending_user(email, accounts.hash_password(body.password))
+    else:
+        # Anti mail-scanner-prefetch (décision verrouillée) : un second
+        # signup sur une adresse encore `pending_email` ne 409 PAS, il
+        # réémet un jeton frais et invalide les précédents plutôt que de
+        # laisser croire qu'il n'y a rien à faire.
+        user = existing
+        repo.invalidate_outstanding_tokens(user.id, "confirm_email")
+
+    raw, token_hash = accounts.build_confirm_token()
+    repo.create_token(user.id, token_hash, "confirm_email", accounts.confirm_token_expiry())
+    link = accounts.confirmation_link(raw)
+    # Revue qualité du 31/08/2026 : contrairement à `/auth/forgot-password`,
+    # cet envoi n'était pas protégé — une panne Resend (ou une adresse
+    # rejetée) devenait une 500 brute côté client, alors que le compte
+    # `pending_email` est déjà créé/committé à ce stade. Le compte reste
+    # utilisable : un nouveau signup sur la même adresse réempruntera le
+    # chemin "réémission" plus haut plutôt que d'échouer à nouveau à froid.
+    try:
+        mailer.send_email(
+            email,
+            "Confirmez votre compte cal-iut",
+            f"Bonjour,\n\nConfirmez votre compte en cliquant sur ce lien : {link}\n\n"
+            "Ce lien expire dans 48 heures.",
+        )
+    except Exception as exc:  # noqa: BLE001 — jamais une 500 brute pour un appel public non authentifié
+        print(f"[auth_signup] échec d'envoi du mail de confirmation à {email} : {exc}", file=sys.stderr)
+        return JSONResponse(
+            status_code=502,
+            content={"message": "Le compte a été créé mais l'email de confirmation n'a pas pu être envoyé. Réessayez dans un instant."},
+        )
+    return SignupResponse(status="pending_email")
+
+
+@app.get("/auth/confirm-email")
+def auth_confirm_email(token: str) -> RedirectResponse:
+    base = accounts.public_base_url_or_placeholder()
+    repo = _account_repo()
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    entry = repo.get_valid_token(token_hash, "confirm_email")
+    if entry is None:
+        return RedirectResponse(f"{base}/#compte=confirme&statut=erreur", status_code=302)
+
+    user = repo.get_by_id(entry.user_id)
+    repo.consume_token(entry)
+    if user is not None:
+        repo.mark_email_confirmed(user)
+    return RedirectResponse(f"{base}/#compte=confirme&statut=ok", status_code=302)
 
 
 @app.post("/auth/login")
 def auth_login(body: LoginRequest, response: Response) -> dict:
-    password = auth.get_password()
-    if not password or body.password != password:
-        raise HTTPException(401, "Mot de passe incorrect.")
+    email = accounts.normalize_email(body.email)
+    repo = _account_repo()
+    user = repo.get_by_email(email)
+    # Message et code IDENTIQUES pour un email inconnu et un mauvais mot de
+    # passe — pas d'énumération de comptes.
+    if user is None or not accounts.verify_password(body.password, user.password_hash):
+        raise HTTPException(401, "Email ou mot de passe incorrect.")
+    if user.status == "pending_email":
+        raise HTTPException(403, "Confirmez votre email avant de vous connecter.")
+    if user.status == "disabled":
+        raise HTTPException(403, "Compte désactivé.")
     response.set_cookie(
-        auth.SESSION_COOKIE, auth.make_session_token(),
-        max_age=auth.SESSION_MAX_AGE_S, httponly=True, samesite="lax",
+        accounts.ACCOUNT_SESSION_COOKIE, accounts.make_account_session_token(user.id),
+        max_age=accounts.ACCOUNT_SESSION_MAX_AGE_S, httponly=True, samesite="lax",
     )
-    return {"ok": True}
+    return {"role": user.role, "status": user.status}
 
 
 @app.post("/auth/logout")
 def auth_logout(response: Response) -> dict:
-    response.delete_cookie(auth.SESSION_COOKIE)
+    response.delete_cookie(accounts.ACCOUNT_SESSION_COOKIE)
     return {"ok": True}
 
 
 @app.get("/auth/status")
 def auth_status(request: Request) -> dict:
-    return {"authenticated": auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE))}
+    return {"authenticated": accounts.get_current_user(request, optional=True) is not None}
+
+
+@app.post("/auth/forgot-password")
+def auth_forgot_password(body: ForgotPasswordRequest) -> dict:
+    # TOUJOURS 200 — un email inconnu ne doit jamais être distinguable d'un
+    # email connu (même principe anti-énumération que `/auth/login`).
+    email = accounts.normalize_email(body.email)
+    repo = _account_repo()
+    user = repo.get_by_email(email)
+    if user is not None and user.status == "active":
+        repo.invalidate_outstanding_tokens(user.id, "reset_password")
+        raw, token_hash = accounts.build_reset_token()
+        repo.create_token(user.id, token_hash, "reset_password", accounts.reset_token_expiry())
+        link = accounts.reset_password_link(raw)
+        try:
+            mailer.send_email(
+                email,
+                "Réinitialisation de votre mot de passe cal-iut",
+                f"Bonjour,\n\nRéinitialisez votre mot de passe en cliquant sur ce lien : {link}\n\n"
+                "Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de cette "
+                "demande, ignorez cet e-mail.",
+            )
+        except Exception:  # noqa: BLE001, S110 — un échec d'envoi ne doit jamais se voir depuis l'extérieur (200 toujours)
+            pass
+    # Autres cas (inconnu, pending, disabled) : silencieux côté réponse,
+    # mais jamais côté serveur — un compte non éligible reste une trace
+    # utile en cas d'abus répété.
+    return {"ok": True}
+
+
+@app.post("/auth/reset-password")
+def auth_reset_password(body: ResetPasswordRequest) -> dict:
+    repo = _account_repo()
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    entry = repo.get_valid_token(token_hash, "reset_password")
+    if entry is None:
+        raise HTTPException(400, "Lien de réinitialisation invalide ou expiré.")
+    user = repo.get_by_id(entry.user_id)
+    if user is None:
+        raise HTTPException(400, "Lien de réinitialisation invalide ou expiré.")
+    if user.status == "disabled":
+        raise HTTPException(403, "Compte désactivé.")
+
+    user.password_hash = accounts.hash_password(body.new_password)
+    repo.db.commit()
+    repo.consume_token(entry)
+    # Invalide TOUT le reste (y compris un autre jeton reset encore valide,
+    # jamais utilisé lui-même) : un mot de passe qui vient de changer rend
+    # tout lien de réinitialisation antérieur obsolète, y compris ceux dont
+    # on ignore s'ils ont fuité.
+    repo.invalidate_outstanding_tokens(user.id, "reset_password")
+    return {"ok": True}
+
+
+@app.get("/auth/me", response_model=MeResponse)
+def auth_me(request: Request) -> MeResponse:
+    user = accounts.get_current_user(request)
+    return MeResponse(id=user.id, email=user.email, role=user.role, status=user.status)
+
+
+@app.get("/admin/users", response_model=AdminUserListResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def admin_list_users(status: str | None = None) -> AdminUserListResponse:
+    repo = _account_repo()
+    return AdminUserListResponse(users=[_user_to_admin_response(u) for u in repo.list_users(status=status)])
+
+
+@app.patch("/admin/users/{user_id}", response_model=AdminUserResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def admin_update_user(user_id: int, body: AdminUserUpdateRequest, request: Request) -> AdminUserResponse | JSONResponse:
+    # Corps d'erreur `{"message": ...}` à PLAT (pas sous `detail`, contrairement
+    # au défaut de `HTTPException` — le contrat exige la même forme que le
+    # reste des 409 de cette API) : construit via `JSONResponse` directement,
+    # un route FastAPI peut rendre un `Response` en dehors de son
+    # `response_model` sans que celui-ci intervienne.
+    if body.role is None and body.status is None:
+        return JSONResponse(status_code=400, content={"message": "Fournissez au moins `role` ou `status`."})
+
+    repo = _account_repo()
+    target = repo.get_by_id(user_id)
+    if target is None:
+        return JSONResponse(status_code=404, content={"message": "Utilisateur introuvable."})
+
+    acting_admin: User = request.state.user  # posé par `require_auth`, toujours présent ici
+
+    # Simule le résultat AVANT d'écrire quoi que ce soit, pour refuser
+    # proprement (409) plutôt que de désactiver le dernier admin puis
+    # constater le dégât.
+    role_apres = body.role if body.role is not None else target.role
+    status_apres = body.status if body.status is not None else target.status
+    activation_implicite = (
+        body.role is not None and body.status is None and target.status == "pending_admin_activation"
+    )
+    if activation_implicite:
+        status_apres = "active"
+    sera_admin_actif = role_apres == "admin" and status_apres == "active"
+    etait_admin_actif = target.role == "admin" and target.status == "active"
+    if etait_admin_actif and not sera_admin_actif and repo.count_active_admins() <= 1:
+        return JSONResponse(
+            status_code=409,
+            content={"message": "Impossible de retirer le dernier administrateur actif."},
+        )
+
+    if activation_implicite:
+        repo.activate(target, role_apres, acting_admin.id)
+    else:
+        if body.role is not None:
+            repo.set_role(target, body.role)
+        if body.status is not None:
+            repo.set_status(target, body.status)
+
+    return _user_to_admin_response(target)
+
+
+def _user_to_admin_response(user: object) -> AdminUserResponse:
+    return AdminUserResponse(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        status=user.status,
+        created_at=user.created_at.isoformat() if user.created_at else "",
+        email_confirmed_at=user.email_confirmed_at.isoformat() if user.email_confirmed_at else None,
+        activated_at=user.activated_at.isoformat() if user.activated_at else None,
+    )
 
 
 def startup() -> None:
@@ -550,12 +797,12 @@ def app_state(request: Request) -> dict[str, object]:
         sae_supervisor_dates=ctx.sae_supervisor_dates,
     )
 
-    # Session admin (mot de passe saisi) = payload complet. Lien personnel
-    # public = version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`). Filtré ICI,
-    # à la sortie, plutôt qu'en amont dans `build_payload` : une seule
-    # liste à relire pour savoir ce qui sort, et `/legacy` (page admin)
-    # continue d'utiliser le calcul complet sans condition.
-    if auth.verify_session_token(request.cookies.get(auth.SESSION_COOKIE)):
+    # Session de compte (n'importe quel rôle actif) = payload complet. Lien
+    # personnel public = version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`).
+    # Filtré ICI, à la sortie, plutôt qu'en amont dans `build_payload` : une
+    # seule liste à relire pour savoir ce qui sort, et `/legacy` (page
+    # admin) continue d'utiliser le calcul complet sans condition.
+    if accounts.get_current_user(request, optional=True) is not None:
         return payload
     vide: dict[str, object] = {"teacherEmails": {}}
     return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
@@ -641,7 +888,7 @@ def get_weights() -> WeightsResponse:
     return WeightsResponse(weights=repo.weights_as_dict(), reason=w.reason)
 
 
-@app.post("/ingest")
+@app.post("/ingest", dependencies=[Depends(accounts.require_role("edit"))])
 def ingest(body: IngestRequest) -> dict[str, object]:
     state = get_state()
     result = run_ingestion(
@@ -777,12 +1024,12 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
     return _build_response(result.status, result.objective_value, result.gap_penalty, with_rooms, sessions_by_id, quality, run.id)
 
 
-@app.post("/solve", response_model=TimetableResponse)
+@app.post("/solve", response_model=TimetableResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def solve(body: SolveRequest) -> TimetableResponse:
     return _solve_and_persist(body)
 
 
-@app.post("/solve/async")
+@app.post("/solve/async", dependencies=[Depends(accounts.require_role("edit"))])
 def solve_async(body: SolveRequest) -> dict[str, str]:
     """
     Variante non bloquante de `/solve` : lance la même résolution (identique,
@@ -833,7 +1080,7 @@ def solve_status(job_id: str | None = None) -> dict[str, object]:
     return {"job_id": job.job_id, "status": "running"}
 
 
-@app.post("/regen/week")
+@app.post("/regen/week", dependencies=[Depends(accounts.require_role("edit"))])
 def regen_week(body: RegenRequest) -> dict[str, str]:
     """
     Régénère UNE semaine future, ou cette semaine + la suivante
@@ -907,7 +1154,7 @@ def weeks_status() -> list[dict[str, object]]:
     return [{"week": w, "status": week_status(state.calendar, semestre, w)} for w in range(n_weeks)]
 
 
-@app.post("/exceptions", response_model=ExceptionResponse)
+@app.post("/exceptions", response_model=ExceptionResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def create_exception(body: ExceptionCreateRequest) -> ExceptionResponse:
     state = get_state()
     repo = get_repo()
@@ -933,7 +1180,7 @@ def list_exceptions(active_only: bool = True) -> list[ExceptionResponse]:
     return [_exception_to_response(r) for r in repo.list_exceptions(active_only=active_only)]
 
 
-@app.delete("/exceptions/{exception_id}")
+@app.delete("/exceptions/{exception_id}", dependencies=[Depends(accounts.require_role("edit"))])
 def delete_exception(exception_id: int) -> dict[str, bool]:
     repo = get_repo()
     ok = repo.deactivate_exception(exception_id)
@@ -988,7 +1235,7 @@ def feedback_analysis() -> FeedbackAnalysisResponse:
     return FeedbackAnalysisResponse(**analysis)
 
 
-@app.post("/feedback/apply")
+@app.post("/feedback/apply", dependencies=[Depends(accounts.require_role("edit"))])
 def feedback_apply() -> dict[str, object]:
     repo = get_repo()
     result = apply_learned_weights(repo)
@@ -1553,7 +1800,7 @@ def _suggestions_for(state: object, session_id: str, match: object) -> tuple[lis
     return resolved, None
 
 
-@app.post("/placements/{session_id}/validate", response_model=ValidationResponse)
+@app.post("/placements/{session_id}/validate", response_model=ValidationResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationResponse:
     state = get_state()
     match = _find_placement(state, session_id)
@@ -1632,7 +1879,7 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     )
 
 
-@app.patch("/placements/{session_id}")
+@app.patch("/placements/{session_id}", dependencies=[Depends(accounts.require_role("edit"))])
 def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse:
     state = get_state()
     match = _find_placement(state, session_id)
@@ -1789,7 +2036,11 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
     return _to_placement(match, state.sessions_by_id)
 
 
-@app.patch("/placements/{session_id}/seance", response_model=PlacementResponse)
+@app.patch(
+    "/placements/{session_id}/seance",
+    response_model=PlacementResponse,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
 def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> PlacementResponse:
     """Overlay enseignant / type / durée sur une séance de maquette."""
     from cal_iut.api.session_patch import appliquer_patch_seance
@@ -1808,7 +2059,7 @@ def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> Placemen
     )
 
 
-@app.post("/placements/{session_id}/deposer")
+@app.post("/placements/{session_id}/deposer", dependencies=[Depends(accounts.require_role("edit"))])
 def deposer_placement(session_id: str) -> dict[str, object]:
     """Retire la séance du planning, la laisse dans le catalogue (À placer)."""
     from cal_iut.api.deposer import deposer_seance
@@ -1816,7 +2067,7 @@ def deposer_placement(session_id: str) -> dict[str, object]:
     return deposer_seance(session_id)
 
 
-@app.post("/placements/echanger", response_model=EchangeResponse)
+@app.post("/placements/echanger", response_model=EchangeResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def echanger_placements(body: EchangeRequest) -> EchangeResponse:
     """Échange la place de deux séances, en une seule décision.
 
@@ -1954,7 +2205,7 @@ def _controler_echange(
     return durs, bloquants, doux
 
 
-@app.patch("/placements/{session_id}/salle", response_model=PlacementResponse)
+@app.patch("/placements/{session_id}/salle", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse:
     """Change UNIQUEMENT la salle, à créneau inchangé — retour utilisateur
     28/08/2026 : « on va vouloir sur la vue promo modifier uniquement les
@@ -2082,7 +2333,7 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     return _to_placement(match, state.sessions_by_id)
 
 
-@app.post("/rooms", response_model=RoomMeta, dependencies=[Depends(require_admin_session)])
+@app.post("/rooms", response_model=RoomMeta, dependencies=[Depends(accounts.require_role("admin"))])
 def creer_salle(body: CreateRoomRequest) -> RoomMeta:
     """Ajoute une salle hors bâtiment — retour utilisateur 28/08/2026 :
     « il se peut que l'on utilise des salles autres que dans le bâtiment,
@@ -2146,7 +2397,7 @@ def _entrees_celcat(state) -> list:
     return entrees
 
 
-@app.get("/celcat/plan", response_model=CelcatPlanResponse, dependencies=[Depends(require_admin_session)])
+@app.get("/celcat/plan", response_model=CelcatPlanResponse, dependencies=[Depends(accounts.require_role("admin"))])
 def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
     """Ce qui serait saisi dans Celcat, sans rien y envoyer.
 
@@ -2513,7 +2764,7 @@ def creneaux_libres(session_id: str, depuis_semaine: int = 0, maximum: int = 12)
     return CreneauxLibresResponse(session_id=session_id, creneaux=creneaux, note=note)
 
 
-@app.post("/placements/{session_id}/placer", response_model=PlacementResponse)
+@app.post("/placements/{session_id}/placer", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementResponse:
     """Pose au planning une séance qui n'y était pas.
 
@@ -2691,7 +2942,7 @@ def _id_seance_personnalisee(course_code: str, semestre: str, session_type: str,
     return f"{base}{n}-{suffixe}"
 
 
-@app.post("/placements/personnalisees", response_model=PlacementResponse)
+@app.post("/placements/personnalisees", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def creer_seance_personnalisee(body: CreerSeanceRequest) -> PlacementResponse:
     """Ajoute une séance à une matière existante et la place — retour
     utilisateur 31/08/2026 (cf. `CreerSeanceRequest`). Délègue entièrement
@@ -2751,7 +3002,7 @@ def creer_seance_personnalisee(body: CreerSeanceRequest) -> PlacementResponse:
     return resultat
 
 
-@app.patch("/placements/personnalisees/{session_id}", response_model=PlacementResponse)
+@app.patch("/placements/personnalisees/{session_id}", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnaliseeRequest) -> PlacementResponse:
     """Modifie une séance créée par ce système — jamais une séance de la
     maquette (rejeté avec un message explicite : `seances_annulees.yaml` +
@@ -2802,7 +3053,7 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
     return resultat
 
 
-@app.delete("/placements/personnalisees/{session_id}")
+@app.delete("/placements/personnalisees/{session_id}", dependencies=[Depends(accounts.require_role("edit"))])
 def supprimer_seance_personnalisee(session_id: str) -> dict[str, bool]:
     """Retire entièrement une séance créée par ce système — métadonnée,
     placement courant et ligne en base. Jamais une séance de la maquette :
@@ -2828,7 +3079,7 @@ def supprimer_seance_personnalisee(session_id: str) -> dict[str, bool]:
     return {"supprimee": True}
 
 
-@app.post("/placements/{session_id}/valider", response_model=ForcagePedagogiqueResponse)
+@app.post("/placements/{session_id}/valider", response_model=ForcagePedagogiqueResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def valider_forcage_pedagogique(session_id: str) -> ForcagePedagogiqueResponse:
     """Confirme un placement qui avait dû forcer l'ordre pédagogique — le
     retire du suivi (`api/forced_pending.py`), il n'apparaît plus dans « À
@@ -2841,7 +3092,7 @@ def valider_forcage_pedagogique(session_id: str) -> ForcagePedagogiqueResponse:
     return ForcagePedagogiqueResponse(session_id=session_id, etait_en_attente=etait_en_attente)
 
 
-@app.delete("/placements/{session_id}", response_model=ForcagePedagogiqueResponse)
+@app.delete("/placements/{session_id}", response_model=ForcagePedagogiqueResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def retirer_placement_force(session_id: str) -> ForcagePedagogiqueResponse:
     """Retire du planning un placement qui avait forcé l'ordre pédagogique —
     la séance redevient une séance « à placer » normale (retour utilisateur
@@ -2864,7 +3115,7 @@ def retirer_placement_force(session_id: str) -> ForcagePedagogiqueResponse:
     return ForcagePedagogiqueResponse(session_id=session_id, etait_en_attente=True)
 
 
-@app.post("/placements/completer", response_model=CompletionResponse)
+@app.post("/placements/completer", response_model=CompletionResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def completer() -> CompletionResponse:
     """Place d'un coup toutes les séances que le solveur a laissées de côté.
 
@@ -3078,7 +3329,7 @@ def _teacher_mail_text(state: object, code: str, name: str, link: str) -> tuple[
 
 
 @app.get("/notifications", response_model=NotificationConfigResponse,
-         dependencies=[Depends(require_admin_session)])
+         dependencies=[Depends(accounts.require_role("admin"))])
 def lire_notifications() -> NotificationConfigResponse:
     """Réglage des notifications. Admin seulement : la liste des
     destinataires est une donnée personnelle, elle n'a rien à faire dans un
@@ -3099,7 +3350,7 @@ def lire_notifications() -> NotificationConfigResponse:
 
 
 @app.put("/notifications", response_model=NotificationConfigResponse,
-         dependencies=[Depends(require_admin_session)])
+         dependencies=[Depends(accounts.require_role("admin"))])
 def ecrire_notifications(body: NotificationConfigRequest) -> NotificationConfigResponse:
     from cal_iut.api import notifications
 
@@ -3112,7 +3363,7 @@ def ecrire_notifications(body: NotificationConfigRequest) -> NotificationConfigR
     return lire_notifications()
 
 
-@app.post("/notifications/test", dependencies=[Depends(require_admin_session)])
+@app.post("/notifications/test", dependencies=[Depends(accounts.require_role("admin"))])
 def tester_notifications() -> dict[str, object]:
     """Envoie un résumé de test aux destinataires enregistrés — le seul moyen
     de vérifier que la configuration marche sans attendre qu'un vrai
@@ -3153,7 +3404,7 @@ def mail_pixel(code: str) -> Response:
     )
 
 
-@app.get("/mail/teacher-links/apercu/{code}", dependencies=[Depends(require_admin_session)])
+@app.get("/mail/teacher-links/apercu/{code}", dependencies=[Depends(accounts.require_role("admin"))])
 def mail_teacher_link_apercu(code: str) -> dict[str, str]:
     """Le mail EXACT tel qu'il partira, pour ce destinataire (retour
     utilisateur 28/08/2026 : pouvoir relire avant d'envoyer à 32 personnes).
@@ -3172,7 +3423,7 @@ def mail_teacher_link_apercu(code: str) -> dict[str, str]:
     return {"subject": sujet, "text": texte, "html": html_body}
 
 
-@app.get("/mail/teacher-links", response_model=TeacherMailPreviewListResponse, dependencies=[Depends(require_admin_session)])
+@app.get("/mail/teacher-links", response_model=TeacherMailPreviewListResponse, dependencies=[Depends(accounts.require_role("admin"))])
 def mail_teacher_links_preview() -> TeacherMailPreviewListResponse:
     """Annuaire d'envoi : un enseignant par ligne, adresse connue ou non
     (affichée quand même — absence visible plutôt que silencieuse, même
@@ -3203,7 +3454,7 @@ def mail_teacher_links_preview() -> TeacherMailPreviewListResponse:
     )
 
 
-@app.post("/mail/teacher-links/send", response_model=SendTeacherMailsResponse, dependencies=[Depends(require_admin_session)])
+@app.post("/mail/teacher-links/send", response_model=SendTeacherMailsResponse, dependencies=[Depends(accounts.require_role("admin"))])
 def mail_teacher_links_send(body: SendTeacherMailsRequest) -> SendTeacherMailsResponse:
     """Envoie le lien personnel à chaque code de `body.codes` — sélection
     TOUJOURS explicite depuis l'écran d'envoi, jamais un "tout le monde" par

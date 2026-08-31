@@ -38,6 +38,8 @@ from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom
 
+from conftest import creer_compte_actif_et_connecter
+
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
 
@@ -60,7 +62,7 @@ def _place(s: SessionToPlace, day: int, slot: int, week: int = SEMAINE) -> Place
 
 
 @pytest.fixture
-def monter():
+def monter(db_isole):
     """Rend une fonction qui monte un état applicatif à partir de séances déjà
     placées, pour que chaque test décrive exactement la situation qu'il teste."""
     etat = get_state()
@@ -88,7 +90,7 @@ def monter():
         etat.courses = []
         etat.config_dir = ROOT / "data" / "config"
         c = TestClient(app)
-        c.post("/auth/login", json={"password": "test-password"})
+        creer_compte_actif_et_connecter(c)
         clients.append(c)
         return c
 

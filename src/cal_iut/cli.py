@@ -615,7 +615,9 @@ def cmd_prod(args: argparse.Namespace) -> int:
     try:
         with distante:
             if args.local_url:
-                with Instance(args.local_url, os.environ.get("CAL_IUT_PASSWORD", "")) as locale:
+                with Instance(
+                    args.local_url, os.environ.get("CAL_IUT_PASSWORD", ""), os.environ.get("CAL_IUT_EMAIL", "")
+                ) as locale:
                     plan_local = locale.planning()
             else:
                 plan_local = planning_local_depuis_db()
@@ -638,7 +640,11 @@ def cmd_prod(args: argparse.Namespace) -> int:
                 # production porte (cf. `Comparaison.inverser`). Utile dès que
                 # quelqu'un modifie le planning en ligne — ce qui est le cas
                 # normal, pas l'exception.
-                locale = Instance(args.local_url or "http://127.0.0.1:8000", os.environ.get("CAL_IUT_PASSWORD", ""))
+                locale = Instance(
+                    args.local_url or "http://127.0.0.1:8000",
+                    os.environ.get("CAL_IUT_PASSWORD", ""),
+                    os.environ.get("CAL_IUT_EMAIL", ""),
+                )
                 with locale:
                     res = pousser(locale, comp.inverser(), appliquer=args.appliquer)
                 if not args.appliquer:

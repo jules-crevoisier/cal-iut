@@ -25,6 +25,8 @@ from cal_iut.models.entities import Room, RoomType, SessionType
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom
 
+from conftest import creer_compte_actif_et_connecter
+
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
 
@@ -89,8 +91,12 @@ def etat():
 
 
 @pytest.fixture(autouse=True)
-def _connecte():
-    client.post("/auth/login", json={"password": "test-password"})
+def _connecte(db_isole):
+    # role="admin" : `test_creer_une_salle_puis_l_affecter` etc. exercent
+    # `POST /rooms`, désormais `Depends(accounts.require_role("admin"))`
+    # (ex-`require_admin_session`) — admin couvre aussi les routes `edit`
+    # utilisées par le reste du fichier (`ROLE_ORDER`, `accounts.py`).
+    creer_compte_actif_et_connecter(client, role="admin")
     yield
 
 

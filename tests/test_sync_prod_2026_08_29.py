@@ -88,7 +88,7 @@ class FauxClient:
 
 def _cible(statut: int = 200) -> tuple[Instance, FauxClient]:
     faux = FauxClient(statut)
-    instance = Instance(url="https://exemple.invalid", mot_de_passe="x")
+    instance = Instance(url="https://exemple.invalid", mot_de_passe="x", email="admin@example.test")
     instance._client = faux  # type: ignore[assignment]
     return instance, faux
 
@@ -187,7 +187,7 @@ def test_une_url_sans_mot_de_passe_ne_suffit_pas(monkeypatch) -> None:
 
 def test_une_instance_non_connectee_le_dit_clairement() -> None:
     with pytest.raises(SyncError, match="non connectée"):
-        Instance(url="https://exemple.invalid", mot_de_passe="x").client
+        Instance(url="https://exemple.invalid", mot_de_passe="x", email="admin@example.test").client
 
 
 # --------------------------------------------------------------------------
