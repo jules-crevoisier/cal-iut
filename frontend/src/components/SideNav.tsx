@@ -56,6 +56,15 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+// Groupe séparé, ajouté conditionnellement (cf. `SideNav` — `estAdmin`) :
+// gestion des comptes (31/08/2026), réservée au rôle admin. Le backend
+// refuse déjà tout le reste (`Depends(require_role("admin"))`) ; ne pas
+// même proposer l'onglet aux autres rôles évite un aller-retour pour rien.
+const GROUPE_ADMIN: NavGroup = {
+  label: "Administration",
+  items: [{ id: "comptes", label: "Comptes" }],
+};
+
 interface SideNavProps {
   activeTab: RouteView;
   onSelect: (id: RouteView) => void;
@@ -65,6 +74,7 @@ interface SideNavProps {
   todoHasBad: boolean;
   open: boolean;
   onClose: () => void;
+  estAdmin?: boolean;
 }
 
 export function SideNav({
@@ -76,7 +86,9 @@ export function SideNav({
   todoHasBad,
   open,
   onClose,
+  estAdmin,
 }: SideNavProps) {
+  const groupes = estAdmin ? [...NAV_GROUPS, GROUPE_ADMIN] : NAV_GROUPS;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   // Tiroir mobile : à l'ouverture, le focus clavier reste sur le bouton ☰
@@ -128,7 +140,7 @@ export function SideNav({
             englobant est déjà le repère de navigation, un nav imbriqué en
             ajouterait un second redondant. */}
         <div className="sidenav-tabs">
-          {NAV_GROUPS.map((group) => (
+          {groupes.map((group) => (
             <div className="nav-group" key={group.label}>
               <span className="nav-group-label" aria-hidden="true">
                 {group.label}

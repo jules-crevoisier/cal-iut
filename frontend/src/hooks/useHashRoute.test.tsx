@@ -2,7 +2,7 @@
  * Contrat de hash admin : fiches prof/salle/cours/groupe, panneau Promo,
  * canonisation de #vue=aplacer, et conservation des liens personnels mode=.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useHashRoute } from "./useHashRoute";
@@ -79,5 +79,35 @@ describe("admin hash routing", () => {
     window.history.replaceState(null, "", "/#mode=groupe&groupe=G1");
     render(<RouteDump />);
     expect(dumpedRoute()).toMatchObject({ mode: "groupe", groupe: "G1" });
+  });
+
+  it("should parse the email-confirmation redirect (compte=confirme&statut=ok)", () => {
+    window.history.replaceState(null, "", "/#compte=confirme&statut=ok");
+    render(<RouteDump />);
+    expect(dumpedRoute()).toMatchObject({ compte: "confirme", statut: "ok" });
+  });
+
+  it("should parse a password-reset link with its token", () => {
+    window.history.replaceState(null, "", "/#compte=reinitialiser&token=abc123");
+    render(<RouteDump />);
+    expect(dumpedRoute()).toMatchObject({ compte: "reinitialiser", token: "abc123" });
+  });
+
+  it("should clear compte/statut/token when navigating to a normal vue", () => {
+    window.history.replaceState(null, "", "/#compte=reinitialiser&token=abc123");
+    function RouteDumpAvecNav() {
+      const { route, setRoute } = useHashRoute();
+      return (
+        <>
+          <pre aria-label="route">{JSON.stringify(route)}</pre>
+          <button type="button" onClick={() => setRoute({ vue: "semaine" })}>
+            go
+          </button>
+        </>
+      );
+    }
+    render(<RouteDumpAvecNav />);
+    fireEvent.click(screen.getByText("go"));
+    expect(dumpedRoute()).toMatchObject({ vue: "semaine", compte: "", statut: "", token: "" });
   });
 });
