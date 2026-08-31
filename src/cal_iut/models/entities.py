@@ -171,6 +171,18 @@ class TeacherAvailability(BaseModel):
 
     teacher_code: str
     forbidden_slots: list[tuple[int, int]] = Field(default_factory=list)
+    # ANNULE des (jour, créneau) autrement RECONDUITS depuis le JSON de
+    # contraintes (`merge_teacher_availability` UNIT les deux sources — une
+    # entrée YAML ne peut normalement que RESTREINDRE, jamais lever une
+    # interdiction). Nécessaire quand la source brute (réponse d'enquête mal
+    # analysée, ex. BTO : "mardi après-midi - mardi" lu comme un jour entier
+    # en double, cf. teacher_availability.yaml) contredit une donnée plus
+    # récente et plus fiable — sans ce champ, corriger l'enseignant en YAML
+    # ne ferait qu'AJOUTER une contrainte de plus à celle, fausse, qui
+    # persiste. Même logique de survie à la régénération que
+    # `seances_annulees.yaml` : déclaré ici, ça ne revient jamais au prochain
+    # `cal-iut fetch` + régénération de `contraintes/*.json`.
+    cancelled_forbidden_slots: list[tuple[int, int]] = Field(default_factory=list)
     preferred_slots: list[tuple[int, int]] = Field(default_factory=list)
     preferred_days: list[int] = Field(default_factory=list)
     # Liste blanche DURE : hors de ces (jour, créneau), l'enseignant n'est pas

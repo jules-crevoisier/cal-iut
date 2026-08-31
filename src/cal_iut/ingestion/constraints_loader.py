@@ -484,7 +484,13 @@ def merge_teacher_availability(
         if not existing:
             by_code[teacher.teacher_code] = teacher
             continue
-        slots = sorted(set(existing.forbidden_slots) | set(teacher.forbidden_slots))
+        # Union, PUIS retrait de ce que le YAML annule explicitement — sinon
+        # une correction saisie côté YAML (`cancelled_forbidden_slots`) se
+        # ferait aussitôt réintroduire par le JSON régénéré à chaque fusion.
+        slots = sorted(
+            (set(existing.forbidden_slots) | set(teacher.forbidden_slots))
+            - set(existing.cancelled_forbidden_slots)
+        )
         days = sorted(set(existing.preferred_days) | set(teacher.preferred_days))
         meta = {**existing.metadata, **teacher.metadata}
         # Liste blanche : INTERSECTION quand les deux sources en déclarent une
