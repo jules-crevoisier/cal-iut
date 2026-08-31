@@ -16,6 +16,9 @@ from typing import Any
 
 from cal_iut.api.state import get_state
 from cal_iut.mcp import journal as mcp_journal
+from cal_iut.mcp.auth import get_mcp_principal
+
+_REFUS_LECTURE = "Permissions insuffisantes : lecture seule."
 
 _JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
 _CRENEAUX = [
@@ -55,6 +58,9 @@ def plan(
     slot: int | None = None,
     ops: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    refus = _refus_si_lecture_seule()
+    if refus is not None:
+        return refus
     if ops is not None:
         items = [_evaluer_item(dict(item)) for item in ops]
         return {"plan_id": _plan_id(items), "items": items}
@@ -79,6 +85,9 @@ def apply(
     ops: list[dict[str, Any]] | None = None,
     plan_id: str | None = None,
 ) -> dict[str, Any]:
+    refus = _refus_si_lecture_seule()
+    if refus is not None:
+        return refus
     items = list(ops or [])
     if not confirm or not items:
         return {"ok": False, "forced": False}
@@ -98,13 +107,34 @@ def apply(
     except HTTPException as exc:
         return {"ok": False, "forced": False, "error": _fmt_http(exc)}
 
-    mcp_journal.append({
+    mcp_journal.append(_entree_journal(plan_id or _plan_id(items), force_utilise, items))
+    return {"ok": True, "forced": force_utilise}
+
+
+def _refus_si_lecture_seule() -> dict[str, Any] | None:
+    """Hors HTTP (tests unitaires) il n'y a pas de principal : ne pas refuser.
+    En requête MCP, `read_only` ne peut ni planifier ni appliquer."""
+    principal = get_mcp_principal()
+    if principal is None:
+        return None
+    from cal_iut.api.accounts import ROLE_ORDER
+
+    if ROLE_ORDER.get(principal.role, -1) < ROLE_ORDER["edit"]:
+        return {"ok": False, "error": _REFUS_LECTURE}
+    return None
+
+
+def _entree_journal(plan_id: str, force_utilise: bool, items: list[dict[str, Any]]) -> dict[str, Any]:
+    entree: dict[str, Any] = {
         "ts": datetime.now(timezone.utc).isoformat(),
-        "plan_id": plan_id or _plan_id(items),
+        "plan_id": plan_id,
         "forced": force_utilise,
         "ops": [_journal_op(item) for item in items],
-    })
-    return {"ok": True, "forced": force_utilise}
+    }
+    principal = get_mcp_principal()
+    if principal is not None and principal.via == "user_key" and principal.email:
+        entree["email"] = principal.email
+    return entree
 
 
 def _plan_id(items: list[dict[str, Any]]) -> str:

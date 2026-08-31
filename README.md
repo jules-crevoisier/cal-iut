@@ -372,6 +372,7 @@ l'export HTML pour afficher "Semaine 3 (7–11 sept. 2026)" plutôt qu'un index 
 - `data/config/teacher_availability.yaml` — dispos profs + poids initiaux
 - `contraintes/00_INDEX.md` — provenance de chaque fichier et **liste des arbitrages humains**
 - `docs/DATA.md` — analyse détaillée des règles extraites
+- `docs/MCP.md` — brancher Claude / Cursor sur `POST /mcp` (clé de compte ou jeton env)
 - `data/state/cal-iut.db` — persistance (runs, diff, corrections, poids appris)
 
 BUT2-DEV-FC (S3/S4) est **gelé** pour 2026-2027 (effectif d'alternants

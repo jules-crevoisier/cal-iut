@@ -34,4 +34,10 @@ describe("SideNav groups", () => {
     expect(screen.getByRole("button", { name: /vue promo/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /vue groupe/i })).not.toBeInTheDocument();
   });
+
+  it("should offer Clé Claude / MCP when an account email is provided", () => {
+    render(<SideNav {...baseProps} email="prof@example.test" onLogout={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /clé claude \/ mcp/i })).toBeInTheDocument();
+    expect(screen.getByText("prof@example.test")).toBeInTheDocument();
+  });
 });

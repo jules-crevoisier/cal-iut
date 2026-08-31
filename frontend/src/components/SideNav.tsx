@@ -75,6 +75,8 @@ interface SideNavProps {
   open: boolean;
   onClose: () => void;
   estAdmin?: boolean;
+  email?: string;
+  onLogout?: () => void;
 }
 
 export function SideNav({
@@ -87,6 +89,8 @@ export function SideNav({
   open,
   onClose,
   estAdmin,
+  email,
+  onLogout,
 }: SideNavProps) {
   const groupes = estAdmin ? [...NAV_GROUPS, GROUPE_ADMIN] : NAV_GROUPS;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -181,6 +185,30 @@ export function SideNav({
         >
           Rechercher <span className="mono kbd" aria-hidden="true">Ctrl+K</span>
         </button>
+
+        {email && (
+          <div className="sidenav-compte">
+            <span className="sidenav-compte-email" title={email}>
+              {email}
+            </span>
+            <button
+              type="button"
+              className={`navbtn ${activeTab === "mcp" ? "active" : ""}`}
+              aria-current={activeTab === "mcp" ? "page" : undefined}
+              onClick={() => {
+                onSelect("mcp");
+                onClose();
+              }}
+            >
+              Clé Claude / MCP
+            </button>
+            {onLogout && (
+              <button type="button" className="navbtn sidenav-logout" onClick={onLogout}>
+                Déconnexion
+              </button>
+            )}
+          </div>
+        )}
       </nav>
     </>
   );

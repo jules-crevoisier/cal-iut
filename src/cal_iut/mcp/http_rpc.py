@@ -143,5 +143,12 @@ async def handle_mcp_post(request: Request) -> Response:
             return _rpc_ok(req_id, {"content": [{"type": "text", "text": str(exc)}], "isError": True})
         import json
 
-        return _rpc_ok(req_id, {"content": [{"type": "text", "text": json.dumps(resultat, ensure_ascii=False)}]})
+        is_error = isinstance(resultat, dict) and resultat.get("ok") is False and "error" in resultat
+        return _rpc_ok(
+            req_id,
+            {
+                "content": [{"type": "text", "text": json.dumps(resultat, ensure_ascii=False)}],
+                "isError": is_error,
+            },
+        )
     return _rpc_err(req_id, -32601, f"Method not found: {method}")

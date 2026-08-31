@@ -1,9 +1,9 @@
 """Auth HTTP du MCP Streamable (`POST /mcp`) — jeton dédié, pas le cookie admin.
 
-Règle verrouillée : `Authorization: Bearer CAL_IUT_MCP_TOKEN` est le SEUL
-moyen d'authentifier le MCP. Un cookie de session admin valide ne suffit
-jamais. Sans jeton configuré, l'endpoint est inutilisable (503) ; le login
-site et `GET /app-state` restent inchangés.
+Règle verrouillée : un Bearer (clé user ou `CAL_IUT_MCP_TOKEN` d'env) est le
+SEUL moyen d'authentifier le MCP. Un cookie de session ne suffit jamais.
+Sans Bearer valide → 401 (les clés user suffisent, plus de 503 « token env
+absent »). Le login site et `GET /app-state` restent inchangés.
 
 Le jeton MCP n'est PAS posé en autouse (cf. `tests/conftest.py`) : chaque
 test déclare lui-même s'il en a un.
@@ -38,18 +38,18 @@ def _post_mcp(client: TestClient, extra_headers: dict[str, str] | None = None):
     return client.post("/mcp", json=_INIT, headers=headers)
 
 
-def test_should_return_503_when_mcp_token_env_is_unset(monkeypatch):
+def test_should_return_401_when_mcp_token_env_is_unset(monkeypatch):
     monkeypatch.delenv("CAL_IUT_MCP_TOKEN", raising=False)
     client = TestClient(app)
     reponse = _post_mcp(client, {"Authorization": f"Bearer {_TOKEN}"})
-    assert reponse.status_code == 503
+    assert reponse.status_code == 401
 
 
-def test_should_return_503_when_mcp_token_env_is_empty(monkeypatch):
+def test_should_return_401_when_mcp_token_env_is_empty(monkeypatch):
     monkeypatch.setenv("CAL_IUT_MCP_TOKEN", "")
     client = TestClient(app)
     reponse = _post_mcp(client, {"Authorization": "Bearer anything"})
-    assert reponse.status_code == 503
+    assert reponse.status_code == 401
 
 
 def test_should_still_accept_site_login_when_mcp_token_env_is_unset(monkeypatch, db_isole):

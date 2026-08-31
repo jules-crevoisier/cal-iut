@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { CopyButton } from "./CopyButton";
+import { OpenLinkButton } from "./OpenLinkButton";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 
@@ -36,7 +37,10 @@ export function TeacherLinksList({ payload }: TeacherLinksListProps) {
               {t.label} <span className="mono muted">{t.code}</span>
             </span>
             <input className="teacherlinks-input mono" type="text" readOnly value={t.link} onFocus={(e) => e.currentTarget.select()} />
-            <CopyButton text={t.link} idleLabel="Copier" />
+            <span className="lien-boutons">
+              <CopyButton text={t.link} idleLabel="Copier" />
+              <OpenLinkButton href={t.link} />
+            </span>
           </div>
         ))}
       </div>
