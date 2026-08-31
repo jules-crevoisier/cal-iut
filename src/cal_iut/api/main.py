@@ -155,6 +155,14 @@ async def _erreurs_validation_sans_secret(request: Request, exc: RequestValidati
     erreurs = []
     for erreur in exc.errors():
         erreur = dict(erreur)
+        # `ctx.error` porte l'exception Python BRUTE d'un validateur custom
+        # (ex. `_valider_email`, `schemas.py`) — non sérialisable en JSON,
+        # `JSONResponse` (contrairement au `jsonable_encoder` par défaut de
+        # FastAPI) ne sait pas l'encoder : trouvé en testant ce correctif
+        # lui-même (500 sur un email malformé au lieu du 422 attendu).
+        # `msg` porte déjà le texte utile, `ctx` est donc retiré plutôt que
+        # converti — rien à en tirer côté client.
+        erreur.pop("ctx", None)
         if any(str(segment) in _CHAMPS_SENSIBLES_VALIDATION for segment in erreur.get("loc", ())):
             erreur.pop("input", None)
             erreur["msg"] = "Valeur invalide."
