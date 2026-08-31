@@ -55,3 +55,37 @@ corrections:
       3 de ses disponibilités laissées aux cours classiques.
     demande_par: "Marc Nino, via Kyllian Bresson"
     le: "2026-08-30"
+
+  # WS110 — « Portfolio » (BUT1). Aucune fenêtre déclarée dans le fichier de
+  # l'établissement (0 journée réservée). Kyllian Bresson, 31/08/2026
+  # 15h37 : « WS110 à débuter en même temps que la WS102. » Décision
+  # utilisateur du 31/08/2026 : même fenêtre complète que WS102 (4-8 janvier
+  # 2027), pas seulement le jour de départ.
+  - course_code: WS110
+    ajouter:
+      - "2027-01-04"
+      - "2027-01-05"
+      - "2027-01-06"
+      - "2027-01-07"
+      - "2027-01-08"
+    motif: "Aucune fenêtre déclarée à l'origine ; alignée sur WS102, qu'elle doit démarrer en même temps."
+    demande_par: "Kyllian Bresson"
+    le: "2026-08-31"
+
+  # WS310D — « Portfolio » (BUT2-DEV-FI). Aucune fenêtre déclarée. Kyllian
+  # Bresson, 31/08/2026 15h37 : « WS310D a placer en même que la SAE
+  # WS301D. » WS301D a DEUX fenêtres (7-16 déc. 2026 et 4-5 janv. 2027) ;
+  # décision utilisateur du 31/08/2026 : la première (7-16 décembre).
+  - course_code: WS310D
+    ajouter:
+      - "2026-12-07"
+      - "2026-12-08"
+      - "2026-12-09"
+      - "2026-12-10"
+      - "2026-12-11"
+      - "2026-12-14"
+      - "2026-12-15"
+      - "2026-12-16"
+    motif: "Aucune fenêtre déclarée à l'origine ; alignée sur la 1ère fenêtre de WS301D (7-16 déc.), qu'elle doit rejoindre."
+    demande_par: "Kyllian Bresson"
+    le: "2026-08-31"
