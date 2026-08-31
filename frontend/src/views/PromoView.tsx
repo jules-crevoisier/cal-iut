@@ -22,7 +22,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { changerSalle, type SeanceAPlacer } from "../api/client";
+import { changerSalle, supprimerSeancePersonnalisee, type SeanceAPlacer } from "../api/client";
 import type { Placement } from "../types";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload, AppRow } from "../types/app";
@@ -36,7 +36,9 @@ import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { lettresGroupe } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
+import { CreerSeanceModal } from "../components/CreerSeanceModal";
 import { WeekBar } from "../components/WeekBar";
+import { APlacerView } from "./APlacerView";
 
 interface PromoViewProps {
   /** Position demandée par un lien ou par « À traiter » (semaine + jour).
@@ -61,18 +63,31 @@ interface PromoViewProps {
   placements?: Placement[];
   onPlacementUpdated?: (p: Placement) => void;
   onError?: (msg: string) => void;
+  /** Une séance personnalisée a été créée, modifiée ou supprimée — recharge
+   * `payload` (compteurs de la matière, contenu des cases) et la liste des
+   * placements. Même garde que `placements`/`onPlacementUpdated` : absent
+   * en lecture seule. */
+  onSeanceChangee?: () => void;
+  setRoute?: (patch: Partial<Route>) => void;
+  onAPlacerRefresh?: () => void;
 }
 
 export function PromoView({
   payload,
   route,
-  placementActif = null,
+  placementActif: placementActifProp = null,
   onAnnulerPlacement,
   onPlaced,
   placements,
   onPlacementUpdated,
   onError,
+  onSeanceChangee,
+  setRoute,
+  onAPlacerRefresh,
 }: PromoViewProps) {
+  const [choixAPlacer, setChoixAPlacer] = useState<SeanceAPlacer | null>(null);
+  const [listeMasquee, setListeMasquee] = useState(() => route?.panel !== "aplacer");
+  const placementActif = placementActifProp ?? choixAPlacer;
   const [displayWeek, setDisplayWeek] = useState(0);
   const [day, setDay] = useState(0);
   const [teacherFilter, setTeacherFilter] = useState("");
@@ -91,6 +106,10 @@ export function PromoView({
   const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
   const dragEnabled = Boolean(placements && onPlacementUpdated && onError);
 
+  useEffect(() => {
+    if (route?.panel === "aplacer") setListeMasquee(false);
+  }, [route?.panel]);
+
   // Édition de la SALLE seule (retour utilisateur 28/08/2026 : « on va
   // vouloir sur la vue promo modifier uniquement les salles ») — même
   // condition d'activation que le glisser-déposer : réservé au contexte
@@ -106,6 +125,12 @@ export function PromoView({
     () => [...payload.rooms].sort((a, b) => a.label.localeCompare(b.label, "fr")),
     [payload.rooms],
   );
+
+  // Créer / modifier une séance personnalisée (retour utilisateur
+  // 31/08/2026) — même garde d'activation que le reste de l'édition.
+  // `"creer"` = formulaire vide ; un `Placement` = édition de cette séance.
+  const [modaleSeance, setModaleSeance] = useState<"creer" | Placement | null>(null);
+  const seanceModaleEnabled = roomEditEnabled;
 
   const appliquerSalle = async (sessionId: string, roomId: string) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
@@ -143,6 +168,24 @@ export function PromoView({
       onError(e instanceof Error ? e.message : "Changement de salle impossible");
     } finally {
       setSalleEnCours(false);
+    }
+  };
+
+  // Supprimer une séance personnalisée — jamais une séance de la maquette,
+  // le bouton n'apparaît d'ailleurs que sur `r.custom` (retour utilisateur
+  // 31/08/2026 : « création + suppression + modification complète »).
+  const supprimerSeance = async (sessionId: string, libelle: string) => {
+    const confirme = await confirmAsync(`Supprimer définitivement « ${libelle} » ?`, {
+      title: "Supprimer la séance",
+      confirmLabel: "Supprimer",
+    });
+    if (!confirme) return;
+    try {
+      await supprimerSeancePersonnalisee(sessionId);
+      setAnnonce(`${libelle} supprimée.`);
+      onSeanceChangee?.();
+    } catch (e) {
+      onError?.(e instanceof Error ? e.message : "Suppression impossible");
     }
   };
 
@@ -286,7 +329,9 @@ export function PromoView({
     setEnCoursPlacement(null);
     if (resultat.ok) {
       setAnnonce(`${placementActif.course_code} placé ${DAY_LABELS[day]} ${SLOT_TIMES[slot].label}.`);
+      setChoixAPlacer(null);
       onPlaced?.();
+      onAPlacerRefresh?.();
     } else {
       setErreurPlacement(resultat.message);
     }
@@ -363,10 +408,38 @@ export function PromoView({
       : {};
 
   return (
-    <section className="view">
+    <section className="view promo">
       <p role="status" aria-live="polite" className="sr-only">
         {annonce}
       </p>
+
+      <div className="promo-avec-aplacer">
+        {!listeMasquee && (
+          <APlacerView
+            variante="panneau"
+            payload={payload}
+            onPlacement={() => onAPlacerRefresh?.()}
+            onChoisirSurPromo={setChoixAPlacer}
+            onFermer={() => {
+              setListeMasquee(true);
+              setChoixAPlacer(null);
+              setRoute?.({ panel: "" });
+            }}
+          />
+        )}
+        <div className="promo-principal">
+      {listeMasquee && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm promo-aplacer-ouvrir"
+          onClick={() => {
+            setListeMasquee(false);
+            setRoute?.({ panel: "aplacer" });
+          }}
+        >
+          Séances à placer
+        </button>
+      )}
 
       {placementActif && (
         <div className="panel promo-placement-actif">
@@ -378,7 +451,14 @@ export function PromoView({
               libre de la colonne {placementActif.parcours} ci-dessous.
             </span>
           </div>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={onAnnulerPlacement}>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => {
+              setChoixAPlacer(null);
+              onAnnulerPlacement?.();
+            }}
+          >
             Annuler
           </button>
         </div>
@@ -404,7 +484,29 @@ export function PromoView({
             ))}
           </select>
         </label>
+        {seanceModaleEnabled && (
+          <button type="button" className="btn btn--accent btn--sm" onClick={() => setModaleSeance("creer")}>
+            + Nouvelle séance
+          </button>
+        )}
       </div>
+
+      {modaleSeance && (
+        <CreerSeanceModal
+          payload={payload}
+          seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
+          onCancel={() => setModaleSeance(null)}
+          onCree={(placement) => {
+            setModaleSeance(null);
+            setAnnonce(
+              modaleSeance === "creer"
+                ? `${placement.course_code} créée ${DAY_LABELS[placement.day]} ${SLOT_TIMES[placement.slot].label}.`
+                : `${placement.course_code} modifiée.`,
+            );
+            onSeanceChangee?.();
+          }}
+        />
+      )}
 
       <div className="daybar">
         {DAY_LABELS.map((label, d) => {
@@ -600,6 +702,37 @@ export function PromoView({
                                       {r.ev ? " · éval" : ""}
                                       {durLabel}
                                     </span>
+                                    {/* Séance ajoutée manuellement (retour utilisateur
+                                        31/08/2026) : seule à proposer modifier/
+                                        supprimer, jamais une séance de la maquette. */}
+                                    {r.custom && seanceModaleEnabled && source && (
+                                      <span className="promo-chip-custom">
+                                        <button
+                                          type="button"
+                                          className="promo-chip-custom-btn"
+                                          title="Modifier cette séance"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setModaleSeance(source);
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                          ✎
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="promo-chip-custom-btn"
+                                          title="Supprimer cette séance"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void supprimerSeance(r.id, `${r.c} (${r.t})`);
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                          🗑
+                                        </button>
+                                      </span>
+                                    )}
                                     {/* Salle modifiable sur place (retour utilisateur
                                         28/08/2026) — un <select> apparaît à la place du
                                         libellé au clic. `stopPropagation` sur le clic :
@@ -751,6 +884,8 @@ export function PromoView({
           }}
         />
       )}
+        </div>
+      </div>
     </section>
   );
 }
