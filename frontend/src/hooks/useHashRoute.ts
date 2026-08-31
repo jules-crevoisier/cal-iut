@@ -37,7 +37,13 @@ export interface Route {
    *  fois : sans lui, un lien « telle séance, tel créneau » ouvre le bon
    *  écran mais pas le bon jour. */
   jour: number | null;
-  mode: "prof" | "groupe" | "";
+  /** "promo" (retour utilisateur 31/08/2026 : « un lien en plus ouvert à
+   * tout le monde [...] accès à la vue promo ») — contrairement à
+   * "prof"/"groupe", ne cible aucune entité : la Vue Promo entière, en
+   * lecture seule. Même mécanisme public que les deux autres (cf.
+   * `api/auth.py::verify_personal_link_param` — seule la présence de `t`
+   * compte, jamais son contenu). */
+  mode: "prof" | "groupe" | "promo" | "";
   /** Code du lien personnel (prof ou groupe) — public depuis le
    * 28/08/2026 (`api/auth.py`), seul moyen pour un lien personnel de
    * contourner le mot de passe partagé. Jamais envoyé au serveur par LE

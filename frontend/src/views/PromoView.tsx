@@ -70,6 +70,16 @@ interface PromoViewProps {
   onSeanceChangee?: () => void;
   setRoute?: (patch: Partial<Route>) => void;
   onAPlacerRefresh?: () => void;
+  /** Lien public « Vue Promo » (retour utilisateur 31/08/2026 : « un lien
+   * en plus ouvert à tout le monde [...] accès à la vue promo ») — maître
+   * absolu, à la différence des props ci-dessus qui ne coupaient QUE
+   * glisser-déposer/salle/création. Sans lui, le panneau « Séances à
+   * placer » et le clic-pour-placer restaient actifs même sans ces props
+   * (ils ne dépendent que de `placementActif`, jamais vérifiés) : un lien
+   * public aurait donc pu écrire au planning malgré son intention "lecture
+   * seule". `readOnly` coupe tout, sans exception, même si l'appelant
+   * passe les callbacks d'édition par erreur. */
+  readOnly?: boolean;
 }
 
 export function PromoView({
@@ -84,10 +94,11 @@ export function PromoView({
   onSeanceChangee,
   setRoute,
   onAPlacerRefresh,
+  readOnly = false,
 }: PromoViewProps) {
   const [choixAPlacer, setChoixAPlacer] = useState<SeanceAPlacer | null>(null);
   const [listeMasquee, setListeMasquee] = useState(() => route?.panel !== "aplacer");
-  const placementActif = placementActifProp ?? choixAPlacer;
+  const placementActif = readOnly ? null : (placementActifProp ?? choixAPlacer);
   const [displayWeek, setDisplayWeek] = useState(0);
   const [day, setDay] = useState(0);
   const [teacherFilter, setTeacherFilter] = useState("");
@@ -104,11 +115,11 @@ export function PromoView({
   const [parcoursOuvert, setParcoursOuvert] = useState<string | null>(null);
   const couleursParMatiere = usePreferences().couleursParMatiere;
   const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
-  const dragEnabled = Boolean(placements && onPlacementUpdated && onError);
+  const dragEnabled = !readOnly && Boolean(placements && onPlacementUpdated && onError);
 
   useEffect(() => {
-    if (route?.panel === "aplacer") setListeMasquee(false);
-  }, [route?.panel]);
+    if (!readOnly && route?.panel === "aplacer") setListeMasquee(false);
+  }, [route?.panel, readOnly]);
 
   // Édition de la SALLE seule (retour utilisateur 28/08/2026 : « on va
   // vouloir sur la vue promo modifier uniquement les salles ») — même
@@ -117,7 +128,7 @@ export function PromoView({
   // « À placer », qui ne reçoit pas ces props.
   const [salleEnEdition, setSalleEnEdition] = useState<string | null>(null);
   const [salleEnCours, setSalleEnCours] = useState(false);
-  const roomEditEnabled = Boolean(onPlacementUpdated && onError);
+  const roomEditEnabled = !readOnly && Boolean(onPlacementUpdated && onError);
   // Séance pour laquelle on est en train de créer une salle — la salle
   // créée lui est appliquée directement, sans re-sélection manuelle.
   const [creationSallePour, setCreationSallePour] = useState<string | null>(null);
@@ -414,7 +425,7 @@ export function PromoView({
       </p>
 
       <div className="promo-avec-aplacer">
-        {!listeMasquee && (
+        {!readOnly && !listeMasquee && (
           <APlacerView
             variante="panneau"
             payload={payload}
@@ -428,7 +439,7 @@ export function PromoView({
           />
         )}
         <div className="promo-principal">
-      {listeMasquee && (
+      {!readOnly && listeMasquee && (
         <button
           type="button"
           className="btn btn--ghost btn--sm promo-aplacer-ouvrir"
