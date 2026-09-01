@@ -25,8 +25,8 @@ interface WeekBarProps {
    * l'histogramme existant plutôt qu'un nouveau composant, `countByWeekIndex`
    * portant alors des heures au lieu d'un compte de séances). */
   unit?: "creneaux" | "heures";
-  /** Dépôt d'une séance déjà en cours de glisser : déplace vers cette
-   *  semaine (même jour / créneau). */
+  /** Dépôt d'une séance déjà en cours de glisser : la Vue Promo parque
+   *  visuellement (À placer) au lieu de garder le même créneau. */
   onDropWeek?: (displayIndex: number) => void;
   dropEnabled?: boolean;
 }
@@ -50,7 +50,7 @@ export function WeekBar({
   // un positionnement relatif au conteneur se décalerait au défilement.
   const [survol, setSurvol] = useState<{ texte: string; x: number; y: number } | null>(null);
   const [dropCible, setDropCible] = useState<number | null>(null);
-  const ignorerClic = useRef(false);
+  const ignorerClic = useRef<number | null>(null);
 
   // Première / sélectionnée / dernière — mais jamais le même libellé deux
   // fois : quand la semaine choisie EST la première ou la dernière (cas le
@@ -99,10 +99,11 @@ export function WeekBar({
                 + (dropCible === i ? " drop-cible" : "")
               }
               onClick={() => {
-                if (ignorerClic.current) {
-                  ignorerClic.current = false;
+                if (ignorerClic.current === i) {
+                  ignorerClic.current = null;
                   return;
                 }
+                ignorerClic.current = null;
                 onSelect(i);
               }}
               onMouseEnter={(e) => montrer(e, title)}
@@ -118,7 +119,7 @@ export function WeekBar({
               onDrop={(e) => {
                 if (!accepteDepot || !onDropWeek) return;
                 e.preventDefault();
-                ignorerClic.current = true;
+                ignorerClic.current = i;
                 setDropCible(null);
                 onDropWeek(i);
               }}

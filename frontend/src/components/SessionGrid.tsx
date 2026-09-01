@@ -43,6 +43,8 @@ export interface EditionGrille {
   onSurvolSeance: (sessionId: string | null) => void;
   onDeposerCase: (day: number, slot: number) => void;
   onDeposerSeance: (sessionId: string) => void;
+  /** Clic sur une case (parcage : la séance est déjà choisie). */
+  onChoisirCase?: (day: number, slot: number) => void;
 }
 
 interface SessionGridProps {
@@ -90,7 +92,16 @@ export function SessionGrid({
    *  pas, sans que rien ne le signale. */
   const propsCase = (d: number, s: number) => {
     const survol = edition?.cibleCase?.day === d && edition?.cibleCase?.slot === s;
+    const libelleCase = `${DAY_LABELS[d]} ${SLOT_TIMES[s].label}`;
     if (!edition) return { className: "sessiongrid-cell" };
+    const choix = edition.onChoisirCase
+      ? {
+          role: "button" as const,
+          tabIndex: 0,
+          "aria-label": libelleCase,
+          onClick: () => edition.onChoisirCase?.(d, s),
+        }
+      : {};
     return {
       className: `sessiongrid-cell${survol ? " dropzone-hover" : ""}`,
       onDragOver: (e: ReactDragEvent) => {
@@ -105,6 +116,7 @@ export function SessionGrid({
         e.preventDefault();
         edition.onDeposerCase(d, s);
       },
+      ...choix,
     };
   };
 
