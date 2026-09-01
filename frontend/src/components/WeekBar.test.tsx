@@ -56,5 +56,53 @@ describe("WeekBar drop onto another week", () => {
     fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }));
     expect(onDropWeek).toHaveBeenCalledWith(1);
   });
+
+  it("should not fire onDropWeek when the target week is blocked", () => {
+    const onDropWeek = vi.fn();
+    render(
+      <WeekBar
+        {...baseProps}
+        selected={0}
+        onDropWeek={onDropWeek}
+        weekRows={[
+          semaines[0],
+          { monday: "2026-12-21", label: "Vacances de Noël", blocked: true, weekIndex: 12 },
+          semaines[1],
+        ]}
+      />,
+    );
+    fireEvent.drop(screen.getByRole("button", { name: /vacances/i }));
+    expect(onDropWeek).not.toHaveBeenCalled();
+  });
+
+  it("should still select another week after a drop on a different week", () => {
+    const onDropWeek = vi.fn();
+    const onSelect = vi.fn();
+    render(
+      <WeekBar {...baseProps} selected={0} onSelect={onSelect} onDropWeek={onDropWeek} />,
+    );
+    fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }));
+    fireEvent.click(screen.getByRole("button", { name: /semaine 29/i }));
+    expect(onSelect).toHaveBeenCalledWith(2);
+  });
+
+  it("should not fire onDropWeek when the target weekIndex is null", () => {
+    const onDropWeek = vi.fn();
+    render(
+      <WeekBar
+        {...baseProps}
+        selected={0}
+        onDropWeek={onDropWeek}
+        weekRows={[
+          semaines[0],
+          { monday: "2026-12-28", label: "Semaine hors calendrier", blocked: false, weekIndex: null },
+          semaines[1],
+        ]}
+      />,
+    );
+    fireEvent.drop(screen.getByRole("button", { name: /hors calendrier/i }));
+    expect(onDropWeek).not.toHaveBeenCalled();
+  });
 });
+
 

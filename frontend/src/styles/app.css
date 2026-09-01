@@ -2284,6 +2284,28 @@ table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.
   height: 76px;
 }
 
+.aplacer-carte--park {
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.aplacer-carte--park-selected {
+  border-color: var(--accent, var(--ink));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 20%, transparent);
+}
+
+.parcoursmodal-aplacer {
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.parcoursmodal-aplacer .aplacer-carte {
+  margin: 0;
+}
+
 .parcoursmodal-aide {
   color: var(--muted);
   font-size: 0.78rem;

@@ -28,6 +28,8 @@ import {
   type SeancesAPlacer,
 } from "../api/client";
 import type { AppPayload } from "../types/app";
+import { ParkedCard } from "../features/park-week-move/ParkedCard";
+import type { ParkUiState } from "../features/park-week-move/parkWeekMove";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
@@ -55,6 +57,10 @@ interface APlacerViewProps {
   variante?: "page" | "panneau";
   onChoisirSurPromo?: (seance: SeanceAPlacer) => void;
   onFermer?: () => void;
+  /** Séance déposée sur une autre semaine, pas encore re-posée. */
+  park?: ParkUiState;
+  onSelectPark?: () => void;
+  onAnnulerPark?: () => void;
 }
 
 export function APlacerView({
@@ -63,6 +69,9 @@ export function APlacerView({
   variante = "page",
   onChoisirSurPromo,
   onFermer,
+  park,
+  onSelectPark,
+  onAnnulerPark,
 }: APlacerViewProps) {
   const [inventaire, setInventaire] = useState<SeancesAPlacer | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -215,11 +224,22 @@ export function APlacerView({
         )}
       </div>
 
-      {manquantes.length === 0 ? (
+      {park?.parked && onSelectPark && onAnnulerPark && (
+        <div className="aplacer-liste">
+          <ParkedCard
+            parked={park.parked}
+            selected={park.selected}
+            onSelect={onSelectPark}
+            onAnnuler={onAnnulerPark}
+          />
+        </div>
+      )}
+
+      {manquantes.length === 0 && !park?.parked ? (
         <div className="panel">
           <p className="muted">Rien à faire ici : toutes les séances sont au planning.</p>
         </div>
-      ) : (
+      ) : manquantes.length === 0 ? null : (
         <div className="aplacer-liste">
           {manquantes.map((s) => (
             <CarteSeance

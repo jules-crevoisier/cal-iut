@@ -36,6 +36,14 @@ import { performMove, performSwap } from "../utils/moveSession";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { DayStrip, todayIndex } from "./DayStrip";
 import { SessionGrid, type EditionGrille } from "./SessionGrid";
+import { ParkedCard } from "../features/park-week-move/ParkedCard";
+import {
+  clearPark,
+  createPark,
+  isHiddenOnGrid,
+  selectPark,
+  type ParkUiState,
+} from "../features/park-week-move/parkWeekMove";
 
 interface ParcoursWeekModalProps {
   payload: AppPayload;
@@ -47,6 +55,8 @@ interface ParcoursWeekModalProps {
   onClose: () => void;
   onPlacementUpdated: (p: Placement) => void;
   onError: (msg: string) => void;
+  park?: ParkUiState;
+  onParkChange?: (next: ParkUiState) => void;
 }
 
 export function ParcoursWeekModal({
@@ -57,22 +67,32 @@ export function ParcoursWeekModal({
   onClose,
   onPlacementUpdated,
   onError,
+  park: parkProp,
+  onParkChange,
 }: ParcoursWeekModalProps) {
   const [semaineAffichee, setSemaineAffichee] = useState(weekIndex);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [cibleCase, setCibleCase] = useState<{ day: number; slot: number } | null>(null);
   const [cibleEchange, setCibleEchange] = useState<string | null>(null);
   const [annonce, setAnnonce] = useState("");
+  const [parkLocal, setParkLocal] = useState<ParkUiState>(() => clearPark());
+  const park = parkProp ?? parkLocal;
+  const setPark = onParkChange ?? setParkLocal;
   const narrow = useNarrowScreen();
   const [mobileDay, setMobileDay] = useState(todayIndex());
 
+  const fermer = () => {
+    if (park.parked) setPark(clearPark());
+    onClose();
+  };
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") fermer();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [fermer]);
 
   const solverWeek = payload.weekRows[semaineAffichee]?.weekIndex ?? null;
 
@@ -88,8 +108,13 @@ export function ParcoursWeekModal({
     () =>
       solverWeek === null
         ? []
-        : payload.rows.filter((r) => r.w === solverWeek && r.g.some((gid) => groupesDuParcours.has(gid))),
-    [payload.rows, solverWeek, groupesDuParcours],
+        : payload.rows.filter(
+            (r) =>
+              r.w === solverWeek &&
+              r.g.some((gid) => groupesDuParcours.has(gid)) &&
+              !isHiddenOnGrid(park, r.id),
+          ),
+    [payload.rows, solverWeek, groupesDuParcours, park],
   );
 
   const placementsParId = useMemo(
@@ -139,6 +164,31 @@ export function ParcoursWeekModal({
     if (ok) setAnnonce(`${source.course_code} et ${autre.course_code} ont échangé leurs places.`);
   };
 
+  const parquerDepuisGlisser = () => {
+    const sessionId = draggingId;
+    reinitialiserGlisser();
+    if (!sessionId) return;
+    const placement = placementsParId.get(sessionId);
+    if (!placement || placement.locked) return;
+    setPark(createPark(placement, null));
+  };
+
+  const poserParked = async (jour: number, creneau: number) => {
+    if (!park.parked || !park.selected || solverWeek === null) return;
+    const origin = park.parked.origin;
+    const ok = await performMove(
+      origin.session_id,
+      { week: solverWeek, day: jour, slot: creneau },
+      origin,
+      onPlacementUpdated,
+      onError,
+    );
+    if (ok) {
+      setAnnonce(`${origin.course_code} déplacé ${DAY_LABELS[jour]} ${SLOT_TIMES[creneau].label}.`);
+      setPark(clearPark());
+    }
+  };
+
   const edition: EditionGrille = {
     draggingId,
     cibleCase,
@@ -153,13 +203,14 @@ export function ParcoursWeekModal({
     onSurvolSeance: setCibleEchange,
     onDeposerCase: (d, s) => void deplacer(d, s),
     onDeposerSeance: (id) => void echanger(id),
+    onChoisirCase: park.selected ? (d, s) => void poserParked(d, s) : undefined,
   };
 
   const semaine = payload.weekRows[semaineAffichee];
   const derniere = payload.weekRows.length - 1;
 
   return (
-    <div className="parcoursmodal-overlay" role="presentation" onClick={onClose}>
+    <div className="parcoursmodal-overlay" role="presentation" onClick={fermer}>
       <div
         className="panel parcoursmodal"
         role="dialog"
@@ -191,11 +242,41 @@ export function ParcoursWeekModal({
             >
               Semaine suivante →
             </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={onClose}>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={fermer}>
               Fermer
             </button>
           </div>
         </div>
+
+        <section
+          className="parcoursmodal-aplacer"
+          role="region"
+          aria-label="À placer"
+          onDragOver={(e) => {
+            if (draggingId) e.preventDefault();
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            parquerDepuisGlisser();
+          }}
+        >
+          {park.parked ? (
+            <ParkedCard
+              parked={park.parked}
+              selected={park.selected}
+              onSelect={() => setPark(selectPark(park))}
+              onAnnuler={() => {
+                const originWeek = park.parked?.origin.week;
+                setPark(clearPark());
+                if (originWeek === undefined) return;
+                const idx = payload.weekRows.findIndex((w) => w.weekIndex === originWeek);
+                if (idx >= 0) setSemaineAffichee(idx);
+              }}
+            />
+          ) : (
+            <p className="muted">Déposez une séance ici pour la poser sur une autre semaine.</p>
+          )}
+        </section>
 
         <p className="parcoursmodal-aide">
           Glisser une séance sur une case libre la déplace · la glisser sur une autre séance échange leurs places.

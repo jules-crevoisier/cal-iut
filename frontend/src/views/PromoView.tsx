@@ -39,6 +39,15 @@ import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
 import { WeekBar } from "../components/WeekBar";
 import { APlacerView } from "./APlacerView";
+import {
+  clearPark,
+  createPark,
+  decideWeekDrop,
+  isHiddenOnGrid,
+  replacePark,
+  selectPark,
+  type ParkUiState,
+} from "../features/park-week-move/parkWeekMove";
 
 interface PromoViewProps {
   /** Position demandée par un lien ou par « À traiter » (semaine + jour).
@@ -98,6 +107,7 @@ export function PromoView({
 }: PromoViewProps) {
   const [choixAPlacer, setChoixAPlacer] = useState<SeanceAPlacer | null>(null);
   const [listeMasquee, setListeMasquee] = useState(() => route?.panel !== "aplacer");
+  const [park, setPark] = useState<ParkUiState>(() => clearPark());
   const placementActif = readOnly ? null : (placementActifProp ?? choixAPlacer);
   const [displayWeek, setDisplayWeek] = useState(0);
   const [day, setDay] = useState(0);
@@ -314,6 +324,7 @@ export function PromoView({
   const byColSlot = new Map<string, AppRow[]>();
   if (solverWeek !== null) {
     for (const r of payload.rows) {
+      if (isHiddenOnGrid(park, r.id)) continue;
       if (r.w !== solverWeek || r.d !== day) continue;
       const dur = Math.max(1, r.dur || 1);
       cols.forEach((_, i) => {
@@ -348,6 +359,33 @@ export function PromoView({
     }
   };
 
+  const restaurerPark = () => {
+    const originWeek = park.parked?.origin.week;
+    setPark(clearPark());
+    if (originWeek === undefined) return;
+    const idx = payload.weekRows.findIndex((w) => w.weekIndex === originWeek);
+    if (idx >= 0) setDisplayWeek(idx);
+  };
+
+  const poserParked = async (slot: number) => {
+    if (!park.parked || !park.selected || !onPlacementUpdated || !onError || solverWeek === null) return;
+    const origin = park.parked.origin;
+    const cle = `${solverWeek}-${day}-${slot}`;
+    setEnCoursPlacement(cle);
+    const ok = await performMove(
+      origin.session_id,
+      { week: solverWeek, day, slot },
+      origin,
+      onPlacementUpdated,
+      onError,
+    );
+    setEnCoursPlacement(null);
+    if (ok) {
+      setAnnonce(`${origin.course_code} déplacé ${DAY_LABELS[day]} ${SLOT_TIMES[slot].label}.`);
+      setPark(clearPark());
+    }
+  };
+
   // Glisser-déposer d'une séance déjà placée — même logique que l'ancien
   // TdWeekGrid (validation -> confirmation si conflit -> forçage ou non,
   // `utils/moveSession.ts::performMove`), déplacée ici (retour utilisateur
@@ -364,26 +402,24 @@ export function PromoView({
     await performMove(sessionId, { week: solverWeek, day: targetDay, slot }, placement, onPlacementUpdated, onError);
   };
 
-  const handleDropOnWeek = async (displayIndex: number) => {
+  const handleDropOnWeek = (displayIndex: number) => {
     const wr = payload.weekRows[displayIndex];
     const sessionId = draggingId;
     setDraggingId(null);
-    if (!sessionId || !placements || !onPlacementUpdated || !onError) return;
-    if (!wr || wr.weekIndex === null || wr.blocked) return;
+    if (!dragEnabled || !sessionId || !placements) return;
     const placement = placements.find((p) => p.session_id === sessionId);
-    if (!placement || placement.locked) return;
-    if (placement.week === wr.weekIndex) {
+    const decision = decideWeekDrop({ placement, target: wr, currentSolverWeek: solverWeek });
+    if (decision === "refuse") return;
+    if (decision === "navigate") {
       setDisplayWeek(displayIndex);
       return;
     }
-    const ok = await performMove(
-      sessionId,
-      { week: wr.weekIndex, day: placement.day, slot: placement.slot },
-      placement,
-      onPlacementUpdated,
-      onError,
-    );
-    if (ok) setDisplayWeek(displayIndex);
+    if (!placement) return;
+    setPark((actuel) => (actuel.parked ? replacePark(actuel, placement, displayIndex) : createPark(placement, displayIndex)));
+    setChoixAPlacer(null);
+    setListeMasquee(false);
+    setRoute?.({ panel: "aplacer" });
+    setDisplayWeek(displayIndex);
   };
 
   /** Dépôt SUR une séance : les deux échangent leurs places. Un seul appel
@@ -452,12 +488,22 @@ export function PromoView({
             variante="panneau"
             payload={payload}
             onPlacement={() => onAPlacerRefresh?.()}
-            onChoisirSurPromo={setChoixAPlacer}
+            onChoisirSurPromo={(seance) => {
+              setChoixAPlacer(seance);
+              setPark((actuel) => (actuel.parked ? { ...actuel, selected: false } : actuel));
+            }}
             onFermer={() => {
+              if (park.parked) restaurerPark();
               setListeMasquee(true);
               setChoixAPlacer(null);
               setRoute?.({ panel: "" });
             }}
+            park={park}
+            onSelectPark={() => {
+              setChoixAPlacer(null);
+              setPark(selectPark(park));
+            }}
+            onAnnulerPark={restaurerPark}
           />
         )}
         <div className="promo-principal">
@@ -641,21 +687,33 @@ export function PromoView({
                           )
                           .map((e) => e.label);
 
-                        // Cellule cible pour un placement en cours — seules les
-                        // colonnes du BON parcours sont proposées (le solveur
-                        // n'affecte jamais une séance en dehors du sien, offrir
-                        // les autres colonnes serait juste un clic pour rien).
-                        const eligible = Boolean(placementActif) && colParcours[i] === placementActif?.parcours;
+                        // Cellule cible pour un placement en cours — manquante
+                        // (parcours de la séance) ou séance parquée (même règle).
+                        const parkParcours = park.parked
+                          ? park.parked.origin.group_ids
+                              .map((g) => payload.groupParcours[g])
+                              .find((pc): pc is string => Boolean(pc))
+                          : undefined;
+                        const eligiblePark =
+                          Boolean(park.parked && park.selected && solverWeek !== null) &&
+                          (parkParcours === undefined || colParcours[i] === parkParcours);
+                        const eligibleManquante =
+                          Boolean(placementActif) && colParcours[i] === placementActif?.parcours;
+                        const eligible = eligiblePark || eligibleManquante;
                         const cleCellule = `${solverWeek}-${day}-${s}`;
                         const placementProps = eligible
                           ? {
                               role: "button" as const,
                               tabIndex: 0,
-                              onClick: () => void placerIci(s),
+                              onClick: () => {
+                                if (park.parked && park.selected) void poserParked(s);
+                                else void placerIci(s);
+                              },
                               onKeyDown: (e: ReactKeyboardEvent) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
-                                  void placerIci(s);
+                                  if (park.parked && park.selected) void poserParked(s);
+                                  else void placerIci(s);
                                 }
                               },
                             }
@@ -663,6 +721,12 @@ export function PromoView({
                         const eligibleClass = eligible ? " promocell--placeable" : "";
                         const isDropHover = dragEnabled && dropTarget?.day === day && dropTarget?.slot === s;
                         const dropCls = isDropHover ? " dropzone-hover" : "";
+                        const libellePoser =
+                          enCoursPlacement === cleCellule
+                            ? "Placement…"
+                            : eligiblePark || entries.length
+                              ? "+ poser ici (conflit possible)"
+                              : "+ poser ici";
 
                         if (entries.length) {
                           return (
@@ -674,7 +738,7 @@ export function PromoView({
                             >
                               {eligible && (
                                 <div className="promocell-poser">
-                                  {enCoursPlacement === cleCellule ? "Placement…" : "+ poser ici (conflit possible)"}
+                                  {libellePoser}
                                 </div>
                               )}
                               {entries.map((r) => {
@@ -889,7 +953,7 @@ export function PromoView({
                           >
                             {eligible && (
                               <div className="promocell-poser">
-                                {enCoursPlacement === cleCellule ? "Placement…" : "+ poser ici"}
+                                {libellePoser}
                               </div>
                             )}
                           </td>
@@ -910,9 +974,14 @@ export function PromoView({
           parcours={parcoursOuvert}
           weekIndex={displayWeek}
           placements={placements}
-          onClose={() => setParcoursOuvert(null)}
+          onClose={() => {
+            if (park.parked) restaurerPark();
+            setParcoursOuvert(null);
+          }}
           onPlacementUpdated={onPlacementUpdated}
           onError={onError}
+          park={park}
+          onParkChange={setPark}
         />
       )}
 
