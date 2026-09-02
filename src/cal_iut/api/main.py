@@ -47,8 +47,15 @@ from cal_iut.api.schemas import (
     RegenRequest,
     RegenResultResponse,
     ResetPasswordRequest,
+    CelcatCompteurs,
     CelcatEntreeResponse,
+    CelcatEtatResponse,
+    CelcatExtraActionResponse,
     CelcatPlanResponse,
+    CelcatSaisieActiveRequest,
+    CelcatSaisieRequest,
+    CelcatSaisieResponse,
+    CelcatValiderRequest,
     ChangeRoomRequest,
     CompletionResponse,
     CreerSeanceRequest,
@@ -2091,7 +2098,9 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             )
 
     _notifier("deplacement", f"{match.course_code} → {_ou(match)}")
-    return _to_placement(match, state.sessions_by_id)
+    resultat = _to_placement(match, state.sessions_by_id)
+    _apres_ecriture_planning(session_id, "update")
+    return resultat
 
 
 @app.patch(
@@ -2103,7 +2112,7 @@ def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> Placemen
     """Overlay enseignant / type / durée sur une séance de maquette."""
     from cal_iut.api.session_patch import appliquer_patch_seance
 
-    return appliquer_patch_seance(
+    resultat = appliquer_patch_seance(
         session_id,
         teacher_codes=body.teacher_codes,
         session_type=body.session_type,
@@ -2115,14 +2124,23 @@ def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> Placemen
         is_eval=body.is_eval,
         force=body.force,
     )
+    _apres_ecriture_planning(session_id, "update")
+    return resultat
 
 
 @app.post("/placements/{session_id}/deposer", dependencies=[Depends(accounts.require_role("edit"))])
 def deposer_placement(session_id: str) -> dict[str, object]:
     """Retire la séance du planning, la laisse dans le catalogue (À placer)."""
     from cal_iut.api.deposer import deposer_seance
+    from cal_iut.celcat.ops import noter_placement_retire
 
-    return deposer_seance(session_id)
+    state = get_state()
+    actuel = next((p for p in state.timetable if p.session_id == session_id), None)
+    if actuel is not None:
+        noter_placement_retire(actuel)
+    resultat = deposer_seance(session_id)
+    _apres_ecriture_planning(session_id, "delete")
+    return resultat
 
 
 @app.post("/placements/echanger", response_model=EchangeResponse, dependencies=[Depends(accounts.require_role("edit"))])
@@ -2219,6 +2237,8 @@ def echanger_placements(body: EchangeRequest) -> EchangeResponse:
             )
 
     _notifier("echange", f"{a.course_code} ({_ou(a)}) ⇄ {b.course_code} ({_ou(b)})")
+    _apres_ecriture_planning(body.session_a, "update")
+    _apres_ecriture_planning(body.session_b, "update")
     return EchangeResponse(placements=[_to_placement(a, state.sessions_by_id), _to_placement(b, state.sessions_by_id)])
 
 
@@ -2310,7 +2330,9 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
                 session.locked if session else False,
                 run_id=state.current_run_id, course_code=match.course_code,
             )
-        return _to_placement(match, state.sessions_by_id)
+        resultat = _to_placement(match, state.sessions_by_id)
+        _apres_ecriture_planning(session_id, "update")
+        return resultat
 
     salle = next((r for r in state.rooms if r.id == body.room_id), None)
     if salle is None:
@@ -2388,7 +2410,9 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
 
     if not getattr(match, "room_id", None):
         _notifier("sans_salle", f"{match.course_code} ({_ou(match)}) n'a plus de salle")
-    return _to_placement(match, state.sessions_by_id)
+    resultat = _to_placement(match, state.sessions_by_id)
+    _apres_ecriture_planning(session_id, "update")
+    return resultat
 
 
 @app.post("/rooms", response_model=RoomMeta, dependencies=[Depends(accounts.require_role("admin"))])
@@ -2430,6 +2454,43 @@ def creer_salle(body: CreateRoomRequest) -> RoomMeta:
     return RoomMeta(id=salle.id, label=salle.label, capacity=salle.capacity, room_type=salle.room_type.value)
 
 
+def _apres_ecriture_planning(session_id: str, action: str) -> None:
+    """File d'attente Celcat après un write planning. N'échoue jamais."""
+    try:
+        from cal_iut.celcat.ops import apres_ecriture_planning
+
+        apres_ecriture_planning(session_id, action)
+    except Exception:
+        return
+
+
+def _celcat_etat_public() -> CelcatEtatResponse:
+    from cal_iut.celcat.etat import charger
+    from cal_iut.celcat.logs import tous
+
+    doc = charger()
+    compteurs = CelcatCompteurs()
+    for item in tous():
+        kind = item.get("kind")
+        if kind == "created":
+            compteurs.created += 1
+        elif kind == "modified":
+            compteurs.modified += 1
+        elif kind == "deleted":
+            compteurs.deleted += 1
+        elif kind == "blocked":
+            compteurs.blocked += 1
+    dernier = doc.get("dernier_job")
+    return CelcatEtatResponse(
+        saisie_active=bool(doc.get("saisie_active")),
+        semaines_validees=list(doc.get("semaines_validees") or []),
+        valide_le=doc.get("valide_le"),
+        dernier_job=dernier if isinstance(dernier, dict) else None,
+        compteurs=compteurs,
+        worker_ok=True,
+    )
+
+
 def _entrees_celcat(state) -> list:
     """Traduit TOUT le planning courant en entrées Celcat (cf.
     `celcat/mapping.py`). Pure lecture : ne touche ni à Celcat, ni au
@@ -2441,6 +2502,7 @@ def _entrees_celcat(state) -> list:
     entrees = []
     for p in state.timetable:
         session = state.sessions_by_id.get(p.session_id)
+        semestre = getattr(session, "semestre", "") or ""
         entrees.append(entree_pour_placement(
             cfg,
             session_id=p.session_id,
@@ -2451,6 +2513,11 @@ def _entrees_celcat(state) -> list:
             teacher_codes=list(p.teacher_codes or []),
             room_id=getattr(p, "room_id", None),
             groupe=", ".join(libelle_groupe.get(g, g) for g in (p.group_ids or [])),
+            semestre=semestre,
+            # Le LUNDI civil, pas l'index solveur : le sélecteur de semaines de
+            # Celcat s'identifie par ses dates. `_date_iso` applique déjà le
+            # décalage de semestre, que `p.week` seul n'intègre pas.
+            lundi=_date_iso(state, semestre, p.week, 0) if semestre else "",
         ))
     return entrees
 
@@ -2468,6 +2535,7 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
     et l'état de la saisie, qui n'ont rien à faire derrière un lien public.
     """
     from cal_iut.celcat.driver import PilotePlaywright
+    from cal_iut.celcat.formulaire import charger_carte
     from cal_iut.celcat.sync import construire_plan
 
     state = get_state()
@@ -2505,7 +2573,10 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
     toutes.sort(key=lambda e: (ordre[action_par_id[e.session_id]], e.semaine, e.jour, e.heure_debut))
 
     pret, message = PilotePlaywright.disponible()
+    carte = charger_carte(state.config_dir)
     return CelcatPlanResponse(
+        formulaire_releve=carte.confirmee,
+        formulaire_manques=carte.manques(),
         semaines=sorted(voulues),
         a_creer=len(plan.a_creer), a_modifier=len(plan.a_modifier),
         a_supprimer=len(plan.a_supprimer), inchangees=len(plan.inchangees),
@@ -2523,6 +2594,242 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
         ],
         pilote_pret=pret, pilote_message=message,
     )
+
+
+@app.post("/celcat/saisie", response_model=CelcatSaisieResponse,
+          dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
+    """Lance la saisie des semaines demandées. SIMULATION par défaut.
+
+    Trois refus AVANT d'ouvrir quoi que ce soit, parce qu'échouer à la
+    trentième séance laisse un Celcat à moitié rempli :
+
+    1. une séance non saisissable dans le lot -> rien ne part ;
+    2. Celcat injoignable (VPN) -> rien ne part ;
+    3. formulaire de création non relevé -> rien ne part, et le message dit
+       lesquels des libellés manquent.
+
+    Le journal de synchronisation n'est alimenté qu'en saisie RÉELLE : une
+    répétition qui marquerait les séances « déjà saisies » les ferait
+    disparaître du prochain plan sans qu'elles existent dans Celcat.
+    """
+    import os
+
+    from cal_iut.celcat.etat import charger as charger_celcat
+
+    if not charger_celcat().get("saisie_active"):
+        raise HTTPException(409, "Saisie Celcat désactivée")
+
+    from cal_iut.celcat import navigateur as nav
+    from cal_iut.celcat import reseau, sync
+    from cal_iut.celcat.driver import PiloteSimule, PilotePlaywright, Rythme, SaisieCelcat
+    from cal_iut.celcat.formulaire import charger_carte
+
+    state = get_state()
+    try:
+        voulues = {int(x) for x in body.semaines.split(",") if x.strip()}
+    except ValueError:
+        raise HTTPException(400, "Paramètre `semaines` invalide : indices séparés par des virgules.") from None
+    if not voulues:
+        raise HTTPException(400, "Aucune semaine demandée.")
+
+    plan = sync.construire_plan(_entrees_celcat(state), voulues)
+    if plan.bloquees and not body.ignorer_bloquees:
+        raise HTTPException(409, plan.resume())
+    if plan.total_actions == 0:
+        return CelcatSaisieResponse(simulee=body.simuler, resume="Rien à saisir : tout est à jour.")
+
+    rythme = Rythme()
+    if body.simuler:
+        pilote = PiloteSimule()
+        base = "(simulation)"
+        journaliser = None
+    else:
+        pret, message = PilotePlaywright.disponible()
+        if not pret:
+            raise HTTPException(503, message)
+        carte = charger_carte(state.config_dir)
+        if not carte.confirmee:
+            raise HTTPException(
+                409,
+                "Le formulaire de création Celcat n'a pas été relevé ("
+                + ", ".join(carte.manques())
+                + "). Voir data/config/celcat_formulaire.yaml. Rien n'a été envoyé.",
+            )
+        identifiant = os.environ.get("CELCAT_UTILISATEUR", "")
+        motdepasse = os.environ.get("CELCAT_MOT_DE_PASSE", "")
+        if not identifiant or not motdepasse:
+            raise HTTPException(
+                503, "CELCAT_UTILISATEUR / CELCAT_MOT_DE_PASSE absents de l'environnement (.env)."
+            )
+        try:
+            reseau.exiger_acces(PilotePlaywright.URL_CONNEXION, monter_le_vpn=body.monter_le_vpn)
+        except reseau.AccesIndisponible as exc:
+            raise HTTPException(503, str(exc)) from None
+        base = nav.BASE_PRODUCTION if body.production else nav.BASE_ENTRAINEMENT
+        pilote = PilotePlaywright(rythme, base=base, carte=carte, config_dir=state.config_dir)
+        journaliser = sync.marquer_saisi
+
+    saisie = SaisieCelcat(
+        pilote, rythme, journaliser=journaliser,
+        verifier_acces=None if body.simuler else (
+            lambda: bool(reseau.verifier(PilotePlaywright.URL_CONNEXION))
+        ),
+    )
+    identifiants = ("(simulation)", "") if body.simuler else (identifiant, motdepasse)
+    resultat = saisie.executer(
+        plan, *identifiants, ignorer_bloquees=body.ignorer_bloquees,
+    )
+
+    return CelcatSaisieResponse(
+        simulee=body.simuler, base=base,
+        creees=resultat.creees, modifiees=resultat.modifiees, supprimees=resultat.supprimees,
+        echecs=resultat.echecs, interrompu=resultat.interrompu,
+        acces_perdu=resultat.acces_perdu, resume=resultat.resume(),
+        actions=list(getattr(pilote, "actions", [])),
+    )
+
+
+@app.get("/celcat/etat", response_model=CelcatEtatResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_etat() -> CelcatEtatResponse:
+    return _celcat_etat_public()
+
+
+@app.patch("/celcat/saisie", response_model=CelcatEtatResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_saisie_active(body: CelcatSaisieActiveRequest) -> CelcatEtatResponse:
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    doc["saisie_active"] = body.active
+    sauver(doc)
+    if not body.active:
+        from cal_iut.celcat.file_attente import vider
+
+        vider()
+    return _celcat_etat_public()
+
+
+@app.post("/celcat/valider", response_model=CelcatEtatResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_valider(body: CelcatValiderRequest) -> CelcatEtatResponse:
+    from datetime import datetime, timezone
+
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    doc["semaines_validees"] = [int(s) for s in body.semaines]
+    doc["valide_le"] = datetime.now(timezone.utc).isoformat()
+    sauver(doc)
+    return _celcat_etat_public()
+
+
+@app.get("/celcat/logs", dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_logs(limit: int = 50, cursor: str | None = None) -> dict[str, object]:
+    from cal_iut.celcat.logs import paginer
+
+    items, suivant = paginer(limit, cursor)
+    return {"items": items, "cursor": suivant}
+
+
+@app.get("/celcat/extras", dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_extras(statut: str | None = None) -> dict[str, object]:
+    from cal_iut.celcat.extras import lister
+
+    return {"extras": lister(statut)}
+
+
+@app.post("/celcat/extras/{extra_id}/ignorer", dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_extra_ignorer(extra_id: str) -> dict[str, str]:
+    from cal_iut.celcat.etat import charger, sauver
+    from cal_iut.celcat.extras import enregistrer, trouver
+
+    extra = trouver(extra_id)
+    if extra is None:
+        extra = {"id": extra_id}
+    extra["statut"] = "ignore"
+    enregistrer(extra)
+    doc = charger()
+    ignores = dict(doc.get("ignores") or {})
+    ignores[extra_id] = True
+    if extra.get("event_id") is not None:
+        ignores[str(extra["event_id"])] = True
+    doc["ignores"] = ignores
+    sauver(doc)
+    return {"statut": "ignore"}
+
+
+@app.post(
+    "/celcat/extras/{extra_id}/ajouter",
+    response_model=CelcatExtraActionResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_extra_ajouter(extra_id: str) -> CelcatExtraActionResponse:
+    from cal_iut.celcat.extras import enregistrer, trouver
+    from cal_iut.celcat.mapping import SLOT_TIMES, load_celcat_config
+
+    extra = trouver(extra_id)
+    if extra is None:
+        raise HTTPException(404, f"Extra {extra_id} introuvable")
+
+    state = get_state()
+    code = str(extra.get("course_code") or "").strip()
+    cfg = load_celcat_config(state.config_dir)
+    if not cfg.modules.get(code.upper()):
+        raise HTTPException(409, f"{code} sans code Celcat")
+
+    manques: list[str] = []
+    jour_brut = extra.get("jour")
+    try:
+        jour = int(jour_brut) if jour_brut is not None else None
+    except (TypeError, ValueError):
+        jour = None
+    if jour is None:
+        manques.append("jour")
+    heure = str(extra.get("heure_debut") or "").strip()
+    if not heure:
+        manques.append("heure_debut")
+    try:
+        week = int(extra["semaine"]) if extra.get("semaine") is not None else None
+    except (TypeError, ValueError):
+        week = None
+    if week is None:
+        manques.append("semaine")
+    group_ids = extra.get("group_ids")
+    if not isinstance(group_ids, list) or not group_ids:
+        manques.append("group_ids")
+    teacher_codes = extra.get("teacher_codes")
+    if not isinstance(teacher_codes, list) or not teacher_codes:
+        manques.append("teacher_codes")
+    if manques:
+        raise HTTPException(
+            409,
+            f"Extra {extra_id} incomplet ({', '.join(manques)}) — rien n'a été inventé.",
+        )
+
+    day = jour - 1 if jour >= 1 else 0
+    day = max(0, min(4, day))
+    slot = 0
+    for i, (debut, _fin) in enumerate(SLOT_TIMES):
+        if debut == heure:
+            slot = i
+            break
+    session_type = str(extra.get("session_type") or "TD")
+
+    placement = creer_seance_personnalisee(
+        CreerSeanceRequest(
+            course_code=code,
+            session_type=session_type,
+            group_ids=[str(g) for g in group_ids],
+            teacher_codes=[str(t) for t in teacher_codes],
+            week=week,
+            day=day,
+            slot=slot,
+            force=False,
+        )
+    )
+    extra["statut"] = "ajoute"
+    extra["session_id"] = placement.session_id
+    enregistrer(extra)
+    return CelcatExtraActionResponse(statut="ajoute", session_id=placement.session_id)
 
 
 @app.get("/corrections")
@@ -2959,7 +3266,9 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
             })
 
     _notifier("placement", f"{place.course_code} posée {_ou(place)}")
-    return _to_placement(place, state.sessions_by_id)
+    resultat = _to_placement(place, state.sessions_by_id)
+    _apres_ecriture_planning(session_id, "create")
+    return resultat
 
 
 def _reference_cours(state: object, course_code: str, group_ids: list[str]) -> object:
@@ -3128,12 +3437,18 @@ def supprimer_seance_personnalisee(session_id: str) -> dict[str, bool]:
             "par ce système peuvent être supprimées ici.",
         )
 
+    actuel = next((p for p in state.timetable if p.session_id == session_id), None)
+    if actuel is not None:
+        from cal_iut.celcat.ops import noter_placement_retire
+
+        noter_placement_retire(actuel)
     state.timetable = [p for p in state.timetable if p.session_id != session_id]
     state.sessions = [s for s in state.sessions if s.id != session_id]
     del state.sessions_by_id[session_id]
     if state.current_run_id:
         get_repo().remove_current_placement(session_id)
     custom_sessions.remove_custom_session(session_id)
+    _apres_ecriture_planning(session_id, "delete")
     return {"supprimee": True}
 
 

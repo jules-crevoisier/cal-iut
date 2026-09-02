@@ -125,3 +125,23 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
         mcp_journal = None
     if mcp_journal is not None:
         monkeypatch.setattr(mcp_journal, "_path", lambda: tmp_path / "mcp_journal.json")
+    # Journal / réglages Celcat — même fichier que le sync historique.
+    try:
+        from cal_iut.celcat import sync as celcat_sync
+    except ImportError:
+        celcat_sync = None
+    if celcat_sync is not None and hasattr(celcat_sync, "_path"):
+        monkeypatch.setattr(celcat_sync, "_path", lambda: tmp_path / "celcat_sync.json")
+    for nom_mod, fichier in (
+        ("etat", "celcat_sync.json"),
+        ("file_attente", "celcat_file_attente.json"),
+        ("logs", "celcat_logs.json"),
+        ("extras", "celcat_extras.json"),
+        ("nuit", "celcat_sync.json"),
+    ):
+        try:
+            module = __import__(f"cal_iut.celcat.{nom_mod}", fromlist=["*"])
+        except ImportError:
+            continue
+        if hasattr(module, "_path"):
+            monkeypatch.setattr(module, "_path", lambda f=fichier: tmp_path / f)

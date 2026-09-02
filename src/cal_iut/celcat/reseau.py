@@ -33,8 +33,11 @@ Aucun identifiant n'est écrit ici : ils viennent de l'environnement
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
+import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -262,20 +265,39 @@ def _connecter_openconnect(
     ]
     if groupe:
         commande.insert(-1, f"--authgroup={groupe}")
+
+    # Les sorties vont dans un FICHIER, jamais dans des tubes. Avec
+    # `--background`, openconnect monte le tunnel puis rend la main en
+    # laissant un fils détaché derrière lui ; ce fils hérite des descripteurs
+    # de sortie. Branchés sur des tubes (`capture_output=True`), ceux-ci
+    # restent ouverts tant que le tunnel vit, et `subprocess.run` attend donc
+    # la fin du TUNNEL au lieu de la fin du MONTAGE : blocage jusqu'au délai.
+    # Constaté le 01/09/2026 — 180 s d'attente pour un VPN monté en 8 s.
+    journal = Path(tempfile.mkstemp(prefix="openconnect-", suffix=".log")[1])
     try:
-        acheve = subprocess.run(
-            commande, input=f"{mot_de_passe}\n", capture_output=True, text=True, timeout=delai
-        )
+        with journal.open("w+", encoding="utf-8", errors="replace") as sortie:
+            acheve = subprocess.run(
+                commande,
+                input=f"{mot_de_passe}\n",
+                stdout=sortie,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=delai,
+                check=False,
+            )
+        trace = journal.read_text(encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         return Diagnostic(False, f"OpenConnect abandonné après {delai:.0f} s.")
     except OSError as exc:
         return Diagnostic(False, f"Lancement d'openconnect impossible : {exc}")
+    finally:
+        journal.unlink(missing_ok=True)
     if acheve.returncode == 0:
         return Diagnostic(True, f"VPN monté sur {passerelle} (openconnect).", vpn_monte=True)
     return Diagnostic(
         False,
         "OpenConnect a échoué. "
-        + _sans_secret(acheve.stderr or acheve.stdout, mot_de_passe)
+        + _sans_secret(trace, mot_de_passe)
         + " — vérifiez /dev/net/tun et la capacité NET_ADMIN du conteneur.",
     )
 
@@ -301,6 +323,25 @@ def _sans_secret(texte: str, *secrets: str) -> str:
     return " ".join(texte.split())[-400:]
 
 
+def attendre_acces(url: str, *, delai: float = 30.0, pas: float = 1.5) -> Diagnostic:
+    """Réessaie jusqu'à ce que Celcat réponde, ou rend le dernier diagnostic.
+
+    Monter le tunnel et pouvoir s'en servir ne sont pas simultanés :
+    openconnect rend la main dès le tunnel établi, mais c'est `vpnc-script`
+    qui réécrit ENSUITE `/etc/resolv.conf` et pose les routes. Vérifier dans
+    la foulée voit donc encore l'ancien état et conclut à tort que le VPN
+    n'est pas monté — c'est ce qui a fait échouer le relevé du 01/09/2026
+    sur un tunnel pourtant parfaitement établi (`tun0` monté, Celcat en 200
+    huit secondes plus tard).
+    """
+    diagnostic = verifier(url)
+    fin = time.monotonic() + delai
+    while not diagnostic and time.monotonic() < fin:
+        time.sleep(pas)
+        diagnostic = verifier(url)
+    return diagnostic
+
+
 def exiger_acces(url: str, *, monter_le_vpn: bool = False) -> Diagnostic:
     """Garantit l'accès, ou lève. C'est le point d'entrée de la saisie.
 
@@ -318,7 +359,7 @@ def exiger_acces(url: str, *, monter_le_vpn: bool = False) -> Diagnostic:
         montage = connecter()
         if not montage:
             raise AccesIndisponible(f"{diagnostic.detail} {montage.detail}")
-        diagnostic = verifier(url)
+        diagnostic = attendre_acces(url)
         if diagnostic:
             return diagnostic
     raise AccesIndisponible(diagnostic.detail)

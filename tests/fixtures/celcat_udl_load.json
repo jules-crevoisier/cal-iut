@@ -1,0 +1,63 @@
+[
+  {
+    "event_id": 1665591,
+    "day_of_week": 6,
+    "start_time": null,
+    "end_time": null,
+    "evCatName": "Jour férié",
+    "event_cat_id": 451,
+    "rooms": [],
+    "modules": [],
+    "staff": [],
+    "groups": [],
+    "weeks": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+    "protected": "Y",
+    "global_event": "Y",
+    "suspended": "N",
+    "event_name": null
+  },
+    {
+    "event_id": 1931666,
+    "day_of_week": 0,
+    "start_time": "08:00",
+    "end_time": "09:30",
+    "evCatName": "[CM]",
+    "rooms": [{"id": 104105, "name": "H.105"}],
+    "modules": [
+      {
+        "id": 601106,
+        "name": "WR106 Expression Comm.",
+        "unique_name": "TSBZ2106"
+      }
+    ],
+    "staff": [{"name": "RIGUET Marine", "unique_name": "RIGUET"}],
+    "groups": [
+      {
+        "id": 1661972,
+        "name": "BUT MMI S1 TD AB - 2024",
+        "unique_name": "6TSBZ1TD_1"
+      }
+    ],
+    "weeks": "NNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+    "protected": "N",
+    "global_event": "N",
+    "suspended": "N"
+  },
+  {
+    "event_id": 1929034,
+    "day_of_week": 1,
+    "start_time": null,
+    "end_time": null,
+    "evCatName": null,
+    "rooms": [],
+    "modules": [],
+    "staff": [],
+    "groups": [],
+    "weeks": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+    "protected": "N",
+    "global_event": "N",
+    "suspended": "N",
+    "date_change": "2026-09-01T00:50:53",
+    "userName": "bres0026"
+  }
+]

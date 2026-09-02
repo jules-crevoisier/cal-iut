@@ -22,7 +22,7 @@ RUN apt-get update \
 WORKDIR /travail
 # Les navigateurs sont deja dans /ms-playwright : seul le paquet Python
 # manque, et sa version doit correspondre a celle de l'image.
-RUN pip install --no-cache-dir playwright==1.55.0 python-dotenv httpx
+RUN pip install --no-cache-dir playwright==1.55.0 python-dotenv httpx pyyaml
 
 # Le code est monté au lancement plutôt que copié : cette image sert à
 # EXPLORER Celcat, et on ne veut pas la reconstruire à chaque essai.

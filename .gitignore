@@ -7,7 +7,10 @@ dist/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
-.claude/
+# Config locale Claude Code (mcp.json, settings) — le skill projet est versionné.
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 node_modules/
 frontend/dist/
 data/exports/*.json
@@ -29,6 +32,7 @@ data/state/custom_sessions.json
 data/state/session_overrides.json
 data/state/mcp_journal.json
 data/state/celcat_sync.json
+data/releves/celcat-rpc-en-tetes.json
 # Destinataires des notifications : donnee personnelle, et propre a
 # chaque deploiement (cf. api/notifications.py).
 data/state/notifications.json

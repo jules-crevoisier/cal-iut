@@ -1,9 +1,9 @@
 # Celcat : ce qu'on sait, et ce qu'il reste à faire
 
-Relevé le 31 août 2026, en explorant le vrai Celcat de l'URCA depuis un
-conteneur, en **lecture seule** (rôle `985_consultation`). Tout ce qui suit
-a été constaté, pas supposé — ce qui n'a pas pu être vérifié est signalé
-comme tel.
+Relevé les 31 août et 1er septembre 2026, en explorant le vrai Celcat de
+l'URCA depuis un conteneur, en **lecture seule** (rôle `985_consultation`).
+Tout ce qui suit a été constaté, pas supposé — ce qui n'a pas pu être
+vérifié est signalé comme tel.
 
 ## L'essentiel en dix lignes
 
@@ -150,6 +150,9 @@ l'**inspecteur d'événement**, avec cinq onglets :
 | Critères requis | contraintes de salle |
 | Historique | qui a modifié quoi |
 
+**C'est le même formulaire que celui de la création** — voir « Le formulaire,
+enfin ouvert » plus bas. C'est ce qui a permis de le relever sans rien créer.
+
 La création passe par le bouton **+** en haut à droite du panneau — repéré
 le 01/09/2026, voir la section suivante.
 
@@ -169,14 +172,26 @@ Réponses de Kyllian Bresson à la première exploration :
   paire).
 - Champ Groupe : taper **« BUT MMI »** suffit à retrouver un groupe.
 
-### Le bouton + (création), enfin repéré
+### Les boutons créer et supprimer, enfin repérés
 
-Ce n'est PAS un vrai `+` glyphe mais une icône `new.png`, dans la barre du
-panneau « Emploi du temps » du groupe (à droite du titre `Enregistrement`) :
-5 icônes, dans l'ordre — `new` (créer), `delete` (supprimer), `refresh`,
-`save`, `cancel`. Repérées par leur image de fond (`background-image`), pas
-par texte : qooxdoo ne leur donne aucun libellé accessible. Un survol
-affiche l'infobulle **« Créer un nouvel événement »** sur l'icône `new`.
+Ce ne sont PAS des glyphes `+` / `−` mais les icônes `new.png` et
+`delete.png`, dans la barre du panneau « Emploi du temps » du groupe (à
+droite du titre `Enregistrement`) : 5 icônes, dans l'ordre — `new` (créer),
+`delete` (supprimer), `refresh`, `save`, `cancel`. Repérées par leur image
+de fond (`background-image`), pas par texte : qooxdoo ne leur donne aucun
+libellé accessible. Un survol affiche l'infobulle **« Créer un nouvel
+événement »** sur l'icône `new`.
+
+> **`new.png` apparaît DEUX fois à l'écran**, et c'est un piège coûteux : la
+> barre du panneau de gauche (liste de ressources) porte la même image. Le
+> relevé du 01/09 en a compté deux, à 460 px d'écart horizontal. Cliquer la
+> mauvaise, c'est créer un objet dans la mauvaise fenêtre.
+>
+> `navigateur.cliquer_icone_barre` exige donc un **repère** : on lui nomme
+> une icône présente une seule fois dans la barre visée (`refresh`, `save`),
+> il en déduit la barre, et ne retient que les icônes qui s'y trouvent. Sans
+> repère, une icône ambiguë fait **lever** plutôt que choisir au hasard.
+> Verrouillé par deux tests.
 
 ### Le sélecteur de semaines : l'infobulle au survol donne la vraie date
 
@@ -186,11 +201,22 @@ infobulles n'existent que le temps d'un survol réel (`mouse.move` + pause),
 pas comme un attribut statique. Cliquer une cellule au hasard ne suffit
 donc pas à savoir quelle semaine on vient de sélectionner. Capture
 utilisateur du 01/09/2026 : survoler une cellule affiche bien
-**« 1 (04/01/27–10/01/27) »** — semaine + plage de dates américaine, exact
-format attendu. **À faire ensuite** : piloter par `mouse.move` (pas
-`mouse.click` seul) sur la cellule visée, lire cette infobulle pour
-confirmer la semaine AVANT de cliquer, plutôt que deviner des coordonnées
-par tâtonnement (ce qui a été tenté cette nuit, sans succès fiable).
+**« 1 (04/01/27–10/01/27) »** — semaine + plage de dates, exact format
+attendu.
+
+**Fait** (`navigateur.choisir_semaine`) : le pilote survole chaque cellule,
+lit l'infobulle, et ne clique que celle qui désigne la semaine visée —
+sinon il lève. Plus aucune coordonnée devinée.
+
+Une subtilité qui a demandé une décision. Les deux relevés se
+**contredisent** sur le format de date : « 4 (1/25/27-1/31/27) » ne se lit
+qu'en mois/jour, « 1 (04/01/27–10/01/27) » ne se lit qu'en jour/mois (avril
+→ octobre ne serait pas une semaine). Plutôt que de trancher au hasard, les
+deux lectures sont essayées, et c'est la **cohérence de l'intervalle** qui
+départage : il faut une lecture donnant six jours pleins commençant au lundi
+visé. Cela suffit à écarter le seul cas dangereux — prendre la semaine du
+1er avril (`01/04/27–07/04/27`) pour celle du 4 janvier, les mêmes chiffres
+inversés. Verrouillé par `tests/test_celcat_pilote_2026_09_01.py`.
 
 ### Incident : un événement vide créé par erreur
 
@@ -244,6 +270,118 @@ chevron, vérifier qu'il s'agit bien de l'événement sans catégorie/horaire
 (`event_id` 1929034 si l'identifiant est visible quelque part dans
 l'inspecteur), puis le supprimer. Le total du groupe doit revenir à 208h18.
 
+## Le formulaire, enfin ouvert — sans rien créer
+
+Le point de blocage était circulaire : pour connaître les libellés du
+formulaire il fallait l'ouvrir, et l'ouvrir par `new` créait un événement.
+
+**La sortie tenait en une phrase du relevé précédent** : « un double-clic sur
+une case vide ouvre l'inspecteur d'événement ». Cet inspecteur *est* le
+formulaire de création — mêmes onglets, mêmes champs, en lecture. On le lit
+donc sur un événement **existant**, sans jamais toucher `new`. Le script
+`scripts/relever_formulaire_celcat.py` ne clique cette icône à aucun moment.
+
+```powershell
+docker build -t cal-iut-celcat deploy/celcat-sidecar
+docker run --rm --cap-add NET_ADMIN --device /dev/net/tun `
+  --env-file .env -v "${PWD}:/travail" -w /travail cal-iut-celcat `
+  python scripts/relever_formulaire_celcat.py --vpn `
+    --base URCA_2026 --role 985_consultation `
+    --semaines 2026-09-14,2027-03-29
+.venv\Scripts\python.exe scripts/lire_releve_celcat.py data/releves/celcat-formulaire-<…>
+```
+
+Options utiles : `--lister-groupes MMI` (les libellés exacts, plutôt que les
+deviner), `--calendrier` (la géométrie du sélecteur de semaines et ses
+infobulles), `--semaines` (plusieurs lundis essayés jusqu'à en trouver un qui
+porte des séances).
+
+### Ce que ça a donné
+
+| repère | valeur relevée |
+|---|---|
+| Onglets | `Détails`, `Ressources`, `Remarques et personnaliser`, `Critères requis`, `Historique` |
+| Jour | libellé `Jour:` — les deux points font partie du texte |
+| Heure | libellé `Heure:` |
+| Catégorie | `Catégorie d'événement:` (onglet Détails) |
+| Département | `Département:` (onglet Détails) |
+
+Trois corrections que le relevé impose, et qu'aucun raisonnement n'aurait
+données :
+
+**1. Le champ est SOUS son libellé, pas à sa droite.** « Jour: » en
+(952, 737), sa valeur « Mon » en (956, 770). Même écart pour « Heure: » et
+« Temps de pause: » : **+32 px vers le bas, à x quasi constant**. On avait
+supposé 120 px vers la droite, d'après les coordonnées de l'ancien
+autoclicker. Cette supposition visait (1072, 737) — soit le libellé
+« Heure: » à 18 px près : on aurait saisi l'heure dans le champ du jour, et
+le formulaire aurait accepté.
+
+**2. Il n'y a qu'UN champ d'horaire, en 12 heures.** L'écran affiche
+« 7:00 AM-11:59 PM » : un intervalle entier dans un seul champ, pas un début
+et une fin. `heure_debut` / `heure_fin` ont disparu de la carte, et
+`navigateur.intervalle_12h` convertit nos `08:00`/`09:30` en
+`8:00 AM-9:30 AM`.
+
+**3. Il n'y a pas de bouton texte pour valider l'horaire.** Aucun « OK »
+n'existe à l'écran ; c'est l'icône `save` de la barre qui commet.
+`validation_horaire` reste vide, volontairement.
+
+### Le sélecteur de semaines : deuxième correction
+
+La méthode « survoler chaque cellule et lire son infobulle » supposait des
+cellules identifiables. En vrai, **seule la semaine sélectionnée porte du
+texte** ; les autres sont des `<div>` vides. Et le format réel de l'infobulle
+n'est ni l'un ni l'autre des deux relevés précédents : c'est
+**`Week: 37 (9/7/26-9/13/26)`**, en anglais, mois/jour.
+
+`choisir_semaine` procède donc géométriquement : il énumère les cellules par
+position, **fusionne celles qui se superposent** (qooxdoo empile plusieurs
+`<div>` par case — sans cette fusion on comptait 3 fois trop de cellules),
+calcule où devrait tomber la semaine visée, y saute directement, et corrige
+au survol suivant. Il ne clique que sur une cellule dont l'infobulle confirme
+le lundi attendu ; sinon il lève.
+
+### Détecter les séances : ni par le texte, ni par l'Échap
+
+Deux impasses, notées pour ne pas y retomber :
+
+- Chercher les séances par leur **texte** remonte aussi les en-têtes de
+  colonnes et, pire, les **bulles de survol** — qui contiennent les mêmes
+  mots. Les blocs sont donc détectés **géométriquement**, par leur couleur de
+  fond et leur taille.
+- Fermer une bulle de survol par `Échap` ferme **tout le panneau** emploi du
+  temps. On éloigne le pointeur (`mouse.move` vers la liste) et la bulle
+  s'efface d'elle-même.
+
+### Onglet Ressources — relevé le 01/09/2026 sur URCA_2025
+
+`URCA_2026` n'avait que des jours fériés : pas d'onglet Ressources à lire.
+Sur `URCA_2025`, groupe `BUT MMI S1 CM - 2024` (78 événements, 67 avec
+ressources), l'onglet affiche des **sections** :
+
+| à l'écran | champ chez nous |
+|---|---|
+| `Matières [0]` | `champs.matiere` = `Matières` |
+| `Salles [1]` | `champs.salle` = `Salles` |
+| `Personnel [1]` | `champs.enseignant` = `Personnel` |
+| `Groupes [1]` | (le groupe est déjà celui de l'emploi du temps) |
+
+Le chiffre entre crochets est un compte, il change. On dépose sur le nom.
+
+Catégories lues dans `udlTimetables.load` des groupes CM / TD / TP :
+
+- CM → `[CM]`
+- TD → `[TD]` (distinct de `TD0`)
+- TP → `[TP]`
+
+Piège en chemin : cliquer l'icône « Groupes » aux Y de 2026 ouvrait
+**Départements** (type 610). `ouvrir_ressource` vérifie maintenant le titre
+du panneau et balaie la colonne si ce n'est pas le bon.
+
+`carte.manques()` est vide. `POST /celcat/saisie` n'est plus bloqué par le
+formulaire.
+
 ### Catégories d'événement — la liste complète
 
 Relevée en entier cette nuit (38 catégories, `TYPE_CATEGORIES_EVENEMENT`
@@ -256,6 +394,25 @@ formulaire de création n'ayant pas pu être rempli pour de vrai cette nuit
 (incident ci-dessus), on ne sait toujours pas laquelle des deux formes
 (position ou id) il attend pour la catégorie.
 
+## Ce que l'ancien autoclicker a appris
+
+`~/Desktop/clickclick/` est l'autoclicker nut-js qui précédait cet outil :
+23 étapes en coordonnées absolues, calibrées pour un écran 2560×1440 à 75 %
+de zoom sous macOS. Inutilisable tel quel — c'est justement ce que le
+pilotage par TEXTE remplace. Mais il consignait une chose qu'aucune autre
+trace ne documentait, et qui manquait pour finir le travail :
+
+**Les champs du formulaire se remplissent par GLISSER-DÉPOSER** depuis la
+liste de ressources de gauche. On ne tape pas dedans : on y dépose une
+ligne. Il procède ainsi pour les cinq champs — catégorie, département,
+enseignant, salle, matière. Les pauses comptent : qooxdoo implémente son
+propre glisser-déposer sur les événements souris, et sans temps d'arrêt
+après l'appui puis positions intermédiaires, aucun glissement ne démarre
+(`navigateur.glisser_deposer`).
+
+Accessoirement, l'ordre de ses icônes de barre latérale correspond
+exactement à `navigateur.ICONES`, ce qui confirme cette table de position.
+
 ## Où en est l'outil
 
 Acquis :
@@ -266,25 +423,78 @@ Acquis :
 - correspondance des salles vérifiée (y compris l'amphi et les salles
   combinées), convention des groupes établie ;
 - l'icône de création (`new`) repérée, ainsi que celles de suppression
-  (`delete`), sauvegarde et annulation ;
+  (`delete`), sauvegarde et annulation — et la levée d'ambiguïté quand la
+  même image apparaît dans deux barres ;
+- **le formulaire ouvert et relevé sans rien créer** (double-clic sur un
+  événement existant) : onglets, libellés du jour, de l'heure, de la
+  catégorie et du département, écart libellé→champ, format d'horaire ;
 - lecture fiable des événements d'un groupe (`udlTimetables.load`) ;
-- liste complète des 38 catégories d'événement, dont `[CM]` confirmé.
+- liste complète des 38 catégories d'événement, dont `[CM]` confirmé ;
+- **le pilote lui-même** (`driver.PilotePlaywright`) : connexion, ouverture
+  d'un groupe par son nom Celcat, choix de la semaine confirmé par
+  infobulle, glisser-déposer, onglets, icônes de barre — vérifié hors ligne
+  contre une fausse page qui enregistre la séquence ;
+- **le lancement** : `POST /celcat/saisie`, simulation par défaut, base
+  d'entraînement par défaut, refus avant tout clic si une séance est bloquée,
+  si Celcat est injoignable, ou si le formulaire n'est pas relevé.
+
+## Voie durable : JSON-RPC dans la page (pas le clicker)
+
+Le `new` / glisser-déposer n'est **pas** le chemin d'écriture. Après `new`,
+Conflits s'ouvre, Détails n'apparaît souvent pas, et l'événement naît sur
+**54 semaines**. Un `fetch` Python à part reçoit `ESessionTimeout` : la
+session est la connexion du navigateur.
+
+La suite : Playwright ne fait que le login ; les appels passent par le
+client qooxdoo `ctweb.io.Rpc.invoke` (événement `result`) — un `fetch` /
+XHR neuf reçoit `ESessionTimeout` sur `udlTimetables.load`. Méthode
+d'écriture relevée dans les scripts : **`udlTimetables.save`**. Premier
+write : `URCA_FORMATION`. Production seulement après un canari 1 semaine
+là-bas.
+
+Preuve du 01/09/2026 (FORMATION, `985_T_MMI`) :
+
+- `udlTimetables.load` `{GroupIDs:[47925]}` → **266 événements**.
+- `udlTimetables.save` **create** (sans `event_id`) a créé l'événement
+  **1523405**, 1 semaine, notes `cal-iut-create` (clone WR113).
+  `event_id: 0` est refusé (« l'enregistrement n'existe pas »).
+- Un `fetch`/`XHR` séparé sur la même page timeoute.
+
+```powershell
+python scripts/sonder_rpc_celcat.py --vpn --base URCA_FORMATION
+python scripts/pousser_manquants_celcat.py --lundi 2026-09-07 --vpn --base URCA_2026
+```
+
+Le second, sans `--ecrire`, liste ce qui manque (WR107 AB, etc.) en lisant
+Live. `--ecrire` est refusé tant que `methode_ecriture` est vide.
 
 Manquant :
 
 1. **Nettoyer l'événement vide créé par erreur** (`event_id` 1929034, groupe
-   `BUT MMI S1 TD AB`) — voir incident ci-dessus, en priorité.
-2. **Le formulaire de création rempli pour de vrai** — un clic sur `new`
-   crée déjà un événement par défaut (récurrent sur l'année) ; il reste à
-   voir le formulaire de saisie (catégorie, horaire, salle, groupe,
-   enseignant) qui doit suivre ce clic, jamais atteint cette nuit.
-3. **Navigation fiable vers une semaine précise** — l'infobulle au survol
-   fonctionne, mais n'a pas encore été pilotée par script (voir section
-   dédiée ci-dessus).
-4. Le code Celcat exact des CM (position ou `event_cat_id`, à trancher une
-   fois le formulaire vu).
-5. Les codes Celcat de 3 enseignants (`0` dans `celcat.yaml`) et de
+   `BUT MMI S1 TD AB`) — voir incident ci-dessus, en priorité. À la main.
+2. **Pousser les manquants** en production (`--limite 1 --production --ecrire`
+   d'abord, WR107 AB mercredi). Create RPC prouvé sur FORMATION (1523405).
+3. Les codes Celcat de 3 enseignants (`0` dans `celcat.yaml`) et de
    WSA501D.
+
+## Relire le formulaire (si Celcat change)
+
+Le relevé du 01/09/2026 a rempli `celcat_formulaire.yaml`. Pour le
+recommencer sans rien créer (jamais l'icône `new`) :
+
+```powershell
+docker run --rm --cap-add NET_ADMIN --device /dev/net/tun `
+  --env-file .env -v "${PWD}:/travail" -w /travail cal-iut-celcat `
+  python scripts/relever_formulaire_celcat.py --vpn `
+    --base URCA_2025 --role 985_consultation --lister-groupes "BUT MMI"
+.venv\Scripts\python.exe scripts/lire_releve_celcat.py data/releves/celcat-formulaire-<…>
+.venv\Scripts\python.exe -c "from cal_iut.celcat.formulaire import charger_carte; print(charger_carte('data/config').manques())"
+```
+
+`--lister-groupes "MMI"` seul ne marche pas (`ETooManyRecords`). « BUT MMI »
+si. Le script enchaîne sur le premier groupe TD trouvé.
+
+Liste vide → la carte est complète. Fermer l'inspecteur par **Annuler**.
 
 ## L'architecture qui va avec
 

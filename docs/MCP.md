@@ -87,6 +87,11 @@ claude mcp add-json cal-iut '{"type":"http","url":"https://cal-iut-mmi.srko.fr/m
 
 Puis ouvre le fichier et remplace le placeholder.
 
+Le skill projet Claude Code (inspect → plan → apply, mapping des semaines)
+est dans `.claude/skills/cal-iut-edt/`. Claude Code le charge tout seul
+quand on parle d’emploi du temps. Cursor a l’équivalent dans
+`.cursor/skills/cal-iut-edt/` (fichiers distincts).
+
 ---
 
 ## Prompt à coller dans Cursor / Claude Code

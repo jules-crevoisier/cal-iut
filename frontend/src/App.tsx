@@ -33,6 +33,7 @@ import { SignupPage } from "./components/SignupPage";
 import { TdWeekGrid } from "./components/TdWeekGrid";
 import { TimetableCalendar } from "./components/TimetableCalendar";
 import { Toolbar } from "./components/Toolbar";
+import { AdminCelcatView } from "./views/AdminCelcatView";
 import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
 import { buildTodoList } from "./utils/todo";
@@ -617,7 +618,7 @@ export function App() {
           </>
         )}
 
-        {activeTab !== "semaine" && activeTab !== "promo" && activeTab !== "comptes" && activeTab !== "mcp" && !appPayload && (
+        {activeTab !== "semaine" && activeTab !== "promo" && activeTab !== "comptes" && activeTab !== "celcat" && activeTab !== "mcp" && !appPayload && (
           <div className="empty-state">
             <p>Aucun planning résolu.</p>
             <p className="muted">Générez un planning depuis la Vue Semaine pour voir cette page.</p>
@@ -698,6 +699,7 @@ export function App() {
         )}
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
+        {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}
           </main>
         </div>

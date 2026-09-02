@@ -1,0 +1,98 @@
+# Repères du formulaire d'événement Celcat.
+#
+# ÉTAT : RELEVÉ (01/09/2026). Onglet Détails lu sur URCA_2026 (inspecteur),
+# onglet Ressources lu sur URCA_2025 (événement réel, rôle 985_consultation,
+# 1920×1080). `carte.manques()` doit être vide.
+#
+# COMMENT CE RELEVÉ A ÉTÉ FAIT, et comment le reprendre :
+#
+#     docker build -t cal-iut-celcat deploy/celcat-sidecar
+#     docker run --rm --cap-add NET_ADMIN --device /dev/net/tun \
+#       --env-file .env -v "$PWD:/travail" -w /travail cal-iut-celcat \
+#       python scripts/relever_formulaire_celcat.py --vpn \
+#         --base URCA_2026 --role 985_consultation \
+#         --semaines 2026-09-14,2027-03-29
+#     python scripts/lire_releve_celcat.py data/releves/celcat-formulaire-<…>
+#
+# Le script n'a JAMAIS cliqué l'icône `new` : elle crée d'emblée un événement
+# récurrent sur les 54 semaines de l'année, même sans rien remplir ni
+# enregistrer (incident du 01/09/2026). Le même formulaire s'ouvre par un
+# simple double-clic sur la grille, sans rien créer. La procédure complète
+# est dans docs/CELCAT.md.
+#
+# NE METTEZ AUCUNE COORDONNÉE ICI, sauf `decalage_champ_y` qui est un écart
+# relatif, pas une position. Les pixels absolus de l'ancien autoclicker ne
+# valaient que pour un écran 2560×1440 à 75 % de zoom sous macOS : c'est
+# exactement ce qui l'a rendu inutilisable dès qu'on a changé de machine.
+
+# --- Onglets de l'inspecteur d'événement ---
+# RELEVÉS, à l'identique. Cinq onglets, dans cet ordre : Détails, Ressources,
+# Remarques et personnaliser, Critères requis, Historique.
+#
+# Les deux derniers n'apparaissent que sur un événement qui PEUT porter des
+# ressources : un jour férié est un « événement global » et n'affiche que
+# Détails, Remarques et Historique. Ne pas s'en étonner au relevé.
+onglet_details: "Détails"
+onglet_ressources: "Ressources"
+
+# --- Onglet Détails : jour et horaire ---
+# RELEVÉS. Le libellé porte les deux points, et le champ est SOUS lui.
+jour: "Jour:"
+# UN SEUL CHAMP, qui porte l'intervalle entier : l'écran affiche
+# « 7:00 AM-11:59 PM ». Il n'y a pas de heure_debut / heure_fin séparés, et
+# les heures sont en 12 heures AM/PM — `navigateur.intervalle_12h` convertit.
+heure: "Heure:"
+# Aucun bouton texte de validation n'a été vu : c'est l'icône `enregistrer`
+# de la barre de l'emploi du temps qui commet, et elle se repère à son image
+# de fond, pas à un libellé. Laisser vide.
+validation_horaire: ""
+
+# --- Champs remplis par GLISSER-DÉPOSER ---
+# Ces champs ne se tapent pas : on y dépose une ligne prise dans la liste de
+# ressources de gauche. C'est l'apport de l'ancien autoclicker
+# (`clickclick/robot01.js`), seul endroit où cette information existait.
+#
+# `categorie` et `departement` sont RELEVÉS (onglet Détails, vus à l'écran).
+#
+# `enseignant`, `salle` et `matiere` : RELEVÉS le 01/09/2026 sur URCA_2025,
+# groupe « BUT MMI S1 CM - 2024 », onglet Ressources d'un événement réel
+# (pas un jour férié). L'écran affiche « Personnel [1] », « Salles [1] »,
+# « Matières [0] » : le nombre entre crochets est un compte, il change.
+# On retient le nom seul — `trouver` accepte un préfixe.
+champs:
+  categorie: "Catégorie d'événement:"   # onglet Détails    — RELEVÉ
+  departement: "Département:"           # onglet Détails    — RELEVÉ
+  enseignant: "Personnel"               # onglet Ressources — RELEVÉ
+  salle: "Salles"                       # onglet Ressources — RELEVÉ
+  matiere: "Matières"                   # onglet Ressources — RELEVÉ
+
+# --- Catégorie d'événement, par type de séance ---
+# Le LIBELLÉ tel qu'il apparaît dans `udlTimetables.load` / la liste de
+# gauche, pas un index de position (TD=4 / TP=6 des `.bat`).
+#
+# Relevé le 01/09/2026 sur URCA_2025 :
+#   CM group « BUT MMI S1 CM - 2024 »  → catégories dont « [CM] »
+#   TD group « BUT MMI S1 TD AB - 2024 » → catégories dont « [TD] »
+#   (il existe aussi « TD0 », distinct — on ne s'en sert pas)
+# « [CM] » n'est PAS « [CM bénévole] » ni « [CM Capacite] ».
+# Dans l'inspecteur le libellé affiché peut porter un pourcentage
+# (« Projet [0%] ») : pour le glisser-déposer, c'est le nom de liste
+# ci-dessous qui compte.
+categories:
+  TD: "[TD]"
+  TP: "[TP]"
+  CM: "[CM]"
+
+# Distance VERTICALE entre un libellé et le champ qu'il désigne : le champ
+# est SOUS son libellé, pas à sa droite.
+#
+# Mesuré à l'écran : « Jour: » en (952, 737) et sa valeur « Mon » en
+# (956, 770) ; « Heure: » en (1090, 737) et sa valeur en (1136, 770) ;
+# « Temps de pause: » en (996, 801) et son champ en (966, 832). Soit +32 px
+# vers le bas, à x quasi constant.
+#
+# On avait d'abord supposé 120 px vers la DROITE, d'après les coordonnées de
+# l'ancien autoclicker. Cette hypothèse visait (1072, 737) pour le jour —
+# soit le libellé « Heure: » à 18 px près : on aurait saisi l'heure dans le
+# champ du jour.
+decalage_champ_y: 32

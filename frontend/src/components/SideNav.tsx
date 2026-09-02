@@ -62,7 +62,10 @@ const NAV_GROUPS: NavGroup[] = [
 // même proposer l'onglet aux autres rôles évite un aller-retour pour rien.
 const GROUPE_ADMIN: NavGroup = {
   label: "Administration",
-  items: [{ id: "comptes", label: "Comptes" }],
+  items: [
+    { id: "comptes", label: "Comptes" },
+    { id: "celcat", label: "Celcat" },
+  ],
 };
 
 interface SideNavProps {
