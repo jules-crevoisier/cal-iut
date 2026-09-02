@@ -31,6 +31,7 @@ export default defineConfig({
       "/feedback": "http://127.0.0.1:8000",
       "/weights": "http://127.0.0.1:8000",
       "/legacy": "http://127.0.0.1:8000",
+      "/celcat": "http://127.0.0.1:8000",
     },
   },
 });
