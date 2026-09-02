@@ -656,6 +656,8 @@ class CelcatCompteurs(BaseModel):
 class CelcatEtatResponse(BaseModel):
     saisie_active: bool
     semaines_validees: list[int] = []
+    semaines_passees: list[int] = []
+    semaines_lancees: list[int] = []
     valide_le: str | None = None
     dernier_job: dict[str, str] | None = None
     compteurs: CelcatCompteurs = CelcatCompteurs()

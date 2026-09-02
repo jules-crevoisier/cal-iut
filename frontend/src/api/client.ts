@@ -624,6 +624,8 @@ export function sendTeacherMails(codes: string[]): Promise<{ results: TeacherMai
 export interface CelcatEtat {
   saisie_active: boolean;
   semaines_validees: number[];
+  semaines_passees: number[];
+  semaines_lancees: number[];
   valide_le: string | null;
   dernier_job: Record<string, string> | null;
   compteurs: { created: number; modified: number; deleted: number; blocked: number };
@@ -655,6 +657,10 @@ export function patchCelcatSaisie(active: boolean): Promise<CelcatEtat> {
 
 export function validerSemainesCelcat(semaines: number[]): Promise<CelcatEtat> {
   return request("/celcat/valider", { method: "POST", body: JSON.stringify({ semaines }) });
+}
+
+export function lancerNuitCelcat(): Promise<CelcatEtat> {
+  return request("/celcat/lancer-nuit", { method: "POST" });
 }
 
 export function fetchCelcatExtras(statut = "ouvert"): Promise<{ extras: CelcatExtra[] }> {

@@ -3933,6 +3933,19 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   background: var(--warn-soft);
 }
 
+.celcat-semaine--passee,
+.celcat-semaine--lancee,
+.celcat-semaine--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.celcat-lot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .celcat-extras,
 .celcat-journal-list {
   display: flex;

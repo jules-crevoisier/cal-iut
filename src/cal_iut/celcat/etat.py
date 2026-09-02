@@ -8,6 +8,7 @@ les semaines validées pour le job de nuit, et les files annexes.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ def _vide() -> dict[str, Any]:
         "version": 2,
         "saisie_active": False,
         "semaines_validees": [],
+        "semaines_lancees": [],
         "valide_le": None,
         "journal": {},
         "ignores": {},
@@ -66,6 +68,8 @@ def _completer(data: dict[str, Any]) -> dict[str, Any]:
     doc["saisie_active"] = bool(doc.get("saisie_active"))
     semaines = doc.get("semaines_validees")
     doc["semaines_validees"] = [int(s) for s in semaines] if isinstance(semaines, list) else []
+    lancees = doc.get("semaines_lancees")
+    doc["semaines_lancees"] = [int(s) for s in lancees] if isinstance(lancees, list) else []
     journal = doc.get("journal")
     if not isinstance(journal, dict):
         journal = {}
@@ -112,6 +116,23 @@ def sauver(doc: dict[str, Any]) -> None:
         json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+
+
+NB_SEMAINES_LOT = 30
+
+
+def semaines_celcat_passees(*, today: date | None = None) -> list[int]:
+    """Chips 1..30 dont la semaine S1 est déjà terminée (`week_status` = past)."""
+    from cal_iut.api.state import get_state
+    from cal_iut.calendar.academic import week_status
+
+    jour = today if today is not None else date.today()
+    calendrier = get_state().calendar
+    return [
+        n
+        for n in range(1, NB_SEMAINES_LOT + 1)
+        if week_status(calendrier, "S1", n - 1, jour) == "past"
+    ]
 
 
 def definir_live(evenements: list[EvenementCelcat]) -> None:
