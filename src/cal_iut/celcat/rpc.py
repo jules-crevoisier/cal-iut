@@ -109,6 +109,15 @@ class MethodeEcritureAbsente(ValueError):
     """Pas de méthode d'enregistrement relevée — on n'en invente pas une."""
 
 
+class MethodeSuppressionAbsente(ValueError):
+    """Pas de méthode de suppression relevée — on n'en invente pas une.
+
+    Mirroir de `MethodeEcritureAbsente` : `methode_suppression` reste vide
+    tant qu'aucun canari n'a prouvé le nom réel de la méthode RPC — cf.
+    `.orchestrator/architect-contract-celcat-modifier-seance.md`.
+    """
+
+
 def parser_reponse(texte: str) -> dict:
     lu = lire_reponse(texte)
     if not isinstance(lu, dict):
@@ -260,6 +269,39 @@ def enregistrer_evenement(page, charge: dict, *, methode: str) -> object:
     if not methode.strip():
         raise MethodeEcritureAbsente("methode_ecriture vide : capturer un Enregistrer sur URCA_FORMATION")
     return appeler(page, methode, [[preparer_evenement(charge)]])
+
+
+def event_id_retour(resultat: object) -> int | None:
+    """Extrait l'event_id d'une réponse `udlTimetables.save` — formes vues :
+    un entier nu, une liste dont la tête est l'un des cas ci-dessous, ou un
+    dict portant `event_id`/`id`. Public : partagé par `ecriture.py` et
+    `modification.py`, une seule implémentation."""
+    if isinstance(resultat, bool):
+        return None
+    if isinstance(resultat, int):
+        return resultat
+    if isinstance(resultat, list) and resultat:
+        return event_id_retour(resultat[0])
+    if isinstance(resultat, dict):
+        brut = resultat.get("event_id") or resultat.get("id")
+        if brut is not None:
+            return int(brut)
+    return None
+
+
+def supprimer_evenement_rpc(page, charge: object, *, methode: str) -> object:
+    """Primitive RPC brute de suppression — mirroir de `enregistrer_evenement`.
+
+    Méthode encore non prouvée par un canari (cf. risques du contrat) : tant
+    que `methode` est vide, on refuse plutôt que d'en deviner une.
+    """
+    if not methode.strip():
+        raise MethodeSuppressionAbsente(
+            "methode_suppression vide : capturer une Suppression sur URCA_FORMATION"
+        )
+    if isinstance(charge, dict):
+        return appeler(page, methode, [[dict(charge)]])
+    return appeler(page, methode, [charge])
 
 
 def masquer_semaine(*, longueur: int, indice: int) -> str:

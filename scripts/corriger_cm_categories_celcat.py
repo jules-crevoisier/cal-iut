@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import os
 import sys
 from pathlib import Path
@@ -20,20 +19,21 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RACINE / "src"))
 
-from cal_iut.celcat import navigateur as nav  # noqa: E402
-from cal_iut.celcat import reseau  # noqa: E402
-from cal_iut.celcat.categories import (  # noqa: E402
+from cal_iut.celcat import navigateur as nav
+from cal_iut.celcat import reseau
+from cal_iut.celcat.categories import (
     CATEGORIE_IDS,
     EcartCategorie,
     inventaire_ecarts_categorie,
     libelle_categorie,
 )
-from cal_iut.celcat.ecriture import creer_manquants, resoudre_groupe, resoudre_ids  # noqa: E402
-from cal_iut.celcat.etat import charger  # noqa: E402
-from cal_iut.celcat.formulaire import charger_carte  # noqa: E402
-from cal_iut.celcat.lecture import evenement_depuis_rpc, indice_depuis_lundi  # noqa: E402
-from cal_iut.celcat.mapping import EntreeCelcat  # noqa: E402
-from cal_iut.celcat.rpc import MethodeEcritureAbsente, charger_edt, masquer_semaine  # noqa: E402
+from cal_iut.celcat.ecriture import resoudre_groupe, resoudre_ids
+from cal_iut.celcat.etat import charger
+from cal_iut.celcat.formulaire import charger_carte
+from cal_iut.celcat.lecture import evenement_depuis_rpc, indice_depuis_lundi
+from cal_iut.celcat.mapping import EntreeCelcat
+from cal_iut.celcat.modification import modifier_evenement
+from cal_iut.celcat.rpc import MethodeEcritureAbsente, charger_edt, masquer_semaine
 
 GROUPES_S1 = (
     "BUT MMI S1 CM",
@@ -231,21 +231,23 @@ def principal() -> int:
                             f"(attendu {CATEGORIE_IDS['CM']})"
                         )
                         continue
-                    resultat = creer_manquants(
+                    # `modifier_evenement`, pas `creer_manquants(event_id=...)` : la
+                    # cause racine du bug « partial key » est un objet reconstruit
+                    # depuis zéro pour un update — `modifier_evenement` recharge
+                    # l'enregistrement COMPLET puis n'écrase que les champs voulus
+                    # (cf. .orchestrator/architect-contract-celcat-modifier-seance.md).
+                    event_id_confirme = modifier_evenement(
                         page,
-                        [entree],
+                        entree,
+                        event_id=int(ecart.event_id),
                         group_id=int(gid_cm),
                         ids=ids,
                         masque=masque,
                         methode=methode,
                         base=args.base,
                         production_autorisee=args.production,
-                        event_id=int(ecart.event_id),
                     )
-                    for s, eid in resultat.crees:
-                        print(f"  OK     {s} event_id={eid} → [CM]")
-                    for s, err in resultat.echecs:
-                        print(f"  ÉCHEC  {s} {err}")
+                    print(f"  OK     {sid} event_id={event_id_confirme} → [CM]")
                 except Exception as exc:  # noqa: BLE001
                     print(f"  ÉCHEC  {sid} {exc}")
             return 0

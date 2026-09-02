@@ -52,6 +52,26 @@ def vider() -> None:
     _ecrire([])
 
 
+def _cle_job(job: dict[str, Any]) -> tuple[str, str, str]:
+    action = str(job.get("action") or "")
+    session_id = str(job.get("session_id") or "")
+    event_id = job.get("event_id")
+    event_id_s = "" if event_id in (None, "") else str(event_id)
+    return (action, session_id, event_id_s)
+
+
+def retirer_traites(identites: list[dict[str, Any]]) -> None:
+    """Retire de la file les jobs dont `(action, session_id, event_id)`
+    correspond EXACTEMENT à l'une des identités données — jamais un
+    `vider()` global, qui perdrait les jobs arrivés entre-temps ou ceux
+    qui ont échoué (RPC/réseau) et doivent rester pour la prochaine nuit."""
+    if not identites:
+        return
+    cibles = {_cle_job(i) for i in identites}
+    restants = [j for j in _lire() if _cle_job(j) not in cibles]
+    _ecrire(restants)
+
+
 def retenir_evenement(ev: EvenementCelcat) -> None:
     _CONNUS[ev.event_id] = ev
 

@@ -256,3 +256,49 @@ def entree_pour_placement(
         course_code=course_code,
         bloquants=bloquants,
     )
+
+
+def _lundi_iso(state: object, semestre: str, week: int) -> str:
+    """Le LUNDI civil d'une semaine solveur, pour un semestre donné.
+
+    Même calcul que `api/main.py::_date_iso(state, semestre, week, 0)`,
+    reproduit ici plutôt qu'importé : `mapping.py` est une couche basse,
+    `api/main.py` en dépend déjà — l'importer en retour créerait un cycle.
+    """
+    from datetime import timedelta
+
+    from cal_iut.calendar.academic import semester_week_offset
+
+    calendar = getattr(state, "calendar", None)
+    if not semestre or calendar is None:
+        return ""
+    index = semester_week_offset(calendar, semestre) + week
+    if 0 <= index < len(calendar.teaching_mondays):
+        return (calendar.teaching_mondays[index] + timedelta(days=0)).isoformat()
+    return ""
+
+
+def entrees_pour_state(state: object) -> dict[str, EntreeCelcat]:
+    """Même construction que `api/main.py::_entrees_celcat`, indexée par
+    `session_id` — pour que `nuit.py` retrouve l'EntreeCelcat d'une session
+    en file sans reconstruire la traduction à la main."""
+    cfg = load_celcat_config(state.config_dir)
+    libelle_groupe = {g.id: g.label for g in state.groups}
+    entrees: dict[str, EntreeCelcat] = {}
+    for p in state.timetable:
+        session = state.sessions_by_id.get(p.session_id)
+        semestre = getattr(session, "semestre", "") or ""
+        entrees[p.session_id] = entree_pour_placement(
+            cfg,
+            session_id=p.session_id,
+            course_code=p.course_code,
+            session_type=str(getattr(getattr(session, "session_type", None), "value", "")) if session else "",
+            week=p.week, day=p.day, slot=p.slot,
+            duration_slots=max(1, getattr(session, "duration_slots", 1) or 1) if session else 1,
+            teacher_codes=list(p.teacher_codes or []),
+            room_id=getattr(p, "room_id", None),
+            groupe=", ".join(libelle_groupe.get(g, g) for g in (p.group_ids or [])),
+            semestre=semestre,
+            lundi=_lundi_iso(state, semestre, p.week) if semestre else "",
+        )
+    return entrees

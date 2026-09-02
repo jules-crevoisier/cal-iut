@@ -21,20 +21,20 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RACINE / "src"))
 
-from cal_iut.celcat import navigateur as nav  # noqa: E402
-from cal_iut.celcat import reseau  # noqa: E402
-from cal_iut.celcat.diff import comparer  # noqa: E402
-from cal_iut.celcat.ecriture import (  # noqa: E402
+from cal_iut.celcat import navigateur as nav
+from cal_iut.celcat import reseau
+from cal_iut.celcat.diff import comparer
+from cal_iut.celcat.ecriture import (
     ProductionRefusee,
     creer_manquants,
     resoudre_groupe,
     resoudre_ids,
 )
-from cal_iut.celcat.formulaire import charger_carte  # noqa: E402
-from cal_iut.celcat.lecture import evenement_depuis_rpc, indice_depuis_lundi  # noqa: E402
-from cal_iut.celcat.mapping import EntreeCelcat  # noqa: E402
-from cal_iut.celcat.rpc import MethodeEcritureAbsente, charger_edt, masquer_semaine  # noqa: E402
-from cal_iut.celcat.sync import marquer_saisi  # noqa: E402
+from cal_iut.celcat.formulaire import charger_carte
+from cal_iut.celcat.lecture import evenement_depuis_rpc, indice_depuis_lundi
+from cal_iut.celcat.mapping import EntreeCelcat
+from cal_iut.celcat.rpc import MethodeEcritureAbsente, charger_edt, masquer_semaine
+from cal_iut.celcat.sync import marquer_saisi
 
 PREMIERE_SEMAINE_CELCAT = 34
 GROUPES_S1 = (
@@ -281,7 +281,7 @@ def principal() -> int:
                     event_id=0,
                 )
                 for sid, eid in resultat.crees:
-                    marquer_saisi(e, event_id=eid)
+                    marquer_saisi(e, event_id=eid, group_id=gid)
                     print(f"  CRÉÉ   {sid} event_id={eid}")
                 for sid, err in resultat.echecs:
                     print(f"  ÉCHEC  {sid} {err}")
