@@ -594,6 +594,7 @@ export function PromoView({
                 ? `${placement.course_code} créée ${DAY_LABELS[placement.day]} ${SLOT_TIMES[placement.slot].label}.`
                 : `${placement.course_code} modifiée.`,
             );
+            onPlacementUpdated?.(placement);
             onSeanceChangee?.();
           }}
         />
@@ -817,6 +818,7 @@ export function PromoView({
                                           type="button"
                                           className="promo-chip-custom-btn"
                                           title="Modifier cette séance"
+                                          aria-label="Modifier cette séance"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setModaleSeance(source);

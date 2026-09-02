@@ -1,0 +1,15 @@
+{
+  "s-legacy": {
+    "session_id": "s-legacy",
+    "semaine": 4,
+    "jour": 1,
+    "heure_debut": "08:00",
+    "heure_fin": "09:30",
+    "code_module": "TSBZ2106",
+    "code_enseignant": "RIGUET",
+    "salle": "H.105",
+    "event_id": 1931666,
+    "type_seance_nom": "CM",
+    "groupe": "TD AB"
+  }
+}

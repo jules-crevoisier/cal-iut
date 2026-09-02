@@ -1,0 +1,7 @@
+# Canari 2026-09-01 : UPDATE notes event 202985 ; CREATE sans event_id
+# → event_id 1523405 (1 semaine) sur URCA_FORMATION.
+# params[0] = tableau d'événements, chaque item a _type_: Event.
+# start_time / end_time : objets Date JS (pas d'ISO).
+# Create : omettre event_id (0 est lu comme une mise à jour).
+methode_ecriture: udlTimetables.save
+event_id_create: omit

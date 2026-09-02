@@ -620,3 +620,55 @@ export interface TeacherMailSendResult {
 export function sendTeacherMails(codes: string[]): Promise<{ results: TeacherMailSendResult[] }> {
   return request("/mail/teacher-links/send", { method: "POST", body: JSON.stringify({ codes }) });
 }
+
+export interface CelcatEtat {
+  saisie_active: boolean;
+  semaines_validees: number[];
+  valide_le: string | null;
+  dernier_job: Record<string, string> | null;
+  compteurs: { created: number; modified: number; deleted: number; blocked: number };
+  worker_ok: boolean;
+}
+
+export interface CelcatExtra {
+  id: string;
+  statut: string;
+  course_code?: string;
+  libelle?: string;
+  module_nom?: string;
+  event_id?: number;
+}
+
+export interface CelcatLog {
+  kind: string;
+  motif?: string | null;
+  session_id?: string | null;
+}
+
+export function fetchCelcatEtat(): Promise<CelcatEtat> {
+  return request("/celcat/etat");
+}
+
+export function patchCelcatSaisie(active: boolean): Promise<CelcatEtat> {
+  return request("/celcat/saisie", { method: "PATCH", body: JSON.stringify({ active }) });
+}
+
+export function validerSemainesCelcat(semaines: number[]): Promise<CelcatEtat> {
+  return request("/celcat/valider", { method: "POST", body: JSON.stringify({ semaines }) });
+}
+
+export function fetchCelcatExtras(statut = "ouvert"): Promise<{ extras: CelcatExtra[] }> {
+  return request(`/celcat/extras?statut=${encodeURIComponent(statut)}`);
+}
+
+export function fetchCelcatLogs(limit = 50): Promise<{ items: CelcatLog[]; cursor: string | null }> {
+  return request(`/celcat/logs?limit=${limit}`);
+}
+
+export function ignorerExtraCelcat(id: string): Promise<{ statut: string }> {
+  return request(`/celcat/extras/${encodeURIComponent(id)}/ignorer`, { method: "POST" });
+}
+
+export function ajouterExtraCelcat(id: string): Promise<{ statut: string; session_id?: string }> {
+  return request(`/celcat/extras/${encodeURIComponent(id)}/ajouter`, { method: "POST" });
+}

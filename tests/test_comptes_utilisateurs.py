@@ -688,6 +688,28 @@ def test_anciennes_routes_require_admin_session_exigent_desormais_le_role_admin(
     assert client.get("/celcat/plan").status_code == 403
 
 
+def test_la_saisie_celcat_est_reservee_a_admin_et_valide_ses_semaines() -> None:
+    """`POST /celcat/saisie` écrit dans un intranet qui alimente la paie :
+    c'est la route la plus sensible du service, elle doit être derrière le
+    même rôle que le reste du groupe Celcat.
+
+    Le 400 obtenu ensuite avec un admin sur un paramètre invalide sert de
+    preuve de traversée : c'est une erreur métier, donc la garde de rôle a
+    laissé passer — et elle survient AVANT toute ouverture de navigateur."""
+    assert client.post("/celcat/saisie", json={"semaines": "2"}).status_code == 401
+
+    _inserer_utilisateur("editrice-saisie@example.test", status="active", role="edit")
+    client.post("/auth/login", json={"email": "editrice-saisie@example.test", "password": MOT_DE_PASSE})
+    assert client.post("/celcat/saisie", json={"semaines": "2"}).status_code == 403
+    client.post("/auth/logout")
+    client.cookies.clear()
+
+    _inserer_utilisateur(ADMIN_EMAIL, status="active", role="admin")
+    client.post("/auth/login", json={"email": ADMIN_EMAIL, "password": MOT_DE_PASSE})
+    assert client.post("/celcat/saisie", json={"semaines": "deux"}).status_code == 400
+    assert client.post("/celcat/saisie", json={"semaines": " "}).status_code == 400
+
+
 # --------------------------------------------------------------------------
 # Régression : les liens personnels `?t=...` restent publics, sans compte
 # ni cookie — c'est le comportement le plus facile à casser par accident

@@ -23,7 +23,6 @@ il vaut mieux qu'il soit écrit ici que découvert plus tard.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,43 +35,51 @@ def _path() -> Path:
 
 
 def _load() -> dict[str, dict[str, str]]:
-    path = _path()
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (json.JSONDecodeError, OSError):
-        # Journal illisible = on repart de zéro. Le pire scénario est de
-        # re-saisir des séances déjà présentes, jamais d'en perdre.
-        return {}
+    return journal()
 
 
 def _save(data: dict[str, dict[str, str]]) -> None:
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    doc["journal"] = data
+    sauver(doc)
 
 
 def journal() -> dict[str, dict[str, str]]:
-    return _load()
+    from cal_iut.celcat.etat import charger
+
+    brut = charger().get("journal") or {}
+    return brut if isinstance(brut, dict) else {}
 
 
-def marquer_saisi(entree: EntreeCelcat) -> None:
-    data = _load()
-    data[entree.session_id] = {
+def marquer_saisi(entree: EntreeCelcat, *, event_id: int | None = None) -> None:
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    journal_doc = dict(doc.get("journal") or {})
+    ligne = {
+        "session_id": entree.session_id,
         "signature": entree.signature(),
         "saisi_le": datetime.now(timezone.utc).isoformat(),
         "semaine": str(entree.semaine),
     }
-    _save(data)
+    if event_id is not None:
+        ligne["event_id"] = str(event_id)
+    journal_doc[entree.session_id] = ligne
+    doc["journal"] = journal_doc
+    sauver(doc)
 
 
 def marquer_supprime(session_id: str) -> None:
-    data = _load()
-    if session_id in data:
-        del data[session_id]
-        _save(data)
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    journal_doc = dict(doc.get("journal") or {})
+    if session_id in journal_doc:
+        del journal_doc[session_id]
+        doc["journal"] = journal_doc
+        sauver(doc)
 
 
 @dataclass

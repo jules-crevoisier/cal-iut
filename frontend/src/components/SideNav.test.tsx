@@ -40,4 +40,13 @@ describe("SideNav groups", () => {
     expect(screen.getByRole("button", { name: /clé claude \/ mcp/i })).toBeInTheDocument();
     expect(screen.getByText("prof@example.test")).toBeInTheDocument();
   });
+
+  it("should show Administration Celcat only when moi.role is admin", () => {
+    const { rerender } = render(<SideNav {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /celcat/i })).not.toBeInTheDocument();
+
+    rerender(<SideNav {...baseProps} estAdmin />);
+    expect(screen.getByText("Administration")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /celcat/i })).toBeInTheDocument();
+  });
 });

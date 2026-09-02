@@ -23,6 +23,7 @@ export type RouteView =
   | "salle"
   | "cours"
   | "comptes"
+  | "celcat"
   | "mcp";
 
 /** Écrans du système de comptes (31/08/2026) — pré-authentification,

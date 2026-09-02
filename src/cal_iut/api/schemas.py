@@ -596,3 +596,72 @@ class CelcatPlanResponse(BaseModel):
     # Le pilote réel est-il utilisable (Playwright installé, URL renseignée) ?
     pilote_pret: bool = False
     pilote_message: str = ""
+    # Les libellés du formulaire de création ont-ils été relevés ? Distinct de
+    # `pilote_pret` : Playwright peut être installé et l'écriture rester
+    # impossible faute d'avoir vu le formulaire une fois.
+    formulaire_releve: bool = False
+    formulaire_manques: list[str] = []
+
+
+class CelcatSaisieRequest(BaseModel):
+    """Lancement d'une saisie. Tout y est restrictif par défaut."""
+
+    # Indices solveur, séparés par des virgules. Obligatoire : on saisit par
+    # lots (« ajuster le nombre de semaines que l'on met »), jamais l'année
+    # entière d'un seul geste.
+    semaines: str = Field(min_length=1)
+    # Simulation par DÉFAUT : le déroulé complet est rejoué sans navigateur.
+    # Écrire dans Celcat doit être demandé explicitement.
+    simuler: bool = True
+    # Base d'entraînement par défaut côté pilote ; passer à `false` vise la
+    # base annuelle réelle, celle dont dépend la paie.
+    production: bool = False
+    monter_le_vpn: bool = False
+    # Les séances sans code (enseignant « 0 », module absent) restent
+    # hors du lot ; les autres partent. Défaut False : un oubli ne doit
+    # pas pousser un planning à moitié mappé.
+    ignorer_bloquees: bool = False
+
+
+class CelcatSaisieResponse(BaseModel):
+    simulee: bool = True
+    base: str = ""
+    creees: list[str] = []
+    modifiees: list[str] = []
+    supprimees: list[str] = []
+    # (session_id, motif) — une séance qui échoue n'arrête pas les suivantes.
+    echecs: list[tuple[str, str]] = []
+    interrompu: bool = False
+    acces_perdu: bool = False
+    resume: str = ""
+    # Ce que le pilote a fait, dans l'ordre. Jamais de mot de passe.
+    actions: list[str] = []
+
+
+class CelcatSaisieActiveRequest(BaseModel):
+    active: bool
+
+
+class CelcatValiderRequest(BaseModel):
+    semaines: list[int]
+
+
+class CelcatCompteurs(BaseModel):
+    created: int = 0
+    modified: int = 0
+    deleted: int = 0
+    blocked: int = 0
+
+
+class CelcatEtatResponse(BaseModel):
+    saisie_active: bool
+    semaines_validees: list[int] = []
+    valide_le: str | None = None
+    dernier_job: dict[str, str] | None = None
+    compteurs: CelcatCompteurs = CelcatCompteurs()
+    worker_ok: bool = True
+
+
+class CelcatExtraActionResponse(BaseModel):
+    statut: str
+    session_id: str | None = None

@@ -41,17 +41,48 @@ class CelcatConfig:
     modules: dict[str, str] = field(default_factory=dict)
 
 
+def _code_renseigne(valeur: object) -> str | None:
+    """Un code Celcat utilisable, ou rien.
+
+    « 0 » dans le YAML signifie « pas encore de code » (ALE, BMA, FCI, TMI) :
+    c'est truthy en Python, donc `if v` le garderait et le pilote irait
+    chercher l'enseignant « 0 ».
+    """
+    if valeur is None:
+        return None
+    texte = str(valeur).strip()
+    if not texte or texte == "0":
+        return None
+    return texte
+
+
 def load_celcat_config(config_dir: Path) -> CelcatConfig:
     path = config_dir / "celcat.yaml"
     if not path.exists():
         return CelcatConfig()
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return CelcatConfig(
-        enseignants={str(k).upper(): str(v) for k, v in (data.get("enseignants") or {}).items() if v},
+        enseignants={
+            str(k).upper(): code
+            for k, v in (data.get("enseignants") or {}).items()
+            if (code := _code_renseigne(v))
+        },
         salles={str(k): str(v) for k, v in (data.get("salles") or {}).items() if v},
         types_seance=dict(data.get("types_seance") or {}),
         modules={str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v},
     )
+
+
+def libelle_groupe_celcat(groupe: str) -> str:
+    """Notre libellé (« Promo BUT1 », « TD AB ») → fragment Celcat.
+
+    Convention relevée le 31/08/2026 : « BUT MMI S1 TD AB », « BUT MMI S1 CM ».
+    Les groupes CM s'appellent « Promo … » chez nous, « CM » chez eux.
+    """
+    nom = groupe.strip()
+    if nom.lower().startswith("promo"):
+        return "CM"
+    return nom
 
 
 @dataclass
@@ -72,7 +103,21 @@ class EntreeCelcat:
     salle: str | None
     code_module: str | None
     type_seance: int | None
-    groupe: str           # libellé du groupe, pour choisir le bon onglet Celcat
+    # Notre nom de type (« TD », « TP », « CM ») : c'est par lui que le
+    # pilote retrouve le LIBELLÉ de la catégorie d'événement Celcat, la
+    # valeur numérique ci-dessus n'étant qu'un index de position hérité des
+    # `.bat` (cf. `celcat/formulaire.py::CarteFormulaire.categorie`).
+    type_seance_nom: str = ""
+    groupe: str = ""      # libellé du groupe, pour choisir le bon onglet Celcat
+    # Semestre (« S2 ») : indispensable pour reconstituer le nom Celcat du
+    # groupe, « BUT MMI S2 TD AB » — le libellé seul (« TD AB ») ne le porte
+    # pas, et il n'y a aucun moyen de le deviner depuis l'index de semaine.
+    semestre: str = ""
+    # Lundi ISO de la semaine visée. L'index solveur ne suffit PAS : le
+    # sélecteur de semaines de Celcat s'identifie par ses dates, et le piège
+    # classique est d'y envoyer `semaine + 1` (cf. docs/MCP.md). Une semaine
+    # mal choisie déverse une promotion entière sur les mauvaises dates.
+    lundi: str = ""
     # Repris tel quel pour l'affichage/le journal, jamais envoyé à Celcat.
     course_code: str = ""
     bloquants: list[str] = field(default_factory=list)
@@ -80,6 +125,16 @@ class EntreeCelcat:
     @property
     def prete(self) -> bool:
         return not self.bloquants
+
+    @property
+    def nom_groupe_celcat(self) -> str:
+        """« TD AB » + « S2 » -> « BUT MMI S2 TD AB ».
+
+        Sans le suffixe d'année de cohorte : une recherche sans lui retrouve
+        le groupe (vérifié le 31/08/2026), ce qui évite d'avoir à deviner
+        laquelle des cohortes est concernée.
+        """
+        return f"BUT MMI {self.semestre} {self.groupe}".strip()
 
     def signature(self) -> str:
         """Ce qui définit l'entrée CÔTÉ CELCAT. Sert à repérer qu'une séance
@@ -119,6 +174,8 @@ def entree_pour_placement(
     teacher_codes: list[str],
     room_id: str | None,
     groupe: str,
+    semestre: str = "",
+    lundi: str = "",
 ) -> EntreeCelcat:
     """Traduit UN placement. `duration_slots` > 1 : l'heure de fin est celle
     du DERNIER créneau occupé — Celcat prend une plage, pas une répétition
@@ -157,9 +214,30 @@ def entree_pour_placement(
     if not code_module:
         bloquants.append(f"module {course_code} sans code Celcat")
 
-    type_celcat = cfg.types_seance.get(session_type.upper())
-    if type_celcat is None:
+    type_nom = session_type.strip().upper()
+    type_celcat = cfg.types_seance.get(type_nom)
+    # L'index numérique (TD=4, TP=6) est un héritage des `.bat`. Le pilote
+    # désigne la catégorie par son LIBELLÉ (`[CM]`, `[TD]`, `[TP]`), relevé
+    # le 01/09/2026. Un CM n'a pas d'index et n'en a plus besoin.
+    if not type_nom:
+        bloquants.append("type de séance manquant")
+    elif type_celcat is None and type_nom != "CM":
         bloquants.append(f"type de séance {session_type} sans code Celcat")
+
+    if "," in groupe:
+        bloquants.append(
+            f"plusieurs groupes ({groupe}) : Celcat n'en ouvre qu'un à la fois"
+        )
+    groupe_celcat = libelle_groupe_celcat(groupe)
+
+    # Les deux repères de navigation. Ils ne servent pas à remplir un champ
+    # du formulaire, mais à ATTEINDRE le bon endroit avant de le remplir :
+    # sans eux le pilote saisirait la bonne séance sur le mauvais groupe ou la
+    # mauvaise semaine — une erreur invisible dans un journal de réussites.
+    if not semestre.strip():
+        bloquants.append("semestre inconnu : nom du groupe Celcat introuvable")
+    if not lundi.strip():
+        bloquants.append(f"date de la semaine {week} inconnue : semaine Celcat non repérable")
 
     return EntreeCelcat(
         session_id=session_id,
@@ -171,7 +249,10 @@ def entree_pour_placement(
         salle=salle,
         code_module=code_module,
         type_seance=type_celcat,
-        groupe=groupe,
+        type_seance_nom=type_nom,
+        groupe=groupe_celcat,
+        semestre=semestre.strip(),
+        lundi=lundi.strip(),
         course_code=course_code,
         bloquants=bloquants,
     )

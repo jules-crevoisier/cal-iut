@@ -41,6 +41,9 @@ def _entree(cfg, **kw):
     base = dict(
         session_id="s1", course_code="WR314D", session_type="TD", week=2, day=0,
         slot=0, duration_slots=1, teacher_codes=["FLI"], room_id="h111", groupe="TD AB",
+        # Semestre et lundi sont désormais exigés : sans eux, le nom Celcat du
+        # groupe et la semaine visée sont indevinables (cf. mapping.py).
+        semestre="S2", lundi="2026-09-14",
     )
     base.update(kw)
     return entree_pour_placement(cfg, **base)
@@ -83,7 +86,6 @@ def test_la_salle_203_devient_023(cfg) -> None:
         (dict(room_id=None), "aucune salle"),
         (dict(room_id="h999"), "sans équivalent Celcat"),
         (dict(course_code="WR999"), "sans code Celcat"),
-        (dict(session_type="CM"), "type de séance CM"),
     ],
 )
 def test_toute_donnee_manquante_bloque_avec_son_motif(cfg, modif, motif) -> None:
@@ -100,11 +102,28 @@ def test_plusieurs_enseignants_sont_signales_pas_tronques(cfg) -> None:
     assert any("n'en accepte qu'un" in b for b in e.bloquants)
 
 
-def test_la_config_reelle_du_depot_se_charge(cfg) -> None:
-    """`data/config/celcat.yaml` doit rester lisible et cohérent."""
+def test_un_cm_est_saisissable_sans_index_numerique(cfg) -> None:
+    """La catégorie se dépose par son libellé « [CM] », pas par un index."""
+    e = _entree(cfg, session_type="CM", groupe="Promo BUT1", semestre="S1")
+    assert e.prete, e.bloquants
+    assert e.type_seance_nom == "CM"
+    assert e.nom_groupe_celcat == "BUT MMI S1 CM"
+
+
+def test_un_code_enseignant_zero_bloque(cfg) -> None:
+    """« 0 » dans celcat.yaml = pas de code, pas une recherche de l'enseignant 0."""
+    e = _entree(cfg, teacher_codes=["ALE"])
+    assert not e.prete
+    assert any("ALE" in b for b in e.bloquants)
+
+
+def test_la_config_ignore_les_codes_zero() -> None:
     reelle = load_celcat_config(ROOT / "data" / "config")
     assert reelle.enseignants, "les codes enseignants doivent être renseignés"
-    assert reelle.salles.get("h203") == "H.023", "la particularité 203 -> 023 doit tenir"
+    assert reelle.salles.get("h203") == "H.023"
+    assert "ALE" not in reelle.enseignants
+    assert "FCI" not in reelle.enseignants
+    assert "WSA501D" not in reelle.modules
 
 
 # --------------------------------------------------------------------------
@@ -181,6 +200,19 @@ def test_la_saisie_refuse_de_demarrer_s_il_reste_des_bloquees(cfg) -> None:
     assert pilote.actions == [], "aucune action ne doit avoir eu lieu"
 
 
+def test_la_saisie_peut_ignorer_les_bloquees_et_saisir_le_reste(cfg) -> None:
+    """Décision du 01/09/2026 : ALE/BMA/FCI/TMI/WSA501D n'empêchent pas le reste."""
+    pret = _entree(cfg)
+    bloquee = _entree(cfg, session_id="s-manque", course_code="WR999")
+    plan = sync.construire_plan([pret, bloquee], {2})
+    pilote = PiloteSimule()
+    res = SaisieCelcat(pilote, _rythme_instantane()).executer(
+        plan, "user", "mdp", ignorer_bloquees=True,
+    )
+    assert res.creees == ["s1"]
+    assert pilote.actions[0] == "connexion(user)"
+
+
 def test_le_deroule_complet_est_rejoue_sans_navigateur(cfg) -> None:
     plan = sync.construire_plan([_entree(cfg), _entree(cfg, session_id="s2", slot=1)], {2})
     pilote = PiloteSimule()
@@ -188,7 +220,20 @@ def test_le_deroule_complet_est_rejoue_sans_navigateur(cfg) -> None:
     assert len(res.creees) == 2
     assert pilote.actions[0] == "connexion(user)"
     assert pilote.actions[-1] == "fermeture"
-    assert any(a.startswith("groupe(TD AB") for a in pilote.actions)
+    # Le pilote reçoit le nom CELCAT du groupe et la DATE du lundi : c'est ce
+    # qu'il aura à retrouver là-bas, un index de semaine n'y désigne rien.
+    assert any(a == "groupe(BUT MMI S2 TD AB, 2026-09-14)" for a in pilote.actions)
+
+
+def test_s1_et_s5_meme_libelle_ne_sont_pas_melanges(cfg) -> None:
+    """« TD AB » sans semestre collerait les S5 sur l'onglet S1."""
+    s1 = _entree(cfg, session_id="s1", semestre="S1", lundi="2026-09-07")
+    s5 = _entree(cfg, session_id="s5", semestre="S5", lundi="2026-09-07")
+    plan = sync.construire_plan([s1, s5], {2})
+    pilote = PiloteSimule()
+    SaisieCelcat(pilote, _rythme_instantane()).executer(plan, "user", "mdp")
+    assert "groupe(BUT MMI S1 TD AB, 2026-09-07)" in pilote.actions
+    assert "groupe(BUT MMI S5 TD AB, 2026-09-07)" in pilote.actions
 
 
 def test_le_mot_de_passe_n_est_jamais_journalise(cfg) -> None:
@@ -311,6 +356,21 @@ def test_aucun_secret_dans_les_messages_de_vpn():
     from cal_iut.celcat import reseau
 
     assert "hunter2" not in reseau._sans_secret("échec pour hunter2 ici", "hunter2")
+
+
+def test_l_absence_de_client_vpn_se_constate_sans_planter(monkeypatch):
+    """`client_disponible` cherchait OpenConnect avec `shutil.which` sans que
+    `shutil` soit importé : sur une machine sans AnyConnect — donc sur tout
+    poste où l'on découvre l'outil — le diagnostic levait un `NameError` au
+    lieu de répondre « aucun client VPN ». L'erreur ne se voyait pas depuis
+    Windows avec AnyConnect installé, où la première branche sort avant."""
+    from cal_iut.celcat import reseau
+
+    monkeypatch.setattr(reseau, "chemin_vpncli", lambda: None)
+    monkeypatch.setattr(reseau, "CHEMINS_OPENCONNECT", ())
+    monkeypatch.setattr(reseau.shutil, "which", lambda _: None)
+    assert reseau.client_disponible() == (None, None)
+    assert reseau.etat_vpn() == "aucun client VPN (ni AnyConnect ni OpenConnect)"
 
 
 def test_acces_direct_essaye_avant_de_monter_le_vpn(monkeypatch):

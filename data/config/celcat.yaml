@@ -153,22 +153,16 @@ groupes:
   departement: "T_MMI"
 
 # --- Types de séance : le nôtre -> code Celcat ---
-# TD=4 et TP=6 relevés dans les scripts `.bat` existants. CM jamais observé
-# (le fichier `S2_S19_CM_CM.bat` fourni est vide) : À CONFIRMER avant tout
-# envoi réel, l'outil refuse de pousser un type non renseigné.
+# TD=4 et TP=6 sont des INDEX DE POSITION hérités des `.bat`. Le pilote
+# n'en a plus besoin : il dépose le LIBELLÉ relevé le 01/09/2026
+# (`[TD]`, `[TP]`, `[CM]` dans celcat_formulaire.yaml).
 types_seance:
   TD: 4
   TP: 6
-  CM: null   # À CONFIRMER — la catégorie « [CM] » EXISTE bien dans Celcat
-             # (confirmé le 01/09/2026, liste complète des 38 catégories
-             # d'événement, distincte de « [CM bénévole] » et
-             # « [CM Capacite] »), mais TD=4/TP=6 ci-dessus sont des INDEX
-             # DE POSITION dans un menu déroulant (hérités des .bat
-             # d'origine, bien trop petits pour être un `event_cat_id` réel
-             # — celui de « [CM bénévole] » est 845). Le formulaire de
-             # création n'a pas encore été rempli pour de vrai : vérifier
-             # avec quel type de valeur IL attend une catégorie avant de
-             # fixer ce champ. Cf. docs/CELCAT.md, incident du 01/09/2026.
+  CM: null   # Catégorie « [CM] » relevée. Distincte de « [CM bénévole] »
+             # (event_cat_id 845) et « [CM Capacite] ». TD=4/TP=6 restent des
+             # INDEX DE POSITION hérités des .bat, pas des event_cat_id.
+             # L'écriture RPC n'utilise plus cet index.
   PTUT: null # À CONFIRMER
 
 # --- Modules : notre code cours -> code module Celcat ---
@@ -204,11 +198,19 @@ modules:
   WR302D: "TSBZ302D"  # Anglais renforcé
   WR303D: "TSBZ303D"  # Design d'expérience
   WR304D: "TSBZ304D"  # Culture numérique
+  WR305D: "TSBZ305D"  # Strat. — Kyllian 02/09/2026 (code avec Z)
   WR306D: "TSBZ306D"  # Référencement
   WR307D: "TSBZ307D"  # Expression comm
   WR308D: "TSBZ308D"  # Ecriture
+  WR309D: "TSBZ309D"  # Création — Kyllian 02/09/2026
   WR310D: "TSBZ310D"  # Culture artistique
   WR311D: "TSBZ311D"  # Audiovisuel motion
+  WR312D: "TSBZ312D"  # Dév Front — Kyllian 02/09/2026, à confirmer avec Marina
+  WR313D: "TSBZ313D"  # Dév Back — Kyllian 02/09/2026
+  WR314D: "TSBZ314D"  # Dépl. services — Kyllian 02/09/2026, à confirmer avec Marina
+  WR317D: "TSBZ317D"  # Eco/Droit — Kyllian 02/09/2026, à confirmer avec Marina
+  WR318D: "TSBZ318D"  # PPP — Kyllian 02/09/2026, à confirmer avec Marina
+  WR319D: "TSBZ319D"  # Symfony — Kyllian 02/09/2026
   WR501D: "TSBZ5010"  # Anglais
   WR502D: "TSBZ5020"  # Management qualité
   WR503D: "TSBZ5030"  # Entrepreneuriat
@@ -254,23 +256,12 @@ modules:
   WRA509D: "TSBZE09D"  # IA avancée
   WRA510D: "TSBZE10D"  # Dev avancé AI
 
-# --- À TRANCHER : plusieurs codes Celcat pour le même module ---------------
-# Deux familles de doublons dans la liste fournie :
-#   - préfixe « TSB2… » vs « TSBZ… » (même numéro, même libellé) ;
-#   - suffixe « …0 » vs « …D » (ex. TSBZ3140 / TSBZ314D), où l'un des deux
-#     libellés porte souvent une coquille (« Déploiemet »), ce qui suggère
-#     une entrée héritée devenue obsolète — mais ce n'est qu'une hypothèse.
-# Rien n'est choisi ici : reporter le bon code dans `modules:` ci-dessus.
-#   WR305D: TSB2305D (Strat) | TSBZ305D (Strat)
-#   WR309D: TSB2309D (Création) | TSBZ309D (Création)
-#   WR312D: TSBZ3120 (Développement Front) | TSBZ312D (Développement Front)
-#   WR313D: TSB2313D (Développement Back) | TSBZ313D (Développement Back)
-#   WR314D: TSBZ3140 (Dépl. de services) | TSBZ314D (Déploiemet services)
+# --- Encore deux codes Celcat pour le même module --------------------------
+# Kyllian 02/09/2026 : prendre le code avec Z (TSBZ…). Les WR305/309/312–
+# 314/317–319 sont passés dans `modules:` (ceux marqués « ! » restent à
+# confirmer avec Marina, le mapping TSBZ est déjà celui à utiliser).
 #   WR315D: TSBZ3150 (Maths) | TSBZ315D (Maths)
 #   WR316D: TSBZ3160 (Gestion de projet) | TSBZ316D (Gestion de projet)
-#   WR317D: TSBZ3170 (Eco/Droit) | TSBZ317D (Eco/Droit)
-#   WR318D: TSBZ3180 (PPP) | TSBZ318D (PPP)
-#   WR319D: TSB2319D (Symfony) | TSBZ319D (Symfony)
 
 # --- ABSENTS de la liste fournie ------------------------------------------
 # Aucun code Celcat trouvé, même en retirant le suffixe. À récupérer.
