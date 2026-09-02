@@ -165,6 +165,19 @@ def test_should_strip_nested_event_id_when_preparer_create() -> None:
     assert pret["groups"][0]["_type_"] == "Group"
 
 
+def test_should_keep_event_id_when_preparer_update() -> None:
+    pret = preparer_evenement({
+        "event_id": 1931666,
+        "weeks": "Y" + "N" * 53,
+        "modules": [{"module_id": 1}],
+        "groups": [{"group_id": 2}],
+        "rooms": [{"room_id": 3}],
+        "staff": [{"staff_id": 4}],
+    })
+    assert pret["event_id"] == 1931666
+    assert pret["_type_"] == "Event"
+
+
 def test_should_load_resources_by_type_when_charger_ressources() -> None:
     page = FaussePage()
     page.reponses["udlResources.load"] = [{"id": 1604422, "name": "H.105"}]

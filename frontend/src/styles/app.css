@@ -2088,6 +2088,18 @@ table.promo-grid td.promocell--placeable {
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
 }
+table.promo-grid td.promocell--teacher-busy {
+  outline: 2px dashed var(--warn);
+  outline-offset: -2px;
+  background: var(--warn-soft);
+}
+.promocell__teacher-busy {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--warn-text);
+  margin-top: 2px;
+}
 table.promo-grid td.promocell--placeable:hover,
 table.promo-grid td.promocell--placeable:focus-visible {
   background: var(--accent-soft);

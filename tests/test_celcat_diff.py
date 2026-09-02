@@ -91,6 +91,16 @@ def test_should_expose_a_modifier_and_a_supprimer_when_plan_is_built() -> None:
         assert hasattr(plan, nom)
 
 
+def test_should_put_entree_in_a_modifier_when_live_category_is_tp_for_cm() -> None:
+    """CM journalisé en [TP] (bug autoclicker) doit partir en update, pas OK."""
+    wr106 = next(b for b in _bruts() if b["event_id"] == 1931666)
+    faux_tp = dict(wr106, evCatName="[TP]", event_cat_id=999)
+    entree = _entree(type_seance_nom="CM")
+    plan = comparer([entree], [_ev(faux_tp)], indice_semaine=3)
+    assert any(p[0].session_id == entree.session_id for p in plan.a_modifier)
+    assert entree not in [p[0] for p in plan.deja_la]
+
+
 def test_should_put_entree_in_a_modifier_when_live_room_differs() -> None:
     entree = _entree(salle="H.999")
     plan = comparer([entree], _live(), indice_semaine=3)

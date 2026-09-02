@@ -258,7 +258,7 @@ def test_should_append_log_kind_blocked_with_motif_containing_the_course_code_wh
         types_seance={"TD": 4, "CM": None},
         modules={},
     )
-    monkeypatch.setattr("cal_iut.celcat.mapping.load_celcat_config", lambda *_a, **_k: cfg)
+    monkeypatch.setattr("cal_iut.celcat.ops.load_celcat_config", lambda *_a, **_k: cfg)
 
     etat = get_state()
     wr314 = seance("wr314", code="WR314D")
@@ -291,7 +291,7 @@ def test_should_keep_the_cal_iut_placement_200_when_celcat_is_blocked_or_worker_
         types_seance={"TD": 4},
         modules={},
     )
-    monkeypatch.setattr("cal_iut.celcat.mapping.load_celcat_config", lambda *_a, **_k: cfg)
+    monkeypatch.setattr("cal_iut.celcat.ops.load_celcat_config", lambda *_a, **_k: cfg)
     activer_saisie(planning)
 
     wr314 = seance("wr314b", code="WR314D")

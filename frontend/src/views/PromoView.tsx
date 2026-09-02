@@ -32,6 +32,12 @@ import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 import { ParcoursWeekModal } from "../components/ParcoursWeekModal";
 import { couleursMatiere } from "../utils/couleursMatiere";
 import { performMove, performSwap } from "../utils/moveSession";
+import {
+  teacherBusyByDaySlot,
+  teacherBusyLabel,
+  teacherBusyOnCell,
+  type TeacherBusyHit,
+} from "../utils/teacherBusy";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { lettresGroupe } from "../utils/years";
@@ -222,6 +228,26 @@ export function PromoView({
   }, [route?.sem, route?.jour]);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
+
+  const teacherBusyMap = useMemo(() => {
+    if (solverWeek === null) return new Map<string, TeacherBusyHit>();
+    let teachers: string[] = [];
+    let excludeId: string | undefined;
+    if (draggingId) {
+      const row = payload.rows.find((r) => r.id === draggingId);
+      teachers = row?.te ?? [];
+      excludeId = draggingId;
+    } else if (placementActif) {
+      teachers = placementActif.teacher_codes;
+      excludeId = placementActif.session_id;
+    } else if (park.parked && park.selected) {
+      teachers = park.parked.origin.teacher_codes;
+      excludeId = park.parked.sessionId;
+    } else {
+      return new Map<string, TeacherBusyHit>();
+    }
+    return teacherBusyByDaySlot(payload.rows, teachers, solverWeek, excludeId);
+  }, [draggingId, placementActif, park.parked, park.selected, payload.rows, solverWeek]);
 
   // À l'activation d'un placement (arrivée depuis « À placer »), saute
   // directement sur sa première semaine idéale plutôt que de laisser la
@@ -675,6 +701,11 @@ export function PromoView({
                       {cols.map((c, i) => {
                         const entries = byColSlot.get(`${i}-${s}`) ?? [];
                         const cellClass = `promocell ${colClass(i)}`;
+                        const busyHit = teacherBusyOnCell(teacherBusyMap, day, s, entries);
+                        const busyClass = busyHit ? " promocell--teacher-busy" : "";
+                        const busyHint = busyHit ? (
+                          <span className="promocell__teacher-busy">{teacherBusyLabel(busyHit)}</span>
+                        ) : null;
                         const sae = payload.saeRows.find(
                           (x) => x.w === solverWeek && x.d === day && x.p === colParcours[i],
                         );
@@ -733,7 +764,7 @@ export function PromoView({
                           return (
                             <td
                               key={c}
-                              className={cellClass + eligibleClass + dropCls}
+                              className={cellClass + eligibleClass + dropCls + busyClass}
                               {...placementProps}
                               {...dropHandlers(day, s)}
                             >
@@ -742,6 +773,7 @@ export function PromoView({
                                   {libellePoser}
                                 </div>
                               )}
+                              {busyHint}
                               {entries.map((r) => {
                                 const highlighted = teacherFilter && r.te.includes(teacherFilter);
                                 const teacherNames = r.te.map((tc) => payload.teacherLabels[tc] ?? tc).join(", ");
@@ -949,7 +981,7 @@ export function PromoView({
                         return (
                           <td
                             key={c}
-                            className={cellClass + eligibleClass + dropCls}
+                            className={cellClass + eligibleClass + dropCls + busyClass}
                             {...placementProps}
                             {...dropHandlers(day, s)}
                           >
@@ -958,6 +990,7 @@ export function PromoView({
                                 {libellePoser}
                               </div>
                             )}
+                            {busyHint}
                           </td>
                         );
                       })}

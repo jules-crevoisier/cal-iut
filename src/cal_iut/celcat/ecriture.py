@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from pathlib import Path
 
+from cal_iut.celcat.categories import verifier_charge_categorie
 from cal_iut.celcat.driver import SemainesNonRestreintes
 from cal_iut.celcat.mapping import EntreeCelcat
 from cal_iut.celcat.navigateur import (
@@ -325,6 +326,7 @@ def creer_manquants(
             charge = charge_utile(
                 e, group_id=group_id, ids=ids, masque=masque, event_id=event_id
             )
+            verifier_charge_categorie(charge, type_seance_nom=e.type_seance_nom)
             verifier_avant_envoi(
                 charge, base=base, production_autorisee=production_autorisee
             )
@@ -333,6 +335,25 @@ def creer_manquants(
             if nouveau is None or nouveau == 0:
                 raise RuntimeError("enregistrement sans event_id")
             resultat.crees.append((e.session_id, nouveau))
+            _notifier_celcat(
+                "celcat_ok",
+                f"{e.session_id} enregistré Celcat (event_id={nouveau}, {e.type_seance_nom})",
+            )
         except Exception as exc:  # noqa: BLE001
             resultat.echecs.append((e.session_id, str(exc)))
+            _notifier_celcat(
+                "celcat_echec",
+                f"{e.session_id} Celcat : {exc}",
+            )
     return resultat
+
+
+def _notifier_celcat(evenement: str, texte: str) -> None:
+    """Mail optionnel — jamais faire échouer l'écriture Celcat."""
+    try:
+        from cal_iut.api import notifications
+
+        notifications.signaler(evenement, texte)
+        notifications.envoyer_si_temps_ecoule()
+    except Exception:  # noqa: BLE001
+        return

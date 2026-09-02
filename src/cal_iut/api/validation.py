@@ -119,9 +119,9 @@ def validate_move(
             hard.append(f"Conflit groupe : {placement.course_code} ({quand})")
 
         if _overlap(teacher_codes, placement.teacher_codes):
+            codes = ", ".join(placement.teacher_codes)
             hard.append(
-                f"Conflit enseignant : {placement.course_code} "
-                f"({', '.join(placement.teacher_codes)})"
+                f"Conflit enseignant : {codes} a déjà {placement.course_code} à ce créneau"
             )
 
         if room_id and getattr(placement, "room_id", None) in ({room_id} | (conflicting_room_ids or set())):

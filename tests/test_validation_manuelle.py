@@ -200,6 +200,32 @@ def test_deux_parcours_differents_ne_se_bloquent_pas():
     assert resultat.valid, resultat.hard_conflicts
 
 
+def test_un_enseignant_deja_place_sur_un_autre_parcours_est_un_conflit():
+    """L'indispo déclarée n'est pas le seul signal : un cours déjà posé aussi.
+
+    Vue Promo ne peint pas le cours de l'autre parcours dans la colonne
+    courante — le créneau a l'air libre. validate_move doit quand même
+    nommer le cours déjà posé (Forcer reste possible côté API).
+    """
+    autre = PlacedSession(
+        session_id="autre", week=0, day=1, slot=0, course_code="WR311D",
+        group_ids=["but2-dev-fi-td-ab"], teacher_codes=["KBR"],
+    )
+    sessions = {
+        "autre": _session("autre", "but2-dev-fi-td-ab", "KBR"),
+        "td": _session("td", "but1-td-ab", "KBR"),
+    }
+    resultat = validate_move(
+        "td", 0, 1, 0, [autre], ["but1-td-ab"], ["KBR"],
+        sessions_by_id=sessions, groups=GROUPES,
+    )
+    assert not resultat.valid
+    assert any(
+        "KBR" in c and "WR311D" in c and "déjà" in c
+        for c in resultat.hard_conflicts
+    )
+
+
 # --------------------------------------------------------------------------
 # Propriétés générales de la validation
 # --------------------------------------------------------------------------

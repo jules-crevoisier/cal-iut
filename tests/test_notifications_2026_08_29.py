@@ -84,7 +84,14 @@ def test_un_evenement_inconnu_est_refuse() -> None:
 
 
 def test_la_liste_des_evenements_est_stable() -> None:
-    assert set(notif.EVENEMENTS) == {"sans_salle", "deplacement", "echange", "placement"}
+    assert set(notif.EVENEMENTS) == {
+        "sans_salle",
+        "deplacement",
+        "echange",
+        "placement",
+        "celcat_echec",
+        "celcat_ok",
+    }
 
 
 # --------------------------------------------------------------------------
