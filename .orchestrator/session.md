@@ -1,23 +1,33 @@
 # Session
-goal: MCP has the same live catalog a Promo admin sees, plus a repo skill; Claude can place/move/swap/unplace/room/patch seance/custom exactly like the UI, after a visible plan.
-out_of_scope: WhatsApp inbox; inventing a replacement teacher; personal-link chrome; design duel; solver/regen/ingest/mails as MCP tools; writing YAML under data/config; silent force of PAC/SAE/declared indispo.
-users: admin (Kyllian) on desktop + Claude.ai / Cursor on https://cal-iut-mmi.srko.fr/mcp
-branch: feature/mcp-edt-agent
-design_pick: da_now (MCP + skill, no new visual world)
-inspiration: skip
+
+goal: rendre l’onglet admin Celcat lisible en 5 s — bandeau statut Live + 3 étapes (armer, semaines nuit, extras), chrome cal-iut inchangé.
+
+out_of_scope: nouveaux endpoints ; cliqueur ; push immédiat Live ; rollback ; onglets Comptes/MCP ; changer les actions API (ON/OFF, valider semaines, Ajouter/Ignorer, logs).
+
+users: admin, desktop Administration. Mobile-first 320px.
+
+branch: feature/celcat-admin-ui
+
 locked:
-- Context live via MCP (not only a local skill): inspect returns sessions AND catalog slices (teachers, rooms, groups, weeks, unplaced, constraints/availability relevant to the filter). Same source as /app-state, never raw YAML dumps of secrets (celcat passwords, mail keys).
-- Context durable via a repo skill (`.cursor/skills/cal-iut-edt/SKILL.md`): IUT MMI slots, weekIndex vs label, hard vs forceable vs blocking, how to call inspect/plan/apply, how to read the MCP journal. Claude.ai still works from MCP tools alone.
-- Tools stay inspect / plan / apply. Plan is dry-run with ok | blocked | soft warning. Apply only if confirm=true, ops non-empty, plan_id matches if given, no blocked items.
-- Apply ops = human Promo actions: place, move (week/day/slot), swap, unplace, salle, patch seance (teachers, type, duration 1|2, week/day/slot, room, is_eval on CM), custom create/patch/delete. Same conflict stack as REST. Never invent teachers.
-- Force: only when the plan item already showed a forceable conflict and the human confirmed apply. Never force blocking_conflicts (PAC/SAE/institutional/declared indispo). Soft prefs = warnings in the plan.
-- Journal: each successful apply appends data/state/mcp_journal.json (gitignored). inspect can return it. Persistence of the EDT itself is the same SQLite + overlays + custom_sessions as the UI so the next regen/week/solve generation sees the new placements — no separate solver constraint type.
-open:
-- none
+- Bandeau héros : ÉCRITURE OFF / ON. Texte clair : si ON, chaque edit planning écrit Celcat tout de suite.
+- Worker joignable / injoignable + dernière validation visibles dans le bandeau (plus du muted).
+- Interrupteur, pas une case à cocher anodine (paie enseignants).
+- Parcours 3 étapes : 1 armer l’écriture → 2 choisir les semaines du lot de nuit → 3 traiter les extras.
+- Semaines : distinguer sélection en cours vs déjà validées. Plus un mur de 30 cases identiques.
+- « Valider » relabel : enregistre le lot de NUIT, pas un envoi immédiat.
+- Extras : quoi faire (Ajouter au planning / Ignorer) vs journal : ce qui s’est passé (créé / bloqué + motif).
+- UI only. Mêmes fetch : etat, saisie, valider, extras, logs.
+- Chrome Administration inchangé (panels, boutons, pills comme Comptes). Pas de nouveau monde, pas de duel.
+
+open: none
+
+design_pick: incumbent-admin
+
 acceptance:
-- inspect without filter is too big to be the default; with teacher_code or course_code returns sessions + matching catalog (labels, rooms usable, unplaced for that course/teacher).
-- inspect of WRA507C lists those sessions with week/day/slot/room/teachers; catalog includes week labels and rooms.
-- plan+apply can place, move across weeks, swap, unplace, change room, patch teachers/type/duration/eval, create a custom session — 409 structured if blocked; force only on confirm after a forceable warning.
-- apply writes mcp_journal.json; a second inspect shows that entry; timetable/overlays match the UI APIs.
-- Unauthenticated / wrong token cannot mutate. No MCP token → 503.
-- Skill file exists in the repo and names the tools, journal, and hard vs forceable rules. No new Promo UI.
+- Bandeau affiche OFF ou ON + conséquence Live + worker + dernière validation.
+- L’interrupteur a un rôle switch (pas une checkbox anonyme) ; OFF par défaut inchangé.
+- Étapes 1/2/3 visibles ; étape 2 explique lot de nuit ; bouton n’est plus juste « Valider ».
+- Semaines : libellé Semaine N, état validé vs coché, multi-select conservé.
+- Extra ouvert : Ajouter + Ignorer ; vide : aucun extra ouvert.
+- Journal séparé, kinds + motifs lisibles (créé / bloqué).
+- Aucun nouvel appel réseau. Tests TDD puis E2E 320px.

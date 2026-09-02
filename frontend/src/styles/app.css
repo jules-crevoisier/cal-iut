@@ -3786,3 +3786,184 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
     min-width: min(260px, calc(100vw - 32px));
   }
 }
+
+/* ══════════════ Celcat (AdminCelcatView) — même chrome que Comptes ══════════════ */
+
+.celcat-etape {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.celcat-etape-num {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.celcat-etape-corps {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.celcat-etape-corps h3 {
+  margin: 0;
+}
+
+.celcat-etape-corps > p {
+  margin: 0;
+  color: var(--ink);
+}
+
+.celcat-hero-statut {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+
+.celcat-hero--on .celcat-hero-statut {
+  color: var(--bad-text);
+}
+
+.celcat-hero-consequence {
+  margin: 0;
+}
+
+.celcat-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.celcat-switch {
+  position: relative;
+  width: 52px;
+  min-width: 52px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.celcat-switch[aria-checked="true"] {
+  background: var(--bad-soft);
+  border-color: var(--bad);
+}
+
+.celcat-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.celcat-switch-knob {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  transition: left 0.15s;
+}
+
+.celcat-switch[aria-checked="true"] .celcat-switch-knob {
+  left: 16px;
+  background: var(--bad);
+}
+
+.celcat-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.celcat-semaines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.celcat-semaine {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.celcat-semaine--cochee {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.celcat-semaine--validee {
+  box-shadow: inset 0 0 0 1px var(--good);
+}
+
+.celcat-semaine--retiree {
+  border-style: dashed;
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.celcat-extras,
+.celcat-journal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.celcat-extra,
+.celcat-journal-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.celcat-extra-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .celcat-etape {
+    flex-direction: column;
+  }
+}

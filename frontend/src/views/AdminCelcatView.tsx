@@ -1,6 +1,6 @@
 /**
- * Administration Celcat — interrupteur de saisie, semaines à valider,
- * extras Live-only (Ajouter / Ignorer) et journal des blocages.
+ * Administration Celcat — bandeau Live, 3 étapes, lot de nuit, extras, journal.
+ * Chrome identique à Comptes (panels, boutons, pills). Pas de nouvel endpoint.
  */
 import { useCallback, useEffect, useState } from "react";
 
@@ -18,6 +18,26 @@ import {
 } from "../api/client";
 
 const SEMAINES = Array.from({ length: 30 }, (_, i) => i + 1);
+
+function classesSemaine(n: number, draft: number[], validees: number[]): string {
+  const cochee = draft.includes(n);
+  const validee = validees.includes(n);
+  const classes = ["celcat-semaine"];
+  if (cochee) classes.push("celcat-semaine--cochee");
+  if (validee) classes.push("celcat-semaine--validee");
+  if (validee && !cochee) classes.push("celcat-semaine--retiree");
+  return classes.join(" ");
+}
+
+function libelleJournal(kind: string): string {
+  if (kind === "created") return "créé";
+  if (kind === "blocked") return "bloqué";
+  return kind;
+}
+
+function libelleExtra(extra: CelcatExtra): string {
+  return extra.course_code || extra.libelle || extra.module_nom || extra.id;
+}
 
 export function AdminCelcatView() {
   const [etat, setEtat] = useState<CelcatEtat | null>(null);
@@ -95,7 +115,7 @@ export function AdminCelcatView() {
 
   if (erreur && !etat) {
     return (
-      <section className="view">
+      <section className="view celcat">
         <div className="panel">
           <p className="alerte" role="alert">
             {erreur}
@@ -107,7 +127,7 @@ export function AdminCelcatView() {
 
   if (!etat) {
     return (
-      <section className="view">
+      <section className="view celcat">
         <div className="panel">
           <p className="muted">Chargement…</p>
         </div>
@@ -115,8 +135,10 @@ export function AdminCelcatView() {
     );
   }
 
+  const validees = etat.semaines_validees;
+
   return (
-    <section className="view">
+    <section className="view celcat">
       {erreur && (
         <div className="panel">
           <p className="alerte" role="alert">
@@ -125,88 +147,133 @@ export function AdminCelcatView() {
         </div>
       )}
 
-      <div className="panel">
-        <h3>Saisie Celcat</h3>
-        <label>
-          <input
-            type="checkbox"
-            checked={etat.saisie_active}
-            disabled={enCours}
-            onChange={(ev) => void basculerSaisie(ev.target.checked)}
-          />{" "}
-          Saisie active
-        </label>
-        <p className="muted">
-          {etat.worker_ok ? "Worker joignable." : "Worker injoignable."}
-          {etat.valide_le ? ` Dernière validation : ${etat.valide_le}.` : ""}
-        </p>
-      </div>
-
-      <div className="panel">
-        <h3>Semaines à envoyer</h3>
-        <div>
-          {SEMAINES.map((n) => {
-            const libelle = n <= 2 ? `Semaine ${n}` : `S. ${n}`;
-            return (
-              <label key={n}>
-                <input
-                  type="checkbox"
-                  checked={semaines.includes(n)}
-                  aria-label={libelle}
-                  onChange={() => basculerSemaine(n)}
-                />{" "}
-                {libelle}
-              </label>
-            );
-          })}
+      <div className={`panel celcat-hero celcat-etape ${etat.saisie_active ? "celcat-hero--on" : "celcat-hero--off"}`}>
+        <span className="celcat-etape-num">1</span>
+        <div className="celcat-etape-corps">
+          <h3>Armer l’écriture</h3>
+          <p className="celcat-hero-statut">{etat.saisie_active ? "ÉCRITURE ON" : "ÉCRITURE OFF"}</p>
+          <p className="celcat-hero-consequence">
+            {etat.saisie_active
+              ? "Chaque modification du planning s’écrit tout de suite dans Celcat."
+              : "Les modifications du planning ne s’écrivent pas tout de suite dans Celcat."}
+          </p>
+          <div className="celcat-switch-row">
+            <button
+              type="button"
+              role="switch"
+              className="celcat-switch"
+              aria-checked={etat.saisie_active}
+              aria-label="Écriture Celcat"
+              disabled={enCours}
+              onClick={() => void basculerSaisie(!etat.saisie_active)}
+            >
+              <span className="celcat-switch-knob" />
+            </button>
+            <span>{etat.saisie_active ? "Live armé" : "Live désarmé"}</span>
+          </div>
+          <div className="celcat-hero-meta">
+            <span className={`pill mini ${etat.worker_ok ? "good" : "bad"}`}>
+              {etat.worker_ok ? "Worker joignable." : "Worker injoignable."}
+            </span>
+            <span>
+              {etat.valide_le ? `Dernière validation : ${etat.valide_le}.` : "Aucune validation."}
+            </span>
+          </div>
         </div>
-        <button type="button" className="btn btn--accent" disabled={enCours} onClick={() => void valider()}>
-          Valider
-        </button>
       </div>
 
-      <div className="panel">
-        <h3>Extras Live</h3>
-        {extras.length === 0 ? (
-          <p className="muted">Aucun extra ouvert.</p>
-        ) : (
-          <ul>
-            {extras.map((x) => (
-              <li key={x.id}>
-                {x.course_code || x.libelle || x.module_nom || x.id}{" "}
+      <div className="panel celcat-etape">
+        <span className="celcat-etape-num">2</span>
+        <div className="celcat-etape-corps">
+          <h3>Semaines du lot de nuit</h3>
+          <p>
+            Enregistrer ici ne pousse rien tout de suite : le job de nuit enverra ces semaines. Ce n’est pas un
+            envoi immédiat.
+          </p>
+          <div className="celcat-semaines">
+            {SEMAINES.map((n) => {
+              const validee = validees.includes(n);
+              const cochee = semaines.includes(n);
+              return (
                 <button
+                  key={n}
                   type="button"
-                  className="btn btn--sm"
-                  disabled={enCours}
-                  aria-label={`Ajouter ${x.course_code || x.libelle || x.id}`}
-                  onClick={() => void traiterExtra(x.id, "ajouter")}
+                  className={classesSemaine(n, semaines, validees)}
+                  aria-pressed={cochee}
+                  aria-label={validee ? `Semaine ${n} validée` : `Semaine ${n}`}
+                  onClick={() => basculerSemaine(n)}
                 >
-                  Ajouter
-                </button>{" "}
-                <button
-                  type="button"
-                  className="btn btn--sm btn--ghost"
-                  disabled={enCours}
-                  aria-label={`Ignorer ${x.course_code || x.libelle || x.id}`}
-                  onClick={() => void traiterExtra(x.id, "ignorer")}
-                >
-                  Ignorer
+                  Semaine {n}
+                  {validee ? (
+                    <span className="pill mini" aria-hidden="true">
+                      validée
+                    </span>
+                  ) : null}
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
+              );
+            })}
+          </div>
+          <button type="button" className="btn btn--accent" disabled={enCours} onClick={() => void valider()}>
+            Enregistrer le lot de nuit
+          </button>
+        </div>
       </div>
 
-      <div className="panel">
+      <div className="panel celcat-etape">
+        <span className="celcat-etape-num">3</span>
+        <div className="celcat-etape-corps">
+          <h3>Extras Live</h3>
+          {extras.length === 0 ? (
+            <p className="muted">Aucun extra ouvert.</p>
+          ) : (
+            <ul className="celcat-extras">
+              {extras.map((x) => {
+                const label = libelleExtra(x);
+                return (
+                  <li key={x.id} className="celcat-extra">
+                    <strong>{label}</strong>
+                    <div className="celcat-extra-actions">
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        disabled={enCours}
+                        aria-label={`Ajouter ${label}`}
+                        onClick={() => void traiterExtra(x.id, "ajouter")}
+                      >
+                        Ajouter
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--sm btn--ghost"
+                        disabled={enCours}
+                        aria-label={`Ignorer ${label}`}
+                        onClick={() => void traiterExtra(x.id, "ignorer")}
+                      >
+                        Ignorer
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <div className="panel celcat-journal">
         <h3>Journal</h3>
         {logs.length === 0 ? (
           <p className="muted">Aucune entrée.</p>
         ) : (
-          <ul>
+          <ul className="celcat-journal-list">
             {logs.map((item, i) => (
-              <li key={`${item.session_id ?? "log"}-${i}`}>
-                {item.kind}
+              <li
+                key={`${item.session_id ?? "log"}-${i}`}
+                className={`celcat-journal-item ${item.kind === "created" ? "celcat-journal-item--created" : ""} ${item.kind === "blocked" ? "celcat-journal-item--blocked" : ""}`.trim()}
+              >
+                <span className={`pill mini ${item.kind === "blocked" ? "bad" : item.kind === "created" ? "good" : ""}`}>
+                  {libelleJournal(item.kind)}
+                </span>
                 {item.motif ? ` — ${item.motif}` : ""}
               </li>
             ))}
