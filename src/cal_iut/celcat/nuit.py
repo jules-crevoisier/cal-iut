@@ -147,11 +147,18 @@ def _scanner_extras(page: Any, doc: dict[str, Any]) -> None:
 
 
 def executer_job_nuit(page: Any = None) -> None:
+    from datetime import datetime, timezone
+
+    from cal_iut.celcat.etat import sauver, semaines_celcat_passees
+
     doc = charger()
     if not doc.get("saisie_active"):
         return
 
-    semaines = {int(s) for s in (doc.get("semaines_validees") or [])}
+    validees = {int(s) for s in (doc.get("semaines_validees") or [])}
+    deja_lancees = {int(s) for s in (doc.get("semaines_lancees") or [])}
+    passees = set(semaines_celcat_passees())
+    semaines = validees - deja_lancees - passees
     state = get_state()
     journal = doc.get("journal") if isinstance(doc.get("journal"), dict) else {}
 
@@ -201,3 +208,9 @@ def executer_job_nuit(page: Any = None) -> None:
         )
 
     _scanner_extras(page, doc)
+
+    doc = charger()
+    lancees = {int(s) for s in (doc.get("semaines_lancees") or [])}
+    doc["semaines_lancees"] = sorted(lancees | semaines)
+    doc["dernier_job"] = {"lance_le": datetime.now(timezone.utc).isoformat()}
+    sauver(doc)

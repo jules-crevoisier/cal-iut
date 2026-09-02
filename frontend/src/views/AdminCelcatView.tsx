@@ -1,6 +1,6 @@
 /**
  * Administration Celcat — bandeau Live, 3 étapes, lot de nuit, extras, journal.
- * Chrome identique à Comptes (panels, boutons, pills). Pas de nouvel endpoint.
+ * Chrome identique à Comptes (panels, boutons, pills).
  */
 import { useCallback, useEffect, useState } from "react";
 
@@ -10,6 +10,7 @@ import {
   fetchCelcatExtras,
   fetchCelcatLogs,
   ignorerExtraCelcat,
+  lancerNuitCelcat,
   patchCelcatSaisie,
   validerSemainesCelcat,
   type CelcatEtat,
@@ -19,14 +20,32 @@ import {
 
 const SEMAINES = Array.from({ length: 30 }, (_, i) => i + 1);
 
-function classesSemaine(n: number, draft: number[], validees: number[]): string {
+function classesSemaine(
+  n: number,
+  draft: number[],
+  validees: number[],
+  passees: number[],
+  lancees: number[],
+): string {
   const cochee = draft.includes(n);
   const validee = validees.includes(n);
+  const passee = passees.includes(n);
+  const lancee = lancees.includes(n);
   const classes = ["celcat-semaine"];
   if (cochee) classes.push("celcat-semaine--cochee");
   if (validee) classes.push("celcat-semaine--validee");
   if (validee && !cochee) classes.push("celcat-semaine--retiree");
+  if (passee) classes.push("celcat-semaine--passee");
+  if (lancee) classes.push("celcat-semaine--lancee");
+  if (passee || lancee) classes.push("celcat-semaine--disabled");
   return classes.join(" ");
+}
+
+function libelleSemaine(n: number, passees: number[], lancees: number[], validees: number[]): string {
+  if (passees.includes(n)) return `Semaine ${n} passée`;
+  if (lancees.includes(n)) return `Semaine ${n} lancée`;
+  if (validees.includes(n)) return `Semaine ${n} validée`;
+  return `Semaine ${n}`;
 }
 
 function libelleJournal(kind: string): string {
@@ -92,6 +111,23 @@ export function AdminCelcatView() {
     }
   };
 
+  const lancerMaintenant = async () => {
+    setEnCours(true);
+    try {
+      setEtat(await lancerNuitCelcat());
+      setErreur(null);
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  const basculerSemaine = (n: number, verrouillee: boolean) => {
+    if (verrouillee) return;
+    setSemaines((prev) => (prev.includes(n) ? prev.filter((s) => s !== n) : [...prev, n].sort((a, b) => a - b)));
+  };
+
   const traiterExtra = async (id: string, action: "ajouter" | "ignorer") => {
     setEnCours(true);
     try {
@@ -107,10 +143,6 @@ export function AdminCelcatView() {
     } finally {
       setEnCours(false);
     }
-  };
-
-  const basculerSemaine = (n: number) => {
-    setSemaines((prev) => (prev.includes(n) ? prev.filter((s) => s !== n) : [...prev, n].sort((a, b) => a - b)));
   };
 
   if (erreur && !etat) {
@@ -136,6 +168,8 @@ export function AdminCelcatView() {
   }
 
   const validees = etat.semaines_validees;
+  const passees = etat.semaines_passees ?? [];
+  const lancees = etat.semaines_lancees ?? [];
 
   return (
     <section className="view celcat">
@@ -187,35 +221,48 @@ export function AdminCelcatView() {
         <div className="celcat-etape-corps">
           <h3>Semaines du lot de nuit</h3>
           <p>
-            Enregistrer ici ne pousse rien tout de suite : le job de nuit enverra ces semaines. Ce n’est pas un
-            envoi immédiat.
+            Enregistrer le lot pour cette nuit. Lancer maintenant enfile le même lot tout de suite, sans attendre
+            minuit. Les semaines passées ou déjà lancées sont désactivées.
           </p>
           <div className="celcat-semaines">
             {SEMAINES.map((n) => {
               const validee = validees.includes(n);
               const cochee = semaines.includes(n);
+              const verrouillee = passees.includes(n) || lancees.includes(n);
+              const pastille = passees.includes(n) ? "passée" : lancees.includes(n) ? "lancée" : validee ? "validée" : null;
               return (
                 <button
                   key={n}
                   type="button"
-                  className={classesSemaine(n, semaines, validees)}
+                  className={classesSemaine(n, semaines, validees, passees, lancees)}
                   aria-pressed={cochee}
-                  aria-label={validee ? `Semaine ${n} validée` : `Semaine ${n}`}
-                  onClick={() => basculerSemaine(n)}
+                  aria-label={libelleSemaine(n, passees, lancees, validees)}
+                  disabled={verrouillee || enCours}
+                  onClick={() => basculerSemaine(n, verrouillee)}
                 >
                   Semaine {n}
-                  {validee ? (
+                  {pastille ? (
                     <span className="pill mini" aria-hidden="true">
-                      validée
+                      {pastille}
                     </span>
                   ) : null}
                 </button>
               );
             })}
           </div>
-          <button type="button" className="btn btn--accent" disabled={enCours} onClick={() => void valider()}>
-            Enregistrer le lot de nuit
-          </button>
+          <div className="celcat-lot-actions">
+            <button type="button" className="btn btn--accent" disabled={enCours} onClick={() => void valider()}>
+              Enregistrer le lot de nuit
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={enCours || !etat.saisie_active}
+              onClick={() => void lancerMaintenant()}
+            >
+              Lancer maintenant
+            </button>
+          </div>
         </div>
       </div>
 

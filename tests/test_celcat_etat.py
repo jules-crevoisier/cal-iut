@@ -20,6 +20,7 @@ from test_celcat_rpc import FaussePage
 NOUVELLES_ECRITURES = (
     ("patch", "/celcat/saisie", {"active": True}),
     ("post", "/celcat/valider", {"semaines": [1, 2]}),
+    ("post", "/celcat/lancer-nuit", None),
     ("post", "/celcat/extras/extra-1/ajouter", None),
     ("post", "/celcat/extras/extra-1/ignorer", None),
 )
@@ -78,6 +79,8 @@ def test_should_persist_saisie_active_false_by_default_when_no_settings_exist(
     etat = reponse.json()
     assert etat["saisie_active"] is False
     assert "semaines_validees" in etat
+    assert "semaines_passees" in etat
+    assert "semaines_lancees" in etat
     assert "valide_le" in etat
     assert "dernier_job" in etat
     assert "compteurs" in etat
@@ -175,3 +178,42 @@ def test_should_paginate_get_celcat_logs_and_include_created_modified_deleted_bl
     bloques = [item for item in tout if item.get("kind") == "blocked"]
     assert bloques
     assert any(item.get("motif") and "WR314D" in str(item["motif"]) for item in bloques)
+
+
+def test_should_list_past_solver_weeks_as_semaines_passees_when_today_is_after_them(
+    client_admin,
+) -> None:
+    from datetime import date
+
+    from cal_iut.celcat.etat import semaines_celcat_passees
+
+    passees = semaines_celcat_passees(today=date(2026, 9, 16))
+    assert 1 in passees
+    assert 2 in passees
+    assert 4 not in passees
+    etat = client_admin.get("/celcat/etat").json()
+    assert isinstance(etat["semaines_passees"], list)
+    assert isinstance(etat["semaines_lancees"], list)
+
+
+def test_should_return_409_when_post_celcat_lancer_nuit_and_saisie_is_off(
+    client_admin,
+) -> None:
+    reponse = client_admin.post("/celcat/lancer-nuit")
+    assert reponse.status_code == 409, reponse.text
+    assert client_admin.get("/celcat/etat").json()["semaines_lancees"] == []
+
+
+def test_should_mark_validees_as_lancees_when_post_celcat_lancer_nuit_and_saisie_is_on(
+    client_admin,
+) -> None:
+    client_admin.patch("/celcat/saisie", json={"active": True})
+    client_admin.post("/celcat/valider", json={"semaines": [4, 5]})
+    reponse = client_admin.post("/celcat/lancer-nuit")
+    assert reponse.status_code == 200, reponse.text
+    lancees = reponse.json()["semaines_lancees"]
+    assert 4 in lancees
+    assert 5 in lancees
+    assert client_admin.get("/celcat/etat").json()["semaines_lancees"] == lancees
+    assert reponse.json()["dernier_job"]
+

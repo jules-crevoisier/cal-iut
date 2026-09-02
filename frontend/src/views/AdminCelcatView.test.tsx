@@ -9,6 +9,8 @@ import { AdminCelcatView } from "./AdminCelcatView";
 const ETAT = {
   saisie_active: false,
   semaines_validees: [1],
+  semaines_passees: [] as number[],
+  semaines_lancees: [] as number[],
   valide_le: "2026-09-01T10:00:00+00:00",
   dernier_job: null,
   compteurs: { created: 1, modified: 0, deleted: 0, blocked: 1 },
@@ -55,6 +57,12 @@ function stubFetch(opts?: { etat?: typeof ETAT; extras?: typeof EXTRAS }): Retur
     if (cible.includes("/celcat/valider") && init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as { semaines: number[] };
       return jsonOk({ ...etat, semaines_validees: body.semaines });
+    }
+    if (cible.includes("/celcat/lancer-nuit") && init?.method === "POST") {
+      const lancees = [...new Set([...(etat.semaines_lancees ?? []), ...(etat.semaines_validees ?? [])])].sort(
+        (a, b) => a - b,
+      );
+      return jsonOk({ ...etat, semaines_lancees: lancees });
     }
     if (cible.includes("/ajouter") || cible.includes("/ignorer")) {
       return jsonOk({ statut: "ok" });
@@ -130,7 +138,8 @@ describe("AdminCelcatView", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /armer l’écriture/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /lot de nuit/i })).toBeInTheDocument();
-    expect(screen.getByText(/pas un envoi immédiat/i)).toBeInTheDocument();
+    expect(screen.getByText(/lancer maintenant enfile le même lot/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /lancer maintenant/i })).toBeInTheDocument();
   });
 
   it("should name the submit lot de nuit and not expose a button named only Valider", async () => {
@@ -229,5 +238,38 @@ describe("AdminCelcatView", () => {
     expect(chemins.some((u) => u.includes("/celcat/extras?statut=ouvert"))).toBe(true);
     expect(chemins.some((u) => u.includes("/celcat/logs?limit=50"))).toBe(true);
     expect(chemins).toHaveLength(3);
+  });
+
+  it("should disable a past week and a launched week", async () => {
+    stubFetch({
+      etat: { ...ETAT, semaines_passees: [1], semaines_lancees: [3], semaines_validees: [3] },
+    });
+    render(<AdminCelcatView />);
+
+    const passee = await screen.findByRole("button", { name: /semaine 1 passée/i });
+    const lancee = screen.getByRole("button", { name: /semaine 3 lancée/i });
+    expect(passee).toBeDisabled();
+    expect(lancee).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^semaine 2$/i })).not.toBeDisabled();
+  });
+
+  it("should disable Lancer maintenant when saisie is off", async () => {
+    stubFetch();
+    render(<AdminCelcatView />);
+
+    const lancer = await screen.findByRole("button", { name: /lancer maintenant/i });
+    expect(lancer).toBeDisabled();
+  });
+
+  it("should POST /celcat/lancer-nuit when Lancer maintenant is clicked while saisie is on", async () => {
+    const mock = stubFetch({ etat: { ...ETAT, saisie_active: true, semaines_validees: [4] } });
+    render(<AdminCelcatView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /lancer maintenant/i }));
+    await waitFor(() => {
+      expect(
+        mock.mock.calls.some(([url, init]) => String(url).includes("/celcat/lancer-nuit") && init?.method === "POST"),
+      ).toBe(true);
+    });
   });
 });

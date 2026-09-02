@@ -2465,7 +2465,7 @@ def _apres_ecriture_planning(session_id: str, action: str) -> None:
 
 
 def _celcat_etat_public() -> CelcatEtatResponse:
-    from cal_iut.celcat.etat import charger
+    from cal_iut.celcat.etat import charger, semaines_celcat_passees
     from cal_iut.celcat.logs import tous
 
     doc = charger()
@@ -2484,6 +2484,8 @@ def _celcat_etat_public() -> CelcatEtatResponse:
     return CelcatEtatResponse(
         saisie_active=bool(doc.get("saisie_active")),
         semaines_validees=list(doc.get("semaines_validees") or []),
+        semaines_passees=semaines_celcat_passees(),
+        semaines_lancees=list(doc.get("semaines_lancees") or []),
         valide_le=doc.get("valide_le"),
         dernier_job=dernier if isinstance(dernier, dict) else None,
         compteurs=compteurs,
@@ -2719,6 +2721,17 @@ def celcat_valider(body: CelcatValiderRequest) -> CelcatEtatResponse:
     doc["semaines_validees"] = [int(s) for s in body.semaines]
     doc["valide_le"] = datetime.now(timezone.utc).isoformat()
     sauver(doc)
+    return _celcat_etat_public()
+
+
+@app.post("/celcat/lancer-nuit", response_model=CelcatEtatResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_lancer_nuit() -> CelcatEtatResponse:
+    from cal_iut.celcat.etat import charger
+    from cal_iut.celcat.nuit import executer_job_nuit
+
+    if not charger().get("saisie_active"):
+        raise HTTPException(409, "Saisie Celcat désactivée")
+    executer_job_nuit()
     return _celcat_etat_public()
 
 

@@ -113,3 +113,45 @@ def test_should_list_a_live_only_mmi_course_as_extra_statut_ouvert_after_nightly
         and (x.get("course_code") == "WR106" or "WR106" in str(x.get("libelle") or x.get("module_nom") or ""))
         for x in lignes
     )
+
+
+def test_should_record_semaines_validees_as_lancees_after_nightly_runs_and_saisie_is_on(
+    planning,
+) -> None:
+    from cal_iut.celcat.etat import charger
+
+    activer_saisie(planning)
+    planning.post("/celcat/valider", json={"semaines": [SEMAINE]})
+    _executer_nuit()
+    lancees = charger().get("semaines_lancees") or []
+    assert SEMAINE in [int(s) for s in lancees]
+
+
+def test_should_not_reenqueue_when_week_already_in_semaines_lancees(
+    planning,
+) -> None:
+    activer_saisie(planning)
+    planning.post("/celcat/valider", json={"semaines": [SEMAINE]})
+    _executer_nuit()
+    vider_file()
+    _executer_nuit()
+    assert jobs_en_attente() == []
+
+
+def test_should_skip_past_weeks_and_not_mark_them_lancees(
+    planning,
+    monkeypatch,
+) -> None:
+    from cal_iut.celcat.etat import charger
+
+    activer_saisie(planning)
+    planning.post("/celcat/valider", json={"semaines": [SEMAINE]})
+    monkeypatch.setattr(
+        "cal_iut.celcat.etat.semaines_celcat_passees",
+        lambda **_: [SEMAINE],
+    )
+    vider_file()
+    _executer_nuit()
+    assert jobs_en_attente() == []
+    assert SEMAINE not in [int(s) for s in charger().get("semaines_lancees") or []]
+
