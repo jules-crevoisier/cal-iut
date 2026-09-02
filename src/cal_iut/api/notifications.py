@@ -44,6 +44,8 @@ EVENEMENTS: dict[str, str] = {
     "deplacement": "Une séance est déplacée",
     "echange": "Deux séances échangent leurs places",
     "placement": "Une séance non placée est posée au planning",
+    "celcat_echec": "Écriture Celcat refusée ou échouée",
+    "celcat_ok": "Écriture Celcat réussie (création ou mise à jour)",
 }
 
 _DELAI_DEFAUT_MINUTES = 15

@@ -83,6 +83,11 @@ categories:
   TP: "[TP]"
   CM: "[CM]"
 
+# IDs numériques (udlResources / canari) — garde-fou écriture CM.
+# Voir cal_iut.celcat.categories.CATEGORIE_IDS
+categories_ids:
+  CM: 430
+
 # Distance VERTICALE entre un libellé et le champ qu'il désigne : le champ
 # est SOUS son libellé, pas à sa droite.
 #

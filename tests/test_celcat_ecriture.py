@@ -125,6 +125,24 @@ def test_should_send_sentinel_event_id_and_group_when_charge_utile() -> None:
     assert charge["groups"][0]["group_id"] == GROUP_ID
 
 
+def test_should_keep_event_id_when_charge_utile_updates_existing_event() -> None:
+    """Modifier un cours déjà dans Celcat = save avec le même event_id.
+
+    CI ne frappe pas Live. Ce contrat dit : la charge d'update porte
+    l'identifiant, pas un create (event_id absent / 0) ni un delete.
+    """
+    charge = charge_utile(
+        _entree(),
+        group_id=GROUP_ID,
+        ids=IDS,
+        masque=_masque(),
+        event_id=1931666,
+    )
+    assert charge["event_id"] == 1931666
+    assert "new" not in charge
+    assert "delete" not in {str(k).lower() for k in charge}
+
+
 def test_should_not_call_delete_remove_or_new_when_creer_manquants() -> None:
     page = FaussePage()
     page.reponses["udlTimetables.save"] = 8000001
@@ -175,3 +193,31 @@ def test_should_record_session_id_and_event_id_when_save_returns_id() -> None:
     assert (entree.session_id, 8000001) in list(resultat.crees)
     events = charger_edt(page, group_ids=[GROUP_ID])
     assert any((e.get("event_id") or e.get("id")) == 8000001 for e in events)
+
+
+def test_should_pass_event_id_to_save_when_creer_manquants_updates() -> None:
+    page = FaussePage()
+    page.reponses["udlTimetables.save"] = 1931666
+    creer_manquants(
+        page,
+        [_entree()],
+        group_id=GROUP_ID,
+        ids=IDS,
+        masque=_masque(),
+        methode="udlTimetables.save",
+        event_id=1931666,
+    )
+    evenement = None
+    for _js, arg in page.journal:
+        if isinstance(arg, dict) and arg.get("methode") == "udlTimetables.save":
+            evenement = arg["params"][0][0]
+            break
+    assert evenement is not None
+    assert evenement["event_id"] == 1931666
+    for _js, arg in page.journal:
+        if not isinstance(arg, dict):
+            continue
+        nom = str(arg.get("methode") or arg.get("method") or "").lower()
+        assert "delete" not in nom
+        assert "remove" not in nom
+        assert "new" not in nom

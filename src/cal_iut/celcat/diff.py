@@ -116,7 +116,11 @@ def comparer(
         if len(hits) == 0:
             plan.a_creer.append(e)
         elif len(hits) == 1:
-            if _salle_compatibles(e, hits[0]):
+            # Salle OU catégorie (CM saisi en [TP], etc.) → update, pas « déjà là ».
+            from cal_iut.celcat.categories import categorie_live_coherente
+
+            cat_ok = categorie_live_coherente(e.type_seance_nom, hits[0].categorie)
+            if _salle_compatibles(e, hits[0]) and cat_ok:
                 plan.deja_la.append((e, hits[0]))
             else:
                 plan.a_modifier.append((e, hits[0]))

@@ -205,11 +205,11 @@ modules:
   WR309D: "TSBZ309D"  # Création — Kyllian 02/09/2026
   WR310D: "TSBZ310D"  # Culture artistique
   WR311D: "TSBZ311D"  # Audiovisuel motion
-  WR312D: "TSBZ312D"  # Dév Front — Kyllian 02/09/2026, à confirmer avec Marina
+  WR312D: "TSBZ312D"  # Dév Front — Kyllian 02/09/2026 (confirmé soir)
   WR313D: "TSBZ313D"  # Dév Back — Kyllian 02/09/2026
-  WR314D: "TSBZ314D"  # Dépl. services — Kyllian 02/09/2026, à confirmer avec Marina
-  WR317D: "TSBZ317D"  # Eco/Droit — Kyllian 02/09/2026, à confirmer avec Marina
-  WR318D: "TSBZ318D"  # PPP — Kyllian 02/09/2026, à confirmer avec Marina
+  WR314D: "TSBZ314D"  # Dépl. services — Kyllian 02/09/2026 (confirmé soir)
+  WR317D: "TSBZ317D"  # Eco/Droit — Kyllian 02/09/2026 (confirmé soir)
+  WR318D: "TSBZ318D"  # PPP — Kyllian 02/09/2026 (confirmé soir)
   WR319D: "TSBZ319D"  # Symfony — Kyllian 02/09/2026
   WR501D: "TSBZ5010"  # Anglais
   WR502D: "TSBZ5020"  # Management qualité
@@ -257,9 +257,8 @@ modules:
   WRA510D: "TSBZE10D"  # Dev avancé AI
 
 # --- Encore deux codes Celcat pour le même module --------------------------
-# Kyllian 02/09/2026 : prendre le code avec Z (TSBZ…). Les WR305/309/312–
-# 314/317–319 sont passés dans `modules:` (ceux marqués « ! » restent à
-# confirmer avec Marina, le mapping TSBZ est déjà celui à utiliser).
+# Kyllian 02/09/2026 soir : TSBZ confirmé pour WR305/309/312–314/317–319.
+#   WR315D / WR316D : deux codes Celcat chacun, toujours non tranchés.
 #   WR315D: TSBZ3150 (Maths) | TSBZ315D (Maths)
 #   WR316D: TSBZ3160 (Gestion de projet) | TSBZ316D (Gestion de projet)
 

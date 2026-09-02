@@ -438,6 +438,28 @@ Acquis :
   d'entraînement par défaut, refus avant tout clic si une séance est bloquée,
   si Celcat est injoignable, ou si le formulaire n'est pas relevé.
 
+## Catégories CM / TD / TP
+
+Les libellés Celcat sont `[CM]`, `[TD]`, `[TP]` (`celcat_formulaire.yaml`).
+L'id numérique de `[CM]` est **430** (canari).
+
+**Bug historique** : l'ancien autoclicker (`clickclick`) ne connaissait que
+TD=4 sinon TP — un CM était donc enregistré en `[TP]` (ex. WR116 mardi
+8 sept. 14h). Le chemin RPC actuel résout `[CM]` par libellé ; un filet
+refuse toute charge CM dont `event_cat_id ≠ 430`
+(`cal_iut.celcat.categories`).
+
+Audit / correctif Live (VPN URCA requis) :
+
+```powershell
+python scripts/corriger_cm_categories_celcat.py --vpn --lundi 2026-09-07 --base URCA_2026
+python scripts/corriger_cm_categories_celcat.py --vpn --lundi 2026-09-07 `
+  --base URCA_2026 --production --ecrire
+```
+
+Le diff `comparer` envoie aussi en `a_modifier` un événement dont la
+catégorie Live ne correspond pas au type maquette (salle OK mais [TP] pour un CM).
+
 ## Voie durable : JSON-RPC dans la page (pas le clicker)
 
 Le `new` / glisser-déposer n'est **pas** le chemin d'écriture. Après `new`,

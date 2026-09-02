@@ -126,6 +126,16 @@ def _executer(session_id: str, action: str) -> None:
             session_id=session_id,
             course_code=getattr(session, "course_code", None),
         )
+        try:
+            from cal_iut.api import notifications
+
+            notifications.signaler(
+                "celcat_echec",
+                f"{session_id} : {motif}",
+            )
+            notifications.envoyer_si_temps_ecoule()
+        except Exception:  # noqa: BLE001
+            pass
         return
 
     journal = doc.get("journal") or {}
