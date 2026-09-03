@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
 from pathlib import Path
 
 from cal_iut.celcat.categories import verifier_charge_categorie
@@ -19,7 +18,18 @@ from cal_iut.celcat.navigateur import (
     TYPE_PERSONNEL,
     TYPE_SALLES,
 )
-from cal_iut.celcat.rpc import charger_edt, charger_ressources, enregistrer_evenement, id_ressource
+from cal_iut.celcat.rpc import (
+    charger_edt,
+    charger_ressources,
+    enregistrer_evenement,
+    event_id_retour,
+    id_ressource,
+)
+
+# Ré-export : `_event_id_retour` vivait ici avant d'être promu public dans
+# `rpc.py` (partagé avec `modification.py`) — alias gardé pour ne rien
+# casser d'un éventuel appelant existant qui importait le nom privé.
+_event_id_retour = event_id_retour
 
 _FILTRE_VIDE: dict[str, object] = {"customOnly": False, "includedDetails": []}
 _CATALOGUE: dict[int, list[dict]] = {}
@@ -30,14 +40,14 @@ _CHEMIN_GROUPES = (
 
 __all__ = [
     "ProductionRefusee",
-    "SemainesNonRestreintes",
-    "ResultatEcriture",
     "RessourceIntrouvable",
+    "ResultatEcriture",
+    "SemainesNonRestreintes",
     "charge_utile",
-    "verifier_avant_envoi",
-    "resoudre_ids",
-    "resoudre_groupe",
     "creer_manquants",
+    "resoudre_groupe",
+    "resoudre_ids",
+    "verifier_avant_envoi",
 ]
 
 
@@ -103,20 +113,6 @@ def verifier_avant_envoi(
         )
     if base == BASE_PRODUCTION and not production_autorisee:
         raise ProductionRefusee("URCA_2026 exige --production")
-
-
-def _event_id_retour(resultat: object) -> int | None:
-    if isinstance(resultat, bool):
-        return None
-    if isinstance(resultat, int):
-        return resultat
-    if isinstance(resultat, list) and resultat:
-        return _event_id_retour(resultat[0])
-    if isinstance(resultat, dict):
-        brut = resultat.get("event_id") or resultat.get("id")
-        if brut is not None:
-            return int(brut)
-    return None
 
 
 def _filtre_ressource(*, record_ids: list[int] | None = None) -> dict:

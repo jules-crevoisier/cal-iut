@@ -499,6 +499,87 @@ Manquant :
 3. Les codes Celcat de 3 enseignants (`0` dans `celcat.yaml`) et de
    WSA501D.
 
+## Modifier / supprimer une séance déjà posée (cause racine du « partial key »)
+
+Le bug historique **`EUDLDSError: Cannot locate a record using only a
+partial key`** sur un update RPC n'était pas un champ manquant isolé — la
+tentation naturelle (« il manque `original_id` », « il manque
+`accessRights` »...) était fausse. Le canari du 01/09/2026 (event_id
+202985, FORMATION) l'a prouvé par comparaison : **c'est la DIFFÉRENCE
+STRUCTURELLE** entre un objet reconstruit à la main (quelques champs +
+`event_id` accroché dessus, comme le fait `charge_utile()` pour une
+création) et l'enregistrement **complet** que `udlTimetables.load` renvoie,
+qui fait échouer `save`. Un update Celcat n'accepte que sa propre forme
+complète, avec seulement les champs voulus modifiés dessus.
+
+Le correctif (`src/cal_iut/celcat/modification.py`) :
+
+1. `localiser_evenement(page, event_id, group_ids=...)` recharge l'EDT des
+   groupes concernés via `udlTimetables.load` et renvoie le dict **brut**
+   portant `event_id` — jamais un `EvenementCelcat` normalisé qui aurait
+   perdu des clés.
+2. `fusionner_deltas(brut, ...)` **clone** ce dict et n'écrase QUE
+   `day_of_week` / `start_time` / `end_time` / `weeks` / `event_cat_id` /
+   `dept_id` / `modules` / `rooms` / `staff` / `groups` / `notes` — le même
+   jeu de champs que `ecriture.charge_utile()`, mais superposé sur
+   l'enregistrement complet plutôt qu'à la place de rien.
+3. `modifier_evenement(...)` enchaîne localiser → fusionner → revérifier
+   (`categories.verifier_charge_categorie`, `ecriture.verifier_avant_envoi`
+   — mêmes garde-fous que la création : CM sans catégorie refusé,
+   masque semaines à 1×Y, `--production` exigé sur URCA_2026) → `save`.
+
+`modifier_seance`/`supprimer_seance` (RPC) sont désormais **branchés** :
+`nuit.py::executer_job_nuit(page=...)` consomme les jobs `update` de
+`celcat_file_attente.json` via `modification.modifier_manquants`, aux
+côtés des `create` (`ecriture.creer_manquants`, inchangé).
+
+**La suppression suit la même cause racine** (`suppression.py`) : on
+localise l'événement AVANT de le supprimer, jamais un `event_id` nu. Le
+garde-fou `file_attente.autoriser_suppression` (jour férié protégé,
+fantôme, `protected=Y`, Celcat-en-plus) est réévalué sur l'enregistrement
+**frais** rechargé, jamais sur l'instantané porté par le job en file — un
+jour férié devenu protégé après la mise en file bloque quand même.
+
+**La méthode RPC de suppression reste NON PROUVÉE.** Contrairement à
+`udlTimetables.save` (capturé au canari du 01/09/2026), aucune capture
+n'a encore établi le nom réel de la méthode `delete`/`remove`.
+`data/config/celcat_rpc.yaml::methode_suppression` reste donc
+**volontairement vide** tant qu'un canari ne l'a pas prouvée — comme
+`methode_ecriture` l'était avant le 01/09/2026. `MethodeSuppressionAbsente`
+refuse proprement plutôt que de deviner un nom : `supprimer_manquants`
+classe alors chaque job en échec (RPC), pas en refus (garde-fou), et il
+reste en file pour la prochaine nuit une fois la méthode capturée.
+
+### Ce qui est PROUVÉ en direct vs ce qui ne l'est PAS (02/09/2026)
+
+Deux cas très différents se cachaient derrière la même erreur « partial
+key », et ils n'ont pas le même niveau de preuve :
+
+- **Catégorie / horaire / semaines, ressources INCHANGÉES** — prouvé en
+  direct à deux reprises : sur URCA_FORMATION (canari 202985, aller-retour
+  notes), puis en production sur URCA_2026 (les 2 CM WR116, `event_id`
+  1931709 et 1933218, `[TP] → [CM]`, confirmé par une relecture d'audit à
+  0 écart). **C'est le seul chemin qu'on peut recommander aujourd'hui.**
+- **Changement de RESSOURCE (salle/enseignant/matière)** — la première
+  version de `fusionner_deltas` (greffer le nouvel id sur le sous-objet de
+  l'ANCIENNE ressource) écrivait **sans erreur mais sans effet** : `save`
+  répond succès, la ressource ne change pas (constaté sur le canari
+  202985, salle A.018 → une autre salle, ça a marché ; le retour vers
+  A.018 est resté silencieusement bloqué). Une deuxième version (recharger
+  le VRAI enregistrement de la ressource visée via `udlResources.load`)
+  s'est heurtée à un « partial key » sur le sous-objet lui-même — corrigé
+  en y incluant `event_id` (l'association événement↔ressource se localise
+  par les DEUX, pas par le seul id de la ressource). Après ce correctif,
+  le retour vers A.018 est **resté silencieusement sans effet, à nouveau**
+  — aucune erreur, la salle ne change toujours pas. Hypothèse non vérifiée :
+  la salle visée (A.018, dept `iut Troyes T00`, site 101287) est hors du
+  périmètre d'écriture du rôle utilisé, et Celcat ignore l'affectation au
+  lieu de la refuser explicitement — mais ce n'est PAS confirmé.
+  **Ne pas activer ce chemin pour un déplacement de salle/enseignant/matière
+  avant d'avoir compris ce dernier silencieux.** L'événement canari
+  (202985, URCA_FORMATION) est resté sur la mauvaise salle après ce test —
+  base d'entraînement, pas de production concernée.
+
 ## Relire le formulaire (si Celcat change)
 
 Le relevé du 01/09/2026 a rempli `celcat_formulaire.yaml`. Pour le

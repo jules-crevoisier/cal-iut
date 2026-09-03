@@ -2,20 +2,38 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+from pathlib import Path
 from typing import Any
 
 from cal_iut.api.state import get_state
+from cal_iut.celcat.ecriture import creer_manquants, resoudre_groupe, resoudre_ids
 from cal_iut.celcat.etat import charger, live_actuel
-from cal_iut.celcat.extras import enregistrer, lister as lister_extras
-from cal_iut.celcat.file_attente import enfiler
+from cal_iut.celcat.extras import enregistrer
+from cal_iut.celcat.extras import lister as lister_extras
+from cal_iut.celcat.file_attente import enfiler, lister, retirer_traites
+from cal_iut.celcat.formulaire import charger_carte
 from cal_iut.celcat.lecture import (
     EvenementCelcat,
     est_cours,
     est_fantome,
     est_ferie,
     evenement_depuis_rpc,
+    indice_depuis_lundi,
 )
+from cal_iut.celcat.mapping import entrees_pour_state
+from cal_iut.celcat.modification import ElementModification, modifier_manquants
+from cal_iut.celcat.navigateur import BASE_ENTRAINEMENT
 from cal_iut.celcat.ops import correspond_live
+from cal_iut.celcat.rpc import masquer_semaine
+from cal_iut.celcat.rpc_config import charger_methodes
+from cal_iut.celcat.suppression import ElementSuppression, supprimer_manquants
+from cal_iut.celcat.sync import marquer_saisi
+
+# Même valeur que `scripts/pousser_manquants_celcat.py::PREMIERE_SEMAINE_CELCAT`
+# — indice `weeks` 0 = cette semaine ISO. Dupliqué plutôt qu'importé d'un
+# script : les scripts ne sont pas un module importable en amont de `src/`.
+PREMIERE_SEMAINE_CELCAT = 34
 
 
 def _event_id(row: dict[str, Any]) -> int | None:
@@ -146,8 +164,175 @@ def _scanner_extras(page: Any, doc: dict[str, Any]) -> None:
         )
 
 
-def executer_job_nuit(page: Any = None) -> None:
-    from datetime import datetime, timezone
+def _masque_pour(entree: Any) -> str:
+    """Masque `weeks` (54 caractères, 1×Y) pour une entrée — calcul PUR
+    (aucun RPC) : `lundi` -> indice `weeks`. Ne lève jamais : un lundi
+    absent ou hors calendrier retombe sur un masque vide, que
+    `verifier_avant_envoi` refusera proprement en aval (SemainesNonRestreintes)."""
+    try:
+        if not str(getattr(entree, "lundi", "") or "").strip():
+            return "N" * 54
+        from datetime import date
+
+        indice = indice_depuis_lundi(
+            date.fromisoformat(entree.lundi), premiere_semaine_celcat=PREMIERE_SEMAINE_CELCAT
+        )
+        return masquer_semaine(longueur=54, indice=indice)
+    except Exception:  # noqa: BLE001
+        return "N" * 54
+
+
+def _ids_pour(page: Any, entree: Any) -> dict:
+    """Résout module/salle/personnel/catégorie/département Celcat via le
+    catalogue RPC (`page`). Sur un échec de résolution (catalogue
+    indisponible, ressource inconnue), retombe sur `{}` : l'écriture réelle
+    (creer_manquants/modifier_manquants) refusera alors proprement via ses
+    propres garde-fous plutôt que de faire échouer tout le job de nuit."""
+    try:
+        state = get_state()
+        carte = charger_carte(state.config_dir)
+        categorie = carte.categorie(entree.type_seance_nom)
+        return resoudre_ids(page, entree, categorie=categorie)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _group_id_pour(page: Any, entree: Any, group_id_connu: object) -> int:
+    """Préfère le `group_id` déjà porté par le job (posé par `ops.py` ou par
+    le job lui-même) ; sinon résout via le catalogue RPC, sinon 0 (échec
+    encaissé en aval, jamais une exception qui arrête le job de nuit)."""
+    if group_id_connu not in (None, ""):
+        try:
+            return int(group_id_connu)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            pass
+    try:
+        return resoudre_groupe(page, entree.nom_groupe_celcat)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def _consommer_file(
+    page: Any, doc: dict[str, Any], *, base: str, production_autorisee: bool
+) -> None:
+    """Draine `file_attente.lister()` et appelle la primitive RPC adaptée à
+    chaque job (create/update/delete). Un job traité (succès OU refus de
+    garde-fou) est retiré de la file ; un job en échec RPC/réseau y reste
+    pour la prochaine nuit — jamais un `vider()` global."""
+    jobs = lister()
+    if not jobs:
+        return
+
+    state = get_state()
+    entrees = entrees_pour_state(state)
+    methodes = charger_methodes(Path(state.config_dir))
+    a_retirer: list[dict[str, Any]] = []
+
+    # --- create : un appel par job, comme les scripts existants (ids/masque
+    # ne sont pas garantis homogènes entre deux jobs différents). ---------
+    for job in jobs:
+        if job.get("action") != "create":
+            continue
+        entree = entrees.get(str(job.get("session_id") or ""))
+        if entree is None:
+            continue
+        group_id = _group_id_pour(page, entree, job.get("group_id"))
+        ids = _ids_pour(page, entree)
+        masque = _masque_pour(entree)
+        resultat = creer_manquants(
+            page,
+            [entree],
+            group_id=group_id,
+            ids=ids,
+            masque=masque,
+            methode=methodes.methode_ecriture,
+            base=base,
+            production_autorisee=production_autorisee,
+        )
+        for sid, eid in resultat.crees:
+            marquer_saisi(entree, event_id=eid, group_id=group_id)
+            a_retirer.append(job)
+
+    # --- update : un seul lot, ElementModification porte déjà ses propres
+    # ids/masque/group_id (contrairement à creer_manquants). ---------------
+    elements_m: list[ElementModification] = []
+    jobs_m: dict[str, dict[str, Any]] = {}
+    for job in jobs:
+        if job.get("action") != "update":
+            continue
+        sid = str(job.get("session_id") or "")
+        entree = entrees.get(sid)
+        eid = job.get("event_id")
+        if entree is None or eid in (None, ""):
+            continue
+        group_id = _group_id_pour(page, entree, job.get("group_id"))
+        elements_m.append(
+            ElementModification(
+                entree=entree,
+                event_id=int(eid),
+                group_id=group_id,
+                ids=_ids_pour(page, entree),
+                masque=_masque_pour(entree),
+            )
+        )
+        jobs_m[sid] = job
+    if elements_m:
+        resultat_m = modifier_manquants(
+            page,
+            elements_m,
+            methode=methodes.methode_ecriture,
+            base=base,
+            production_autorisee=production_autorisee,
+        )
+        gid_par_session = {el.entree.session_id: el.group_id for el in elements_m}
+        for sid, eid in resultat_m.modifiees:
+            job = jobs_m.get(sid)
+            if job is None:
+                continue
+            a_retirer.append(job)
+            entree = entrees.get(sid)
+            if entree is not None:
+                marquer_saisi(entree, event_id=eid, group_id=gid_par_session.get(sid))
+
+    # --- delete : group_id vient du job (row.get("group_id")), jamais résolu
+    # ici — c'est `ops.py` qui le pose à l'enfilage. ------------------------
+    elements_s: list[ElementSuppression] = []
+    jobs_s: dict[str, dict[str, Any]] = {}
+    for job in jobs:
+        if job.get("action") != "delete":
+            continue
+        sid = str(job.get("session_id") or "")
+        eid = job.get("event_id")
+        gid = job.get("group_id")
+        if eid in (None, "") or gid in (None, ""):
+            continue
+        elements_s.append(ElementSuppression(session_id=sid, event_id=int(eid), group_id=int(gid)))
+        jobs_s[sid] = job
+    if elements_s:
+        resultat_s = supprimer_manquants(
+            page,
+            elements_s,
+            methode=methodes.methode_suppression,
+            base=base,
+            production_autorisee=production_autorisee,
+        )
+        for sid in resultat_s.supprimees:
+            job = jobs_s.get(sid)
+            if job is not None:
+                a_retirer.append(job)
+        for sid, _motif in resultat_s.refusees:
+            job = jobs_s.get(sid)
+            if job is not None:
+                a_retirer.append(job)
+
+    if a_retirer:
+        retirer_traites(a_retirer)
+
+
+def executer_job_nuit(
+    page: Any = None, *, base: str = BASE_ENTRAINEMENT, production_autorisee: bool = False
+) -> None:
+    from datetime import datetime
 
     from cal_iut.celcat.etat import sauver, semaines_celcat_passees
 
@@ -209,8 +394,11 @@ def executer_job_nuit(page: Any = None) -> None:
 
     _scanner_extras(page, doc)
 
+    if page is not None:
+        _consommer_file(page, doc, base=base, production_autorisee=production_autorisee)
+
     doc = charger()
     lancees = {int(s) for s in (doc.get("semaines_lancees") or [])}
     doc["semaines_lancees"] = sorted(lancees | semaines)
-    doc["dernier_job"] = {"lance_le": datetime.now(timezone.utc).isoformat()}
+    doc["dernier_job"] = {"lance_le": datetime.now(UTC).isoformat()}
     sauver(doc)

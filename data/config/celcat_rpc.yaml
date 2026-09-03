@@ -5,3 +5,8 @@
 # Create : omettre event_id (0 est lu comme une mise à jour).
 methode_ecriture: udlTimetables.save
 event_id_create: omit
+# Suppression : AUCUN canari n'a encore prouvé le nom de la méthode RPC de
+# delete (contrairement à udlTimetables.save, capturé le 2026-09-01).
+# Volontairement VIDE — `MethodeSuppressionAbsente` refuse plutôt que de
+# deviner. Cf. .orchestrator/architect-contract-celcat-modifier-seance.md.
+methode_suppression:

@@ -24,7 +24,7 @@ il vaut mieux qu'il soit écrit ici que découvert plus tard.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from cal_iut.celcat.mapping import EntreeCelcat
@@ -53,7 +53,9 @@ def journal() -> dict[str, dict[str, str]]:
     return brut if isinstance(brut, dict) else {}
 
 
-def marquer_saisi(entree: EntreeCelcat, *, event_id: int | None = None) -> None:
+def marquer_saisi(
+    entree: EntreeCelcat, *, event_id: int | None = None, group_id: int | None = None
+) -> None:
     from cal_iut.celcat.etat import charger, sauver
 
     doc = charger()
@@ -61,11 +63,13 @@ def marquer_saisi(entree: EntreeCelcat, *, event_id: int | None = None) -> None:
     ligne = {
         "session_id": entree.session_id,
         "signature": entree.signature(),
-        "saisi_le": datetime.now(timezone.utc).isoformat(),
+        "saisi_le": datetime.now(UTC).isoformat(),
         "semaine": str(entree.semaine),
     }
     if event_id is not None:
         ligne["event_id"] = str(event_id)
+    if group_id is not None:
+        ligne["group_id"] = str(group_id)
     journal_doc[entree.session_id] = ligne
     doc["journal"] = journal_doc
     sauver(doc)

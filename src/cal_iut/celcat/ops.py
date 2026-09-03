@@ -6,7 +6,10 @@ exception est avalée par `apres_ecriture_planning`.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from cal_iut.api.state import get_state
 from cal_iut.celcat.etat import charger, live_actuel
@@ -18,9 +21,45 @@ from cal_iut.celcat.file_attente import (
 )
 from cal_iut.celcat.lecture import EvenementCelcat
 from cal_iut.celcat.logs import append as append_log
-from cal_iut.celcat.mapping import SLOT_TIMES, load_celcat_config
+from cal_iut.celcat.mapping import SLOT_TIMES, libelle_groupe_celcat, load_celcat_config
 
 _placement_retire: Any = None
+
+_CHEMIN_GROUPES_CELCAT = (
+    Path(__file__).resolve().parents[3] / "data" / "config" / "celcat_groupes.yaml"
+)
+_GROUPES_CELCAT: dict[str, int] | None = None
+
+
+def _groupes_celcat() -> dict[str, int]:
+    """IDs Celcat des groupes (`data/config/celcat_groupes.yaml`) — la même
+    source que `ecriture.py::_groupes_connus`, lue ici en pure local (aucun
+    appel RPC) pour porter un `group_id` sur chaque job de suppression, y
+    compris quand l'événement Live n'a pas encore été vu par ce process."""
+    global _GROUPES_CELCAT
+    if _GROUPES_CELCAT is None:
+        lus: dict[str, int] = {}
+        if _CHEMIN_GROUPES_CELCAT.exists():
+            data = yaml.safe_load(_CHEMIN_GROUPES_CELCAT.read_text(encoding="utf-8")) or {}
+            if isinstance(data, dict):
+                for cle, val in data.items():
+                    try:
+                        lus[str(cle)] = int(val)
+                    except (TypeError, ValueError):
+                        continue
+        _GROUPES_CELCAT = lus
+    return _GROUPES_CELCAT
+
+
+def _group_id_celcat(session: Any) -> int | None:
+    if session is None:
+        return None
+    semestre = str(getattr(session, "semestre", "") or "").strip()
+    groupe_label = _libelle_groupe(session).strip()
+    if not semestre or not groupe_label:
+        return None
+    nom = f"BUT MMI {semestre} {libelle_groupe_celcat(groupe_label)}"
+    return _groupes_celcat().get(nom)
 
 
 def noter_placement_retire(placement: Any) -> None:
@@ -168,11 +207,20 @@ def _executer(session_id: str, action: str) -> None:
     if action != "delete":
         return
 
+    # Résolu depuis la config locale (jamais un appel RPC) : porté sur
+    # CHAQUE job de suppression, y compris quand l'événement Live n'a pas
+    # encore été vu par ce process — cf. `_group_id_celcat`.
+    group_id = _group_id_celcat(session)
+
     if event_id is not None:
         ev = _trouver_evenement(event_id)
         if ev is not None and not autoriser_suppression(ev):
             return
-        job = {"action": "delete", "session_id": session_id, "event_id": event_id}
+        if group_id is None and ev is not None:
+            group_id = ev.group_id
+        job: dict[str, Any] = {"action": "delete", "session_id": session_id, "event_id": event_id}
+        if group_id is not None:
+            job["group_id"] = group_id
         if semaine is not None:
             job["semaine"] = semaine
         enfiler(job)
@@ -187,6 +235,9 @@ def _executer(session_id: str, action: str) -> None:
     if not autoriser_suppression(unique):
         return
     job = {"action": "delete", "session_id": session_id, "event_id": unique.event_id}
+    gid = group_id if group_id is not None else unique.group_id
+    if gid is not None:
+        job["group_id"] = gid
     if semaine is not None:
         job["semaine"] = semaine
     enfiler(job)

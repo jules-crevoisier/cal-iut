@@ -155,3 +155,138 @@ def test_should_skip_past_weeks_and_not_mark_them_lancees(
     assert jobs_en_attente() == []
     assert SEMAINE not in [int(s) for s in charger().get("semaines_lancees") or []]
 
+
+def test_should_drain_create_update_delete_jobs_from_file_attente_and_call_matching_rpc_function_when_executer_job_nuit_runs_with_a_page_and_do_nothing_rpc_wise_when_page_is_none(
+    planning,
+    monkeypatch,
+) -> None:
+    activer_saisie(planning)
+    from cal_iut.celcat.file_attente import enfiler
+
+    vider_file()
+    enfiler({"action": "create", "session_id": "s-sem-validee", "semaine": SEMAINE})
+    enfiler(
+        {
+            "action": "update",
+            "session_id": "s-sem-validee",
+            "event_id": 1931666,
+            "group_id": GROUP_ID,
+            "semaine": SEMAINE,
+        }
+    )
+    enfiler(
+        {
+            "action": "delete",
+            "session_id": "s-disparue",
+            "event_id": 1665591,
+            "group_id": GROUP_ID,
+            "semaine": SEMAINE,
+        }
+    )
+
+    appels = {"create": 0, "update": 0, "delete": 0}
+
+    def _faux_creer(*_a, **_k):
+        from cal_iut.celcat.ecriture import ResultatEcriture
+
+        appels["create"] += 1
+        return ResultatEcriture()
+
+    def _faux_modifier(*_a, **_k):
+        from cal_iut.celcat.modification import ResultatModification
+
+        appels["update"] += 1
+        return ResultatModification()
+
+    def _faux_supprimer(*_a, **_k):
+        from cal_iut.celcat.suppression import ResultatSuppression
+
+        appels["delete"] += 1
+        return ResultatSuppression()
+
+    monkeypatch.setattr("cal_iut.celcat.nuit.creer_manquants", _faux_creer)
+    monkeypatch.setattr("cal_iut.celcat.nuit.modifier_manquants", _faux_modifier)
+    monkeypatch.setattr("cal_iut.celcat.nuit.supprimer_manquants", _faux_supprimer)
+
+    page = FaussePage()
+    _executer_nuit(page)
+    assert appels == {"create": 1, "update": 1, "delete": 1}
+
+    apres_page = dict(appels)
+    vider_file()
+    enfiler({"action": "create", "session_id": "s-sem-validee", "semaine": SEMAINE})
+    _executer_nuit(None)
+    assert appels == apres_page  # aucun appel RPC supplémentaire sans page
+
+
+def test_should_remove_only_successfully_processed_or_guard_refused_jobs_from_the_queue_after_consommer_file_leaving_rpc_failed_jobs_for_the_next_run(
+    planning,
+    monkeypatch,
+) -> None:
+    activer_saisie(planning)
+    from cal_iut.celcat.file_attente import enfiler
+
+    etat = get_state()
+    ok = seance("s-create-ok")
+    echec = seance("s-create-echec-rpc")
+    etat.sessions += [ok, echec]
+    etat.sessions_by_id["s-create-ok"] = ok
+    etat.sessions_by_id["s-create-echec-rpc"] = echec
+    etat.timetable += [
+        place(ok, week=SEMAINE, day=2),
+        place(echec, week=SEMAINE, day=3),
+    ]
+
+    vider_file()
+    enfiler({"action": "create", "session_id": "s-create-ok", "semaine": SEMAINE})
+    enfiler({"action": "create", "session_id": "s-create-echec-rpc", "semaine": SEMAINE})
+    enfiler(
+        {
+            "action": "delete",
+            "session_id": "s-delete-refuse",
+            "event_id": 1665591,
+            "group_id": GROUP_ID,
+            "semaine": SEMAINE,
+        }
+    )
+    enfiler(
+        {
+            "action": "delete",
+            "session_id": "s-delete-echec-rpc",
+            "event_id": 9999999,
+            "group_id": GROUP_ID,
+            "semaine": SEMAINE,
+        }
+    )
+
+    def _faux_creer(_page, entrees, **_k):
+        from cal_iut.celcat.ecriture import ResultatEcriture
+
+        resultat = ResultatEcriture()
+        for e in entrees:
+            if e.session_id == "s-create-ok":
+                resultat.crees.append((e.session_id, 4242))
+            else:
+                resultat.echecs.append((e.session_id, "boom RPC create"))
+        return resultat
+
+    def _faux_supprimer(_page, elements, **_k):
+        from cal_iut.celcat.suppression import ResultatSuppression
+
+        resultat = ResultatSuppression()
+        for el in elements:
+            if el.session_id == "s-delete-refuse":
+                resultat.refusees.append((el.session_id, "protégé"))
+            else:
+                resultat.echecs.append((el.session_id, "boom RPC delete"))
+        return resultat
+
+    monkeypatch.setattr("cal_iut.celcat.nuit.creer_manquants", _faux_creer)
+    monkeypatch.setattr("cal_iut.celcat.nuit.supprimer_manquants", _faux_supprimer)
+
+    page = FaussePage()
+    _executer_nuit(page)
+
+    restants_ids = {j.get("session_id") for j in jobs_en_attente()}
+    assert restants_ids == {"s-create-echec-rpc", "s-delete-echec-rpc"}
+

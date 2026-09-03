@@ -6,10 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
-from cal_iut.api.state import get_state
-from cal_iut.celcat.lecture import est_fantome, est_ferie, evenement_depuis_rpc
-from cal_iut.celcat.mapping import CelcatConfig
 from celcat_sync_helpers import (
     SEMAINE,
     activer_saisie,
@@ -22,6 +18,10 @@ from celcat_sync_helpers import (
     snapshot_etat,
     vider_file,
 )
+
+from cal_iut.api.state import get_state
+from cal_iut.celcat.lecture import est_fantome, est_ferie, evenement_depuis_rpc
+from cal_iut.celcat.mapping import CelcatConfig
 
 FIX = Path(__file__).resolve().parent / "fixtures" / "celcat_udl_load.json"
 GROUP_ID = 1661972
@@ -246,6 +246,41 @@ def test_should_not_delete_a_celcat_en_plus_protected_ferie_fantome_event(planni
     vider_file()
     assert planning.post("/placements/placee/deposer").status_code == 200
     assert not any(j.get("event_id") == 1665591 and j.get("action") == "delete" for j in jobs_en_attente())
+
+
+def test_should_carry_group_id_on_every_enqueued_delete_job_never_silently_missing_it(planning) -> None:
+    activer_saisie(planning)
+
+    # Résolution via l'event_id journalisé.
+    _seed_journal_event("placee", 1931666)
+    vider_file()
+    reponse = planning.post("/placements/placee/deposer")
+    assert reponse.status_code == 200, reponse.text
+    deletes_journal = [j for j in jobs_en_attente() if j.get("action") == "delete"]
+    assert any(j.get("event_id") == 1931666 and j.get("group_id") == GROUP_ID for j in deletes_journal)
+
+    # Résolution via le match Live unique (pas d'event_id journalisé).
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    journal_doc = dict(doc.get("journal") or {})
+    journal_doc.pop("placee", None)
+    doc["journal"] = journal_doc
+    sauver(doc)
+
+    etat = get_state()
+    placee = etat.sessions_by_id["placee"]
+    etat.timetable.append(place(placee))
+    wr106 = _ev(1931666)
+    _definir_live([wr106])
+    etat.sessions_by_id["placee"].course_code = "WR106"
+    etat.timetable[-1].course_code = "WR106"
+
+    vider_file()
+    reponse2 = planning.post("/placements/placee/deposer")
+    assert reponse2.status_code == 200, reponse2.text
+    deletes_live = [j for j in jobs_en_attente() if j.get("action") == "delete"]
+    assert any(j.get("event_id") == 1931666 and j.get("group_id") == GROUP_ID for j in deletes_live)
 
 
 def test_should_append_log_kind_blocked_with_motif_containing_the_course_code_when_module_has_no_celcat_code(
