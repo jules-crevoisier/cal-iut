@@ -2829,6 +2829,38 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   }
 }
 
+.promo-grille-entete {
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.promo-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-left: auto;
+}
+
+.promo-filtre {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--muted, #666);
+}
+
+.promo-filtre select {
+  min-height: 36px;
+  min-width: 9rem;
+  font: inherit;
+}
+
+.aplacer-liste--park {
+  border-top: 1px solid var(--border, #ddd);
+  padding-top: 8px;
+}
+
 /* ==========================================================================
    « À placer » — panneau dans Vue Promo (et secours page si pas de payload)
    ==========================================================================

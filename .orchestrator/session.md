@@ -1,15 +1,22 @@
-# Session — polish placements Vue Promo
+# Session — Vue Promo densite + park multi
 
-**Goal:** Unifier warnings/force, SAE placeables, click À placer, Celcat enqueue MCP, Retirer visible.
-**Out of scope:** Design duel (chrome Promo existant), Live Celcat write.
-**Stack:** FastAPI + React PromoView / APlacerView / MCP tools.
+**Goal:** Une grille Promo lisible (filtres année/parcours) + file multi-park + un seul panneau latéral (À placer ∪ parkés).
+**Done:** Filtrer BUT1 sans voir BUT2/3 ; park N séances, en sélectionner une pour poser ; plus la sensation « deux systèmes ».
+**Out of scope:** Celcat, MCP, règles force/blocking, duel Impeccable/Taste.
+**Users:** Admin planning (desktop-first, chrome Promo existant).
+**Mode:** Operate.
+**Locked choices (agent, 03/09/2026):**
+1. **C** — filtres année + parcours, option « Tout »
+2. **A** — file multi-park, sélection d’une carte pour poser
+3. **A** — un panneau latéral unifié À placer + parkés
+4. **A** — rester dans le chrome Promo (pas de duel design)
+5. Hors scope Celcat/MCP/force confirmé
 **Acceptance:**
-1. Cellules SAE (et bandeaux férié/événement) restent cliquables si placement/park actif.
-2. WS* apparaissent dans `/placements/manquantes` et se placent un jour SAE ; WR* restent bloqués.
-3. 409 / validate renvoient blocking + hard + soft ensemble ; UI affiche tout ; Forcer seulement si blocking vide.
-4. Copy : pedago + indispo forçables ; PAC/SAE/férié non.
-5. MCP `unplace` passe par `deposer_placement` (file Celcat delete).
-6. Bouton Retirer sur chip Promo (+ confirm).
-7. Suggestions À placer utilisent `placerAvecConfirmation`.
-**Branch:** `feature/promo-placement-polish`
-**Go:** user confirmed 03/09/2026.
+1. Filtre année BUT1 → colonnes / lignes hors BUT1 absentes ; « Tout » restaure.
+2. Filtre parcours affine encore ; combinaison année+parcours OK.
+3. `parked[]` peut contenir N séances ; `selectedSessionId` au plus une.
+4. Drop semaine ajoute à la file (ne remplace plus) ; Annuler une carte restaure cette séance.
+5. Poser une case retire la sélectionnée de la file ; les autres restent.
+6. Panneau latéral affiche section Parkés + À placer dans le même panneau.
+**Branch:** `feature/promo-filtre-park-multi`
+**Go:** 03/09/2026
