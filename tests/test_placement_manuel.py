@@ -107,18 +107,14 @@ def test_l_inventaire_liste_exactement_les_seances_absentes_du_planning(client):
     assert corps["total_placees"] == 1
 
 
-def test_l_inventaire_exclut_les_sae_non_planifiees_par_le_solveur(client):
-    """Bug réel corrigé le 27/08/2026 (retour utilisateur : « j'ai 1121 à
-    placer pas 426 ») : une SAE au préfixe "WS" dont la semaine vient du
-    calendrier réel (pas de `solver_scheduled_sae`) n'est jamais censée être
-    placée à la main — elle ne doit donc jamais apparaître ici, au même
-    titre que dans l'audit (`resultat.seances_non_placees`) et
-    `score_run`. WSA501D (solver_scheduled_sae), lui, reste une vraie
-    manquante : c'est le solveur qui décide de sa semaine, comme un cours
-    classique."""
+def test_l_inventaire_inclut_les_sae_pour_placement_manuel(client):
+    """Retour 03/09/2026 : les enseignant·es planifient les SAE (WS*) dans
+    leurs fenêtres — elles doivent figurer dans « À placer ». L'exclusion
+    d'août 2026 (éviter 1121 fantômes) est remplacée par l'exemption de
+    sanctuarisation côté placement (`is_unplaced_sae`)."""
     etat = get_state()
-    sae_non_planifiee = SessionToPlace(
-        id="sae-non-planifiee", course_code="WSA310M", course_name="SAE", semestre="S3",
+    sae_calendaire = SessionToPlace(
+        id="sae-calendaire", course_code="WSA310M", course_name="SAE", semestre="S3",
         parcours="BUT2-DEV-FI", annee="BUT2", session_type=SessionType.TD,
         sequence_order=1, group_ids=["but1-td-ab"], teacher_codes=["MRI"],
     )
@@ -127,14 +123,14 @@ def test_l_inventaire_exclut_les_sae_non_planifiees_par_le_solveur(client):
         parcours="BUT3-DEV-FC", annee="BUT3", session_type=SessionType.TD,
         sequence_order=1, group_ids=["but1-td-ab"], teacher_codes=["MRI"],
     )
-    etat.sessions = etat.sessions + [sae_non_planifiee, sae_planifiee]
-    etat.sessions_by_id[sae_non_planifiee.id] = sae_non_planifiee
+    etat.sessions = etat.sessions + [sae_calendaire, sae_planifiee]
+    etat.sessions_by_id[sae_calendaire.id] = sae_calendaire
     etat.sessions_by_id[sae_planifiee.id] = sae_planifiee
 
     reponse = client.get("/placements/manquantes").json()
     ids = {m["session_id"] for m in reponse["manquantes"]}
-    assert "sae-non-planifiee" not in ids, "une SAE hors solver_scheduled_sae n'est jamais à placer à la main"
-    assert "sae-planifiee" in ids, "une SAE solver_scheduled_sae (WSA501D) reste une vraie manquante"
+    assert "sae-calendaire" in ids
+    assert "sae-planifiee" in ids
 
 
 def test_l_inventaire_se_calcule_par_difference_pas_depuis_le_solveur(client):

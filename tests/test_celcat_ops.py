@@ -283,6 +283,19 @@ def test_should_carry_group_id_on_every_enqueued_delete_job_never_silently_missi
     assert any(j.get("event_id") == 1931666 and j.get("group_id") == GROUP_ID for j in deletes_live)
 
 
+def test_should_enqueue_delete_when_mcp_unplace_and_saisie_is_on(planning) -> None:
+    """MCP unplace doit passer par le même dépôt HTTP (noter + file delete)."""
+    activer_saisie(planning)
+    _seed_journal_event("placee", 1931666)
+    vider_file()
+    from cal_iut.mcp.tools import _executer_item
+
+    _executer_item({"op": "unplace", "session_id": "placee", "status": "ok"})
+    deletes = [j for j in jobs_en_attente() if j.get("action") == "delete"]
+    assert any(j.get("event_id") == 1931666 for j in deletes)
+    assert not any(p.session_id == "placee" for p in get_state().timetable)
+
+
 def test_should_append_log_kind_blocked_with_motif_containing_the_course_code_when_module_has_no_celcat_code(
     planning,
     monkeypatch,

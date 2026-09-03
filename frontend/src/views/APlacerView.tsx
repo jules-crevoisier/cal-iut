@@ -19,7 +19,6 @@ import {
   completerPlacements,
   fetchCreneauxLibres,
   fetchSeancesManquantes,
-  placerSeance,
   retirerPlacementForce,
   validerPlacementForce,
   type Completion,
@@ -30,7 +29,7 @@ import {
 import type { AppPayload } from "../types/app";
 import { ParkedCard } from "../features/park-week-move/ParkedCard";
 import type { ParkUiState } from "../features/park-week-move/parkWeekMove";
-import { detailConflit, placerAvecConfirmation } from "../utils/placement";
+import { placerAvecConfirmation } from "../utils/placement";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HORAIRES = ["08h00", "09h30", "11h00", "14h00", "15h30", "17h00"];
@@ -369,16 +368,13 @@ function CarteSeance({
   const placer = (c: CreneauLibre) => {
     setEnCours(`${c.week}-${c.day}-${c.slot}`);
     setEchec(null);
-    placerSeance(seance.session_id, { week: c.week, day: c.day, slot: c.slot })
-      .then(onPlace)
-      .catch((e: Error) => {
-        // Un refus vient presque toujours d'un créneau pris entre-temps :
-        // on redemande la liste plutôt que de laisser un choix périmé à
-        // l'écran. `detailConflit` évite d'afficher le JSON brut du détail
-        // structuré quand ce refus en est un.
-        const detail = detailConflit(e);
-        const message = detail ? [...detail.hard_conflicts, ...detail.soft_warnings].join(" · ") : e.message;
-        setEchec(`${message} — la liste des créneaux vient d'être actualisée.`);
+    void placerAvecConfirmation(seance.session_id, { week: c.week, day: c.day, slot: c.slot })
+      .then((resultat) => {
+        if (resultat.ok) {
+          onPlace();
+          return;
+        }
+        setEchec(`${resultat.message} — la liste des créneaux vient d'être actualisée.`);
         charger();
       })
       .finally(() => setEnCours(null));
@@ -545,9 +541,10 @@ function CarteSeance({
                   {manuelEnCours ? "Placement…" : "Placer à ce créneau"}
                 </button>
                 <p className="muted small">
-                  Ce créneau n'a PAS été vérifié à l'avance : un conflit de salle/enseignant/groupe vous sera proposé
-                  en confirmation avant d'être forcé. Les règles institutionnelles (PAC, SAE, ordre pédagogique) ne
-                  peuvent jamais être forcées.
+                  Ce créneau n&apos;a PAS été vérifié à l&apos;avance : les conflits forçables (salle,
+                  enseignant, groupe, ordre pédagogique, indispo déclarée) s&apos;affichent avant
+                  confirmation. Les verrous institutionnels (PAC, SAE pour un cours WR*, férié) ne
+                  peuvent jamais être forcés.
                 </p>
               </div>
             )}

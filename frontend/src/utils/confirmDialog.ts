@@ -62,11 +62,9 @@ export function confirmAsync(
 /**
  * Message SANS choix — l'action est impossible, pas discutable.
  *
- * Ajoute le 29/08/2026 : sur une indisponibilite enseignant declaree, la
- * modale proposait « Forcer le deplacement », le serveur refusait quand
- * meme (ces verrous-la ignorent `force`), et il ne restait qu'une discrete
- * notice d'erreur. Mieux vaut dire tout de suite que ce n'est pas
- * negociable, et pourquoi.
+ * Réservé aux verrous institutionnels (PAC, SAE pour WR*, férié…).
+ * L'indisponibilité enseignant et l'ordre pédagogique sont forçables
+ * (28/08 et 03/09/2026) : pour ceux-là, utiliser `confirmAsync`.
  */
 export function alerterAsync(message: string, options?: { title?: string; cancelLabel?: string }): Promise<void> {
   return new Promise((resolve) => {

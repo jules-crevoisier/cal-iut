@@ -1753,8 +1753,9 @@ def _institutional_violations(
             libelle_calendrier
             or (
                 "Créneau institutionnellement bloqué (jeudi après-midi PAC, fin de semestre, "
-                "journée SAE sanctuarisée, événement du planning officiel à cet horaire précis, "
-                "ou présence IUT d'un alternant) — non modifiable, même en forçant."
+                "journée SAE sanctuarisée pour les cours classiques WR*, événement du planning "
+                "officiel à cet horaire précis, ou présence IUT d'un alternant) — non modifiable, "
+                "même en forçant. Exception : une séance SAE (code WS*) peut être placée un jour de SAE."
             )
         )
     return violations
@@ -1931,25 +1932,14 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     # contraintes avant que ça s'effectue"). Jamais contournables.
     if session and _is_duo_synced(session, state.teacher_duos):
         return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + [_DUO_SYNC_NOTE], soft_warnings=[], blocking_conflicts=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
+
+    institutional: list[str] = []
+    pedago: list[str] = []
     if session:
-        # L'ordre pédagogique et l'indisponibilité enseignant sont signalés
-        # ici (dry-run, avant décision de l'utilisateur) même si
-        # `body.force` n'est pas encore posé — c'est ce qui déclenche la
-        # modale de confirmation côté front ; le forçage réel n'intervient
-        # qu'au vrai déplacement (`move_session`/`placer_seance`), pas dans
-        # cette prévisualisation.
+        # Toujours calculer les deux familles, puis les ressources : l'UI doit
+        # afficher TOUTES les contraintes d'un coup (brief 03/09/2026), pas
+        # seulement le premier verrou institutionnel.
         institutional, pedago = _conflits_deplacement(state, session, body.week, body.day, body.slot)
-        if institutional or pedago:
-            # `institutional` seul est BLOQUANT : ni `force` ni rien d'autre
-            # ne le lève côté `move_session`. L'ordre pédagogique et le
-            # verrou de semaine, eux, sont négociables.
-            return ValidationResponse(
-                valid=False,
-                hard_conflicts=verrou_semaine + institutional + pedago,
-                soft_warnings=[],
-                blocking_conflicts=list(institutional),
-                suggestions=[], suggestions_note=None,
-            )
 
     # Même résolution de salle que `move_session` — sinon un dry-run
     # pourrait signaler un conflit que le déplacement réel n'aurait pas
@@ -1977,15 +1967,18 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         groups=state.groups,
         conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
     )
-    conflits = verrou_semaine + result.hard_conflicts
-    valide = not conflits
+    hard = verrou_semaine + pedago + result.hard_conflicts
+    blocking = list(institutional)
+    soft = list(result.soft_warnings)
+    valide = not blocking and not hard
     suggestions, note = ([], None) if valide else _suggestions_for(state, session_id, match)
-    # Arrivé ici, rien n'est bloquant : les conflits restants sont des
-    # conflits de RESSOURCE (groupe, enseignant, salle), qu'un humain peut
-    # avoir une bonne raison ponctuelle de forcer.
     return ValidationResponse(
-        valid=valide, hard_conflicts=conflits, soft_warnings=result.soft_warnings,
-        blocking_conflicts=[], suggestions=suggestions, suggestions_note=note,
+        valid=valide,
+        hard_conflicts=hard,
+        soft_warnings=soft,
+        blocking_conflicts=blocking,
+        suggestions=suggestions,
+        suggestions_note=note,
     )
 
 
@@ -2034,7 +2027,9 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         institutional, pedago = _conflits_deplacement(state, session, body.week, body.day, body.slot)
         if institutional:
             raise HTTPException(409, detail={
-                "message": "Déplacement impossible", "hard_conflicts": institutional,
+                "message": "Déplacement impossible",
+                # Forçables aussi listés : l'UI affiche tout (brief 03/09/2026).
+                "hard_conflicts": pedago,
                 "blocking_conflicts": institutional,
                 "soft_warnings": [], "suggestions": [], "suggestions_note": None,
             })
@@ -3024,16 +3019,10 @@ def _sessions_manquantes(state: object) -> list[tuple[object, set[int], bool, ob
     semaine_par_seance = {p.session_id: p.week for p in state.timetable}
     n_semaines = max((p.week for p in state.timetable), default=-1) + 1
 
-    from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
-
-    scheduled_sae = load_solver_scheduled_sae(state.config_dir)
-
     resultat: list[tuple[object, set[int], bool, object | None]] = []
     for session in state.sessions:
         provisoire = session.id in en_attente
         if session.id in places and not provisoire:
-            continue
-        if session.course_code.upper().startswith("WS") and (session.course_code.upper(), session.semestre) not in scheduled_sae:
             continue
         lo, hi = _movable_bounds(session.id, voisins, semaine_par_seance, n_semaines)
         semaines_ok = set(range(lo, hi + 1))
@@ -3262,7 +3251,8 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     institutional, pedago = _conflits_deplacement(state, session, body.week, body.day, body.slot)
     if institutional:
         raise HTTPException(409, detail={
-            "message": "Placement impossible", "hard_conflicts": institutional,
+            "message": "Placement impossible",
+            "hard_conflicts": pedago,
             # Non contournables, meme avec `force` : l'interface ne doit donc
             # pas proposer « Forcer » ici (cf. `ValidationResponse.
             # blocking_conflicts`, meme distinction).
@@ -3667,18 +3657,12 @@ def _teacher_a_des_seances_non_placees(state: object, code: str) -> bool:
     solveur n'a pas su placer (cf. écran « À placer ») — sans ce signal, son
     lien perso lui montrerait un planning qui a l'air complet alors qu'il
     manque des heures, sans qu'il sache qu'il doit relancer quelqu'un.
-    Même filtre SAE que `seances_manquantes` (l'inventaire réel de l'écran
-    « À placer ») pour rester cohérent avec ce qu'il verrait en l'ouvrant."""
-    from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
-
+    Aligné sur l'inventaire réel (y compris WS*)."""
     placees = {p.session_id for p in state.timetable}
-    scheduled_sae = load_solver_scheduled_sae(state.config_dir)
     for s in state.sessions:
         if s.id in placees:
             continue
         if code not in (s.teacher_codes or []):
-            continue
-        if s.course_code.upper().startswith("WS") and (s.course_code.upper(), s.semestre) not in scheduled_sae:
             continue
         return True
     return False
