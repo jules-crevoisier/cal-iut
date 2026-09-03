@@ -639,8 +639,10 @@ def _executer_item(item: dict[str, Any]) -> None:
     force = _veut_force(item)
 
     if action == "unplace":
-        from cal_iut.api.deposer import deposer_seance
-        deposer_seance(sid)
+        # Même chemin que POST /placements/{id}/deposer : noter le placement
+        # retiré + file Celcat `delete` si la saisie est armée.
+        from cal_iut.api.main import deposer_placement
+        deposer_placement(sid)
         return
 
     if action == "place":

@@ -17,8 +17,8 @@ import { alerterAsync, confirmAsync } from "./confirmDialog";
 import { detailConflit } from "./placement";
 
 /** Obstacles que « Forcer » ne lève pas : on prévient au lieu de proposer un
- *  bouton qui échouera (retour utilisateur 29/08/2026 : « on veut bien
- *  afficher les contraintes enseignantes si cela les enfreint »). */
+ *  bouton qui échouera (PAC / SAE pour WR* / férié). L'indispo enseignant et
+ *  l'ordre pédagogique sont, eux, forçables depuis 28/08–03/09/2026. */
 async function annoncerBlocage(motifs: string[], titre: string): Promise<void> {
   await alerterAsync(motifs.join("\n"), { title: titre });
 }
@@ -33,19 +33,21 @@ export async function performMove(
   try {
     const validation = await validateMove(sessionId, { ...target, room_id: placement.room_id });
     if (!validation.valid) {
-      // Indisponibilité enseignant déclarée, verrou PAC/SAE, événement
-      // institutionnel : le serveur les refuse MÊME avec `force` (cf.
-      // api/main.py::move_session). Proposer « Forcer » ici menait à un
-      // échec incompréhensible.
       const bloquants = validation.blocking_conflicts ?? [];
+      const forçables = validation.hard_conflicts ?? [];
+      const soft = validation.soft_warnings ?? [];
+      const texte = [
+        bloquants.length ? `Impossible (non forçable) :\n${bloquants.join("\n")}` : "",
+        forçables.length ? `Forçable :\n${forçables.join("\n")}` : "",
+        soft.length ? `Avertissement :\n${soft.join("\n")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       if (bloquants.length > 0) {
-        await annoncerBlocage(bloquants, "Déplacement impossible");
+        await annoncerBlocage(texte || bloquants, "Déplacement impossible");
         return false;
       }
-      // Modale interne, pas `window.confirm` (retour utilisateur 28/08/2026 :
-      // un bloqueur de popup le renvoie à `false` en silence, empêchant tout
-      // forçage — cf. utils/confirmDialog.ts).
-      const force = await confirmAsync(validation.hard_conflicts.join("\n"), { confirmLabel: "Forcer le déplacement" });
+      const force = await confirmAsync(texte || forçables.join("\n"), { confirmLabel: "Forcer le déplacement" });
       if (!force) return false;
       const updated = await movePlacement(sessionId, { ...target, room_id: placement.room_id, force: true });
       onPlacementUpdated(updated);

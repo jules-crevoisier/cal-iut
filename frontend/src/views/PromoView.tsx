@@ -22,7 +22,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { changerSalle, supprimerSeancePersonnalisee, type SeanceAPlacer } from "../api/client";
+import { changerSalle, deposerPlacement, supprimerSeancePersonnalisee, type SeanceAPlacer } from "../api/client";
 import type { Placement } from "../types";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload, AppRow } from "../types/app";
@@ -284,9 +284,16 @@ export function PromoView({
         const leaf = tpIds.length
           ? tpIds
           : allGroupIds.filter((gid) => payload.groupParcours[gid] === pc && payload.groupKind[gid] !== "promo");
+        // Fallback : si un parcours n'a ni TP ni TD (ou seulement promo),
+        // garder quand même une colonne pour pouvoir y poser une manquante
+        // (bug « clic À placer ne place rien » — colonnes filtrées à vide).
+        const cols =
+          leaf.length > 0
+            ? leaf
+            : allGroupIds.filter((gid) => payload.groupParcours[gid] === pc);
         return {
           parcours: pc,
-          cols: leaf.sort((a, b) =>
+          cols: cols.sort((a, b) =>
             lettresGroupe(payload.groupLabels[a] ?? a).localeCompare(lettresGroupe(payload.groupLabels[b] ?? b), "fr"),
           ),
         };
@@ -409,6 +416,22 @@ export function PromoView({
     if (ok) {
       setAnnonce(`${origin.course_code} déplacé ${DAY_LABELS[day]} ${SLOT_TIMES[slot].label}.`);
       setPark(clearPark());
+    }
+  };
+
+  const retirerDuPlanning = async (sessionId: string, courseCode: string) => {
+    const ok = await confirmAsync(
+      `Retirer ${courseCode} du planning et le remettre dans « À placer » ?`,
+      { title: "Retirer du planning", confirmLabel: "Retirer", cancelLabel: "Annuler" },
+    );
+    if (!ok) return;
+    try {
+      await deposerPlacement(sessionId);
+      setAnnonce(`${courseCode} retirée du planning — repose-la depuis « À placer ».`);
+      onSeanceChangee?.();
+      onAPlacerRefresh?.();
+    } catch (e) {
+      onError?.(e instanceof Error ? e.message : "Retrait impossible");
     }
   };
 
@@ -865,6 +888,19 @@ export function PromoView({
                                         >
                                           ✎
                                         </button>
+                                        <button
+                                          type="button"
+                                          className="promo-chip-custom-btn"
+                                          title="Retirer du planning (vers À placer)"
+                                          aria-label={`Retirer ${r.c} du planning`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void retirerDuPlanning(r.id, r.c);
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                          ↩
+                                        </button>
                                         {r.custom && (
                                         <button
                                           type="button"
@@ -940,7 +976,14 @@ export function PromoView({
                         }
                         if (holiday) {
                           return (
-                            <td key={c} className={cellClass}>
+                            <td
+                              key={c}
+                              className={cellClass + eligibleClass + dropCls + busyClass}
+                              {...placementProps}
+                              {...dropHandlers(day, s)}
+                            >
+                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
+                              {busyHint}
                               <div className="sessiongrid-holiday">
                                 <span className="title">{holiday.kind === "vacances" ? "Vacances" : "Férié"}</span>
                                 <span className="label">{holiday.label}</span>
@@ -950,7 +993,14 @@ export function PromoView({
                         }
                         if (sae) {
                           return (
-                            <td key={c} className={cellClass}>
+                            <td
+                              key={c}
+                              className={cellClass + eligibleClass + dropCls + busyClass}
+                              {...placementProps}
+                              {...dropHandlers(day, s)}
+                            >
+                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
+                              {busyHint}
                               <div className="sessiongrid-sae">
                                 <span className="title">SAE</span>
                                 <span className="codes">{sae.codes.join(", ")}</span>
@@ -960,7 +1010,14 @@ export function PromoView({
                         }
                         if (eventsAtSlot.length) {
                           return (
-                            <td key={c} className={cellClass}>
+                            <td
+                              key={c}
+                              className={cellClass + eligibleClass + dropCls + busyClass}
+                              {...placementProps}
+                              {...dropHandlers(day, s)}
+                            >
+                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
+                              {busyHint}
                               <div className="sessiongrid-event">
                                 {eventsAtSlot.map((e) => (
                                   <span key={e} className="label">
@@ -973,7 +1030,14 @@ export function PromoView({
                         }
                         if (dayEvents) {
                           return (
-                            <td key={c} className={cellClass}>
+                            <td
+                              key={c}
+                              className={cellClass + eligibleClass + dropCls + busyClass}
+                              {...placementProps}
+                              {...dropHandlers(day, s)}
+                            >
+                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
+                              {busyHint}
                               <div className="sessiongrid-event">
                                 {dayEvents.map((e) => (
                                   <span key={e} className="label">
