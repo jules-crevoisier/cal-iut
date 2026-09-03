@@ -142,6 +142,52 @@ def test_build_payload_includes_rooms_and_course_catalog() -> None:
     assert payload["groupParcours"]["but1-tp-a"] == "BUT1"
 
 
+def test_build_payload_keeps_a_column_for_a_parcours_with_zero_placements() -> None:
+    """Retour utilisateur (03/09/2026) : « les cours dans à placer quand
+    l'on clique ne peuvent pas être placés ». Root cause : `relevant_parcours`/
+    `groups_with_sessions` ne venaient QUE de `placements` — un parcours/
+    groupe sans AUCUNE séance déjà posée disparaissait de la grille, donc
+    aucune colonne à cliquer pour une séance encore « à placer »."""
+    from cal_iut.models.entities import Group
+    from cal_iut.models.session import SessionToPlace
+    from cal_iut.models.entities import SessionType
+
+    # Un AUTRE parcours (BUT8) a bien une séance PLACÉE : sans ça,
+    # `relevant_parcours` serait vide et retomberait sur son repli `or
+    # groups` (tous les groupes), ce qui masquerait le bug plutôt que de le
+    # révéler.
+    groupe_place = Group(id="but8-td-ab", label="TD AB", parcours="BUT8", annee="BUT8", kind="td")
+    placee = SessionToPlace(
+        id="placee", course_code="WR800", course_name="Test", semestre="S1",
+        parcours="BUT8", annee="BUT8", session_type=SessionType.TD,
+        sequence_order=1, group_ids=[groupe_place.id], teacher_codes=["YYY"], duration_slots=1,
+    )
+    groupe = Group(id="but9-td-ab", label="TD AB", parcours="BUT9", annee="BUT9", kind="td")
+    manquante = SessionToPlace(
+        id="manquante", course_code="WR900", course_name="Test", semestre="S1",
+        parcours="BUT9", annee="BUT9", session_type=SessionType.TD,
+        sequence_order=1, group_ids=[groupe.id], teacher_codes=["ZZZ"], duration_slots=1,
+    )
+    timetable = {
+        "status": "OPTIMAL", "objective_value": None, "quality": None,
+        "placements": [
+            {
+                "session_id": "placee", "week": 0, "day": 0, "slot": 0,
+                "course_code": "WR800", "group_ids": [groupe_place.id],
+                "teacher_codes": ["YYY"], "room_label": None,
+            },
+        ],
+    }
+
+    payload = build_payload(timetable, [placee, manquante], [groupe_place, groupe], semestre="S1")
+
+    assert groupe.id in payload["groupParcours"], (
+        "le groupe du parcours BUT9 (aucune séance placée, une seule manquante) "
+        "doit rester une colonne cliquable"
+    )
+    assert payload["groupParcours"][groupe.id] == "BUT9"
+
+
 def test_teacher_constraint_violation_is_detected() -> None:
     """Une contrainte enseignante délibérément en conflit avec le planning doit être signalée."""
     timetable, subset, groups = _but1_wr108_solved()

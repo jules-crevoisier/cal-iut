@@ -568,13 +568,9 @@ def _analyser_creneau(
     from cal_iut.api.main import (
         _as_placed,
         _build_conflict_map,
-        _hard_constraint_context,
-        _institutional_violations,
+        _conflits_deplacement,
         _is_duo_synced,
-        _libelle_jour_ferme,
-        _pedagogical_order_violations,
         _resolve_room,
-        _teacher_availability_violations,
         _DUO_SYNC_NOTE,
     )
     from cal_iut.api.validation import validate_move
@@ -593,15 +589,13 @@ def _analyser_creneau(
     if _is_duo_synced(session, state.teacher_duos):
         hard.append(_DUO_SYNC_NOTE)
 
-    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-    institutional = _institutional_violations(
-        week, day, slot, extra_blocked,
-        _libelle_jour_ferme(state, session.semestre, week, day),
-    )
-    institutional += _teacher_availability_violations(state, session, week, day, slot)
+    # Même point d'entrée que le côté HTTP (`api/main.py::_conflits_deplacement`)
+    # — un seul endroit décide de ce qui est institutionnel (jamais
+    # contournable) vs force-able (ordre pédagogique, indisponibilité
+    # enseignant), pour éviter que les deux surfaces divergent en silence.
+    institutional, pedago = _conflits_deplacement(state, session, week, day, slot)
     blocking.extend(institutional)
     hard.extend(institutional)
-    pedago = _pedagogical_order_violations(week, day, slot, extra_blocked_pedago, allowed_weeks)
     hard.extend(pedago)
 
     if room_id:

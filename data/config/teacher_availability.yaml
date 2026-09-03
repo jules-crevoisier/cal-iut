@@ -206,6 +206,40 @@ teachers:
         slots: [3, 4, 5]
         note: "Indisponible toute la semaine 8 (12-16 oct. 2026)"
 
+  # HKO, relais Kyllian Bresson 02/09/2026 : « Disponibilités : les mercredis
+  # de 14h00 à 15h30 ; les semaines paires, les jeudis de 15h30 à 17h00 » +
+  # indisponibilité du 15 au 30 octobre 2026. Codé en liste blanche DURE
+  # (mercredi tous les jours, jeudi toutes les semaines) + une règle de
+  # parité qui RETIRE le jeudi les semaines IMPAIRES — seul moyen d'exprimer
+  # « disponible seulement les semaines paires » avec ce mécanisme
+  # (`week_parity_rules` ne fait que soustraire, jamais ajouter).
+  - teacher_code: HKO
+    allowed_slots:
+      - [2, 3]   # mercredi 14h00-15h30
+      - [3, 4]   # jeudi 15h30-17h00 (restreint aux semaines paires ci-dessous)
+    week_parity_rules:
+      - parity: impaire
+        day: 3      # jeudi
+        slots: [4]  # 15h30-17h00 retiré les semaines impaires
+    forbidden_date_slots:
+      # Indisponible du 15 au 30 octobre 2026 : les seuls jours où il aurait
+      # normalement cours dans cette fenêtre (mercredis et jeudis).
+      - date: "2026-10-15"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible du 15 au 30 octobre 2026"
+      - date: "2026-10-21"   # mercredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible du 15 au 30 octobre 2026"
+      - date: "2026-10-22"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible du 15 au 30 octobre 2026"
+      - date: "2026-10-28"   # mercredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible du 15 au 30 octobre 2026"
+      - date: "2026-10-29"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible du 15 au 30 octobre 2026"
+
 # Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
   gap_penalty: 100

@@ -3939,6 +3939,14 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   box-shadow: inset 0 0 0 1px var(--good);
 }
 
+/* Retour utilisateur (03/09/2026) : semaine entièrement placée, mais pas
+   encore validée pour le lot de nuit — distinct de "validée" (pointillé
+   plutôt que trait plein, pour ne pas se confondre avec le vert plein). */
+.celcat-semaine--complete {
+  box-shadow: inset 0 0 0 1px var(--teal);
+  border-style: dotted;
+}
+
 .celcat-semaine--retiree {
   border-style: dashed;
   border-color: var(--warn);

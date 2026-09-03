@@ -264,6 +264,7 @@ export function ParcoursWeekModal({
             <ParkedCard
               parked={park.parked}
               selected={park.selected}
+              groupLabels={payload.groupLabels}
               onSelect={() => setPark(selectPark(park))}
               onAnnuler={() => {
                 const originWeek = park.parked?.origin.week;

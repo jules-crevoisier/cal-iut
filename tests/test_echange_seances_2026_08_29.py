@@ -9,12 +9,13 @@ Deux demandes du 29/08/2026, liées :
    enfreint » — d'où la distinction entre conflits FORÇABLES et conflits
    BLOQUANTS dans la réponse de validation.
 
-Le point 2 n'est pas cosmétique. Une indisponibilité enseignant déclarée
-n'est PAS contournable par forçage (`move_session` la refuse même avec
-`force=True`), alors que l'interface proposait quand même « Forcer le
-déplacement » : le bouton échouait, et la personne ne comprenait pas
-pourquoi. Il faut donc que la validation dise LESQUELS des conflits sont
-définitifs, pas seulement qu'il y en a.
+Le point 2 n'est pas cosmétique. Un verrou institutionnel (PAC/SAE/fin de
+semestre) n'est PAS contournable par forçage (`move_session` le refuse même
+avec `force=True`) — il faut donc que la validation dise LESQUELS des
+conflits sont définitifs, pas seulement qu'il y en a. L'indisponibilité
+enseignant déclarée, elle, est devenue contournable via `force` depuis le
+03/09/2026 (retour Kyllian Bresson : « des fois ils acceptent de faire
+cours quand même ») — même traitement que l'ordre pédagogique.
 
 Sur l'échange, le piège central est l'état intermédiaire : pendant qu'on
 échange A et B, chacun doit être jugé sur la position LIBÉRÉE par l'autre.
@@ -238,13 +239,15 @@ def _avec_indisponibilite(monter, jour: int, creneau: int):
     return client
 
 
-def test_une_indispo_enseignant_ressort_comme_conflit_BLOQUANT(monter) -> None:
-    """Sans ce champ, l'interface propose « Forcer » sur un obstacle que le
-    serveur refusera de toute façon."""
+def test_une_indispo_enseignant_est_signalee_mais_forcable(monter) -> None:
+    """Depuis le 03/09/2026 (retour Kyllian Bresson), une indisponibilité
+    enseignant déclarée n'est plus dans `blocking_conflicts` : l'interface
+    peut proposer « Forcer », le serveur l'acceptera (cf.
+    `test_forcer_un_echange_sur_indisponibilite_enseignant_reussit`)."""
     client = _avec_indisponibilite(monter, jour=2, creneau=0)
     corps = client.post("/placements/a/validate", json={"week": SEMAINE, "day": 2, "slot": 0}).json()
     assert corps["valid"] is False
-    assert any("indisponible" in m for m in corps["blocking_conflicts"])
+    assert corps["blocking_conflicts"] == []
     # Toujours présent dans la liste générale : rien ne disparaît de l'affichage.
     assert any("indisponible" in m for m in corps["hard_conflicts"])
 
@@ -275,16 +278,21 @@ def test_un_deplacement_valide_n_a_aucun_conflit_bloquant(monter) -> None:
     assert corps["blocking_conflicts"] == []
 
 
-def test_l_echange_refuse_dit_aussi_ce_qui_est_bloquant(monter) -> None:
+def test_l_echange_refuse_dit_que_l_indispo_n_est_pas_bloquante(monter) -> None:
     """Même information des deux côtés : l'interface décide d'offrir « Forcer »
     de la même façon, qu'il s'agisse d'un déplacement ou d'un échange."""
     client = _avec_indisponibilite(monter, jour=1, creneau=3)
     reponse = client.post("/placements/echanger", json={"session_a": "a", "session_b": "b"})
     assert reponse.status_code == 409
-    assert any("indisponible" in m for m in reponse.json()["detail"]["blocking_conflicts"])
+    detail = reponse.json()["detail"]
+    assert any("indisponible" in m for m in detail["hard_conflicts"])
+    assert detail["blocking_conflicts"] == []
 
 
-def test_un_echange_bloquant_reste_refuse_meme_force(monter) -> None:
+def test_forcer_un_echange_sur_indisponibilite_enseignant_reussit(monter) -> None:
+    """Retour Kyllian Bresson (03/09/2026) : « des fois ils acceptent de faire
+    cours quand même » — `force=True` doit donc débloquer, à la différence
+    d'un verrou institutionnel (PAC/SAE), qui lui reste refusé même forcé."""
     client = _avec_indisponibilite(monter, jour=1, creneau=3)
     reponse = client.post("/placements/echanger", json={"session_a": "a", "session_b": "b", "force": True})
-    assert reponse.status_code == 409
+    assert reponse.status_code == 200, reponse.text

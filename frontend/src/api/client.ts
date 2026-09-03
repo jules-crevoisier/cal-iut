@@ -532,6 +532,15 @@ export function supprimerSeancePersonnalisee(sessionId: string): Promise<{ suppr
   });
 }
 
+/** Retire une séance du planning SANS la supprimer du catalogue — elle
+ * rejoint « À placer » et peut être reposée plus tard. Retour utilisateur
+ * (03/09/2026) : un enseignant ne sait parfois pas encore quand il sera
+ * disponible ; endpoint déjà là côté serveur (`api/deposer.py`), jamais
+ * relié à l'interface jusqu'ici. */
+export function deposerPlacement(sessionId: string): Promise<{ ok: boolean; session_id: string; deposee: boolean }> {
+  return request(`/placements/${encodeURIComponent(sessionId)}/deposer`, { method: "POST" });
+}
+
 // ── Suivi des placements forcés (ordre pédagogique) — retour utilisateur
 // 28/08/2026 : « valider »/« revenir en arrière ». ──
 
@@ -626,6 +635,7 @@ export interface CelcatEtat {
   semaines_validees: number[];
   semaines_passees: number[];
   semaines_lancees: number[];
+  semaines_completes: number[];
   valide_le: string | null;
   dernier_job: Record<string, string> | null;
   compteurs: { created: number; modified: number; deleted: number; blocked: number };

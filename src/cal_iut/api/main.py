@@ -1629,21 +1629,31 @@ def _hard_constraint_context(
     extra_blocked |= event_blocked.get(ALL_PARCOURS, set())
     extra_blocked |= event_blocked.get(session.parcours, set())
 
-    sae_days_by_course = sae_windows_as_week_days(planning, state.calendar.date_to_week_day, week_offset, n_weeks)
-    sae_group_labels = sae_group_labels_by_course(planning)
-    blocked_by_parcours = sae_blocked_days_by_parcours(
-        state.sessions, sae_days_by_course, sae_group_labels
-    )
-    blocked_days = set(blocked_by_parcours.get(session.parcours, set()))
-    if sae_group_labels:
-        blocked_by_group = sae_blocked_days_by_group(
-            state.sessions, sae_days_by_course, sae_group_labels, state.groups
+    # Une SAE (WS*) ne sanctuarise PAS son propre jour : ce jour n'est bloqué
+    # que pour les ressources classiques (WR/WRA), exactement comme le
+    # solveur (`solver/constraints.py::add_sae_sanctuarization_constraints`,
+    # `if session.is_unplaced_sae: continue`) — les enseignants planifient
+    # eux-mêmes leurs séances SAE (`docs/DATA.md` §8.2/§15.1), donc placer une
+    # séance WS un jour de SAE, potentiellement CE jour-là, doit rester
+    # possible. Manquait ici (retour utilisateur 03/09/2026 : "on ne peut pas
+    # placer des cours de SAE dans les SAE") — le déplacement manuel n'avait
+    # jamais reçu cette exemption, contrairement au solveur.
+    if not getattr(session, "is_unplaced_sae", False):
+        sae_days_by_course = sae_windows_as_week_days(planning, state.calendar.date_to_week_day, week_offset, n_weeks)
+        sae_group_labels = sae_group_labels_by_course(planning)
+        blocked_by_parcours = sae_blocked_days_by_parcours(
+            state.sessions, sae_days_by_course, sae_group_labels
         )
-        for gid in session.group_ids:
-            blocked_days |= blocked_by_group.get(gid, set())
-    for w, d in blocked_days:
-        for slot in range(6):
-            extra_blocked.add((w, d, slot))
+        blocked_days = set(blocked_by_parcours.get(session.parcours, set()))
+        if sae_group_labels:
+            blocked_by_group = sae_blocked_days_by_group(
+                state.sessions, sae_days_by_course, sae_group_labels, state.groups
+            )
+            for gid in session.group_ids:
+                blocked_days |= blocked_by_group.get(gid, set())
+        for w, d in blocked_days:
+            for slot in range(6):
+                extra_blocked.add((w, d, slot))
 
     # Ordre pédagogique : mêmes bornes que la régénération ciblée
     # (`_movable_bounds`, déjà utilisé par `api/regen.py`) — ne jamais
@@ -1782,15 +1792,21 @@ def _teacher_availability_violations(state: object, session: object, week: int, 
     """
     Indisponibilité enseignant DÉCLARÉE — récurrente, dates précises, liste
     blanche, parité de semaine, ET supervision SAE (`state.teacher_availability`
-    augmenté une fois au démarrage, cf. `startup()`) — jamais contournable via
-    `force`, au même titre que le verrou PAC/SAE/ordre pédagogique : un humain
-    n'a jamais de bonne raison de placer un cours chez un enseignant qui a
-    explicitement signalé son indisponibilité ce jour-là (retour utilisateur
-    11/08/2026 : "vérifie bien toutes les contraintes avant que ça
-    s'effectue"). Avant ce correctif, ces indisponibilités ne servaient qu'à
-    FILTRER les suggestions (`_teacher_free_at`, déjà appelé par
-    `_suggestions_for`) — un glisser-déposer direct sur une case arbitraire,
-    hors suggestion, pouvait les violer sans aucun garde-fou serveur.
+    augmenté une fois au démarrage, cf. `startup()`). Signalée systématiquement
+    (retour utilisateur 11/08/2026 : "vérifie bien toutes les contraintes
+    avant que ça s'effectue" — avant ce correctif, ces indisponibilités ne
+    servaient qu'à FILTRER les suggestions via `_teacher_free_at`, déjà
+    appelé par `_suggestions_for` ; un glisser-déposer direct sur une case
+    arbitraire, hors suggestion, pouvait les violer sans aucun garde-fou
+    serveur).
+
+    Contournable via `force` depuis le 03/09/2026 (retour Kyllian Bresson :
+    « des fois ils acceptent de faire cours quand même haha ») — même
+    traitement que l'ordre pédagogique (28/08/2026), à la différence du
+    verrou PAC/SAE (`_institutional_violations`), qui lui reste
+    définitivement non contournable : un humain peut avoir une bonne raison
+    ponctuelle de placer un cours chez un enseignant indisponible sur le
+    papier (accord donné à l'oral), jamais de casser un jeudi PAC.
     """
     from cal_iut.api.validation import _teacher_free_at
 
@@ -1806,8 +1822,42 @@ def _teacher_availability_violations(state: object, session: object, week: int, 
     return [
         f"Enseignant indisponible à ce créneau ({', '.join(session.teacher_codes)}) — "
         "indisponibilité déclarée (contrainte enseignant ou encadrement SAE) — "
-        "non modifiable, même en forçant."
+        "un placement manuel avec « Forcer » peut débloquer, si l'enseignant a "
+        "accepté malgré tout."
     ]
+
+
+def _conflits_deplacement(
+    state: object, session: object, week: int, day: int, slot: int
+) -> tuple[list[str], list[str]]:
+    """Point d'entrée UNIQUE pour « qu'est-ce qui bloque ce créneau ? »,
+    utilisé par `validate_placement`, `move_session`, `placer_seance`,
+    `_controler_echange` ET le côté MCP (`mcp/tools.py::_evaluer_move`).
+
+    Avant ce regroupement (03/09/2026), les cinq appelants recopiaient les
+    mêmes quatre lignes — `_hard_constraint_context` puis
+    `_institutional_violations`/`_pedagogical_order_violations`/
+    `_teacher_availability_violations` assemblées à la main. Le risque
+    concret : le 03/09/2026, rendre l'indisponibilité enseignant
+    force-able a d'abord été fait sur les 4 appelants de `main.py` SEULEMENT
+    — la copie MCP, oubliée dans le même geste, a fait échouer un test
+    avant d'être retrouvée. Un seul point d'entrée empêche ce genre de
+    divergence silencieuse entre les deux surfaces (HTTP et MCP).
+
+    Rend `(institutional, forceable)` :
+    - `institutional` — verrous JAMAIS contournables via `force` (PAC, SAE,
+      fin de semestre, événement du planning officiel).
+    - `forceable` — ordre pédagogique + indisponibilité enseignant
+      déclarée : signalés systématiquement, mais `force=True` les lève.
+    """
+    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+    institutional = _institutional_violations(
+        week, day, slot, extra_blocked,
+        _libelle_jour_ferme(state, session.semestre, week, day),
+    )
+    forceable = _pedagogical_order_violations(week, day, slot, extra_blocked_pedago, allowed_weeks)
+    forceable += _teacher_availability_violations(state, session, week, day, slot)
+    return institutional, forceable
 
 
 def _suggestions_for(state: object, session_id: str, match: object) -> tuple[list[SlotSuggestionResponse], str | None]:
@@ -1882,18 +1932,13 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     if session and _is_duo_synced(session, state.teacher_duos):
         return ValidationResponse(valid=False, hard_conflicts=verrou_semaine + [_DUO_SYNC_NOTE], soft_warnings=[], blocking_conflicts=[], suggestions=[], suggestions_note=_DUO_SYNC_NOTE)
     if session:
-        extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-        institutional = _institutional_violations(
-            body.week, body.day, body.slot, extra_blocked,
-            _libelle_jour_ferme(state, session.semestre, body.week, body.day),
-        )
-        institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
-        # L'ordre pédagogique est signalé ici (dry-run, avant décision de
-        # l'utilisateur) même si `body.force` n'est pas encore posé — c'est
-        # ce qui déclenche la modale de confirmation côté front ; le forçage
-        # réel n'intervient qu'au vrai déplacement (`move_session`/
-        # `placer_seance`), pas dans cette prévisualisation.
-        pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+        # L'ordre pédagogique et l'indisponibilité enseignant sont signalés
+        # ici (dry-run, avant décision de l'utilisateur) même si
+        # `body.force` n'est pas encore posé — c'est ce qui déclenche la
+        # modale de confirmation côté front ; le forçage réel n'intervient
+        # qu'au vrai déplacement (`move_session`/`placer_seance`), pas dans
+        # cette prévisualisation.
+        institutional, pedago = _conflits_deplacement(state, session, body.week, body.day, body.slot)
         if institutional or pedago:
             # `institutional` seul est BLOQUANT : ni `force` ni rien d'autre
             # ne le lève côté `move_session`. L'ordre pédagogique et le
@@ -1979,26 +2024,20 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             "soft_warnings": [], "suggestions": [], "suggestions_note": _DUO_SYNC_NOTE,
         })
     if session:
-        extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-        institutional = _institutional_violations(
-            body.week, body.day, body.slot, extra_blocked,
-            _libelle_jour_ferme(state, session.semestre, body.week, body.day),
-        )
-        institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
+        # Institutionnel : jamais contournable, vérifié et refusé AVANT
+        # tout le reste. Ordre pédagogique + indisponibilité enseignant :
+        # contournables via `force` depuis le 28/08 et le 03/09/2026 (cf.
+        # `_conflits_deplacement`) — calculés même si `force` est déjà vrai,
+        # `forced_pending.sync_after_move` (plus bas, UNE FOIS le
+        # déplacement réellement effectué) en a besoin pour savoir si CE
+        # déplacement doit rester suivi.
+        institutional, pedago = _conflits_deplacement(state, session, body.week, body.day, body.slot)
         if institutional:
             raise HTTPException(409, detail={
                 "message": "Déplacement impossible", "hard_conflicts": institutional,
                 "blocking_conflicts": institutional,
                 "soft_warnings": [], "suggestions": [], "suggestions_note": None,
             })
-        # Ordre pédagogique : contournable via `force` depuis le 28/08/2026
-        # (cf. `_pedagogical_order_violations`), à la différence du bloc
-        # institutionnel ci-dessus. Calculé même si `force` est déjà vrai —
-        # `forced_pending.sync_after_move`, appelé plus bas UNE FOIS le
-        # déplacement réellement effectué (pas ici : un conflit de ressource
-        # peut encore faire échouer le déplacement après ce point), en a
-        # besoin pour savoir si CE déplacement doit rester suivi.
-        pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
         if pedago and not body.force:
             raise HTTPException(409, detail={
                 "message": "Conflit", "hard_conflicts": pedago,
@@ -2248,10 +2287,11 @@ def _controler_echange(
     """Tous les contrôles d'un déplacement, appliqués aux DEUX séances.
 
     Rend `(durs, bloquants, doux)` — `bloquants` est le sous-ensemble de
-    `durs` que `force` ne lève pas (verrous institutionnels, indisponibilité
-    enseignant déclarée), exactement la même distinction que
-    `validate_placement`, pour que l'interface décide de la même façon des
-    deux côtés.
+    `durs` que `force` ne lève pas (verrous institutionnels UNIQUEMENT,
+    depuis le 03/09/2026 — l'indisponibilité enseignant déclarée est
+    devenue contournable via `force`, comme l'ordre pédagogique), exactement
+    la même distinction que `validate_placement`, pour que l'interface
+    décide de la même façon des deux côtés.
     """
     durs: list[str] = []
     bloquants: list[str] = []
@@ -2259,17 +2299,14 @@ def _controler_echange(
     for placement, seance, salle in cibles:
         durs += _semaines_non_modifiables(state, placement.session_id, placement.week, placement.week, force=force)
         if seance is not None:
-            extra_bloque, extra_bloque_pedago, semaines_permises = _hard_constraint_context(state, seance)
-            institutionnels = _institutional_violations(
-                placement.week, placement.day, placement.slot, extra_bloque,
-                _libelle_jour_ferme(state, seance.semestre, placement.week, placement.day),
+            institutionnels, forcable = _conflits_deplacement(
+                state, seance, placement.week, placement.day, placement.slot
             )
-            institutionnels += _teacher_availability_violations(state, seance, placement.week, placement.day, placement.slot)
             bloquants += institutionnels
             durs += institutionnels
-            durs += _pedagogical_order_violations(
-                placement.week, placement.day, placement.slot, extra_bloque_pedago, semaines_permises
-            )
+            # Ordre pédagogique + indisponibilité enseignant : dans `durs`
+            # (négociable via `force`), jamais dans `bloquants`.
+            durs += forcable
         resultat = validate_move(
             placement.session_id, placement.week, placement.day, placement.slot,
             _as_placed(state.timetable), placement.group_ids, placement.teacher_codes, salle,
@@ -2486,11 +2523,27 @@ def _celcat_etat_public() -> CelcatEtatResponse:
         semaines_validees=list(doc.get("semaines_validees") or []),
         semaines_passees=semaines_celcat_passees(),
         semaines_lancees=list(doc.get("semaines_lancees") or []),
+        semaines_completes=_semaines_celcat_completes(),
         valide_le=doc.get("valide_le"),
         dernier_job=dernier if isinstance(dernier, dict) else None,
         compteurs=compteurs,
         worker_ok=True,
     )
+
+
+def _semaines_celcat_completes() -> list[int]:
+    """Chips 1..30 (S1, cf. `celcat.etat.NB_SEMAINES_LOT`) dont plus aucune
+    séance manquante ne pourrait encore atterrir — réutilise
+    `_sessions_manquantes` (même filtre SAE, mêmes bornes d'ordre
+    pédagogique que `/placements/manquantes`) plutôt qu'un nouveau calcul :
+    une semaine « complète » l'est au même sens que « rien à placer »."""
+    from cal_iut.celcat.etat import NB_SEMAINES_LOT
+
+    state = get_state()
+    semaines_visees: set[int] = set()
+    for _session, semaines_ok, _provisoire, _actuel in _sessions_manquantes(state):
+        semaines_visees |= semaines_ok
+    return [n for n in range(1, NB_SEMAINES_LOT + 1) if (n - 1) not in semaines_visees]
 
 
 def _entrees_celcat(state) -> list:
@@ -2955,6 +3008,40 @@ def _date_iso(state: object, semestre: str, week: int, day: int) -> str:
     return ""
 
 
+def _sessions_manquantes(state: object) -> list[tuple[object, set[int], bool, object | None]]:
+    """`[(session, semaines_possibles, placée_provisoirement, placement_actuel)]`
+    pour toute séance absente du planning (ou placée en forçant l'ordre
+    pédagogique, pas encore validée) — le CŒUR de `/placements/manquantes`,
+    extrait ici pour être réutilisé par `_celcat_etat_public` (semaines
+    complètes) sans dupliquer le filtre SAE/le calcul de bornes."""
+    places = {p.session_id for p in state.timetable}
+    placement_by_id = {p.session_id: p for p in state.timetable}
+    en_attente = forced_pending.all_pending()
+
+    from cal_iut.solver.decomposed import _build_sequence_neighbors, _movable_bounds
+
+    voisins = _build_sequence_neighbors(state.sessions, state.groups)
+    semaine_par_seance = {p.session_id: p.week for p in state.timetable}
+    n_semaines = max((p.week for p in state.timetable), default=-1) + 1
+
+    from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
+
+    scheduled_sae = load_solver_scheduled_sae(state.config_dir)
+
+    resultat: list[tuple[object, set[int], bool, object | None]] = []
+    for session in state.sessions:
+        provisoire = session.id in en_attente
+        if session.id in places and not provisoire:
+            continue
+        if session.course_code.upper().startswith("WS") and (session.course_code.upper(), session.semestre) not in scheduled_sae:
+            continue
+        lo, hi = _movable_bounds(session.id, voisins, semaine_par_seance, n_semaines)
+        semaines_ok = set(range(lo, hi + 1))
+        actuel = placement_by_id.get(session.id) if provisoire else None
+        resultat.append((session, semaines_ok, provisoire, actuel))
+    return resultat
+
+
 @app.get("/placements/manquantes", response_model=SeancesAPlacerResponse)
 def seances_manquantes() -> SeancesAPlacerResponse:
     """Inventaire des séances absentes du planning.
@@ -2965,52 +3052,29 @@ def seances_manquantes() -> SeancesAPlacerResponse:
     régénération de semaine interrompue, correction manuelle).
     """
     state = get_state()
-    places = {p.session_id for p in state.timetable}
-    placement_by_id = {p.session_id: p for p in state.timetable}
-    # Placées en forçant l'ordre pédagogique, pas encore validées : restent
-    # listées ici même si elles SONT au planning (`session.id in places`),
-    # cf. `api/forced_pending.py` — retour utilisateur 28/08/2026.
-    en_attente = forced_pending.all_pending()
     noms = _noms_enseignants(state)
     libelle_groupe = {g.id: g.label for g in state.groups}
 
-    # Les bornes d'ordre pédagogique sont calculées ICI, une fois pour toutes,
-    # au lieu de passer par `_hard_constraint_context` séance par séance :
-    # celui-ci relit le planning officiel sur disque et reparcourt les 3101
-    # séances à chaque appel. Mesuré sur un run très incomplet (795 séances
-    # manquantes) : 13,6 s pour dresser l'inventaire, contre une fraction de
-    # seconde ici. Le résultat est identique — `allowed_weeks` n'y vient que
-    # de `_movable_bounds`.
-    from cal_iut.solver.decomposed import _build_sequence_neighbors, _movable_bounds
-
-    voisins = _build_sequence_neighbors(state.sessions, state.groups)
-    semaine_par_seance = {p.session_id: p.week for p in state.timetable}
+    # Les bornes d'ordre pédagogique sont calculées ICI, une fois pour toutes
+    # (`_sessions_manquantes`), au lieu de passer par `_hard_constraint_context`
+    # séance par séance : celui-ci relit le planning officiel sur disque et
+    # reparcourt les 3101 séances à chaque appel. Mesuré sur un run très
+    # incomplet (795 séances manquantes) : 13,6 s pour dresser l'inventaire,
+    # contre une fraction de seconde ici. Le résultat est identique —
+    # `allowed_weeks` n'y vient que de `_movable_bounds`. Exclut aussi les SAE
+    # non planifiées par le solveur (préfixe "WS", sauf `solver_scheduled_sae`,
+    # ex. WSA501D) — même filtre que l'audit (`resultat.seances_non_placees`)
+    # et `scripts/solve_until_ok.py::score_run`. Bug réel trouvé le 27/08/2026
+    # (retour utilisateur : « j'ai 1121 à placer pas 426 ») : cet inventaire —
+    # l'onglet « À placer » réel de l'appli — comptait encore les 695 séances
+    # SAE dont la semaine vient du calendrier réel, jamais du solveur, jamais
+    # censées être placées à la main.
     n_semaines = max((p.week for p in state.timetable), default=-1) + 1
-
-    # Exclut les SAE non planifiées par le solveur (préfixe "WS", sauf
-    # `solver_scheduled_sae`, ex. WSA501D) — même filtre que l'audit
-    # (`resultat.seances_non_placees`) et `scripts/solve_until_ok.py::score_run`.
-    # Bug réel trouvé le 27/08/2026 (retour utilisateur : « j'ai 1121 à
-    # placer pas 426 ») : cet inventaire — l'onglet « À placer » réel de
-    # l'appli — comptait encore les 695 séances SAE dont la semaine vient du
-    # calendrier réel, jamais du solveur, jamais censées être placées à la
-    # main.
-    from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
-
-    scheduled_sae = load_solver_scheduled_sae(state.config_dir)
 
     manquantes: list[SeanceAPlacerResponse] = []
     par_parcours: dict[str, int] = {}
-    for session in state.sessions:
-        provisoire = session.id in en_attente
-        if session.id in places and not provisoire:
-            continue
-        if session.course_code.upper().startswith("WS") and (session.course_code.upper(), session.semestre) not in scheduled_sae:
-            continue
-        lo, hi = _movable_bounds(session.id, voisins, semaine_par_seance, n_semaines)
-        semaines_ok = set(range(lo, hi + 1))
+    for session, semaines_ok, provisoire, actuel in _sessions_manquantes(state):
         par_parcours[session.parcours] = par_parcours.get(session.parcours, 0) + 1
-        actuel = placement_by_id.get(session.id) if provisoire else None
         manquantes.append(SeanceAPlacerResponse(
             session_id=session.id,
             course_code=session.course_code,
@@ -3054,7 +3118,7 @@ def seances_manquantes() -> SeancesAPlacerResponse:
         )
     return SeancesAPlacerResponse(
         total_a_placer=total,
-        total_placees=len(places),
+        total_placees=len(state.timetable),
         manquantes=manquantes,
         par_parcours=par_parcours,
         resume=resume,
@@ -3189,12 +3253,13 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
             "soft_warnings": [], "suggestions": [], "suggestions_note": _DUO_SYNC_NOTE,
         })
 
-    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-    institutional = _institutional_violations(
-        body.week, body.day, body.slot, extra_blocked,
-        _libelle_jour_ferme(state, session.semestre, body.week, body.day),
-    )
-    institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
+    # Institutionnel : jamais contournable. Ordre pédagogique + indisponibilité
+    # enseignant : contournables via `force` depuis le 28/08 et le 03/09/2026
+    # (cf. `_conflits_deplacement`) — calculés même si `force` est déjà vrai,
+    # `forced_pending.sync_after_move` (plus bas, UNE FOIS le placement
+    # réellement effectué) en a besoin pour savoir si CE placement doit
+    # rester suivi.
+    institutional, pedago = _conflits_deplacement(state, session, body.week, body.day, body.slot)
     if institutional:
         raise HTTPException(409, detail={
             "message": "Placement impossible", "hard_conflicts": institutional,
@@ -3204,13 +3269,6 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
             "blocking_conflicts": institutional,
             "soft_warnings": [], "suggestions": [], "suggestions_note": None,
         })
-    # Ordre pédagogique : contournable via `force` depuis le 28/08/2026 (cf.
-    # `_pedagogical_order_violations`), à la différence du bloc institutionnel
-    # ci-dessus. Calculé même si `force` est déjà vrai — `forced_pending.
-    # sync_after_move`, appelé plus bas UNE FOIS le placement réellement
-    # effectué (un conflit de ressource peut encore le faire échouer après
-    # ce point), en a besoin pour savoir si CE placement doit rester suivi.
-    pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
     if pedago and not body.force:
         raise HTTPException(409, detail={
             "message": "Conflit", "hard_conflicts": pedago,

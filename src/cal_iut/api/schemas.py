@@ -658,6 +658,11 @@ class CelcatEtatResponse(BaseModel):
     semaines_validees: list[int] = []
     semaines_passees: list[int] = []
     semaines_lancees: list[int] = []
+    # Chips 1..30 (S1) dont plus AUCUNE séance ne pourrait encore atterrir —
+    # retour utilisateur 03/09/2026 : "si la semaine 1 est entièrement
+    # placée on la met comme placée". Calculé par différence, comme
+    # `/placements/manquantes` : jamais garanti par le solveur seul.
+    semaines_completes: list[int] = []
     valide_le: str | None = None
     dernier_job: dict[str, str] | None = None
     compteurs: CelcatCompteurs = CelcatCompteurs()

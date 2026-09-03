@@ -1152,7 +1152,13 @@ def build_payload(
     sessions_by_id = {s.id: s for s in sessions}
     placements = timetable.get("placements", [])
 
-    relevant_parcours = {sessions_by_id[p["session_id"]].parcours for p in placements if p["session_id"] in sessions_by_id}
+    # Toutes les SÉANCES (placées ET manquantes), pas seulement `placements` :
+    # un parcours/groupe dont AUCUNE séance n'est encore posée disparaissait
+    # sinon complètement de la grille — la colonne visée par une séance « À
+    # placer » n'existait tout simplement pas, rendant le glisser-déposer/clic
+    # muet sur cette case (retour utilisateur 03/09/2026 : « les cours dans à
+    # placer quand l'on clique ne peuvent pas être placés »).
+    relevant_parcours = {s.parcours for s in sessions}
     scoped_groups = [g for g in groups if g.parcours in relevant_parcours] or groups
 
     # Ne pas proposer dans l'interface un groupe qui n'a AUCUNE séance : les
@@ -1161,8 +1167,9 @@ def build_payload(
     # (il porte la définition de la cohorte pour le plafond hebdomadaire),
     # mais dont toutes les séances sont émises en TD sur le groupe TD —
     # l'afficher ferait apparaître deux entrées pour les mêmes étudiants,
-    # dont une systématiquement vide.
-    groups_with_sessions = {gid for p in placements for gid in p["group_ids"]}
+    # dont une systématiquement vide. « Aucune séance » = ni placée ni
+    # manquante (même raison que `relevant_parcours` ci-dessus).
+    groups_with_sessions = {gid for s in sessions for gid in (s.group_ids or [])}
     visible_groups = [g for g in scoped_groups if g.kind == "promo" or g.id in groups_with_sessions]
     if visible_groups:
         scoped_groups = visible_groups

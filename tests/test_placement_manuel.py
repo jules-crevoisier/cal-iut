@@ -167,6 +167,24 @@ def test_un_planning_complet_le_dit_explicitement(client):
     assert "Toutes les séances sont placées" in corps["resume"]
 
 
+def test_une_semaine_avec_une_seance_encore_manquante_n_est_pas_semaines_completes(client) -> None:
+    """Retour utilisateur (03/09/2026) : « si la semaine 1 est entièrement
+    placée on la met comme placée ». Tant que « manquante » pourrait encore
+    atterrir semaine 10 (0-indexée, chip 11), cette semaine n'est pas
+    complète — même si `placee` y est déjà."""
+    from cal_iut.api.main import _semaines_celcat_completes
+
+    assert 11 not in _semaines_celcat_completes()
+
+
+def test_une_semaine_ou_tout_est_place_devient_semaines_completes(client) -> None:
+    from cal_iut.api.main import _semaines_celcat_completes
+
+    etat = get_state()
+    etat.timetable.append(_place(etat.sessions_by_id["manquante"], 10, 2, 0))
+    assert 11 in _semaines_celcat_completes()
+
+
 # --------------------------------------------------------------------------
 # Les créneaux proposés
 # --------------------------------------------------------------------------

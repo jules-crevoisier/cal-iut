@@ -26,25 +26,35 @@ function classesSemaine(
   validees: number[],
   passees: number[],
   lancees: number[],
+  completes: number[],
 ): string {
   const cochee = draft.includes(n);
   const validee = validees.includes(n);
   const passee = passees.includes(n);
   const lancee = lancees.includes(n);
+  const complete = completes.includes(n);
   const classes = ["celcat-semaine"];
   if (cochee) classes.push("celcat-semaine--cochee");
   if (validee) classes.push("celcat-semaine--validee");
   if (validee && !cochee) classes.push("celcat-semaine--retiree");
   if (passee) classes.push("celcat-semaine--passee");
   if (lancee) classes.push("celcat-semaine--lancee");
+  if (complete && !validee && !passee && !lancee) classes.push("celcat-semaine--complete");
   if (passee || lancee) classes.push("celcat-semaine--disabled");
   return classes.join(" ");
 }
 
-function libelleSemaine(n: number, passees: number[], lancees: number[], validees: number[]): string {
+function libelleSemaine(
+  n: number,
+  passees: number[],
+  lancees: number[],
+  validees: number[],
+  completes: number[],
+): string {
   if (passees.includes(n)) return `Semaine ${n} passée`;
   if (lancees.includes(n)) return `Semaine ${n} lancée`;
   if (validees.includes(n)) return `Semaine ${n} validée`;
+  if (completes.includes(n)) return `Semaine ${n} entièrement placée`;
   return `Semaine ${n}`;
 }
 
@@ -170,6 +180,11 @@ export function AdminCelcatView() {
   const validees = etat.semaines_validees;
   const passees = etat.semaines_passees ?? [];
   const lancees = etat.semaines_lancees ?? [];
+  // Retour utilisateur (03/09/2026) : "si la semaine 1 est entièrement
+  // placée on la met comme placée" — distinct de « validée » (lot de nuit
+  // enregistré) : une semaine peut être entièrement placée sans qu'on ait
+  // encore décidé de l'envoyer à Celcat.
+  const completes = etat.semaines_completes ?? [];
 
   return (
     <section className="view celcat">
@@ -210,7 +225,20 @@ export function AdminCelcatView() {
               {etat.worker_ok ? "Worker joignable." : "Worker injoignable."}
             </span>
             <span>
-              {etat.valide_le ? `Dernière validation : ${etat.valide_le}.` : "Aucune validation."}
+              {etat.valide_le ? `Dernier lot validé : ${etat.valide_le}.` : "Aucun lot validé."}
+            </span>
+            {/* Retour utilisateur (03/09/2026) : "il affiche que la dernière
+                modification faite est hier, c'est bizarre" — `valide_le` ne
+                marque QUE le dernier clic sur « Enregistrer le lot de nuit »,
+                jamais un envoi réel à Celcat (le job de nuit et la file par
+                édition ne le touchent pas). `dernier_job.lance_le` est le
+                signal qui existait déjà côté backend mais n'était jamais
+                affiché — on distingue maintenant les deux plutôt que de
+                laisser un seul horodatage ambigu. */}
+            <span>
+              {etat.dernier_job?.lance_le
+                ? `Dernier envoi au clickeur : ${etat.dernier_job.lance_le}.`
+                : "Aucun envoi au clickeur pour l'instant."}
             </span>
           </div>
         </div>
@@ -229,14 +257,22 @@ export function AdminCelcatView() {
               const validee = validees.includes(n);
               const cochee = semaines.includes(n);
               const verrouillee = passees.includes(n) || lancees.includes(n);
-              const pastille = passees.includes(n) ? "passée" : lancees.includes(n) ? "lancée" : validee ? "validée" : null;
+              const pastille = passees.includes(n)
+                ? "passée"
+                : lancees.includes(n)
+                  ? "lancée"
+                  : validee
+                    ? "validée"
+                    : completes.includes(n)
+                      ? "placée"
+                      : null;
               return (
                 <button
                   key={n}
                   type="button"
-                  className={classesSemaine(n, semaines, validees, passees, lancees)}
+                  className={classesSemaine(n, semaines, validees, passees, lancees, completes)}
                   aria-pressed={cochee}
-                  aria-label={libelleSemaine(n, passees, lancees, validees)}
+                  aria-label={libelleSemaine(n, passees, lancees, validees, completes)}
                   disabled={verrouillee || enCours}
                   onClick={() => basculerSemaine(n, verrouillee)}
                 >
