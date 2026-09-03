@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { CreerSeanceBody } from "../api/client";
-import { modifierSeancePersonnalisee } from "../api/client";
+import { deposerPlacement, modifierSeancePersonnalisee } from "../api/client";
 import type { Placement } from "../types";
 import type { AppPayload } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
@@ -27,6 +27,11 @@ interface CreerSeanceModalProps {
   suggestion?: { courseCode?: string; groupId?: string; week?: number; day?: number } | null;
   onCree: (placement: Placement) => void;
   onCancel: () => void;
+  /** Retirer du planning (garde la séance au catalogue, elle rejoint « À
+   * placer ») — retour utilisateur 03/09/2026 : un enseignant ne sait
+   * parfois pas encore quand il sera disponible. Absent = pas de bouton
+   * (ex. à la création, où il n'y a encore rien à retirer). */
+  onRetiree?: (sessionId: string) => void;
 }
 
 /** Créer, ou modifier, une séance ajoutée à une matière existante — retour
@@ -46,6 +51,7 @@ export function CreerSeanceModal({
   suggestion = null,
   onCree,
   onCancel,
+  onRetiree,
 }: CreerSeanceModalProps) {
   const modeMaquette = mode === "maquette";
   const coursTries = useMemo(
@@ -183,6 +189,19 @@ export function CreerSeanceModal({
       onCree(resultat.placement);
     } else {
       setErreur(resultat.message);
+    }
+  };
+
+  const retirer = async () => {
+    if (!seanceExistante) return;
+    setEnCours(true);
+    setErreur(null);
+    try {
+      await deposerPlacement(seanceExistante.session_id);
+      onRetiree?.(seanceExistante.session_id);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Retrait impossible");
+      setEnCours(false);
     }
   };
 
@@ -334,6 +353,17 @@ export function CreerSeanceModal({
         {erreur && <p className="alerte">{erreur}</p>}
 
         <div className="confirmmodal-actions">
+          {seanceExistante && onRetiree && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={enCours}
+              onClick={retirer}
+              title="Remet la séance dans « À placer », sans la supprimer."
+            >
+              Retirer du planning
+            </button>
+          )}
           <button type="button" className="btn btn--ghost" onClick={onCancel}>
             Annuler
           </button>

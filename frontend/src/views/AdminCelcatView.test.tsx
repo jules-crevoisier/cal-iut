@@ -11,6 +11,7 @@ const ETAT = {
   semaines_validees: [1],
   semaines_passees: [] as number[],
   semaines_lancees: [] as number[],
+  semaines_completes: [] as number[],
   valide_le: "2026-09-01T10:00:00+00:00",
   dernier_job: null,
   compteurs: { created: 1, modified: 0, deleted: 0, blocked: 1 },
@@ -90,8 +91,23 @@ describe("AdminCelcatView", () => {
     await screen.findByText("ÉCRITURE OFF");
     expect(screen.getByText(/ne s’écrivent pas tout de suite/i)).toBeInTheDocument();
     expect(screen.getByText("Worker joignable.")).toBeInTheDocument();
-    expect(screen.getByText(/Dernière validation/)).toBeInTheDocument();
+    expect(screen.getByText(/Dernier lot validé/)).toBeInTheDocument();
     expect(screen.getByText(/2026-09-01/)).toBeInTheDocument();
+    expect(screen.getByText(/Aucun envoi au clickeur/)).toBeInTheDocument();
+  });
+
+  it("should show the last real push to Celcat separately from the last validated batch", async () => {
+    // Retour utilisateur (03/09/2026) : "il affiche que la dernière
+    // modification faite est hier, c'est bizarre" — `valide_le` et
+    // `dernier_job.lance_le` mesurent deux choses différentes, il faut les
+    // distinguer plutôt qu'un seul horodatage ambigu.
+    stubFetch({ etat: { ...ETAT, dernier_job: { lance_le: "2026-09-03T08:00:00+00:00" } } });
+    render(<AdminCelcatView />);
+
+    await screen.findByText("ÉCRITURE OFF");
+    expect(screen.getByText(/Dernier lot validé/)).toBeInTheDocument();
+    expect(screen.getByText(/Dernier envoi au clickeur/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-09-03/)).toBeInTheDocument();
   });
 
   it("should show ÉCRITURE ON and the Live consequence when saisie is active", async () => {
@@ -167,6 +183,18 @@ describe("AdminCelcatView", () => {
 
     fireEvent.click(s2);
     expect(s2).not.toHaveClass("celcat-semaine--cochee");
+  });
+
+  it("should mark a fully-placed week as complete, distinct from validée", async () => {
+    // Retour utilisateur (03/09/2026) : "si la semaine 1 est entièrement
+    // placée on la met comme placée" — semaine 1 est déjà "validée" dans
+    // ETAT, donc on le vérifie sur une semaine complète mais NON validée.
+    stubFetch({ etat: { ...ETAT, semaines_completes: [2] } });
+    render(<AdminCelcatView />);
+
+    const s2 = await screen.findByRole("button", { name: /^semaine 2 entièrement placée$/i });
+    expect(s2).toHaveClass("celcat-semaine--complete");
+    expect(s2).not.toHaveClass("celcat-semaine--validee");
   });
 
   it("should POST /celcat/valider with the draft semaines when the night-lot button is pressed", async () => {

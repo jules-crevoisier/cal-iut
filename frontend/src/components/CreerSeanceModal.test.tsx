@@ -158,4 +158,40 @@ describe("CreerSeanceModal maquette mode", () => {
     expect(screen.getByText("Groupe(s)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /créer et placer/i })).toBeInTheDocument();
   });
+
+  it("should not show a retirer button when creating (no onRetiree, no seanceExistante)", () => {
+    render(<CreerSeanceModal payload={payload} onCree={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /retirer du planning/i })).not.toBeInTheDocument();
+  });
+
+  it("should not show a retirer button when onRetiree is not given, even editing an existing session", () => {
+    renderMaquette();
+    expect(screen.queryByRole("button", { name: /retirer du planning/i })).not.toBeInTheDocument();
+  });
+
+  it("should call deposer and onRetiree, not onCree, when retirer is clicked", async () => {
+    // Retour utilisateur (03/09/2026) : "enlever un cours de l'EDT pour le
+    // mettre dans à placer" — endpoint POST /placements/{id}/deposer déjà
+    // là côté serveur, jamais relié à l'interface jusqu'ici.
+    const onRetiree = vi.fn();
+    const onCree = vi.fn();
+    render(
+      <CreerSeanceModal
+        mode="maquette"
+        payload={payload}
+        seanceExistante={placement}
+        onCree={onCree}
+        onCancel={vi.fn()}
+        onRetiree={onRetiree}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /retirer du planning/i }));
+
+    await waitFor(() => expect(onRetiree).toHaveBeenCalledWith("maquette-1"));
+    const appel = vi.mocked(fetch).mock.calls.find((call) => String(call[0]).includes("/deposer"));
+    expect(appel).toBeDefined();
+    expect(appel?.[1]?.method).toBe("POST");
+    expect(onCree).not.toHaveBeenCalled();
+  });
 });

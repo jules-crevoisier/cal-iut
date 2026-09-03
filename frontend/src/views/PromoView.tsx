@@ -623,6 +623,12 @@ export function PromoView({
             onPlacementUpdated?.(placement);
             onSeanceChangee?.();
           }}
+          onRetiree={(sessionId) => {
+            const courseCode = modaleSeance !== "creer" ? modaleSeance?.course_code : undefined;
+            setModaleSeance(null);
+            setAnnonce(`${courseCode ?? sessionId} retirée du planning — repose-la depuis « À placer ».`);
+            onSeanceChangee?.();
+          }}
         />
       )}
 
