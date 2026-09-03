@@ -268,4 +268,18 @@ modules:
 #   WRA307M
 #   WRA313M
 #   WRA319M
-#   WSA501D
+
+# --- SAE (WS*/WSA*) : AUCUN code Celcat, sur tout le périmètre S1/S3/S5 -----
+# Repéré le 03/09/2026 : le blocage "sans code Celcat" de WS310D (Portfolio
+# S3) est apparu dans le lot de nuit dès que les séances SAE sont devenues
+# plaçables dans l'outil (elles ne l'étaient pas avant, donc jamais
+# poussées vers Celcat, donc ce trou restait invisible). Vérifié
+# exhaustivement : aucune des ~48 matières WS*/WSA* n'a de code — pas un
+# oubli isolé. Confirmé avec l'utilisateur (03/09/2026) : les SAE ONT
+# besoin d'un code Celcat comme le reste, même traitement que WSA501D — à
+# récupérer auprès de Kyllian, périmètre S1/S3/S5 (les autres semestres
+# hors périmètre 2026-2027, cf. README) :
+#   S1 : WS101 WS102 WS103 WS104 WS105 WS106 WS107 WS110 WS1PJ
+#   S3 : WS301D WS302D WS303D WS310D WS3PJ WSA301M WSA302M WSA310M WSA3PRJ
+#   S5 : WS501D WS502D WS510D WS5PJ WSA501C WSA501D WSA502C WSA502D WSA510C
+#        WSA510D WSA5PRJ
