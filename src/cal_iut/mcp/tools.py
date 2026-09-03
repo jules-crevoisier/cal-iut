@@ -598,10 +598,14 @@ def _analyser_creneau(
         week, day, slot, extra_blocked,
         _libelle_jour_ferme(state, session.semestre, week, day),
     )
-    institutional += _teacher_availability_violations(state, session, week, day, slot)
     blocking.extend(institutional)
     hard.extend(institutional)
     pedago = _pedagogical_order_violations(week, day, slot, extra_blocked_pedago, allowed_weeks)
+    # Indisponibilité enseignant DÉCLARÉE : contournable via `force` depuis
+    # le 03/09/2026 (retour Kyllian Bresson : « des fois ils acceptent de
+    # faire cours quand même ») — même changement que côté HTTP
+    # (`api/main.py`), pas dans `blocking` (jamais contournable).
+    pedago += _teacher_availability_violations(state, session, week, day, slot)
     hard.extend(pedago)
 
     if room_id:

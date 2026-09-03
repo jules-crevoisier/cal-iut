@@ -1782,15 +1782,21 @@ def _teacher_availability_violations(state: object, session: object, week: int, 
     """
     Indisponibilité enseignant DÉCLARÉE — récurrente, dates précises, liste
     blanche, parité de semaine, ET supervision SAE (`state.teacher_availability`
-    augmenté une fois au démarrage, cf. `startup()`) — jamais contournable via
-    `force`, au même titre que le verrou PAC/SAE/ordre pédagogique : un humain
-    n'a jamais de bonne raison de placer un cours chez un enseignant qui a
-    explicitement signalé son indisponibilité ce jour-là (retour utilisateur
-    11/08/2026 : "vérifie bien toutes les contraintes avant que ça
-    s'effectue"). Avant ce correctif, ces indisponibilités ne servaient qu'à
-    FILTRER les suggestions (`_teacher_free_at`, déjà appelé par
-    `_suggestions_for`) — un glisser-déposer direct sur une case arbitraire,
-    hors suggestion, pouvait les violer sans aucun garde-fou serveur.
+    augmenté une fois au démarrage, cf. `startup()`). Signalée systématiquement
+    (retour utilisateur 11/08/2026 : "vérifie bien toutes les contraintes
+    avant que ça s'effectue" — avant ce correctif, ces indisponibilités ne
+    servaient qu'à FILTRER les suggestions via `_teacher_free_at`, déjà
+    appelé par `_suggestions_for` ; un glisser-déposer direct sur une case
+    arbitraire, hors suggestion, pouvait les violer sans aucun garde-fou
+    serveur).
+
+    Contournable via `force` depuis le 03/09/2026 (retour Kyllian Bresson :
+    « des fois ils acceptent de faire cours quand même haha ») — même
+    traitement que l'ordre pédagogique (28/08/2026), à la différence du
+    verrou PAC/SAE (`_institutional_violations`), qui lui reste
+    définitivement non contournable : un humain peut avoir une bonne raison
+    ponctuelle de placer un cours chez un enseignant indisponible sur le
+    papier (accord donné à l'oral), jamais de casser un jeudi PAC.
     """
     from cal_iut.api.validation import _teacher_free_at
 
@@ -1806,7 +1812,8 @@ def _teacher_availability_violations(state: object, session: object, week: int, 
     return [
         f"Enseignant indisponible à ce créneau ({', '.join(session.teacher_codes)}) — "
         "indisponibilité déclarée (contrainte enseignant ou encadrement SAE) — "
-        "non modifiable, même en forçant."
+        "un placement manuel avec « Forcer » peut débloquer, si l'enseignant a "
+        "accepté malgré tout."
     ]
 
 
@@ -1887,13 +1894,18 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
             body.week, body.day, body.slot, extra_blocked,
             _libelle_jour_ferme(state, session.semestre, body.week, body.day),
         )
-        institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         # L'ordre pédagogique est signalé ici (dry-run, avant décision de
         # l'utilisateur) même si `body.force` n'est pas encore posé — c'est
         # ce qui déclenche la modale de confirmation côté front ; le forçage
         # réel n'intervient qu'au vrai déplacement (`move_session`/
         # `placer_seance`), pas dans cette prévisualisation.
         pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+        # Indisponibilité enseignant DÉCLARÉE : contournable via `force`
+        # depuis le 03/09/2026 (retour Kyllian Bresson : « des fois ils
+        # acceptent de faire cours quand même ») — même traitement que
+        # l'ordre pédagogique, à la différence des verrous institutionnels
+        # ci-dessus qui eux restent définitivement non contournables.
+        pedago += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if institutional or pedago:
             # `institutional` seul est BLOQUANT : ni `force` ni rien d'autre
             # ne le lève côté `move_session`. L'ordre pédagogique et le
@@ -1984,7 +1996,6 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             body.week, body.day, body.slot, extra_blocked,
             _libelle_jour_ferme(state, session.semestre, body.week, body.day),
         )
-        institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if institutional:
             raise HTTPException(409, detail={
                 "message": "Déplacement impossible", "hard_conflicts": institutional,
@@ -1999,6 +2010,11 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         # peut encore faire échouer le déplacement après ce point), en a
         # besoin pour savoir si CE déplacement doit rester suivi.
         pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+        # Indisponibilité enseignant DÉCLARÉE : contournable via `force`
+        # depuis le 03/09/2026 (retour Kyllian Bresson : « des fois ils
+        # acceptent de faire cours quand même ») — cf. même changement dans
+        # `validate_placement` ci-dessus.
+        pedago += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
         if pedago and not body.force:
             raise HTTPException(409, detail={
                 "message": "Conflit", "hard_conflicts": pedago,
@@ -2248,10 +2264,11 @@ def _controler_echange(
     """Tous les contrôles d'un déplacement, appliqués aux DEUX séances.
 
     Rend `(durs, bloquants, doux)` — `bloquants` est le sous-ensemble de
-    `durs` que `force` ne lève pas (verrous institutionnels, indisponibilité
-    enseignant déclarée), exactement la même distinction que
-    `validate_placement`, pour que l'interface décide de la même façon des
-    deux côtés.
+    `durs` que `force` ne lève pas (verrous institutionnels UNIQUEMENT,
+    depuis le 03/09/2026 — l'indisponibilité enseignant déclarée est
+    devenue contournable via `force`, comme l'ordre pédagogique), exactement
+    la même distinction que `validate_placement`, pour que l'interface
+    décide de la même façon des deux côtés.
     """
     durs: list[str] = []
     bloquants: list[str] = []
@@ -2264,12 +2281,16 @@ def _controler_echange(
                 placement.week, placement.day, placement.slot, extra_bloque,
                 _libelle_jour_ferme(state, seance.semestre, placement.week, placement.day),
             )
-            institutionnels += _teacher_availability_violations(state, seance, placement.week, placement.day, placement.slot)
             bloquants += institutionnels
             durs += institutionnels
             durs += _pedagogical_order_violations(
                 placement.week, placement.day, placement.slot, extra_bloque_pedago, semaines_permises
             )
+            # Indisponibilité enseignant DÉCLARÉE : contournable via `force`
+            # depuis le 03/09/2026 (retour Kyllian Bresson : « des fois ils
+            # acceptent de faire cours quand même ») — dans `durs` (négociable
+            # via force), plus dans `bloquants` (jamais contournable).
+            durs += _teacher_availability_violations(state, seance, placement.week, placement.day, placement.slot)
         resultat = validate_move(
             placement.session_id, placement.week, placement.day, placement.slot,
             _as_placed(state.timetable), placement.group_ids, placement.teacher_codes, salle,
@@ -3194,7 +3215,6 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
         body.week, body.day, body.slot, extra_blocked,
         _libelle_jour_ferme(state, session.semestre, body.week, body.day),
     )
-    institutional += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
     if institutional:
         raise HTTPException(409, detail={
             "message": "Placement impossible", "hard_conflicts": institutional,
@@ -3211,6 +3231,10 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     # effectué (un conflit de ressource peut encore le faire échouer après
     # ce point), en a besoin pour savoir si CE placement doit rester suivi.
     pedago = _pedagogical_order_violations(body.week, body.day, body.slot, extra_blocked_pedago, allowed_weeks)
+    # Indisponibilité enseignant DÉCLARÉE : contournable via `force` depuis
+    # le 03/09/2026 (retour Kyllian Bresson : « des fois ils acceptent de
+    # faire cours quand même ») — cf. même changement dans `move_session`.
+    pedago += _teacher_availability_violations(state, session, body.week, body.day, body.slot)
     if pedago and not body.force:
         raise HTTPException(409, detail={
             "message": "Conflit", "hard_conflicts": pedago,

@@ -367,7 +367,11 @@ def test_should_move_when_apply_confirms_forceable_conflict(monter):
     assert (pose.week, pose.day, pose.slot) == (cible.week, cible.day, cible.slot)
 
 
-def test_should_block_and_never_apply_when_declared_indispo(monter):
+def test_should_be_forceable_and_apply_when_declared_indispo(monter):
+    """Contournable via `force` depuis le 03/09/2026 (retour Kyllian
+    Bresson : « des fois ils acceptent de faire cours quand même ») — même
+    changement que côté HTTP (`api/main.py`). Un verrou institutionnel
+    (PAC/SAE), lui, resterait `blocked` même avec `force`."""
     ara = Teacher(code="ARA", nom="Museum", prenom="A")
     seance = _seance("wra507c-cm", code="WRA507C", prof="ARA")
     monter(
@@ -384,14 +388,15 @@ def test_should_block_and_never_apply_when_declared_indispo(monter):
         "force": True,
     }])
     item = propose["items"][0]
-    assert item["status"] == "blocked"
-    avant = (_placement(seance.id).week, _placement(seance.id).day, _placement(seance.id).slot)
+    assert item["status"] == "ok"
+    assert item["forceable"] is True
+    assert any("indisponible" in m for m in item["hard_conflicts"])
     item["force"] = True
     retour = apply(confirm=True, ops=[item], plan_id=propose["plan_id"])
     if isinstance(retour, dict):
-        assert retour.get("ok") is not True
-        assert retour.get("forced") is not True
-    assert (_placement(seance.id).week, _placement(seance.id).day, _placement(seance.id).slot) == avant
+        assert retour.get("ok") is True
+        assert retour.get("forced") is True
+    assert (_placement(seance.id).week, _placement(seance.id).day, _placement(seance.id).slot) == (SEMAINE, 0, 5)
 
 
 def test_should_list_ops_on_plan_tool_when_mcp_tools_listed(monkeypatch):

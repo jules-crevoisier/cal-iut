@@ -229,6 +229,7 @@ export function APlacerView({
           <ParkedCard
             parked={park.parked}
             selected={park.selected}
+            groupLabels={payload?.groupLabels}
             onSelect={onSelectPark}
             onAnnuler={onAnnulerPark}
           />
