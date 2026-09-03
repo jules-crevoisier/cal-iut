@@ -47,6 +47,11 @@ import {
   selectedParked,
   type ParkUiState,
 } from "../features/park-week-move/parkWeekMove";
+import {
+  filtrerRowsParGroupe,
+  listerGroupesParcours,
+  type FiltreGroupeId,
+} from "../utils/parcoursGroupFilter";
 
 interface ParcoursWeekModalProps {
   payload: AppPayload;
@@ -83,6 +88,7 @@ export function ParcoursWeekModal({
   const setPark = onParkChange ?? setParkLocal;
   const narrow = useNarrowScreen();
   const [mobileDay, setMobileDay] = useState(todayIndex());
+  const [filtreGroupe, setFiltreGroupe] = useState<FiltreGroupeId>("Tout");
 
   const fermer = () => {
     if (hasParked(park)) setPark(clearPark());
@@ -107,18 +113,22 @@ export function ParcoursWeekModal({
     [payload.groupLabels, payload.groupParcours, parcours],
   );
 
-  const rowsSemaine = useMemo(
-    () =>
-      solverWeek === null
-        ? []
-        : payload.rows.filter(
-            (r) =>
-              r.w === solverWeek &&
-              r.g.some((gid) => groupesDuParcours.has(gid)) &&
-              !isHiddenOnGrid(park, r.id),
-          ),
-    [payload.rows, solverWeek, groupesDuParcours, park],
+  const optionsGroupe = useMemo(
+    () => listerGroupesParcours(payload, parcours),
+    [payload, parcours],
   );
+
+  // Réinitialise le filtre si on change de parcours (autre modale) ou si
+  // l'option sélectionnée n'existe plus dans ce parcours.
+  useEffect(() => {
+    setFiltreGroupe("Tout");
+  }, [parcours]);
+
+  const rowsSemaine = useMemo(() => {
+    if (solverWeek === null) return [];
+    const deLaSemaine = payload.rows.filter((r) => r.w === solverWeek && !isHiddenOnGrid(park, r.id));
+    return filtrerRowsParGroupe(deLaSemaine, filtreGroupe, payload, parcours, groupesDuParcours);
+  }, [payload, solverWeek, groupesDuParcours, park, filtreGroupe, parcours]);
 
   const placementsParId = useMemo(
     () => new Map(placements.map((p) => [p.session_id, p])),
@@ -251,6 +261,30 @@ export function ParcoursWeekModal({
             </button>
           </div>
         </div>
+
+        {optionsGroupe.length > 0 && (
+          <div className="parcoursmodal-filtres" role="group" aria-label="Filtrer par groupe">
+            <button
+              type="button"
+              className={"btn btn--ghost btn--sm" + (filtreGroupe === "Tout" ? " is-active" : "")}
+              aria-pressed={filtreGroupe === "Tout"}
+              onClick={() => setFiltreGroupe("Tout")}
+            >
+              Tout
+            </button>
+            {optionsGroupe.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                className={"btn btn--ghost btn--sm" + (filtreGroupe === g.id ? " is-active" : "")}
+                aria-pressed={filtreGroupe === g.id}
+                onClick={() => setFiltreGroupe(g.id)}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <section
           className="parcoursmodal-aplacer"
