@@ -19,8 +19,8 @@ import { detailConflit } from "./placement";
 /** Obstacles que « Forcer » ne lève pas : on prévient au lieu de proposer un
  *  bouton qui échouera (PAC / SAE pour WR* / férié). L'indispo enseignant et
  *  l'ordre pédagogique sont, eux, forçables depuis 28/08–03/09/2026. */
-async function annoncerBlocage(motifs: string[], titre: string): Promise<void> {
-  await alerterAsync(motifs.join("\n"), { title: titre });
+async function annoncerBlocage(message: string, titre: string): Promise<void> {
+  await alerterAsync(message, { title: titre });
 }
 
 export async function performMove(
@@ -44,7 +44,7 @@ export async function performMove(
         .filter(Boolean)
         .join("\n\n");
       if (bloquants.length > 0) {
-        await annoncerBlocage(texte || bloquants, "Déplacement impossible");
+        await annoncerBlocage(texte || bloquants.join("\n"), "Déplacement impossible");
         return false;
       }
       const force = await confirmAsync(texte || forçables.join("\n"), { confirmLabel: "Forcer le déplacement" });
@@ -100,7 +100,7 @@ export async function performSwap(
       return false;
     }
     if (detail.blocking_conflicts.length > 0) {
-      await annoncerBlocage(detail.blocking_conflicts, "Échange impossible");
+      await annoncerBlocage(detail.blocking_conflicts.join("\n"), "Échange impossible");
       return false;
     }
     const force = await confirmAsync([...detail.hard_conflicts, ...detail.soft_warnings].join("\n"), {
