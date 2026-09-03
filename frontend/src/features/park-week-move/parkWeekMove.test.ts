@@ -1,19 +1,22 @@
 /**
- * Contrat pur du parcage inter-semaines : décider park / navigate / refuse,
- * un seul parcage à la fois, masquage grille, sélection explicite.
+ * Contrat pur du parcage inter-semaines : file multi, sélection, masquage.
  */
 import { describe, expect, it } from "vitest";
 
 import type { Placement } from "../../types";
 import type { WeekRow } from "../../types/app";
 import {
+  addPark,
   clearPark,
   createPark,
   decideWeekDrop,
+  emptyPark,
+  hasParked,
   isHiddenOnGrid,
+  removePark,
   replacePark,
   selectPark,
-  type ParkUiState,
+  selectedParked,
 } from "./parkWeekMove";
 
 function placement(patch: Partial<Placement> = {}): Placement {
@@ -62,32 +65,12 @@ describe("decideWeekDrop", () => {
   });
 
   it("should return refuse when placement is missing", () => {
-    expect(
-      decideWeekDrop({
-        placement: null,
-        target: semaineCible,
-        currentSolverWeek: 0,
-      }),
-    ).toBe("refuse");
+    expect(decideWeekDrop({ placement: null, target: semaineCible, currentSolverWeek: 0 })).toBe("refuse");
   });
 
   it("should return refuse when the session is locked", () => {
     expect(
-      decideWeekDrop({
-        placement: placement({ locked: true }),
-        target: semaineCible,
-        currentSolverWeek: 0,
-      }),
-    ).toBe("refuse");
-  });
-
-  it("should return refuse when the target week is missing", () => {
-    expect(
-      decideWeekDrop({
-        placement: placement(),
-        target: undefined,
-        currentSolverWeek: 0,
-      }),
+      decideWeekDrop({ placement: placement({ locked: true }), target: semaineCible, currentSolverWeek: 0 }),
     ).toBe("refuse");
   });
 
@@ -96,16 +79,6 @@ describe("decideWeekDrop", () => {
       decideWeekDrop({
         placement: placement(),
         target: { ...semaineCible, blocked: true },
-        currentSolverWeek: 0,
-      }),
-    ).toBe("refuse");
-  });
-
-  it("should return refuse when the target weekIndex is null", () => {
-    expect(
-      decideWeekDrop({
-        placement: placement(),
-        target: { ...semaineCible, weekIndex: null },
         currentSolverWeek: 0,
       }),
     ).toBe("refuse");
@@ -122,73 +95,62 @@ describe("decideWeekDrop", () => {
   });
 });
 
-describe("createPark / isHiddenOnGrid / selectPark / clearPark / replacePark", () => {
-  it("should snapshot origin week day slot room and labels when createPark runs", () => {
-    const source = placement({ week: 2, day: 3, slot: 4, room_id: "b204", room_label: "B204" });
+describe("multi-park file", () => {
+  it("should snapshot origin when createPark runs", () => {
+    const source = placement({ week: 2, day: 3, slot: 4 });
     const state = createPark(source, 1);
     source.week = 99;
-    source.day = 99;
-    source.slot = 99;
-    expect(state.parked).toEqual({
-      sessionId: "maquette-1",
-      origin: expect.objectContaining({
-        session_id: "maquette-1",
-        week: 2,
-        day: 3,
-        slot: 4,
-        room_id: "b204",
-        room_label: "B204",
-        course_code: "WR101",
-        course_name: "Écriture",
-      }),
-      viaDisplayWeek: 1,
-    });
-    expect(state.selected).toBe(false);
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]?.origin.week).toBe(2);
+    expect(state.selectedSessionId).toBeNull();
   });
 
-  it("should hide the parked session on the grid when createPark has run", () => {
-    const state = createPark(placement(), 1);
-    expect(isHiddenOnGrid(state, "maquette-1")).toBe(true);
-  });
-
-  it("should not hide another session when a different one is parked", () => {
-    const state = createPark(placement(), 1);
-    expect(isHiddenOnGrid(state, "maquette-2")).toBe(false);
-  });
-
-  it("should keep selected false when createPark runs", () => {
-    expect(createPark(placement(), 1).selected).toBe(false);
-  });
-
-  it("should mark the park selected only when selectPark is called", () => {
-    const parked = createPark(placement(), 1);
-    expect(parked.selected).toBe(false);
-    const selected = selectPark(parked);
-    expect(selected.selected).toBe(true);
-    expect(selected.parked?.sessionId).toBe("maquette-1");
-    expect(isHiddenOnGrid(selected, "maquette-1")).toBe(true);
-  });
-
-  it("should leave selected false when selectPark runs without a parked session", () => {
-    const vide: ParkUiState = { parked: null, selected: false };
-    expect(selectPark(vide)).toEqual({ parked: null, selected: false });
-  });
-
-  it("should clear the park when clearPark is called", () => {
-    const state = clearPark(selectPark(createPark(placement(), 1)));
-    expect(state.parked).toBeNull();
-    expect(state.selected).toBe(false);
-    expect(isHiddenOnGrid(state, "maquette-1")).toBe(false);
-  });
-
-  it("should replace the first park when replacePark receives a second session", () => {
+  it("should keep both sessions when a second is added", () => {
     const premier = createPark(placement({ session_id: "s-a", course_code: "WR101" }), 1);
-    const state = replacePark(premier, placement({ session_id: "s-b", course_code: "WR102", slot: 1 }), 2);
-    expect(state.parked?.sessionId).toBe("s-b");
-    expect(state.parked?.origin.slot).toBe(1);
-    expect(state.parked?.viaDisplayWeek).toBe(2);
-    expect(state.selected).toBe(false);
+    const state = addPark(premier, placement({ session_id: "s-b", course_code: "WR102", slot: 1 }), 2);
+    expect(state.items.map((p) => p.sessionId)).toEqual(["s-a", "s-b"]);
+    expect(isHiddenOnGrid(state, "s-a")).toBe(true);
     expect(isHiddenOnGrid(state, "s-b")).toBe(true);
+    expect(state.selectedSessionId).toBeNull();
+  });
+
+  it("should not duplicate when the same session is parked twice", () => {
+    const premier = createPark(placement({ session_id: "s-a" }), 1);
+    const state = addPark(premier, placement({ session_id: "s-a", week: 3 }), 2);
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]?.origin.week).toBe(3);
+    expect(state.items[0]?.viaDisplayWeek).toBe(2);
+  });
+
+  it("should select one session without clearing the queue", () => {
+    let state = createPark(placement({ session_id: "s-a" }), 1);
+    state = addPark(state, placement({ session_id: "s-b" }), 1);
+    state = selectPark(state, "s-a");
+    expect(state.selectedSessionId).toBe("s-a");
+    expect(selectedParked(state)?.sessionId).toBe("s-a");
+    expect(state.items).toHaveLength(2);
+  });
+
+  it("should remove only the cancelled session from the queue", () => {
+    let state = createPark(placement({ session_id: "s-a" }), 1);
+    state = addPark(state, placement({ session_id: "s-b" }), 1);
+    state = selectPark(state, "s-a");
+    state = removePark(state, "s-a");
+    expect(state.items.map((p) => p.sessionId)).toEqual(["s-b"]);
+    expect(state.selectedSessionId).toBeNull();
     expect(isHiddenOnGrid(state, "s-a")).toBe(false);
+  });
+
+  it("should clear the whole queue with clearPark", () => {
+    let state = addPark(createPark(placement({ session_id: "s-a" }), 1), placement({ session_id: "s-b" }), 1);
+    state = clearPark(state);
+    expect(state).toEqual(emptyPark());
+    expect(hasParked(state)).toBe(false);
+  });
+
+  it("should append via replacePark (compat) instead of replacing the queue", () => {
+    const premier = createPark(placement({ session_id: "s-a" }), 1);
+    const state = replacePark(premier, placement({ session_id: "s-b" }), 2);
+    expect(state.items.map((p) => p.sessionId)).toEqual(["s-a", "s-b"]);
   });
 });

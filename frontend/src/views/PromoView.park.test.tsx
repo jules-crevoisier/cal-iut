@@ -101,7 +101,7 @@ async function rendrePromo(extra: Record<string, unknown> = {}) {
     />,
   );
   await waitFor(() => {
-    expect(screen.getByText(/séances à placer à la main/i)).toBeInTheDocument();
+    expect(screen.getByText(/à placer & déplacer/i)).toBeInTheDocument();
   });
   return { onPlacementUpdated, onError };
 }
@@ -270,7 +270,7 @@ describe("PromoView park-week-move", () => {
     );
   });
 
-  it("should replace the first parked session when a second one is parked without POST", async () => {
+  it("should keep the first parked session hidden when a second one is parked without POST", async () => {
     await rendrePromo();
     await parquerVersSemaine8("WR101");
     fireEvent.click(screen.getByRole("button", { name: /semaine 2 \(/i }));
@@ -280,11 +280,11 @@ describe("PromoView park-week-move", () => {
     await parquerVersSemaine8("WR102");
     fireEvent.click(screen.getByRole("button", { name: /semaine 2 \(/i }));
     await waitFor(() => {
-      expect(chipDansGrille("WR101")).toBeInTheDocument();
+      expect(chipDansGrille("WR101")).not.toBeInTheDocument();
+      expect(chipDansGrille("WR102")).not.toBeInTheDocument();
     });
-    expect(chipDansGrille("WR102")).not.toBeInTheDocument();
+    expect(screen.getByRole("article", { name: /WR101/ })).toBeInTheDocument();
     expect(screen.getByRole("article", { name: /WR102/ })).toBeInTheDocument();
-    expect(screen.queryByRole("article", { name: /WR101/ })).not.toBeInTheDocument();
     expect(performMove).not.toHaveBeenCalled();
     expect(aEcritVers("/deposer")).toBe(false);
   });
@@ -302,11 +302,25 @@ describe("PromoView park-week-move", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /séances à placer/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/séances à placer à la main/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/à placer & déplacer/i)).not.toBeInTheDocument();
     fireEvent.dragStart(cibleGlisser("WR101"), { dataTransfer });
     fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }), { dataTransfer });
     expect(chipDansGrille("WR101")).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: /WR101/ })).not.toBeInTheDocument();
     expect(performMove).not.toHaveBeenCalled();
+  });
+
+  it("should keep both parked cards when a second session is dropped on another week", async () => {
+    await rendrePromo();
+    await parquerVersSemaine8("WR101");
+    fireEvent.click(screen.getByRole("button", { name: /semaine 2 \(/i }));
+    fireEvent.dragStart(cibleGlisser("WR102"), { dataTransfer });
+    fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }), { dataTransfer });
+    await waitFor(() => {
+      expect(screen.getByRole("article", { name: /WR101/ })).toBeInTheDocument();
+      expect(screen.getByRole("article", { name: /WR102/ })).toBeInTheDocument();
+    });
+    expect(chipDansGrille("WR101")).not.toBeInTheDocument();
+    expect(chipDansGrille("WR102")).not.toBeInTheDocument();
   });
 });

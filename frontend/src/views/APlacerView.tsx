@@ -28,7 +28,7 @@ import {
 } from "../api/client";
 import type { AppPayload } from "../types/app";
 import { ParkedCard } from "../features/park-week-move/ParkedCard";
-import type { ParkUiState } from "../features/park-week-move/parkWeekMove";
+import { hasParked, type ParkUiState } from "../features/park-week-move/parkWeekMove";
 import { placerAvecConfirmation } from "../utils/placement";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
@@ -56,10 +56,10 @@ interface APlacerViewProps {
   variante?: "page" | "panneau";
   onChoisirSurPromo?: (seance: SeanceAPlacer) => void;
   onFermer?: () => void;
-  /** Séance déposée sur une autre semaine, pas encore re-posée. */
+  /** File de séances déposées sur une autre semaine, pas encore re-posées. */
   park?: ParkUiState;
-  onSelectPark?: () => void;
-  onAnnulerPark?: () => void;
+  onSelectPark?: (sessionId: string) => void;
+  onAnnulerPark?: (sessionId: string) => void;
 }
 
 export function APlacerView({
@@ -139,7 +139,7 @@ export function APlacerView({
 
       <div className="panel">
         <div className="section-header">
-          <h3>Séances à placer à la main</h3>
+          <h3>À placer & déplacer</h3>
           {onFermer && (
             <button type="button" className="btn btn--ghost btn--sm" onClick={onFermer}>
               Masquer
@@ -223,24 +223,31 @@ export function APlacerView({
         )}
       </div>
 
-      {park?.parked && onSelectPark && onAnnulerPark && (
-        <div className="aplacer-liste">
-          <ParkedCard
-            parked={park.parked}
-            selected={park.selected}
-            groupLabels={payload?.groupLabels}
-            onSelect={onSelectPark}
-            onAnnuler={onAnnulerPark}
-          />
+      {hasParked(park ?? { items: [], selectedSessionId: null }) && onSelectPark && onAnnulerPark && (
+        <div className="aplacer-liste aplacer-liste--park">
+          <p className="muted small">
+            En déplacement vers une autre semaine ({park!.items.length}) — cliquez une carte, puis une case
+          </p>
+          {park!.items.map((item) => (
+            <ParkedCard
+              key={item.sessionId}
+              parked={item}
+              selected={park!.selectedSessionId === item.sessionId}
+              groupLabels={payload?.groupLabels}
+              onSelect={() => onSelectPark(item.sessionId)}
+              onAnnuler={() => onAnnulerPark(item.sessionId)}
+            />
+          ))}
         </div>
       )}
 
-      {manquantes.length === 0 && !park?.parked ? (
+      {manquantes.length === 0 && !hasParked(park ?? { items: [], selectedSessionId: null }) ? (
         <div className="panel">
           <p className="muted">Rien à faire ici : toutes les séances sont au planning.</p>
         </div>
       ) : manquantes.length === 0 ? null : (
         <div className="aplacer-liste">
+          <p className="muted small">Pas encore au planning</p>
           {manquantes.map((s) => (
             <CarteSeance
               key={s.session_id}
