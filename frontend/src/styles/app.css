@@ -2285,6 +2285,19 @@ table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.
   margin: 0;
 }
 
+.parcoursmodal-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.parcoursmodal-filtres .btn.is-active {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
 .parcoursmodal-corps {
   overflow: auto;
   flex: 1 1 auto;
