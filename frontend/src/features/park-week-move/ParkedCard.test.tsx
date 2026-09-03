@@ -46,4 +46,20 @@ describe("ParkedCard", () => {
     render(<ParkedCard parked={parked()} selected={false} onSelect={vi.fn()} onAnnuler={vi.fn()} />);
     expect(screen.getByText(/cliquez puis une case de la grille/i)).toBeInTheDocument();
   });
+
+  it("should stay on one line without the grid hint when compact", () => {
+    render(
+      <ParkedCard
+        parked={parked()}
+        selected={false}
+        compact
+        onSelect={vi.fn()}
+        onAnnuler={vi.fn()}
+        groupLabels={{ "g-td-ab": "TD AB" }}
+      />,
+    );
+    expect(screen.queryByText(/cliquez puis une case de la grille/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/AB/)).toBeInTheDocument();
+    expect(screen.getByRole("article").className).toMatch(/park-compact/);
+  });
 });

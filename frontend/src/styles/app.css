@@ -2278,6 +2278,7 @@ table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.
   align-items: center;
   gap: 10px;
   justify-content: space-between;
+  flex: 0 0 auto;
 }
 
 .parcoursmodal-entete h3 {
@@ -2286,7 +2287,8 @@ table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.
 
 .parcoursmodal-corps {
   overflow: auto;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Cases plus hautes qu'en vue admin : ici la grille a tout l'écran pour
@@ -2307,21 +2309,60 @@ table.promo-grid.teacher-filter .promo-chip { opacity: 0.3; filter: grayscale(0.
 }
 
 .parcoursmodal-aplacer {
-  min-height: 72px;
-  padding: 10px 12px;
+  flex: 0 1 auto;
+  min-height: 48px;
+  max-height: min(28vh, 200px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 10px;
   border: 1px dashed var(--border);
   border-radius: 12px;
   background: var(--surface-2);
 }
 
+.parcoursmodal-aplacer .aplacer-liste {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.parcoursmodal-aplacer .aplacer-liste > .muted {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
 .parcoursmodal-aplacer .aplacer-carte {
   margin: 0;
+  flex: 1 1 240px;
+  max-width: 100%;
+}
+
+.aplacer-carte--park-compact {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.aplacer-carte--park-compact .aplacer-entete {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.aplacer-carte--park-compact .aplacer-corps {
+  border-top: 0;
+  padding: 4px 10px 4px 0;
+  flex: 0 0 auto;
 }
 
 .parcoursmodal-aide {
   color: var(--muted);
   font-size: 0.78rem;
   margin: 0;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 900px) {

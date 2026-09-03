@@ -271,6 +271,7 @@ export function ParcoursWeekModal({
                 <ParkedCard
                   key={item.sessionId}
                   parked={item}
+                  compact
                   selected={park.selectedSessionId === item.sessionId}
                   groupLabels={payload.groupLabels}
                   onSelect={() => setPark(selectPark(park, item.sessionId))}

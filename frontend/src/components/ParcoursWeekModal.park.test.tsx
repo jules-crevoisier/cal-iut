@@ -33,7 +33,10 @@ const payload = emptyPayload({
     { week: 0, status: "current" },
     { week: 6, status: "future" },
   ],
-  rows: [placedRow({ id: "maquette-1", w: 0, d: 0, s: 0, c: "WR101", n: "Écriture", g: ["but1-td-ab"], te: ["MRI"], r: "H.005" })],
+  rows: [
+    placedRow({ id: "maquette-1", w: 0, d: 0, s: 0, c: "WR101", n: "Écriture", g: ["but1-td-ab"], te: ["MRI"], r: "H.005" }),
+    placedRow({ id: "maquette-2", w: 0, d: 1, s: 0, c: "WR106", n: "Expression", g: ["but1-td-ab"], te: ["MRI"], r: "H.105" }),
+  ],
 });
 
 const origin: Placement = {
@@ -53,6 +56,16 @@ const origin: Placement = {
   duration_slots: 1,
 };
 
+const origin2: Placement = {
+  ...origin,
+  session_id: "maquette-2",
+  day: 1,
+  course_code: "WR106",
+  course_name: "Expression",
+  room_id: "h105",
+  room_label: "H.105",
+};
+
 const dataTransfer = { effectAllowed: "move", setData: vi.fn(), getData: vi.fn() };
 
 function urlsDesAppels(): string[] {
@@ -68,7 +81,7 @@ function rendreModale(extra: Record<string, unknown> = {}) {
       payload={payload}
       parcours="BUT1"
       weekIndex={0}
-      placements={[origin]}
+          placements={[origin, origin2]}
       onClose={onClose}
       onPlacementUpdated={onPlacementUpdated}
       onError={onError}
@@ -155,6 +168,22 @@ describe("ParcoursWeekModal park-week-move", () => {
     expect(screen.queryByRole("article", { name: /WR101/ })).not.toBeInTheDocument();
     expect(performMove).not.toHaveBeenCalled();
     expect(urlsDesAppels().some((l) => l.includes("/deposer"))).toBe(false);
+  });
+
+  it("should keep both parked cards and the week grid help in the dialog", async () => {
+    rendreModale();
+    await parquerDepuisLaGrille();
+    const chip2 = screen.getByRole("button", { name: /WR106/ });
+    fireEvent.dragStart(chip2, { dataTransfer });
+    fireEvent.drop(screen.getByRole("region", { name: /à placer/i }), { dataTransfer });
+    await waitFor(() => {
+      expect(screen.getByRole("article", { name: /WR101/ })).toBeInTheDocument();
+      expect(screen.getByRole("article", { name: /WR106/ })).toBeInTheDocument();
+    });
+    const zone = screen.getByRole("region", { name: /à placer/i });
+    expect(zone.className).toMatch(/parcoursmodal-aplacer/);
+    expect(screen.getByText(/glisser une séance sur une case libre/i)).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).getByRole("table")).toBeInTheDocument();
   });
 
   it("should restore the origin and skip /deposer when Fermer is clicked while parked", async () => {

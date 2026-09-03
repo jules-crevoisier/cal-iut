@@ -10,28 +10,40 @@ interface ParkedCardProps {
   onSelect: () => void;
   onAnnuler: () => void;
   groupLabels?: Record<string, string>;
+  /** Modale semaine : une ligne, sans recouvrir la grille. */
+  compact?: boolean;
 }
 
-export function ParkedCard({ parked, selected, onSelect, onAnnuler, groupLabels = {} }: ParkedCardProps) {
+export function ParkedCard({
+  parked,
+  selected,
+  onSelect,
+  onAnnuler,
+  groupLabels = {},
+  compact = false,
+}: ParkedCardProps) {
   const { origin } = parked;
   const titre = `${origin.course_code} — ${origin.course_name}`;
   // Retour utilisateur (03/09/2026) : le groupe concerné (TD AB, TP C…)
   // n'apparaissait nulle part sur cette carte — on ne pouvait pas savoir à
   // quel groupe la séance parquée appartenait sans rouvrir la grille.
   const groupe = shortGroupLabel(origin.group_ids, groupLabels);
+  const meta = [origin.session_type, groupe, origin.room_label].filter(Boolean).join(" · ");
+  const classes = [
+    "aplacer-carte",
+    "aplacer-carte--park",
+    selected ? "aplacer-carte--park-selected" : "",
+    compact ? "aplacer-carte--park-compact" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <article
-      className={"aplacer-carte aplacer-carte--park" + (selected ? " aplacer-carte--park-selected" : "")}
-      aria-label={titre}
-      onClick={onSelect}
-    >
+    <article className={classes} aria-label={titre} onClick={onSelect}>
       <div className="aplacer-entete">
         <span className="aplacer-titre">
           <strong>{titre}</strong>
           <span className="sub">
-            {origin.session_type}
-            {groupe ? ` · ${groupe}` : ""}
-            {origin.room_label ? ` · ${origin.room_label}` : ""} — cliquez puis une case de la grille
+            {compact ? meta : `${meta} — cliquez puis une case de la grille`}
           </span>
         </span>
       </div>
