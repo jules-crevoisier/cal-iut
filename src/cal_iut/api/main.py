@@ -3138,7 +3138,20 @@ def _sessions_manquantes(state: object) -> list[tuple[object, set[int], bool, ob
     pour toute séance absente du planning (ou placée en forçant l'ordre
     pédagogique, pas encore validée) — le CŒUR de `/placements/manquantes`,
     extrait ici pour être réutilisé par `_celcat_etat_public` (semaines
-    complètes) sans dupliquer le filtre SAE/le calcul de bornes."""
+    complètes) sans dupliquer le filtre SAE/le calcul de bornes.
+
+    Exclut les SAE (WS*) jamais placées par le solveur (`is_unplaced_sae`) :
+    retour utilisateur 04/09/2026, verbatim « toutes les séance de sae ws se
+    retrouve dans a placer, il faut les retirer » — inverse le choix du
+    03/09/2026 (`test_should_list_unplaced_ws_sae_in_manquantes`, qui les
+    voulait ICI justement) : les lister dans « À placer » les rendait certes
+    manuellement plaçables, mais noyait la liste sous des dizaines d'entrées
+    SAE qui ne sont d'ailleurs pas vraiment « manquantes » au même sens
+    qu'une TD/CM classique. `POST /placements/personnalisees` (« + Nouvelle
+    séance ») reste le chemin dédié pour en créer une — même filet
+    `is_unplaced_sae` côté SAE-day-block (`_hard_constraint_context`), donc
+    toujours plaçable sur son propre jour de SAE, juste plus via cette
+    liste-ci."""
     places = {p.session_id for p in state.timetable}
     placement_by_id = {p.session_id: p for p in state.timetable}
     en_attente = forced_pending.all_pending()
@@ -3151,6 +3164,8 @@ def _sessions_manquantes(state: object) -> list[tuple[object, set[int], bool, ob
 
     resultat: list[tuple[object, set[int], bool, object | None]] = []
     for session in state.sessions:
+        if getattr(session, "is_unplaced_sae", False):
+            continue
         provisoire = session.id in en_attente
         if session.id in places and not provisoire:
             continue

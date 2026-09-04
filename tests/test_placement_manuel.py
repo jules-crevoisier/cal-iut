@@ -107,30 +107,34 @@ def test_l_inventaire_liste_exactement_les_seances_absentes_du_planning(client):
     assert corps["total_placees"] == 1
 
 
-def test_l_inventaire_inclut_les_sae_pour_placement_manuel(client):
-    """Retour 03/09/2026 : les enseignant·es planifient les SAE (WS*) dans
-    leurs fenêtres — elles doivent figurer dans « À placer ». L'exclusion
-    d'août 2026 (éviter 1121 fantômes) est remplacée par l'exemption de
-    sanctuarisation côté placement (`is_unplaced_sae`)."""
+def test_l_inventaire_exclut_les_sae_jamais_placees_par_le_solveur(client):
+    """Inverse du 03/09/2026 (ce test incluait alors les deux) : retour
+    utilisateur 04/09/2026, verbatim « toutes les séance de sae ws se
+    retrouve dans a placer, il faut les retirer ». `is_unplaced_sae` reste
+    True pour les deux ici (aucune n'a `metadata["solver_scheduled_sae"]`) —
+    seul le sens de l'assertion change. Une SAE effectivement
+    `solver_scheduled_sae` (ex. WSA501D dans le vrai run) redeviendrait une
+    séance ordinaire et réapparaîtrait normalement ici, cf.
+    `SessionToPlace.is_unplaced_sae`."""
     etat = get_state()
     sae_calendaire = SessionToPlace(
         id="sae-calendaire", course_code="WSA310M", course_name="SAE", semestre="S3",
         parcours="BUT2-DEV-FI", annee="BUT2", session_type=SessionType.TD,
         sequence_order=1, group_ids=["but1-td-ab"], teacher_codes=["MRI"],
     )
-    sae_planifiee = SessionToPlace(
-        id="sae-planifiee", course_code="WSA501D", course_name="SAE", semestre="S5",
+    sae_autre = SessionToPlace(
+        id="sae-autre", course_code="WSA501D", course_name="SAE", semestre="S5",
         parcours="BUT3-DEV-FC", annee="BUT3", session_type=SessionType.TD,
         sequence_order=1, group_ids=["but1-td-ab"], teacher_codes=["MRI"],
     )
-    etat.sessions = etat.sessions + [sae_calendaire, sae_planifiee]
+    etat.sessions = etat.sessions + [sae_calendaire, sae_autre]
     etat.sessions_by_id[sae_calendaire.id] = sae_calendaire
-    etat.sessions_by_id[sae_planifiee.id] = sae_planifiee
+    etat.sessions_by_id[sae_autre.id] = sae_autre
 
     reponse = client.get("/placements/manquantes").json()
     ids = {m["session_id"] for m in reponse["manquantes"]}
-    assert "sae-calendaire" in ids
-    assert "sae-planifiee" in ids
+    assert "sae-calendaire" not in ids
+    assert "sae-autre" not in ids
 
 
 def test_l_inventaire_se_calcule_par_difference_pas_depuis_le_solveur(client):
