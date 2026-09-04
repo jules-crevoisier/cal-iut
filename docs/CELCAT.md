@@ -550,6 +550,50 @@ refuse proprement plutôt que de deviner un nom : `supprimer_manquants`
 classe alors chaque job en échec (RPC), pas en refus (garde-fou), et il
 reste en file pour la prochaine nuit une fois la méthode capturée.
 
+**Tentatives du 05/09/2026, deux hypothèses ÉCARTÉES avec preuve, une piste
+UI non aboutie :**
+
+1. *Capture par clic UI* (`scripts/capturer_suppression_celcat.py`, retiré
+   après coup — pas assez fiable pour rester) : crée un canari (RPC, prouvé,
+   ok), MAIS le repérage du bloc correspondant sur la grille (double-clic
+   sur un `<div>` coloré, même technique que `capturer_save_celcat.py`) n'a
+   jamais réussi en environnement **headless** — 5 tentatives, jamais le bon
+   bloc identifié. Reste à retenter avec un navigateur non-headless (ou une
+   autre méthode de sélection) pour aller jusqu'au clic « Supprimer » et
+   capturer le RPC qu'il déclenche.
+2. *Hypothèse `suspended: "Y"`* — ÉCARTÉE, testée et prouvée fausse.
+   `udlTimetables.save` accepte et persiste `suspended: "Y"` sans erreur,
+   mais l'événement **reste visible** dans `udlTimetables.load` ensuite
+   (`scripts/tester_suspended_celcat.py --event-id … --group-id …`, sans
+   `--weeks-all-n`). Ce champ existe (posé à `"N"` à la création,
+   `ecriture.py::charge_utile`) mais ne fait pas ce qu'on espérait.
+3. *Hypothèse `weeks` tout à `N`* — ÉCARTÉE, refusée par le SERVEUR
+   lui-même : `EUDLDSError` sur la contrainte `CK_EVENT_WKLEN` de la table
+   `dbo.CT_EVENT` (`--weeks-all-n` du même script). Celcat interdit par
+   construction qu'un événement existant n'ait plus aucune semaine active —
+   confirme qu'une vraie suppression retire la LIGNE, pas seulement son
+   masque de semaines.
+4. *Scan statique des méthodes JS* (`scripts/scanner_methodes_udl_celcat.py`)
+   — 108 méthodes `udl*.*` recensées sur URCA_FORMATION, **aucune**
+   `udlTimetables.delete`/`.remove`. Les seules pistes portant "delete"
+   (`udlExclusivity.deleteExclusivityRequest`, `udlRoomBooker.deleteEvents`)
+   appartiennent à d'autres sous-systèmes (accès exclusif, réservation de
+   salle libre-service), pas au planning enseignant. Le scan élargi (tout
+   motif proche de delete/remove/suppr/cancel, pas seulement `udl*`) trouve
+   `this.deleteSelected` / `this._onDeleteBtnClick` / `this.undoDelete` —
+   de vrais gestionnaires de clic côté client, mais leur appel RPC réel
+   n'a jamais été observé (bloqué par le point 1 ci-dessus). Hypothèse la
+   plus probable pour la suite : le nom de méthode est construit
+   dynamiquement au clic plutôt qu'écrit en toutes lettres dans le JS
+   scanné — seule une capture réseau pendant un vrai clic peut trancher.
+
+**Reste de côté sur URCA_FORMATION**, laissés par ces tentatives (aucune
+suppression n'ayant marché, impossible de les retirer par API) : trois
+canaris `event_id` 1523406/1523407/1523408 sur le groupe « BUT MMI S1 TD
+AB - 2024 » (group_id 47925), `notes="canari-suppression"` — inoffensifs
+(base d'entraînement), à nettoyer à la main dans l'UI Celcat si besoin, ou
+via `methode_suppression` une fois prouvée.
+
 ### Ce qui est PROUVÉ en direct vs ce qui ne l'est PAS (02/09/2026)
 
 Deux cas très différents se cachaient derrière la même erreur « partial
