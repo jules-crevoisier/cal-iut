@@ -123,7 +123,10 @@ def test_la_config_ignore_les_codes_zero() -> None:
     assert reelle.salles.get("h203") == "H.023"
     assert "ALE" not in reelle.enseignants
     assert "FCI" not in reelle.enseignants
-    assert "WSA501D" not in reelle.modules
+    # WSA501D a reçu son code Celcat le 04/09/2026 (Kyllian) — WS1PJ, lui,
+    # est CONFIRMÉ sans code ("Projet Ens.", jamais à chercher).
+    assert reelle.modules.get("WSA501D") == "TSBZE51D"
+    assert "WS1PJ" not in reelle.modules
 
 
 # --------------------------------------------------------------------------
