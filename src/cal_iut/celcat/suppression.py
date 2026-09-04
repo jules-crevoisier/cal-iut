@@ -55,7 +55,7 @@ def supprimer_evenement(
         )
 
     verifier_avant_envoi(brut, base=base, production_autorisee=production_autorisee)
-    supprimer_evenement_rpc(page, brut, methode=methode)
+    supprimer_evenement_rpc(page, event_id, methode=methode)
     return
 
 

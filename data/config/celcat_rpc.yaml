@@ -5,8 +5,10 @@
 # Create : omettre event_id (0 est lu comme une mise à jour).
 methode_ecriture: udlTimetables.save
 event_id_create: omit
-# Suppression : AUCUN canari n'a encore prouvé le nom de la méthode RPC de
-# delete (contrairement à udlTimetables.save, capturé le 2026-09-01).
-# Volontairement VIDE — `MethodeSuppressionAbsente` refuse plutôt que de
-# deviner. Cf. .orchestrator/architect-contract-celcat-modifier-seance.md.
-methode_suppression:
+# Canari 2026-09-05 : suppression du canari 1523412 sur URCA_FORMATION
+# (BUT MMI S1 TD AB - 2024, group_id 47925). PAS de méthode dédiée : même
+# méthode que la création/modification, avec un enregistrement MINIMAL
+# `{"-event_id": <id>, "_type_": "Event"}` (clé au signe moins — convention
+# Celcat "supprimer cet id" dans un batch save, pas une valeur négative).
+# Vérifié : l'événement disparaît du udlTimetables.load qui suit.
+methode_suppression: udlTimetables.save
