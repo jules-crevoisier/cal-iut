@@ -128,9 +128,16 @@ def build_ics(
         "METHOD:PUBLISH",
         # Suggère un intervalle de rafraîchissement aux applis qui le
         # respectent (pas garanti, chacune a sa propre logique de
-        # resynchronisation) — un signal correct à donner plutôt qu'aucun.
-        "REFRESH-INTERVAL;VALUE=DURATION:PT6H",
-        "X-PUBLISHED-TTL:PT6H",
+        # resynchronisation — Google Calendar en particulier ignore ce
+        # champ et resynchronise sur son propre calendrier, ~toutes les 12 à
+        # 24h, sans qu'on puisse forcer plus vite depuis le serveur). Retour
+        # utilisateur 04/09/2026 : « en temps réel ou 1h max » — ramené de
+        # 6h à 1h, le maximum qu'on promet ; le contenu lui-même est déjà
+        # calculé en direct sur `state.timetable` à CHAQUE requête, aucune
+        # mise en cache serveur ne s'ajoute par-dessus (cf. `Cache-Control`
+        # sur la réponse HTTP, `api/main.py::ics_teacher`/`ics_groupe`).
+        "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+        "X-PUBLISHED-TTL:PT1H",
         f"X-WR-CALNAME:{_ics_escape('Planning MMI — ' + calendar_name)}",
         # Repris par Google et Apple pour afficher le calendrier dans le bon
         # fuseau même avant de lire le premier événement.

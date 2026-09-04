@@ -1334,6 +1334,18 @@ def export_csv() -> Response:
     return Response(content=content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=emploi_du_temps.csv"})
 
 
+# Le contenu est déjà recalculé EN DIRECT sur `state.timetable` à chaque
+# requête (rien n'est mis en cache côté serveur) — la seule staleness
+# possible vient d'un intermédiaire HTTP (proxy, CDN) qui garderait une
+# vieille réponse. `no-store` empêche ça explicitement. Retour utilisateur
+# 04/09/2026 : « en temps réel ou 1h max » — ce qu'on contrôle vraiment
+# (le serveur) est donc déjà à jour à chaque fois ; ce qu'on ne contrôle
+# PAS, c'est la fréquence à laquelle Google/Outlook/Apple repollent une URL
+# .ics abonnée (souvent plusieurs heures, parfois ~24h pour Google — aucun
+# en-tête ne force ça depuis le serveur).
+_ICS_CACHE_HEADERS = {"Cache-Control": "no-store, max-age=0"}
+
+
 def _ics_items_for_placements(state: object, placements: list) -> list:
     """`IcsItem` par placement — date calculée depuis le SEMESTRE PROPRE à
     chaque séance (pas un semestre de référence unique, cf. `ics_feed.py`
@@ -1392,7 +1404,10 @@ def ics_teacher(code: str) -> Response:
     content = build_ics(items, noms.get(code, code), f"prof-{code}", group_labels, noms)
     return Response(
         content=content, media_type="text/calendar; charset=utf-8",
-        headers={"Content-Disposition": f'inline; filename="planning-{code}.ics"'},
+        headers={
+            "Content-Disposition": f'inline; filename="planning-{code}.ics"',
+            **_ICS_CACHE_HEADERS,
+        },
     )
 
 
@@ -1417,7 +1432,10 @@ def ics_groupe(group_id: str) -> Response:
     content = build_ics(items, label, f"groupe-{group_id}", group_labels, noms)
     return Response(
         content=content, media_type="text/calendar; charset=utf-8",
-        headers={"Content-Disposition": f'inline; filename="planning-{group_id}.ics"'},
+        headers={
+            "Content-Disposition": f'inline; filename="planning-{group_id}.ics"',
+            **_ICS_CACHE_HEADERS,
+        },
     )
 
 

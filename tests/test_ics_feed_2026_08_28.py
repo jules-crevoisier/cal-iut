@@ -100,6 +100,24 @@ def test_flux_prof_contient_bien_du_icalendar(etat_avec_seances) -> None:
     assert "UID:prof-KBR-td1@cal-iut" in corps
 
 
+def test_flux_annonce_un_rafraichissement_d_une_heure(etat_avec_seances) -> None:
+    """Retour utilisateur (04/09/2026) : « en temps réel ou 1h max » — ramené
+    de PT6H à PT1H, le maximum qu'on promet (un simple hint ICS, pas garanti
+    par tous les agendas — cf. `ics_feed.py::build_ics`)."""
+    corps = client.get("/ics/prof/KBR.ics?t=KBR").text
+    assert "REFRESH-INTERVAL;VALUE=DURATION:PT1H" in corps
+    assert "X-PUBLISHED-TTL:PT1H" in corps
+    assert "PT6H" not in corps
+
+
+def test_flux_n_est_jamais_mis_en_cache_intermediaire(etat_avec_seances) -> None:
+    """Le contenu est recalculé en direct sur `state.timetable` à chaque
+    requête (rien n'est mis en cache côté serveur) — `no-store` empêche un
+    proxy/CDN intermédiaire d'en garder une vieille copie."""
+    reponse = client.get("/ics/prof/KBR.ics?t=KBR")
+    assert "no-store" in reponse.headers.get("cache-control", "")
+
+
 def test_flux_prof_ne_contient_pas_les_seances_d_un_autre(etat_avec_seances) -> None:
     corps = client.get("/ics/prof/KBR.ics?t=KBR").text
     assert "WR999" not in corps
