@@ -135,6 +135,12 @@ def _inventaire(plan) -> None:
         print(f"  AMBIGU {e.nom_groupe_celcat:24} {e.course_code:8} (on ne touche pas)")
     for ev in plan.fantomes:
         print(f"  FANTÔME id={ev.event_id} {ev.weeks.count('Y')} sem")
+    for ev in plan.celcat_en_plus:
+        print(
+            f"  EN PLUS id={ev.event_id:8} {ev.groupe_nom:24} module={ev.module_nom!r} "
+            f"j{ev.jour} {ev.heure_debut}-{ev.heure_fin} salle={ev.salle or '—'} "
+            f"enseignant={ev.enseignant!r}"
+        )
 
 
 def principal() -> int:

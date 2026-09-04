@@ -110,3 +110,17 @@ def test_should_be_on_week_three_when_wr106_weeks_has_y_at_index() -> None:
     assert sur_la_semaine(ev, 3)
     assert not sur_la_semaine(ev, 0)
     assert est_cours(ev)
+
+
+def test_should_not_be_a_cours_when_category_is_an_administrative_booking() -> None:
+    """Repéré le 05/09/2026 en prod (event_id 1933217, catégorie
+    « Conférence ») : salle + horaire réels mais aucun module/enseignant —
+    ce n'est pas un écart de planning, juste un booking hors cours qui
+    ressortait à tort en « Celcat en plus » à chaque comparaison."""
+    conference = _ev({
+        "event_id": 1933217, "day_of_week": 1,
+        "start_time": "09:30", "end_time": "12:30",
+        "evCatName": "Conférence", "modules": [], "staff": [],
+        "rooms": [{"name": "Amphi 3 MMI"}], "groups": [], "weeks": "Y", "protected": "N",
+    })
+    assert not est_cours(conference)
