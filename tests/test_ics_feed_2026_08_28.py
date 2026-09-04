@@ -53,7 +53,15 @@ def etat_avec_seances():
         parcours="BUT1", annee="BUT1", session_type=SessionType.TD,
         sequence_order=1, group_ids=["but1-td-cd"], teacher_codes=["JSA"],
     )
-    etat.sessions = [td, cm, autre]
+    # Bloc de 3h ("2×1h30 collées", `double_sessions.yaml`) — retour
+    # utilisateur 04/09/2026 : WSA501D affichait bien 9h30-12h30 dans la Vue
+    # Promo (duration_slots=2), mais le flux .ics s'arrêtait à 11h.
+    double = SessionToPlace(
+        id="double1", course_code="WSA501D", course_name="SAE web", semestre="S1",
+        parcours="BUT1", annee="BUT1", session_type=SessionType.TD,
+        sequence_order=1, group_ids=["but1-td-ab"], teacher_codes=["KBR"], duration_slots=2,
+    )
+    etat.sessions = [td, cm, autre, double]
     etat.sessions_by_id = {s.id: s for s in etat.sessions}
     etat.timetable = [
         PlacedSessionWithRoom(session_id="td1", week=0, day=0, slot=0,
@@ -64,6 +72,9 @@ def etat_avec_seances():
                                room_id="h018", room_label="H.018"),
         PlacedSessionWithRoom(session_id="autre1", week=0, day=2, slot=2,
                                course_code="WR999", group_ids=["but1-td-cd"], teacher_codes=["JSA"]),
+        PlacedSessionWithRoom(session_id="double1", week=0, day=3, slot=1,
+                               course_code="WSA501D", group_ids=["but1-td-ab"], teacher_codes=["KBR"],
+                               room_id="h205", room_label="H.205"),
     ]
     etat.groups = GROUPES
     etat.rooms = []
@@ -116,6 +127,19 @@ def test_flux_n_est_jamais_mis_en_cache_intermediaire(etat_avec_seances) -> None
     proxy/CDN intermédiaire d'en garder une vieille copie."""
     reponse = client.get("/ics/prof/KBR.ics?t=KBR")
     assert "no-store" in reponse.headers.get("cache-control", "")
+
+
+def test_flux_respecte_duration_slots_pour_un_bloc_de_3h(etat_avec_seances) -> None:
+    """Retour utilisateur (04/09/2026, capture d'écran de la Vue Promo à
+    l'appui) : « j'ai bien une séance à 11h to 12h30 » — un bloc de 3h
+    (`duration_slots=2`, ex. WSA501D) se terminait sur l'heure de fin du
+    SEUL créneau de départ, tronquant silencieusement la seconde moitié."""
+    corps = client.get("/ics/prof/KBR.ics?t=KBR").text
+    evenement = corps.split("UID:prof-KBR-double1@cal-iut")[1].split("END:VEVENT")[0]
+    assert "DTSTART" in evenement and "T093000" in evenement.split("DTEND")[0]
+    assert "T123000" in evenement.split("DTEND")[1], (
+        "la fin doit couvrir les 2 créneaux (9h30-12h30), pas s'arrêter à 11h"
+    )
 
 
 def test_flux_prof_ne_contient_pas_les_seances_d_un_autre(etat_avec_seances) -> None:

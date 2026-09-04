@@ -1372,7 +1372,18 @@ def _ics_items_for_placements(state: object, placements: list) -> list:
     for p in placements:
         session = state.sessions_by_id.get(p.session_id)
         semestre = getattr(session, "semestre", None) or _export_semestre(state)
-        start, end = _ICS_SLOT_TIMES[p.slot] if 0 <= p.slot < len(_ICS_SLOT_TIMES) else ("", "")
+        # `duration_slots` (ex. 2 = bloc de 3h, "2×1h30 collées" —
+        # `double_sessions.yaml`) N'ÉTAIT PAS lu ici : la fin d'un bloc de 3h
+        # se calculait sur le SEUL créneau de départ (`_ICS_SLOT_TIMES[p.slot]`),
+        # tronquant silencieusement la seconde moitié — la Vue Promo affichait
+        # bien les 2 créneaux (WSA501D 9h30-12h30, 4/09/2026), le flux .ics
+        # s'arrêtait à 11h. Retour utilisateur (04/09/2026, capture d'écran à
+        # l'appui) : "j'ai bien une séance à 11h to 12h30". Fin = fin du
+        # DERNIER créneau occupé, pas du premier.
+        duree = max(1, getattr(session, "duration_slots", None) or 1)
+        slot_fin = p.slot + duree - 1
+        start = _ICS_SLOT_TIMES[p.slot][0] if 0 <= p.slot < len(_ICS_SLOT_TIMES) else ""
+        end = _ICS_SLOT_TIMES[slot_fin][1] if 0 <= slot_fin < len(_ICS_SLOT_TIMES) else start
         items.append(IcsItem(
             session_id=p.session_id,
             course_code=p.course_code,
