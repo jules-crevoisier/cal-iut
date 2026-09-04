@@ -69,7 +69,7 @@ def test_should_honor_the_key_owner_role_on_a_general_route(db_isole) -> None:
     assert ecriture.status_code == 403
 
 
-def test_should_return_401_on_a_general_route_when_the_bearer_key_is_unknown() -> None:
+def test_should_return_401_on_a_general_route_when_the_bearer_key_is_unknown(db_isole) -> None:
     anonyme = TestClient(app)
     reponse = anonyme.get(
         "/placements/manquantes", headers={"Authorization": "Bearer caliut_ceci-nexiste-pas"}
