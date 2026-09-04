@@ -638,6 +638,7 @@ export interface CelcatEtat {
   semaines_completes: number[];
   valide_le: string | null;
   dernier_job: Record<string, string> | null;
+  derniere_ecriture_celcat: string | null;
   compteurs: { created: number; modified: number; deleted: number; blocked: number };
   worker_ok: boolean;
 }

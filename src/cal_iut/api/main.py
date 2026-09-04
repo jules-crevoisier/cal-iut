@@ -2502,6 +2502,7 @@ def _celcat_etat_public() -> CelcatEtatResponse:
 
     doc = charger()
     compteurs = CelcatCompteurs()
+    derniere_ecriture: str | None = None
     for item in tous():
         kind = item.get("kind")
         if kind == "created":
@@ -2512,6 +2513,13 @@ def _celcat_etat_public() -> CelcatEtatResponse:
             compteurs.deleted += 1
         elif kind == "blocked":
             compteurs.blocked += 1
+        # « created »/« modified »/« deleted » sont les SEULS kinds qui
+        # correspondent à une écriture Celcat réellement réussie — « blocked »
+        # n'a rien changé côté Celcat. Le journal est ajouté en ordre
+        # chronologique (`celcat/logs.py::append`) : le dernier de ces trois
+        # kinds rencontré en parcourant `tous()` est donc le plus récent.
+        if kind in ("created", "modified", "deleted"):
+            derniere_ecriture = item.get("at") or derniere_ecriture
     dernier = doc.get("dernier_job")
     return CelcatEtatResponse(
         saisie_active=bool(doc.get("saisie_active")),
@@ -2521,6 +2529,7 @@ def _celcat_etat_public() -> CelcatEtatResponse:
         semaines_completes=_semaines_celcat_completes(),
         valide_le=doc.get("valide_le"),
         dernier_job=dernier if isinstance(dernier, dict) else None,
+        derniere_ecriture_celcat=derniere_ecriture,
         compteurs=compteurs,
         worker_ok=True,
     )

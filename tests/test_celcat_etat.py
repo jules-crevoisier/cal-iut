@@ -180,6 +180,32 @@ def test_should_paginate_get_celcat_logs_and_include_created_modified_deleted_bl
     assert any(item.get("motif") and "WR314D" in str(item["motif"]) for item in bloques)
 
 
+def test_should_expose_the_last_real_write_separately_from_blocked_attempts(
+    client_admin,
+) -> None:
+    """Retour utilisateur (03/09/2026) : « on voudrait la dernière fois
+    qu'une modification faite dans l'app a été appliquée dans Celcat » —
+    `valide_le`/`dernier_job` ne mesurent que des actions admin (valider un
+    lot, lancer le job), jamais une écriture réellement confirmée."""
+    from cal_iut.celcat.logs import append as append_log
+
+    append_log(kind="created", motif=None, session_id="s-a")
+    append_log(kind="blocked", motif="WR314D sans code Celcat", session_id="s-d")
+
+    etat = client_admin.get("/celcat/etat").json()
+    apres_created = etat["derniere_ecriture_celcat"]
+    assert apres_created is not None
+
+    # Un « blocked » plus RÉCENT ne doit pas passer pour une écriture réelle.
+    append_log(kind="blocked", motif="WS310D sans code Celcat", session_id="s-f")
+    etat2 = client_admin.get("/celcat/etat").json()
+    assert etat2["derniere_ecriture_celcat"] == apres_created
+
+    append_log(kind="modified", motif=None, session_id="s-g")
+    etat3 = client_admin.get("/celcat/etat").json()
+    assert etat3["derniere_ecriture_celcat"] != apres_created
+
+
 def test_should_list_past_solver_weeks_as_semaines_passees_when_today_is_after_them(
     client_admin,
 ) -> None:
