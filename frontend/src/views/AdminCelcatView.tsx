@@ -54,7 +54,11 @@ function libelleSemaine(
   if (passees.includes(n)) return `Semaine ${n} passée`;
   if (lancees.includes(n)) return `Semaine ${n} lancée`;
   if (validees.includes(n)) return `Semaine ${n} validée`;
-  if (completes.includes(n)) return `Semaine ${n} entièrement placée`;
+  // "planning complet", pas "placée dans Celcat" — retour utilisateur
+  // (03/09/2026) : la formulation précédente laissait croire que ces
+  // semaines étaient déjà envoyées à Celcat, alors que ça ne dit que « plus
+  // aucune séance manquante côté planning », rien sur Celcat.
+  if (completes.includes(n)) return `Semaine ${n} — planning complet, pas encore envoyé à Celcat`;
   return `Semaine ${n}`;
 }
 
@@ -224,23 +228,28 @@ export function AdminCelcatView() {
             <span className={`pill mini ${etat.worker_ok ? "good" : "bad"}`}>
               {etat.worker_ok ? "Worker joignable." : "Worker injoignable."}
             </span>
+            {/* Retour utilisateur (03/09/2026) : "on voudrait la dernière
+                fois qu'une modification faite dans l'app a été appliquée
+                dans Celcat" — c'est CE signal-là qui doit être le plus
+                visible, pas `valide_le` (qui ne marque que le dernier clic
+                sur « Enregistrer le lot de nuit », jamais une écriture
+                réelle). */}
             <span>
-              {etat.valide_le ? `Dernier lot validé : ${etat.valide_le}.` : "Aucun lot validé."}
-            </span>
-            {/* Retour utilisateur (03/09/2026) : "il affiche que la dernière
-                modification faite est hier, c'est bizarre" — `valide_le` ne
-                marque QUE le dernier clic sur « Enregistrer le lot de nuit »,
-                jamais un envoi réel à Celcat (le job de nuit et la file par
-                édition ne le touchent pas). `dernier_job.lance_le` est le
-                signal qui existait déjà côté backend mais n'était jamais
-                affiché — on distingue maintenant les deux plutôt que de
-                laisser un seul horodatage ambigu. */}
-            <span>
-              {etat.dernier_job?.lance_le
-                ? `Dernier envoi au clickeur : ${etat.dernier_job.lance_le}.`
-                : "Aucun envoi au clickeur pour l'instant."}
+              {etat.derniere_ecriture_celcat
+                ? `Dernière modification appliquée dans Celcat : ${etat.derniere_ecriture_celcat}.`
+                : "Aucune modification encore appliquée dans Celcat."}
             </span>
           </div>
+          {/* Détail technique, secondaire : à quand remonte le dernier lot
+              VALIDÉ (étape 2) et le dernier passage du job de nuit — utile
+              pour diagnostiquer pourquoi rien n'a encore été appliqué
+              ci-dessus, pas la première chose à lire. */}
+          <p className="celcat-hero-detail muted">
+            {etat.valide_le ? `Dernier lot validé : ${etat.valide_le}.` : "Aucun lot validé."}{" "}
+            {etat.dernier_job?.lance_le
+              ? `Dernier passage du job de nuit : ${etat.dernier_job.lance_le}.`
+              : "Le job de nuit n'a encore jamais tourné."}
+          </p>
         </div>
       </div>
 
@@ -264,7 +273,7 @@ export function AdminCelcatView() {
                   : validee
                     ? "validée"
                     : completes.includes(n)
-                      ? "placée"
+                      ? "planning complet"
                       : null;
               return (
                 <button

@@ -665,6 +665,14 @@ class CelcatEtatResponse(BaseModel):
     semaines_completes: list[int] = []
     valide_le: str | None = None
     dernier_job: dict[str, str] | None = None
+    # Dernière fois qu'une modification faite dans l'appli a été RÉELLEMENT
+    # appliquée dans Celcat (dernier `created`/`modified`/`deleted` du
+    # journal — `blocked` exclu, ça n'a rien changé côté Celcat). Retour
+    # utilisateur (03/09/2026) : « on voudrait la dernière fois qu'une
+    # modification faite dans l'app a été appliquée dans Celcat » —
+    # `valide_le`/`dernier_job` ne mesurent que des ACTIONS ADMIN (valider un
+    # lot, lancer le job), jamais une écriture réelle confirmée.
+    derniere_ecriture_celcat: str | None = None
     compteurs: CelcatCompteurs = CelcatCompteurs()
     worker_ok: bool = True
 

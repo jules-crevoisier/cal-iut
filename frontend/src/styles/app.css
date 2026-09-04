@@ -3992,6 +3992,15 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   color: var(--ink);
 }
 
+/* Détail technique secondaire (dernier lot validé / job de nuit) — plus
+   petit que `.celcat-hero-meta`, volontairement moins visible : le signal
+   qui compte (dernière modif réellement appliquée dans Celcat) est
+   au-dessus. */
+.celcat-hero-detail {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+}
+
 .celcat-semaines {
   display: flex;
   flex-wrap: wrap;

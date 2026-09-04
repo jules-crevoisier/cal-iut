@@ -14,6 +14,7 @@ const ETAT = {
   semaines_completes: [] as number[],
   valide_le: "2026-09-01T10:00:00+00:00",
   dernier_job: null,
+  derniere_ecriture_celcat: null as string | null,
   compteurs: { created: 1, modified: 0, deleted: 0, blocked: 1 },
   worker_ok: true,
 };
@@ -84,30 +85,37 @@ describe("AdminCelcatView", () => {
     vi.restoreAllMocks();
   });
 
-  it("should show ÉCRITURE OFF, consequence, worker and last validation in the hero", async () => {
+  it("should show ÉCRITURE OFF, consequence, worker and no Celcat write yet in the hero", async () => {
     stubFetch();
     render(<AdminCelcatView />);
 
     await screen.findByText("ÉCRITURE OFF");
     expect(screen.getByText(/ne s’écrivent pas tout de suite/i)).toBeInTheDocument();
     expect(screen.getByText("Worker joignable.")).toBeInTheDocument();
+    expect(screen.getByText(/Aucune modification encore appliquée dans Celcat/)).toBeInTheDocument();
+    // Le détail technique reste présent, mais secondaire.
     expect(screen.getByText(/Dernier lot validé/)).toBeInTheDocument();
     expect(screen.getByText(/2026-09-01/)).toBeInTheDocument();
-    expect(screen.getByText(/Aucun envoi au clickeur/)).toBeInTheDocument();
+    expect(screen.getByText(/job de nuit n'a encore jamais tourné/)).toBeInTheDocument();
   });
 
-  it("should show the last real push to Celcat separately from the last validated batch", async () => {
-    // Retour utilisateur (03/09/2026) : "il affiche que la dernière
-    // modification faite est hier, c'est bizarre" — `valide_le` et
-    // `dernier_job.lance_le` mesurent deux choses différentes, il faut les
-    // distinguer plutôt qu'un seul horodatage ambigu.
-    stubFetch({ etat: { ...ETAT, dernier_job: { lance_le: "2026-09-03T08:00:00+00:00" } } });
+  it("should show the last real Celcat write prominently, distinct from the last validated batch", async () => {
+    // Retour utilisateur (03/09/2026) : "on voudrait la dernière fois
+    // qu'une modification faite dans l'app a été appliquée dans Celcat" —
+    // `valide_le` (action admin) ne doit plus être le signal principal.
+    stubFetch({
+      etat: {
+        ...ETAT,
+        dernier_job: { lance_le: "2026-09-03T08:00:00+00:00" },
+        derniere_ecriture_celcat: "2026-09-03T09:15:00+00:00",
+      },
+    });
     render(<AdminCelcatView />);
 
     await screen.findByText("ÉCRITURE OFF");
-    expect(screen.getByText(/Dernier lot validé/)).toBeInTheDocument();
-    expect(screen.getByText(/Dernier envoi au clickeur/)).toBeInTheDocument();
-    expect(screen.getByText(/2026-09-03/)).toBeInTheDocument();
+    expect(screen.getByText(/Dernière modification appliquée dans Celcat.*2026-09-03T09:15/)).toBeInTheDocument();
+    expect(screen.getByText(/Dernier lot validé.*2026-09-01/)).toBeInTheDocument();
+    expect(screen.getByText(/Dernier passage du job de nuit.*2026-09-03T08:00/)).toBeInTheDocument();
   });
 
   it("should show ÉCRITURE ON and the Live consequence when saisie is active", async () => {
@@ -189,12 +197,17 @@ describe("AdminCelcatView", () => {
     // Retour utilisateur (03/09/2026) : "si la semaine 1 est entièrement
     // placée on la met comme placée" — semaine 1 est déjà "validée" dans
     // ETAT, donc on le vérifie sur une semaine complète mais NON validée.
+    // Libellé reformulé le 04/09/2026 (retour utilisateur : l'ancien
+    // "entièrement placée" laissait croire à un envoi Celcat déjà fait).
     stubFetch({ etat: { ...ETAT, semaines_completes: [2] } });
     render(<AdminCelcatView />);
 
-    const s2 = await screen.findByRole("button", { name: /^semaine 2 entièrement placée$/i });
+    const s2 = await screen.findByRole("button", {
+      name: /^semaine 2 — planning complet, pas encore envoyé à celcat$/i,
+    });
     expect(s2).toHaveClass("celcat-semaine--complete");
     expect(s2).not.toHaveClass("celcat-semaine--validee");
+    expect(screen.getByText("planning complet")).toBeInTheDocument();
   });
 
   it("should POST /celcat/valider with the draft semaines when the night-lot button is pressed", async () => {
