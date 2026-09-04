@@ -1,0 +1,6 @@
+# Scripts shell : toujours LF, même sur un checkout Windows
+# (core.autocrlf=true) — un script bash avec des CRLF plante dans le
+# conteneur Linux qui l'exécute (`$'\r': command not found`, etc.).
+# Repéré le 01/09/2026 sur diag_vpn_celcat.sh, recorrigé à la main à chaque
+# fois depuis faute de règle ici.
+*.sh text eol=lf
