@@ -289,19 +289,23 @@ def event_id_retour(resultat: object) -> int | None:
     return None
 
 
-def supprimer_evenement_rpc(page, charge: object, *, methode: str) -> object:
-    """Primitive RPC brute de suppression — mirroir de `enregistrer_evenement`.
+def supprimer_evenement_rpc(page, event_id: int, *, methode: str) -> object:
+    """Primitive RPC brute de suppression.
 
-    Méthode encore non prouvée par un canari (cf. risques du contrat) : tant
-    que `methode` est vide, on refuse plutôt que d'en deviner une.
+    Prouvée par canari le 05/09/2026 sur URCA_FORMATION
+    (`scripts/capturer_suppression_celcat.py`) : PAS de méthode dédiée — la
+    suppression passe par la MÊME méthode que la création/modification
+    (`udlTimetables.save`, cf. `methode_ecriture`), avec un enregistrement
+    MINIMAL portant la clé `-event_id` (signe moins, pas une valeur
+    négative — convention Celcat pour « supprimer cet id » dans un batch
+    save) plutôt que l'enregistrement complet. Vérifié : l'événement
+    disparaît du rechargement `udlTimetables.load` qui suit.
     """
     if not methode.strip():
         raise MethodeSuppressionAbsente(
             "methode_suppression vide : capturer une Suppression sur URCA_FORMATION"
         )
-    if isinstance(charge, dict):
-        return appeler(page, methode, [[dict(charge)]])
-    return appeler(page, methode, [charge])
+    return appeler(page, methode, [[{"-event_id": int(event_id), "_type_": "Event"}]])
 
 
 def masquer_semaine(*, longueur: int, indice: int) -> str:

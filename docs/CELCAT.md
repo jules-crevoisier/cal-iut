@@ -540,59 +540,44 @@ fantôme, `protected=Y`, Celcat-en-plus) est réévalué sur l'enregistrement
 **frais** rechargé, jamais sur l'instantané porté par le job en file — un
 jour férié devenu protégé après la mise en file bloque quand même.
 
-**La méthode RPC de suppression reste NON PROUVÉE.** Contrairement à
-`udlTimetables.save` (capturé au canari du 01/09/2026), aucune capture
-n'a encore établi le nom réel de la méthode `delete`/`remove`.
-`data/config/celcat_rpc.yaml::methode_suppression` reste donc
-**volontairement vide** tant qu'un canari ne l'a pas prouvée — comme
-`methode_ecriture` l'était avant le 01/09/2026. `MethodeSuppressionAbsente`
-refuse proprement plutôt que de deviner un nom : `supprimer_manquants`
-classe alors chaque job en échec (RPC), pas en refus (garde-fou), et il
-reste en file pour la prochaine nuit une fois la méthode capturée.
+**La méthode RPC de suppression est PROUVÉE (05/09/2026).** Trois
+hypothèses testées, deux écartées avec preuve, la bonne trouvée grâce à un
+retour utilisateur précis (« il faut cliquer sur la séance et il y a un
+bouton supprimer en haut du planning » — UN SEUL clic, pas un double-clic
+pour ouvrir l'inspecteur) :
 
-**Tentatives du 05/09/2026, deux hypothèses ÉCARTÉES avec preuve, une piste
-UI non aboutie :**
+1. *`suspended: "Y"`* — ÉCARTÉE. Accepté et persisté sans erreur par
+   `udlTimetables.save`, mais l'événement **reste visible** dans
+   `udlTimetables.load` ensuite. Ce champ existe (posé à `"N"` à la
+   création) mais ne fait pas ce qu'on espérait.
+2. *`weeks` tout à `N`* — ÉCARTÉE, refusée par le SERVEUR lui-même :
+   `EUDLDSError` sur la contrainte `CK_EVENT_WKLEN` de la table
+   `dbo.CT_EVENT`. Celcat interdit par construction qu'un événement
+   existant n'ait plus aucune semaine active.
+3. **La bonne piste** : **aucune méthode RPC dédiée** — la suppression
+   passe par la **même méthode que création/modification**
+   (`udlTimetables.save`, `methode_ecriture`), avec un enregistrement
+   **MINIMAL** `{"-event_id": <id>, "_type_": "Event"}` (clé au signe
+   moins — convention Celcat « supprimer cet id » dans un batch save, pas
+   une valeur négative) plutôt que l'enregistrement complet. Prouvé en
+   direct sur URCA_FORMATION avec capture d'écran (le blocage précédent
+   était le repérage du bloc canari sur la grille en environnement
+   headless — résolu en prenant un `page.screenshot()` et en lisant les
+   coordonnées dessus plutôt qu'en devinant par correspondance de texte),
+   puis reproduit deux fois de plus dont une via le **vrai chemin de code**
+   (`suppression.py::supprimer_evenement`, pas un script ad-hoc,
+   `scripts/verifier_suppression_reelle_celcat.py`) : canari créé, visible,
+   supprimé, disparu du rechargement `udlTimetables.load` qui suit.
 
-1. *Capture par clic UI* (`scripts/capturer_suppression_celcat.py`, retiré
-   après coup — pas assez fiable pour rester) : crée un canari (RPC, prouvé,
-   ok), MAIS le repérage du bloc correspondant sur la grille (double-clic
-   sur un `<div>` coloré, même technique que `capturer_save_celcat.py`) n'a
-   jamais réussi en environnement **headless** — 5 tentatives, jamais le bon
-   bloc identifié. Reste à retenter avec un navigateur non-headless (ou une
-   autre méthode de sélection) pour aller jusqu'au clic « Supprimer » et
-   capturer le RPC qu'il déclenche.
-2. *Hypothèse `suspended: "Y"`* — ÉCARTÉE, testée et prouvée fausse.
-   `udlTimetables.save` accepte et persiste `suspended: "Y"` sans erreur,
-   mais l'événement **reste visible** dans `udlTimetables.load` ensuite
-   (`scripts/tester_suspended_celcat.py --event-id … --group-id …`, sans
-   `--weeks-all-n`). Ce champ existe (posé à `"N"` à la création,
-   `ecriture.py::charge_utile`) mais ne fait pas ce qu'on espérait.
-3. *Hypothèse `weeks` tout à `N`* — ÉCARTÉE, refusée par le SERVEUR
-   lui-même : `EUDLDSError` sur la contrainte `CK_EVENT_WKLEN` de la table
-   `dbo.CT_EVENT` (`--weeks-all-n` du même script). Celcat interdit par
-   construction qu'un événement existant n'ait plus aucune semaine active —
-   confirme qu'une vraie suppression retire la LIGNE, pas seulement son
-   masque de semaines.
-4. *Scan statique des méthodes JS* (`scripts/scanner_methodes_udl_celcat.py`)
-   — 108 méthodes `udl*.*` recensées sur URCA_FORMATION, **aucune**
-   `udlTimetables.delete`/`.remove`. Les seules pistes portant "delete"
-   (`udlExclusivity.deleteExclusivityRequest`, `udlRoomBooker.deleteEvents`)
-   appartiennent à d'autres sous-systèmes (accès exclusif, réservation de
-   salle libre-service), pas au planning enseignant. Le scan élargi (tout
-   motif proche de delete/remove/suppr/cancel, pas seulement `udl*`) trouve
-   `this.deleteSelected` / `this._onDeleteBtnClick` / `this.undoDelete` —
-   de vrais gestionnaires de clic côté client, mais leur appel RPC réel
-   n'a jamais été observé (bloqué par le point 1 ci-dessus). Hypothèse la
-   plus probable pour la suite : le nom de méthode est construit
-   dynamiquement au clic plutôt qu'écrit en toutes lettres dans le JS
-   scanné — seule une capture réseau pendant un vrai clic peut trancher.
+`data/config/celcat_rpc.yaml::methode_suppression: udlTimetables.save` —
+plus vide. `rpc.py::supprimer_evenement_rpc(page, event_id, *, methode)`
+construit directement le payload minimal (plus besoin de l'enregistrement
+complet en entrée, contrairement à `enregistrer_evenement`).
 
-**Reste de côté sur URCA_FORMATION**, laissés par ces tentatives (aucune
-suppression n'ayant marché, impossible de les retirer par API) : trois
-canaris `event_id` 1523406/1523407/1523408 sur le groupe « BUT MMI S1 TD
-AB - 2024 » (group_id 47925), `notes="canari-suppression"` — inoffensifs
-(base d'entraînement), à nettoyer à la main dans l'UI Celcat si besoin, ou
-via `methode_suppression` une fois prouvée.
+Scan complémentaire (`scripts/scanner_methodes_udl_celcat.py`, gardé pour
+référence) : 108 méthodes `udl*.*` recensées sur URCA_FORMATION, aucune
+`udlTimetables.delete`/`.remove` — cohérent avec le point 3, la
+suppression ne passe effectivement pas par une méthode dédiée.
 
 ### Ce qui est PROUVÉ en direct vs ce qui ne l'est PAS (02/09/2026)
 

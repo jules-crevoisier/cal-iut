@@ -73,8 +73,20 @@ def _methodes_appelees(page: FaussePage) -> list[str | None]:
 def test_should_raise_methode_suppression_absente_when_supprimer_evenement_rpc_methode_is_empty() -> None:
     page = FaussePage()
     with pytest.raises(MethodeSuppressionAbsente):
-        supprimer_evenement_rpc(page, {"event_id": 1931666}, methode="")
+        supprimer_evenement_rpc(page, 1931666, methode="")
     assert page.journal == []  # jamais d'appel RPC réel
+
+
+def test_should_send_a_minus_event_id_only_payload_when_supprimer_evenement_rpc_is_called() -> None:
+    """Prouvé par canari le 05/09/2026 sur URCA_FORMATION : suppression =
+    udlTimetables.save (même méthode que create/update) avec un
+    enregistrement MINIMAL {"-event_id": id, "_type_": "Event"} — pas
+    l'enregistrement complet."""
+    page = FaussePage()
+    page.reponses["udlTimetables.save"] = [{"event_id": 1931666}]
+    supprimer_evenement_rpc(page, 1931666, methode="udlTimetables.save")
+    envoi = next(arg for _js, arg in page.journal if isinstance(arg, dict) and arg.get("methode") == "udlTimetables.save")
+    assert envoi["params"] == [[{"-event_id": 1931666, "_type_": "Event"}]]
 
 
 def test_should_read_methode_suppression_from_yaml_via_charger_methodes(tmp_path) -> None:
