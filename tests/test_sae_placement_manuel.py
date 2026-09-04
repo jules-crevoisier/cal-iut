@@ -86,10 +86,17 @@ def client(db_isole):
         setattr(etat, cle, valeur)
 
 
-def test_should_list_unplaced_ws_sae_in_manquantes(client) -> None:
-    """Les SAE (WS*) doivent pouvoir être placées à la main dans leurs
-    fenêtres — les exclure de « À placer » rendait l'exemption serveur
-    inutilisable depuis l'UI (retour Kyllian 03/09/2026)."""
+def test_should_hide_unplaced_ws_sae_from_manquantes(client) -> None:
+    """Inverse du 03/09/2026 (`test_should_list_unplaced_ws_sae_in_manquantes`
+    d'alors) : retour utilisateur 04/09/2026, verbatim « toutes les séance
+    de sae ws se retrouve dans a placer, il faut les retirer ». Les lister
+    dans « À placer » les rendait certes manuellement plaçables, mais noyait
+    la liste sous des dizaines d'entrées SAE qui ne sont pas vraiment
+    « manquantes » au même sens qu'une TD/CM classique — le chemin dédié
+    pour en créer une reste `POST /placements/personnalisees` (« + Nouvelle
+    séance »), toujours plaçable sur son propre jour de SAE (cf.
+    `test_should_skip_sae_day_block_for_ws_but_not_for_wr` ci-dessous, qui ne
+    change pas)."""
     etat = get_state()
     sae = SessionToPlace(
         id="sae-a-placer",
@@ -107,7 +114,7 @@ def test_should_list_unplaced_ws_sae_in_manquantes(client) -> None:
     etat.sessions_by_id[sae.id] = sae
 
     ids = {m["session_id"] for m in client.get("/placements/manquantes").json()["manquantes"]}
-    assert "sae-a-placer" in ids
+    assert "sae-a-placer" not in ids
 
 
 def test_should_skip_sae_day_block_for_ws_but_not_for_wr(monkeypatch, client) -> None:
