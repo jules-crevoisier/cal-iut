@@ -290,14 +290,17 @@ modules:
   WSA502D: "TSBZE520"  # Kyllian 04/09/2026
   WSA510C: "TSBZE61C"  # Kyllian 04/09/2026
   WSA510D: "TSBZE61D"  # Kyllian 04/09/2026
+  WS102: "TSBZ1252"    # Kyllian 04/09/2026
+  WS106: "TSBZ156"     # Kyllian 04/09/2026
+  WS302D: "TSBZ352D"   # Kyllian 04/09/2026
 
 # --- ABSENTS de la liste fournie ------------------------------------------
 # Aucun code Celcat trouvé, même en retirant le suffixe. À récupérer.
-#   WR100BU
-#   WS102, WS103, WS104, WS105, WS106 (S1) — pas dans la réponse de Kyllian
-#     du 04/09/2026 (qui couvrait WS101/107/110 mais pas ceux-là) : à
-#     redemander, pas supposés.
-#   WS302D (S3-DEV-FI) — idem, absent de la réponse du 04/09/2026.
+#   WR100BU — le cours lui-même n'existe pas encore côté Celcat (à créer,
+#     cf. docs/CELCAT.md § WR100BU).
+#   WS103, WS104, WS105 (S1) — pas dans la réponse de Kyllian du 04/09/2026
+#     (qui couvrait WS101/102/106/107/110 mais pas ceux-là) : à redemander,
+#     pas supposés.
 
 # --- Sans code Celcat, confirmé — pas un manque -----------------------------
 # Kyllian 04/09/2026 : "1PJ pas de code / 3PJ pas de code / 3PRJ pas de code

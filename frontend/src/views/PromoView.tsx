@@ -265,6 +265,15 @@ export function PromoView({
     const idx = payload.weekRows.findIndex((w) => w.weekIndex === semaineIdeale);
     if (idx >= 0) setDisplayWeek(idx);
     setErreurPlacement(null);
+    // Bug « clic Placer sur la grille → clic sur une case → rien ne se
+    // passe » : si le filtre année/parcours affiché ne colle pas au
+    // parcours de LA séance qu'on vient de choisir dans « À placer », sa
+    // colonne n'existe simplement plus dans `cols` (filtrée), donc aucune
+    // case n'est cliquable nulle part — silencieusement, sans erreur. On
+    // revient sur « Tout »/« Tout » pour garantir que sa colonne reste
+    // affichée, quel que soit le filtre laissé par la navigation précédente.
+    setFiltreAnnee("Tout");
+    setFiltreParcoursSel("Tout");
     // Volontairement déclenché seulement par un CHANGEMENT de séance
     // active (nouvelle sélection depuis « À placer »), pas par la
     // navigation ultérieure dans `payload.weekRows`.
