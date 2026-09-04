@@ -609,6 +609,25 @@ key », et ils n'ont pas le même niveau de preuve :
   (202985, URCA_FORMATION) est resté sur la mauvaise salle après ce test —
   base d'entraînement, pas de production concernée.
 
+**Retenté le 05/09/2026** à la lumière de la convention `-champ` découverte
+pour la suppression (`{"-event_id": id}` = retirer). Hypothèse : un tableau
+`rooms` à deux entrées, `{"-room_id": ancien, "event_id": ..., ...}` (retire
+l'ancienne association) + `{"room_id": nouveau, "event_id": ...}` (ajoute
+la nouvelle), plutôt qu'un tableau à une seule entrée portant le nouvel id
+(déjà essayé, silencieux). Résultat (`scripts/tester_reaffectation_salle_celcat.py`,
+canari sur URCA_FORMATION) : **progrès partiel, toujours pas d'effet**.
+Le silence a laissé place à une VRAIE erreur explicite —
+`EUDLDSError: Cannot delete a record using only a partial key` — essayé
+avec juste `{"-room_id": ..., "event_id": ...}` puis avec le sous-objet
+`rooms[0]` COMPLET (toutes ses clés d'origine) plus `-room_id` : même
+erreur les deux fois. La clé composite qu'attend le serveur pour
+identifier PRÉCISÉMENT quelle association supprimer reste inconnue —
+`event_id` + `room_id` ne suffisent pas. Cette piste s'arrête ici pour
+l'instant, faute d'avoir capturé le payload d'un vrai changement de salle
+fait à la main dans l'UI (la même méthode qui a fini par percer la
+suppression, cf. § suppression ci-dessus) — à reprendre avec cette
+technique plutôt qu'en devinant la forme du payload.
+
 ## Relire le formulaire (si Celcat change)
 
 Le relevé du 01/09/2026 a rempli `celcat_formulaire.yaml`. Pour le
