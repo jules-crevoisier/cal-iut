@@ -18,6 +18,7 @@ sys.path.insert(0, str(RACINE / "src"))
 
 from cal_iut.celcat import navigateur as nav
 from cal_iut.celcat import reseau
+from cal_iut.celcat.ecriture import _filtre_ressource
 from cal_iut.celcat.navigateur import TYPE_CATEGORIES_EVENEMENT
 from cal_iut.celcat.rpc import charger_ressources
 
@@ -50,10 +51,7 @@ def principal() -> int:
         try:
             print(f"Connexion {args.base} rôle lecture…")
             nav.connexion(page, base=args.base, role=nav.ROLE_LECTURE)
-            lots = charger_ressources(
-                page, TYPE_CATEGORIES_EVENEMENT,
-                {"customOnly": False, "includedDetails": False, "recordIDs": []},
-            )
+            lots = charger_ressources(page, TYPE_CATEGORIES_EVENEMENT, _filtre_ressource())
             print(f"{len(lots)} catégorie(s)")
             for enreg in sorted(lots, key=lambda e: str(e.get("name") or "")):
                 nom = enreg.get("name") or enreg.get("evCatName")
