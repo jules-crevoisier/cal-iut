@@ -172,6 +172,7 @@ def test_un_refus_du_serveur_est_rapporte_et_n_arrete_pas_le_reste() -> None:
 def test_sans_configuration_le_message_dit_quoi_renseigner(monkeypatch) -> None:
     monkeypatch.delenv("CAL_IUT_PROD_URL", raising=False)
     monkeypatch.delenv("CAL_IUT_PROD_PASSWORD", raising=False)
+    monkeypatch.delenv("CAL_IUT_PROD_API_KEY", raising=False)
     with pytest.raises(SyncError, match="CAL_IUT_PROD_URL"):
         prod_depuis_env()
 
@@ -181,6 +182,7 @@ def test_une_url_sans_mot_de_passe_ne_suffit_pas(monkeypatch) -> None:
     loin, sous une forme incompréhensible (HTTP 401)."""
     monkeypatch.setenv("CAL_IUT_PROD_URL", "https://exemple.invalid")
     monkeypatch.delenv("CAL_IUT_PROD_PASSWORD", raising=False)
+    monkeypatch.delenv("CAL_IUT_PROD_API_KEY", raising=False)
     with pytest.raises(SyncError):
         prod_depuis_env()
 
@@ -188,6 +190,73 @@ def test_une_url_sans_mot_de_passe_ne_suffit_pas(monkeypatch) -> None:
 def test_une_instance_non_connectee_le_dit_clairement() -> None:
     with pytest.raises(SyncError, match="non connectée"):
         Instance(url="https://exemple.invalid", mot_de_passe="x", email="admin@example.test").client
+
+
+# --------------------------------------------------------------------------
+# Clé API — alternative à email + mot de passe (retour utilisateur 05/09/2026 :
+# « il faudrait donc que je te donne l'email et le mdp de mon compte ? »)
+# --------------------------------------------------------------------------
+
+
+def test_url_et_cle_api_suffisent_sans_email_ni_mot_de_passe(monkeypatch) -> None:
+    monkeypatch.setenv("CAL_IUT_PROD_URL", "https://exemple.invalid")
+    monkeypatch.setenv("CAL_IUT_PROD_API_KEY", "caliut_abcdef")
+    monkeypatch.delenv("CAL_IUT_PROD_PASSWORD", raising=False)
+    monkeypatch.delenv("CAL_IUT_PROD_EMAIL", raising=False)
+    instance = prod_depuis_env()
+    assert instance.api_key == "caliut_abcdef"
+    assert instance.url == "https://exemple.invalid"
+
+
+def test_la_cle_api_pose_un_bearer_et_ping_meta_plutot_que_login(monkeypatch) -> None:
+    appels: list[tuple[str, str]] = []
+
+    class FauxReponse:
+        status_code = 200
+
+    class FauxClientHttpx:
+        def __init__(self, base_url: str, timeout: float, follow_redirects: bool) -> None:
+            self.headers: dict[str, str] = {}
+            self.base_url = base_url
+
+        def get(self, url: str):
+            appels.append(("GET", url))
+            return FauxReponse()
+
+        def post(self, url: str, json: dict):
+            appels.append(("POST", url))
+            return FauxReponse()
+
+        def close(self) -> None:
+            pass
+
+    import cal_iut.sync.prod as prod_module
+
+    monkeypatch.setattr(prod_module.httpx, "Client", FauxClientHttpx)
+    with Instance(url="https://exemple.invalid", api_key="caliut_abcdef") as instance:
+        assert instance.client.headers["Authorization"] == "Bearer caliut_abcdef"
+    assert appels == [("GET", "/meta")]
+
+
+def test_une_cle_api_refusee_est_signalee_clairement(monkeypatch) -> None:
+    class FauxReponse:
+        status_code = 401
+
+    class FauxClientHttpx:
+        def __init__(self, base_url: str, timeout: float, follow_redirects: bool) -> None:
+            self.headers: dict[str, str] = {}
+
+        def get(self, url: str):
+            return FauxReponse()
+
+        def close(self) -> None:
+            pass
+
+    import cal_iut.sync.prod as prod_module
+
+    monkeypatch.setattr(prod_module.httpx, "Client", FauxClientHttpx)
+    with pytest.raises(SyncError, match="Clé API refusée"):
+        Instance(url="https://exemple.invalid", api_key="caliut_mauvaise").__enter__()
 
 
 # --------------------------------------------------------------------------

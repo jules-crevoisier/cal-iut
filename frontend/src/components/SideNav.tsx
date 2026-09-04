@@ -203,7 +203,7 @@ export function SideNav({
                 onClose();
               }}
             >
-              Clé Claude / MCP
+              Clé API
             </button>
             {onLogout && (
               <button type="button" className="navbtn sidenav-logout" onClick={onLogout}>

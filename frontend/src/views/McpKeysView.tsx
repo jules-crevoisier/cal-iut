@@ -1,6 +1,14 @@
 /**
- * Clés MCP du compte connecté — brut affiché une seule fois à la génération.
+ * Clés API du compte connecté — brut affiché une seule fois à la génération.
  * Réutilise le vocabulaire visuel des comptes admin (liste + actions).
+ *
+ * Anciennement « Clés MCP » (renommé 05/09/2026, retour utilisateur) : la
+ * même clé `caliut_…` sert désormais de Bearer sur N'IMPORTE QUELLE route
+ * protégée, pas seulement `/mcp` — notamment pour un accès programmatique
+ * à la production (`cal-iut prod diff/pull/push`, `CAL_IUT_PROD_API_KEY`)
+ * sans donner l'email/mot de passe d'un compte personnel. Le composant
+ * s'appelle encore `McpKeysView`/`McpKey` côté code (`api/mcp-keys`, table
+ * `McpKey`) — seul le libellé visible change, pas l'API ni le schéma.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -80,10 +88,12 @@ export function McpKeysView() {
   return (
     <section className="view">
       <div className="panel">
-        <h3>Clé Claude / MCP</h3>
+        <h3>Clé API</h3>
         <p className="muted">
-          Une clé par connecteur (Claude, Cursor). Elle n’est affichée qu’une fois : copiez-la
-          tout de suite. Le cookie de session du site ne sert jamais au MCP.
+          Une clé par usage (connecteur MCP type Claude/Cursor, ou accès programmatique à
+          l’application — <code>cal-iut prod diff/pull/push</code> par exemple). Elle n’est
+          affichée qu’une fois : copiez-la tout de suite. Le cookie de session du site ne sert
+          jamais à l’authentification par clé.
         </p>
         {erreur && (
           <p className="alerte" role="alert">
