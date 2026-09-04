@@ -128,6 +128,18 @@ def test_should_treat_as_deja_la_when_live_hours_are_empty() -> None:
     assert entree not in plan.a_creer
 
 
+def test_should_not_flag_ambigu_when_the_rpc_repeats_the_same_event_id() -> None:
+    """udlTimetables.load renvoie parfois la même séance une fois par
+    sous-groupe rattaché (mêmes event_id, lignes RPC répétées) — un seul
+    match réel ne doit pas se lire comme plusieurs séances concurrentes."""
+    wr106 = next(b for b in _bruts() if b["event_id"] == 1931666)
+    ligne_repetee = dict(wr106)  # même event_id, ligne RPC dupliquée
+    entree = _entree()
+    plan = comparer([entree], [_ev(wr106), _ev(ligne_repetee)], indice_semaine=3)
+    assert len(plan.deja_la) == 1
+    assert entree not in plan.ambigu
+
+
 def test_should_treat_as_deja_la_when_amphi_name_is_shortened() -> None:
     wr106 = next(b for b in _bruts() if b["event_id"] == 1931666)
     live = dict(

@@ -100,7 +100,18 @@ def comparer(
     indice_semaine: int,
 ) -> PlanEcriture:
     plan = PlanEcriture()
-    sur_semaine = [ev for ev in evenements if sur_la_semaine(ev, indice_semaine)]
+    sur_semaine_brut = [ev for ev in evenements if sur_la_semaine(ev, indice_semaine)]
+    # udlTimetables.load renvoie parfois la même séance une fois par
+    # sous-groupe rattaché (mêmes event_id, lignes RPC répétées) — sans ce
+    # filtre, une séance à un seul match réel finissait en « ambiguë » rien
+    # qu'à cause de la répétition, bloquant sa création/mise à jour à tort.
+    vus: set[int] = set()
+    sur_semaine: list[EvenementCelcat] = []
+    for ev in sur_semaine_brut:
+        if ev.event_id in vus:
+            continue
+        vus.add(ev.event_id)
+        sur_semaine.append(ev)
     for ev in sur_semaine:
         if est_ferie(ev):
             plan.feries.append(ev)
