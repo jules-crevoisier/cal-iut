@@ -16,3 +16,27 @@
 "BUT MMI S5 TD AB": 1660025
 "BUT MMI S5 TP A": 1660026
 "BUT MMI S5 TP B": 1660027
+
+# S3 (BUT2-DEV-FI) — absents jusqu'ici, cause du "groupe introuvable" qui
+# faisait tomber toute comparaison S3 en repli "à créer" par défaut.
+# Retrouvés le 04/09/2026 par balayage de plage d'IDs (udlResources.load,
+# TYPE_GROUPES) autour des clusters S1/S5 déjà connus.
+"BUT MMI S3 CM": 1660013
+"BUT MMI S3 TD AB": 1660012
+"BUT MMI S3 TD CD": 1660014
+"BUT MMI S3 TD EF": 1660019
+"BUT MMI S3 TD GH": 1660022
+"BUT MMI S3 TP A": 1660015
+"BUT MMI S3 TP B": 1660016
+"BUT MMI S3 TP C": 1660017
+"BUT MMI S3 TP D": 1660018
+"BUT MMI S3 TP E": 1660020
+"BUT MMI S3 TP F": 1660021
+"BUT MMI S3 TP G": 1660023
+"BUT MMI S3 TP H": 1660024
+# TD IJ / TP I / TP J : trouvés dans le même balayage, hors du jeu S1/S3/S5
+# habituel (AB/CD/EF/GH + TP A-H) — origine à confirmer avant usage, gardés
+# en commentaire plutôt qu'utilisés à l'aveugle.
+# "BUT MMI S3 TD IJ": 1658766
+# "BUT MMI S3 TP I": 1658767
+# "BUT MMI S3 TP J": 1658768
