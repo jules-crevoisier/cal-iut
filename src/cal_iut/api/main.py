@@ -1357,17 +1357,7 @@ def _ics_items_for_placements(state: object, placements: list) -> list:
     # Dates de dernière modification, lues en UNE fois : une requête par
     # séance ferait des centaines d'allers-retours pour un flux d'agenda
     # re-téléchargé toutes les six heures par chaque abonné.
-    modifie_le: dict[str, object] = {}
-    if state.current_run_id:
-        try:
-            from cal_iut.db.models import CurrentPlacement
-
-            modifie_le = {
-                row.session_id: row.updated_at
-                for row in get_repo().db.query(CurrentPlacement).filter_by(run_id=state.current_run_id).all()
-            }
-        except Exception:  # noqa: BLE001 — un flux sans horodatage vaut mieux que pas de flux
-            modifie_le = {}
+    modifie_le = _ics_placements_updated_at(state)
 
     for p in placements:
         session = state.sessions_by_id.get(p.session_id)
@@ -1400,6 +1390,95 @@ def _ics_items_for_placements(state: object, placements: list) -> list:
             updated_at=modifie_le.get(p.session_id),
         ))
     return items
+
+
+def _ics_placements_updated_at(state: object) -> dict[str, object]:
+    """`session_id -> updated_at`, lu en UNE fois — même source que
+    `_ics_items_for_placements` (`CurrentPlacement`), factorisé ici pour
+    être réutilisé par `/ics/version` sans dupliquer la requête DB."""
+    if not state.current_run_id:
+        return {}
+    try:
+        from cal_iut.db.models import CurrentPlacement
+
+        return {
+            row.session_id: row.updated_at
+            for row in get_repo().db.query(CurrentPlacement).filter_by(run_id=state.current_run_id).all()
+        }
+    except Exception:  # noqa: BLE001 — pas d'horodatage vaut mieux qu'un crash
+        return {}
+
+
+def _ics_versions(state: object) -> dict[str, list[dict[str, object]]]:
+    """Pour CHAQUE groupe et CHAQUE enseignant : la date de dernière
+    modification et le lien `.ics` à réinterroger si elle a avancé.
+
+    Retour utilisateur (04/09/2026) : un collègue qui développe sa propre
+    appli EDT repolle les flux `.ics` en boucle serrée pour détecter un
+    changement — « ça fait des requêtes de fou ». Ici il peut sonder CET
+    endpoint (petit JSON, pas cher) et n'aller rechercher le `.ics` complet
+    que pour les groupes/enseignants dont `derniere_modification` a bougé
+    depuis son dernier sondage — pas de nouvelle infra (webhook, SSE),
+    juste une manière économique de savoir QUOI rafraîchir.
+    """
+    from cal_iut.models.group_scope import expand_group_filter
+
+    modifie_le = _ics_placements_updated_at(state)
+
+    # Index UNE fois : session_ids par group_id "brut" (avant fusion de
+    # cohorte) et par code enseignant — évite de reparcourir tout
+    # `state.timetable` pour chacun des ~80 groupes/enseignants.
+    par_groupe_brut: dict[str, list[str]] = {}
+    par_enseignant: dict[str, list[str]] = {}
+    for p in state.timetable:
+        for gid in p.group_ids or []:
+            par_groupe_brut.setdefault(gid, []).append(p.session_id)
+        for code in p.teacher_codes or []:
+            par_enseignant.setdefault(code, []).append(p.session_id)
+
+    def _plus_recent(session_ids: list[str]) -> str | None:
+        horodatages = [modifie_le[sid] for sid in session_ids if modifie_le.get(sid) is not None]
+        if not horodatages:
+            return None
+        recent = max(horodatages)
+        return recent.isoformat() if hasattr(recent, "isoformat") else str(recent)
+
+    groupes = []
+    for g in state.groups:
+        cohort = expand_group_filter(g.id, state.groups)
+        ids = [sid for cid in cohort for sid in par_groupe_brut.get(cid, [])]
+        groupes.append({
+            "id": g.id, "label": g.label,
+            "derniere_modification": _plus_recent(ids),
+            "lien": f"/ics/groupe/{g.id}.ics",
+        })
+
+    noms = _noms_enseignants(state)
+    enseignants = []
+    for code in sorted(par_enseignant):
+        enseignants.append({
+            "code": code, "label": noms.get(code, code),
+            "derniere_modification": _plus_recent(par_enseignant[code]),
+            "lien": f"/ics/prof/{code}.ics",
+        })
+
+    return {"groupes": groupes, "enseignants": enseignants}
+
+
+@app.get("/ics/version")
+def ics_version() -> Response:
+    """Petit JSON — dernière modification par groupe/enseignant, et le lien
+    `.ics` à réinterroger si elle a avancé (cf. `_ics_versions`). Pensé
+    pour être sondé BEAUCOUP plus souvent que les flux `.ics` complets
+    (aucun calcul de calendrier, juste des horodatages)."""
+    state = get_state()
+    import json as _json
+
+    contenu = _json.dumps(_ics_versions(state), ensure_ascii=False)
+    return Response(
+        content=contenu, media_type="application/json; charset=utf-8",
+        headers=dict(_ICS_CACHE_HEADERS),
+    )
 
 
 @app.get("/ics/prof/{code}.ics")

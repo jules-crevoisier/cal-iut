@@ -160,3 +160,69 @@ def test_flux_groupe_fusionne_la_cohorte(etat_avec_seances) -> None:
 def test_flux_groupe_inconnu_donne_un_404(etat_avec_seances) -> None:
     reponse = client.get("/ics/groupe/inconnu.ics?t=inconnu")
     assert reponse.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# /ics/version — petit JSON à sonder pour savoir QUOI rafraîchir
+# ---------------------------------------------------------------------------
+#
+# Retour utilisateur (04/09/2026) : un collègue qui développe sa propre
+# appli EDT repolle les flux .ics complets en boucle serrée pour détecter
+# un changement — « ça fait des requêtes de fou ». Il peut sonder CET
+# endpoint (léger) et n'aller rechercher le .ics complet que pour les
+# groupes/enseignants dont `derniere_modification` a avancé.
+
+
+def test_version_sans_t_est_bloque(etat_avec_seances) -> None:
+    assert client.get("/ics/version").status_code == 401
+
+
+def test_version_liste_groupes_et_enseignants_avec_leur_lien(etat_avec_seances) -> None:
+    corps = client.get("/ics/version?t=x").json()
+    assert "groupes" in corps and "enseignants" in corps
+
+    groupe = next(g for g in corps["groupes"] if g["id"] == "but1-td-ab")
+    assert groupe["lien"] == "/ics/groupe/but1-td-ab.ics"
+
+    prof = next(e for e in corps["enseignants"] if e["code"] == "KBR")
+    assert prof["lien"] == "/ics/prof/KBR.ics"
+    assert prof["label"]  # un libellé est fourni, quel qu'il soit
+
+
+def test_version_est_jamais_mise_en_cache(etat_avec_seances) -> None:
+    reponse = client.get("/ics/version?t=x")
+    assert "no-store" in reponse.headers.get("cache-control", "")
+
+
+def test_version_sans_run_id_rend_derniere_modification_nulle(etat_avec_seances) -> None:
+    """`etat_avec_seances` ne monte pas de run persistant (`current_run_id`
+    absent) : aucun horodatage n'existe, `derniere_modification` doit le
+    dire clairement (`null`), pas planter ni inventer une date."""
+    corps = client.get("/ics/version?t=x").json()
+    groupe = next(g for g in corps["groupes"] if g["id"] == "but1-td-ab")
+    assert groupe["derniere_modification"] is None
+
+
+def test_version_prend_la_plus_recente_modification_de_la_cohorte_fusionnee(
+    etat_avec_seances, monkeypatch
+) -> None:
+    """`but1-td-ab` doit refléter la modif la plus récente de SA cohorte —
+    y compris le CM de sa promo (`but1-promo`, fusionné via
+    `expand_group_filter`, même mécanisme que le flux .ics lui-même)."""
+    from datetime import datetime, timezone
+
+    ancien = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    recent = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        "cal_iut.api.main._ics_placements_updated_at",
+        lambda state: {"td1": ancien, "cm1": recent},
+    )
+
+    corps = client.get("/ics/version?t=x").json()
+    groupe = next(g for g in corps["groupes"] if g["id"] == "but1-td-ab")
+    assert groupe["derniere_modification"] == recent.isoformat()
+
+    # `but2-dev-fi-td-ab` (autre promo, aucune séance dans cette fixture) ne
+    # doit PAS hériter de cette date — isolation entre promos.
+    sans_rapport = next(g for g in corps["groupes"] if g["id"] == "but2-dev-fi-td-ab")
+    assert sans_rapport["derniere_modification"] is None
