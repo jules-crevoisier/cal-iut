@@ -2075,7 +2075,13 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         groups=state.groups,
         conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
     )
-    hard = verrou_semaine + pedago + result.hard_conflicts
+    # `blocking_conflicts` DOIT rester un sous-ensemble de `hard_conflicts`
+    # (cf. schemas.ValidationResponse.blocking_conflicts) : un message
+    # institutionnel doit donc apparaître dans les deux, pas seulement dans
+    # `blocking`. Régression du 03/09/2026 repérée par la CI le 04/09/2026 —
+    # `institutional` manquait ici, si bien qu'un motif "férié"/hors
+    # présence n'apparaissait plus du tout dans `hard_conflicts`.
+    hard = verrou_semaine + institutional + pedago + result.hard_conflicts
     blocking = list(institutional)
     soft = list(result.soft_warnings)
     valide = not blocking and not hard
@@ -2136,8 +2142,11 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         if institutional:
             raise HTTPException(409, detail={
                 "message": "Déplacement impossible",
-                # Forçables aussi listés : l'UI affiche tout (brief 03/09/2026).
-                "hard_conflicts": pedago,
+                # `blocking_conflicts` est un sous-ensemble de `hard_conflicts`
+                # (cf. schemas.ValidationResponse) : institutional y est donc
+                # aussi, en plus des forçables listés pour que l'UI affiche
+                # tout (brief 03/09/2026).
+                "hard_conflicts": institutional + pedago,
                 "blocking_conflicts": institutional,
                 "soft_warnings": [], "suggestions": [], "suggestions_note": None,
             })
@@ -2784,6 +2793,17 @@ def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
 
     from cal_iut.celcat.etat import charger as charger_celcat
 
+    # Forme du paramètre validée AVANT l'interrupteur `saisie_active` : une
+    # erreur de saisie (400, business) doit rester visible même verrou
+    # désactivé — sinon un admin qui teste un paramètre voit toujours 409
+    # "désactivée" sans jamais apprendre que sa valeur est invalide.
+    try:
+        voulues = {int(x) for x in body.semaines.split(",") if x.strip()}
+    except ValueError:
+        raise HTTPException(400, "Paramètre `semaines` invalide : indices séparés par des virgules.") from None
+    if not voulues:
+        raise HTTPException(400, "Aucune semaine demandée.")
+
     if not charger_celcat().get("saisie_active"):
         raise HTTPException(409, "Saisie Celcat désactivée")
 
@@ -2793,13 +2813,6 @@ def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
     from cal_iut.celcat.formulaire import charger_carte
 
     state = get_state()
-    try:
-        voulues = {int(x) for x in body.semaines.split(",") if x.strip()}
-    except ValueError:
-        raise HTTPException(400, "Paramètre `semaines` invalide : indices séparés par des virgules.") from None
-    if not voulues:
-        raise HTTPException(400, "Aucune semaine demandée.")
-
     plan = sync.construire_plan(_entrees_celcat(state), voulues)
     if plan.bloquees and not body.ignorer_bloquees:
         raise HTTPException(409, plan.resume())
@@ -3369,7 +3382,10 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     if institutional:
         raise HTTPException(409, detail={
             "message": "Placement impossible",
-            "hard_conflicts": pedago,
+            # `blocking_conflicts` est un sous-ensemble de `hard_conflicts`
+            # (cf. schemas.ValidationResponse) : institutional y est donc
+            # aussi.
+            "hard_conflicts": institutional + pedago,
             # Non contournables, meme avec `force` : l'interface ne doit donc
             # pas proposer « Forcer » ici (cf. `ValidationResponse.
             # blocking_conflicts`, meme distinction).
