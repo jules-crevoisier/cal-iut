@@ -10,9 +10,14 @@
 #     pas de client Linux) ;
 #   - un navigateur, puisque Celcat n'expose aucune API.
 #
-# Lancement (les deux options sont NÉCESSAIRES à openconnect) :
+# Lancement ponctuel/exploration (les deux options sont NÉCESSAIRES à
+# openconnect) :
 #   docker run --rm -it --cap-add NET_ADMIN --device /dev/net/tun \
 #     --env-file .env cal-iut-celcat <commande>
+#
+# Lancement en SERVICE (drain nocturne automatique) : voir
+# nuit-quotidienne.sh dans ce même dossier — un `docker run -d` qui reste
+# vivant et relance le job de nuit Celcat chaque 00h00.
 FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
 
 RUN apt-get update \

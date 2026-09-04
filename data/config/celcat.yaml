@@ -296,8 +296,6 @@ modules:
 
 # --- ABSENTS de la liste fournie ------------------------------------------
 # Aucun code Celcat trouvé, même en retirant le suffixe. À récupérer.
-#   WR100BU — le cours lui-même n'existe pas encore côté Celcat (à créer,
-#     cf. docs/CELCAT.md § WR100BU).
 #   WS103, WS104, WS105 (S1) — pas dans la réponse de Kyllian du 04/09/2026
 #     (qui couvrait WS101/102/106/107/110 mais pas ceux-là) : à redemander,
 #     pas supposés.
@@ -314,3 +312,10 @@ modules:
 # (Divers/Réunion/Conférence/TD selon le cas), mais AUCUN code module à
 # leur donner ; ne pas les pousser vers Celcat tant que ce doute n'est pas
 # levé.
+#
+# Utilisateur 05/09/2026 : "WR100BU est un code inventé, il n'existe pas
+# dans Celcat, c'est juste une visite de la BU" — pas une matière au sens
+# Celcat/paie, ne JAMAIS le pousser vers Celcat (ni chercher de matière
+# réelle en face). Catégorie « [TD bénévole] » (id=846, confirmée en
+# direct le 04/09/2026) sans objet tant que ce point tient.
+#   WR100BU

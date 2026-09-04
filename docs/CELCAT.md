@@ -612,3 +612,37 @@ cal-iut détournerait tout son trafic sortant et couperait le site public.
 Pour un déploiement sur site, ce même conteneur tourne sans VPN du tout —
 d'où la règle de l'accès direct d'abord, qui rend les deux cas identiques
 au lancement près.
+
+### Le drain de nuit tournait pour personne (trouvé le 04/09/2026)
+
+`POST /celcat/lancer-nuit` (bouton admin de l'application) appelle
+`executer_job_nuit()` **sans `page`** : ça empile bien les jobs
+create/update/delete dans `celcat_file_attente.json` et scanne les extras,
+mais ça n'envoie jamais rien à Celcat — `_consommer_file` exige un `page`
+Playwright connecté en VPN, que l'application déployée n'a justement
+jamais (cf. ci-dessus). Sans un processus À PART qui relance
+`scripts/celcat_nuit.py --ecrire --vpn --production` régulièrement, la
+file grossit sans jamais se vider — cause directe d'un déplacement de
+séance jamais remonté sur Celcat (retour Kyllian Bresson, 04/09/2026).
+
+**Fix : `deploy/celcat-sidecar/nuit-quotidienne.sh`** — une boucle qui
+reste vivante dans CE conteneur (jamais celui de l'appli) et relance le
+job de nuit chaque 00h00 :
+
+```bash
+docker build -t cal-iut-celcat deploy/celcat-sidecar
+docker run -d --restart unless-stopped --name celcat-nuit \
+  --cap-add NET_ADMIN --device /dev/net/tun \
+  --env-file /chemin/vers/.env \
+  -v /chemin/vers/le/VRAI/depot/cal-iut:/travail \
+  cal-iut-celcat /travail/deploy/celcat-sidecar/nuit-quotidienne.sh
+```
+
+**Le `-v` est le point critique** : il doit pointer sur le `data/state/`
+que l'application déployée utilise VRAIMENT (celui qui reçoit les
+déplacements faits sur le site), jamais une copie locale de dev — sans
+quoi ce conteneur drainerait une file que personne ne remplit. Pas encore
+branché en production au moment d'écrire ceci : quelqu'un avec accès au
+serveur doit lancer cette commande une fois (le conteneur tourne ensuite
+tout seul, `--restart unless-stopped` le relance au reboot).
+Suivre : `docker logs -f celcat-nuit`.
