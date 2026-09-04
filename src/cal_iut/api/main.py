@@ -275,6 +275,35 @@ def _account_repo() -> AccountRepository:
     return AccountRepository(get_db(get_state().db_path))
 
 
+def _user_depuis_cle_api(request: Request) -> User | None:
+    """Résout l'utilisateur depuis `Authorization: Bearer caliut_…` — même
+    clé, même hash, même table que `/mcp` (`mcp.auth._principal_cle_user`),
+    juste sans passer par le principal MCP puisqu'ici c'est un `User` complet
+    qu'il faut, pour que `require_role` fonctionne à l'identique du cookie."""
+    entete = request.headers.get("Authorization") or ""
+    if not entete.startswith("Bearer "):
+        return None
+    brut = entete[len("Bearer ") :].strip()
+    if not brut:
+        return None
+    from cal_iut.api.mcp_keys import hash_mcp_token
+
+    repo = _account_repo()
+    cle = repo.get_active_mcp_key_by_hash(hash_mcp_token(brut))
+    if cle is None:
+        return None
+    user = repo.get_by_id(cle.user_id)
+    if user is None:
+        return None
+    # PAS de `touch_mcp_key` ici : ça commit(), qui EXPIRE tous les objets
+    # de la session (dont `user`) — `require_role`, appelé bien plus tard
+    # dans la requête, retomberait sur un `DetachedInstanceError` dès que
+    # cette fonction (et sa session locale) sort de portée. La date de
+    # dernier usage reste à jour via `/mcp`, qui suit le même chemin de clé
+    # mais garde sa session ouverte tout du long (`mcp.auth._principal_cle_user`).
+    return user
+
+
 @app.middleware("http")
 async def require_auth(request: Request, call_next):
     path = request.url.path
@@ -290,9 +319,15 @@ async def require_auth(request: Request, call_next):
         return await call_next(request)
 
     user_id = accounts.verify_account_session_token(request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE))
-    if user_id is None:
-        return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
-    user = _account_repo().get_by_id(user_id)
+    user = _account_repo().get_by_id(user_id) if user_id is not None else None
+    if user is None:
+        # Pas de cookie (ou cookie invalide) : une clé « caliut_… » créée
+        # via /auth/mcp-keys authentifie aussi les routes générales,
+        # exactement comme /mcp (`mcp.auth.authentifier_bearer`) — même
+        # table, même hash, même rôle relu sur le compte. Retour
+        # utilisateur 05/09/2026 : accès programmatique (`cal-iut prod
+        # diff/pull/push`) sans donner d'identifiants personnels.
+        user = _user_depuis_cle_api(request)
     if user is None:
         return JSONResponse(status_code=401, content={"detail": "Authentification requise."})
     if user.status != "active":
