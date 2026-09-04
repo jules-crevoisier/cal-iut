@@ -143,7 +143,18 @@ def est_fantome(ev: EvenementCelcat) -> bool:
 
 
 def est_cours(ev: EvenementCelcat) -> bool:
+    """Un vrai CM/TD/TP — jamais une réservation administrative (Conférence,
+    Réunion, Jury, Jour férié, Réservation BU…). Repéré le 05/09/2026 :
+    ces catégories-là ont un `salle`/`heure_debut` (donc passaient le filtre
+    d'avant) mais aucun module ni enseignant — Celcat les affiche comme
+    « en plus » à chaque comparaison sans que ce soit jamais un vrai écart,
+    juste un booking hors du périmètre cours de cal-iut. Toutes les
+    catégories de cours (relevé complet du 04/09/2026, 38 catégories) sont
+    encadrées de crochets — `[CM]`/`[TD]`/`[TP]` et leurs variantes
+    bénévole/capacité — aucune catégorie administrative ne l'est."""
     if est_ferie(ev) or est_fantome(ev):
+        return False
+    if not ev.categorie.strip().startswith("["):
         return False
     return bool(ev.module_nom or ev.heure_debut or ev.salle)
 
