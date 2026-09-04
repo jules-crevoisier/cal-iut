@@ -673,24 +673,38 @@ jamais (cf. ci-dessus). Sans un processus À PART qui relance
 file grossit sans jamais se vider — cause directe d'un déplacement de
 séance jamais remonté sur Celcat (retour Kyllian Bresson, 04/09/2026).
 
-**Fix : `deploy/celcat-sidecar/nuit-quotidienne.sh`** — une boucle qui
-reste vivante dans CE conteneur (jamais celui de l'appli) et relance le
-job de nuit chaque 00h00 :
+**Fix, deux formes du même script (`deploy/celcat-sidecar/nuit-quotidienne.sh`)
+— une boucle qui reste vivante dans CE conteneur (jamais celui de
+l'appli) et relance le job de nuit chaque 00h00 :**
+
+**1. Service Dokploy (05/09/2026, recommandé)** — `docker-compose.yml`
+porte désormais un 3e service, `celcat-nuit`, à côté de `backend`/
+`frontend` : même volume nommé `cal-iut-data` que `backend`
+(`-v cal-iut-data:/app/data/state`), donc voit les VRAIS jobs mis en file
+par l'appli déployée sans configuration manuelle. Se déploie tout seul au
+prochain push sur `main` — **à condition que Dokploy soit configuré en
+mode "Docker Compose" pointant sur ce fichier** (pas le mode "Dockerfile
+x2 services" : dans ce cas-là ce fichier n'est jamais lu, cf. l'avertissement
+en tête de `docker-compose.yml`, et il faut ajouter `celcat-nuit` comme un
+3e service Dokploy séparé à la main). Suivre : `docker compose logs -f
+celcat-nuit` (ou l'équivalent dans le dashboard Dokploy).
+
+**2. Lancement manuel (repli, si le mode Dokploy ne convient pas)** — un
+conteneur à part, à démarrer une fois sur la machine qui sert vraiment
+`cal-iut-mmi.srko.fr` :
 
 ```bash
-docker build -t cal-iut-celcat deploy/celcat-sidecar
+docker build -t cal-iut-celcat -f deploy/celcat-sidecar/Dockerfile .
 docker run -d --restart unless-stopped --name celcat-nuit \
   --cap-add NET_ADMIN --device /dev/net/tun \
   --env-file /chemin/vers/.env \
-  -v /chemin/vers/le/VRAI/depot/cal-iut:/travail \
-  cal-iut-celcat /travail/deploy/celcat-sidecar/nuit-quotidienne.sh
+  -v cal-iut-data:/app/data/state \
+  cal-iut-celcat
 ```
 
-**Le `-v` est le point critique** : il doit pointer sur le `data/state/`
-que l'application déployée utilise VRAIMENT (celui qui reçoit les
-déplacements faits sur le site), jamais une copie locale de dev — sans
-quoi ce conteneur drainerait une file que personne ne remplit. Pas encore
-branché en production au moment d'écrire ceci : quelqu'un avec accès au
-serveur doit lancer cette commande une fois (le conteneur tourne ensuite
-tout seul, `--restart unless-stopped` le relance au reboot).
+**Le volume est le point critique** dans les deux cas : il doit être le
+MÊME que celui du service `backend` (le nom `cal-iut-data` du
+`docker-compose.yml`, ou l'équivalent Dokploy) — jamais une copie locale
+de dev — sans quoi ce conteneur drainerait une file que personne ne
+remplit.
 Suivre : `docker logs -f celcat-nuit`.

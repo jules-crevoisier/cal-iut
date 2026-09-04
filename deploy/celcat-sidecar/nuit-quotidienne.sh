@@ -9,29 +9,24 @@
 # l'application (cf. Dockerfile) : c'est CE conteneur, et lui seul, qui
 # monte le VPN URCA.
 #
-# Lancement (une fois, en arrière-plan, sur la machine qui sert cal-iut) :
+# Déployé comme service `celcat-nuit` dans `docker-compose.yml`, à côté de
+# `backend`/`frontend` — Dokploy le construit et le démarre automatiquement
+# à chaque déploiement, comme les deux autres. Partage `data/state/` avec
+# `backend` via le même volume nommé `cal-iut-data` : ce script voit donc
+# les VRAIS jobs mis en file par l'appli déployée, jamais une copie locale.
 #
-#   docker build -t cal-iut-celcat deploy/celcat-sidecar
-#   docker run -d --restart unless-stopped --name celcat-nuit \
-#     --cap-add NET_ADMIN --device /dev/net/tun \
-#     --env-file /chemin/vers/.env \
-#     -v /chemin/vers/le/vrai/depot/cal-iut:/travail \
-#     cal-iut-celcat /travail/deploy/celcat-sidecar/nuit-quotidienne.sh
-#
-# IMPORTANT : `-v` doit pointer sur le MÊME `data/state/` que l'application
-# déployée (celui qui reçoit vraiment les déplacements faits sur le site) —
-# jamais une copie locale à part, sans quoi ce conteneur draine une file
-# que personne ne remplit. `--base` et `--production` sont volontairement
-# en dur ci-dessous (URCA_2026, écriture réelle) : ce script n'a pas
-# vocation à tourner sur autre chose qu'une vraie nuit de production.
-#
-# Suivre : `docker logs -f celcat-nuit`. Arrêter : `docker stop celcat-nuit`.
+# `--base`/`--production` volontairement en dur ci-dessous (URCA_2026,
+# écriture réelle) : ce script n'a pas vocation à tourner sur autre chose
+# qu'une vraie nuit de production. Suivre : `docker compose logs -f
+# celcat-nuit` (ou `docker logs -f <container>` en Dokploy).
 
 set -euo pipefail
-cd /travail
+cd /app
 
-echo "[$(date -Is)] installation du paquet cal-iut…"
-pip install --quiet -e . >/dev/null 2>&1 || pip install --quiet -e .
+# Filet de sécurité seulement : l'image bake déjà le paquet au build
+# (Dockerfile). Utile si ce script tourne monté par-dessus une image plus
+# ancienne pendant une itération manuelle.
+pip install --quiet -e . >/dev/null 2>&1 || true
 
 while true; do
   maintenant=$(date +%s)
