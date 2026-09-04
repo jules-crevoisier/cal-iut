@@ -256,30 +256,58 @@ modules:
   WRA509D: "TSBZE09D"  # IA avancée
   WRA510D: "TSBZE10D"  # Dev avancé AI
 
-# --- Encore deux codes Celcat pour le même module --------------------------
-# Kyllian 02/09/2026 soir : TSBZ confirmé pour WR305/309/312–314/317–319.
-#   WR315D / WR316D : deux codes Celcat chacun, toujours non tranchés.
-#   WR315D: TSBZ3150 (Maths) | TSBZ315D (Maths)
-#   WR316D: TSBZ3160 (Gestion de projet) | TSBZ316D (Gestion de projet)
+  # --- Kyllian 04/09/2026 : tranche WR315D/316D, complète WRA307M/313M/319M,
+  # et la quasi-totalité des SAE (WS*/WSA*) S1/S3/S5 ------------------------
+  WR315D: "TSBZ315D"   # Kyllian 04/09/2026 (tranché — l'autre candidat TSBZ3150 abandonné)
+  WR316D: "TSBZ316D"   # Kyllian 04/09/2026 (tranché — l'autre candidat TSBZ3160 abandonné)
+  WRA307M: "TSBZC07C"  # Expression, communication et rhétorique — Kyllian 04/09/2026
+  WRA313M: "TSBZC13C"  # Audiovisuel et Motion Design — Kyllian 04/09/2026
+  WRA319M: "TSBZC19C"  # Modélisation 3D — Kyllian 04/09/2026
+  WS101: "TSBZ1151"    # Auditer une communication numérique — Kyllian 04/09/2026
+  WS107: "TSBZ1357"    # Production d'un podcast — Kyllian 04/09/2026
+  WS110: "TSBZ1M60"    # Portfolio S1 — Kyllian 04/09/2026
+  # Kyllian a écrit "WS01D" — lu comme WS301D (typo, "3" manquant) : seul
+  # code SAE S3-DEV-FI de ce numéro dans le catalogue, aucun "WS01D" n'existe.
+  WS301D: "TSBZ351D"   # Kyllian 04/09/2026 — lu WS01D→WS301D, à confirmer si doute
+  # Kyllian a écrit "WS303" — lu comme WS303D (typo, suffixe D manquant) :
+  # même motif que ci-dessus, "WS303" seul n'existe pas dans le catalogue.
+  WS303D: "TSBZ353D"   # Kyllian 04/09/2026 — lu WS303→WS303D, à confirmer si doute
+  WS310D: "TSBZ360D"   # Portfolio S3-DEV-FI — Kyllian 04/09/2026
+  WSA301M: "TSBZC51M"  # Kyllian 04/09/2026
+  # Kyllian a écrit "WS302M" — lu comme WSA302M ("A" manquant) : entouré de
+  # codes WSA3xx S3-CREACOM-FC, "WS302M" seul n'existe pas dans le catalogue.
+  WSA302M: "TSBZC52M"  # Kyllian 04/09/2026 — lu WS302M→WSA302M, à confirmer si doute
+  # Kyllian a écrit "WS310M" — lu comme WSA310M ("A" manquant), même motif.
+  WSA310M: "TSBZC600"  # Portfolio S3-CREACOM-FC — Kyllian 04/09/2026 — lu WS310M→WSA310M, à confirmer si doute
+  # ATTENTION Kyllian 04/09/2026 : "ancien code, il faut vérifier
+  # l'information" — pas confirmé au même niveau que les autres ci-dessus.
+  WS501D: "TSB1551D"   # Kyllian 04/09/2026 — code ANCIEN, à vérifier avant usage
+  WS502D: "TSB1552D"   # Kyllian 04/09/2026 — code ANCIEN, à vérifier avant usage
+  WS510D: "TSBZ5600"   # Portfolio S5-DEV-FI — Kyllian 04/09/2026
+  WSA501C: "TSBZE51C"  # Kyllian 04/09/2026
+  WSA501D: "TSBZE51D"  # Kyllian 04/09/2026
+  WSA502C: "TSBZE52C"  # Kyllian 04/09/2026
+  WSA502D: "TSBZE520"  # Kyllian 04/09/2026
+  WSA510C: "TSBZE61C"  # Kyllian 04/09/2026
+  WSA510D: "TSBZE61D"  # Kyllian 04/09/2026
 
 # --- ABSENTS de la liste fournie ------------------------------------------
 # Aucun code Celcat trouvé, même en retirant le suffixe. À récupérer.
 #   WR100BU
-#   WRA307M
-#   WRA313M
-#   WRA319M
+#   WS102, WS103, WS104, WS105, WS106 (S1) — pas dans la réponse de Kyllian
+#     du 04/09/2026 (qui couvrait WS101/107/110 mais pas ceux-là) : à
+#     redemander, pas supposés.
+#   WS302D (S3-DEV-FI) — idem, absent de la réponse du 04/09/2026.
 
-# --- SAE (WS*/WSA*) : AUCUN code Celcat, sur tout le périmètre S1/S3/S5 -----
-# Repéré le 03/09/2026 : le blocage "sans code Celcat" de WS310D (Portfolio
-# S3) est apparu dans le lot de nuit dès que les séances SAE sont devenues
-# plaçables dans l'outil (elles ne l'étaient pas avant, donc jamais
-# poussées vers Celcat, donc ce trou restait invisible). Vérifié
-# exhaustivement : aucune des ~48 matières WS*/WSA* n'a de code — pas un
-# oubli isolé. Confirmé avec l'utilisateur (03/09/2026) : les SAE ONT
-# besoin d'un code Celcat comme le reste, même traitement que WSA501D — à
-# récupérer auprès de Kyllian, périmètre S1/S3/S5 (les autres semestres
-# hors périmètre 2026-2027, cf. README) :
-#   S1 : WS101 WS102 WS103 WS104 WS105 WS106 WS107 WS110 WS1PJ
-#   S3 : WS301D WS302D WS303D WS310D WS3PJ WSA301M WSA302M WSA310M WSA3PRJ
-#   S5 : WS501D WS502D WS510D WS5PJ WSA501C WSA501D WSA502C WSA502D WSA510C
-#        WSA510D WSA5PRJ
+# --- Sans code Celcat, confirmé — pas un manque -----------------------------
+# Kyllian 04/09/2026 : "1PJ pas de code / 3PJ pas de code / 3PRJ pas de code
+# / 5PJ pas de code / 5PRJ pas de code" — ces "Projet Ens." n'ont
+# délibérément aucun code, à ne jamais chercher :
+#   WS1PJ, WS3PJ, WSA3PRJ, WS5PJ, WSA5PRJ
+#
+# Kyllian 04/09/2026, sur COR/PCA/PRP/RC/RN/RRI (lignes admin) : "pas besoin
+# de mettre de matière sur ces codes-là, mais je ne suis même pas sûr qu'il
+# faille les saisir [dans Celcat]" — catégorie suggérée si besoin un jour
+# (Divers/Réunion/Conférence/TD selon le cas), mais AUCUN code module à
+# leur donner ; ne pas les pousser vers Celcat tant que ce doute n'est pas
+# levé.
