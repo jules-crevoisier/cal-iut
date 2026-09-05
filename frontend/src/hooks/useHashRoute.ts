@@ -63,6 +63,13 @@ export interface Route {
    * démarrage (App.tsx) pour être rejoué en paramètre de requête sur
    * chaque appel API (`api/client.ts::setAccessToken`). */
   t: string;
+  /** Parcours à pré-sélectionner en Vue Promo (retour utilisateur
+   * 05/09/2026 : chercher un groupe CM et cliquer dessus n'affichait QUE
+   * les CM, sans pouvoir choisir les TD de la même promo). Posé par la
+   * recherche globale (nouveau résultat « Promo », un par parcours
+   * distinct) — la Vue Promo lit ce champ pour se filtrer sur l'arrivée,
+   * exactement comme `sem`/`jour` la font déjà pour la semaine/le jour. */
+  parcours: string;
   /** Écran de compte à afficher (inscription/reset/confirmation) — lu
    * indépendamment de `vue`, avant de savoir si une session existe. */
   compte: RouteCompte;
@@ -89,9 +96,13 @@ const EMPTY_ROUTE: Route = {
   compte: "",
   statut: "",
   token: "",
+  parcours: "",
 };
 
-const ENTITY_RESET: Pick<Route, "prof" | "groupe" | "salle" | "cours" | "panel" | "compte" | "statut" | "token"> = {
+const ENTITY_RESET: Pick<
+  Route,
+  "prof" | "groupe" | "salle" | "cours" | "panel" | "compte" | "statut" | "token" | "parcours"
+> = {
   prof: "",
   groupe: "",
   salle: "",
@@ -100,6 +111,7 @@ const ENTITY_RESET: Pick<Route, "prof" | "groupe" | "salle" | "cours" | "panel" 
   compte: "",
   statut: "",
   token: "",
+  parcours: "",
 };
 
 function asPanel(value: string | null): RoutePanel {
@@ -131,6 +143,7 @@ function readHash(): Route {
     compte: (params.get("compte") as RouteCompte) || "",
     statut: (params.get("statut") as Route["statut"]) || "",
     token: params.get("token") || "",
+    parcours: params.get("parcours") || "",
   });
 }
 

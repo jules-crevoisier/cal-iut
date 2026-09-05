@@ -79,13 +79,13 @@ export function GlobalSearch({ payload, open, onClose, onNavigate }: GlobalSearc
         aria-label="Recherche globale"
       >
         <label className="sr-only" htmlFor="recherche-globale">
-          Rechercher un enseignant, un cours, une salle ou un groupe
+          Rechercher un enseignant, un cours, une salle, un groupe ou une promo
         </label>
         <input
           id="recherche-globale"
           ref={inputRef}
           type="search"
-          placeholder="Enseignant, cours, salle ou groupe…"
+          placeholder="Enseignant, cours, salle, groupe ou promo…"
           autoComplete="off"
           role="combobox"
           aria-expanded="true"
