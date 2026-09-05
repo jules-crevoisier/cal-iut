@@ -1,6 +1,16 @@
-# Stack complète (front + backend) — utilisable en local pour tester avant
-# Dokploy, ou directement comme déploiement Docker Compose dans Dokploy si
-# tu préfères ce mode au mode "Dockerfile x2 services".
+# Stack complète (front + backend + drain nocturne Celcat) — utilisable en
+# local pour tester avant Dokploy, ou directement comme déploiement Docker
+# Compose dans Dokploy si tu préfères ce mode au mode "Dockerfile x2 services".
+#
+# IMPORTANT (05/09/2026) : le service `celcat-nuit` ci-dessous n'est
+# déployé automatiquement QUE si Dokploy est bien configuré en mode
+# "Docker Compose" pointant sur CE fichier. En mode "Dockerfile x2
+# services" (un Dockerfile par service, configuré à la main dans Dokploy),
+# ce fichier n'est jamais lu — il faut alors ajouter `celcat-nuit` comme un
+# 3e service Dokploy séparé (Dockerfile = deploy/celcat-sidecar/Dockerfile,
+# même volume `cal-iut-data` que `backend`, mêmes variables CELCAT_*/VPN_*
+# ci-dessous, cap_add NET_ADMIN + device /dev/net/tun). À vérifier dans le
+# dashboard Dokploy avant de compter sur le déploiement automatique.
 #
 # Local :
 #   cp .env.example .env   # puis remplir les valeurs
@@ -61,6 +71,39 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  # Draine chaque nuit (00h00) la file Celcat que `backend` remplit
+  # (déplacements/créations/suppressions faits sur le site) — cf.
+  # docs/CELCAT.md § « Le drain de nuit tournait pour personne ». Conteneur
+  # À PART de `backend` : lui seul monte le VPN URCA (un tunnel complet,
+  # coupe tout le reste du trafic sortant si monté ailleurs). Partage
+  # `data/state/` avec `backend` via le MÊME volume nommé : voit donc les
+  # vrais jobs mis en file par l'appli déployée, jamais une copie locale.
+  #
+  # `NET_ADMIN`/`/dev/net/tun` : nécessaires à openconnect (client VPN) pour
+  # créer l'interface tun — sans lien avec les privilèges de `backend`.
+  celcat-nuit:
+    build:
+      context: .
+      dockerfile: deploy/celcat-sidecar/Dockerfile
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      CELCAT_URL: ${CELCAT_URL}
+      CELCAT_UTILISATEUR: ${CELCAT_UTILISATEUR}
+      CELCAT_MOT_DE_PASSE: ${CELCAT_MOT_DE_PASSE}
+      # Optionnels — sans eux, reseau.py retombe sur CELCAT_UTILISATEUR/
+      # CELCAT_MOT_DE_PASSE ci-dessus pour la connexion VPN elle-même.
+      VPN_PASSERELLE: ${VPN_PASSERELLE}
+      VPN_UTILISATEUR: ${VPN_UTILISATEUR}
+      VPN_MOT_DE_PASSE: ${VPN_MOT_DE_PASSE}
+      VPN_GROUPE: ${VPN_GROUPE}
+      VPN_CODE: ${VPN_CODE}
+    volumes:
+      - cal-iut-data:/app/data/state
+    restart: unless-stopped
 
 volumes:
   cal-iut-data:

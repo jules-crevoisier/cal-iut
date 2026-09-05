@@ -10,25 +10,40 @@
 #     pas de client Linux) ;
 #   - un navigateur, puisque Celcat n'expose aucune API.
 #
-# Lancement ponctuel/exploration (les deux options sont NÉCESSAIRES à
-# openconnect) :
-#   docker run --rm -it --cap-add NET_ADMIN --device /dev/net/tun \
-#     --env-file .env cal-iut-celcat <commande>
-#
-# Lancement en SERVICE (drain nocturne automatique) : voir
-# nuit-quotidienne.sh dans ce même dossier — un `docker run -d` qui reste
-# vivant et relance le job de nuit Celcat chaque 00h00.
+# Deux usages, une seule image :
+#   1. Exploration ponctuelle — code monté au lancement (`-v $PWD:/app`),
+#      pour itérer sans reconstruire à chaque essai :
+#        docker run --rm -it --cap-add NET_ADMIN --device /dev/net/tun \
+#          --env-file .env -v "$PWD:/app" -w /app cal-iut-celcat <commande>
+#      (le montage écrase ce que COPY a mis en place au build — sans effet
+#      de bord, `pip install -e .` se relance de toute façon au besoin)
+#   2. Service permanent (drain nocturne, `docker-compose.yml::celcat-nuit`)
+#      — l'app est bakée dans l'image au build (comme le Dockerfile
+#      principal), le CMD ci-dessous tourne tout seul, `data/state/`
+#      partagé avec le service `backend` via le volume nommé `cal-iut-data`.
 FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openconnect iproute2 dnsutils curl \
  && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /travail
-# Les navigateurs sont deja dans /ms-playwright : seul le paquet Python
-# manque, et sa version doit correspondre a celle de l'image.
-RUN pip install --no-cache-dir playwright==1.55.0 python-dotenv httpx pyyaml
+WORKDIR /app
 
-# Le code est monté au lancement plutôt que copié : cette image sert à
-# EXPLORER Celcat, et on ne veut pas la reconstruire à chaque essai.
-CMD ["bash"]
+# Même logique que le Dockerfile principal (racine du repo) : `-e` pour
+# que CONFIG_DIR/DB_PATH (calculés via Path(__file__).resolve().parents[N])
+# retombent sur CETTE arborescence, pas sur site-packages.
+COPY pyproject.toml README.md ./
+COPY src/ src/
+RUN pip install --no-cache-dir -e . playwright==1.55.0 python-dotenv httpx pyyaml
+
+COPY scripts/ scripts/
+COPY data/config/ data/config/
+COPY deploy/celcat-sidecar/nuit-quotidienne.sh deploy/celcat-sidecar/nuit-quotidienne.sh
+
+ENV PYTHONUNBUFFERED=1
+VOLUME ["/app/data/state"]
+
+# Repris à l'identique par le service exploration (`docker run ... bash`) :
+# un CMD par défaut ne gêne pas un `docker run` qui précise sa propre
+# commande, il ne sert que quand rien n'est précisé (service permanent).
+CMD ["bash", "deploy/celcat-sidecar/nuit-quotidienne.sh"]
