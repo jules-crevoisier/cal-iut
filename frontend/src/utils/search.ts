@@ -8,7 +8,7 @@
 import type { AppPayload } from "../types/app";
 import type { Route } from "../hooks/useHashRoute";
 
-export type SearchKind = "Enseignant" | "Groupe" | "Cours" | "Salle";
+export type SearchKind = "Enseignant" | "Groupe" | "Promo" | "Cours" | "Salle";
 
 export interface SearchHit {
   kind: SearchKind;
@@ -49,6 +49,28 @@ export function buildSearchIndex(payload: AppPayload): SearchHit[] {
       label: payload.groupLabels[gid] || gid,
       sub: gid,
       route: { vue: "groupe", groupe: gid },
+    });
+  }
+
+  // Un résultat par PROMO (parcours), en plus des groupes un par un —
+  // retour utilisateur 05/09/2026 : chercher un groupe CM et cliquer
+  // dessus n'affichait QUE les CM (GroupeView, cohorte = le groupe
+  // lui-même pour un CM), sans pouvoir choisir les TD de la même promo.
+  // Route vers la Vue Promo, filtrée sur ce parcours à l'arrivée — CM/TD/TP
+  // choisissables dans la même page, c'est tout son principe.
+  const parcoursVus = new Set<string>();
+  for (const gid of groupIds) {
+    const pc = payload.groupParcours[gid];
+    if (!pc || parcoursVus.has(pc)) continue;
+    parcoursVus.add(pc);
+  }
+  for (const pc of [...parcoursVus].sort((a, b) => a.localeCompare(b, "fr"))) {
+    const nGroupes = groupIds.filter((gid) => payload.groupParcours[gid] === pc).length;
+    index.push({
+      kind: "Promo",
+      label: pc,
+      sub: `${nGroupes} groupe(s) · CM, TD, TP`,
+      route: { vue: "promo", parcours: pc },
     });
   }
 

@@ -23,6 +23,7 @@ export function testRoute(patch: Record<string, unknown> = {}): Route {
     jour: null,
     mode: "",
     t: "",
+    parcours: "",
     ...patch,
   } as Route;
 }

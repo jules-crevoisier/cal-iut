@@ -56,7 +56,7 @@ import {
   selectedParked,
   type ParkUiState,
 } from "../features/park-week-move/parkWeekMove";
-import { filtrerParcours, listerAnnees, parcoursPourSelect } from "../utils/promoFilters";
+import { anneeDepuisParcours, filtrerParcours, listerAnnees, parcoursPourSelect } from "../utils/promoFilters";
 
 interface PromoViewProps {
   /** Position demandée par un lien ou par « À traiter » (semaine + jour).
@@ -231,6 +231,19 @@ export function PromoView({
     // Volontairement déclenché par la ROUTE seule.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route?.sem, route?.jour]);
+
+  // Retour utilisateur 05/09/2026 : chercher un groupe CM et cliquer dessus
+  // n'affichait QUE les CM (GroupeView), sans pouvoir choisir les TD de la
+  // même promo. La recherche pose désormais un résultat « Promo » qui
+  // arrive ici avec `route.parcours` — on filtre la grille sur ce parcours
+  // précis à l'arrivée, CM/TD/TP restent tous choisissables dans la page.
+  useEffect(() => {
+    if (!route?.parcours) return;
+    setFiltreAnnee(anneeDepuisParcours(route.parcours) ?? "Tout");
+    setFiltreParcoursSel(route.parcours);
+    // Volontairement déclenché par la ROUTE seule.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route?.parcours]);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
 

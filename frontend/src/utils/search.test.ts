@@ -89,6 +89,23 @@ describe("buildSearchIndex", () => {
     }
   });
 
+  it("should add one Promo result per distinct parcours, routing to Vue Promo filtered on it", () => {
+    // Retour utilisateur 05/09/2026 : chercher un groupe CM et cliquer
+    // dessus n'affichait QUE les CM — il faut pouvoir choisir les TD de la
+    // même promo. La recherche gagne donc un résultat « Promo » à part,
+    // par parcours, qui ouvre la Vue Promo déjà filtrée dessus.
+    const avecPromo = emptyPayload({
+      groupLabels: { cm1: "CM", td1: "TD AB" },
+      groupParcours: { cm1: "BUT1", td1: "BUT1" },
+    });
+    const index = buildSearchIndex(avecPromo);
+    const promo = index.find((h) => h.kind === "Promo" && h.label === "BUT1");
+    expect(promo).toBeDefined();
+    expect(routeOf(promo!)).toMatchObject({ vue: "promo", parcours: "BUT1" });
+    // Un seul résultat Promo pour BUT1, pas un par groupe.
+    expect(index.filter((h) => h.kind === "Promo" && h.label === "BUT1")).toHaveLength(1);
+  });
+
   it("should return no hits when the query matches nothing", () => {
     expect(runSearch(buildSearchIndex(payload), "zzzz-inconnu")).toEqual([]);
   });
