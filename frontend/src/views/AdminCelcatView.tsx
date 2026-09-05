@@ -128,6 +128,15 @@ export function AdminCelcatView() {
   const lancerMaintenant = async () => {
     setEnCours(true);
     try {
+      // Bug utilisateur du 05/09/2026 : cocher des semaines puis cliquer
+      // directement « Lancer maintenant » (sans passer par « Enregistrer
+      // le lot de nuit » d'abord) ne faisait RIEN — ce bouton appelait
+      // /celcat/lancer-nuit tout seul, qui ne connaît que le DERNIER lot
+      // déjà enregistré côté serveur (semaines_validees), jamais la
+      // sélection à l'écran. « Lancer maintenant » enregistre donc d'abord
+      // la sélection courante, exactement comme « Enregistrer le lot de
+      // nuit » le ferait, avant de lancer — un seul clic suffit désormais.
+      await validerSemainesCelcat(semaines);
       setEtat(await lancerNuitCelcat());
       setErreur(null);
     } catch (err) {

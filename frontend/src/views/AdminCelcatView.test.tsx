@@ -313,4 +313,29 @@ describe("AdminCelcatView", () => {
       ).toBe(true);
     });
   });
+
+  it("should save the checked weeks before launching when Lancer maintenant is clicked without Enregistrer first", async () => {
+    // Bug utilisateur du 05/09/2026, verbatim : « j'ai sélectionné et j'ai
+    // cliqué sur lancer maintenant et rien ne se passe » — cocher une
+    // semaine puis cliquer directement Lancer maintenant (sans passer par
+    // Enregistrer le lot de nuit) relançait l'ANCIEN lot déjà enregistré
+    // côté serveur, jamais la sélection cochée à l'écran.
+    const mock = stubFetch({ etat: { ...ETAT, saisie_active: true, semaines_validees: [] } });
+    render(<AdminCelcatView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^semaine 2$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /lancer maintenant/i }));
+
+    await waitFor(() => {
+      const appelValider = mock.mock.calls.find(
+        ([url, init]) => String(url).includes("/celcat/valider") && init?.method === "POST",
+      );
+      expect(appelValider).toBeDefined();
+      expect(JSON.parse(String(appelValider?.[1]?.body))).toEqual({ semaines: [2] });
+    });
+    const indexValider = mock.mock.calls.findIndex(([url]) => String(url).includes("/celcat/valider"));
+    const indexLancer = mock.mock.calls.findIndex(([url]) => String(url).includes("/celcat/lancer-nuit"));
+    expect(indexValider).toBeGreaterThanOrEqual(0);
+    expect(indexLancer).toBeGreaterThan(indexValider);
+  });
 });
