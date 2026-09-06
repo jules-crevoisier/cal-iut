@@ -689,6 +689,23 @@ en tête de `docker-compose.yml`, et il faut ajouter `celcat-nuit` comme un
 3e service Dokploy séparé à la main). Suivre : `docker compose logs -f
 celcat-nuit` (ou l'équivalent dans le dashboard Dokploy).
 
+**Bug trouvé et corrigé le 06/09/2026** : la toute première version dormait
+une fois pour toutes jusqu'au PROCHAIN minuit calculé au démarrage — un
+simple redéploiement (qui redémarre TOUS les services du compose, même
+ceux qui n'ont pas changé) repartait sur un nouveau sommeil de ~24h à
+chaque fois, sans jamais atteindre un vrai passage. Constaté en
+production après plusieurs merges le même jour : démarré le 05/09 à
+00h03, toujours pas de passage réel 39h plus tard. Corrigé avec un
+marqueur persistant (`data/state/celcat_nuit_dernier_passage.txt`, dans
+le MÊME volume que `backend` — survit à un redémarrage) : la boucle
+revérifie ce marqueur toutes les 5 minutes plutôt que de dormir
+longtemps ; un redémarrage ne fait que ré-entrer dans la boucle et relire
+le marqueur. Effet de bord assumé : le job peut désormais se déclencher
+n'importe quand dans la journée (dès qu'il détecte ne pas encore avoir
+tourné aujourd'hui), pas forcément pile à minuit — la fiabilité (au moins
+un passage par jour, quel que soit le nombre de redéploiements) prime sur
+l'heure exacte.
+
 **2. Lancement manuel (repli, si le mode Dokploy ne convient pas)** — un
 conteneur à part, à démarrer une fois sur la machine qui sert vraiment
 `cal-iut-mmi.srko.fr` :
