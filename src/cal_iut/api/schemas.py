@@ -680,3 +680,32 @@ class CelcatEtatResponse(BaseModel):
 class CelcatExtraActionResponse(BaseModel):
     statut: str
     session_id: str | None = None
+
+
+class CelcatJournalLigne(BaseModel):
+    """Une correspondance session_id ↔ event_id/group_id déjà constatée en
+    direct sur Celcat — jamais un appel RPC ici, seulement la fusion dans le
+    journal local (`data/state/celcat_sync.json`)."""
+
+    session_id: str
+    event_id: int | None = None
+    group_id: int | None = None
+    semaine: int | None = None
+    signature: str | None = None
+
+
+class CelcatJournalReconcilierRequest(BaseModel):
+    # Retour utilisateur 07/09/2026 : une saisie poussée depuis une AUTRE
+    # machine (via `pousser_manquants_celcat.py`) n'écrit que le journal
+    # LOCAL à cette machine — jamais celui de la prod, qui reste vide côté
+    # `event_id` et fait donc partir tout déplacement ultérieur en "create"
+    # (doublon) plutôt qu'en "update". Cet endpoint comble ce trou : il fusionne
+    # des lignes déjà connues (constatées ailleurs) dans le journal de CETTE
+    # instance, sans jamais écraser une entrée déjà présente.
+    lignes: list[CelcatJournalLigne]
+
+
+class CelcatJournalReconcilierResponse(BaseModel):
+    fusionnees: int
+    deja_presentes: int
+    ignorees: list[str] = []

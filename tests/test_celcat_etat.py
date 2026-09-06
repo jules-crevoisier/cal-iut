@@ -23,6 +23,7 @@ NOUVELLES_ECRITURES = (
     ("post", "/celcat/lancer-nuit", None),
     ("post", "/celcat/extras/extra-1/ajouter", None),
     ("post", "/celcat/extras/extra-1/ignorer", None),
+    ("post", "/celcat/journal/reconcilier", {"lignes": []}),
 )
 
 
@@ -147,6 +148,50 @@ def test_should_not_enqueue_queue_jobs_and_not_call_rpc_when_valider_succeeds(
     assert appels_rpc == []
     assert page.journal == []
     assert jobs_en_attente() == []
+
+
+def test_should_fill_missing_journal_rows_but_never_overwrite_existing_ones_when_reconciling(
+    client_admin,
+) -> None:
+    from cal_iut.celcat.etat import charger, sauver
+
+    # Une entrée déjà connue (poussée par un job de nuit précédent) : ne
+    # doit surtout pas être écrasée par la réconciliation.
+    doc = charger()
+    doc["journal"] = {
+        "WR101-S1-CM-1": {
+            "session_id": "WR101-S1-CM-1",
+            "signature": "déjà-connue",
+            "event_id": "111",
+        }
+    }
+    sauver(doc)
+
+    reponse = client_admin.post(
+        "/celcat/journal/reconcilier",
+        json={
+            "lignes": [
+                # Comble un vrai trou (retour utilisateur 07/09/2026 : une
+                # saisie poussée depuis une autre machine).
+                {"session_id": "WR115-S1-CM-1", "event_id": 1949541, "group_id": 1661971, "semaine": 2, "signature": "sig-115"},
+                # Déjà présente : ignorée, jamais écrasée.
+                {"session_id": "WR101-S1-CM-1", "event_id": 999, "group_id": 1, "semaine": 1, "signature": "autre"},
+                # Sans event_id : rien à journaliser, ignorée proprement.
+                {"session_id": "WR999-S1-CM-1", "event_id": None},
+            ]
+        },
+    )
+    assert reponse.status_code == 200, reponse.text
+    corps = reponse.json()
+    assert corps["fusionnees"] == 1
+    assert corps["deja_presentes"] == 1
+    assert corps["ignorees"] == ["WR999-S1-CM-1"]
+
+    journal = charger_etat()["journal"]
+    assert journal["WR115-S1-CM-1"]["event_id"] == "1949541"
+    assert journal["WR115-S1-CM-1"]["group_id"] == "1661971"
+    assert journal["WR101-S1-CM-1"]["event_id"] == "111"  # inchangée
+    assert journal["WR101-S1-CM-1"]["signature"] == "déjà-connue"
 
 
 def test_should_paginate_get_celcat_logs_and_include_created_modified_deleted_blocked_with_motif(
