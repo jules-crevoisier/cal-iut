@@ -329,6 +329,31 @@ def _consommer_file(
         retirer_traites(a_retirer)
 
 
+def drainer_file_immediate(
+    page: Any, *, base: str = BASE_ENTRAINEMENT, production_autorisee: bool = False
+) -> bool:
+    """Consomme la file d'attente (create/update/delete) TOUT DE SUITE —
+    jamais le balayage par semaine ni le marquage `semaines_lancees`,
+    réservés au vrai job de nuit (`executer_job_nuit`). Retour utilisateur
+    07/09/2026 : « sur les update on veut tenter en temps réel, pas la
+    nuit » — un déplacement de séance déjà placée (`ops.py::_executer`,
+    action « update ») s'enfile immédiatement dans la file ; c'est CETTE
+    fonction, appelée par le worker à un rythme rapide (cf.
+    `deploy/celcat-sidecar/nuit-quotidienne.sh`), qui la vide en quelques
+    secondes plutôt qu'à la prochaine bascule de jour.
+
+    Retourne True si des jobs étaient en attente (donc si la connexion
+    Live valait le coût) — permet à l'appelant de sauter la connexion VPN
+    quand il n'y a rien à faire."""
+    doc = charger()
+    if not doc.get("saisie_active"):
+        return False
+    if not lister():
+        return False
+    _consommer_file(page, doc, base=base, production_autorisee=production_autorisee)
+    return True
+
+
 def executer_job_nuit(
     page: Any = None, *, base: str = BASE_ENTRAINEMENT, production_autorisee: bool = False
 ) -> None:

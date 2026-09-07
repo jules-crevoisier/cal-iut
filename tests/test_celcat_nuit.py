@@ -219,6 +219,56 @@ def test_should_drain_create_update_delete_jobs_from_file_attente_and_call_match
     assert appels == apres_page  # aucun appel RPC supplémentaire sans page
 
 
+def test_should_drain_queue_immediately_without_touching_semaines_lancees_or_dernier_job_and_report_whether_there_was_anything_to_do(
+    planning,
+    monkeypatch,
+) -> None:
+    """Retour utilisateur 07/09/2026 : « sur les update on veut tenter en
+    temps réel, pas la nuit » — `drainer_file_immediate` doit vider la
+    file SANS toucher au balayage par semaine ni au marquage
+    `semaines_lancees`/`dernier_job`, réservés au vrai job de nuit."""
+    from cal_iut.celcat.etat import charger
+    from cal_iut.celcat.file_attente import enfiler
+    from cal_iut.celcat.nuit import drainer_file_immediate
+
+    activer_saisie(planning)
+    vider_file()
+
+    page = FaussePage()
+    avant = charger()
+    assert drainer_file_immediate(page) is False  # file vide : rien à faire
+    assert charger() == avant  # pas la moindre écriture
+
+    appels = {"update": 0}
+
+    def _faux_modifier(*_a, **_k):
+        from cal_iut.celcat.modification import ResultatModification
+
+        appels["update"] += 1
+        resultat = ResultatModification()
+        resultat.modifiees.append(("s-sem-validee", 1931666))
+        return resultat
+
+    monkeypatch.setattr("cal_iut.celcat.nuit.modifier_manquants", _faux_modifier)
+    enfiler(
+        {
+            "action": "update",
+            "session_id": "s-sem-validee",
+            "event_id": 1931666,
+            "group_id": GROUP_ID,
+            "semaine": SEMAINE,
+        }
+    )
+
+    assert drainer_file_immediate(page) is True
+    assert appels == {"update": 1}
+    assert jobs_en_attente() == []  # traité, retiré de la file
+
+    doc = charger()
+    assert doc.get("semaines_lancees") == avant.get("semaines_lancees")  # jamais touché
+    assert doc.get("dernier_job") == avant.get("dernier_job")  # jamais touché
+
+
 def test_should_remove_only_successfully_processed_or_guard_refused_jobs_from_the_queue_after_consommer_file_leaving_rpc_failed_jobs_for_the_next_run(
     planning,
     monkeypatch,
