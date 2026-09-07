@@ -12,8 +12,20 @@ from dataclasses import dataclass
 
 # IDs numériques relevés sur URCA (canari FORMATION / lecture Live).
 # Source : data/releves/celcat-rpc-canari.json — evCatName [CM] → 430.
+#
+# [TD] et [TP] ajoutés le 07/09/2026, relevés sur URCA_2026 par
+# `scripts/auditer_categories_celcat.py` (catalogue udlResources complet).
+# Tant qu'ils manquaient, le filet était ASYMÉTRIQUE : il refusait un CM mal
+# catégorisé mais laissait passer un TD portant l'identifiant du CM — la
+# forme exacte du symptôme signalé par David Annebicque (« les TD sont
+# aléatoirement indiqués en TD ou en CM »). Ne pas confondre avec les
+# variantes voisines du même catalogue, qui ont leurs propres identifiants
+# et ne doivent jamais être choisies à la place : [CM Capacite] 429,
+# [CM bénévole] 845, [TD bénévole] 846, [TP bénévole] 847, TD0 465.
 CATEGORIE_IDS: dict[str, int] = {
     "CM": 430,
+    "TD": 433,
+    "TP": 435,
 }
 
 LIBELLES: dict[str, str] = {
@@ -78,6 +90,24 @@ class EcartCategorie:
     event_id: int | None
     categorie_live: str
     motif: str
+
+
+def type_depuis_identifiant(session_id: str) -> str:
+    """Type porté par l'identifiant : « WR101-S1-TD-1-but1-td-ab » -> TD.
+
+    Repli pour juger une séance que la maquette ne connaît pas (ou plus) —
+    cas normal hors du serveur, où `state.timetable` est vide. Sans lui, un
+    audit de catégories ne jugerait aucune séance et conclurait « aucun
+    écart » : sur un sujet qui remonte dans OMEGA, un faux silence coûte
+    plus cher qu'un doute affiché.
+
+    Ne devine rien : seul un segment valant exactement CM, TD ou TP est
+    retenu, sans quoi la réponse est vide et la séance reste non jugée.
+    """
+    for morceau in (session_id or "").upper().split("-"):
+        if morceau in LIBELLES:
+            return morceau
+    return ""
 
 
 def est_seance_cm(session_id: str, signature: str = "", session_type: str = "") -> bool:
