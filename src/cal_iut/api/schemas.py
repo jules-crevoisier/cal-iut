@@ -159,6 +159,31 @@ class CreerSeanceRequest(BaseModel):
     force: bool = False
 
 
+class CreerEvenementRequest(BaseModel):
+    """Événement HORS MAQUETTE affiché en clair sur l'EDT (réunion,
+    conférence...) — jamais une matière : contrairement à
+    `CreerSeanceRequest`, `libelle` invente volontairement un nouveau code
+    (aucune entrée `state.courses` requise), puisqu'aucune progression, ni
+    volume horaire, ni contrainte d'ordonnancement ne s'y applique jamais.
+
+    Retour utilisateur 07/09/2026 : « il faudrait que l'on créer un module
+    WR000Réunion ou WRréunion ou Conférence, pour indiqué sur cal-iut
+    l'échange IA en clair sur l'emploi du temps des étudiants S1 ».
+    """
+
+    libelle: str = Field(min_length=1)  # ex. "Conférence"
+    semestre: str
+    group_ids: list[str] = Field(min_length=1)
+    teacher_codes: list[str] = Field(default_factory=list)
+    duration_slots: int = Field(default=1, ge=1, le=4)
+    note: str | None = None
+    week: int = Field(ge=0)
+    day: int = Field(ge=0, le=4)
+    slot: int = Field(ge=0, le=5)
+    room_id: str | None = None
+    force: bool = False
+
+
 class ModifierSeancePersonnaliseeRequest(BaseModel):
     """Modifie une séance personnalisée déjà créée. Tous les champs sont
     optionnels : seuls ceux fournis changent. Fournir `week`/`day`/`slot`
