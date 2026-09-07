@@ -74,7 +74,12 @@ def test_un_echec_d_ecriture_apparait_dans_le_bilan_avec_son_motif(planning, mon
     bilan = drainer_file_immediate(FaussePage())
 
     assert bilan.reussis == 0
-    assert ("s-sem-validee", "ETooManyRecords") in bilan.echecs
+    # Le motif peut être enrichi de la cause d'une résolution d'ids ratée
+    # (cf. `test_drainage_lots_2026_09_07`) : on vérifie qu'il PORTE
+    # l'erreur, pas qu'il lui est identique.
+    assert any(
+        sid == "s-sem-validee" and "ETooManyRecords" in motif for sid, motif in bilan.echecs
+    ), bilan.echecs
     assert jobs_en_attente(), "un échec RPC reste en file pour la prochaine tentative"
     assert "ETooManyRecords" in bilan.resume()
     assert "0 réussi" in bilan.resume()

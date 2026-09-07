@@ -183,19 +183,25 @@ def _masque_pour(entree: Any) -> str:
         return "N" * 54
 
 
-def _ids_pour(page: Any, entree: Any) -> dict:
+def _ids_pour(page: Any, entree: Any) -> tuple[dict, str | None]:
     """Résout module/salle/personnel/catégorie/département Celcat via le
     catalogue RPC (`page`). Sur un échec de résolution (catalogue
     indisponible, ressource inconnue), retombe sur `{}` : l'écriture réelle
     (creer_manquants/modifier_manquants) refusera alors proprement via ses
-    propres garde-fous plutôt que de faire échouer tout le job de nuit."""
+    propres garde-fous plutôt que de faire échouer tout le job de nuit.
+
+    Rend AUSSI la cause de l'échec. Sans elle, l'écriture échouait plus loin
+    sur « TD exige event_cat_id pour [TD] — reçu vide » : le symptôme du
+    garde-fou, jamais la ressource réellement introuvable — salle ? module ?
+    enseignant ? La réponse était dans l'exception, et on la jetait
+    (constaté sur 415 échecs le 07/09/2026)."""
     try:
         state = get_state()
         carte = charger_carte(state.config_dir)
         categorie = carte.categorie(entree.type_seance_nom)
-        return resoudre_ids(page, entree, categorie=categorie)
-    except Exception:  # noqa: BLE001
-        return {}
+        return resoudre_ids(page, entree, categorie=categorie), None
+    except Exception as exc:  # noqa: BLE001
+        return {}, f"{type(exc).__name__} : {exc}"
 
 
 def _group_id_pour(page: Any, entree: Any, group_id_connu: object) -> int:
@@ -238,21 +244,56 @@ class BilanDrainage:
     def __bool__(self) -> bool:
         return self.en_attente > 0
 
+    @staticmethod
+    def _par_motif(entrees: list[tuple[str, str]], combien: int = 4) -> str:
+        """Répartition par motif, du plus fréquent au plus rare.
+
+        Trois exemples pris dans l'ordre d'arrivée ne disent pas si l'on a
+        UN problème massif ou quinze cas isolés — c'est pourtant ce qui
+        décide par quoi commencer. Chaque motif garde le nom d'UNE séance
+        concernée : un compte sans exemple ne permet pas d'aller regarder
+        dans Celcat.
+        """
+        from collections import Counter
+
+        comptes = Counter(motif for _sid, motif in entrees)
+        exemple = {}
+        for sid, motif in entrees:
+            exemple.setdefault(motif, sid)
+        morceaux = [
+            f"{n}× {motif} (ex. {exemple[motif]})" for motif, n in comptes.most_common(combien)
+        ]
+        reste = len(comptes) - len(morceaux)
+        if reste > 0:
+            morceaux.append(f"et {reste} autre(s) motif(s)")
+        return " | ".join(morceaux)
+
     def resume(self) -> str:
         if not self.en_attente:
             return "file d'attente vide"
         parts = [f"{self.en_attente} job(s)", f"{self.reussis} réussi(s)"]
         if self.echecs:
-            detail = "; ".join(f"{sid} : {motif}" for sid, motif in self.echecs[:3])
-            parts.append(f"{len(self.echecs)} en échec ({detail})")
+            parts.append(f"{len(self.echecs)} en échec — {self._par_motif(self.echecs)}")
         if self.ignores:
-            detail = "; ".join(f"{sid} : {motif}" for sid, motif in self.ignores[:3])
-            parts.append(f"{len(self.ignores)} ignoré(s) ({detail})")
+            parts.append(f"{len(self.ignores)} ignoré(s) — {self._par_motif(self.ignores, 2)}")
         return " — ".join(parts)
 
 
+def _avec_cause(
+    echecs: list[tuple[str, str]], cause: str | None
+) -> list[tuple[str, str]]:
+    """Rattache la cause d'une résolution d'ids ratée au motif d'échec.
+
+    Sans elle, l'écriture rend « TD exige event_cat_id pour [TD] — reçu
+    vide » : le symptôme du garde-fou, jamais la ressource réellement
+    introuvable — salle ? module ? enseignant ?"""
+    if not cause:
+        return list(echecs)
+    return [(sid, f"{motif} [ids irrésolus : {cause}]") for sid, motif in echecs]
+
+
 def _consommer_file(
-    page: Any, doc: dict[str, Any], *, base: str, production_autorisee: bool
+    page: Any, doc: dict[str, Any], *, base: str, production_autorisee: bool, limite: int = 0
 ) -> BilanDrainage:
     """Draine `file_attente.lister()` et appelle la primitive RPC adaptée à
     chaque job (create/update/delete). Un job traité (succès OU refus de
@@ -265,6 +306,13 @@ def _consommer_file(
     bilan = BilanDrainage(en_attente=len(jobs))
     if not jobs:
         return bilan
+    if limite > 0:
+        # Un cycle BORNÉ. Le premier drainage réel a duré 2h11 sur 489 jobs,
+        # session VPN du compte partagé prise du début à la fin et pas une
+        # ligne de journal entre-temps. La file étant persistante, ce qui
+        # n'est pas fait maintenant se fera au cycle suivant — il n'y a
+        # aucune raison de tout tenir en un seul passage.
+        jobs = jobs[:limite]
 
     state = get_state()
     entrees = entrees_pour_state(state)
@@ -298,7 +346,7 @@ def _consommer_file(
         eid_connu = _event_id(row_connu) if isinstance(row_connu, dict) else None
 
         group_id = _group_id_pour(page, entree, job.get("group_id"))
-        ids = _ids_pour(page, entree)
+        ids, cause_ids = _ids_pour(page, entree)
         masque = _masque_pour(entree)
         resultat = creer_manquants(
             page,
@@ -315,12 +363,20 @@ def _consommer_file(
             marquer_saisi(entree, event_id=eid, group_id=group_id)
             a_retirer.append(job)
             bilan.reussis += 1
-        bilan.echecs.extend(resultat.echecs)
+        # L'écriture est tentée même avec des ids incomplets — c'est le
+        # comportement voulu, ses propres garde-fous la refuseront. Mais si
+        # elle échoue ALORS QUE la résolution avait déjà échoué, le motif
+        # rendu (« event_cat_id reçu vide ») est un symptôme : on lui
+        # rattache la cause, sans quoi elle est perdue.
+        bilan.echecs.extend(_avec_cause(resultat.echecs, cause_ids))
 
     # --- update : un seul lot, ElementModification porte déjà ses propres
     # ids/masque/group_id (contrairement à creer_manquants). ---------------
     elements_m: list[ElementModification] = []
     jobs_m: dict[str, dict[str, Any]] = {}
+    # Cause d'une resolution d'ids ratee, par seance : rattachee au motif
+    # d'echec plus bas (le lot d'updates est ecrit en une fois).
+    causes_m: dict[str, str] = {}
     for job in jobs:
         if job.get("action") != "update":
             continue
@@ -337,13 +393,16 @@ def _consommer_file(
                 )
             )
             continue
+        ids_m, cause_ids_m = _ids_pour(page, entree)
+        if cause_ids_m is not None:
+            causes_m[sid] = cause_ids_m
         group_id = _group_id_pour(page, entree, job.get("group_id"))
         elements_m.append(
             ElementModification(
                 entree=entree,
                 event_id=int(eid),
                 group_id=group_id,
-                ids=_ids_pour(page, entree),
+                ids=ids_m,
                 masque=_masque_pour(entree),
             )
         )
@@ -366,7 +425,11 @@ def _consommer_file(
             entree = entrees.get(sid)
             if entree is not None:
                 marquer_saisi(entree, event_id=eid, group_id=gid_par_session.get(sid))
-        bilan.echecs.extend(resultat_m.echecs)
+        for sid_e, motif_e in resultat_m.echecs:
+            cause = causes_m.get(sid_e)
+            bilan.echecs.append(
+                (sid_e, f"{motif_e} [ids irrésolus : {cause}]" if cause else motif_e)
+            )
 
     # --- delete : group_id vient du job (row.get("group_id")), jamais résolu
     # ici — c'est `ops.py` qui le pose à l'enfilage. ------------------------
@@ -411,8 +474,12 @@ def _consommer_file(
 
 
 def drainer_file_immediate(
-    page: Any, *, base: str = BASE_ENTRAINEMENT, production_autorisee: bool = False
-) -> bool:
+    page: Any,
+    *,
+    base: str = BASE_ENTRAINEMENT,
+    production_autorisee: bool = False,
+    limite: int = 0,
+) -> BilanDrainage:
     """Consomme la file d'attente (create/update/delete) TOUT DE SUITE —
     jamais le balayage par semaine ni le marquage `semaines_lancees`,
     réservés au vrai job de nuit (`executer_job_nuit`). Retour utilisateur
@@ -432,7 +499,9 @@ def drainer_file_immediate(
         return BilanDrainage()
     if not lister():
         return BilanDrainage()
-    return _consommer_file(page, doc, base=base, production_autorisee=production_autorisee)
+    return _consommer_file(
+        page, doc, base=base, production_autorisee=production_autorisee, limite=limite
+    )
 
 
 def executer_job_nuit(
