@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[1]
@@ -74,27 +75,41 @@ def principal() -> int:
             file=sys.stderr,
         )
         return 2
-    diag = reseau.exiger_acces(url, monter_le_vpn=args.vpn) if args.vpn else reseau.verifier(url)
-    if not getattr(diag, "joignable", False):
-        print(f"Celcat injoignable : {diag.detail}", file=sys.stderr)
+    # `reseau.acces` rend le tunnel en sortant du bloc — appelé toutes les
+    # 30 s par le sidecar, ce script ne doit garder la session du compte que
+    # le temps du drainage (retour utilisateur 07/09/2026 : « quand on a pas
+    # besoin de faire des actions dessus, le VPN se désactive »). Sans VPN
+    # (sur site), `nullcontext` porte le même diagnostic sans rien à rendre.
+    contexte = reseau.acces(url, monter_le_vpn=True) if args.vpn else nullcontext(reseau.verifier(url))
+    try:
+        with contexte as diag:
+            if not getattr(diag, "joignable", False):
+                print(f"Celcat injoignable : {diag.detail}", file=sys.stderr)
+                return 3
+
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as p:
+                navigateur = p.chromium.launch(headless=True)
+                page = navigateur.new_page(viewport={"width": 1920, "height": 1080})
+                try:
+                    print(f"Connexion {args.base} rôle {args.role}…")
+                    nav.connexion(page, base=args.base, role=args.role)
+                    traite = drainer_file_immediate(
+                        page=page, base=args.base, production_autorisee=args.production
+                    )
+                    print("file d'attente drainée (temps réel)" if traite else "rien à drainer")
+                finally:
+                    try:
+                        nav.deconnexion(page)
+                    except Exception:  # noqa: BLE001, S110
+                        pass
+                    navigateur.close()
+    except reseau.AccesIndisponible as exc:
+        print(f"Celcat injoignable : {exc}", file=sys.stderr)
         return 3
-
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        navigateur = p.chromium.launch(headless=True)
-        page = navigateur.new_page(viewport={"width": 1920, "height": 1080})
-        try:
-            print(f"Connexion {args.base} rôle {args.role}…")
-            nav.connexion(page, base=args.base, role=args.role)
-            traite = drainer_file_immediate(page=page, base=args.base, production_autorisee=args.production)
-            print("file d'attente drainée (temps réel)" if traite else "rien à drainer")
-        finally:
-            try:
-                nav.deconnexion(page)
-            except Exception:  # noqa: BLE001, S110
-                pass
-            navigateur.close()
+    if getattr(diag, "monte_par_nous", False):
+        print("VPN rendu (session libérée pour le compte partagé)")
     return 0
 
 

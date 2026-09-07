@@ -2960,6 +2960,7 @@ def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
         return CelcatSaisieResponse(simulee=body.simuler, resume="Rien à saisir : tout est à jour.")
 
     rythme = Rythme()
+    acces = None  # diagnostic d'accès, seulement en saisie réelle (cf. plus bas)
     if body.simuler:
         pilote = PiloteSimule()
         base = "(simulation)"
@@ -2983,7 +2984,9 @@ def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
                 503, "CELCAT_UTILISATEUR / CELCAT_MOT_DE_PASSE absents de l'environnement (.env)."
             )
         try:
-            reseau.exiger_acces(PilotePlaywright.URL_CONNEXION, monter_le_vpn=body.monter_le_vpn)
+            acces = reseau.exiger_acces(
+                PilotePlaywright.URL_CONNEXION, monter_le_vpn=body.monter_le_vpn
+            )
         except reseau.AccesIndisponible as exc:
             raise HTTPException(503, str(exc)) from None
         base = nav.BASE_PRODUCTION if body.production else nav.BASE_ENTRAINEMENT
@@ -2997,9 +3000,18 @@ def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
         ),
     )
     identifiants = ("(simulation)", "") if body.simuler else (identifiant, motdepasse)
-    resultat = saisie.executer(
-        plan, *identifiants, ignorer_bloquees=body.ignorer_bloquees,
-    )
+    try:
+        resultat = saisie.executer(
+            plan, *identifiants, ignorer_bloquees=body.ignorer_bloquees,
+        )
+    finally:
+        # Même règle que dans le sidecar (`reseau.acces`) : la saisie finie,
+        # on rend la session du compte partagé. Uniquement si c'est CET
+        # appel qui a monté le tunnel — un AnyConnect ouvert à la main par
+        # l'utilisateur ne nous appartient pas et le couper le mettrait
+        # dehors de sa propre session.
+        if acces is not None and acces.monte_par_nous:
+            reseau.deconnecter()
 
     return CelcatSaisieResponse(
         simulee=body.simuler, base=base,
