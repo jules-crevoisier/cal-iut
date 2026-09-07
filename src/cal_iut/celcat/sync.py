@@ -75,6 +75,49 @@ def marquer_saisi(
     sauver(doc)
 
 
+def reconcilier(lignes: list[dict]) -> tuple[int, int, list[str]]:
+    """Comble les trous du journal LOCAL avec des correspondances déjà
+    constatées ailleurs (typiquement : une saisie poussée depuis une autre
+    machine via `pousser_manquants_celcat.py`, dont le journal — écrit en
+    local à CETTE machine, cf. `_path()` — n'a jamais atteint la prod).
+
+    Ne touche JAMAIS une entrée déjà présente : cet endpoint sert à
+    combler un manque, jamais à écraser un état déjà connu (qui pourrait
+    être plus récent que ce qu'on nous rapporte). `session_id` sans
+    `event_id` est ignoré (rien à journaliser sans identifiant Celcat).
+    Retourne (fusionnées, déjà présentes, session_id ignorés)."""
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    existant = dict(doc.get("journal") or {})
+    fusionnees = 0
+    deja_presentes = 0
+    ignorees: list[str] = []
+    for ligne in lignes:
+        sid = str(ligne.get("session_id") or "").strip()
+        if not sid or ligne.get("event_id") in (None, ""):
+            ignorees.append(sid or "?")
+            continue
+        if sid in existant:
+            deja_presentes += 1
+            continue
+        row: dict[str, str] = {
+            "session_id": sid,
+            "signature": str(ligne.get("signature") or ""),
+            "saisi_le": datetime.now(UTC).isoformat(),
+            "semaine": str(ligne.get("semaine") or ""),
+            "event_id": str(ligne["event_id"]),
+        }
+        if ligne.get("group_id") not in (None, ""):
+            row["group_id"] = str(ligne["group_id"])
+        existant[sid] = row
+        fusionnees += 1
+    if fusionnees:
+        doc["journal"] = existant
+        sauver(doc)
+    return fusionnees, deja_presentes, ignorees
+
+
 def marquer_supprime(session_id: str) -> None:
     from cal_iut.celcat.etat import charger, sauver
 

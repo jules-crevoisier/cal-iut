@@ -51,6 +51,8 @@ from cal_iut.api.schemas import (
     CelcatEntreeResponse,
     CelcatEtatResponse,
     CelcatExtraActionResponse,
+    CelcatJournalReconcilierRequest,
+    CelcatJournalReconcilierResponse,
     CelcatPlanResponse,
     CelcatSaisieActiveRequest,
     CelcatSaisieRequest,
@@ -2946,6 +2948,22 @@ def celcat_lancer_nuit() -> CelcatEtatResponse:
         raise HTTPException(409, "Saisie Celcat désactivée")
     executer_job_nuit()
     return _celcat_etat_public()
+
+
+@app.post(
+    "/celcat/journal/reconcilier",
+    response_model=CelcatJournalReconcilierResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_journal_reconcilier(
+    body: CelcatJournalReconcilierRequest,
+) -> CelcatJournalReconcilierResponse:
+    from cal_iut.celcat.sync import reconcilier
+
+    fusionnees, deja_presentes, ignorees = reconcilier([ligne.model_dump() for ligne in body.lignes])
+    return CelcatJournalReconcilierResponse(
+        fusionnees=fusionnees, deja_presentes=deja_presentes, ignorees=ignorees
+    )
 
 
 @app.get("/celcat/logs", dependencies=[Depends(accounts.require_role("admin"))])
