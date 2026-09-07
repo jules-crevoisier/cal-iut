@@ -42,6 +42,12 @@ FROM nginx:1.27-alpine AS runtime
 # sont substituées, les variables nginx (`$uri`, `$host`…) restent
 # intactes puisqu'elles n'existent pas dans l'environnement du process.
 ENV BACKEND_URL=http://backend:8000
+# Serveur DNS que nginx interroge à CHAQUE requête proxy (cf. la directive
+# `resolver` du gabarit) : 127.0.0.11 est le résolveur interne de Docker,
+# présent dans tout conteneur d'un réseau applicatif. Variable plutôt
+# qu'écrit en dur pour qu'un déploiement hors Docker puisse pointer le
+# résolveur de son hôte sans modifier l'image.
+ENV DNS_RESOLVER=127.0.0.11
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 COPY --from=build /app/dist /usr/share/nginx/html
