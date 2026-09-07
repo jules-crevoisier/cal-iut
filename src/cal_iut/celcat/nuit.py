@@ -284,6 +284,19 @@ def _consommer_file(
             # silence (c'était le cas avant le 07/09/2026).
             bilan.ignores.append((sid_job, "séance inconnue de la maquette"))
             continue
+        # Le journal est relu ICI, au moment d'écrire — et non pas seulement
+        # au moment d'enfiler, comme le fait `ops.py::_executer`. Entre les
+        # deux instants, la séance a pu recevoir un event_id (saisie
+        # manuelle, réconciliation du journal) : partir quand même sur une
+        # création poserait un SECOND événement à côté du premier. L'écart
+        # était théorique tant que la file se vidait en quelques secondes ;
+        # il ne l'est plus depuis qu'elle a stagné plusieurs jours.
+        # `creer_manquants` avec un `event_id` non nul modifie l'existant au
+        # lieu de créer (cf. `charge_utile`).
+        journal_actuel = doc.get("journal") if isinstance(doc.get("journal"), dict) else {}
+        row_connu = journal_actuel.get(sid_job)
+        eid_connu = _event_id(row_connu) if isinstance(row_connu, dict) else None
+
         group_id = _group_id_pour(page, entree, job.get("group_id"))
         ids = _ids_pour(page, entree)
         masque = _masque_pour(entree)
@@ -296,6 +309,7 @@ def _consommer_file(
             methode=methodes.methode_ecriture,
             base=base,
             production_autorisee=production_autorisee,
+            event_id=eid_connu or 0,
         )
         for sid, eid in resultat.crees:
             marquer_saisi(entree, event_id=eid, group_id=group_id)
