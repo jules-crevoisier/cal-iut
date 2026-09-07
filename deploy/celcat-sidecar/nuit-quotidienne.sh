@@ -45,6 +45,19 @@ cd /app
 MARQUEUR=/app/data/state/celcat_nuit_dernier_passage.txt
 RYTHME_TEMPS_REEL=30
 
+# RECUL PROGRESSIF SUR ÉCHEC (07/09/2026). Depuis que les scripts RENDENT le
+# VPN en sortant (`reseau.acces`), chaque tour qui a du travail rouvre une
+# session sur la passerelle. Tant que tout va bien c'est sans conséquence :
+# la file est vide la plupart du temps et le script sort alors sans toucher
+# au réseau. Mais un job qui échoue RESTE en file (`file_attente.py::
+# retirer_traites` ne retire que les jobs traités) : à rythme fixe, un seul
+# job durablement bloqué produirait 2880 authentifications par jour avec le
+# compte partagé — le plus sûr moyen de le faire verrouiller, c'est-à-dire
+# de reproduire en pire la panne qu'on répare. On double donc l'attente à
+# chaque échec, jusqu'à une demi-heure, et on revient au rythme nominal dès
+# le premier succès.
+RECUL_MAX=1800
+
 # Filet de sécurité seulement : l'image bake déjà le paquet au build
 # (Dockerfile). Utile si ce script tourne monté par-dessus une image plus
 # ancienne pendant une itération manuelle.
@@ -52,14 +65,23 @@ pip install --quiet -e . >/dev/null 2>&1 || true
 
 echo "[$(date -Is)] démarrage — marqueur : $(cat "$MARQUEUR" 2>/dev/null || echo '(aucun)')"
 
+attente=$RYTHME_TEMPS_REEL
+
 while true; do
+  tour_ok=1
+
   # --- (1) temps réel : la file d'attente (create/update/delete), à
   # chaque tour. `celcat_immediat.py` se termine tout de suite sans VPN si
   # la file est vide — coût quasi nul dans le cas courant. -----------------
   if python3 scripts/celcat_immediat.py --ecrire --vpn --production --base URCA_2026; then
     :
   else
-    echo "[$(date -Is)] drainage temps réel — ÉCHEC (code $?), on retentera au tour suivant"
+    # Code capturé AVANT le `date` du message : dans un `echo "$(date) $?"`,
+    # bash exécute la substitution de commande d'abord et `$?` rapporterait
+    # alors le succès de `date`, jamais l'échec qu'on veut journaliser.
+    code=$?
+    tour_ok=0
+    echo "[$(date -Is)] drainage temps réel — ÉCHEC (code ${code})"
   fi
 
   # --- (2) une fois par jour : semaines validées + extras. -----------------
@@ -73,9 +95,20 @@ while true; do
       echo "$aujourdhui" > "$MARQUEUR"
     else
       code=$?
-      echo "[$(date -Is)] job de nuit Celcat — ÉCHEC (code ${code}), on retentera au prochain tour"
+      tour_ok=0
+      echo "[$(date -Is)] job de nuit Celcat — ÉCHEC (code ${code})"
     fi
   fi
 
-  sleep "$RYTHME_TEMPS_REEL"
+  if [ "$tour_ok" -eq 1 ]; then
+    attente=$RYTHME_TEMPS_REEL
+  else
+    attente=$(( attente * 2 ))
+    if [ "$attente" -gt "$RECUL_MAX" ]; then
+      attente=$RECUL_MAX
+    fi
+    echo "[$(date -Is)] prochaine tentative dans ${attente}s"
+  fi
+
+  sleep "$attente"
 done

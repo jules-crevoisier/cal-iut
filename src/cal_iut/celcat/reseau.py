@@ -17,7 +17,20 @@ Trois niveaux, du plus sûr au plus automatique :
    que Celcat n'est pas joignable.
 2. `connecter()` — monte le VPN via `vpncli.exe`, le CLI livré avec le
    client. Sur option explicite seulement.
-3. `deconnecter()` — ne coupe que ce que l'outil a lui-même monté.
+3. `deconnecter()` — coupe le tunnel, sans distinguer qui l'a monté.
+4. `acces(url, monter_le_vpn=…)` — le geste complet, et celui à préférer
+   dans un script automatisé : monte si besoin, rend TOUJOURS ce qu'il a
+   monté en sortant, ne touche JAMAIS à un tunnel trouvé déjà en place.
+
+Sur ce dernier point (retour utilisateur 07/09/2026 : « quand on a pas
+besoin de faire des actions dessus, le VPN se désactive »). Le VPN et
+Celcat partagent le même compte, et la passerelle URCA n'accorde qu'une
+session à la fois : un tunnel que le robot garde monté pour rien est une
+session que l'utilisateur ne peut plus ouvrir lui-même. Le sidecar montait
+et ne rendait jamais — `deconnecter()` n'avait aucun appelant. D'où le
+contrat inverse, et son revers tout aussi important : sur le poste
+Windows, raccrocher un tunnel qu'on n'a pas monté couperait l'AnyConnect
+de l'utilisateur en pleine session.
 
 Sur l'authentification à deux facteurs : si la passerelle en demande une,
 `connecter()` reste utilisable — le processus attend pendant que
@@ -38,7 +51,9 @@ import socket
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -72,6 +87,11 @@ class Diagnostic:
     joignable: bool
     detail: str
     vpn_monte: bool | None = None
+    # Vrai UNIQUEMENT si c'est cet appel qui a monté le tunnel. À ne pas
+    # confondre avec `vpn_monte`, qui dit seulement qu'un tunnel est là —
+    # peut-être celui que l'utilisateur a ouvert à la main. Seul ce
+    # drapeau-ci autorise à raccrocher.
+    monte_par_nous: bool = False
 
     def __bool__(self) -> bool:
         return self.joignable
@@ -361,5 +381,35 @@ def exiger_acces(url: str, *, monter_le_vpn: bool = False) -> Diagnostic:
             raise AccesIndisponible(f"{diagnostic.detail} {montage.detail}")
         diagnostic = attendre_acces(url)
         if diagnostic:
-            return diagnostic
+            return replace(diagnostic, monte_par_nous=True)
+        # Tunnel établi, Celcat muet quand même (service en panne DERRIÈRE
+        # le VPN). On lève — mais pas sans rendre d'abord la session : elle
+        # ne sert plus à rien et personne d'autre ne peut la rendre, l'appel
+        # levant n'ayant jamais reçu de quoi savoir qu'un tunnel existe.
+        deconnecter()
     raise AccesIndisponible(diagnostic.detail)
+
+
+@contextmanager
+def acces(url: str, *, monter_le_vpn: bool = False, raccrocher: bool = True) -> Iterator[Diagnostic]:
+    """Garantit l'accès le temps du bloc, puis rend ce qu'il a pris.
+
+    À préférer à `exiger_acces` partout où le programme n'est pas piloté par
+    quelqu'un devant l'écran : c'est ici, et pas dans chaque script, que
+    tient la garantie « le VPN ne reste pas monté pour rien ». Un `finally`
+    oublié dans un seul appelant suffirait sinon à retenir la session du
+    compte pour la journée.
+
+        with reseau.acces(url, monter_le_vpn=True):
+            ...  # saisie Celcat
+
+    `raccrocher=False` garde le tunnel : utile pour enchaîner à la main
+    plusieurs scripts d'enquête sans repayer une authentification à la
+    passerelle à chaque commande.
+    """
+    diagnostic = exiger_acces(url, monter_le_vpn=monter_le_vpn)
+    try:
+        yield diagnostic
+    finally:
+        if raccrocher and diagnostic.monte_par_nous:
+            deconnecter()

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parents[1]
@@ -75,27 +76,40 @@ def principal() -> int:
             file=sys.stderr,
         )
         return 2
-    diag = reseau.exiger_acces(url, monter_le_vpn=args.vpn) if args.vpn else reseau.verifier(url)
-    if not getattr(diag, "joignable", False):
-        print(f"Celcat injoignable : {diag.detail}", file=sys.stderr)
+    # Le tunnel est rendu en sortant du bloc : le job de nuit dure quelques
+    # minutes, la session du compte partagé ne doit pas rester prise les
+    # ~23 heures restantes (cf. `reseau.acces`).
+    contexte = reseau.acces(url, monter_le_vpn=True) if args.vpn else nullcontext(reseau.verifier(url))
+    try:
+        with contexte as diag:
+            if not getattr(diag, "joignable", False):
+                print(f"Celcat injoignable : {diag.detail}", file=sys.stderr)
+                return 3
+
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as p:
+                navigateur = p.chromium.launch(headless=True)
+                page = navigateur.new_page(viewport={"width": 1920, "height": 1080})
+                try:
+                    print(f"Connexion {args.base} rôle {args.role}…")
+                    nav.connexion(page, base=args.base, role=args.role)
+                    executer_job_nuit(page=page, base=args.base, production_autorisee=args.production)
+                    print(
+                        "job nuit : file d'attente consommée (create/update/delete) "
+                        "+ extras mis à jour"
+                    )
+                finally:
+                    try:
+                        nav.deconnexion(page)
+                    except Exception:  # noqa: BLE001, S110
+                        pass
+                    navigateur.close()
+    except reseau.AccesIndisponible as exc:
+        print(f"Celcat injoignable : {exc}", file=sys.stderr)
         return 3
-
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as p:
-        navigateur = p.chromium.launch(headless=True)
-        page = navigateur.new_page(viewport={"width": 1920, "height": 1080})
-        try:
-            print(f"Connexion {args.base} rôle {args.role}…")
-            nav.connexion(page, base=args.base, role=args.role)
-            executer_job_nuit(page=page, base=args.base, production_autorisee=args.production)
-            print("job nuit : file d'attente consommée (create/update/delete) + extras mis à jour")
-        finally:
-            try:
-                nav.deconnexion(page)
-            except Exception:  # noqa: BLE001, S110
-                pass
-            navigateur.close()
+    if getattr(diag, "monte_par_nous", False):
+        print("VPN rendu (session libérée pour le compte partagé)")
     return 0
 
 
