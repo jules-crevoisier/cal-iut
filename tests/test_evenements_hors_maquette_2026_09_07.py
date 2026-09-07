@@ -111,6 +111,51 @@ def test_creer_un_evenement_sur_un_creneau_libre_sans_matiere_connue(monter):
     assert seance.metadata.get("evenement") is True
 
 
+def test_un_evenement_est_exempte_du_verrou_institutionnel_jeudi_apres_midi_pac(monter):
+    """Retour utilisateur 07/09/2026 : « il faut créer un faux cours pour
+    afficher les séances bloquées » — un évènement REPRÉSENTE un créneau
+    officiellement bloqué (ex. « Echange IA », déjà connu de
+    `contraintes/10_dates_fixes.json`), il n'empiète sur rien. Le jeudi
+    après-midi (PAC, non-FC) est bloqué pour une séance NORMALE — vérifié en
+    creux ici via une matière réelle qui, elle, doit rester refusée."""
+    from cal_iut.models.entities import Course, Teacher, TeacherBlock
+
+    a = _seance("a")
+    prof = Teacher(code="MRI", nom="Riguet", prenom="Marine")
+    cours = Course(
+        code="WR101", name="Cours existant", semestre="S1", parcours="BUT1", annee="BUT1",
+        lead=prof, profs=[TeacherBlock(teacher=prof, block="1", td=17, nbGpTd=1, nbGpTp=1)],
+        volumes={"cm": 0, "td": 17, "tp": 0}, groupes_td=1, groupes_tp=1,
+        progression_defined=False, seance_sequence=[], ordonnancement=[],
+    )
+    client = monter([(a, _place(a, 0, 0))], courses=[cours])
+
+    # Un évènement : accepté malgré le jeudi après-midi.
+    r = client.post("/placements/evenements", json=_corps_creation(day=3, slot=3, duration_slots=1))
+    assert r.status_code == 200, r.text
+
+    # Une séance normale sur le MÊME créneau : toujours refusée, verrou intact.
+    from cal_iut.models.session import SessionToPlace
+
+    b = SessionToPlace(
+        id="b", course_code="WR101", course_name="Cours existant", semestre="S1",
+        parcours="BUT1", annee="BUT1", session_type=SessionType.TD, sequence_order=1,
+        group_ids=["but1-promo"], teacher_codes=["MRI"], duration_slots=1,
+    )
+    get_state().sessions.append(b)
+    get_state().sessions_by_id["b"] = b
+    r = client.post(
+        "/placements/personnalisees",
+        json={
+            "course_code": "WR101", "session_type": "TD", "group_ids": ["but1-promo"],
+            "teacher_codes": ["MRI"], "duration_slots": 1, "week": SEMAINE, "day": 3, "slot": 4,
+            "force": True,
+        },
+    )
+    assert r.status_code == 409
+    assert "institutionnellement bloqué" in r.text
+
+
 def test_le_libelle_est_translitere_en_code_lisible(monter):
     a = _seance("a")
     client = monter([(a, _place(a, 0, 0))])
