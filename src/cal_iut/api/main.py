@@ -1998,10 +1998,28 @@ def _conflits_deplacement(
       déclarée : signalés systématiquement, mais `force=True` les lève.
     """
     extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
-    institutional = _institutional_violations(
-        week, day, slot, extra_blocked,
-        _libelle_jour_ferme(state, session.semestre, week, day),
-    )
+    # Un évènement hors maquette (`metadata["evenement"]`, cf.
+    # `POST /placements/evenements`) est exempté du verrou institutionnel —
+    # retour utilisateur 07/09/2026 : « il faut créer un faux cours pour
+    # afficher les séances bloquées ». Le verrou existe pour empêcher un VRAI
+    # cours d'empiéter sur un créneau officiellement bloqué (PAC, SAE,
+    # évènement du planning officiel...) ; un évènement créé exprès pour
+    # REPRÉSENTER cet évènement officiel n'empiète sur rien, il EST la chose
+    # que le verrou protège — sans quoi rien ne pourrait jamais rendre visible
+    # un évènement déjà connu (ex. « Echange IA », 08/09/2026, H.018, cf.
+    # `contraintes/10_dates_fixes.json`).
+    # `getattr(..., "metadata", None)` : certains appelants (aperçu MCP,
+    # `mcp/tools.py::_evaluer_custom_create`) évaluent une séance qui
+    # n'existe pas encore avec un simple `SimpleNamespace` sans `metadata`
+    # du tout — jamais une séance qui REPRÉSENTE un évènement officiel dans
+    # ce cas, donc jamais exemptée, mais surtout jamais une AttributeError.
+    if (getattr(session, "metadata", None) or {}).get("evenement"):
+        institutional: list[str] = []
+    else:
+        institutional = _institutional_violations(
+            week, day, slot, extra_blocked,
+            _libelle_jour_ferme(state, session.semestre, week, day),
+        )
     forceable = _pedagogical_order_violations(week, day, slot, extra_blocked_pedago, allowed_weeks)
     forceable += _teacher_availability_violations(state, session, week, day, slot)
     return institutional, forceable
