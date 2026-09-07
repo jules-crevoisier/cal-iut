@@ -38,7 +38,7 @@ le fuseau qui porte la règle, pas nous.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 TZID = "Europe/Paris"
 
@@ -89,6 +89,22 @@ class IcsItem:
     updated_at: datetime | None = None
 
 
+@dataclass
+class IcsAllDayItem:
+    """Repère JOURNÉE(S) ENTIÈRE(S), sans horaire — une fenêtre SAE
+    (`SaeWindow`), jamais une réservation de créneau : retour utilisateur
+    07/09/2026 « les SAE il faut que ça remonte » dans l'EDT/ICS. De vraies
+    séances WS* viennent s'y placer plus tard, à leurs propres horaires —
+    cet item-ci ne les remplace ni ne les bloque, il donne juste le
+    contexte (« c'est une semaine de projet ») à qui consulte son agenda."""
+
+    key: str  # UID stable : course_code de la fenêtre
+    title: str
+    date_start: str  # ISO, premier jour INCLUS
+    date_end: str  # ISO, dernier jour INCLUS (la RFC 5545 veut l'exclusif : géré ici)
+    description: str = ""
+
+
 def _ics_escape(text: str) -> str:
     return str(text).replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n")
 
@@ -119,6 +135,7 @@ def build_ics(
     uid_prefix: str,
     group_labels: dict[str, str],
     teacher_labels: dict[str, str],
+    all_day_items: list[IcsAllDayItem] | None = None,
 ) -> str:
     lines = [
         "BEGIN:VCALENDAR",
@@ -183,5 +200,25 @@ def build_ics(
                 "LAST-MODIFIED:" + horodatage.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             )
         lines.append("END:VEVENT")
+
+    for it in all_day_items or []:
+        debut = date.fromisoformat(it.date_start)
+        # DTEND EXCLUSIF pour un évènement journée entière (RFC 5545) : le
+        # lendemain du dernier jour, pas le dernier jour lui-même — sans ça,
+        # une fenêtre d'un seul jour (`date_start == date_end`) s'afficherait
+        # comme durant zéro jour dans la plupart des agendas.
+        fin_exclusive = date.fromisoformat(it.date_end) + timedelta(days=1)
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{uid_prefix}-sae-{it.key}@cal-iut",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;VALUE=DATE:{debut.strftime('%Y%m%d')}",
+            f"DTEND;VALUE=DATE:{fin_exclusive.strftime('%Y%m%d')}",
+            f"SUMMARY:{_ics_escape(it.title)}",
+            f"DESCRIPTION:{_ics_escape(it.description)}",
+            "TRANSP:TRANSPARENT",  # n'occupe pas le créneau dans les vues "disponibilité"
+            "END:VEVENT",
+        ]
+
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines)

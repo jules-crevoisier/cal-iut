@@ -157,6 +157,26 @@ def test_flux_groupe_fusionne_la_cohorte(etat_avec_seances) -> None:
     assert "WR999" not in corps
 
 
+def test_flux_groupe_contient_les_fenetres_sae_du_parcours_en_journee_entiere(
+    etat_avec_seances,
+) -> None:
+    """Retour utilisateur 07/09/2026 : « les SAE il faut que ça remonte »
+    dans l'EDT/ICS — une fenêtre SAE (WS101, BUT1, 20-23/10/2026 réel) doit
+    apparaître comme un VEVENT journée entière (`VALUE=DATE`, DTEND
+    EXCLUSIF donc 24/10), jamais comme une réservation horaire."""
+    corps = client.get("/ics/groupe/but1-promo.ics?t=but1-promo").text
+    assert "SAE WS101" in corps
+    assert "DTSTART;VALUE=DATE:20261020" in corps
+    assert "DTEND;VALUE=DATE:20261024" in corps  # exclusif : lendemain du dernier jour (23/10)
+
+
+def test_flux_groupe_ne_contient_pas_les_fenetres_sae_d_un_autre_parcours(
+    etat_avec_seances,
+) -> None:
+    corps = client.get("/ics/groupe/but1-promo.ics?t=but1-promo").text
+    assert "SAE WS501D" not in corps  # BUT3, pas BUT1
+
+
 def test_flux_groupe_inconnu_donne_un_404(etat_avec_seances) -> None:
     reponse = client.get("/ics/groupe/inconnu.ics?t=inconnu")
     assert reponse.status_code == 404

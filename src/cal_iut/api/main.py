@@ -1484,6 +1484,34 @@ def _ics_items_for_placements(state: object, placements: list) -> list:
     return items
 
 
+def _ics_all_day_sae_items(state: object, parcours: str | None) -> list:
+    """`IcsAllDayItem` par fenêtre SAE du `parcours` donné (ou sans parcours
+    déclaré) — retour utilisateur 07/09/2026 : « les SAE il faut que ça
+    remonte » dans l'EDT/ICS. Jamais une réservation de créneau (cf.
+    `IcsAllDayItem`) : de vraies séances WS* viennent s'y placer plus tard,
+    à leurs propres horaires, sans lien avec cet item purement indicatif."""
+    from cal_iut.api.ics_feed import IcsAllDayItem
+    from cal_iut.ingestion.planning_loader import load_mmi_planning_for_semestres
+
+    planning = load_mmi_planning_for_semestres(state.config_dir.parents[1], [])
+    items = []
+    for window in planning.sae_windows:
+        if window.parcours is not None and window.parcours != parcours:
+            continue
+        if not window.dates:
+            continue
+        code = window.course_codes[0] if window.course_codes else window.label
+        groupes = f" ({', '.join(window.group_labels)})" if window.group_labels else ""
+        items.append(IcsAllDayItem(
+            key=code,
+            title=f"SAE {window.label}{groupes}",
+            date_start=min(window.dates).isoformat(),
+            date_end=max(window.dates).isoformat(),
+            description=f"Semaine de projet/évaluation SAE — {window.label}",
+        ))
+    return items
+
+
 def _ics_placements_updated_at(state: object) -> dict[str, object]:
     """`session_id -> updated_at`, lu en UNE fois — même source que
     `_ics_items_for_placements` (`CurrentPlacement`), factorisé ici pour
@@ -1609,9 +1637,11 @@ def ics_groupe(group_id: str) -> Response:
     noms = _noms_enseignants(state)
     group_labels = {g.id: g.label for g in state.groups}
     label = group_labels.get(group_id, group_id)
+    parcours = next((g.parcours for g in state.groups if g.id == group_id), None)
+    sae_items = _ics_all_day_sae_items(state, parcours)
     from cal_iut.api.ics_feed import build_ics
 
-    content = build_ics(items, label, f"groupe-{group_id}", group_labels, noms)
+    content = build_ics(items, label, f"groupe-{group_id}", group_labels, noms, sae_items)
     return Response(
         content=content, media_type="text/calendar; charset=utf-8",
         headers={
