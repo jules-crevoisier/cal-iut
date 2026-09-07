@@ -239,11 +239,19 @@ def connecter(
     if outil == "openconnect":
         return _connecter_openconnect(exe, passerelle, utilisateur, mot_de_passe, groupe, delai)
 
-    # `vpncli` pose ses questions dans l'ordre : groupe (si la passerelle en
-    # propose plusieurs), identifiant, mot de passe, éventuel second facteur,
-    # puis la bannière à accepter. Les lignes vides sautent une question qui
-    # n'est pas posée — d'où un script tolérant plutôt qu'un dialogue exact.
-    reponses = "\n".join([groupe, utilisateur, mot_de_passe, code, "y", ""])
+    # `vpncli` pose ses questions dans l'ordre : groupe (SEULEMENT si la
+    # passerelle en propose plusieurs), identifiant, mot de passe, éventuel
+    # second facteur, puis la bannière à accepter.
+    #
+    # La ligne du groupe n'est envoyée QUE s'il y en a un. Une ligne vide ne
+    # « saute » pas une question non posée : elle répond à la question
+    # SUIVANTE en acceptant son défaut. La passerelle URCA ne propose qu'un
+    # groupe et commence donc par « Username: » — envoyer une ligne vide y
+    # validait le nom d'utilisateur mémorisé par AnyConnect, puis
+    # l'identifiant partait comme MOT DE PASSE. Tout le dialogue glissait
+    # d'un cran, et l'échec ressemblait à s'y méprendre à un problème
+    # d'identifiants (« Login failed », constaté le 07/09/2026).
+    reponses = "\n".join(([groupe] if groupe else []) + [utilisateur, mot_de_passe, code, "y", ""])
     try:
         acheve = subprocess.run(
             [str(exe), "-s", "connect", passerelle],

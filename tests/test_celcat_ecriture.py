@@ -21,7 +21,12 @@ IDS = {
     "module_id": 601106,
     "room_id": 104105,
     "staff_id": 603001,
-    "event_cat_id": 850,
+    # 433 = [TD], l'identifiant RÉEL relevé sur URCA_2026, cohérent avec le
+    # `type_seance_nom="TD"` de `_entree()`. Ce n'est plus une valeur
+    # d'exemple depuis que `CATEGORIE_IDS` connaît les trois types : le
+    # garde-fou d'écriture refuse une charge dont la catégorie ne correspond
+    # pas au type (l'ancien 850 est « Travail en groupe » au catalogue).
+    "event_cat_id": 433,
     "dept_id": 610029,
 }
 
