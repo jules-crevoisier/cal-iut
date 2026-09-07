@@ -38,6 +38,15 @@ RUN pip install --no-cache-dir -e . playwright==1.55.0 python-dotenv httpx pyyam
 
 COPY scripts/ scripts/
 COPY data/config/ data/config/
+# `contraintes/` comme dans le Dockerfile principal : sans lui, le
+# calendrier retombe sur la copie codée en dur de `calendar/academic.py`
+# (avertissement à chaque démarrage, constaté en production le 07/09/2026).
+# Les deux calendriers coïncident aujourd'hui — vérifié, 38 lundis
+# identiques — donc rien n'était faux ; mais faire dépendre les DATES d'un
+# planning d'un repli explicitement documenté comme « potentiellement
+# obsolète » ne tient que jusqu'à la prochaine modification du calendrier
+# officiel, qui ne serait alors vue que par le backend.
+COPY contraintes/ contraintes/
 COPY deploy/celcat-sidecar/nuit-quotidienne.sh deploy/celcat-sidecar/nuit-quotidienne.sh
 
 ENV PYTHONUNBUFFERED=1

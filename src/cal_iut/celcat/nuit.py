@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -212,16 +213,58 @@ def _group_id_pour(page: Any, entree: Any, group_id_connu: object) -> int:
         return 0
 
 
+@dataclass
+class BilanDrainage:
+    """Ce qu'un passage de drainage a VRAIMENT fait.
+
+    Existe parce que son absence a coûté cher (07/09/2026) : `_consommer_
+    file` ne lisait que les succès, et le worker a répété « file d'attente
+    drainée » toutes les minutes pendant des jours sans jamais réussir une
+    seule écriture. Une panne totale et une file vide produisaient la même
+    ligne de journal — la panne n'a été découverte que par trois
+    signalements humains (un cours déplacé resté à son ancienne heure, une
+    séance annulée toujours affichée, une catégorie fausse).
+
+    `__bool__` rend « il y avait quelque chose à faire », ce que renvoyait
+    l'ancien booléen : un appelant qui ne s'intéresse qu'à ça n'a rien à
+    changer.
+    """
+
+    en_attente: int = 0
+    reussis: int = 0
+    echecs: list[tuple[str, str]] = field(default_factory=list)
+    ignores: list[tuple[str, str]] = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return self.en_attente > 0
+
+    def resume(self) -> str:
+        if not self.en_attente:
+            return "file d'attente vide"
+        parts = [f"{self.en_attente} job(s)", f"{self.reussis} réussi(s)"]
+        if self.echecs:
+            detail = "; ".join(f"{sid} : {motif}" for sid, motif in self.echecs[:3])
+            parts.append(f"{len(self.echecs)} en échec ({detail})")
+        if self.ignores:
+            detail = "; ".join(f"{sid} : {motif}" for sid, motif in self.ignores[:3])
+            parts.append(f"{len(self.ignores)} ignoré(s) ({detail})")
+        return " — ".join(parts)
+
+
 def _consommer_file(
     page: Any, doc: dict[str, Any], *, base: str, production_autorisee: bool
-) -> None:
+) -> BilanDrainage:
     """Draine `file_attente.lister()` et appelle la primitive RPC adaptée à
     chaque job (create/update/delete). Un job traité (succès OU refus de
     garde-fou) est retiré de la file ; un job en échec RPC/réseau y reste
-    pour la prochaine nuit — jamais un `vider()` global."""
+    pour la prochaine nuit — jamais un `vider()` global.
+
+    Rend un `BilanDrainage` : ce qui a échoué compte autant que ce qui a
+    réussi, et rester muet sur les échecs revient à les cacher."""
     jobs = lister()
+    bilan = BilanDrainage(en_attente=len(jobs))
     if not jobs:
-        return
+        return bilan
 
     state = get_state()
     entrees = entrees_pour_state(state)
@@ -233,8 +276,13 @@ def _consommer_file(
     for job in jobs:
         if job.get("action") != "create":
             continue
-        entree = entrees.get(str(job.get("session_id") or ""))
+        sid_job = str(job.get("session_id") or "")
+        entree = entrees.get(sid_job)
         if entree is None:
+            # Le job restera en file sans jamais pouvoir être traité : le
+            # nommer est le minimum, sans quoi il tourne indéfiniment en
+            # silence (c'était le cas avant le 07/09/2026).
+            bilan.ignores.append((sid_job, "séance inconnue de la maquette"))
             continue
         group_id = _group_id_pour(page, entree, job.get("group_id"))
         ids = _ids_pour(page, entree)
@@ -252,6 +300,8 @@ def _consommer_file(
         for sid, eid in resultat.crees:
             marquer_saisi(entree, event_id=eid, group_id=group_id)
             a_retirer.append(job)
+            bilan.reussis += 1
+        bilan.echecs.extend(resultat.echecs)
 
     # --- update : un seul lot, ElementModification porte déjà ses propres
     # ids/masque/group_id (contrairement à creer_manquants). ---------------
@@ -264,6 +314,14 @@ def _consommer_file(
         entree = entrees.get(sid)
         eid = job.get("event_id")
         if entree is None or eid in (None, ""):
+            bilan.ignores.append(
+                (
+                    sid,
+                    "séance inconnue de la maquette"
+                    if entree is None
+                    else "aucun event_id dans le job",
+                )
+            )
             continue
         group_id = _group_id_pour(page, entree, job.get("group_id"))
         elements_m.append(
@@ -290,9 +348,11 @@ def _consommer_file(
             if job is None:
                 continue
             a_retirer.append(job)
+            bilan.reussis += 1
             entree = entrees.get(sid)
             if entree is not None:
                 marquer_saisi(entree, event_id=eid, group_id=gid_par_session.get(sid))
+        bilan.echecs.extend(resultat_m.echecs)
 
     # --- delete : group_id vient du job (row.get("group_id")), jamais résolu
     # ici — c'est `ops.py` qui le pose à l'enfilage. ------------------------
@@ -320,13 +380,20 @@ def _consommer_file(
             job = jobs_s.get(sid)
             if job is not None:
                 a_retirer.append(job)
-        for sid, _motif in resultat_s.refusees:
+                bilan.reussis += 1
+        for sid, motif in resultat_s.refusees:
             job = jobs_s.get(sid)
             if job is not None:
                 a_retirer.append(job)
+            # Refus d'un garde-fou : le job SORT de la file (le retenter
+            # donnerait le même refus), mais il n'a rien changé dans Celcat
+            # — le compter comme réussi masquerait une suppression qui
+            # n'aura jamais lieu.
+            bilan.ignores.append((sid, f"suppression refusée : {motif}"))
 
     if a_retirer:
         retirer_traites(a_retirer)
+    return bilan
 
 
 def drainer_file_immediate(
@@ -342,16 +409,16 @@ def drainer_file_immediate(
     `deploy/celcat-sidecar/nuit-quotidienne.sh`), qui la vide en quelques
     secondes plutôt qu'à la prochaine bascule de jour.
 
-    Retourne True si des jobs étaient en attente (donc si la connexion
-    Live valait le coût) — permet à l'appelant de sauter la connexion VPN
-    quand il n'y a rien à faire."""
+    Rend un `BilanDrainage`, vrai au sens booléen s'il y avait des jobs en
+    attente (donc si la connexion Live valait le coût) — l'appelant qui ne
+    veut que cette information n'a rien à changer, celui qui journalise
+    dispose enfin du détail des échecs."""
     doc = charger()
     if not doc.get("saisie_active"):
-        return False
+        return BilanDrainage()
     if not lister():
-        return False
-    _consommer_file(page, doc, base=base, production_autorisee=production_autorisee)
-    return True
+        return BilanDrainage()
+    return _consommer_file(page, doc, base=base, production_autorisee=production_autorisee)
 
 
 def executer_job_nuit(
