@@ -42,6 +42,16 @@ def principal() -> int:
         print("saisie inactive — rien à faire")
         return 0
 
+    # INDISPENSABLE avant tout drainage : `get_state()` rend un état VIDE
+    # tant que personne ne l'a peuplé, et `startup()` (qui s'en charge côté
+    # API) n'est jamais exécuté ici. Sans cet appel, `entrees_pour_state()`
+    # ne connaît aucune séance et TOUS les jobs sont écartés comme
+    # « inconnus de la maquette » — sans erreur, sans exception : c'est
+    # exactement ce qui a bloqué 463 écritures Celcat jusqu'au 07/09/2026.
+    from cal_iut.api.main import charger_etat_applicatif
+
+    charger_etat_applicatif()
+
     # Vérification SANS VPN : pas la peine de monter une connexion Live
     # pour une file vide, c'est le cas le plus fréquent entre deux
     # déplacements de séance.

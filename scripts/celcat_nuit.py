@@ -46,6 +46,14 @@ def principal() -> int:
         print("saisie inactive — rien à faire")
         return 0
 
+    # Même raison que dans `celcat_immediat.py` : sans état chargé,
+    # `executer_job_nuit` ne voit AUCUN placement, n'enfile donc rien — et
+    # marque malgré tout les semaines comme `semaines_lancees`. Le planning
+    # passait ainsi pour poussé alors que Celcat n'avait rien reçu.
+    from cal_iut.api.main import charger_etat_applicatif
+
+    charger_etat_applicatif()
+
     if args.ecrire and args.base == nav.BASE_PRODUCTION and not args.production:
         print("refus : URCA_2026 exige --production", file=sys.stderr)
         return 2

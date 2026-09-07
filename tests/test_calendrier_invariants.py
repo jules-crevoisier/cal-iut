@@ -35,6 +35,20 @@ indices_semaine = st.integers(min_value=0, max_value=max(0, len(CAL.teaching_mon
 jours = st.integers(min_value=0, max_value=DAYS_PER_WEEK - 1)
 dates_annee = st.dates(min_value=date(2026, 8, 1), max_value=date(2027, 8, 31))
 
+# Week-ends tirés DIRECTEMENT, plutôt qu'obtenus en filtrant `dates_annee`
+# avec `assume(d.weekday() > 4)` : cinq tirages sur sept étaient alors
+# jetés, et Hypothesis a fini par refuser de générer (health check
+# « filter_too_much », échec aléatoire selon la graine — constaté le
+# 07/09/2026 sur la graine 25467291925349563133906358927224376088). Le
+# calendrier n'y était pour rien : le test échouait AVANT d'être exécuté.
+# On décale vers le samedi de la même semaine, plus 0 ou 1 jour pour
+# couvrir aussi le dimanche.
+week_ends = st.builds(
+    lambda d, sur_dimanche: d + timedelta(days=(5 - d.weekday()) % 7 + sur_dimanche),
+    dates_annee,
+    st.integers(min_value=0, max_value=1),
+)
+
 
 # ==========================================================================
 # Aller-retour date <-> (semaine, jour)
@@ -69,10 +83,10 @@ def test_le_jour_rendu_correspond_au_vrai_jour_de_la_semaine(semaine: int, jour:
     assert d.weekday() == jour
 
 
-@given(dates_annee)
+@given(week_ends)
 @_reglage
 def test_un_week_end_n_est_jamais_placable(d: date):
-    assume(d.weekday() > 4)
+    assert d.weekday() > 4, "la stratégie ne doit produire que des samedis et dimanches"
     assert CAL.date_to_week_day_any(d) is None
     assert CAL.date_to_week_day(d) is None
 

@@ -642,6 +642,26 @@ def startup() -> None:
             "`_PUBLIC_PATHS` si l'accès public est VOULU."
         )
 
+    charger_etat_applicatif()
+
+
+def charger_etat_applicatif() -> None:
+    """Peuple l'état applicatif : maquette, groupes, salles, contraintes,
+    calendrier, puis le dernier planning enregistré.
+
+    PAS seulement pour l'API. `state.py` expose un `_state = AppState()`
+    VIDE au chargement du module ; c'est cette fonction qui le remplit, et
+    tout process qui appelle `get_state()` sans l'avoir appelée travaille
+    sur du vide — sans la moindre erreur pour le lui dire.
+
+    C'est ce qui est arrivé au worker Celcat jusqu'au 07/09/2026 : le
+    sidecar ne démarre aucune application web, donc `startup()` n'était
+    jamais exécuté chez lui. `entrees_pour_state()` ne trouvait rien, et
+    ses 463 jobs en attente étaient tous écartés comme « séance inconnue
+    de la maquette » — pendant que le planning en ligne, lui, était juste.
+    D'où ce point d'entrée commun, appelé aussi par `scripts/
+    celcat_immediat.py` et `scripts/celcat_nuit.py`.
+    """
     state = get_state()
     state.config_dir = CONFIG_DIR
     state.groups = load_groups(CONFIG_DIR)
