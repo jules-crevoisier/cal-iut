@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
-# Boucle de service : draine la file Celcat (create/update/delete) et scanne
-# les extras une fois par jour, dès que 00h00 UTC est passé.
+# Boucle de service : deux rythmes distincts.
+#   1) TEMPS RÉEL (~30s) : draine la file create/update/delete dès qu'elle
+#      n'est pas vide (retour utilisateur 07/09/2026 : « sur les update on
+#      veut tenter en temps réel, pas la nuit »). Vérification locale (JSON,
+#      sans VPN) à chaque tour ; connexion Live seulement s'il y a vraiment
+#      quelque chose à pousser.
+#   2) UNE FOIS PAR JOUR (00h00 UTC passé) : balaie les semaines validées
+#      (enfile ce qui manque) et scanne les extras Live — c'est le vrai job
+#      de nuit, `scripts/celcat_nuit.py`, qui draine aussi la file au passage
+#      (filet de sécurité si le rythme temps réel a raté un job).
 #
 # RÉSISTANT AUX REDÉMARRAGES (corrigé le 06/09/2026) — la toute première
 # version calculait "dors jusqu'au PROCHAIN minuit" une seule fois au
@@ -15,10 +23,10 @@
 #
 # Le correctif : un MARQUEUR PERSISTANT (`data/state/celcat_nuit_dernier_
 # passage.txt`, dans le MÊME volume partagé que backend — survit à un
-# redémarrage) retient la dernière date déjà traitée. La boucle vérifie ce
-# marqueur toutes les 5 minutes plutôt que de dormir une fois pour toutes :
-# un redémarrage ne fait que ré-entrer dans la boucle et relire le
-# marqueur, jamais repartir sur un sommeil de 24h.
+# redémarrage) retient la dernière date déjà traitée pour le rythme (2).
+# Le rythme (1), lui, n'a pas besoin de marqueur : la file elle-même EST
+# l'état à traiter, un redémarrage la retrouve intacte dans le volume
+# partagé.
 #
 # Déployé comme service `celcat-nuit` dans `docker-compose.yml`, à côté de
 # `backend`/`frontend` — Dokploy le construit et le démarre automatiquement
@@ -35,6 +43,7 @@ set -euo pipefail
 cd /app
 
 MARQUEUR=/app/data/state/celcat_nuit_dernier_passage.txt
+RYTHME_TEMPS_REEL=30
 
 # Filet de sécurité seulement : l'image bake déjà le paquet au build
 # (Dockerfile). Utile si ce script tourne monté par-dessus une image plus
@@ -44,6 +53,16 @@ pip install --quiet -e . >/dev/null 2>&1 || true
 echo "[$(date -Is)] démarrage — marqueur : $(cat "$MARQUEUR" 2>/dev/null || echo '(aucun)')"
 
 while true; do
+  # --- (1) temps réel : la file d'attente (create/update/delete), à
+  # chaque tour. `celcat_immediat.py` se termine tout de suite sans VPN si
+  # la file est vide — coût quasi nul dans le cas courant. -----------------
+  if python3 scripts/celcat_immediat.py --ecrire --vpn --production --base URCA_2026; then
+    :
+  else
+    echo "[$(date -Is)] drainage temps réel — ÉCHEC (code $?), on retentera au tour suivant"
+  fi
+
+  # --- (2) une fois par jour : semaines validées + extras. -----------------
   aujourdhui=$(date -u +%Y-%m-%d)
   deja_fait=$(cat "$MARQUEUR" 2>/dev/null || echo "")
 
@@ -51,14 +70,12 @@ while true; do
     echo "[$(date -Is)] job de nuit Celcat — début (jour $aujourdhui, dernier passage : ${deja_fait:-jamais})"
     if python3 scripts/celcat_nuit.py --ecrire --vpn --production --base URCA_2026; then
       echo "[$(date -Is)] job de nuit Celcat — terminé"
+      echo "$aujourdhui" > "$MARQUEUR"
     else
       code=$?
-      echo "[$(date -Is)] job de nuit Celcat — ÉCHEC (code ${code}), on retentera dans 5 min"
-      sleep 300
-      continue
+      echo "[$(date -Is)] job de nuit Celcat — ÉCHEC (code ${code}), on retentera au prochain tour"
     fi
-    echo "$aujourdhui" > "$MARQUEUR"
   fi
 
-  sleep 300
+  sleep "$RYTHME_TEMPS_REEL"
 done
