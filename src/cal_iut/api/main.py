@@ -47,6 +47,9 @@ from cal_iut.api.schemas import (
     RegenRequest,
     RegenResultResponse,
     ResetPasswordRequest,
+    CalendrierSaeResponse,
+    SaeFenetreResponse,
+    SaeJourResponse,
     CelcatCompteurs,
     CelcatEntreeResponse,
     CelcatEtatResponse,
@@ -229,7 +232,7 @@ app.add_middleware(
 # buildés, favicon...) reste servi sans authentification : sans ça, le
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
-    "/admin", "/app-state", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
+    "/admin", "/app-state", "/calendrier", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
@@ -945,6 +948,57 @@ def timetable_view() -> HTMLResponse:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "version": "1.0.0"}
+
+
+@app.get("/calendrier/sae", response_model=CalendrierSaeResponse)
+def calendrier_sae(semestre: str = "") -> CalendrierSaeResponse:
+    """Fenêtres SAE (projet/éval, plusieurs jours COMPLETS, sans salle ni
+    horaire précis — cf. `SaeFenetreResponse`) — repère informatif pour
+    l'EDT, jamais une réservation : de vraies séances WS* viendront s'y
+    placer plus tard (retour utilisateur 07/09/2026). `semestre` vide =
+    toutes les SAE connues, tous semestres confondus.
+
+    `week_offset=0` volontairement : les `week` renvoyés sont ABSOLUS,
+    directement comparables à `PlacedSessionWithRoom.week` — S1/S3/S5
+    partagent de toute façon le même `semester_week_offset` (rentrée
+    commune du 31/08/2026), donc ce choix ne change rien pour eux ; S2/S4/S6
+    (rentrée du 01/02/2027) restent corrects puisque `date_to_week_day_any`
+    calcule l'index absolu à partir du calendrier, pas d'un offset supposé.
+    """
+    from cal_iut.ingestion.planning_loader import (
+        load_mmi_planning_for_semestres,
+        sae_windows_as_week_days,
+    )
+
+    state = get_state()
+    planning = load_mmi_planning_for_semestres(
+        state.config_dir.parents[1], [semestre] if semestre else []
+    )
+    n_weeks = len(state.calendar.teaching_mondays)
+    jours_par_code = sae_windows_as_week_days(
+        planning, state.calendar.date_to_week_day_any, 0, n_weeks
+    )
+
+    fenetres: list[SaeFenetreResponse] = []
+    for window in planning.sae_windows:
+        jours: set[tuple[int, int]] = set()
+        for code in window.course_codes:
+            jours |= jours_par_code.get(code, set())
+        if not jours:
+            continue
+        fenetres.append(
+            SaeFenetreResponse(
+                course_code=window.course_codes[0] if window.course_codes else window.label,
+                label=window.label,
+                parcours=window.parcours,
+                group_labels=list(window.group_labels) if window.group_labels else None,
+                jours=[
+                    SaeJourResponse(semaine=w, jour=d)
+                    for w, d in sorted(jours)
+                ],
+            )
+        )
+    return CalendrierSaeResponse(fenetres=fenetres)
 
 
 @app.get("/meta", response_model=MetaResponse)

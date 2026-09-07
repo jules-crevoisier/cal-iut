@@ -707,6 +707,29 @@ class CelcatExtraActionResponse(BaseModel):
     session_id: str | None = None
 
 
+class SaeJourResponse(BaseModel):
+    semaine: int
+    jour: int
+
+
+class SaeFenetreResponse(BaseModel):
+    """Une fenêtre SAE (projet/éval sur plusieurs jours COMPLETS, sans salle
+    ni horaire précis — cf. `ingestion/planning_loader.py::SaeWindow`).
+    Retour utilisateur 07/09/2026 : « les SAE, il faut que ça remonte » —
+    un simple repère informatif sur l'EDT, jamais une réservation de
+    créneau : de vraies séances (WS*) viendront s'y placer plus tard."""
+
+    course_code: str
+    label: str
+    parcours: str | None = None
+    group_labels: list[str] | None = None
+    jours: list[SaeJourResponse]
+
+
+class CalendrierSaeResponse(BaseModel):
+    fenetres: list[SaeFenetreResponse]
+
+
 class CelcatJournalLigne(BaseModel):
     """Une correspondance session_id ↔ event_id/group_id déjà constatée en
     direct sur Celcat — jamais un appel RPC ici, seulement la fusion dans le
