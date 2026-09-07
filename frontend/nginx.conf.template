@@ -51,20 +51,36 @@ server {
     }
 
     location @backend {
-        # `${BACKEND_URL}` est substitué par `envsubst` AVANT que nginx ne
-        # lise ce fichier (simple remplacement de texte, ne comprend rien à
-        # la syntaxe nginx) — une fois substitué, cette ligne est un
-        # `proxy_pass` 100% littéral, sans aucune variable nginx. C'est
-        # important : dès qu'une variable nginx apparaît DANS `proxy_pass`
-        # (ex. `$uri` collé juste après), nginx bascule en résolution DNS
-        # À LA REQUÊTE plutôt qu'au chargement de la config, ce qui exige un
-        # `resolver` (sinon : "no resolver defined to resolve
-        # host.docker.internal", trouvé en testant l'image le 27/08/2026).
-        # Sans variable ici, la résolution se fait une fois au démarrage —
-        # et sans chemin après l'hôte, nginx transmet automatiquement l'URI
-        # d'origine (chemin + query) tel quel, pas besoin de le recoller
-        # manuellement.
-        proxy_pass ${BACKEND_URL};
+        # RÉSOLUTION DNS À CHAQUE REQUÊTE, pas une seule fois au démarrage.
+        #
+        # `proxy_pass` avec une valeur 100% littérale résout le nom UNE FOIS,
+        # au chargement de la configuration, et grave l'adresse obtenue. Or
+        # `backend` est un conteneur : chaque redéploiement lui donne une
+        # NOUVELLE adresse. nginx continuait alors d'écrire vers l'ancienne,
+        # morte — et tout ce qui passait par le proxy tombait en 502 pendant
+        # que le site lui-même (statique) répondait parfaitement, ce qui rend
+        # la panne trompeuse : `/` et `/healthz` en 200, toute l'API en 502.
+        # Seul un redémarrage du conteneur frontend rétablissait le service,
+        # alors que le frontend n'avait rien de cassé.
+        #
+        # Survenu deux fois en deux jours (06 et 07/09/2026), à chaque fois
+        # déclenché par un déploiement du backend — y compris par un merge
+        # sans aucun rapport avec lui.
+        #
+        # Le `resolver` est ce qui manquait pour pouvoir mettre une variable
+        # dans `proxy_pass` (sans lui : "no resolver defined to resolve
+        # backend", constaté le 27/08/2026). 127.0.0.11 est le DNS interne de
+        # Docker ; `valid=10s` borne à dix secondes le temps pendant lequel
+        # une adresse périmée peut encore être utilisée.
+        resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+        resolver_timeout 5s;
+
+        # `$request_uri` est OBLIGATOIRE ici : la transmission automatique de
+        # l'URI d'origine ne vaut que pour un `proxy_pass` sans variable.
+        # Avec une variable et rien derrière, nginx enverrait la requête sur
+        # « / » — toutes les routes de l'API répondraient la même chose.
+        set $cible ${BACKEND_URL};
+        proxy_pass $cible$request_uri;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
