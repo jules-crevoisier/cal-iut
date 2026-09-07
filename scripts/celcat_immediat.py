@@ -35,6 +35,16 @@ def principal() -> int:
     parseur.add_argument("--role", default=nav.ROLE_ECRITURE)
     parseur.add_argument("--ecrire", action="store_true")
     parseur.add_argument("--production", action="store_true")
+    parseur.add_argument(
+        "--limite",
+        type=int,
+        default=25,
+        help=(
+            "nombre maximum de jobs par cycle (0 = tous). Le premier drainage "
+            "réel a duré 2h11 sur 489 jobs, session VPN prise du début à la fin : "
+            "la file étant persistante, mieux vaut des cycles courts et répétés."
+        ),
+    )
     args = parseur.parse_args()
 
     doc = charger()
@@ -106,7 +116,10 @@ def principal() -> int:
                     print(f"Connexion {args.base} rôle {args.role}…")
                     nav.connexion(page, base=args.base, role=args.role)
                     bilan = drainer_file_immediate(
-                        page=page, base=args.base, production_autorisee=args.production
+                        page=page,
+                        base=args.base,
+                        production_autorisee=args.production,
+                        limite=args.limite,
                     )
                     # Le bilan, jamais un « drainée » de principe : c'est ce
                     # message trop optimiste qui a laissé passer plusieurs
