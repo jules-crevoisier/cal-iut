@@ -236,7 +236,10 @@ def test_should_drain_queue_immediately_without_touching_semaines_lancees_or_der
 
     page = FaussePage()
     avant = charger()
-    assert drainer_file_immediate(page) is False  # file vide : rien à faire
+    # Depuis le 07/09/2026 le retour est un `BilanDrainage` et non plus un
+    # booléen (cf. `test_drainage_bilan_2026_09_07`) : il reste faux au sens
+    # booléen quand il n'y avait rien à faire, ce que ce test vérifie.
+    assert not drainer_file_immediate(page)  # file vide : rien à faire
     assert charger() == avant  # pas la moindre écriture
 
     appels = {"update": 0}
@@ -260,7 +263,9 @@ def test_should_drain_queue_immediately_without_touching_semaines_lancees_or_der
         }
     )
 
-    assert drainer_file_immediate(page) is True
+    bilan = drainer_file_immediate(page)
+    assert bilan, "il y avait un job à traiter"
+    assert (bilan.reussis, bilan.echecs) == (1, [])
     assert appels == {"update": 1}
     assert jobs_en_attente() == []  # traité, retiré de la file
 

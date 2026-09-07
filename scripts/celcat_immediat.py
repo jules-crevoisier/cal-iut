@@ -95,10 +95,14 @@ def principal() -> int:
                 try:
                     print(f"Connexion {args.base} rôle {args.role}…")
                     nav.connexion(page, base=args.base, role=args.role)
-                    traite = drainer_file_immediate(
+                    bilan = drainer_file_immediate(
                         page=page, base=args.base, production_autorisee=args.production
                     )
-                    print("file d'attente drainée (temps réel)" if traite else "rien à drainer")
+                    # Le bilan, jamais un « drainée » de principe : c'est ce
+                    # message trop optimiste qui a laissé passer plusieurs
+                    # jours de panne totale (07/09/2026), le worker répétant
+                    # « file d'attente drainée » sans écrire une seule fois.
+                    print(bilan.resume())
                 finally:
                     try:
                         nav.deconnexion(page)
