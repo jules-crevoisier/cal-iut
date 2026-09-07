@@ -60,6 +60,7 @@ from cal_iut.api.schemas import (
     CelcatValiderRequest,
     ChangeRoomRequest,
     CompletionResponse,
+    CreerEvenementRequest,
     CreerSeanceRequest,
     ModifierSeancePersonnaliseeRequest,
     CreneauLibreResponse,
@@ -3623,6 +3624,75 @@ def creer_seance_personnalisee(body: CreerSeanceRequest) -> PlacementResponse:
     except HTTPException:
         # Rien ne doit rester d'une séance dont le placement échoue — ni en
         # mémoire, ni a fortiori sur disque (jamais tenté à ce stade).
+        state.sessions.remove(seance)
+        del state.sessions_by_id[session_id]
+        raise
+
+    custom_sessions.add_custom_session(seance)
+    return resultat
+
+
+def _code_evenement(libelle: str) -> str:
+    """Slug lisible depuis un libellé libre — ex. « Conférence » ->
+    « CONFERENCE ». Jamais vide : un libellé sans lettre/chiffre retombe sur
+    « EVENEMENT » plutôt que de produire un `course_code` illisible."""
+    import unicodedata
+
+    sans_accents = unicodedata.normalize("NFKD", libelle).encode("ascii", "ignore").decode("ascii")
+    code = "".join(c if c.isalnum() else "-" for c in sans_accents.strip().upper())
+    code = "-".join(filter(None, code.split("-")))
+    return code or "EVENEMENT"
+
+
+@app.post("/placements/evenements", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
+def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
+    """Événement hors maquette affiché en clair sur l'EDT (réunion,
+    conférence...) — cf. `CreerEvenementRequest`. Même mécanique que
+    `creer_seance_personnalisee` (délègue à `placer_seance`, ne persiste la
+    séance qu'après un placement réussi), mais invente son `course_code`
+    depuis `libelle` au lieu d'exiger une matière déjà connue : ni
+    progression, ni volume horaire, ni ordonnancement ne s'y applique
+    jamais, donc rien n'exige que `state.courses` la connaisse.
+    """
+    state = get_state()
+
+    inconnus = [g for g in body.group_ids if g not in {gr.id for gr in state.groups}]
+    if inconnus:
+        raise HTTPException(400, f"Groupe(s) inconnu(s) : {', '.join(inconnus)}")
+
+    premier_groupe = next((g for g in state.groups if g.id == body.group_ids[0]), None)
+    parcours = premier_groupe.parcours if premier_groupe else ""
+    annee = premier_groupe.annee if premier_groupe else ""
+
+    code = _code_evenement(body.libelle)
+    session_id = _id_seance_personnalisee(code, body.semestre, "CM", body.group_ids)
+
+    seance = SessionToPlace(
+        id=session_id,
+        course_code=code,
+        course_name=body.libelle.strip(),
+        semestre=body.semestre,
+        parcours=parcours,
+        annee=annee,
+        session_type=SessionType.CM,
+        group_ids=list(body.group_ids),
+        teacher_codes=[t.strip().upper() for t in body.teacher_codes if t.strip()],
+        duration_slots=body.duration_slots,
+        is_eval=False,
+        metadata={"custom_session": True, "evenement": True, "note": (body.note or "").strip()},
+    )
+    state.sessions.append(seance)
+    state.sessions_by_id[session_id] = seance
+
+    try:
+        resultat = placer_seance(
+            session_id,
+            MoveSessionRequest(
+                week=body.week, day=body.day, slot=body.slot,
+                room_id=body.room_id, lock=False, force=body.force,
+            ),
+        )
+    except HTTPException:
         state.sessions.remove(seance)
         del state.sessions_by_id[session_id]
         raise
