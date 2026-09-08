@@ -84,6 +84,16 @@ while true; do
     echo "[$(date -Is)] drainage temps réel — ÉCHEC (code ${code})"
   fi
 
+  # --- (1 bis) instantané Celcat : ce que l'interface affiche dans la vue
+  # d'activité. Le script se termine sans toucher au réseau tant que le
+  # dernier relevé a moins de deux heures ET que personne n'a cliqué sur
+  # « Rafraîchir » — cadence choisie pour ménager le VPN, partagé avec le
+  # compte Celcat de l'équipe (retour utilisateur 08/09/2026). --------------
+  if ! python3 scripts/celcat_instantane.py --vpn; then
+    code=$?
+    echo "[$(date -Is)] instantané Celcat — ÉCHEC (code ${code})"
+  fi
+
   # --- (2) une fois par jour : semaines validées + extras. -----------------
   aujourdhui=$(date -u +%Y-%m-%d)
   deja_fait=$(cat "$MARQUEUR" 2>/dev/null || echo "")

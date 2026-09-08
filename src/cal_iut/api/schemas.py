@@ -678,6 +678,35 @@ class CelcatCompteurs(BaseModel):
     blocked: int = 0
 
 
+class CelcatInstantaneResponse(BaseModel):
+    """Ce que le sidecar a relevé dans Celcat, et QUAND.
+
+    L'API ne lit jamais Celcat elle-même (son conteneur n'a ni VPN ni
+    navigateur, cf. `celcat/instantane.py`) : elle sert un relevé déposé
+    dans le volume partagé. `age_secondes` et `perime` ne sont donc pas des
+    détails — sans eux, un relevé de trois heures s'afficherait comme l'état
+    courant au moment précis où l'on cherche à vérifier quelque chose.
+    """
+
+    evenements: list[dict] = Field(default_factory=list)
+    groupes: list[str] = Field(default_factory=list)
+    releve_le: str | None = None
+    age_secondes: float | None = None
+    # Vrai tant qu'aucun relevé n'existe OU qu'il dépasse la cadence de 2 h.
+    perime: bool = True
+    # Un relevé demandé mais pas encore honoré par le sidecar : permet au
+    # bouton d'afficher « relevé demandé… » au lieu de rester inerte.
+    demande_en_cours: bool = False
+    # Pourquoi le dernier relevé a échoué (VPN, session expirée…) — un
+    # instantané vide sans explication renverrait au silence qu'on répare.
+    erreur: str | None = None
+
+
+class CelcatInstantaneDemandeResponse(BaseModel):
+    demande: bool
+    message: str
+
+
 class CelcatEtatResponse(BaseModel):
     saisie_active: bool
     semaines_validees: list[int] = []

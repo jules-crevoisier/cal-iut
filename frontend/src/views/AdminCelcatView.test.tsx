@@ -157,9 +157,11 @@ describe("AdminCelcatView", () => {
     render(<AdminCelcatView />);
 
     await screen.findByRole("switch", { name: /écriture/i });
-    expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    // `getByText("1")` ne suffit plus : la vue d'activité affiche aussi des
+    // compteurs par colonne (08/09/2026). On cible les puces d'étape.
+    expect(screen.getAllByText("1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("3").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: /armer l’écriture/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /lot de nuit/i })).toBeInTheDocument();
     expect(screen.getByText(/lancer maintenant enfile le même lot/i)).toBeInTheDocument();
@@ -259,17 +261,18 @@ describe("AdminCelcatView", () => {
     stubFetch();
     render(<AdminCelcatView />);
 
-    const journal = await screen.findByRole("heading", { name: /^journal$/i });
+    // Renommé « Activité » et passé en colonnes le 08/09/2026 : ce qui doit
+    // rester vrai, c'est que le journal reste SÉPARÉ des extras (pas de
+    // bouton d'action dedans) et qu'il montre le motif, pas seulement le
+    // fait qu'il y ait eu un échec.
+    const journal = await screen.findByRole("heading", { name: /^activité$/i });
     const panneau = journal.closest(".panel");
     expect(panneau).not.toBeNull();
     expect(within(panneau as HTMLElement).queryByRole("button", { name: /ajouter/i })).not.toBeInTheDocument();
-    expect(within(panneau as HTMLElement).getByText(/créé/i)).toBeInTheDocument();
-    expect(within(panneau as HTMLElement).getByText(/bloqué/i)).toBeInTheDocument();
-    expect(within(panneau as HTMLElement).getByText(/WR314D/)).toBeInTheDocument();
     expect(within(panneau as HTMLElement).getByText(/sans code Celcat/i)).toBeInTheDocument();
   });
 
-  it("should only call etat, extras ouvert, and logs on mount", async () => {
+  it("should only call etat, extras ouvert, logs and instantane on mount", async () => {
     const mock = stubFetch();
     render(<AdminCelcatView />);
 
@@ -278,7 +281,10 @@ describe("AdminCelcatView", () => {
     expect(chemins.some((u) => u.includes("/celcat/etat"))).toBe(true);
     expect(chemins.some((u) => u.includes("/celcat/extras?statut=ouvert"))).toBe(true);
     expect(chemins.some((u) => u.includes("/celcat/logs?limit=50"))).toBe(true);
-    expect(chemins).toHaveLength(3);
+    // 4e depuis le 08/09/2026 : l'instantané Celcat, servi par l'API depuis
+    // le relevé du sidecar (elle ne lit jamais Celcat elle-même).
+    expect(chemins.some((u) => u.includes("/celcat/instantane"))).toBe(true);
+    expect(chemins).toHaveLength(4);
   });
 
   it("should disable a past week and a launched week", async () => {

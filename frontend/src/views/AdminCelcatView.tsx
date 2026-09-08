@@ -8,13 +8,16 @@ import {
   ajouterExtraCelcat,
   fetchCelcatEtat,
   fetchCelcatExtras,
+  fetchCelcatInstantane,
   fetchCelcatLogs,
+  rafraichirCelcatInstantane,
   ignorerExtraCelcat,
   lancerNuitCelcat,
   patchCelcatSaisie,
   validerSemainesCelcat,
   type CelcatEtat,
   type CelcatExtra,
+  type CelcatInstantane,
   type CelcatLog,
 } from "../api/client";
 
@@ -62,10 +65,28 @@ function libelleSemaine(
   return `Semaine ${n}`;
 }
 
-function libelleJournal(kind: string): string {
-  if (kind === "created") return "créé";
-  if (kind === "blocked") return "bloqué";
-  return kind;
+/** Colonnes de la vue d'activité, dans l'ordre de lecture : ce qui s'est
+ * bien passé d'abord, ce qui coince en dernier — c'est là que le regard doit
+ * s'arrêter. */
+const COLONNES: Array<{ kind: string; titre: string; ton: string }> = [
+  { kind: "created", titre: "Créées", ton: "good" },
+  { kind: "modified", titre: "Modifiées", ton: "good" },
+  { kind: "deleted", titre: "Supprimées", ton: "" },
+  { kind: "echec", titre: "Échecs", ton: "bad" },
+  { kind: "blocked", titre: "Bloquées", ton: "bad" },
+];
+
+/** « il y a 47 min » — l'âge d'un relevé compte autant que son contenu :
+ * présenté sans lui, un relevé de trois heures passerait pour l'état
+ * courant. */
+function ageLisible(secondes: number | null): string {
+  if (secondes === null) return "";
+  if (secondes < 60) return "il y a moins d’une minute";
+  const minutes = Math.floor(secondes / 60);
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const heures = Math.floor(minutes / 60);
+  const reste = minutes % 60;
+  return reste ? `il y a ${heures} h ${reste} min` : `il y a ${heures} h`;
 }
 
 function libelleExtra(extra: CelcatExtra): string {
@@ -79,18 +100,24 @@ export function AdminCelcatView() {
   const [semaines, setSemaines] = useState<number[]>([]);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [instantane, setInstantane] = useState<CelcatInstantane | null>(null);
+  const [messageReleve, setMessageReleve] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     try {
-      const [e, x, l] = await Promise.all([
+      const [e, x, l, i] = await Promise.all([
         fetchCelcatEtat(),
         fetchCelcatExtras("ouvert"),
         fetchCelcatLogs(50),
+        // L'instantané ne doit pas faire échouer tout l'écran : le reste
+        // reste utile même si le sidecar n'a encore rien déposé.
+        fetchCelcatInstantane().catch(() => null),
       ]);
       setEtat(e);
       setSemaines(e.semaines_validees);
       setExtras(x.extras);
       setLogs(l.items);
+      setInstantane(i);
       setErreur(null);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : "Erreur de chargement");
@@ -361,24 +388,100 @@ export function AdminCelcatView() {
         </div>
       </div>
 
+      {/* Ce que Celcat contient vraiment. L'API ne le lit jamais elle-même
+          (son conteneur n'a ni VPN ni navigateur) : elle sert un relevé
+          déposé par le sidecar, d'où l'âge affiché systématiquement. */}
+      <div className="panel celcat-instantane" data-testid="instantane-celcat">
+        <h3>Contenu de Celcat</h3>
+        {!instantane?.releve_le ? (
+          <p className="muted">
+            Aucun relevé pour l’instant — Celcat n’a pas encore été consulté.
+          </p>
+        ) : (
+          <p className={instantane.perime ? "bad" : "muted"}>
+            {(instantane.evenements ?? []).length} évènement(s) sur{" "}
+            {(instantane.groupes ?? []).length} groupe(s),
+            relevé {ageLisible(instantane.age_secondes)}
+            {instantane.perime ? " — périmé, à rafraîchir" : ""}
+          </p>
+        )}
+        {instantane?.erreur ? (
+          // Un instantané vide sans explication ramènerait au silence que
+          // cet outil vient de passer deux jours à réparer.
+          <p className="bad">Dernier relevé en échec : {instantane.erreur}</p>
+        ) : null}
+        <button
+          type="button"
+          disabled={enCours}
+          onClick={async () => {
+            setEnCours(true);
+            try {
+              const r = await rafraichirCelcatInstantane();
+              setMessageReleve(r.message);
+              setErreur(null);
+            } catch (err) {
+              setErreur(err instanceof Error ? err.message : "Demande impossible");
+            } finally {
+              setEnCours(false);
+            }
+          }}
+        >
+          Rafraîchir
+        </button>
+        {messageReleve ? <p className="muted">{messageReleve}</p> : null}
+        {instantane?.demande_en_cours && !messageReleve ? (
+          <p className="muted">Relevé demandé — en attente du prochain passage.</p>
+        ) : null}
+      </div>
+
+      {/* Activité récente, en colonnes. Remplace la liste chronologique :
+          « 12 échecs sur le même motif » et « 12 incidents distincts »
+          n'appellent pas le même geste, et une liste à plat ne les
+          distinguait pas. */}
       <div className="panel celcat-journal">
-        <h3>Journal</h3>
+        <h3>Activité</h3>
         {logs.length === 0 ? (
           <p className="muted">Aucune entrée.</p>
         ) : (
-          <ul className="celcat-journal-list">
-            {logs.map((item, i) => (
-              <li
-                key={`${item.session_id ?? "log"}-${i}`}
-                className={`celcat-journal-item ${item.kind === "created" ? "celcat-journal-item--created" : ""} ${item.kind === "blocked" ? "celcat-journal-item--blocked" : ""}`.trim()}
-              >
-                <span className={`pill mini ${item.kind === "blocked" ? "bad" : item.kind === "created" ? "good" : ""}`}>
-                  {libelleJournal(item.kind)}
-                </span>
-                {item.motif ? ` — ${item.motif}` : ""}
-              </li>
-            ))}
-          </ul>
+          <div className="celcat-kanban">
+            {COLONNES.map((colonne) => {
+              const lignes = logs.filter((l) => l.kind === colonne.kind);
+              return (
+                <div
+                  key={colonne.kind}
+                  className="celcat-kanban-col"
+                  data-testid={`colonne-${colonne.kind}`}
+                >
+                  <h4>
+                    {colonne.titre} <span className={`pill mini ${colonne.ton}`}>{lignes.length}</span>
+                  </h4>
+                  {lignes.length === 0 ? (
+                    <p className="muted">—</p>
+                  ) : (
+                    <ul className="celcat-journal-list">
+                      {lignes.map((item, i) => (
+                        <li
+                          key={`${item.session_id ?? colonne.kind}-${i}`}
+                          className={`celcat-journal-item celcat-journal-item--${colonne.kind}`}
+                          title={item.at ?? undefined}
+                        >
+                          <strong>{item.session_id ?? item.course_code ?? "?"}</strong>
+                          {/* Le nombre de tentatives distingue un blocage
+                              installé d'un incident isolé — sans lui, les
+                              deux se ressemblent. */}
+                          {item.repetitions && item.repetitions > 1 ? (
+                            <span className="pill mini bad"> {item.repetitions}× </span>
+                          ) : null}
+                          {item.event_id ? <span className="muted"> #{item.event_id}</span> : null}
+                          {item.motif ? <div className="muted">{item.motif}</div> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </section>
