@@ -202,7 +202,31 @@ def est_cours(ev: EvenementCelcat) -> bool:
 
 
 def indice_depuis_lundi(lundi: date, *, premiere_semaine_celcat: int) -> int:
-    return lundi.isocalendar().week - premiere_semaine_celcat
+    """Position d'un lundi dans le masque `weeks` de Celcat.
+
+    Compte les semaines ÉCOULÉES depuis le lundi de référence, et non la
+    différence de deux numéros ISO — parce que la numérotation ISO repart à
+    1 au 1er janvier :
+
+        lundi 2026-12-14  ->  ISO 51  ->  51 - 34 =  17   correct
+        lundi 2027-01-04  ->  ISO  1  ->   1 - 34 = -33   négatif
+
+    Un indice négatif fait lever `masquer_semaine`, `_masque_pour` encaisse
+    l'exception et retombe sur un masque vide, et l'écriture est alors
+    refusée sur « masque semaines 0×Y ». AUCUNE séance de janvier à juin
+    2027 ne pouvait donc partir dans Celcat — toute la seconde moitié de
+    l'année universitaire, sans que rien ne le dise (trouvé le 08/09/2026 en
+    remontant les échecs du worker).
+
+    L'année de référence se déduit du lundi lui-même : une semaine ISO
+    inférieure à `premiere_semaine_celcat` appartient forcément à l'année
+    universitaire commencée l'année civile précédente. Une différence de
+    dates, elle, ne connaît pas le 1er janvier.
+    """
+    annee_iso, semaine_iso, _ = lundi.isocalendar()
+    annee_reference = annee_iso if semaine_iso >= premiere_semaine_celcat else annee_iso - 1
+    lundi_reference = date.fromisocalendar(annee_reference, premiere_semaine_celcat, 1)
+    return (lundi - lundi_reference).days // 7
 
 
 def premiere_semaine_depuis_infobulle(texte: str) -> int | None:
