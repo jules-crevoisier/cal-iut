@@ -672,6 +672,39 @@ export interface CelcatLog {
   kind: string;
   motif?: string | null;
   session_id?: string | null;
+  /** Permet d'aller vérifier l'évènement dans Celcat — une ligne sans lui
+   * ne sert qu'à compter. */
+  event_id?: number | null;
+  course_code?: string | null;
+  at?: string | null;
+  /** Tentatives d'un échec qui se répète : le worker retente toutes les 30 à
+   * 60 s, et ces tentatives sont regroupées sur une seule ligne côté serveur
+   * (cf. `celcat/logs.py`). « 87 tentatives » vaut mieux que 87 lignes. */
+  repetitions?: number | null;
+}
+
+/** Ce que le sidecar a relevé dans Celcat, et QUAND. L'API ne lit jamais
+ * Celcat elle-même (son conteneur n'a ni VPN ni navigateur) : elle sert un
+ * relevé déposé dans le volume partagé, d'où l'âge et `perime`. */
+export interface CelcatInstantane {
+  evenements: Array<Record<string, unknown>>;
+  groupes: string[];
+  releve_le: string | null;
+  age_secondes: number | null;
+  perime: boolean;
+  demande_en_cours: boolean;
+  erreur: string | null;
+}
+
+export function fetchCelcatInstantane(): Promise<CelcatInstantane> {
+  return request("/celcat/instantane");
+}
+
+/** Demande un relevé. Le sidecar l'honore à son prochain passage (moins
+ * d'une minute) : ce n'est pas un ordre immédiat, et l'interface ne doit pas
+ * laisser croire le contraire. */
+export function rafraichirCelcatInstantane(): Promise<{ demande: boolean; message: string }> {
+  return request("/celcat/instantane/rafraichir", { method: "POST" });
 }
 
 export function fetchCelcatEtat(): Promise<CelcatEtat> {

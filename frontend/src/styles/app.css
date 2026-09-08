@@ -4071,6 +4071,42 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   padding: 0;
 }
 
+/* Vue d'activité en colonnes (retour utilisateur 08/09/2026 : « un peu comme
+   un kanban »). Mobile d'abord — une colonne à 320 px, puis autant que la
+   largeur en permet : sur un écran étroit, des colonnes serrées côte à côte
+   seraient illisibles alors que c'est précisément l'écran qu'on consulte en
+   vitesse pour savoir si ça passe. */
+.celcat-kanban {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .celcat-kanban {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+.celcat-kanban-col {
+  min-width: 0; /* sans quoi un motif long élargit la colonne au lieu de passer à la ligne */
+  border: 1px solid var(--bordure, #e2e2e2);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.celcat-kanban-col h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.celcat-kanban-col .celcat-journal-item {
+  word-break: break-word; /* les identifiants de séance sont longs et sans espace */
+}
+
 .celcat-extra,
 .celcat-journal-item {
   display: flex;
