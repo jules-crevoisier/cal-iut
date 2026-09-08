@@ -19,10 +19,10 @@
  *    l'alphabétique brut ("les groupe [FC] sont mis après les fi").
  */
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { jourOuvreAujourdhui } from "../utils/semaineCourante";
+import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
 import { changerSalle, deposerPlacement, supprimerSeancePersonnalisee, type SeanceAPlacer } from "../api/client";
 import type { Placement } from "../types";
 import type { Route } from "../hooks/useHashRoute";
@@ -225,6 +225,31 @@ export function PromoView({
       onError?.(e instanceof Error ? e.message : "Suppression impossible");
     }
   };
+
+  // Ouvrir sur la semaine EN COURS (retour utilisateur 08/09/2026 : « on
+  // arrive semaine 2 alors que l'on est semaine 3 »).
+  //
+  // ICI et pas seulement dans `App.tsx` : la vue Promo tient son PROPRE
+  // `displayWeek`. Corriger celui de l'application ne l'atteignait pas —
+  // d'où un jour juste et une semaine fausse, le jour étant lui déjà géré
+  // dans ce fichier.
+  //
+  // Une seule fois, et jamais quand la route fixe déjà une semaine (arrivée
+  // depuis « À traiter » ou depuis la recherche) : recentrer par-dessus
+  // ramènerait l'utilisateur à aujourd'hui alors qu'il vient précisément de
+  // demander une autre semaine.
+  const semaineRecentree = useRef(false);
+  useEffect(() => {
+    if (semaineRecentree.current) return;
+    if (route?.sem !== null && route?.sem !== undefined) {
+      semaineRecentree.current = true;
+      return;
+    }
+    if (!payload.weekRows?.length) return;
+    semaineRecentree.current = true;
+    setDisplayWeek(indexSemaineCourante(payload.weekRows));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payload.weekRows]);
 
   // Suit la route quand elle change (clic depuis « À traiter »), sans
   // reprendre la main sur la navigation manuelle ensuite.
