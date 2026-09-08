@@ -4,6 +4,8 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
+import { CopyButton } from "../components/CopyButton";
+
 import {
   ajouterExtraCelcat,
   fetchCelcatEtat,
@@ -87,6 +89,23 @@ function ageLisible(secondes: number | null): string {
   const heures = Math.floor(minutes / 60);
   const reste = minutes % 60;
   return reste ? `il y a ${heures} h ${reste} min` : `il y a ${heures} h`;
+}
+
+/** Ce qu'on colle dans un message ou un ticket : l'identifiant de séance,
+ * l'évènement Celcat pour aller vérifier, le nombre de tentatives pour
+ * juger de l'ampleur, et le motif. Relire à l'écran pour retaper à côté est
+ * exactement la friction qui fait qu'un problème n'est pas signalé. */
+function texteColonne(titre: string, lignes: CelcatLog[]): string {
+  const entete = `${titre} (${lignes.length})`;
+  const corps = lignes.map((l) => {
+    const morceaux = [l.session_id ?? l.course_code ?? "?"];
+    if (l.event_id) morceaux.push(`event_id=${l.event_id}`);
+    if (l.repetitions && l.repetitions > 1) morceaux.push(`${l.repetitions} tentatives`);
+    if (l.at) morceaux.push(l.at);
+    if (l.motif) morceaux.push(l.motif);
+    return `- ${morceaux.join(" | ")}`;
+  });
+  return [entete, ...corps].join("\n");
 }
 
 function libelleExtra(extra: CelcatExtra): string {
@@ -454,6 +473,13 @@ export function AdminCelcatView() {
                 >
                   <h4>
                     {colonne.titre} <span className={`pill mini ${colonne.ton}`}>{lignes.length}</span>
+                    {lignes.length > 0 ? (
+                      <CopyButton
+                        text={() => texteColonne(colonne.titre, lignes)}
+                        idleLabel="Copier"
+                        title={`Copier les ${lignes.length} ligne(s) de « ${colonne.titre} »`}
+                      />
+                    ) : null}
                   </h4>
                   {lignes.length === 0 ? (
                     <p className="muted">—</p>

@@ -19,7 +19,7 @@ from cal_iut.celcat.file_attente import (
     evenement_connu,
     retenir_evenement,
 )
-from cal_iut.celcat.lecture import EvenementCelcat
+from cal_iut.celcat.lecture import EvenementCelcat, meme_creneau
 from cal_iut.celcat.logs import append as append_log
 from cal_iut.celcat.mapping import SLOT_TIMES, libelle_groupe_celcat, load_celcat_config
 
@@ -137,7 +137,11 @@ def correspond_live(session: Any, placement: Any, ev: EvenementCelcat) -> bool:
     jour, heure = _creneau(placement)
     if ev.jour and ev.jour != jour:
         return False
-    if ev.heure_debut and heure and ev.heure_debut != heure:
+    # `meme_creneau` et non `!=` : Celcat exprime nos horaires avec le fuseau
+    # historique de Paris (9'21" d'écart), donc « 15:20 » chez lui vaut notre
+    # « 15:30 ». La comparaison stricte échouait pour TOUTES les séances, et
+    # un évènement pourtant bien placé finissait signalé comme « extra ».
+    if ev.heure_debut and heure and not meme_creneau(ev.heure_debut, heure):
         return False
     return True
 

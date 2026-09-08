@@ -169,6 +169,36 @@ describe("Vue d'activité Celcat", () => {
     expect(within(bloc).getByText(/ESessionTimeout/)).toBeTruthy();
   });
 
+  it("permet de copier le contenu d'une colonne", async () => {
+    // Retour utilisateur 08/09/2026 : « ajoute la possibilité de copier les
+    // informations ». Un échec se transmet à un collègue (Kyllian, David) ou
+    // se colle dans un ticket — le relire à l'écran pour le retaper à côté
+    // est exactement le genre de friction qui fait qu'on ne le signale pas.
+    const ecrit = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: ecrit } });
+    stubFetch();
+    render(<AdminCelcatView />);
+
+    const echecs = await screen.findByTestId("colonne-echec");
+    fireEvent.click(within(echecs).getByRole("button", { name: /copier/i }));
+
+    await waitFor(() => expect(ecrit).toHaveBeenCalled());
+    const copie = String(ecrit.mock.calls[0][0]);
+    expect(copie).toContain("WR108-S1-CM-1");
+    expect(copie).toContain("partial key");
+    expect(copie).toContain("87");
+  });
+
+  it("ne propose pas de copier une colonne vide", async () => {
+    stubFetch();
+    render(<AdminCelcatView />);
+
+    const supprimees = await screen.findByTestId("colonne-deleted");
+    const vide = screen.getByTestId("colonne-blocked");
+    expect(within(supprimees).queryByRole("button", { name: /copier/i })).toBeTruthy();
+    expect(within(vide).queryByRole("button", { name: /copier/i })).toBeNull();
+  });
+
   it("le bouton Rafraîchir demande un relevé sans promettre l'immédiat", async () => {
     const mock = stubFetch();
     render(<AdminCelcatView />);
