@@ -54,6 +54,7 @@ from cal_iut.api.schemas import (
     CelcatEntreeResponse,
     CelcatComparaisonResponse,
     CelcatCorrigerResponse,
+    CelcatResyncResponse,
     CelcatEtatResponse,
     CelcatFileResponse,
     CelcatInstantaneDemandeResponse,
@@ -3202,8 +3203,19 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     # source qui sert à l'écriture.
     libelles_groupes = {g.id: g.label for g in state.groups}
     groupes_celcat: dict[str, str] = {}
+    # Le TYPE de séance (CM/TD/TP), pour comparer la catégorie d'évènement
+    # Celcat. Signalé par David Annebicque le 05/09/2026 : « les TD sont
+    # aléatoirement indiqués en TD ou en CM ». Il vient de la SÉANCE — le
+    # placement ne le porte pas — et il est passé explicitement plutôt que
+    # déduit du `session_id`, qui n'a aucune obligation de le contenir.
+    types_seance: dict[str, str] = {}
     for placement in state.timetable:
         session = state.sessions_by_id.get(placement.session_id)
+        type_seance = str(
+            getattr(getattr(session, "session_type", None), "value", "") or ""
+        ).strip()
+        if type_seance:
+            types_seance[placement.session_id] = type_seance.upper()
         semestre = str(getattr(session, "semestre", "") or "").strip()
         ids = list(getattr(placement, "group_ids", None) or [])
         if not semestre or not ids:
@@ -3231,6 +3243,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
             groupes_celcat=groupes_celcat,
             salles_celcat=cfg.salles,
             codes_celcat=set(cfg.modules),
+            types_seance=types_seance,
         )
         if releve.releve_le is not None
         else []
@@ -3252,7 +3265,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     response_model=CelcatCorrigerResponse,
     dependencies=[Depends(accounts.require_role("admin"))],
 )
-def celcat_comparaison_corriger(semaine: int = 0) -> CelcatCorrigerResponse:
+def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> CelcatCorrigerResponse:
     """Pousse les écarts d'une semaine vers Celcat — via la FILE D'ATTENTE.
 
     N'écrit jamais dans Celcat directement : chaque écart devient un job que
@@ -3271,12 +3284,14 @@ def celcat_comparaison_corriger(semaine: int = 0) -> CelcatCorrigerResponse:
 
     # Sans relevé, toutes les séances paraissent absentes : « tout corriger »
     # créerait alors un doublon de tout le planning.
-    if lire().releve_le is None:
-        raise HTTPException(
-            409,
-            "Aucun relevé Celcat : rien à comparer, donc rien à corriger. "
-            "Utilisez « Rafraîchir » d'abord.",
-        )
+    #
+    # Et un relevé PÉRIMÉ est refusé au même titre : la correction se calcule
+    # entièrement dessus, si bien qu'une photo de trois heures ferait pousser
+    # des modifications contre un Celcat qui a changé — et surtout supprimer
+    # des évènements d'après un état qui n'existe plus. Le 08/09/2026, Celcat
+    # est passé de 1484 à 1470 évènements en une heure pendant qu'un collègue
+    # y travaillait à la main.
+    _exiger_releve_exploitable(lire())
     # Sans saisie armée, `ops` ignore tout : les jobs partiraient dans le
     # vide et l'écran annoncerait un succès qui n'a pas eu lieu.
     if not charger_celcat().get("saisie_active"):
@@ -3286,10 +3301,171 @@ def celcat_comparaison_corriger(semaine: int = 0) -> CelcatCorrigerResponse:
             "Activez l’écriture, puis relancez.",
         )
 
+    compte, hors, epargnees = _enfiler_ecarts_semaine(semaine, supprimer=supprimer)
+    total = sum(compte.values())
+    # Ce qui a été ÉPARGNÉ se dit, sinon « aucune suppression à faire » et
+    # « des suppressions volontairement laissées » se lisent pareil.
+    reste = (
+        f" {epargnees} suppression(s) laissée(s) de côté."
+        if epargnees
+        else ""
+    )
+    return CelcatCorrigerResponse(
+        modifications=compte["update"], creations=compte["create"],
+        suppressions=compte["delete"], total=total, hors_celcat=hors,
+        suppressions_ignorees=epargnees,
+        message=(
+            f"{total} correction(s) mises en file — le worker les pousse à son "
+            f"prochain passage (moins d’une minute).{reste}"
+            if total
+            else f"Rien à corriger sur cette semaine.{reste}"
+        ),
+    )
+
+
+@app.post(
+    "/celcat/file/resynchroniser",
+    response_model=CelcatResyncResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_file_resynchroniser(semaines: str = "") -> CelcatResyncResponse:
+    """Repart de la comparaison : jette ce qui attend, ré-enfile ce qui diverge.
+
+    Demande utilisateur 08/09/2026 : « c'est possible de virer tout ce qui
+    n'est pas nécessaire et repartir uniquement de la comparaison », « on
+    veut uniquement modifier ce qui ne va pas ».
+
+    La file contenait 491 jobs dont 409 créations, alors que la comparaison
+    des mêmes semaines dit : 250 identiques (rien à faire), 21 écarts, 60
+    absentes, 24 en trop — soit 105 jobs utiles. Les ~350 créations
+    superflues visaient des cours que Celcat possède déjà, faute d'en
+    connaître l'`event_id` : au mieux elles échouent, au pire elles posent un
+    doublon.
+
+    PORTÉE LIMITÉE aux semaines demandées. Vider la file entière perdrait un
+    déplacement de séance demandé sur une semaine qu'on ne reconstruit pas —
+    invisible pour celui qui l'avait demandé.
+    """
+    from cal_iut.celcat.etat import charger as charger_celcat
+    from cal_iut.celcat.file_attente import retirer_semaines
+    from cal_iut.celcat.instantane import lire
+
+    # Sans relevé, toutes les séances paraissent absentes : resynchroniser
+    # créerait alors un doublon de tout le planning. Même garde-fou que
+    # « Corriger », pour la même raison.
+    # Même exigence que « Corriger », et pour une raison plus forte encore :
+    # la resynchronisation reconstruit la file ENTIÈRE depuis ce relevé.
+    _exiger_releve_exploitable(lire())
+    if not charger_celcat().get("saisie_active"):
+        raise HTTPException(
+            409,
+            "La saisie Celcat est désarmée : les corrections ne partiraient pas. "
+            "Activez l’écriture, puis relancez.",
+        )
+
+    demandees: list[int] = []
+    for morceau in str(semaines or "").split(","):
+        texte = morceau.strip()
+        if not texte:
+            continue
+        try:
+            demandees.append(int(texte))
+        except ValueError:
+            raise HTTPException(400, f"semaine illisible : « {texte} »") from None
+    if not demandees:
+        # Par défaut, le périmètre que l'établissement a validé — c'est
+        # exactement celui que `executer_job_nuit` a rempli à l'aveugle.
+        demandees = sorted({int(s) for s in (charger_celcat().get("semaines_validees") or [])})
+    if not demandees:
+        raise HTTPException(409, "Aucune semaine validée : rien à resynchroniser.")
+
+    retires = retirer_semaines(set(demandees))
+    compte = {"update": 0, "create": 0, "delete": 0}
+    hors = 0
+    for semaine in demandees:
+        partiel, hors_semaine, _ = _enfiler_ecarts_semaine(semaine)
+        for cle, valeur in partiel.items():
+            compte[cle] += valeur
+        hors += hors_semaine
+
+    total = sum(compte.values())
+    return CelcatResyncResponse(
+        semaines=demandees,
+        retires=retires,
+        modifications=compte["update"],
+        creations=compte["create"],
+        suppressions=compte["delete"],
+        total=total,
+        hors_celcat=hors,
+        message=(
+            f"{retires} job(s) retiré(s), {total} reconstruit(s) depuis la comparaison "
+            f"({compte['update']} modification(s), {compte['create']} création(s), "
+            f"{compte['delete']} suppression(s))."
+        ),
+    )
+
+
+def _exiger_releve_exploitable(releve: object) -> None:
+    """Refuse d'agir sur un relevé absent, vide ou périmé.
+
+    Les trois disent la même chose — « je ne sais pas ce que Celcat contient
+    en ce moment » — et conduisent au même désastre : toutes les séances
+    paraissent absentes, donc on créerait un doublon du planning entier, et
+    on supprimerait des évènements d'après un état révolu.
+
+    Le cas PÉRIMÉ est le plus traître des trois, parce que `releve_le` est
+    renseigné : le relevé a l'air valide. Signalé le 08/09/2026 par la
+    vérification du geste « Corriger », alors que Celcat passait de 1484 à
+    1470 évènements en une heure sous l'effet d'une saisie manuelle.
+    """
+    if getattr(releve, "releve_le", None) is None or not getattr(releve, "evenements", None):
+        raise HTTPException(
+            409,
+            "Aucun relevé Celcat exploitable : rien à comparer, donc rien à corriger. "
+            "Utilisez « Rafraîchir » d'abord.",
+        )
+    if getattr(releve, "perime", False):
+        raise HTTPException(
+            409,
+            "Relevé Celcat périmé : corriger d'après une photo dépassée pousserait "
+            "des modifications contre un Celcat qui a changé, et supprimerait des "
+            "évènements qui n'existent plus tels quels. Rafraîchissez d'abord.",
+        )
+
+
+def _enfiler_ecarts_semaine(
+    semaine: int, *, supprimer: bool = True
+) -> tuple[dict[str, int], int, int]:
+    """Enfile ce qui DIVERGE réellement sur une semaine, et rien d'autre.
+
+    La comparaison est la source unique : ce qui concorde n'engendre aucun
+    job, quelle que soit l'origine de la concordance. C'est ce qui manquait à
+    `executer_job_nuit`, qui enfilait une création par séance dont le journal
+    ignorait l'`event_id` — 409 créations pour 60 séances réellement
+    absentes (constaté le 08/09/2026), les autres visant des cours que Celcat
+    possède déjà.
+
+    Un écart devient une MODIFICATION portant l'`event_id` relevé, jamais une
+    création : créer poserait un doublon à côté de l'évènement existant, et
+    `creer_manquants` n'a aucun garde-fou pour l'empêcher.
+
+    `supprimer=False` pousse les modifications et les créations sans toucher
+    aux « en trop ». Un écart et une absence sont auto-limitants — si
+    quelqu'un a déjà corrigé dans Celcat, la comparaison rend « identique » et
+    rien ne part. Une suppression, non : un évènement peut ressortir « en
+    trop » parce qu'il fait double emploi, ou parce que notre rapprochement
+    l'a raté, et les deux sont indiscernables. Le 08/09/2026, quatre des neuf
+    « en trop » de la semaine 1 portaient des `event_id` très récents, sur les
+    matières mêmes qu'un collègue corrigeait à la main : les supprimer aurait
+    défait son travail, sans retour possible.
+    """
+    from cal_iut.celcat.file_attente import enfiler
+
     state = get_state()
     comparaison = celcat_comparaison(semaine)
     compte = {"update": 0, "create": 0, "delete": 0}
     hors = 0
+    suppressions_ignorees = 0
 
     for ligne in comparaison.lignes:
         statut = ligne.get("statut")
@@ -3310,6 +3486,12 @@ def celcat_comparaison_corriger(semaine: int = 0) -> CelcatCorrigerResponse:
             enfiler({"action": "create", "session_id": session_id, "semaine": semaine})
             compte["create"] += 1
         elif statut == "en_trop_celcat" and celcat.get("event_id"):
+            if not supprimer:
+                # Comptées, jamais tues : « aucune suppression » et « des
+                # suppressions écartées » se lisent pareil à l'écran si on
+                # ne le dit pas.
+                suppressions_ignorees += 1
+                continue
             # `group_id` est indispensable : la suppression localise
             # l'évènement par son groupe, un job sans lui resterait en file
             # sans jamais pouvoir être traité.
@@ -3322,17 +3504,7 @@ def celcat_comparaison_corriger(semaine: int = 0) -> CelcatCorrigerResponse:
             })
             compte["delete"] += 1
 
-    total = sum(compte.values())
-    return CelcatCorrigerResponse(
-        modifications=compte["update"], creations=compte["create"],
-        suppressions=compte["delete"], total=total, hors_celcat=hors,
-        message=(
-            f"{total} correction(s) mises en file — le worker les pousse à son "
-            "prochain passage (moins d’une minute)."
-            if total
-            else "Rien à corriger sur cette semaine."
-        ),
-    )
+    return compte, hors, suppressions_ignorees
 
 
 def _groupe_id_depuis_nom(state: object, nom: str) -> int | None:

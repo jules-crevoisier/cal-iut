@@ -38,9 +38,34 @@ def _ecrire(jobs: list[dict[str, Any]]) -> None:
     path.write_text(json.dumps(jobs, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def cle_job(job: dict[str, Any]) -> tuple[str, str, str]:
+    action = str(job.get("action") or "")
+    session_id = str(job.get("session_id") or "")
+    event_id = job.get("event_id")
+    event_id_s = "" if event_id in (None, "") else str(event_id)
+    return (action, session_id, event_id_s)
+
+
 def enfiler(job: dict[str, Any]) -> None:
+    """Ajoute un job, SANS jamais en empiler deux identiques.
+
+    Deux chemins produisent le même job — le balayage `executer_job_nuit` et
+    le bouton « Corriger » — et deux clics suffisent aussi. Or deux jobs de
+    même clé dans un même cycle sont traités DEUX FOIS : deux appels RPC,
+    donc deux évènements dans Celcat. La relecture du journal annoncée par
+    `_consommer_file` ne rattrape pas le coup, puisqu'elle lit le document
+    chargé une seule fois au début du cycle (trouvé le 08/09/2026 par l'audit
+    de la chaîne).
+
+    La clé reste `(action, session_id, event_id)` : « créer » et « supprimer »
+    la même séance sont deux intentions distinctes, pas un doublon — les
+    confondre ferait disparaître une suppression demandée.
+    """
     jobs = _lire()
-    jobs.append(dict(job))
+    nouveau = dict(job)
+    if any(cle_job(existant) == cle_job(nouveau) for existant in jobs):
+        return
+    jobs.append(nouveau)
     _ecrire(jobs)
 
 
@@ -50,14 +75,6 @@ def lister() -> list[dict[str, Any]]:
 
 def vider() -> None:
     _ecrire([])
-
-
-def cle_job(job: dict[str, Any]) -> tuple[str, str, str]:
-    action = str(job.get("action") or "")
-    session_id = str(job.get("session_id") or "")
-    event_id = job.get("event_id")
-    event_id_s = "" if event_id in (None, "") else str(event_id)
-    return (action, session_id, event_id_s)
 
 
 def retirer_traites(identites: list[dict[str, Any]]) -> None:
@@ -70,6 +87,40 @@ def retirer_traites(identites: list[dict[str, Any]]) -> None:
     cibles = {cle_job(i) for i in identites}
     restants = [j for j in _lire() if cle_job(j) not in cibles]
     _ecrire(restants)
+
+
+def retirer_semaines(semaines: set[int]) -> int:
+    """Retire les jobs visant ces semaines. Rend le nombre retiré.
+
+    Sert à RECONSTRUIRE une semaine depuis la comparaison : on efface ce
+    qu'on croyait devoir faire, on ré-enfile ce qui diverge réellement.
+
+    Ciblé par semaine, jamais un `vider()` global : un déplacement de séance
+    demandé en semaine 12 n'a pas à disparaître parce qu'on resynchronise la
+    semaine 1. C'est la difference entre « je reconstruis ce périmètre » et
+    « j'efface tout », et seule la première est sûre quand l'API continue
+    d'enfiler pendant ce temps.
+    """
+    if not semaines:
+        return 0
+    jobs = _lire()
+    restants = []
+    retires = 0
+    for job in jobs:
+        brut = job.get("semaine")
+        try:
+            sem = int(brut) if brut is not None else None
+        except (TypeError, ValueError):
+            sem = None
+        # Un job sans semaine lisible est CONSERVÉ : on ne sait pas s'il
+        # relève du périmètre, et le perdre serait pire que le garder.
+        if sem is not None and sem in semaines:
+            retires += 1
+            continue
+        restants.append(job)
+    if retires:
+        _ecrire(restants)
+    return retires
 
 
 def repousser_en_fin(identites: list[dict[str, Any]]) -> None:

@@ -134,7 +134,14 @@ def test_un_ecart_enfile_une_MODIFICATION_avec_son_event_id() -> None:
 
 
 def test_une_seance_absente_enfile_une_CREATION() -> None:
-    instantane.enregistrer([], groupes=["BUT MMI S1 CM"])
+    # Un relevé RÉEL qui ne contient pas cette séance — pas un relevé vide.
+    # Depuis le 08/09/2026, un relevé sans aucun évènement est refusé au même
+    # titre qu'un relevé absent : les deux disent « je ne sais pas ce que
+    # Celcat contient », et feraient créer un doublon de tout le planning.
+    instantane.enregistrer(
+        [_ev(event_id=999999, module="WR999 Autre", semaine=42)],
+        groupes=["BUT MMI S1 CM"],
+    )
 
     _corriger()
 

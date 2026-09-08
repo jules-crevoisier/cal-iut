@@ -278,8 +278,25 @@ def test_should_return_409_when_post_celcat_lancer_nuit_and_saisie_is_off(
 def test_should_mark_validees_as_lancees_when_post_celcat_lancer_nuit_and_saisie_is_on(
     client_admin,
 ) -> None:
+    from cal_iut.celcat.instantane import enregistrer
+
     client_admin.patch("/celcat/saisie", json={"active": True})
     client_admin.post("/celcat/valider", json={"semaines": [4, 5]})
+    # Depuis le 08/09/2026, le balayage passe par la comparaison : sans relevé
+    # Celcat — ou avec un relevé vide — il n'enfile rien ET ne marque aucune
+    # semaine comme lancée, pour ne pas la retirer du balayage sans qu'elle
+    # soit jamais partie. L'intention du test ne change pas ; sa précondition
+    # doit être posée.
+    enregistrer(
+        [
+            {
+                "event_id": 1, "groupe": "BUT MMI S1 CM", "jour": 0,
+                "heure_debut": "08:00", "heure_fin": "09:30", "salle": "H.101",
+                "categorie": "[CM]", "module": "WR999", "semaine": 6,
+            }
+        ],
+        groupes=["BUT MMI S1 CM"],
+    )
     reponse = client_admin.post("/celcat/lancer-nuit")
     assert reponse.status_code == 200, reponse.text
     lancees = reponse.json()["semaines_lancees"]

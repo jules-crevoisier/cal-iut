@@ -64,6 +64,11 @@ def test_should_create_update_delete_only_semaines_validees_when_nightly_runs_an
     valide = planning.post("/celcat/valider", json={"semaines": [SEMAINE]})
     assert valide.status_code == 200, valide.text
     vider_file()
+    # Le balayage passe par la comparaison depuis le 08/09/2026 : il lui faut
+    # un relevé pour savoir ce que Celcat contient déjà. Celui-ci ne contient
+    # aucun cours rapprochable, donc toutes les séances de la semaine validée
+    # ressortent « absentes » — le lot attendu par ce test.
+    poser_semaines_celcat()
     page = FaussePage()
     _executer_nuit(page)
     jobs = jobs_en_attente()
@@ -123,6 +128,11 @@ def test_should_record_semaines_validees_as_lancees_after_nightly_runs_and_saisi
 
     activer_saisie(planning)
     planning.post("/celcat/valider", json={"semaines": [SEMAINE]})
+    # Depuis le 08/09/2026 le balayage passe par la comparaison : sans relevé
+    # Celcat il n'enfile rien et ne marque RIEN comme lancé (sinon la semaine
+    # sortirait du balayage sans être jamais partie). L'intention du test est
+    # inchangée ; sa précondition, elle, doit être dite.
+    poser_semaines_celcat()
     _executer_nuit()
     lancees = charger().get("semaines_lancees") or []
     assert SEMAINE in [int(s) for s in lancees]

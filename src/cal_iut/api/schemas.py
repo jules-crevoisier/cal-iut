@@ -741,6 +741,30 @@ class CelcatCorrigerResponse(BaseModel):
     # Séances sans équivalent module dans Celcat (BU, évènements officiels) :
     # comptées à part, jamais enfilées.
     hors_celcat: int = 0
+    # Suppressions volontairement laissées de côté (`supprimer=false`), quand
+    # quelqu'un travaille dans Celcat en même temps. Comptées à part : « aucune
+    # suppression à faire » et « des suppressions épargnées » se lisent pareil
+    # si on ne le dit pas.
+    suppressions_ignorees: int = 0
+    # Le compte rendu lisible. Il était CONSTRUIT par l'endpoint depuis
+    # toujours, mais absent du schéma : Pydantic le supprimait donc à la
+    # sérialisation, et l'écran affichait `undefined` après chaque
+    # « Corriger » (trouvé le 08/09/2026 en écrivant le test du mode « sans
+    # supprimer »). Un message que personne ne voit ne vaut pas mieux que
+    # pas de message.
+    message: str = ""
+
+
+class CelcatResyncResponse(CelcatCorrigerResponse):
+    """Ce qu'une resynchronisation a JETÉ, et ce qu'elle a reconstruit.
+
+    `retires` compte autant que le reste : c'est la mesure de l'écart entre
+    ce que la file croyait devoir faire et ce qui diverge réellement — 409
+    créations en file pour 60 séances absentes, le 08/09/2026.
+    """
+
+    semaines: list[int] = Field(default_factory=list)
+    retires: int = 0
     message: str = ""
 
 

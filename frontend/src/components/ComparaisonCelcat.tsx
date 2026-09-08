@@ -115,8 +115,24 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
   const identiques = toutes.filter((l) => l.statut === "identique");
   const horsCelcat = toutes.filter((l) => l.statut === "hors_celcat");
 
-  const corrigerTout = async () => {
+  const corrigerTout = async (supprimer = true) => {
     const suppressions = aAgir.filter((l) => l.statut === "en_trop_celcat").length;
+    if (!supprimer) {
+      // Pas de confirmation : sans suppression, l'action est rattrapable —
+      // une modification de trop se re-corrige, une suppression non. Demander
+      // pour un geste sûr apprend à cliquer « oui » sans lire, et c'est
+      // justement ce qui rend la confirmation des suppressions inutile.
+      setEnCours(true);
+      try {
+        setCorrection((await corrigerEcartsCelcat(semaine, { supprimer: false })).message);
+        setErreur(null);
+      } catch (e) {
+        setErreur(e instanceof Error ? e.message : "Correction impossible");
+      } finally {
+        setEnCours(false);
+      }
+      return;
+    }
     // Une confirmation, pas une par ligne : l'action est irréversible côté
     // Celcat, et le nombre de SUPPRESSIONS est ce qu'il faut voir avant de
     // valider — créer en trop se rattrape, supprimer non.
@@ -126,7 +142,10 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
 
 ` +
         "Le worker les poussera à son prochain passage.",
-      { title: "Corriger tous les écarts", confirmLabel: "Envoyer les corrections" },
+      {
+        title: "Corriger les écarts de cette semaine",
+        confirmLabel: "Envoyer les corrections",
+      },
     );
     if (!ok) return;
     setEnCours(true);
@@ -159,9 +178,27 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
       ) : (
         <>
           <CopyButton text={() => texteLignes(aAgir)} idleLabel="Copier les écarts" />
+          {/* « tous les écarts » se lisait « toutes les semaines » : le
+              bouton n'a jamais agi que sur la semaine affichée, mais rien ne
+              le disait (signalé le 08/09/2026). Le libellé porte donc
+              maintenant sa portée. */}
           <button type="button" disabled={enCours} onClick={() => void corrigerTout()}>
-            Corriger tous les écarts
+            Corriger les écarts de cette semaine
           </button>
+          {/* Le mode sûr quand quelqu'un travaille dans Celcat en même temps :
+              un écart mal poussé se re-corrige, une suppression non. Le
+              08/09/2026, quatre des neuf « en trop » de la semaine 1 venaient
+              d'être créés à la main par un collègue en train de corriger. */}
+          {aAgir.some((l) => l.statut === "en_trop_celcat") ? (
+            <button
+              type="button"
+              disabled={enCours}
+              data-testid="corriger-sans-supprimer"
+              onClick={() => void corrigerTout(false)}
+            >
+              Corriger sans supprimer
+            </button>
+          ) : null}
           {correction ? <p className="muted">{correction}</p> : null}
           {/* Ce qui attend et ce que le worker en a fait : sans ça, le
               bouton annonçait un envoi et plus rien ne suivait. */}

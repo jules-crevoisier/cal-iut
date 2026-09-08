@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ComparaisonCelcat } from "../components/ComparaisonCelcat";
 import { CopyButton } from "../components/CopyButton";
+import { EtatFileCelcat } from "../components/EtatFileCelcat";
 
 import {
   ajouterExtraCelcat,
@@ -18,6 +19,7 @@ import {
   ignorerExtraCelcat,
   lancerNuitCelcat,
   patchCelcatSaisie,
+  resynchroniserFileCelcat,
   validerSemainesCelcat,
   type CelcatEtat,
   type CelcatExtra,
@@ -142,6 +144,7 @@ export function AdminCelcatView() {
   // mauvaise semaine sans s'en apercevoir (constaté le 08/09/2026).
   const [libellesSemaines, setLibellesSemaines] = useState<string[]>([]);
   const [onglet, setOnglet] = useState<"pilotage" | "activite" | "celcat">("pilotage");
+  const [messageResync, setMessageResync] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     try {
@@ -530,6 +533,43 @@ export function AdminCelcatView() {
 
       {onglet === "activite" ? (
       <>
+      {/* Repartir de la comparaison. La file se remplissait par balayage
+          aveugle du planning : 491 jobs dont 409 créations, là où la
+          comparaison n'en réclamait que 105 (le 08/09/2026). Ce bouton jette
+          ce qui attend sur les semaines validées et ne ré-enfile que ce qui
+          diverge réellement — « on veut uniquement modifier ce qui ne va
+          pas ». */}
+      <div className="panel">
+        <h3>File d’attente</h3>
+        <EtatFileCelcat />
+        <p className="muted">
+          Reconstruit la file à partir de la comparaison : ce qui concorde déjà avec Celcat
+          n’engendre plus aucun job. Ne touche que les semaines validées.
+        </p>
+        <button
+          type="button"
+          disabled={enCours}
+          data-testid="resynchroniser-file"
+          onClick={() => {
+            void (async () => {
+              setEnCours(true);
+              try {
+                const r = await resynchroniserFileCelcat();
+                setMessageResync(r.message);
+                setErreur(null);
+              } catch (e) {
+                setErreur(e instanceof Error ? e.message : "Resynchronisation impossible");
+              } finally {
+                setEnCours(false);
+              }
+            })();
+          }}
+        >
+          Repartir de la comparaison
+        </button>
+        {messageResync ? <p className="muted">{messageResync}</p> : null}
+      </div>
+
       {/* Activité récente, en colonnes. Remplace la liste chronologique :
           « 12 échecs sur le même motif » et « 12 incidents distincts »
           n'appellent pas le même geste, et une liste à plat ne les

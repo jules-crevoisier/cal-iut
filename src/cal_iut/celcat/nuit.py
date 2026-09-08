@@ -20,6 +20,7 @@ from cal_iut.celcat.file_attente import (
     retirer_traites,
 )
 from cal_iut.celcat.formulaire import charger_carte
+from cal_iut.celcat.instantane import lire as lire_instantane
 from cal_iut.celcat.lecture import (
     EvenementCelcat,
     est_cours,
@@ -33,6 +34,9 @@ from cal_iut.celcat.mapping import entrees_pour_state
 from cal_iut.celcat.modification import ElementModification, modifier_manquants
 from cal_iut.celcat.navigateur import BASE_ENTRAINEMENT
 from cal_iut.celcat.ops import correspond_live
+from cal_iut.celcat.planification import contexte as contexte_comparaison
+from cal_iut.celcat.planification import jobs_depuis_lignes
+from cal_iut.celcat.planification import lignes as lignes_comparaison
 from cal_iut.celcat.rpc import masquer_semaine
 from cal_iut.celcat.rpc_config import charger_methodes
 from cal_iut.celcat.suppression import ElementSuppression, supprimer_manquants
@@ -188,6 +192,29 @@ def _masque_pour(entree: Any) -> str:
         return masquer_semaine(longueur=54, indice=indice)
     except Exception:  # noqa: BLE001
         return "N" * 54
+
+
+def _group_id_celcat_depuis_nom(nom: str) -> int | None:
+    """ID Celcat d'un groupe depuis son nom (« BUT MMI S1 CM »).
+
+    Lu dans `data/config/celcat_groupes.yaml`, la même source que l'écriture :
+    deviner un identifiant produirait une suppression sur le mauvais groupe,
+    ou aucune. Rend None si le nom est inconnu — le job n'est alors pas
+    enfilé, plutôt qu'enfilé sans groupe et bloqué à jamais en file.
+    """
+    from cal_iut.celcat.ecriture import _groupes_connus
+
+    if not nom.strip():
+        return None
+    connus = _groupes_connus()
+    direct = connus.get(nom.strip())
+    if direct is not None:
+        return int(direct)
+    cible = nom.strip().upper()
+    for cle, valeur in connus.items():
+        if cle.strip().upper() == cible:
+            return int(valeur)
+    return None
 
 
 def _indice_pour(entree: Any) -> int | None:
@@ -467,6 +494,12 @@ def _consommer_file(
             cache_groupes[nom] = _group_id_pour(page, entree, None)
         return cache_groupes[nom]
 
+    # Créations dont le journal connaît déjà l'event_id : ce sont en réalité
+    # des modifications, versées plus bas dans le lot d'updates.
+    elements_requalifies: list[ElementModification] = []
+    jobs_requalifies: dict[str, dict[str, Any]] = {}
+    causes_requalifiees: dict[str, str] = {}
+
     # --- create : un appel par job, comme les scripts existants (ids/masque
     # ne sont pas garantis homogènes entre deux jobs différents). ---------
     for job in jobs:
@@ -487,8 +520,6 @@ def _consommer_file(
         # création poserait un SECOND événement à côté du premier. L'écart
         # était théorique tant que la file se vidait en quelques secondes ;
         # il ne l'est plus depuis qu'elle a stagné plusieurs jours.
-        # `creer_manquants` avec un `event_id` non nul modifie l'existant au
-        # lieu de créer (cf. `charge_utile`).
         journal_actuel = doc.get("journal") if isinstance(doc.get("journal"), dict) else {}
         row_connu = journal_actuel.get(sid_job)
         eid_connu = _event_id(row_connu) if isinstance(row_connu, dict) else None
@@ -496,6 +527,37 @@ def _consommer_file(
         group_id = _groupe_cache(entree, job.get("group_id"))
         ids, cause_ids = _ids_cache(entree)
         masque = _masque_pour(entree)
+
+        if eid_connu:
+            # L'évènement EXISTE déjà là-bas : c'est une modification, et elle
+            # doit emprunter le chemin des modifications.
+            #
+            # `creer_manquants(..., event_id=N)` semblait faire l'affaire —
+            # `charge_utile` pose bien la clé `event_id`. Mais il RECONSTRUIT
+            # l'évènement à partir de rien : `"rooms": [{"room_id": 42}]`,
+            # sans `dept_id`, `unique_name`, `name` ni `weeks`. Or
+            # `modification.py` documente exactement cette forme comme la
+            # cause de « Cannot locate a record using only a partial key » —
+            # devenu le motif d'échec DOMINANT en production le 08/09/2026,
+            # jusqu'à 25 échecs sur 25 dans un cycle.
+            #
+            # `modifier_manquants` recharge l'évènement COMPLET depuis Celcat
+            # puis n'écrase que les champs qui changent : c'est le remède déjà
+            # écrit, il suffisait d'y router ces jobs.
+            elements_requalifies.append(
+                ElementModification(
+                    entree=entree,
+                    event_id=int(eid_connu),
+                    group_id=group_id,
+                    ids=ids,
+                    masque=masque,
+                )
+            )
+            jobs_requalifies[sid_job] = job
+            if cause_ids is not None:
+                causes_requalifiees[sid_job] = cause_ids
+            continue
+
         resultat = creer_manquants(
             page,
             [entree],
@@ -505,7 +567,7 @@ def _consommer_file(
             methode=methodes.methode_ecriture,
             base=base,
             production_autorisee=production_autorisee,
-            event_id=eid_connu or 0,
+            event_id=0,
         )
         for sid, eid in resultat.crees:
             marquer_saisi(entree, event_id=eid, group_id=group_id)
@@ -532,11 +594,15 @@ def _consommer_file(
 
     # --- update : un seul lot, ElementModification porte déjà ses propres
     # ids/masque/group_id (contrairement à creer_manquants). ---------------
-    elements_m: list[ElementModification] = []
-    jobs_m: dict[str, dict[str, Any]] = {}
+    # Les créations requalifiées rejoignent ce lot : elles portent un
+    # event_id, donc elles modifient un évènement existant, et le chemin
+    # `localiser_evenement` + `fusionner_deltas` est le seul qui envoie un
+    # enregistrement COMPLET — le seul que Celcat accepte.
+    elements_m: list[ElementModification] = list(elements_requalifies)
+    jobs_m: dict[str, dict[str, Any]] = dict(jobs_requalifies)
     # Cause d'une resolution d'ids ratee, par seance : rattachee au motif
     # d'echec plus bas (le lot d'updates est ecrit en une fois).
-    causes_m: dict[str, str] = {}
+    causes_m: dict[str, str] = dict(causes_requalifiees)
     for job in jobs:
         if job.get("action") != "update":
             continue
@@ -715,50 +781,62 @@ def executer_job_nuit(
     state = get_state()
     journal = doc.get("journal") if isinstance(doc.get("journal"), dict) else {}
 
-    places = [p for p in state.timetable if p.week in semaines]
-    ids_places = {p.session_id for p in places}
-
-    for placement in places:
-        row = journal.get(placement.session_id)
-        eid = _event_id(row) if isinstance(row, dict) else None
-        if eid is None:
-            enfiler(
-                {
-                    "action": "create",
-                    "session_id": placement.session_id,
-                    "semaine": placement.week,
-                }
+    # LE BALAYAGE PASSE PAR LA COMPARAISON, jamais par le seul journal.
+    #
+    # Il enfilait une CRÉATION pour chaque séance dont le journal ignorait
+    # l'event_id, sans regarder ce que Celcat contient : 409 créations pour
+    # les semaines 1 à 3, quand 60 séances seulement y manquaient (mesuré le
+    # 08/09/2026). Les ~350 autres visaient des cours déjà présents — au
+    # mieux elles échouent, au pire elles posent un doublon.
+    #
+    # Demande de l'utilisateur, le même jour : « on veut uniquement modifier
+    # ce qui ne va pas », puis « il faut bien fix cela pour les prochaines
+    # saisies ». C'est ici que ça se joue : sans ce changement, valider la
+    # semaine 4 relancerait les 350 créations aveugles.
+    semaines_faites: set[int] = set()
+    if semaines:
+        releve = lire_instantane()
+        if releve.releve_le is None or not releve.evenements:
+            # Sans relevé — ou avec un relevé VIDE, qui dit la même chose en
+            # ayant l'air de dire autre chose — TOUTES les séances paraissent
+            # absentes de Celcat : le balayage créerait un doublon de tout le
+            # planning. On n'enfile rien.
+            #
+            # Et surtout ON NE MARQUE PAS la semaine « lancée » : elle
+            # sortirait du balayage pour toujours sans jamais être partie.
+            # C'est exactement ce qui est arrivé aux semaines 1, 2 et 3,
+            # marquées lancées alors que l'état applicatif du sidecar était
+            # vide et qu'aucun job n'avait pu être enfilé.
+            journaliser(
+                kind="echec",
+                session_id="(balayage)",
+                motif=(
+                    "relevé Celcat absent ou vide : balayage reporté, rien n'est enfilé"
+                ),
+                regrouper=True,
             )
         else:
-            enfiler(
-                {
-                    "action": "update",
-                    "session_id": placement.session_id,
-                    "event_id": eid,
-                    "semaine": placement.week,
-                }
-            )
-
-    for session_id, row in journal.items():
-        if not isinstance(row, dict):
-            continue
-        try:
-            sem = int(row.get("semaine", -1))
-        except (TypeError, ValueError):
-            continue
-        if sem not in semaines or session_id in ids_places:
-            continue
-        eid = _event_id(row)
-        if eid is None:
-            continue
-        enfiler(
-            {
-                "action": "delete",
-                "session_id": session_id,
-                "event_id": eid,
-                "semaine": sem,
-            }
-        )
+            ctx = contexte_comparaison(state)
+            lundis = getattr(state.calendar, "teaching_mondays", []) or []
+            for semaine in sorted(semaines):
+                if not 0 <= semaine < len(lundis):
+                    continue
+                indice = indice_depuis_lundi(
+                    lundis[semaine], premiere_semaine_celcat=PREMIERE_SEMAINE_CELCAT
+                )
+                for job in jobs_depuis_lignes(
+                    lignes_comparaison(
+                        state,
+                        semaine=semaine,
+                        semaine_celcat=indice,
+                        evenements=releve.evenements,
+                        ctx=ctx,
+                    ),
+                    semaine=semaine,
+                    group_id_pour_nom=_group_id_celcat_depuis_nom,
+                ):
+                    enfiler(job)
+                semaines_faites.add(semaine)
 
     _scanner_extras(page, doc)
 
@@ -767,6 +845,11 @@ def executer_job_nuit(
 
     doc = charger()
     lancees = {int(s) for s in (doc.get("semaines_lancees") or [])}
-    doc["semaines_lancees"] = sorted(lancees | semaines)
+    # Seules les semaines RÉELLEMENT balayées sont marquées. Marquer une
+    # semaine qu'on n'a pas pu traiter (relevé absent, semaine hors
+    # calendrier) la retirerait du balayage définitivement : elle ne
+    # partirait jamais, en silence. C'est la panne des semaines 1, 2 et 3,
+    # marquées « lancées » sans qu'un seul job ne parte (07/09/2026).
+    doc["semaines_lancees"] = sorted(lancees | semaines_faites)
     doc["dernier_job"] = {"lance_le": datetime.now(UTC).isoformat()}
     sauver(doc)
