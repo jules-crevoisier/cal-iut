@@ -84,6 +84,30 @@ def _etat(db_isole):
         setattr(etat, cle, valeur)
 
 
+def test_une_seance_avec_un_vrai_groupe_est_reconnue(_etat) -> None:
+    """Le test « synchronisée » d'origine utilisait un placement SANS groupe :
+    le critère de groupe ne s'appliquait donc pas, et il est resté vert
+    pendant que la comparaison réelle rendait zéro « identique » sur toute
+    une semaine (08/09/2026).
+
+    Le nom Celcat d'un groupe s'écrit « BUT MMI S1 CM » : le semestre vient
+    de la SÉANCE, pas du `Group` — qui n'a pas cet attribut. Le construire
+    depuis le groupe donnait « BUT MMI  CM », qui ne correspond à rien.
+    """
+    from cal_iut.models.entities import Group
+
+    etat = get_state()
+    etat.groups = [
+        Group(id="but1-promo", label="Promo BUT1", parcours="BUT1", annee="BUT1", kind="promo")
+    ]
+    etat.sessions_by_id["WR116-S1-CM-1"].group_ids = ["but1-promo"]
+    etat.timetable[0].group_ids = ["but1-promo"]
+    instantane.enregistrer([_ev(groupe="BUT MMI S1 CM")], groupes=["BUT MMI S1 CM"])
+
+    lignes = client.get(f"/celcat/comparaison?semaine={SEMAINE}").json()["lignes"]
+    assert [l["statut"] for l in lignes] == ["identique"], lignes
+
+
 def test_refuse_un_anonyme() -> None:
     client.cookies.clear()
     assert client.get(f"/celcat/comparaison?semaine={SEMAINE}").status_code in (401, 403)

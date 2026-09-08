@@ -91,7 +91,7 @@ def test_deux_groupes_au_meme_creneau_ne_se_confondent_pas() -> None:
         ],
         semaine=1,
         semaine_celcat=3,
-        groupes_celcat={"ab": "BUT MMI S1 TD AB", "cd": "BUT MMI S1 TD CD"},
+        groupes_celcat={"WR101-AB": "BUT MMI S1 TD AB", "WR101-CD": "BUT MMI S1 TD CD"},
     )
 
     assert [l["statut"] for l in lignes] == ["identique", "identique"]
@@ -107,7 +107,7 @@ def test_sans_correspondance_de_groupe_la_seance_est_absente_et_non_appariee_a_t
         evenements=[_ev(module="WR101 Anglais", groupe="BUT MMI S1 TD ZZ")],
         semaine=1,
         semaine_celcat=3,
-        groupes_celcat={"ab": "BUT MMI S1 TD AB"},
+        groupes_celcat={"WR101-AB": "BUT MMI S1 TD AB"},
     )
 
     assert {l["statut"] for l in lignes} == {"absente_celcat", "en_trop_celcat"}

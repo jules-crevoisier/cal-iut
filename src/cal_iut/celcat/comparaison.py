@@ -102,11 +102,10 @@ def _correspond(
     if not module.upper().startswith(code):
         return False
 
-    attendu = ""
-    for gid in list(getattr(placement, "group_ids", None) or []):
-        attendu = groupes_celcat.get(str(gid), "")
-        if attendu:
-            break
+    # Indexé par `session_id` : c'est la SÉANCE qui porte le semestre, et le
+    # nom Celcat en a besoin (« BUT MMI S1 CM »). Passer par le groupe seul
+    # produisait « BUT MMI  CM » — un nom qui ne correspond à rien.
+    attendu = groupes_celcat.get(str(getattr(placement, "session_id", "")), "")
     vu = str(ev.get("groupe") or "").strip().upper()
     if attendu and vu and attendu.strip().upper() != vu:
         return False

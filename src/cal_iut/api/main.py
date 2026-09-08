@@ -3188,10 +3188,28 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     # ferait diverger les deux sens. `h018` s'appelle « Amphi 3 MMI » chez
     # Celcat — sans cette table, tous les CM en amphi ressortaient en écart.
     cfg = load_celcat_config(state.config_dir)
-    groupes_celcat = {
-        g.id: f"BUT MMI {getattr(g, 'semestre', '')} {libelle_groupe_celcat(g.label)}".strip()
-        for g in state.groups
-    }
+    # Le nom Celcat d'un groupe s'écrit « BUT MMI S1 CM » : le semestre vient
+    # de la SÉANCE, pas du `Group` — qui n'a tout simplement pas cet
+    # attribut. Le construire depuis le groupe donnait « BUT MMI  CM », qui
+    # ne correspond à rien : la comparaison rendait alors ZÉRO « identique »
+    # sur une semaine entière, chaque séance ressortant à la fois « absente »
+    # et « en trop » (constaté en production le 08/09/2026).
+    #
+    # Indexé par `session_id` et non par groupe, puisque c'est la séance qui
+    # porte le semestre. Même construction que `ops._group_id_celcat`, la
+    # source qui sert à l'écriture.
+    libelles_groupes = {g.id: g.label for g in state.groups}
+    groupes_celcat: dict[str, str] = {}
+    for placement in state.timetable:
+        session = state.sessions_by_id.get(placement.session_id)
+        semestre = str(getattr(session, "semestre", "") or "").strip()
+        ids = list(getattr(placement, "group_ids", None) or [])
+        if not semestre or not ids:
+            continue
+        label = str(libelles_groupes.get(ids[0], ids[0]))
+        groupes_celcat[placement.session_id] = (
+            f"BUT MMI {semestre} {libelle_groupe_celcat(label)}"
+        )
 
     lundis = state.calendar.teaching_mondays
     semaine_celcat = (
