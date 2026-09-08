@@ -89,6 +89,48 @@ def _heure(valeur: object) -> str:
     return ""
 
 
+# Tolérance de rapprochement entre une heure Celcat et une heure cal-iut.
+# Celcat pose ses horaires sur la date pivot du 31/12/1899 (convention
+# Delphi) : sérialisés en UTC, ils portent le fuseau HISTORIQUE de Paris,
+# celui d'avant l'adoption de GMT en 1911 — `UTC+00:09:21`. Notre 14h00
+# s'y lit donc « 13:50 », et notre 15h30 « 15:20 » (vérifié à la seconde
+# près le 08/09/2026 sur le CM de Régis Huez).
+#
+# Une tolérance plutôt qu'une conversion de fuseau : deux créneaux
+# consécutifs sont espacés de 90 minutes, donc un quart d'heure d'écart ne
+# peut désigner que le même créneau — et cela reste vrai si l'établissement
+# décale ses horaires de dix minutes, là où une conversion codée en dur
+# deviendrait fausse sans prévenir.
+TOLERANCE_CRENEAU_MINUTES = 15
+
+
+def _minutes(heure: str) -> int | None:
+    morceaux = str(heure or "").split(":")
+    if len(morceaux) < 2:
+        return None
+    try:
+        return int(morceaux[0]) * 60 + int(morceaux[1])
+    except ValueError:
+        return None
+
+
+def meme_creneau(heure_celcat: str, heure_caliut: str) -> bool:
+    """Ces deux heures désignent-elles le même créneau ?
+
+    Comparer les chaînes avec `!=` — ce que faisait `ops.correspond_live` —
+    échouait pour TOUTES les séances à cause du décalage ci-dessus : un
+    évènement Celcat parfaitement à sa place n'était jamais reconnu, et se
+    retrouvait signalé comme « extra » à trancher à la main.
+
+    Une heure absente ou illisible ne correspond à rien : un évènement
+    fantôme ne doit pas se rapprocher de n'importe quelle séance.
+    """
+    a, b = _minutes(heure_celcat), _minutes(heure_caliut)
+    if a is None or b is None:
+        return False
+    return abs(a - b) <= TOLERANCE_CRENEAU_MINUTES
+
+
 def _sans_cohorte(nom: str) -> str:
     return re.sub(r"\s+-\s+\d{4}\s*$", "", nom).strip()
 
