@@ -14,6 +14,7 @@ from cal_iut.celcat.extras import enregistrer
 from cal_iut.celcat.extras import lister as lister_extras
 from cal_iut.celcat.file_attente import enfiler, lister, retirer_traites
 from cal_iut.celcat.formulaire import charger_carte
+from cal_iut.celcat.logs import append as journaliser
 from cal_iut.celcat.lecture import (
     EvenementCelcat,
     est_cours,
@@ -363,12 +364,24 @@ def _consommer_file(
             marquer_saisi(entree, event_id=eid, group_id=group_id)
             a_retirer.append(job)
             bilan.reussis += 1
+            # Journalise l'ECRITURE, pas seulement les refus : sans ça, les
+            # compteurs et la vue d'activite restent a zero meme quand tout
+            # marche (constate le 07/09/2026).
+            journaliser(
+                kind="created", session_id=sid, event_id=eid,
+                course_code=getattr(entree, "course_code", None),
+            )
         # L'écriture est tentée même avec des ids incomplets — c'est le
         # comportement voulu, ses propres garde-fous la refuseront. Mais si
         # elle échoue ALORS QUE la résolution avait déjà échoué, le motif
         # rendu (« event_cat_id reçu vide ») est un symptôme : on lui
         # rattache la cause, sans quoi elle est perdue.
-        bilan.echecs.extend(_avec_cause(resultat.echecs, cause_ids))
+        for sid_e, motif_e in _avec_cause(resultat.echecs, cause_ids):
+            bilan.echecs.append((sid_e, motif_e))
+            journaliser(
+                kind="echec", session_id=sid_e, motif=motif_e,
+                course_code=getattr(entree, "course_code", None), regrouper=True,
+            )
 
     # --- update : un seul lot, ElementModification porte déjà ses propres
     # ids/masque/group_id (contrairement à creer_manquants). ---------------
@@ -425,10 +438,17 @@ def _consommer_file(
             entree = entrees.get(sid)
             if entree is not None:
                 marquer_saisi(entree, event_id=eid, group_id=gid_par_session.get(sid))
+            journaliser(
+                kind="modified", session_id=sid, event_id=eid,
+                course_code=getattr(entree, "course_code", None),
+            )
         for sid_e, motif_e in resultat_m.echecs:
             cause = causes_m.get(sid_e)
-            bilan.echecs.append(
-                (sid_e, f"{motif_e} [ids irrésolus : {cause}]" if cause else motif_e)
+            motif_complet = f"{motif_e} [ids irrésolus : {cause}]" if cause else motif_e
+            bilan.echecs.append((sid_e, motif_complet))
+            journaliser(
+                kind="echec", session_id=sid_e, motif=motif_complet,
+                course_code=getattr(entrees.get(sid_e), "course_code", None), regrouper=True,
             )
 
     # --- delete : group_id vient du job (row.get("group_id")), jamais résolu
@@ -458,6 +478,10 @@ def _consommer_file(
             if job is not None:
                 a_retirer.append(job)
                 bilan.reussis += 1
+                journaliser(
+                    kind="deleted", session_id=sid,
+                    event_id=int(job.get("event_id") or 0) or None,
+                )
         for sid, motif in resultat_s.refusees:
             job = jobs_s.get(sid)
             if job is not None:
