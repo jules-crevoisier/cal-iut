@@ -29,11 +29,27 @@ export function setAccessToken(token: string | null): void {
  * `{"detail": [{"msg": "..."}]}` (422 de validation Pydantic — un tableau,
  * jamais une chaîne). Sans ce dernier cas, un mot de passe trop court
  * affichait `[object Object]`. */
-function messageErreur(body: unknown, repli: string): string {
+/** Exportée pour être testée directement (`utils/erreurConflit.test.ts`) :
+ * c'est ici que le détail d'un conflit se perdait, et le symptôme visible
+ * était à trois fichiers de là. */
+export function messageErreur(body: unknown, repli: string): string {
   if (body && typeof body === "object") {
     const b = body as Record<string, unknown>;
     if (typeof b.message === "string") return b.message;
     if (typeof b.detail === "string") return b.detail;
+    // Détail STRUCTURÉ (`{"detail": {"message": ..., "hard_conflicts": [...]}}`)
+    // — la forme que le serveur emploie pour tout conflit FORÇABLE. Elle
+    // n'était pas reconnue : ni chaîne, ni tableau, on retombait sur le
+    // `repli`, c'est-à-dire le statut HTTP (« Conflict »). `detailConflit`
+    // ne pouvait alors plus rien y lire, et l'interface n'ouvrait jamais la
+    // modale « forcer » — le changement de salle sur la semaine en cours
+    // échouait sans un mot (retour utilisateur 08/09/2026).
+    //
+    // Sérialisé plutôt qu'aplati en texte : `detailConflit` le relit en
+    // JSON pour retrouver `hard_conflicts` et `soft_warnings` séparément.
+    if (b.detail && typeof b.detail === "object" && !Array.isArray(b.detail)) {
+      return JSON.stringify(b.detail);
+    }
     if (Array.isArray(b.detail)) {
       const msgs = b.detail
         .map((e) => (e && typeof e === "object" && typeof (e as Record<string, unknown>).msg === "string" ? (e as Record<string, unknown>).msg : null))
