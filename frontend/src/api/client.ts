@@ -762,6 +762,9 @@ export interface CelcatFile {
   reussis: number;
   echecs: number;
   ignores: number;
+  /** Jobs en attente d'une semaine encore non posée dans Celcat — ni un
+   *  échec ni un abandon (consigne du 08/09/2026). */
+  differes: number;
   resume: string;
 }
 

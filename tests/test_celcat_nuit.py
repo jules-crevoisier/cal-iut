@@ -17,6 +17,7 @@ from celcat_sync_helpers import (
     jobs_en_attente,
     monter_planning,
     place,
+    poser_semaines_celcat,
     restaurer_etat,
     seance,
     snapshot_etat,
@@ -183,6 +184,7 @@ def test_should_drain_create_update_delete_jobs_from_file_attente_and_call_match
             "semaine": SEMAINE,
         }
     )
+    poser_semaines_celcat()
 
     appels = {"create": 0, "update": 0, "delete": 0}
 
@@ -313,6 +315,7 @@ def test_should_remove_only_successfully_processed_or_guard_refused_jobs_from_th
             "semaine": SEMAINE,
         }
     )
+    poser_semaines_celcat()
 
     def _faux_creer(_page, entrees, **_k):
         from cal_iut.celcat.ecriture import ResultatEcriture

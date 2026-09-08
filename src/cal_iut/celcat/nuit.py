@@ -14,7 +14,6 @@ from cal_iut.celcat.extras import enregistrer
 from cal_iut.celcat.extras import lister as lister_extras
 from cal_iut.celcat.file_attente import enfiler, lister, retirer_traites
 from cal_iut.celcat.formulaire import charger_carte
-from cal_iut.celcat.logs import append as journaliser
 from cal_iut.celcat.lecture import (
     EvenementCelcat,
     est_cours,
@@ -23,6 +22,7 @@ from cal_iut.celcat.lecture import (
     evenement_depuis_rpc,
     indice_depuis_lundi,
 )
+from cal_iut.celcat.logs import append as journaliser
 from cal_iut.celcat.mapping import entrees_pour_state
 from cal_iut.celcat.modification import ElementModification, modifier_manquants
 from cal_iut.celcat.navigateur import BASE_ENTRAINEMENT
@@ -184,6 +184,84 @@ def _masque_pour(entree: Any) -> str:
         return "N" * 54
 
 
+def _indice_pour(entree: Any) -> int | None:
+    """Indice `weeks` d'une entrée, ou None si on ne peut pas le calculer.
+
+    Même calcul que `_masque_pour`, rendu séparément : le masque sert à
+    ÉCRIRE, l'indice sert à DÉCIDER si l'on écrit. `_masque_pour` retombe
+    volontairement sur un masque vide en cas de lundi illisible ; ici il faut
+    pouvoir distinguer « semaine 7 » de « je ne sais pas », les deux
+    n'appelant pas la même conduite.
+    """
+    try:
+        if not str(getattr(entree, "lundi", "") or "").strip():
+            return None
+        from datetime import date
+
+        return indice_depuis_lundi(
+            date.fromisoformat(entree.lundi), premiere_semaine_celcat=PREMIERE_SEMAINE_CELCAT
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _ecarter_semaines_non_posees(
+    jobs: list[dict[str, Any]], entrees: dict[str, Any], bilan: BilanDrainage
+) -> list[dict[str, Any]]:
+    """Retire les CRÉATIONS visant une semaine que Celcat n'a pas encore
+    posée (consigne du 08/09/2026 : « les semaines pas posées dans Celcat il
+    faut attendre »).
+
+    Seules les créations sont concernées : un `update` ou un `delete` porte
+    un `event_id`, donc l'évènement EXISTE déjà là-bas et la semaine y est
+    posée par construction. Différer une correction laisserait une heure
+    fausse en ligne — le signalement de Régis Huez cette semaine.
+
+    APPELÉ AVANT LE DÉCOUPAGE PAR `limite`, et c'est essentiel : le cycle
+    prend les PREMIERS jobs de la file. Trier après aurait rendu des cycles
+    entiers vides dès que des différés occupent la tête de file, chaque
+    passage reprenant les mêmes — une file qui cesse de se vider tout en
+    ayant l'air de tourner, c'est-à-dire la panne du 07/09/2026 reproduite
+    par le remède.
+    """
+    from cal_iut.celcat.instantane import lire
+    from cal_iut.celcat.semaines_posees import cours_par_semaine, motif_attente, semaines_posees
+
+    attendus: dict[int, int] = {}
+    for entree in entrees.values():
+        indice = _indice_pour(entree)
+        if indice is not None:
+            attendus[indice] = attendus.get(indice, 0) + 1
+
+    releve = lire()
+    posees = semaines_posees(releve.evenements, attendus=attendus)
+    presents = cours_par_semaine(releve.evenements)
+
+    retenus: list[dict[str, Any]] = []
+    for job in jobs:
+        if job.get("action") != "create":
+            retenus.append(job)
+            continue
+        entree = entrees.get(str(job.get("session_id") or ""))
+        indice = _indice_pour(entree) if entree is not None else None
+        # Une entrée inconnue ou sans lundi lisible passe ici sans être
+        # différée : son sort est déjà décidé plus bas (« séance inconnue de
+        # la maquette »), et l'écarter ici la ferait disparaître des
+        # compteurs sans explication.
+        if indice is None or indice in posees:
+            retenus.append(job)
+            continue
+        bilan.differes.append(
+            (
+                str(job.get("session_id") or ""),
+                motif_attente(
+                    indice, celcat=presents.get(indice, 0), attendu=attendus.get(indice, 0)
+                ),
+            )
+        )
+    return retenus
+
+
 def _cle_ressources(entree: Any) -> tuple:
     """Ce qui détermine les identifiants Celcat d'une séance.
 
@@ -258,6 +336,12 @@ class BilanDrainage:
     reussis: int = 0
     echecs: list[tuple[str, str]] = field(default_factory=list)
     ignores: list[tuple[str, str]] = field(default_factory=list)
+    # Jobs volontairement NON tentés : leur semaine n'est pas encore posée
+    # dans Celcat (consigne du 08/09/2026). Ni un échec ni un abandon — ils
+    # restent en file. Comptés à part parce que les confondre avec les
+    # ignorés ferait lire « 409 jobs perdus » là où il faut lire « 409 jobs
+    # qui attendent que l'équipe ouvre les semaines ».
+    differes: list[tuple[str, str]] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.en_attente > 0
@@ -294,6 +378,11 @@ class BilanDrainage:
             parts.append(f"{len(self.echecs)} en échec — {self._par_motif(self.echecs)}")
         if self.ignores:
             parts.append(f"{len(self.ignores)} ignoré(s) — {self._par_motif(self.ignores, 2)}")
+        if self.differes:
+            parts.append(
+                f"{len(self.differes)} en attente d'une semaine posée "
+                f"— {self._par_motif(self.differes, 2)}"
+            )
         return " — ".join(parts)
 
 
@@ -324,6 +413,16 @@ def _consommer_file(
     bilan = BilanDrainage(en_attente=len(jobs))
     if not jobs:
         return bilan
+    state = get_state()
+    entrees = entrees_pour_state(state)
+    methodes = charger_methodes(Path(state.config_dir))
+    a_retirer: list[dict[str, Any]] = []
+
+    # D'ABORD écarter ce qui vise une semaine que Celcat n'a pas ouverte,
+    # ENSUITE borner le cycle : l'ordre inverse ferait des passages entiers
+    # vides dès que des différés occupent la tête de file (cf.
+    # `_ecarter_semaines_non_posees`).
+    jobs = _ecarter_semaines_non_posees(jobs, entrees, bilan)
     if limite > 0:
         # Un cycle BORNÉ. Le premier drainage réel a duré 2h11 sur 489 jobs,
         # session VPN du compte partagé prise du début à la fin et pas une
@@ -331,11 +430,6 @@ def _consommer_file(
         # n'est pas fait maintenant se fera au cycle suivant — il n'y a
         # aucune raison de tout tenir en un seul passage.
         jobs = jobs[:limite]
-
-    state = get_state()
-    entrees = entrees_pour_state(state)
-    methodes = charger_methodes(Path(state.config_dir))
-    a_retirer: list[dict[str, Any]] = []
 
     # Résolutions mises en cache LE TEMPS DE CE CYCLE. Chaque job coûtait
     # sinon six appels RPC (groupe, module, salle, personnel, catégorie,

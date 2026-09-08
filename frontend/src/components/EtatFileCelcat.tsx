@@ -64,6 +64,13 @@ export function EtatFileCelcat() {
     .map(([action, n]) => `${n} ${action}`)
     .join(", ");
 
+  // Une file qui ne descend pas parce qu'elle ATTEND que l'équipe ouvre les
+  // semaines dans Celcat, et une file qui ne descend pas parce qu'elle
+  // ÉCHOUE, se ressemblent à l'écran et appellent des gestes opposés : dans
+  // un cas il n'y a rien à faire, dans l'autre il faut aller voir. On le dit
+  // donc explicitement plutôt que de laisser déduire du compteur.
+  const differes = typeof file.differes === "number" ? file.differes : 0;
+
   return (
     <p className={file.en_attente > 0 ? "bad" : "muted"} data-testid="etat-file-celcat">
       {file.en_attente === 0
@@ -72,6 +79,15 @@ export function EtatFileCelcat() {
       {file.passe_le
         ? `Dernier passage du worker ${ageLisible(file.age_secondes)} : ${file.resume || "—"}.`
         : "Le worker n’est pas encore passé."}
+      {differes > 0 ? (
+        <>
+          {" "}
+          <span data-testid="file-differes">
+            Dont {differes} en attente d’une semaine encore non posée dans Celcat — normal,
+            rien à faire tant que l’équipe ne l’a pas saisie.
+          </span>
+        </>
+      ) : null}
     </p>
   );
 }
