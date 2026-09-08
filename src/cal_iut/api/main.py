@@ -55,6 +55,7 @@ from cal_iut.api.schemas import (
     CelcatComparaisonResponse,
     CelcatCorrigerResponse,
     CelcatEtatResponse,
+    CelcatFileResponse,
     CelcatInstantaneDemandeResponse,
     CelcatInstantaneResponse,
     CelcatExtraActionResponse,
@@ -3355,6 +3356,38 @@ def _groupe_id_depuis_nom(state: object, nom: str) -> int | None:
         return int(data[nom])
     except (KeyError, TypeError, ValueError):
         return None
+
+
+@app.get(
+    "/celcat/file",
+    response_model=CelcatFileResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_file() -> CelcatFileResponse:
+    """Ce qui attend d'être poussé, et ce que le worker a fait en dernier.
+
+    Répond au manque signalé le 08/09/2026 : après « 38 corrections mises en
+    file », plus rien ne disait où ça en était. L'information existait dans
+    `docker compose logs celcat-nuit`, c'est-à-dire nulle part pour qui
+    utilise l'application.
+    """
+    import collections
+
+    from cal_iut.celcat.drainage import dernier
+    from cal_iut.celcat.file_attente import lister
+
+    jobs = lister()
+    bilan = dernier()
+    return CelcatFileResponse(
+        en_attente=len(jobs),
+        par_action=dict(collections.Counter(str(j.get("action") or "?") for j in jobs)),
+        passe_le=bilan.passe_le,
+        age_secondes=bilan.age_secondes,
+        reussis=bilan.reussis,
+        echecs=bilan.echecs,
+        ignores=bilan.ignores,
+        resume=bilan.resume,
+    )
 
 
 @app.get("/celcat/extras", dependencies=[Depends(accounts.require_role("admin"))])

@@ -150,6 +150,7 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
         ("etat", "celcat_sync.json"),
         ("file_attente", "celcat_file_attente.json"),
         ("logs", "celcat_logs.json"),
+        ("drainage", "celcat_drainage.json"),
         ("extras", "celcat_extras.json"),
         ("nuit", "celcat_sync.json"),
     ):
