@@ -53,6 +53,7 @@ from cal_iut.api.schemas import (
     CelcatCompteurs,
     CelcatEntreeResponse,
     CelcatComparaisonResponse,
+    CelcatCorrigerResponse,
     CelcatEtatResponse,
     CelcatInstantaneDemandeResponse,
     CelcatInstantaneResponse,
@@ -3228,6 +3229,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
             semaine_celcat=semaine_celcat,
             groupes_celcat=groupes_celcat,
             salles_celcat=cfg.salles,
+            codes_celcat=set(cfg.modules),
         )
         if releve.releve_le is not None
         else []
@@ -3242,6 +3244,117 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
         perime=releve.perime,
         lignes=lignes,
     )
+
+
+@app.post(
+    "/celcat/comparaison/corriger",
+    response_model=CelcatCorrigerResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_comparaison_corriger(semaine: int = 0) -> CelcatCorrigerResponse:
+    """Pousse les écarts d'une semaine vers Celcat — via la FILE D'ATTENTE.
+
+    N'écrit jamais dans Celcat directement : chaque écart devient un job que
+    le worker consomme avec ses garde-fous (catégorie d'évènement, masque
+    d'une seule semaine, refus d'écrire sur URCA_2026 sans `--production`).
+    Un bouton qui écrirait lui-même contournerait tout ce qui protège d'une
+    mauvaise écriture.
+
+    Un écart devient une MODIFICATION, jamais une création : créer poserait
+    un doublon à côté de l'évènement existant.
+    """
+    from cal_iut.celcat.etat import charger as charger_celcat
+    from cal_iut.celcat.file_attente import enfiler
+    from cal_iut.celcat.instantane import lire
+    from cal_iut.celcat.ops import _group_id_celcat
+
+    # Sans relevé, toutes les séances paraissent absentes : « tout corriger »
+    # créerait alors un doublon de tout le planning.
+    if lire().releve_le is None:
+        raise HTTPException(
+            409,
+            "Aucun relevé Celcat : rien à comparer, donc rien à corriger. "
+            "Utilisez « Rafraîchir » d'abord.",
+        )
+    # Sans saisie armée, `ops` ignore tout : les jobs partiraient dans le
+    # vide et l'écran annoncerait un succès qui n'a pas eu lieu.
+    if not charger_celcat().get("saisie_active"):
+        raise HTTPException(
+            409,
+            "La saisie Celcat est désarmée : les corrections ne partiraient pas. "
+            "Activez l’écriture, puis relancez.",
+        )
+
+    state = get_state()
+    comparaison = celcat_comparaison(semaine)
+    compte = {"update": 0, "create": 0, "delete": 0}
+    hors = 0
+
+    for ligne in comparaison.lignes:
+        statut = ligne.get("statut")
+        if statut in ("identique", "hors_celcat"):
+            hors += 1 if statut == "hors_celcat" else 0
+            continue
+
+        session_id = str(ligne.get("session_id") or "")
+        celcat = ligne.get("celcat") or {}
+
+        if statut == "ecart" and celcat.get("event_id"):
+            enfiler({
+                "action": "update", "session_id": session_id,
+                "event_id": int(celcat["event_id"]), "semaine": semaine,
+            })
+            compte["update"] += 1
+        elif statut == "absente_celcat":
+            enfiler({"action": "create", "session_id": session_id, "semaine": semaine})
+            compte["create"] += 1
+        elif statut == "en_trop_celcat" and celcat.get("event_id"):
+            # `group_id` est indispensable : la suppression localise
+            # l'évènement par son groupe, un job sans lui resterait en file
+            # sans jamais pouvoir être traité.
+            gid = _groupe_id_depuis_nom(state, str(celcat.get("groupe") or ""))
+            if gid is None:
+                continue
+            enfiler({
+                "action": "delete", "session_id": session_id or f"celcat-{celcat['event_id']}",
+                "event_id": int(celcat["event_id"]), "group_id": gid, "semaine": semaine,
+            })
+            compte["delete"] += 1
+
+    total = sum(compte.values())
+    return CelcatCorrigerResponse(
+        modifications=compte["update"], creations=compte["create"],
+        suppressions=compte["delete"], total=total, hors_celcat=hors,
+        message=(
+            f"{total} correction(s) mises en file — le worker les pousse à son "
+            "prochain passage (moins d’une minute)."
+            if total
+            else "Rien à corriger sur cette semaine."
+        ),
+    )
+
+
+def _groupe_id_depuis_nom(state: object, nom: str) -> int | None:
+    """ID Celcat d'un groupe depuis son nom (« BUT MMI S1 CM »).
+
+    Lu dans `data/config/celcat_groupes.yaml`, la même source que
+    l'écriture : deviner un identifiant produirait une suppression sur le
+    mauvais groupe, ou aucune.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    chemin = Path(state.config_dir) / "celcat_groupes.yaml"
+    if not nom or not chemin.exists():
+        return None
+    data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        return None
+    try:
+        return int(data[nom])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 @app.get("/celcat/extras", dependencies=[Depends(accounts.require_role("admin"))])

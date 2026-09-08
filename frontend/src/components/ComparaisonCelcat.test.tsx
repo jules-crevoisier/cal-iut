@@ -120,3 +120,49 @@ describe("Comparaison Celcat / cal-iut", () => {
     expect(copie).toContain("event_id=1931709");
   });
 });
+
+describe("Bouton « Corriger tous les écarts »", () => {
+  it("demande confirmation en disant COMBIEN de suppressions", async () => {
+    // Créer en trop se rattrape, supprimer non : c'est le nombre qu'il faut
+    // voir avant de valider.
+    const confirmer = vi.fn(() => Promise.resolve(false));
+    vi.doMock("../utils/confirmDialog", () => ({ confirmAsync: confirmer }));
+    const mock = stub({
+      ...BASE,
+      lignes: [ECART, { ...ECART, statut: "en_trop_celcat" as const, caliut: null }],
+    });
+    render(<ComparaisonCelcat semaine={1} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /corriger tous les écarts/i }));
+
+    // Rien n'est envoyé tant que l'utilisateur n'a pas confirmé.
+    await waitFor(() =>
+      expect(
+        mock.mock.calls.some(([u]) => String(u).includes("/comparaison/corriger")),
+      ).toBe(false),
+    );
+  });
+
+  it("compte à part les séances sans équivalent Celcat", async () => {
+    // Retour utilisateur : « il faut bien sûr ignorer les cours que l'on a
+    // créés, exemple BU ». Les mêler aux écarts noierait les vrais.
+    stub({
+      ...BASE,
+      lignes: [
+        ECART,
+        {
+          ...ECART,
+          statut: "hors_celcat" as const,
+          session_id: "WR100BU-S1-TD-1",
+          course_code: "WR100BU",
+          celcat: null,
+        },
+      ],
+    });
+    render(<ComparaisonCelcat semaine={1} />);
+
+    const bloc = await screen.findByTestId("comparaison-celcat");
+    expect(within(bloc).getByText(/1 écart\(s\)/)).toBeTruthy();
+    expect(within(bloc).getByText(/sans équivalent dans Celcat/i)).toBeTruthy();
+  });
+});

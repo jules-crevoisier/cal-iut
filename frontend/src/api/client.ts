@@ -702,7 +702,9 @@ export interface CelcatInstantane {
  * Les réimplémenter ici garantirait qu'elles divergent, et une comparaison
  * fausse est pire qu'aucune : elle enverrait corriger ce qui va bien. */
 export interface LigneComparaison {
-  statut: "identique" | "ecart" | "absente_celcat" | "en_trop_celcat";
+  /** « hors_celcat » : séance sans équivalent module dans Celcat (BU,
+   * évènements officiels). Ce n'est pas un écart — rien à y corriger. */
+  statut: "identique" | "ecart" | "absente_celcat" | "en_trop_celcat" | "hors_celcat";
   session_id: string;
   course_code: string;
   caliut: { jour: number | null; heure: string; salle: string | null; semaine: number | null } | null;
@@ -728,6 +730,21 @@ export interface CelcatComparaison {
   age_secondes: number | null;
   perime: boolean;
   lignes: LigneComparaison[];
+}
+
+export interface CelcatCorrection {
+  modifications: number;
+  creations: number;
+  suppressions: number;
+  total: number;
+  hors_celcat: number;
+  message: string;
+}
+
+/** Pousse les écarts d'une semaine vers Celcat — via la FILE d'attente, donc
+ * avec tous les garde-fous du worker. N'écrit jamais directement. */
+export function corrigerEcartsCelcat(semaine: number): Promise<CelcatCorrection> {
+  return request(`/celcat/comparaison/corriger?semaine=${semaine}`, { method: "POST" });
 }
 
 export function fetchCelcatComparaison(semaine: number): Promise<CelcatComparaison> {

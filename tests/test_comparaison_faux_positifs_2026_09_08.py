@@ -195,3 +195,51 @@ def test_un_code_tronque_ne_se_confond_pas_avec_un_autre_module() -> None:
     )
 
     assert {l["statut"] for l in lignes} == {"absente_celcat", "en_trop_celcat"}
+
+
+def test_une_seance_sans_code_celcat_n_est_pas_une_absence() -> None:
+    """Retour utilisateur 08/09/2026 : « il faut bien sûr ignorer les cours
+    que l'on a créés, exemple BU etc. ».
+
+    WR100BU (la BU), ÉCHANGE-IA, les rentrées, les présentations de
+    services : ces séances n'ont AUCUN équivalent module dans Celcat et
+    n'ont pas vocation à y aller. Les compter « absentes de Celcat » les
+    mélangeait à de vrais oublis — et un bouton « tout corriger » aurait
+    tenté de les créer, échouant à chaque passage du worker (c'est déjà ce
+    que faisaient les 23 blocages « WR100BU sans code Celcat » du journal).
+    """
+    lignes = comparer(
+        placements=[_placement(session_id="WR100BU-S1-TD-1", course_code="WR100BU")],
+        evenements=[],
+        semaine=1,
+        semaine_celcat=3,
+        salles_celcat=SALLES,
+        codes_celcat={"WR104", "WR116"},
+    )
+
+    assert lignes[0]["statut"] == "hors_celcat"
+
+
+def test_une_vraie_absence_reste_signalee_quand_le_code_existe() -> None:
+    """Ignorer ce qui n'a pas sa place dans Celcat ne doit pas faire taire
+    ce qui devrait y être."""
+    lignes = comparer(
+        placements=[_placement()],
+        evenements=[],
+        semaine=1,
+        semaine_celcat=3,
+        salles_celcat=SALLES,
+        codes_celcat={"WR104"},
+    )
+
+    assert lignes[0]["statut"] == "absente_celcat"
+
+
+def test_sans_liste_de_codes_le_comportement_ne_change_pas() -> None:
+    """La liste est une information de l'appelant : ne pas l'avoir ne doit
+    pas faire disparaître des séances de la comparaison."""
+    lignes = comparer(
+        placements=[_placement()], evenements=[], semaine=1, semaine_celcat=3, salles_celcat=SALLES
+    )
+
+    assert lignes[0]["statut"] == "absente_celcat"

@@ -24,7 +24,13 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchCelcatComparaison, type CelcatComparaison, type LigneComparaison } from "../api/client";
+import {
+  corrigerEcartsCelcat,
+  fetchCelcatComparaison,
+  type CelcatComparaison,
+  type LigneComparaison,
+} from "../api/client";
+import { confirmAsync } from "../utils/confirmDialog";
 import { CopyButton } from "./CopyButton";
 
 const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi"];
@@ -34,6 +40,7 @@ const LIBELLE: Record<LigneComparaison["statut"], string> = {
   absente_celcat: "Absente de Celcat",
   en_trop_celcat: "En trop dans Celcat",
   identique: "Identique",
+  hors_celcat: "Hors Celcat",
 };
 
 function jour(n: number | null | undefined): string {
@@ -68,6 +75,8 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
   const [donnees, setDonnees] = useState<CelcatComparaison | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [voirIdentiques, setVoirIdentiques] = useState(false);
+  const [correction, setCorrection] = useState<string | null>(null);
+  const [enCours, setEnCours] = useState(false);
 
   const charger = useCallback(async () => {
     try {
@@ -98,8 +107,38 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
     );
   }
 
-  const aAgir = toutes.filter((l) => l.statut !== "identique");
+  // « hors_celcat » n'est pas un écart : ce sont des séances sans équivalent
+  // module dans Celcat (BU, évènements officiels) — rien à corriger, et les
+  // mélanger aux vrais écarts noierait ces derniers.
+  const aAgir = toutes.filter((l) => l.statut !== "identique" && l.statut !== "hors_celcat");
   const identiques = toutes.filter((l) => l.statut === "identique");
+  const horsCelcat = toutes.filter((l) => l.statut === "hors_celcat");
+
+  const corrigerTout = async () => {
+    const suppressions = aAgir.filter((l) => l.statut === "en_trop_celcat").length;
+    // Une confirmation, pas une par ligne : l'action est irréversible côté
+    // Celcat, et le nombre de SUPPRESSIONS est ce qu'il faut voir avant de
+    // valider — créer en trop se rattrape, supprimer non.
+    const ok = await confirmAsync(
+      `${aAgir.length} correction(s) vont être mises en file pour Celcat, dont ` +
+        `${suppressions} suppression(s) définitive(s).
+
+` +
+        "Le worker les poussera à son prochain passage.",
+      { title: "Corriger tous les écarts", confirmLabel: "Envoyer les corrections" },
+    );
+    if (!ok) return;
+    setEnCours(true);
+    try {
+      const r = await corrigerEcartsCelcat(semaine);
+      setCorrection(r.message);
+      setErreur(null);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Correction impossible");
+    } finally {
+      setEnCours(false);
+    }
+  };
 
   return (
     <div data-testid="comparaison-celcat">
@@ -119,6 +158,10 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
       ) : (
         <>
           <CopyButton text={() => texteLignes(aAgir)} idleLabel="Copier les écarts" />
+          <button type="button" disabled={enCours} onClick={() => void corrigerTout()}>
+            Corriger tous les écarts
+          </button>
+          {correction ? <p className="muted">{correction}</p> : null}
           <table className="comparaison-table">
             <thead>
               <tr>
@@ -154,6 +197,13 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
           </table>
         </>
       )}
+
+      {horsCelcat.length > 0 ? (
+        <p className="muted">
+          {horsCelcat.length} séance(s) sans équivalent dans Celcat (BU, évènements officiels) —
+          ignorées.
+        </p>
+      ) : null}
 
       {identiques.length > 0 ? (
         <p className="muted">

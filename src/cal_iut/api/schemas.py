@@ -726,6 +726,24 @@ class CelcatComparaisonResponse(BaseModel):
     lignes: list[dict] = Field(default_factory=list)
 
 
+class CelcatCorrigerResponse(BaseModel):
+    """Ce que « Tout corriger » a ENFILÉ — pas ce qui est écrit.
+
+    Le bouton n'écrit pas dans Celcat : il pose des jobs que le worker
+    consomme avec ses garde-fous. Le compte rendu doit donc parler de ce qui
+    est mis en file, jamais laisser croire que Celcat est déjà à jour.
+    """
+
+    modifications: int = 0
+    creations: int = 0
+    suppressions: int = 0
+    total: int = 0
+    # Séances sans équivalent module dans Celcat (BU, évènements officiels) :
+    # comptées à part, jamais enfilées.
+    hors_celcat: int = 0
+    message: str = ""
+
+
 class CelcatEtatResponse(BaseModel):
     saisie_active: bool
     semaines_validees: list[int] = []
