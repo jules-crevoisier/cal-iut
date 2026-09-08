@@ -102,6 +102,10 @@ def _relever(page) -> tuple[list[dict], list[str]]:
                     "heure_debut": ev.heure_debut,
                     "heure_fin": ev.heure_fin,
                     "salle": ev.salle,
+                    # TOUTES les salles : un cours posé sur deux salles à la
+                    # fois n'était pas visible, le relevé n'en gardant qu'une
+                    # (signalé par Kyllian Bresson le 08/09/2026).
+                    "salles": ev.salles,
                     "categorie": ev.categorie,
                     "enseignant": ev.enseignant,
                     "module": ev.module_nom,

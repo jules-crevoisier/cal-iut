@@ -33,6 +33,10 @@ class EvenementCelcat:
     staff_id: int | None = None
     dept_id: int | None = None
     suspended: str = "N"
+    # TOUTES les salles de l'évènement. `salle` reste la première — tout le
+    # code de rapprochement s'en sert et le changer d'un coup le ferait
+    # diverger — mais un cours posé sur DEUX salles doit pouvoir se voir.
+    salles: list[str] = field(default_factory=list)
 
     @property
     def indice_semaine(self) -> int | None:
@@ -54,6 +58,35 @@ def _premier_id(valeurs: object) -> int | None:
             except (TypeError, ValueError):
                 return None
     return None
+
+
+def _tous_les_noms(valeurs: object, *cles: str) -> list[str]:
+    """TOUS les noms d'une liste de ressources, pas seulement le premier.
+
+    Un évènement Celcat peut porter plusieurs salles : sur l'interface, on
+    change de salle soit par le bouton de retrait, soit en glissant la
+    nouvelle avec Maj — sans quoi elle s'AJOUTE à l'ancienne. Le cours se
+    retrouve alors sur deux salles à la fois (signalé par Kyllian Bresson le
+    08/09/2026 : « Thomas Castellengo est sur deux salles »).
+
+    `_premier_nom` ne rapportait que la tête, si bien qu'un tel évènement
+    nous paraissait normal — et l'écran affirmait « identique » dessus.
+    """
+    if not isinstance(valeurs, list):
+        return []
+    noms: list[str] = []
+    for item in valeurs:
+        if not isinstance(item, dict):
+            texte = str(item).strip()
+            if texte:
+                noms.append(texte)
+            continue
+        for cle in cles:
+            val = item.get(cle)
+            if val not in (None, ""):
+                noms.append(str(val))
+                break
+    return noms
 
 
 def _premier_nom(valeurs: object, *cles: str) -> str:
@@ -163,6 +196,7 @@ def evenement_depuis_rpc(
         staff_id=_premier_id(brut.get("staff")),
         dept_id=int(brut["dept_id"]) if brut.get("dept_id") is not None else None,
         suspended=str(brut.get("suspended") or "N"),
+        salles=_tous_les_noms(brut.get("rooms"), "name", "unique_name"),
     )
 
 
