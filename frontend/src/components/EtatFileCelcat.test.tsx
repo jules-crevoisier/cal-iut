@@ -43,7 +43,33 @@ describe("État de la file Celcat", () => {
 
     const bloc = await screen.findByTestId("etat-file-celcat");
     expect(bloc.textContent).toContain("38 correction(s) en attente");
-    expect(bloc.textContent).toContain("17 delete");
+    // En français, pas en jargon d'API : « delete » ne dit pas à un
+    // utilisateur que dix-sept cours vont DISPARAÎTRE de Celcat.
+    expect(bloc.textContent).toContain("17 suppressions");
+  });
+
+  it("range les motifs d'échec dans un repli au lieu d'un pavé", async () => {
+    // Retour utilisateur 08/09/2026, capture à l'appui : « fix moi cette
+    // interface, on ne comprend rien du tout là ». Le résumé brut noyait les
+    // trois chiffres qui décident sous vingt lignes de motifs.
+    stub({
+      ...VIDE,
+      en_attente: 414,
+      par_action: { create: 392, update: 22 },
+      reussis: 18,
+      echecs: 7,
+      resume:
+        "414 job(s) — 18 réussi(s) — 7 en échec — 1× matière TSBZC05M introuvable " +
+        "(ex. WRA305M) | 1× matière TSBZC12M introuvable (ex. WRA312M)",
+    });
+    render(<EtatFileCelcat />);
+
+    const bloc = await screen.findByTestId("etat-file-celcat");
+    // Ce qui décide reste en clair, hors du repli.
+    expect(bloc.textContent).toContain("18 réussi(s)");
+    const motifs = await screen.findByTestId("file-motifs");
+    expect(motifs.querySelectorAll("li").length).toBe(3);
+    expect(motifs.textContent).toContain("TSBZC05M");
   });
 
   it("montre QUAND le worker est passé et ce qu'il a fait", async () => {

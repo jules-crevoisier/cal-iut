@@ -4076,6 +4076,44 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
    largeur en permet : sur un écran étroit, des colonnes serrées côte à côte
    seraient illisibles alors que c'est précisément l'écran qu'on consulte en
    vitesse pour savoir si ça passe. */
+/* État de la file Celcat. Retour utilisateur 08/09/2026, capture à l'appui :
+   « fix moi cette interface, on ne comprend rien du tout là » — le compte
+   rendu du worker s'affichait d'un seul bloc, vingt lignes sans respiration
+   où les chiffres qui décident étaient introuvables. Les motifs vivent
+   désormais dans un repli, et chacun sur sa ligne. */
+.celcat-file p {
+  margin: 0 0 6px;
+}
+
+.celcat-file details {
+  margin-top: 8px;
+}
+
+.celcat-file summary {
+  cursor: pointer;
+  /* Cible tactile : le repli se consulte au téléphone, en réunion. */
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.celcat-file details ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  /* Une liste de motifs peut être longue : elle défile chez elle plutôt que
+     de repousser le tableau de comparaison hors de l'écran. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.celcat-file details li {
+  margin-bottom: 6px;
+  /* Les motifs portent des identifiants de séance sans espaces
+     (`WRA305M-S3-TD-1-but2-creacom-fc-td-gh`) : sans cette césure, ils
+     débordent la colonne à 320 px. */
+  overflow-wrap: anywhere;
+}
+
 .celcat-kanban {
   display: grid;
   grid-template-columns: 1fr;

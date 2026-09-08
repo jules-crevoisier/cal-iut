@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ComparaisonCelcat } from "../components/ComparaisonCelcat";
 import { CopyButton } from "../components/CopyButton";
 import { EtatFileCelcat } from "../components/EtatFileCelcat";
+import { confirmAsync } from "../utils/confirmDialog";
 
 import {
   ajouterExtraCelcat,
@@ -546,27 +547,46 @@ export function AdminCelcatView() {
           Reconstruit la file à partir de la comparaison : ce qui concorde déjà avec Celcat
           n’engendre plus aucun job. Ne touche que les semaines validées.
         </p>
-        <button
-          type="button"
-          disabled={enCours}
-          data-testid="resynchroniser-file"
-          onClick={() => {
-            void (async () => {
-              setEnCours(true);
-              try {
-                const r = await resynchroniserFileCelcat();
-                setMessageResync(r.message);
-                setErreur(null);
-              } catch (e) {
-                setErreur(e instanceof Error ? e.message : "Resynchronisation impossible");
-              } finally {
-                setEnCours(false);
-              }
-            })();
-          }}
-        >
-          Repartir de la comparaison
-        </button>
+        {/* Deux gestes, parce que le risque n'est pas le même. Reconstruire
+            les modifications et les créations est rattrapable ; supprimer ne
+            l'est pas — le 08/09/2026, dix-sept évènements ont disparu de
+            Celcat parce que des suppressions dormaient en file depuis le
+            matin, dont douze venus d'une saisie manuelle en cours. */}
+        {([
+          ["sans", "Reconstruire sans supprimer", false],
+          ["avec", "Reconstruire, suppressions comprises", true],
+        ] as const).map(([cle, libelle, supprimer]) => (
+          <button
+            key={cle}
+            type="button"
+            disabled={enCours}
+            data-testid={`resynchroniser-file-${cle}`}
+            onClick={() => {
+              void (async () => {
+                if (supprimer) {
+                  const ok = await confirmAsync(
+                    "Les évènements que Celcat a en trop seront SUPPRIMÉS définitivement.\n\n" +
+                      "À n’utiliser que si personne ne travaille dans Celcat en ce moment.",
+                    { title: "Reconstruire avec les suppressions", confirmLabel: "Reconstruire" },
+                  );
+                  if (!ok) return;
+                }
+                setEnCours(true);
+                try {
+                  const r = await resynchroniserFileCelcat(undefined, { supprimer });
+                  setMessageResync(r.message);
+                  setErreur(null);
+                } catch (e) {
+                  setErreur(e instanceof Error ? e.message : "Resynchronisation impossible");
+                } finally {
+                  setEnCours(false);
+                }
+              })();
+            }}
+          >
+            {libelle}
+          </button>
+        ))}
         {messageResync ? <p className="muted">{messageResync}</p> : null}
       </div>
 
