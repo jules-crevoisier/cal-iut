@@ -95,6 +95,54 @@ def _ressource_reelle(page, type_id: int, id_cible: int) -> dict | None:
     return lots[0] if lots else None
 
 
+def _premier_id_ressource(brut_liste: object, cle_id: str) -> int | None:
+    """Identifiant de la ressource actuellement associée, ou None."""
+    if not isinstance(brut_liste, list) or not brut_liste:
+        return None
+    tete = brut_liste[0]
+    if not isinstance(tete, dict):
+        return None
+    for cle in ("id", cle_id):
+        if tete.get(cle) is not None:
+            try:
+                return int(tete[cle])
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _nom_ressource(brut_liste: object) -> str:
+    """Le nom lisible de la ressource actuelle, pour le motif de refus — un
+    identifiant numérique n'aide personne à aller regarder dans Celcat."""
+    if not isinstance(brut_liste, list) or not brut_liste:
+        return "?"
+    tete = brut_liste[0]
+    if not isinstance(tete, dict):
+        return "?"
+    return str(tete.get("name") or tete.get("unique_name") or tete.get("id") or "?")
+
+
+class ChangementSalleSuspendu(RuntimeError):
+    """Remplacer une salle AJOUTE la nouvelle au lieu de retirer l'ancienne.
+
+    Constaté en production le 08/09/2026 : les séances corrigées se sont
+    retrouvées sur DEUX salles (« H.007 + H.101 »), exactement celles dont
+    l'écart de salle venait d'être poussé.
+
+    La cause est juste en dessous — `_ressource_fusionnee` construit un objet
+    d'association neuf quand l'identifiant change, sans rien qui désigne
+    l'association EXISTANTE. Celcat ne peut donc pas savoir laquelle
+    remplacer : il en ajoute une et garde l'ancienne. C'est le pendant RPC du
+    glisser-sans-Maj décrit par Kyllian Bresson le même jour.
+
+    Le remède probable — envoyer `{"-room_id": ancienne}`, la convention déjà
+    prouvée pour supprimer un évènement (cf. `rpc.supprimer_evenement_rpc`) —
+    n'a jamais été essayé contre Celcat. L'essayer en production aggraverait
+    le problème s'il est faux : on refuse donc, visiblement, en attendant de
+    pouvoir le vérifier.
+    """
+
+
 def _ressource_fusionnee(
     page, brut_liste: object, *, cle_id: str, valeur: int | None, event_id: int | None
 ) -> list[dict]:
@@ -182,8 +230,29 @@ def fusionner_deltas(
         page, brut.get("modules"), cle_id="module_id", valeur=_id(ids, "module_id"),
         event_id=id_evenement,
     )
+    # LA SALLE EST SUSPENDUE tant qu'un remplacement ajoute au lieu de
+    # retirer (cf. `ChangementSalleSuspendu`). Refusé ici plutôt qu'écrit
+    # à moitié : `modifier_manquants` encaisse un échec isolé, donc le reste
+    # du lot passe, et le motif apparaît au bilan là où on le verra.
+    #
+    # Tout le RESTE continue — heure, jour, catégorie d'évènement, semaine.
+    # Suspendre la salle ne doit pas suspendre la correction des catégories
+    # fausses signalées par David Annebicque.
+    salle_voulue = _id(ids, "room_id", "salle_id")
+    salle_actuelle = _premier_id_ressource(brut.get("rooms"), "room_id")
+    if (
+        salle_voulue is not None
+        and salle_actuelle is not None
+        and salle_voulue != salle_actuelle
+    ):
+        raise ChangementSalleSuspendu(
+            f"changement de salle suspendu : Celcat ajoute la nouvelle salle au lieu de "
+            f"remplacer l'ancienne (event_id={id_evenement} est encore en "
+            f"{_nom_ressource(brut.get('rooms'))}). À corriger à la main dans Celcat, "
+            f"avec Maj en glissant la salle ou le bouton de retrait."
+        )
     fusionne["rooms"] = _ressource_fusionnee(
-        page, brut.get("rooms"), cle_id="room_id", valeur=_id(ids, "room_id", "salle_id"),
+        page, brut.get("rooms"), cle_id="room_id", valeur=salle_voulue,
         event_id=id_evenement,
     )
     fusionne["staff"] = _ressource_fusionnee(
