@@ -751,6 +751,24 @@ export function fetchCelcatComparaison(semaine: number): Promise<CelcatComparais
   return request(`/celcat/comparaison?semaine=${semaine}`);
 }
 
+/** Ce qui attend d'être poussé, et ce que le worker a fait en dernier. Les
+ * deux ensemble : une file qui ne bouge pas malgré des passages réguliers
+ * est le signe d'une panne. */
+export interface CelcatFile {
+  en_attente: number;
+  par_action: Record<string, number>;
+  passe_le: string | null;
+  age_secondes: number | null;
+  reussis: number;
+  echecs: number;
+  ignores: number;
+  resume: string;
+}
+
+export function fetchCelcatFile(): Promise<CelcatFile> {
+  return request("/celcat/file");
+}
+
 export function fetchCelcatInstantane(): Promise<CelcatInstantane> {
   return request("/celcat/instantane");
 }

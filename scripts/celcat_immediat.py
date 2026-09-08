@@ -126,6 +126,16 @@ def principal() -> int:
                     # jours de panne totale (07/09/2026), le worker répétant
                     # « file d'attente drainée » sans écrire une seule fois.
                     print(bilan.resume())
+                    # Trace lue par l'interface : sans elle, l'information
+                    # n'existe que dans `docker compose logs`, c'est-à-dire
+                    # nulle part pour qui utilise l'application.
+                    from cal_iut.celcat.drainage import enregistrer as tracer
+
+                    tracer(
+                        en_attente=bilan.en_attente, reussis=bilan.reussis,
+                        echecs=len(bilan.echecs), ignores=len(bilan.ignores),
+                        resume=bilan.resume(),
+                    )
                 finally:
                     try:
                         nav.deconnexion(page)

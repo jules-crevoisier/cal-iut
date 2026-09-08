@@ -31,6 +31,7 @@ import {
   type LigneComparaison,
 } from "../api/client";
 import { confirmAsync } from "../utils/confirmDialog";
+import { EtatFileCelcat } from "./EtatFileCelcat";
 import { CopyButton } from "./CopyButton";
 
 const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi"];
@@ -162,6 +163,9 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
             Corriger tous les écarts
           </button>
           {correction ? <p className="muted">{correction}</p> : null}
+          {/* Ce qui attend et ce que le worker en a fait : sans ça, le
+              bouton annonçait un envoi et plus rien ne suivait. */}
+          <EtatFileCelcat />
           <table className="comparaison-table">
             <thead>
               <tr>

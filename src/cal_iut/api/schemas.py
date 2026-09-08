@@ -744,6 +744,27 @@ class CelcatCorrigerResponse(BaseModel):
     message: str = ""
 
 
+class CelcatFileResponse(BaseModel):
+    """Ce qui attend, et ce que le worker a fait en dernier.
+
+    Deux informations qui ne disent PAS la même chose : la file dit ce qui
+    reste à faire, le dernier passage dit si quelque chose avance. Une file
+    de 38 jobs « depuis 2 secondes » et « depuis 3 heures » n'appellent pas
+    le même geste — et c'est cette distinction manquante qui a laissé passer
+    trois jours de panne silencieuse.
+    """
+
+    en_attente: int = 0
+    par_action: dict[str, int] = Field(default_factory=dict)
+    # Dernier passage du worker.
+    passe_le: str | None = None
+    age_secondes: float | None = None
+    reussis: int = 0
+    echecs: int = 0
+    ignores: int = 0
+    resume: str = ""
+
+
 class CelcatEtatResponse(BaseModel):
     saisie_active: bool
     semaines_validees: list[int] = []
