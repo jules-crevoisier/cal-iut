@@ -12,7 +12,13 @@ from cal_iut.celcat.ecriture import creer_manquants, resoudre_groupe, resoudre_i
 from cal_iut.celcat.etat import charger, live_actuel
 from cal_iut.celcat.extras import enregistrer
 from cal_iut.celcat.extras import lister as lister_extras
-from cal_iut.celcat.file_attente import enfiler, lister, retirer_traites
+from cal_iut.celcat.file_attente import (
+    cle_job,
+    enfiler,
+    lister,
+    repousser_en_fin,
+    retirer_traites,
+)
 from cal_iut.celcat.formulaire import charger_carte
 from cal_iut.celcat.lecture import (
     EvenementCelcat,
@@ -405,7 +411,9 @@ def _consommer_file(
     """Draine `file_attente.lister()` et appelle la primitive RPC adaptée à
     chaque job (create/update/delete). Un job traité (succès OU refus de
     garde-fou) est retiré de la file ; un job en échec RPC/réseau y reste
-    pour la prochaine nuit — jamais un `vider()` global.
+    pour la prochaine nuit — mais REPOUSSÉ EN FIN DE FILE, jamais laissé en
+    tête : le cycle est borné et prend les premiers jobs, si bien qu'un
+    échec systématique confisquerait la file (cf. `repousser_en_fin`).
 
     Rend un `BilanDrainage` : ce qui a échoué compte autant que ce qui a
     réussi, et rester muet sur les échecs revient à les cacher."""
@@ -630,9 +638,31 @@ def _consommer_file(
             # — le compter comme réussi masquerait une suppression qui
             # n'aura jamais lieu.
             bilan.ignores.append((sid, f"suppression refusée : {motif}"))
+        # Échec RPC d'une suppression : personne ne le lisait jusqu'ici, si
+        # bien qu'une suppression impossible restait en file SANS jamais
+        # apparaître au bilan — invisible et immobile, la pire combinaison
+        # (trouvé le 08/09/2026 en câblant la rotation).
+        for sid, motif in resultat_s.echecs:
+            bilan.echecs.append((sid, f"suppression : {motif}"))
+            journaliser(kind="echec", session_id=sid, motif=motif, regrouper=True)
 
     if a_retirer:
         retirer_traites(a_retirer)
+    # TOUT ce qui a été examiné sans être retiré repart en fin de file —
+    # défini par soustraction plutôt que cas par cas, parce que l'énumération
+    # oubliait déjà un cas : « séance inconnue de la maquette » est classée
+    # « ignoré » mais RESTE en file, et squattait donc la tête aussi
+    # sûrement qu'un échec (vu dans les journaux du 08/09/2026, avec
+    # WR303D-S3-TD-2). Par soustraction, tout nouveau cas de ce genre est
+    # couvert d'avance.
+    #
+    # Les jobs différés n'y sont pas : ils ont été écartés AVANT le
+    # découpage, donc ils ne consomment pas le budget du cycle et n'ont pas
+    # besoin de bouger.
+    retires = {cle_job(j) for j in a_retirer}
+    a_repousser = [j for j in jobs if cle_job(j) not in retires]
+    if a_repousser:
+        repousser_en_fin(a_repousser)
     return bilan
 
 

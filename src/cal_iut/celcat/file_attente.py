@@ -52,7 +52,7 @@ def vider() -> None:
     _ecrire([])
 
 
-def _cle_job(job: dict[str, Any]) -> tuple[str, str, str]:
+def cle_job(job: dict[str, Any]) -> tuple[str, str, str]:
     action = str(job.get("action") or "")
     session_id = str(job.get("session_id") or "")
     event_id = job.get("event_id")
@@ -67,9 +67,44 @@ def retirer_traites(identites: list[dict[str, Any]]) -> None:
     qui ont échoué (RPC/réseau) et doivent rester pour la prochaine nuit."""
     if not identites:
         return
-    cibles = {_cle_job(i) for i in identites}
-    restants = [j for j in _lire() if _cle_job(j) not in cibles]
+    cibles = {cle_job(i) for i in identites}
+    restants = [j for j in _lire() if cle_job(j) not in cibles]
     _ecrire(restants)
+
+
+def repousser_en_fin(identites: list[dict[str, Any]]) -> None:
+    """Renvoie ces jobs à la FIN de la file, sans en perdre aucun.
+
+    Un job en échec RPC reste en file — c'est voulu : une panne réseau ou un
+    Celcat momentanément indisponible doit être réessayé. Mais le cycle est
+    borné et prend les PREMIERS jobs : un job qui échoue SYSTÉMATIQUEMENT
+    (ressource supprimée côté Celcat, module absent du catalogue) reste donc
+    en tête indéfiniment, et les jobs derrière ne sont jamais atteints.
+
+    Constaté en production le 08/09/2026 : la file est descendue 504 -> 493
+    -> 491, puis n'a plus bougé pendant que le worker rejouait toutes les
+    cinq minutes les vingt-cinq mêmes échecs, quatre cent dix jobs sains
+    attendant derrière. Une file confisquée par sa propre tête, avec toutes
+    les apparences du bon fonctionnement.
+
+    REPOUSSER N'EST PAS JETER. Aucun compteur d'échecs, aucune mise au
+    rebut : un job impossible revient à chaque tour de file et continue donc
+    de figurer au bilan, là où on peut le voir. Écarter en silence est
+    exactement ce qui a coûté trois jours cette semaine.
+
+    La file est RELUE ici, jamais réordonnée depuis une copie prise en début
+    de cycle : l'API y enfile pendant que le worker travaille, et un
+    déplacement de séance fait entre-temps serait sinon effacé.
+    """
+    if not identites:
+        return
+    cibles = {cle_job(i) for i in identites}
+    jobs = _lire()
+    devant = [j for j in jobs if cle_job(j) not in cibles]
+    derriere = [j for j in jobs if cle_job(j) in cibles]
+    if not derriere:
+        return
+    _ecrire(devant + derriere)
 
 
 def retenir_evenement(ev: EvenementCelcat) -> None:
