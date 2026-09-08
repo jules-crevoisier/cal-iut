@@ -769,9 +769,15 @@ export interface CelcatResync extends CelcatCorrection {
 /** Repart de la comparaison : jette les jobs en attente sur ces semaines et
  *  ré-enfile uniquement ce qui diverge réellement. Sans `semaines`, le
  *  serveur prend celles que l'établissement a validées. */
-export function resynchroniserFileCelcat(semaines?: number[]): Promise<CelcatResync> {
-  const q = semaines && semaines.length ? `?semaines=${semaines.join(",")}` : "";
-  return request(`/celcat/file/resynchroniser${q}`, { method: "POST" });
+export function resynchroniserFileCelcat(
+  semaines?: number[],
+  options?: { supprimer?: boolean },
+): Promise<CelcatResync> {
+  const params = new URLSearchParams();
+  if (semaines && semaines.length) params.set("semaines", semaines.join(","));
+  if (options?.supprimer === false) params.set("supprimer", "false");
+  const q = params.toString();
+  return request(`/celcat/file/resynchroniser${q ? `?${q}` : ""}`, { method: "POST" });
 }
 
 /** Ce qui attend d'être poussé, et ce que le worker a fait en dernier. Les

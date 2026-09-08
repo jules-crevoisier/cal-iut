@@ -160,3 +160,23 @@ def test_sans_supprimer_ne_cree_pas_non_plus_de_doublon(client) -> None:
     client.post(f"/celcat/comparaison/corriger?semaine={SEMAINE}&supprimer=false")
 
     assert all(j["action"] != "create" for j in lister()), lister()
+
+
+def test_la_resynchronisation_sait_aussi_epargner_les_suppressions(client) -> None:
+    """Le geste complet et sûr : purger les jobs aveugles, reconstruire ce qui
+    diverge, sans rien détruire.
+
+    Sans cette option, « Repartir de la comparaison » restait inutilisable
+    tant que quelqu'un travaillait dans Celcat — alors que c'est précisément
+    le moment où la file est le plus encombrée de jobs périmés.
+    """
+    reponse = client.post(
+        f"/celcat/file/resynchroniser?semaines={SEMAINE}&supprimer=false"
+    )
+
+    assert reponse.status_code == 200, reponse.text
+    corps = reponse.json()
+    assert corps["suppressions"] == 0
+    assert corps["suppressions_ignorees"] == 1
+    assert all(j["action"] != "delete" for j in lister()), lister()
+    assert "suppression" in corps["message"].lower()

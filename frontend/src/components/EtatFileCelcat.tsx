@@ -4,28 +4,46 @@
  *
  * Retour utilisateur 08/09/2026, juste après le premier envoi réel : « là on
  * n'a pas vraiment de vue où l'on voit ce qu'il se passe si on appuie sur
- * corriger ». Le bouton annonçait « 38 corrections mises en file », puis
- * plus rien.
+ * corriger ». Puis, capture à l'appui le même jour : « fix moi cette
+ * interface, on ne comprend rien du tout là ».
  *
- * Les deux informations sont montrées ENSEMBLE parce qu'elles ne disent pas
- * la même chose, et que c'est leur croisement qui alerte : une file qui ne
- * bouge pas MALGRÉ des passages réguliers est le signe d'une panne. C'est
- * exactement ce que trois jours de « file d'attente drainée » n'ont pas
- * permis de voir.
+ * IL AVAIT RAISON DEUX FOIS. La première version ne montrait rien ; la
+ * seconde montrait TOUT, d'un bloc — le résumé brut du worker, vingt lignes
+ * de motifs d'échec au milieu desquelles les trois chiffres qui décident
+ * (combien attendent, combien ont réussi, quand) étaient introuvables.
+ *
+ * L'écran est donc hiérarchisé :
+ *
+ *   1. CE QUI ATTEND, en gros — le nombre et sa répartition ;
+ *   2. CE QUE LE WORKER A FAIT en dernier, et QUAND — c'est le croisement des
+ *      deux qui alerte : une file qui ne bouge pas MALGRÉ des passages
+ *      réguliers est le signe d'une panne, et c'est exactement ce que trois
+ *      jours de « file d'attente drainée » n'ont pas permis de voir ;
+ *   3. LE DÉTAIL DES MOTIFS, replié. Il ne se lit pas tous les jours, mais
+ *      quand on en a besoin il n'existe nulle part ailleurs que dans
+ *      `docker compose logs`.
+ *
+ * Les jobs EN ATTENTE D'UNE SEMAINE POSÉE sont dits à part et en clair :
+ * une file qui ne descend pas parce qu'elle attend l'équipe et une file qui
+ * ne descend pas parce qu'elle échoue se ressemblent à l'écran et appellent
+ * des gestes opposés.
  *
  * Se rafraîchit tout seul tant qu'il reste des jobs : après avoir cliqué, on
- * veut voir la file descendre sans avoir à recharger la page.
+ * veut voir la file descendre sans recharger la page.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchCelcatFile, type CelcatFile } from "../api/client";
+import { ageLisible, segmentsResume } from "./segmentsResume";
 
-function ageLisible(secondes: number | null): string {
-  if (secondes === null) return "";
-  if (secondes < 60) return `il y a ${Math.max(1, Math.round(secondes))} s`;
-  const minutes = Math.floor(secondes / 60);
-  if (minutes < 60) return `il y a ${minutes} min`;
-  return `il y a ${Math.floor(minutes / 60)} h`;
+const LIBELLE_ACTION: Record<string, string> = {
+  create: "création",
+  update: "modification",
+  delete: "suppression",
+};
+
+function pluriel(n: number, mot: string): string {
+  return `${n} ${mot}${n > 1 ? "s" : ""}`;
 }
 
 export function EtatFileCelcat() {
@@ -61,33 +79,47 @@ export function EtatFileCelcat() {
   if (!file || typeof file.en_attente !== "number") return null;
 
   const detail = Object.entries(file.par_action ?? {})
-    .map(([action, n]) => `${n} ${action}`)
+    .map(([action, n]) => pluriel(n, LIBELLE_ACTION[action] ?? action))
     .join(", ");
-
-  // Une file qui ne descend pas parce qu'elle ATTEND que l'équipe ouvre les
-  // semaines dans Celcat, et une file qui ne descend pas parce qu'elle
-  // ÉCHOUE, se ressemblent à l'écran et appellent des gestes opposés : dans
-  // un cas il n'y a rien à faire, dans l'autre il faut aller voir. On le dit
-  // donc explicitement plutôt que de laisser déduire du compteur.
   const differes = typeof file.differes === "number" ? file.differes : 0;
+  const motifs = segmentsResume(file.resume);
 
   return (
-    <p className={file.en_attente > 0 ? "bad" : "muted"} data-testid="etat-file-celcat">
-      {file.en_attente === 0
-        ? "File d’attente vide — tout est poussé."
-        : `${file.en_attente} correction(s) en attente${detail ? ` (${detail})` : ""}.`}{" "}
-      {file.passe_le
-        ? `Dernier passage du worker ${ageLisible(file.age_secondes)} : ${file.resume || "—"}.`
-        : "Le worker n’est pas encore passé."}
+    <div className="celcat-file" data-testid="etat-file-celcat">
+      <p className={file.en_attente > 0 ? "bad" : "muted"}>
+        {file.en_attente === 0
+          ? "File d’attente vide — tout est poussé."
+          : `${file.en_attente} correction(s) en attente${detail ? ` : ${detail}` : ""}.`}
+      </p>
+
+      <p className="muted">
+        {file.passe_le ? (
+          <>
+            Dernier passage du worker {ageLisible(file.age_secondes)} :{" "}
+            <strong>{file.reussis} réussi(s)</strong>, {file.echecs} en échec.
+          </>
+        ) : (
+          "Le worker n’est pas encore passé."
+        )}
+      </p>
+
       {differes > 0 ? (
-        <>
-          {" "}
-          <span data-testid="file-differes">
-            Dont {differes} en attente d’une semaine encore non posée dans Celcat — normal,
-            rien à faire tant que l’équipe ne l’a pas saisie.
-          </span>
-        </>
+        <p className="muted" data-testid="file-differes">
+          Dont <strong>{differes}</strong> en attente d’une semaine encore non posée dans
+          Celcat — normal, rien à faire tant que l’équipe ne l’a pas saisie.
+        </p>
       ) : null}
-    </p>
+
+      {motifs.length > 0 ? (
+        <details data-testid="file-motifs">
+          <summary>Détail des motifs ({motifs.length})</summary>
+          <ul>
+            {motifs.map((motif) => (
+              <li key={motif}>{motif}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
   );
 }

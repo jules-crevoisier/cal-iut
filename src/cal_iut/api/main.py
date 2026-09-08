@@ -3328,7 +3328,9 @@ def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> Cel
     response_model=CelcatResyncResponse,
     dependencies=[Depends(accounts.require_role("admin"))],
 )
-def celcat_file_resynchroniser(semaines: str = "") -> CelcatResyncResponse:
+def celcat_file_resynchroniser(
+    semaines: str = "", supprimer: bool = True
+) -> CelcatResyncResponse:
     """Repart de la comparaison : jette ce qui attend, ré-enfile ce qui diverge.
 
     Demande utilisateur 08/09/2026 : « c'est possible de virer tout ce qui
@@ -3382,25 +3384,31 @@ def celcat_file_resynchroniser(semaines: str = "") -> CelcatResyncResponse:
     retires = retirer_semaines(set(demandees))
     compte = {"update": 0, "create": 0, "delete": 0}
     hors = 0
+    epargnees = 0
     for semaine in demandees:
-        partiel, hors_semaine, _ = _enfiler_ecarts_semaine(semaine)
+        partiel, hors_semaine, sans_suppr = _enfiler_ecarts_semaine(
+            semaine, supprimer=supprimer
+        )
         for cle, valeur in partiel.items():
             compte[cle] += valeur
         hors += hors_semaine
+        epargnees += sans_suppr
 
     total = sum(compte.values())
+    reste = f" {epargnees} suppression(s) laissée(s) de côté." if epargnees else ""
     return CelcatResyncResponse(
         semaines=demandees,
         retires=retires,
         modifications=compte["update"],
         creations=compte["create"],
         suppressions=compte["delete"],
+        suppressions_ignorees=epargnees,
         total=total,
         hors_celcat=hors,
         message=(
             f"{retires} job(s) retiré(s), {total} reconstruit(s) depuis la comparaison "
             f"({compte['update']} modification(s), {compte['create']} création(s), "
-            f"{compte['delete']} suppression(s))."
+            f"{compte['delete']} suppression(s)).{reste}"
         ),
     )
 
