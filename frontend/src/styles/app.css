@@ -4131,3 +4131,28 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
     flex-direction: column;
   }
 }
+
+/* Comparaison Celcat / cal-iut (08/09/2026). Le tableau scrolle dans son
+   propre conteneur : à 320 px, quatre colonnes ne tiennent pas, et laisser
+   la PAGE défiler horizontalement rendrait tout le reste pénible. */
+.celcat-comparaison .comparaison-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.celcat-comparaison .comparaison-table th,
+.celcat-comparaison .comparaison-table td {
+  border-bottom: 1px solid var(--bordure, #e2e2e2);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+/* Le verdict se lit à la couleur avant de se lire au texte — mais la pastille
+   porte toujours le mot : la couleur seule exclurait qui la distingue mal. */
+.celcat-comparaison .comparaison-ecart td:first-child { border-left: 3px solid #d9822b; }
+.celcat-comparaison .comparaison-absente_celcat td:first-child { border-left: 3px solid #c0392b; }
+.celcat-comparaison .comparaison-en_trop_celcat td:first-child { border-left: 3px solid #8e44ad; }

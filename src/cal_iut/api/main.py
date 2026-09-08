@@ -52,6 +52,7 @@ from cal_iut.api.schemas import (
     SaeJourResponse,
     CelcatCompteurs,
     CelcatEntreeResponse,
+    CelcatComparaisonResponse,
     CelcatEtatResponse,
     CelcatInstantaneDemandeResponse,
     CelcatInstantaneResponse,
@@ -3157,6 +3158,57 @@ def celcat_instantane_rafraichir() -> CelcatInstantaneDemandeResponse:
     return CelcatInstantaneDemandeResponse(
         demande=True,
         message="Relevé demandé — le sidecar le fera à son prochain passage (moins d'une minute).",
+    )
+
+
+@app.get(
+    "/celcat/comparaison",
+    response_model=CelcatComparaisonResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
+    """Ce que cal-iut place, face à ce que Celcat contient, pour UNE semaine.
+
+    La conversion d'indice se fait ICI parce que c'est ici qu'on a le
+    calendrier : l'indice `weeks` de Celcat n'est pas le nôtre (semaine 1 du
+    planning = indice 3), et `comparaison.comparer` exige les deux plutôt que
+    d'appliquer une règle implicite qui mélangerait les semaines en silence.
+    """
+    from cal_iut.celcat.comparaison import comparer
+    from cal_iut.celcat.instantane import lire
+    from cal_iut.celcat.lecture import indice_depuis_lundi
+    from cal_iut.celcat.nuit import PREMIERE_SEMAINE_CELCAT
+
+    state = get_state()
+    releve = lire()
+
+    lundis = state.calendar.teaching_mondays
+    semaine_celcat = (
+        indice_depuis_lundi(lundis[semaine], premiere_semaine_celcat=PREMIERE_SEMAINE_CELCAT)
+        if 0 <= semaine < len(lundis)
+        else -1
+    )
+
+    # Sans relevé, toutes les séances paraîtraient absentes de Celcat : un
+    # écran qui hurlerait au désastre alors qu'on n'a simplement rien lu.
+    lignes = (
+        comparer(
+            placements=list(state.timetable),
+            evenements=list(releve.evenements),
+            semaine=semaine,
+            semaine_celcat=semaine_celcat,
+        )
+        if releve.releve_le is not None
+        else []
+    )
+
+    return CelcatComparaisonResponse(
+        semaine=semaine,
+        semaine_celcat=semaine_celcat,
+        releve_le=releve.releve_le,
+        age_secondes=releve.age_secondes,
+        perime=releve.perime,
+        lignes=lignes,
     )
 
 

@@ -696,6 +696,41 @@ export interface CelcatInstantane {
   erreur: string | null;
 }
 
+/** Une ligne de la comparaison Celcat / cal-iut. Le rapprochement est fait
+ * PAR LE SERVEUR : ses règles (matière, groupe, jour, et l'heure avec son
+ * décalage de 9'21" dû au fuseau historique de Paris) y sont déjà testées.
+ * Les réimplémenter ici garantirait qu'elles divergent, et une comparaison
+ * fausse est pire qu'aucune : elle enverrait corriger ce qui va bien. */
+export interface LigneComparaison {
+  statut: "identique" | "ecart" | "absente_celcat" | "en_trop_celcat";
+  session_id: string;
+  course_code: string;
+  caliut: { jour: number | null; heure: string; salle: string | null; semaine: number | null } | null;
+  celcat: {
+    event_id: number | null;
+    jour: number | null;
+    heure: string | null;
+    salle: string | null;
+    categorie: string | null;
+    module: string | null;
+    groupe: string | null;
+  } | null;
+  ecarts: string[];
+}
+
+export interface CelcatComparaison {
+  semaine: number;
+  semaine_celcat: number;
+  releve_le: string | null;
+  age_secondes: number | null;
+  perime: boolean;
+  lignes: LigneComparaison[];
+}
+
+export function fetchCelcatComparaison(semaine: number): Promise<CelcatComparaison> {
+  return request(`/celcat/comparaison?semaine=${semaine}`);
+}
+
 export function fetchCelcatInstantane(): Promise<CelcatInstantane> {
   return request("/celcat/instantane");
 }

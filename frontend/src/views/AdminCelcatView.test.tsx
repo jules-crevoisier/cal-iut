@@ -272,7 +272,7 @@ describe("AdminCelcatView", () => {
     expect(within(panneau as HTMLElement).getByText(/sans code Celcat/i)).toBeInTheDocument();
   });
 
-  it("should only call etat, extras ouvert, logs and instantane on mount", async () => {
+  it("should only call etat, extras ouvert, logs, instantane and comparaison on mount", async () => {
     const mock = stubFetch();
     render(<AdminCelcatView />);
 
@@ -284,7 +284,10 @@ describe("AdminCelcatView", () => {
     // 4e depuis le 08/09/2026 : l'instantané Celcat, servi par l'API depuis
     // le relevé du sidecar (elle ne lit jamais Celcat elle-même).
     expect(chemins.some((u) => u.includes("/celcat/instantane"))).toBe(true);
-    expect(chemins).toHaveLength(4);
+    // 5e depuis le 08/09/2026 : la comparaison Celcat / cal-iut de la
+    // semaine affichée, montée par `ComparaisonCelcat`.
+    expect(chemins.some((u) => u.includes("/celcat/comparaison"))).toBe(true);
+    expect(chemins).toHaveLength(5);
   });
 
   it("should disable a past week and a launched week", async () => {
