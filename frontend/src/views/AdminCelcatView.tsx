@@ -11,6 +11,7 @@ import {
   ajouterExtraCelcat,
   fetchCelcatEtat,
   fetchCelcatExtras,
+  fetchAppState,
   fetchCelcatInstantane,
   fetchCelcatLogs,
   rafraichirCelcatInstantane,
@@ -134,6 +135,12 @@ export function AdminCelcatView() {
   // découpage suit l'usage, pas la technique : on VIENT pour piloter la
   // saisie, ou pour vérifier ce qui s'est passé, ou pour confronter à
   // Celcat — rarement pour les trois à la fois.
+  // Libellés RÉELS des semaines (« Semaine 3 (7–11 sept. 2026) ») plutôt
+  // qu'un « Semaine N » recalculé : l'app numérote les semaines autrement
+  // que l'indice interne — `weekRows[0]` s'appelle « Semaine 2 ». Deux
+  // numérotations pour la même chose, c'est la garantie de comparer la
+  // mauvaise semaine sans s'en apercevoir (constaté le 08/09/2026).
+  const [libellesSemaines, setLibellesSemaines] = useState<string[]>([]);
   const [onglet, setOnglet] = useState<"pilotage" | "activite" | "celcat">("pilotage");
 
   const charger = useCallback(async () => {
@@ -146,6 +153,10 @@ export function AdminCelcatView() {
         // reste utile même si le sidecar n'a encore rien déposé.
         fetchCelcatInstantane().catch(() => null),
       ]);
+      // Sans bloquer l'écran si le planning n'est pas résolu.
+      fetchAppState()
+        .then((p) => setLibellesSemaines((p.weekRows ?? []).map((w) => w.label)))
+        .catch(() => setLibellesSemaines([]));
       setEtat(e);
       setSemaines(e.semaines_validees);
       setExtras(x.extras);
@@ -502,11 +513,13 @@ export function AdminCelcatView() {
             value={semaineComparee}
             onChange={(e) => setSemaineComparee(Number(e.target.value))}
           >
-            {SEMAINES.map((n) => (
-              <option key={n} value={n - 1}>
-                Semaine {n}
-              </option>
-            ))}
+            {(libellesSemaines.length ? libellesSemaines : SEMAINES.map((n) => `Semaine ${n}`)).map(
+              (libelle, i) => (
+                <option key={libelle} value={i}>
+                  {libelle}
+                </option>
+              ),
+            )}
           </select>
         </label>
         <ComparaisonCelcat semaine={semaineComparee} />

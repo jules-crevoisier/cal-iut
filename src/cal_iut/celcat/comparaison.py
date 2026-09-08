@@ -61,6 +61,30 @@ def _salle_attendue(placement: Any, salles_celcat: dict[str, str]) -> str:
     return _sans_suffixe(getattr(placement, "room_label", "") or "")
 
 
+def _meme_module(code: str, module: str) -> bool:
+    """« WR314D » (nous) et « WR314 Prog. Web » (Celcat) : même matière.
+
+    Celcat indexe souvent le module SANS le suffixe de parcours que nous
+    ajoutons — la règle est déjà écrite dans `celcat.yaml` pour le mapping,
+    elle manquait ici. Sans elle, des séances S3 et S5 ressortaient
+    « absentes » ET « en trop » alors que jour, heure et salle concordaient
+    (relevé de la semaine 2, 08/09/2026).
+
+    Le suffixe n'est retiré qu'EN DERNIER RECOURS, et seulement si ce qui
+    suit le préfixe n'est pas un chiffre : sans cette précaution, « WR31 »
+    se rapprocherait de « WR314 » — un faux « identique », bien pire qu'un
+    faux « absent » puisqu'il ferait croire à une synchro correcte.
+    """
+    nom = module.upper()
+    if nom.startswith(code):
+        return True
+    tronque = code[:-1] if len(code) > 1 and code[-1].isalpha() else ""
+    if not tronque or not nom.startswith(tronque):
+        return False
+    suivant = nom[len(tronque) : len(tronque) + 1]
+    return not suivant.isdigit()
+
+
 def _est_technique(ev: dict) -> bool:
     """Évènement Celcat sans matière ni horaire : férié, réservation
     technique, coquille vide. Le signaler « en trop » enverrait supprimer ce
@@ -99,7 +123,7 @@ def _correspond(
         meme_heure = bool(heure) and meme_creneau(str(ev.get("heure_debut") or ""), heure)
         meme_salle = _sans_suffixe(ev.get("salle") or "") == _salle_attendue(placement, salles_celcat)
         return meme_jour and meme_heure and meme_salle
-    if not module.upper().startswith(code):
+    if not _meme_module(code, module):
         return False
 
     # Indexé par `session_id` : c'est la SÉANCE qui porte le semestre, et le

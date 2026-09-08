@@ -2,7 +2,7 @@
  * Filtre année / parcours sur la grille Promo.
  */
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { emptyPayload, placedRow, testRoute } from "../test/payloadFixture";
 import { PromoView } from "./PromoView";
@@ -41,6 +41,14 @@ const payload = emptyPayload({
 });
 
 describe("PromoView filters", () => {
+  // La vue Promo s'ouvre sur le jour EN COURS depuis le 08/09/2026 : sans
+  // horloge figée, ces tests passeraient le lundi et échoueraient le mardi.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-09-07T09:00:00")); // un lundi
+  });
+  afterAll(() => vi.useRealTimers());
+
   it("should hide other years when Année BUT1 is selected", () => {
     render(
       <PromoView

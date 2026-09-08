@@ -36,3 +36,20 @@ export function indexSemaineCourante(semaines: WeekRow[], aujourdhui: Date = new
   // après la fin de l'année -> la dernière commencée.
   return dernierAvant >= 0 ? dernierAvant : 0;
 }
+
+
+/** Index du jour de la semaine (lundi = 0), replié sur lundi le week-end.
+ *
+ * Retour utilisateur 08/09/2026 : « on veut arriver à la bonne semaine et au
+ * bon jour ». Ouvrir sur lundi un vendredi oblige à cliquer à chaque fois,
+ * et c'est le genre de friction qu'on ne remarque plus mais qu'on subit.
+ *
+ * Samedi et dimanche retombent sur lundi : il n'y a pas cours, et ouvrir sur
+ * une colonne vide serait pire que sur le premier jour de la semaine qu'on
+ * s'apprête à préparer.
+ */
+export function jourOuvreAujourdhui(aujourdhui: Date = new Date()): number {
+  const jour = aujourdhui.getDay(); // 0 = dimanche
+  if (jour === 0 || jour === 6) return 0;
+  return jour - 1;
+}

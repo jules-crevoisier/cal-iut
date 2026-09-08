@@ -291,7 +291,11 @@ describe("AdminCelcatView", () => {
     // se déclenche qu'à son ouverture — un écran de supervision n'a pas à
     // payer le coût de tout ce qu'il pourrait montrer.
     expect(chemins.some((u) => u.includes("/celcat/comparaison"))).toBe(false);
-    expect(chemins).toHaveLength(4);
+    // `/app-state` en 5e : les LIBELLÉS réels des semaines. L'app numérote
+    // autrement que l'indice interne (`weekRows[0]` s'appelle « Semaine 2 »),
+    // et recalculer un numéro ici ferait comparer la mauvaise semaine.
+    expect(chemins.some((u) => u.includes("/app-state"))).toBe(true);
+    expect(chemins).toHaveLength(5);
 
     fireEvent.click(screen.getByRole("button", { name: /contenu celcat/i }));
     await waitFor(() =>

@@ -22,6 +22,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
+import { jourOuvreAujourdhui } from "../utils/semaineCourante";
 import { changerSalle, deposerPlacement, supprimerSeancePersonnalisee, type SeanceAPlacer } from "../api/client";
 import type { Placement } from "../types";
 import type { Route } from "../hooks/useHashRoute";
@@ -121,7 +122,11 @@ export function PromoView({
   const [filtreParcoursSel, setFiltreParcoursSel] = useState<string>("Tout");
   const placementActif = readOnly ? null : (placementActifProp ?? choixAPlacer);
   const [displayWeek, setDisplayWeek] = useState(0);
-  const [day, setDay] = useState(0);
+  // Le jour EN COURS plutôt que lundi (retour utilisateur 08/09/2026 : « on
+  // veut arriver à la bonne semaine et au bon jour »). Valeur initiale
+  // seulement : la route (`route.jour`) et les clics la remplacent ensuite,
+  // et un rechargement ne ramène donc pas l'utilisateur à aujourd'hui.
+  const [day, setDay] = useState(() => jourOuvreAujourdhui());
   const [teacherFilter, setTeacherFilter] = useState("");
   const [enCoursPlacement, setEnCoursPlacement] = useState<string | null>(null);
   const [erreurPlacement, setErreurPlacement] = useState<string | null>(null);
