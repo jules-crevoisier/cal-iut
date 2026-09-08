@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from conftest import creer_compte_actif_et_connecter
 from fastapi.testclient import TestClient
 
 from cal_iut.api.main import app
@@ -17,7 +18,6 @@ from cal_iut.ingestion.config_loader import load_groups
 from cal_iut.models.entities import Course, Room, RoomType, SessionType, Teacher, TeacherBlock
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.rooms import PlacedSessionWithRoom
-from conftest import creer_compte_actif_et_connecter
 
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
@@ -148,6 +148,40 @@ def vider_file() -> None:
     from cal_iut.celcat.file_attente import vider
 
     vider()
+
+
+def poser_semaines_celcat() -> None:
+    """Déclare que Celcat a déjà posé toutes les semaines du planning courant.
+
+    Depuis le 08/09/2026, le worker ne crée QUE sur les semaines déjà saisies
+    dans Celcat (consigne : « les semaines pas posées dans Celcat il faut
+    attendre »), et il en juge d'après l'instantané du sidecar. Un test qui
+    n'en dépose aucun décrit donc un Celcat vierge, où rien ne doit partir —
+    ce qui est le comportement voulu, mais rarement ce que le test veut dire.
+
+    À appeler dans tout test qui attend qu'une CRÉATION parte réellement.
+    Explicite plutôt qu'automatique : c'est justement la question que chaque
+    test de drainage doit répondre.
+    """
+    from cal_iut.api.state import get_state
+    from cal_iut.celcat.instantane import enregistrer
+    from cal_iut.celcat.mapping import entrees_pour_state
+    from cal_iut.celcat.nuit import _indice_pour
+
+    indices = {
+        indice
+        for entree in entrees_pour_state(get_state()).values()
+        if (indice := _indice_pour(entree)) is not None
+    }
+    # Cinquante cours par semaine : largement au-dessus de ce qu'un planning
+    # de test prévoit. La règle compare Celcat à cal-iut, pas à un nombre
+    # absolu — il s'agit juste de passer la moitié.
+    evenements = [
+        {"event_id": 900_000 + n, "semaine": indice, "categorie": "[TD]", "groupe": "test"}
+        for indice in sorted(indices)
+        for n in range(50)
+    ]
+    enregistrer(evenements, groupes=["test"])
 
 
 def charger_etat() -> dict[str, Any]:

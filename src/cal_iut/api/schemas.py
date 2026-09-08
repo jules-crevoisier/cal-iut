@@ -762,6 +762,11 @@ class CelcatFileResponse(BaseModel):
     reussis: int = 0
     echecs: int = 0
     ignores: int = 0
+    # Jobs en attente d'une semaine posée dans Celcat (consigne du
+    # 08/09/2026). Distingué des échecs à l'écran : une file qui ne descend
+    # pas parce qu'elle ATTEND l'équipe et une file qui ne descend pas parce
+    # qu'elle ÉCHOUE appellent des gestes opposés.
+    differes: int = 0
     resume: str = ""
 
 

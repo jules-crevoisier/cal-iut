@@ -26,6 +26,7 @@ from celcat_sync_helpers import (  # type: ignore[import-not-found]
     SEMAINE,
     activer_saisie,
     place,
+    poser_semaines_celcat,
     seance,
     vider_file,
 )
@@ -57,6 +58,7 @@ def test_les_memes_ressources_ne_sont_resolues_qu_une_fois(planning, monkeypatch
     for i in range(3):
         _placer(f"s-cache-{i}")
         enfiler({"action": "create", "session_id": f"s-cache-{i}", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     resolutions = {"ids": 0, "groupes": 0}
 
@@ -107,6 +109,7 @@ def test_des_ressources_differentes_sont_resolues_separement(planning, monkeypat
         etat.sessions_by_id[s.id] = s
         etat.timetable += [place(s, week=SEMAINE, day=2, room_id=salle.lower().replace(".", ""))]
         enfiler({"action": "create", "session_id": s.id, "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     vues: list[str] = []
 

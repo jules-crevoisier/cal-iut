@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -39,6 +39,11 @@ class Bilan:
     reussis: int = 0
     echecs: int = 0
     ignores: int = 0
+    # Jobs volontairement non tentés, faute d'une semaine posée dans Celcat
+    # (consigne du 08/09/2026). À compter à part des échecs : une file qui
+    # ne descend pas parce qu'elle ATTEND et une file qui ne descend pas
+    # parce qu'elle ÉCHOUE appellent des gestes opposés.
+    differes: int = 0
     resume: str = ""
     passe_le: str | None = None
     age_secondes: float | None = None
@@ -51,6 +56,7 @@ def enregistrer(
     echecs: int,
     ignores: int,
     resume: str,
+    differes: int = 0,
     passe_le: str | None = None,
 ) -> None:
     """Dépose le compte rendu d'un passage. Ne lève jamais : un worker ne
@@ -61,11 +67,12 @@ def enregistrer(
         chemin.write_text(
             json.dumps(
                 {
-                    "passe_le": passe_le or datetime.now(timezone.utc).isoformat(),
+                    "passe_le": passe_le or datetime.now(UTC).isoformat(),
                     "en_attente": en_attente,
                     "reussis": reussis,
                     "echecs": echecs,
                     "ignores": ignores,
+                    "differes": differes,
                     "resume": resume,
                 },
                 ensure_ascii=False,
@@ -104,8 +111,8 @@ def dernier() -> Bilan:
         try:
             horodatage = datetime.fromisoformat(passe_le)
             if horodatage.tzinfo is None:
-                horodatage = horodatage.replace(tzinfo=timezone.utc)
-            age = (datetime.now(timezone.utc) - horodatage).total_seconds()
+                horodatage = horodatage.replace(tzinfo=UTC)
+            age = (datetime.now(UTC) - horodatage).total_seconds()
         except ValueError:
             age = None
 
@@ -120,6 +127,7 @@ def dernier() -> Bilan:
         reussis=_entier("reussis"),
         echecs=_entier("echecs"),
         ignores=_entier("ignores"),
+        differes=_entier("differes"),
         resume=str(contenu.get("resume") or ""),
         passe_le=passe_le if isinstance(passe_le, str) else None,
         age_secondes=age,

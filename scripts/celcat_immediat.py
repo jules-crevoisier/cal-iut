@@ -134,6 +134,7 @@ def principal() -> int:
                     tracer(
                         en_attente=bilan.en_attente, reussis=bilan.reussis,
                         echecs=len(bilan.echecs), ignores=len(bilan.ignores),
+                        differes=len(bilan.differes),
                         resume=bilan.resume(),
                     )
                 finally:

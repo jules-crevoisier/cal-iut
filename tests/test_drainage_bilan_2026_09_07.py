@@ -34,6 +34,7 @@ from celcat_sync_helpers import (  # type: ignore[import-not-found]
     activer_saisie,
     jobs_en_attente,
     place,
+    poser_semaines_celcat,
     seance,
     vider_file,
 )
@@ -168,6 +169,7 @@ def test_les_creations_en_echec_remontent_aussi(planning, monkeypatch) -> None:
 
     vider_file()
     enfiler({"action": "create", "session_id": "s-create-qui-echoue", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     def _creer_qui_echoue(*_a, **_k):
         from cal_iut.celcat.ecriture import ResultatEcriture

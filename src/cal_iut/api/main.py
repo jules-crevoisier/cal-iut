@@ -3386,6 +3386,7 @@ def celcat_file() -> CelcatFileResponse:
         reussis=bilan.reussis,
         echecs=bilan.echecs,
         ignores=bilan.ignores,
+        differes=bilan.differes,
         resume=bilan.resume,
     )
 
