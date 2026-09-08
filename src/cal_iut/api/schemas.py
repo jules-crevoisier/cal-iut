@@ -707,6 +707,22 @@ class CelcatInstantaneDemandeResponse(BaseModel):
     message: str
 
 
+class CelcatComparaisonResponse(BaseModel):
+    """Celcat vs cal-iut, séance par séance, pour UNE semaine.
+
+    Porte l'âge du relevé avec les lignes : comparer contre un instantané de
+    trois heures en le présentant comme l'état courant serait la faute même
+    que cette semaine a servi à réparer.
+    """
+
+    semaine: int
+    semaine_celcat: int
+    releve_le: str | None = None
+    age_secondes: float | None = None
+    perime: bool = True
+    lignes: list[dict] = Field(default_factory=list)
+
+
 class CelcatEtatResponse(BaseModel):
     saisie_active: bool
     semaines_validees: list[int] = []

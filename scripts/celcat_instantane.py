@@ -44,17 +44,22 @@ from cal_iut.celcat.instantane import consommer_demande, enregistrer, releve_du
 from cal_iut.celcat.lecture import evenement_depuis_rpc
 from cal_iut.celcat.rpc import charger_edt
 
-# Groupes relevés. Écrits ici plutôt que déduits : un nom mal deviné ne
-# produit pas une erreur mais un groupe introuvable, donc un relevé
-# silencieusement incomplet — le genre de demi-vérité qu'on cherche à
-# éliminer de cet outil.
-GROUPES = (
-    "BUT MMI S1 CM",
-    "BUT MMI S1 TD AB",
-    "BUT MMI S1 TD CD",
-    "BUT MMI S1 TD EF",
-    "BUT MMI S1 TD GH",
-)
+def _groupes_a_relever() -> list[str]:
+    """Tous les groupes Celcat connus (`data/config/celcat_groupes.yaml`).
+
+    Lus depuis le fichier plutôt que devinés : un nom deviné ne produit pas
+    une erreur mais un groupe INTROUVABLE, donc un relevé silencieusement
+    incomplet — et une comparaison qui annoncerait « absent de Celcat » des
+    séances qui y sont. Ce fichier est déjà la source des identifiants pour
+    l'écriture (`ecriture.py`), les deux côtés voient donc le même monde.
+    """
+    import yaml
+
+    chemin = RACINE / "data" / "config" / "celcat_groupes.yaml"
+    if not chemin.exists():
+        return []
+    data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+    return sorted(str(k) for k in data) if isinstance(data, dict) else []
 
 
 def _args_resolution(url: str) -> list[str]:
@@ -80,7 +85,7 @@ def _args_resolution(url: str) -> list[str]:
 def _relever(page) -> tuple[list[dict], list[str]]:
     evenements: list[dict] = []
     groupes_lus: list[str] = []
-    for nom in GROUPES:
+    for nom in _groupes_a_relever():
         try:
             gid = resoudre_groupe(page, nom)
         except Exception as exc:  # noqa: BLE001

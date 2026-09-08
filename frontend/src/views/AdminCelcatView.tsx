@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
+import { ComparaisonCelcat } from "../components/ComparaisonCelcat";
 import { CopyButton } from "../components/CopyButton";
 
 import {
@@ -121,6 +122,9 @@ export function AdminCelcatView() {
   const [enCours, setEnCours] = useState(false);
   const [instantane, setInstantane] = useState<CelcatInstantane | null>(null);
   const [messageReleve, setMessageReleve] = useState<string | null>(null);
+  // Semaine comparée. Par défaut la première validée : c'est celle qui
+  // compte pour la synchro, pas forcément la semaine courante.
+  const [semaineComparee, setSemaineComparee] = useState(1);
 
   const charger = useCallback(async () => {
     try {
@@ -451,6 +455,26 @@ export function AdminCelcatView() {
         {instantane?.demande_en_cours && !messageReleve ? (
           <p className="muted">Relevé demandé — en attente du prochain passage.</p>
         ) : null}
+      </div>
+
+      {/* Celcat vs cal-iut. Placé juste après l'instantané : c'est la même
+          question — ce que Celcat contient — mais confrontée au planning. */}
+      <div className="panel celcat-comparaison">
+        <h3>Comparer avec cal-iut</h3>
+        <label>
+          Semaine{" "}
+          <select
+            value={semaineComparee}
+            onChange={(e) => setSemaineComparee(Number(e.target.value))}
+          >
+            {SEMAINES.map((n) => (
+              <option key={n} value={n}>
+                Semaine {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ComparaisonCelcat semaine={semaineComparee} />
       </div>
 
       {/* Activité récente, en colonnes. Remplace la liste chronologique :
