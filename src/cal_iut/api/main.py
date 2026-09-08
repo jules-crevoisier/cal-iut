@@ -53,6 +53,8 @@ from cal_iut.api.schemas import (
     CelcatCompteurs,
     CelcatEntreeResponse,
     CelcatEtatResponse,
+    CelcatInstantaneDemandeResponse,
+    CelcatInstantaneResponse,
     CelcatExtraActionResponse,
     CelcatJournalReconcilierRequest,
     CelcatJournalReconcilierResponse,
@@ -3107,6 +3109,55 @@ def celcat_logs(limit: int = 50, cursor: str | None = None) -> dict[str, object]
 
     items, suivant = paginer(limit, cursor)
     return {"items": items, "cursor": suivant}
+
+
+@app.get(
+    "/celcat/instantane",
+    response_model=CelcatInstantaneResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_instantane() -> CelcatInstantaneResponse:
+    """Le dernier relevé Celcat déposé par le sidecar, avec son ÂGE.
+
+    Cette route ne lit pas Celcat : le conteneur de l'application n'a ni VPN
+    ni navigateur, et lui en donner couperait le site public (tunnel complet,
+    cf. `celcat/reseau.py`). Elle sert ce que le sidecar a écrit dans le
+    volume partagé — d'où l'importance de dire quand.
+    """
+    from cal_iut.celcat.instantane import demande_en_cours, lire
+
+    releve = lire()
+    return CelcatInstantaneResponse(
+        evenements=list(releve.evenements),
+        groupes=list(releve.groupes),
+        releve_le=releve.releve_le,
+        age_secondes=releve.age_secondes,
+        perime=releve.perime,
+        demande_en_cours=demande_en_cours(),
+        erreur=releve.erreur,
+    )
+
+
+@app.post(
+    "/celcat/instantane/rafraichir",
+    response_model=CelcatInstantaneDemandeResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_instantane_rafraichir() -> CelcatInstantaneDemandeResponse:
+    """Demande un relevé au sidecar — une DEMANDE, pas un ordre.
+
+    Le sidecar l'honore à son prochain passage (30 à 60 s), parce qu'il doit
+    monter le VPN, et que ce VPN est partagé avec le compte Celcat de
+    l'équipe. Le message le dit franchement plutôt que de laisser croire à
+    un relevé immédiat.
+    """
+    from cal_iut.celcat.instantane import demander
+
+    demander()
+    return CelcatInstantaneDemandeResponse(
+        demande=True,
+        message="Relevé demandé — le sidecar le fera à son prochain passage (moins d'une minute).",
+    )
 
 
 @app.get("/celcat/extras", dependencies=[Depends(accounts.require_role("admin"))])

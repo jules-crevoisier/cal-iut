@@ -132,6 +132,20 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
         celcat_sync = None
     if celcat_sync is not None and hasattr(celcat_sync, "_path"):
         monkeypatch.setattr(celcat_sync, "_path", lambda: tmp_path / "celcat_sync.json")
+    # L'instantané Celcat a DEUX fichiers (le relevé et le drapeau de
+    # demande) : la boucle ci-dessous ne connaît que `_path`.
+    try:
+        from cal_iut.celcat import instantane as celcat_instantane
+    except ImportError:
+        celcat_instantane = None
+    if celcat_instantane is not None:
+        monkeypatch.setattr(
+            celcat_instantane, "_path", lambda: tmp_path / "celcat_instantane.json"
+        )
+        monkeypatch.setattr(
+            celcat_instantane, "_path_demande", lambda: tmp_path / "celcat_instantane_demande.json"
+        )
+
     for nom_mod, fichier in (
         ("etat", "celcat_sync.json"),
         ("file_attente", "celcat_file_attente.json"),
