@@ -184,6 +184,23 @@ def _masque_pour(entree: Any) -> str:
         return "N" * 54
 
 
+def _cle_ressources(entree: Any) -> tuple:
+    """Ce qui détermine les identifiants Celcat d'une séance.
+
+    Même clé que `scripts/pousser_manquants_celcat.py` : deux séances de la
+    même matière, dans la même salle, avec le même enseignant et le même
+    type se résolvent à l'identique. Le TYPE en fait partie — c'est lui qui
+    choisit la catégorie d'évènement, et l'omettre ferait écrire un TD avec
+    la catégorie d'un CM.
+    """
+    return (
+        getattr(entree, "code_module", None),
+        getattr(entree, "salle", None),
+        getattr(entree, "code_enseignant", None),
+        getattr(entree, "type_seance_nom", None),
+    )
+
+
 def _ids_pour(page: Any, entree: Any) -> tuple[dict, str | None]:
     """Résout module/salle/personnel/catégorie/département Celcat via le
     catalogue RPC (`page`). Sur un échec de résolution (catalogue
@@ -320,6 +337,34 @@ def _consommer_file(
     methodes = charger_methodes(Path(state.config_dir))
     a_retirer: list[dict[str, Any]] = []
 
+    # Résolutions mises en cache LE TEMPS DE CE CYCLE. Chaque job coûtait
+    # sinon six appels RPC (groupe, module, salle, personnel, catégorie,
+    # département) : sur 504 jobs, trois mille allers-retours pour une
+    # poignée de combinaisons distinctes — d'où des cycles interminables
+    # (retour utilisateur 08/09/2026 : « cela prend 2321 ans »).
+    # `pousser_manquants_celcat.py` le fait depuis toujours ; le worker,
+    # jamais.
+    #
+    # Pas au-delà du cycle : le catalogue Celcat peut changer entre deux
+    # passages (salle ajoutée, module renommé), et écrire avec des
+    # identifiants périmés serait bien pire que lent.
+    cache_ids: dict[tuple, tuple[dict, str | None]] = {}
+    cache_groupes: dict[str, int] = {}
+
+    def _ids_cache(entree: Any) -> tuple[dict, str | None]:
+        cle = _cle_ressources(entree)
+        if cle not in cache_ids:
+            cache_ids[cle] = _ids_pour(page, entree)
+        return cache_ids[cle]
+
+    def _groupe_cache(entree: Any, group_id_connu: object) -> int:
+        if group_id_connu not in (None, ""):
+            return _group_id_pour(page, entree, group_id_connu)
+        nom = str(getattr(entree, "nom_groupe_celcat", "") or "")
+        if nom not in cache_groupes:
+            cache_groupes[nom] = _group_id_pour(page, entree, None)
+        return cache_groupes[nom]
+
     # --- create : un appel par job, comme les scripts existants (ids/masque
     # ne sont pas garantis homogènes entre deux jobs différents). ---------
     for job in jobs:
@@ -346,8 +391,8 @@ def _consommer_file(
         row_connu = journal_actuel.get(sid_job)
         eid_connu = _event_id(row_connu) if isinstance(row_connu, dict) else None
 
-        group_id = _group_id_pour(page, entree, job.get("group_id"))
-        ids, cause_ids = _ids_pour(page, entree)
+        group_id = _groupe_cache(entree, job.get("group_id"))
+        ids, cause_ids = _ids_cache(entree)
         masque = _masque_pour(entree)
         resultat = creer_manquants(
             page,
@@ -406,10 +451,10 @@ def _consommer_file(
                 )
             )
             continue
-        ids_m, cause_ids_m = _ids_pour(page, entree)
+        ids_m, cause_ids_m = _ids_cache(entree)
         if cause_ids_m is not None:
             causes_m[sid] = cause_ids_m
-        group_id = _group_id_pour(page, entree, job.get("group_id"))
+        group_id = _groupe_cache(entree, job.get("group_id"))
         elements_m.append(
             ElementModification(
                 entree=entree,
