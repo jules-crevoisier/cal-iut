@@ -60,12 +60,28 @@ function jourDate(n: number | null | undefined, lundi: string | null): string {
   return `${nom} ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/** Les salles de l'évènement Celcat, TOUTES s'il y en a plusieurs.
+ *
+ * Un cours posé sur deux salles à la fois est un écart (signalé par Kyllian
+ * Bresson le 08/09/2026 : « Thomas Castellengo est sur deux salles »).
+ * L'annoncer sans dire LESQUELLES obligerait à rouvrir Celcat pour savoir de
+ * quoi on parle.
+ *
+ * `salles` est absent des relevés déposés avant ce correctif : on retombe
+ * alors sur `salle`, plutôt que d'afficher un vide qui se lirait « aucune ».
+ */
+function salleAffichee(celcat: { salle: string | null; salles: string[] | null }): string {
+  const toutes = celcat.salles && celcat.salles.length ? celcat.salles : null;
+  if (toutes) return ` — ${toutes.join(" + ")}`;
+  return celcat.salle ? ` — ${celcat.salle}` : "";
+}
+
 function texteLignes(lignes: LigneComparaison[]): string {
   return lignes
     .map((l) => {
       const gauche = l.caliut ? `${jour(l.caliut.jour)} ${l.caliut.heure} ${l.caliut.salle ?? ""}` : "—";  // texte copié : le nom suffit
       const droite = l.celcat
-        ? `${jour(l.celcat.jour)} ${l.celcat.heure ?? ""} ${l.celcat.salle ?? ""} (event_id=${l.celcat.event_id})`
+        ? `${jour(l.celcat.jour)} ${l.celcat.heure ?? ""}${salleAffichee(l.celcat)} (event_id=${l.celcat.event_id})`
         : "—";
       return `${LIBELLE[l.statut]} | ${l.session_id || l.course_code} | cal-iut: ${gauche} | Celcat: ${droite}`;
     })
@@ -223,7 +239,7 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
                   </td>
                   <td>
                     {l.celcat
-                      ? `${jourDate(l.celcat.jour, donnees.lundi)} ${l.celcat.heure ?? ""}${l.celcat.salle ? ` — ${l.celcat.salle}` : ""}`
+                      ? `${jourDate(l.celcat.jour, donnees.lundi)} ${l.celcat.heure ?? ""}${salleAffichee(l.celcat)}`
                       : "—"}
                   </td>
                   <td>

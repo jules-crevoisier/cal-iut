@@ -713,6 +713,9 @@ export interface LigneComparaison {
     jour: number | null;
     heure: string | null;
     salle: string | null;
+    /** Toutes les salles de l'évènement. Un cours posé sur deux salles à la
+     *  fois est un écart, et l'écran doit pouvoir dire lesquelles. */
+    salles: string[] | null;
     categorie: string | null;
     module: string | null;
     groupe: string | null;

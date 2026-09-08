@@ -195,6 +195,20 @@ def _ecarts(
     type_celcat = _type_celcat(ev)
     if notre_type and type_celcat and notre_type != type_celcat:
         ecarts.append("catégorie")
+    # UN COURS SUR DEUX SALLES. Signalé par Kyllian Bresson le 08/09/2026 :
+    # « Thomas Castellengo est sur deux salles ». Sur l'interface Celcat, une
+    # salle glissée sans Maj s'AJOUTE à l'ancienne au lieu de la remplacer.
+    #
+    # Le relevé ne rapportait que la première salle, si bien qu'un tel
+    # évènement passait pour normal — l'écran affirmait « identique » sur un
+    # cours qui occupe deux salles à la fois.
+    #
+    # Le champ est ABSENT des instantanés déjà déposés : on ne signale donc
+    # rien tant qu'un nouveau relevé n'est pas passé. Ne pas savoir n'est pas
+    # constater une faute.
+    salles = ev.get("salles")
+    if isinstance(salles, list) and len(salles) > 1:
+        ecarts.append("salles multiples")
     heure = _heure_du_slot(getattr(placement, "slot", None))
     heure_ev = str(ev.get("heure_debut") or "")
     if heure and heure_ev and not meme_creneau(heure_ev, heure):
@@ -224,6 +238,10 @@ def _vue_celcat(ev: dict) -> dict:
         "jour": ev.get("jour"),
         "heure": ev.get("heure_debut"),
         "salle": ev.get("salle"),
+        # Toutes les salles, pour que l'écran puisse MONTRER le doublon qu'il
+        # signale : « écart (salles multiples) » sans dire lesquelles
+        # obligerait à rouvrir Celcat pour savoir de quoi on parle.
+        "salles": ev.get("salles") if isinstance(ev.get("salles"), list) else None,
         "categorie": ev.get("categorie"),
         "module": ev.get("module"),
         "groupe": ev.get("groupe"),
