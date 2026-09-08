@@ -28,7 +28,16 @@ from cal_iut.celcat.mapping import SLOT_TIMES
 
 # Ordre d'affichage : ce qui demande une action d'abord. Les lignes
 # identiques ne se lisent pas, elles se comptent.
-_PRIORITE = {"ecart": 0, "absente_celcat": 1, "en_trop_celcat": 2, "identique": 3}
+# Ordre d'affichage : ce qui demande une action d'abord. « hors_celcat »
+# passe après « identique » — ce sont des séances dont il n'y a rien à faire,
+# elles se comptent sans se lire.
+_PRIORITE = {
+    "ecart": 0,
+    "absente_celcat": 1,
+    "en_trop_celcat": 2,
+    "identique": 3,
+    "hors_celcat": 4,
+}
 
 
 def _heure_du_slot(slot: Any) -> str:
@@ -193,6 +202,7 @@ def comparer(
     semaine_celcat: int,
     groupes_celcat: dict[str, str] | None = None,
     salles_celcat: dict[str, str] | None = None,
+    codes_celcat: set[str] | None = None,
 ) -> list[dict]:
     """Une ligne par séance, avec son verdict.
 
@@ -235,9 +245,16 @@ def comparer(
                 trouve, _ = ev, apparies.add(i)
                 break
         if trouve is None:
+            # WR100BU (la BU), ÉCHANGE-IA, les rentrées : aucune équivalence
+            # module dans Celcat, donc aucune vocation à y aller. Les
+            # compter « absentes » les mélangerait à de vrais oublis, et un
+            # « tout corriger » tenterait de les créer — ce que le worker
+            # refuse à chaque passage (« WR100BU sans code Celcat »).
+            code_seance = str(getattr(placement, "course_code", "") or "").strip().upper()
+            hors_perimetre = codes_celcat is not None and code_seance not in codes_celcat
             lignes.append(
                 {
-                    "statut": "absente_celcat",
+                    "statut": "hors_celcat" if hors_perimetre else "absente_celcat",
                     "session_id": getattr(placement, "session_id", ""),
                     "course_code": getattr(placement, "course_code", ""),
                     "caliut": _vue_caliut(placement),
