@@ -78,23 +78,48 @@ def test_un_create_dont_la_seance_a_reçu_un_event_id_devient_une_modification(
     enfiler({"action": "create", "session_id": "s-create-vieilli", "semaine": SEMAINE})
     poser_semaines_celcat()
 
-    envoyes: list[int] = []
+    crees: list[int] = []
+    modifies: list[int] = []
 
     def _creer(page, entrees, **kw):
         from cal_iut.celcat.ecriture import ResultatEcriture
 
-        envoyes.append(kw.get("event_id", 0))
+        crees.append(kw.get("event_id", 0))
         resultat = ResultatEcriture()
         resultat.crees.append((entrees[0].session_id, kw.get("event_id") or 9999))
         return resultat
 
+    def _modifier(page, elements, **kw):
+        from cal_iut.celcat.modification import ResultatModification
+
+        resultat = ResultatModification()
+        for el in elements:
+            modifies.append(el.event_id)
+            resultat.modifiees.append((el.entree.session_id, el.event_id))
+        return resultat
+
     monkeypatch.setattr("cal_iut.celcat.nuit.creer_manquants", _creer)
+    monkeypatch.setattr("cal_iut.celcat.nuit.modifier_manquants", _modifier)
 
     bilan = drainer_file_immediate(FaussePage())
 
-    assert envoyes == [EVENT_ID_DEJA_CONNU], (
-        "l'écriture doit porter l'event_id connu (donc MODIFIER l'événement "
-        "existant), jamais partir avec 0 et en créer un second"
+    # ATTENTE RÉVISÉE LE 08/09/2026, l'intention inchangée. Ce test exigeait
+    # `creer_manquants(event_id=N)` : l'`event_id` était bien transmis, donc
+    # Celcat modifiait au lieu de créer — en théorie. En pratique
+    # `charge_utile` RECONSTRUIT l'évènement (`"rooms": [{"room_id": 42}]`),
+    # et Celcat refuse cette forme par « Cannot locate a record using only a
+    # partial key » — devenu le motif d'échec dominant en production.
+    #
+    # Le test passait donc au vert sur un chemin qui ne fonctionne pas :
+    # il monkeypatchait `creer_manquants` en entier et ne pouvait rien voir
+    # de la charge réellement envoyée. Ce qu'il protège reste le même — ne
+    # jamais poser un SECOND évènement — mais par le chemin qui marche.
+    assert crees == [], (
+        "une séance déjà connue de Celcat ne doit plus repartir en création : "
+        "la charge reconstruite est refusée « partial key »"
+    )
+    assert modifies == [EVENT_ID_DEJA_CONNU], (
+        f"elle doit emprunter le chemin modification, reçu {modifies}"
     )
     assert bilan.reussis == 1
     assert jobs_en_attente() == []

@@ -738,17 +738,40 @@ export interface CelcatCorrection {
   suppressions: number;
   total: number;
   hors_celcat: number;
+  /** Suppressions volontairement laissées de côté (`supprimer: false`). */
+  suppressions_ignorees: number;
   message: string;
 }
 
 /** Pousse les écarts d'une semaine vers Celcat — via la FILE d'attente, donc
  * avec tous les garde-fous du worker. N'écrit jamais directement. */
-export function corrigerEcartsCelcat(semaine: number): Promise<CelcatCorrection> {
-  return request(`/celcat/comparaison/corriger?semaine=${semaine}`, { method: "POST" });
+/** `supprimer: false` pousse modifications et créations sans toucher aux
+ *  « en trop » — le mode à employer quand quelqu'un travaille dans Celcat en
+ *  même temps : un écart se rattrape, une suppression non. */
+export function corrigerEcartsCelcat(
+  semaine: number,
+  options?: { supprimer?: boolean },
+): Promise<CelcatCorrection> {
+  const suffixe = options?.supprimer === false ? "&supprimer=false" : "";
+  return request(`/celcat/comparaison/corriger?semaine=${semaine}${suffixe}`, { method: "POST" });
 }
 
 export function fetchCelcatComparaison(semaine: number): Promise<CelcatComparaison> {
   return request(`/celcat/comparaison?semaine=${semaine}`);
+}
+
+/** Ce qu'une resynchronisation a jeté, et ce qu'elle a reconstruit. */
+export interface CelcatResync extends CelcatCorrection {
+  semaines: number[];
+  retires: number;
+}
+
+/** Repart de la comparaison : jette les jobs en attente sur ces semaines et
+ *  ré-enfile uniquement ce qui diverge réellement. Sans `semaines`, le
+ *  serveur prend celles que l'établissement a validées. */
+export function resynchroniserFileCelcat(semaines?: number[]): Promise<CelcatResync> {
+  const q = semaines && semaines.length ? `?semaines=${semaines.join(",")}` : "";
+  return request(`/celcat/file/resynchroniser${q}`, { method: "POST" });
 }
 
 /** Ce qui attend d'être poussé, et ce que le worker a fait en dernier. Les

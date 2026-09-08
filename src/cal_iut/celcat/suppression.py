@@ -49,9 +49,20 @@ def supprimer_evenement(
 
     ev = evenement_depuis_rpc(brut, group_id=group_id, groupe_nom="")
     if not autoriser_suppression(ev):
+        # Le message énumérait aussi « Celcat-en-plus », une branche que
+        # `autoriser_suppression` n'atteint QUE si on lui passe `categorie` —
+        # ce qu'aucun appelant de production n'a jamais fait. Il annonçait
+        # donc une protection inexistante, et faisait cliquer en confiance
+        # (trouvé le 08/09/2026 en vérifiant s'il était sûr de corriger
+        # pendant qu'un collègue travaillait dans Celcat).
+        #
+        # L'activer partout aurait refusé TOUTES les suppressions « en trop »,
+        # c'est-à-dire la fonctionnalité demandée le même jour. Le message dit
+        # donc désormais ce que le code fait vraiment — un refus qui décrit
+        # une protection absente est pire que pas de protection.
         raise SuppressionRefusee(
-            f"suppression refusée (garde-fou : jour férié protégé, fantôme, "
-            f"protected=Y ou Celcat-en-plus) pour event_id={event_id}"
+            f"suppression refusée (garde-fou : jour férié, évènement fantôme "
+            f"ou protected=Y) pour event_id={event_id}"
         )
 
     verifier_avant_envoi(brut, base=base, production_autorisee=production_autorisee)

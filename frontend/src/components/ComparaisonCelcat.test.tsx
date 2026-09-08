@@ -121,7 +121,7 @@ describe("Comparaison Celcat / cal-iut", () => {
   });
 });
 
-describe("Bouton « Corriger tous les écarts »", () => {
+describe("Bouton « Corriger les écarts de cette semaine »", () => {
   it("demande confirmation en disant COMBIEN de suppressions", async () => {
     // Créer en trop se rattrape, supprimer non : c'est le nombre qu'il faut
     // voir avant de valider.
@@ -133,7 +133,7 @@ describe("Bouton « Corriger tous les écarts »", () => {
     });
     render(<ComparaisonCelcat semaine={1} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /corriger tous les écarts/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /corriger les écarts de cette semaine/i }));
 
     // Rien n'est envoyé tant que l'utilisateur n'a pas confirmé.
     await waitFor(() =>

@@ -21,6 +21,7 @@ des jours sans que rien ne le signale.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from cal_iut.celcat.lecture import meme_creneau
@@ -157,8 +158,43 @@ def _correspond(
     return True
 
 
-def _ecarts(placement: Any, ev: dict, salles_celcat: dict[str, str]) -> list[str]:
+_ETIQUETTE = re.compile(r"^\s*\[([^\]]+)\]")
+
+
+def _type_celcat(ev: dict) -> str:
+    """Le type de cours porté par la catégorie Celcat : « [CM] 100% » -> CM.
+
+    Seule l'étiquette entre crochets fait foi. Le pourcentage et les
+    variantes (bénévole, capacité) ne disent rien du type et signaler leurs
+    différences ferait ressortir comme fausses des catégories parfaitement
+    correctes. Une catégorie administrative (« Conférence », « Jour férié »)
+    n'a pas de crochets et rend donc la chaîne vide.
+    """
+    m = _ETIQUETTE.match(str(ev.get("categorie") or ""))
+    return m.group(1).strip().upper() if m else ""
+
+
+def _ecarts(
+    placement: Any,
+    ev: dict,
+    salles_celcat: dict[str, str],
+    types_seance: dict[str, str] | None = None,
+) -> list[str]:
     ecarts: list[str] = []
+    # LA CATÉGORIE D'ÉVÈNEMENT, signalée par David Annebicque le 05/09/2026 :
+    # « les TD sont aléatoirement indiqués en TD ou en CM dans le type de
+    # cours, ça casse la synchro et ça posera souci sur OMEGA ». Elle n'était
+    # pas comparée : six TD étiquetés [CM] en production (WR101, WR106,
+    # semaine 1) ressortaient « identique », et l'écran affirmait donc que
+    # tout concordait précisément là où c'était faux.
+    #
+    # Ne rien dire quand on ne SAIT pas : un type de séance inconnu ou une
+    # catégorie sans crochets ne produit aucun écart, plutôt qu'un écart
+    # inventé.
+    notre_type = str((types_seance or {}).get(str(getattr(placement, "session_id", "")), "")).upper()
+    type_celcat = _type_celcat(ev)
+    if notre_type and type_celcat and notre_type != type_celcat:
+        ecarts.append("catégorie")
     heure = _heure_du_slot(getattr(placement, "slot", None))
     heure_ev = str(ev.get("heure_debut") or "")
     if heure and heure_ev and not meme_creneau(heure_ev, heure):
@@ -203,6 +239,7 @@ def comparer(
     groupes_celcat: dict[str, str] | None = None,
     salles_celcat: dict[str, str] | None = None,
     codes_celcat: set[str] | None = None,
+    types_seance: dict[str, str] | None = None,
 ) -> list[dict]:
     """Une ligne par séance, avec son verdict.
 
@@ -263,7 +300,7 @@ def comparer(
                 }
             )
             continue
-        ecarts = _ecarts(placement, trouve, salles_celcat or {})
+        ecarts = _ecarts(placement, trouve, salles_celcat or {}, types_seance or {})
         lignes.append(
             {
                 "statut": "ecart" if ecarts else "identique",
