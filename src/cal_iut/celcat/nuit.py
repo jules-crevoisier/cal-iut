@@ -40,7 +40,7 @@ from cal_iut.celcat.planification import lignes as lignes_comparaison
 from cal_iut.celcat.rpc import masquer_semaine
 from cal_iut.celcat.rpc_config import charger_methodes
 from cal_iut.celcat.suppression import ElementSuppression, supprimer_manquants
-from cal_iut.celcat.sync import marquer_saisi
+from cal_iut.celcat.sync import marquer_saisi, marquer_supprime
 
 # Même valeur que `scripts/pousser_manquants_celcat.py::PREMIERE_SEMAINE_CELCAT`
 # — indice `weeks` 0 = cette semaine ISO. Dupliqué plutôt qu'importé d'un
@@ -192,6 +192,26 @@ def _masque_pour(entree: Any) -> str:
         return masquer_semaine(longueur=54, indice=indice)
     except Exception:  # noqa: BLE001
         return "N" * 54
+
+
+def _evenement_a_disparu(motif: str) -> bool:
+    """Ce motif prouve-t-il que l'évènement n'existe PLUS dans Celcat ?
+
+    Deux formulations, toutes deux vues en production le 08/09/2026 :
+    la nôtre, quand `localiser_evenement` ne retrouve rien
+    (« event_id=1953820 absent des group_ids=[1661972] interrogés »), et
+    celle de Celcat lui-même (« L'enregistrement n'existe pas. Il a peut être
+    été supprimé par un autre utilisateur. »).
+
+    STRICTEMENT CES DEUX-LÀ. Le journal est la seule protection contre les
+    doublons : oublier un `event_id` sur une panne réseau, un délai dépassé
+    ou un refus temporaire ferait créer un SECOND évènement à côté de celui
+    qui existe toujours. En particulier « une des ressources affectées a été
+    supprimée » parle d'une SALLE ou d'un ENSEIGNANT disparu, pas de
+    l'évènement — celui-ci est bien là.
+    """
+    texte = str(motif or "")
+    return "absent des group_ids" in texte or "L'enregistrement n'existe pas" in texte
 
 
 def _group_id_celcat_depuis_nom(nom: str) -> int | None:
@@ -659,6 +679,14 @@ def _consommer_file(
             cause = causes_m.get(sid_e)
             motif_complet = f"{motif_e} [ids irrésolus : {cause}]" if cause else motif_e
             bilan.echecs.append((sid_e, motif_complet))
+            if _evenement_a_disparu(motif_e):
+                # L'`event_id` du journal ne désigne plus rien : le garder
+                # ferait requalifier la création en modification à CHAQUE
+                # passage, et la séance ne serait jamais recréée — une boucle
+                # parfaitement stable, avec toutes les apparences du travail.
+                # Huit séances y ont tourné le 08/09/2026 au soir, après que
+                # leurs évènements ont été supprimés de Celcat.
+                marquer_supprime(sid_e)
             journaliser(
                 kind="echec", session_id=sid_e, motif=motif_complet,
                 course_code=getattr(entrees.get(sid_e), "course_code", None), regrouper=True,
