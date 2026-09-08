@@ -5,7 +5,7 @@
  * `route.parcours` posé ; cette vue doit filtrer dessus à l'arrivée.
  */
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { emptyPayload, placedRow, testRoute } from "../test/payloadFixture";
 import { PromoView } from "./PromoView";
@@ -43,6 +43,14 @@ const payload = emptyPayload({
 });
 
 describe("PromoView filtre via route.parcours (arrivée depuis la recherche)", () => {
+  // La vue Promo s'ouvre sur le jour EN COURS depuis le 08/09/2026 : sans
+  // horloge figée, ces tests passeraient le lundi et échoueraient le mardi.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-09-07T09:00:00")); // un lundi
+  });
+  afterAll(() => vi.useRealTimers());
+
   it("should filter the grid to the searched parcours on arrival, showing its TD not just its CM", () => {
     render(
       <PromoView

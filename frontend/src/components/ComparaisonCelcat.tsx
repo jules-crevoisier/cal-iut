@@ -104,9 +104,13 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
   return (
     <div data-testid="comparaison-celcat">
       <p className={donnees.perime ? "bad" : "muted"}>
-        Semaine {donnees.semaine + 1}
-        {donnees.lundi ? ` (du lundi ${donnees.lundi.split("-").reverse().slice(0, 2).join("/")})` : ""} —{" "}
-        {aAgir.length} écart(s) sur {toutes.length} séance(s)
+        {/* La DATE, pas un numéro : l'app numérote les semaines autrement que
+            l'indice interne, et deux numérotations pour la même chose font
+            comparer la mauvaise semaine sans s'en apercevoir. */}
+        {donnees.lundi
+          ? `Semaine du lundi ${donnees.lundi.split("-").reverse().slice(0, 2).join("/")}`
+          : `Semaine ${donnees.semaine + 1}`}{" "}
+        — {aAgir.length} écart(s) sur {toutes.length} séance(s)
         {donnees.perime ? " — relevé périmé, à rafraîchir" : ""}
       </p>
 

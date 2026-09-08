@@ -151,3 +151,47 @@ def test_un_evenement_sans_matiere_se_rapproche_par_creneau_et_salle() -> None:
 
     assert len(lignes) == 1, "une seule ligne, pas une absence ET un en-trop"
     assert lignes[0]["statut"] == "identique"
+
+
+def test_le_suffixe_de_parcours_ne_doit_pas_empecher_le_rapprochement() -> None:
+    """« WR314D » chez nous, « WR314 » chez Celcat.
+
+    Constaté sur le relevé de la semaine 2 (08/09/2026) : des séances S3 et
+    S5 ressortaient « absentes » ET « en trop » alors que jour, heure et
+    salle concordaient — seul le suffixe de parcours différait. La règle est
+    déjà écrite dans `celcat.yaml` pour les modules (« la liste indexe
+    parfois le module SANS le suffixe de parcours que nous utilisons »), elle
+    manquait ici.
+
+    Le suffixe n'est retiré qu'EN DERNIER RECOURS, jamais avant d'avoir
+    essayé la correspondance exacte : c'est la même prudence que le mapping,
+    et Celcat sert aussi à payer les enseignants.
+    """
+    lignes = comparer(
+        placements=[
+            _placement(session_id="WR314D-S3-CM-1", course_code="WR314D", day=0, slot=1,
+                       room_id="h018", room_label="H.018 (Amphi MMI)")
+        ],
+        evenements=[_ev(event_id=1944943, module="WR314 Prog. Web", jour=0, heure_debut="09:30")],
+        semaine=1,
+        semaine_celcat=3,
+        salles_celcat=SALLES,
+    )
+
+    assert len(lignes) == 1, "une seule ligne, pas une absence ET un en-trop"
+    assert lignes[0]["statut"] == "identique"
+
+
+def test_un_code_tronque_ne_se_confond_pas_avec_un_autre_module() -> None:
+    """Retirer le suffixe ne doit pas rapprocher « WR31 » de « WR314 » :
+    ce serait échanger un faux « absent » contre un faux « identique », et le
+    second est bien pire — il ferait croire à une synchro correcte."""
+    lignes = comparer(
+        placements=[_placement(session_id="WR31D-S3-CM-1", course_code="WR31D", day=0, slot=1)],
+        evenements=[_ev(event_id=999, module="WR314 Prog. Web", jour=0, heure_debut="09:30")],
+        semaine=1,
+        semaine_celcat=3,
+        salles_celcat=SALLES,
+    )
+
+    assert {l["statut"] for l in lignes} == {"absente_celcat", "en_trop_celcat"}

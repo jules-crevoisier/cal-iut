@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { indexSemaineCourante } from "./semaineCourante";
+import { indexSemaineCourante, jourOuvreAujourdhui } from "./semaineCourante";
 
 const SEMAINES = [
   { monday: "2026-08-31", label: "Semaine 1", blocked: false, weekIndex: 0 },
@@ -62,5 +62,20 @@ describe("indexSemaineCourante", () => {
   it("ignore une date de lundi illisible", () => {
     const abimees = [{ monday: "pas une date", label: "?", blocked: false, weekIndex: 0 }];
     expect(indexSemaineCourante(abimees, new Date("2026-09-08T10:00:00"))).toBe(0);
+  });
+});
+
+describe("jourOuvreAujourdhui", () => {
+  it("rend l'index du jour en cours, lundi = 0", () => {
+    expect(jourOuvreAujourdhui(new Date("2026-09-07T10:00:00"))).toBe(0); // lundi
+    expect(jourOuvreAujourdhui(new Date("2026-09-08T10:00:00"))).toBe(1); // mardi
+    expect(jourOuvreAujourdhui(new Date("2026-09-11T10:00:00"))).toBe(4); // vendredi
+  });
+
+  it("retombe sur lundi le week-end", () => {
+    // Aucun cours le samedi : ouvrir sur une colonne vide serait pire que
+    // sur le premier jour de la semaine qu'on s'apprête à préparer.
+    expect(jourOuvreAujourdhui(new Date("2026-09-12T10:00:00"))).toBe(0); // samedi
+    expect(jourOuvreAujourdhui(new Date("2026-09-13T10:00:00"))).toBe(0); // dimanche
   });
 });

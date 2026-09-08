@@ -8,7 +8,7 @@
  * dans la grille — aucune case n'est cliquable nulle part, sans erreur.
  */
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SeanceAPlacer } from "../api/client";
 import { emptyPayload, testRoute } from "../test/payloadFixture";
@@ -76,6 +76,14 @@ function manquante(overrides: Partial<SeanceAPlacer> = {}): SeanceAPlacer {
 }
 
 describe("PromoView à-placer sous filtre différent", () => {
+  // La vue Promo s'ouvre sur le jour EN COURS depuis le 08/09/2026 : sans
+  // horloge figée, ces tests passeraient le lundi et échoueraient le mardi.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-09-07T09:00:00")); // un lundi
+  });
+  afterAll(() => vi.useRealTimers());
+
   it("should place the missing session on click even when the year filter still points at another year", async () => {
     const { rerender } = render(
       <PromoView
