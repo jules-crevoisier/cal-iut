@@ -3603,6 +3603,13 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
 
     if body.room_id:
         salle = next((r for r in state.rooms if r.id == body.room_id), None)
+        if salle is None:
+            # Un identifiant inconnu retombait sur `None`, donc sur un
+            # placement SANS salle rendu en 200 : la séance atterrissait au
+            # planning dépourvue de salle, et rien ne le signalait. Une
+            # salle manquante ne se remarque qu'en rouvrant le planning —
+            # donc trop tard (constaté le 08/09/2026).
+            raise HTTPException(404, f"Salle « {body.room_id} » inconnue")
     else:
         salle = _resolve_room(state, session, body.week, body.day, body.slot, None)
 
@@ -3878,6 +3885,18 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
                 room_id=body.room_id, lock=False, force=body.force,
             ),
         )
+    elif body.room_id is not None:
+        # Salle SEULE, sans repositionner. Le `room_id` n'était transmis
+        # qu'à l'intérieur du déplacement ci-dessus : l'envoyer seul rendait
+        # donc 200 en gardant l'ancienne salle — une réponse qui affirme le
+        # succès d'une action qui n'a pas eu lieu (constaté en production le
+        # 08/09/2026 sur « Présentation des services »). Or c'est la forme
+        # naturelle de la demande : « mets-la en A.018 ».
+        #
+        # Délégué à `changer_salle` plutôt que réimplémenté : c'est lui qui
+        # sait ne revérifier QUE le conflit de salle, sans refaire les
+        # contrôles de position qu'un créneau inchangé rendrait absurdes.
+        resultat = changer_salle(session_id, ChangeRoomRequest(room_id=body.room_id, force=body.force))
     else:
         match = _find_placement(state, session_id)
         resultat = _to_placement(match, state.sessions_by_id)
