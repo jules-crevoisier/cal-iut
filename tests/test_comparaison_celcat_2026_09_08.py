@@ -70,6 +70,49 @@ def _placement(**kw):
     return SimpleNamespace(**base)
 
 
+def test_deux_groupes_au_meme_creneau_ne_se_confondent_pas() -> None:
+    """Constaté en production le 08/09/2026, premier relevé réel : 55 séances
+    « absentes de Celcat » et 51 « en trop », presque symétriques — la
+    signature d'un rapprochement raté, pas d'un désastre.
+
+    Sans critère de groupe, le TD du groupe AB s'appariait au TD du groupe CD
+    au même créneau : le premier placement prenait l'évènement, et le second
+    ne trouvait plus rien. Le même WR116 déjà corrigé ressortait ainsi « en
+    trop » alors qu'il était au bon endroit des deux côtés.
+    """
+    lignes = comparer(
+        placements=[
+            _placement(session_id="WR101-AB", course_code="WR101", day=0, slot=2, group_ids=["ab"]),
+            _placement(session_id="WR101-CD", course_code="WR101", day=0, slot=2, group_ids=["cd"]),
+        ],
+        evenements=[
+            _ev(module="WR101 Anglais", groupe="BUT MMI S1 TD AB", jour=0, heure_debut="11:00", event_id=1),
+            _ev(module="WR101 Anglais", groupe="BUT MMI S1 TD CD", jour=0, heure_debut="11:00", event_id=2),
+        ],
+        semaine=1,
+        semaine_celcat=3,
+        groupes_celcat={"ab": "BUT MMI S1 TD AB", "cd": "BUT MMI S1 TD CD"},
+    )
+
+    assert [l["statut"] for l in lignes] == ["identique", "identique"]
+    apparie = {l["session_id"]: l["celcat"]["event_id"] for l in lignes}
+    assert apparie == {"WR101-AB": 1, "WR101-CD": 2}, "chacun avec SON groupe"
+
+
+def test_sans_correspondance_de_groupe_la_seance_est_absente_et_non_appariee_a_tort() -> None:
+    """Mieux vaut « absente de Celcat » qu'un appariement au mauvais groupe :
+    le premier envoie vérifier, le second ferait corriger la mauvaise séance."""
+    lignes = comparer(
+        placements=[_placement(session_id="WR101-AB", course_code="WR101", group_ids=["ab"])],
+        evenements=[_ev(module="WR101 Anglais", groupe="BUT MMI S1 TD ZZ")],
+        semaine=1,
+        semaine_celcat=3,
+        groupes_celcat={"ab": "BUT MMI S1 TD AB"},
+    )
+
+    assert {l["statut"] for l in lignes} == {"absente_celcat", "en_trop_celcat"}
+
+
 def test_une_seance_bien_synchronisee_est_identique() -> None:
     """Le décalage de 9'21" ne doit PAS être vu comme un écart : sans quoi
     toutes les lignes seraient rouges et la vue inexploitable."""

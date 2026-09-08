@@ -40,10 +40,25 @@ def _heure_du_slot(slot: Any) -> str:
 
 
 def _sans_suffixe(salle: str) -> str:
-    """« H.018 (Amphi MMI) » et « H.018 » désignent la même salle : cal-iut
-    affiche un libellé enrichi que Celcat n'a pas. Comparer les chaînes
-    brutes signalerait un écart sur chaque séance en amphi."""
+    """« H.018 (Amphi MMI) » et « H.018 » : cal-iut affiche un libellé enrichi
+    que Celcat n'a pas."""
     return str(salle or "").split("(")[0].strip().upper()
+
+
+def _salle_attendue(placement: Any, salles_celcat: dict[str, str]) -> str:
+    """Le nom CELCAT de la salle placée, via la table de correspondance.
+
+    `data/config/celcat.yaml` dit `h018: "Amphi 3 MMI"` : les deux outils
+    nomment la même salle différemment. Comparer les libellés signalait un
+    écart sur TOUS les CM en amphi — les séances les plus visibles. Cette
+    table sert déjà à l'écriture ; s'en servir aussi pour comparer, c'est
+    garantir que les deux sens voient le même monde.
+    """
+    room_id = str(getattr(placement, "room_id", "") or "")
+    equivalent = salles_celcat.get(room_id)
+    if equivalent:
+        return _sans_suffixe(equivalent)
+    return _sans_suffixe(getattr(placement, "room_label", "") or "")
 
 
 def _est_technique(ev: dict) -> bool:
@@ -53,16 +68,47 @@ def _est_technique(ev: dict) -> bool:
     return not str(ev.get("module") or "").strip() and not str(ev.get("heure_debut") or "").strip()
 
 
-def _correspond(placement: Any, ev: dict) -> bool:
+def _correspond(
+    placement: Any, ev: dict, groupes_celcat: dict[str, str], salles_celcat: dict[str, str]
+) -> bool:
     """Même séance ? Reprend les critères de `ops.correspond_live` sur des
     données déjà relevées (l'instantané est un dict, pas un `EvenementCelcat`).
 
     Le jour Celcat est `day_of_week` brut — 0 = lundi, comme `placement.day`.
+
+    LE GROUPE EST DÉTERMINANT, et son absence a coûté un premier relevé
+    inexploitable (08/09/2026 : 55 séances « absentes » et 51 « en trop »,
+    presque symétriques). Deux TD de groupes différents partagent le même
+    créneau et la même matière : sans ce critère, le premier placement prend
+    l'évènement de l'autre, et le second ne trouve plus rien. Mieux vaut
+    « absente de Celcat » qu'un appariement au mauvais groupe — le premier
+    envoie vérifier, le second ferait corriger la mauvaise séance.
     """
     code = str(getattr(placement, "course_code", "") or "").strip().upper()
     if not code:
         return False
-    if not str(ev.get("module") or "").upper().startswith(code):
+    module = str(ev.get("module") or "").strip()
+    if not module:
+        # Évènement officiel saisi à la main dans Celcat (rentrée,
+        # présentation des services) : sans module, le rapprochement par code
+        # matière est impossible. Le créneau et la salle suffisent à
+        # l'identifier — sans quoi il compte DOUBLE, « absent » d'un côté et
+        # « en trop » de l'autre.
+        meme_jour = ev.get("jour") is None or int(ev["jour"]) == int(getattr(placement, "day", -1) or 0)
+        heure = _heure_du_slot(getattr(placement, "slot", None))
+        meme_heure = bool(heure) and meme_creneau(str(ev.get("heure_debut") or ""), heure)
+        meme_salle = _sans_suffixe(ev.get("salle") or "") == _salle_attendue(placement, salles_celcat)
+        return meme_jour and meme_heure and meme_salle
+    if not module.upper().startswith(code):
+        return False
+
+    attendu = ""
+    for gid in list(getattr(placement, "group_ids", None) or []):
+        attendu = groupes_celcat.get(str(gid), "")
+        if attendu:
+            break
+    vu = str(ev.get("groupe") or "").strip().upper()
+    if attendu and vu and attendu.strip().upper() != vu:
         return False
 
     jour_ev = ev.get("jour")
@@ -79,13 +125,13 @@ def _correspond(placement: Any, ev: dict) -> bool:
     return True
 
 
-def _ecarts(placement: Any, ev: dict) -> list[str]:
+def _ecarts(placement: Any, ev: dict, salles_celcat: dict[str, str]) -> list[str]:
     ecarts: list[str] = []
     heure = _heure_du_slot(getattr(placement, "slot", None))
     heure_ev = str(ev.get("heure_debut") or "")
     if heure and heure_ev and not meme_creneau(heure_ev, heure):
         ecarts.append("heure")
-    salle = _sans_suffixe(getattr(placement, "room_label", "") or "")
+    salle = _salle_attendue(placement, salles_celcat)
     salle_ev = _sans_suffixe(ev.get("salle") or "")
     if salle and salle_ev and salle != salle_ev:
         ecarts.append("salle")
@@ -117,7 +163,13 @@ def _vue_celcat(ev: dict) -> dict:
 
 
 def comparer(
-    *, placements: list[Any], evenements: list[dict], semaine: int, semaine_celcat: int
+    *,
+    placements: list[Any],
+    evenements: list[dict],
+    semaine: int,
+    semaine_celcat: int,
+    groupes_celcat: dict[str, str] | None = None,
+    salles_celcat: dict[str, str] | None = None,
 ) -> list[dict]:
     """Une ligne par séance, avec son verdict.
 
@@ -132,12 +184,21 @@ def comparer(
     calendrier, de faire cette conversion.
     """
     du_planning = [p for p in placements if int(getattr(p, "week", -1) or -1) == int(semaine)]
-    candidats = [
-        ev
-        for ev in evenements
-        if not _est_technique(ev)
-        and int(ev.get("semaine") or -1) == int(semaine_celcat)
-    ]
+    # Dédoublonnage par `event_id` : le relevé interroge 29 groupes, et un CM
+    # commun à la promo est rendu une fois PAR groupe. Sans ça, le même
+    # évènement apparaissait cinq fois « en trop » — liste illisible et
+    # compteur faux (constaté sur le premier relevé réel, 08/09/2026).
+    candidats: list[dict] = []
+    vus: set[int] = set()
+    for ev in evenements:
+        if _est_technique(ev) or int(ev.get("semaine") or -1) != int(semaine_celcat):
+            continue
+        identifiant = ev.get("event_id")
+        if identifiant is not None:
+            if identifiant in vus:
+                continue
+            vus.add(int(identifiant))
+        candidats.append(ev)
 
     lignes: list[dict] = []
     apparies: set[int] = set()
@@ -147,7 +208,7 @@ def comparer(
         for i, ev in enumerate(candidats):
             if i in apparies:
                 continue
-            if _correspond(placement, ev):
+            if _correspond(placement, ev, groupes_celcat or {}, salles_celcat or {}):
                 trouve, _ = ev, apparies.add(i)
                 break
         if trouve is None:
@@ -162,7 +223,7 @@ def comparer(
                 }
             )
             continue
-        ecarts = _ecarts(placement, trouve)
+        ecarts = _ecarts(placement, trouve, salles_celcat or {})
         lignes.append(
             {
                 "statut": "ecart" if ecarts else "identique",

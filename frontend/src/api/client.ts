@@ -721,6 +721,9 @@ export interface LigneComparaison {
 export interface CelcatComparaison {
   semaine: number;
   semaine_celcat: number;
+  /** Lundi de la semaine : « lundi 07/09 » se vérifie d'un coup d'oeil,
+   * « semaine 1 » demande de compter. */
+  lundi: string | null;
   releve_le: string | null;
   age_secondes: number | null;
   perime: boolean;

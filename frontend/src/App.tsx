@@ -36,6 +36,7 @@ import { Toolbar } from "./components/Toolbar";
 import { AdminCelcatView } from "./views/AdminCelcatView";
 import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
+import { indexSemaineCourante } from "./utils/semaineCourante";
 import { buildTodoList } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -116,6 +117,12 @@ export function App() {
   const [parcours, setParcours] = useState(DEFAULT_PARCOURS);
   const [semestre, setSemestre] = useState(DEFAULT_SEMESTRE);
   const [displayWeek, setDisplayWeek] = useState(0);
+  // Une seule fois, au premier planning reçu : ouvrir sur la semaine EN
+  // COURS plutôt que sur la première de l'année (retour utilisateur
+  // 08/09/2026). Un drapeau plutôt qu'un effet sur `appPayload` : sans lui,
+  // chaque rechargement de planning ramènerait l'utilisateur à aujourd'hui
+  // alors qu'il consultait une autre semaine.
+  const semaineInitialisee = useRef(false);
   const [viewMode, setViewMode] = useState<ViewMode>("group");
   const [groupId, setGroupId] = useState("but1-td-ab");
   const [teacherCode, setTeacherCode] = useState("");
@@ -170,7 +177,12 @@ export function App() {
 
   const refreshAppState = useCallback(async () => {
     try {
-      setAppPayload(await fetchAppState());
+      const recu = await fetchAppState();
+      setAppPayload(recu);
+      if (!semaineInitialisee.current && recu?.weekRows?.length) {
+        semaineInitialisee.current = true;
+        setDisplayWeek(indexSemaineCourante(recu.weekRows));
+      }
     } catch {
       // Pas encore de planning résolu — les vues en lecture seule affichent
       // un message d'attente plutôt qu'une erreur bruyante.
