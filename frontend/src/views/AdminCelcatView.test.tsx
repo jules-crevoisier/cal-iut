@@ -265,6 +265,8 @@ describe("AdminCelcatView", () => {
     // rester vrai, c'est que le journal reste SÉPARÉ des extras (pas de
     // bouton d'action dedans) et qu'il montre le motif, pas seulement le
     // fait qu'il y ait eu un échec.
+    // Derrière l'onglet « Activité » depuis le découpage du 08/09/2026.
+    fireEvent.click(await screen.findByRole("button", { name: /^activité$/i }));
     const journal = await screen.findByRole("heading", { name: /^activité$/i });
     const panneau = journal.closest(".panel");
     expect(panneau).not.toBeNull();
@@ -272,7 +274,7 @@ describe("AdminCelcatView", () => {
     expect(within(panneau as HTMLElement).getByText(/sans code Celcat/i)).toBeInTheDocument();
   });
 
-  it("should only call etat, extras ouvert, logs, instantane and comparaison on mount", async () => {
+  it("should only call etat, extras ouvert, logs and instantane on mount, comparaison only when its tab is opened", async () => {
     const mock = stubFetch();
     render(<AdminCelcatView />);
 
@@ -284,10 +286,17 @@ describe("AdminCelcatView", () => {
     // 4e depuis le 08/09/2026 : l'instantané Celcat, servi par l'API depuis
     // le relevé du sidecar (elle ne lit jamais Celcat elle-même).
     expect(chemins.some((u) => u.includes("/celcat/instantane"))).toBe(true);
-    // 5e depuis le 08/09/2026 : la comparaison Celcat / cal-iut de la
-    // semaine affichée, montée par `ComparaisonCelcat`.
-    expect(chemins.some((u) => u.includes("/celcat/comparaison"))).toBe(true);
-    expect(chemins).toHaveLength(5);
+    // La comparaison N'EST PAS chargée au montage : elle vit derrière
+    // l'onglet « Contenu Celcat » depuis le découpage du 08/09/2026, et ne
+    // se déclenche qu'à son ouverture — un écran de supervision n'a pas à
+    // payer le coût de tout ce qu'il pourrait montrer.
+    expect(chemins.some((u) => u.includes("/celcat/comparaison"))).toBe(false);
+    expect(chemins).toHaveLength(4);
+
+    fireEvent.click(screen.getByRole("button", { name: /contenu celcat/i }));
+    await waitFor(() =>
+      expect(urlsDuMock(mock).some((u) => u.includes("/celcat/comparaison"))).toBe(true),
+    );
   });
 
   it("should disable a past week and a launched week", async () => {

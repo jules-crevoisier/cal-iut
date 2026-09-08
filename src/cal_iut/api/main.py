@@ -3177,10 +3177,21 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     from cal_iut.celcat.comparaison import comparer
     from cal_iut.celcat.instantane import lire
     from cal_iut.celcat.lecture import indice_depuis_lundi
+    from cal_iut.celcat.mapping import libelle_groupe_celcat, load_celcat_config
     from cal_iut.celcat.nuit import PREMIERE_SEMAINE_CELCAT
 
     state = get_state()
     releve = lire()
+
+    # Les DEUX tables de correspondance, celles-là mêmes qui servent à
+    # l'écriture : comparer avec d'autres règles que celles qui écrivent
+    # ferait diverger les deux sens. `h018` s'appelle « Amphi 3 MMI » chez
+    # Celcat — sans cette table, tous les CM en amphi ressortaient en écart.
+    cfg = load_celcat_config(state.config_dir)
+    groupes_celcat = {
+        g.id: f"BUT MMI {getattr(g, 'semestre', '')} {libelle_groupe_celcat(g.label)}".strip()
+        for g in state.groups
+    }
 
     lundis = state.calendar.teaching_mondays
     semaine_celcat = (
@@ -3197,6 +3208,8 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
             evenements=list(releve.evenements),
             semaine=semaine,
             semaine_celcat=semaine_celcat,
+            groupes_celcat=groupes_celcat,
+            salles_celcat=cfg.salles,
         )
         if releve.releve_le is not None
         else []
@@ -3205,6 +3218,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     return CelcatComparaisonResponse(
         semaine=semaine,
         semaine_celcat=semaine_celcat,
+        lundi=lundis[semaine].isoformat() if 0 <= semaine < len(lundis) else None,
         releve_le=releve.releve_le,
         age_secondes=releve.age_secondes,
         perime=releve.perime,

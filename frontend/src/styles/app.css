@@ -4156,3 +4156,32 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 .celcat-comparaison .comparaison-ecart td:first-child { border-left: 3px solid #d9822b; }
 .celcat-comparaison .comparaison-absente_celcat td:first-child { border-left: 3px solid #c0392b; }
 .celcat-comparaison .comparaison-en_trop_celcat td:first-child { border-left: 3px solid #8e44ad; }
+
+/* Onglets Celcat (08/09/2026) — l'écran empilait six panneaux : armement,
+   semaines, extras, relevé, comparaison, activité. Retour utilisateur :
+   « là c'est illisible, trop de choses ». Le découpage suit l'usage, pas la
+   technique : on vient piloter la saisie, OU vérifier ce qui s'est passé,
+   OU confronter à Celcat — rarement les trois à la fois. */
+.celcat-onglets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.celcat-onglet {
+  border: 1px solid var(--bordure, #e2e2e2);
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font: inherit;
+  /* 44 px de haut : une cible tactile confortable, l'écran se consulte
+     aussi depuis un téléphone entre deux cours. */
+  min-height: 44px;
+}
+
+.celcat-onglet--actif {
+  border-color: currentColor;
+  font-weight: 600;
+}

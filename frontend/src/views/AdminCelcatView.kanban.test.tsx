@@ -87,6 +87,13 @@ function stubFetch(instantane: unknown = INSTANTANE_FRAIS) {
   return mock;
 }
 
+/** L'écran est découpé en onglets depuis le 08/09/2026 (« là c'est
+ * illisible, trop de choses ») : le contenu n'est monté qu'une fois
+ * l'onglet ouvert. */
+async function ouvrirOnglet(nom: RegExp) {
+  fireEvent.click(await screen.findByRole("button", { name: nom }));
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -96,6 +103,7 @@ describe("Vue d'activité Celcat", () => {
   it("range chaque écriture dans sa colonne", async () => {
     stubFetch();
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/^activité$/i);
 
     const creees = await screen.findByTestId("colonne-created");
     expect(within(creees).getByText(/WR101-S1-TD-1/)).toBeTruthy();
@@ -115,6 +123,7 @@ describe("Vue d'activité Celcat", () => {
     // nombre, un blocage installé depuis des heures ressemble à un incident.
     stubFetch();
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/^activité$/i);
 
     const echecs = await screen.findByTestId("colonne-echec");
     expect(within(echecs).getByText(/87/)).toBeTruthy();
@@ -123,6 +132,7 @@ describe("Vue d'activité Celcat", () => {
   it("affiche le motif d'un échec, pas seulement son existence", async () => {
     stubFetch();
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/^activité$/i);
 
     const echecs = await screen.findByTestId("colonne-echec");
     expect(within(echecs).getByText(/partial key/)).toBeTruthy();
@@ -131,6 +141,7 @@ describe("Vue d'activité Celcat", () => {
   it("donne l'âge du relevé Celcat", async () => {
     stubFetch();
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/contenu celcat/i);
 
     const bloc = await screen.findByTestId("instantane-celcat");
     expect(within(bloc).getByText(/il y a/i)).toBeTruthy();
@@ -139,6 +150,7 @@ describe("Vue d'activité Celcat", () => {
   it("signale un relevé périmé au lieu de le présenter comme courant", async () => {
     stubFetch({ ...INSTANTANE_FRAIS, age_secondes: 10800, perime: true });
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/contenu celcat/i);
 
     const bloc = await screen.findByTestId("instantane-celcat");
     expect(within(bloc).getByText(/périmé|à rafraîchir/i)).toBeTruthy();
@@ -155,6 +167,7 @@ describe("Vue d'activité Celcat", () => {
       erreur: null,
     });
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/contenu celcat/i);
 
     const bloc = await screen.findByTestId("instantane-celcat");
     expect(within(bloc).getByText(/aucun relevé/i)).toBeTruthy();
@@ -164,6 +177,7 @@ describe("Vue d'activité Celcat", () => {
     // Un instantané vide sans explication ramènerait au silence qu'on répare.
     stubFetch({ ...INSTANTANE_FRAIS, evenements: [], erreur: "ESessionTimeout" });
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/contenu celcat/i);
 
     const bloc = await screen.findByTestId("instantane-celcat");
     expect(within(bloc).getByText(/ESessionTimeout/)).toBeTruthy();
@@ -178,6 +192,7 @@ describe("Vue d'activité Celcat", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: ecrit } });
     stubFetch();
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/^activité$/i);
 
     const echecs = await screen.findByTestId("colonne-echec");
     fireEvent.click(within(echecs).getByRole("button", { name: /copier/i }));
@@ -192,6 +207,7 @@ describe("Vue d'activité Celcat", () => {
   it("ne propose pas de copier une colonne vide", async () => {
     stubFetch();
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/^activité$/i);
 
     const supprimees = await screen.findByTestId("colonne-deleted");
     const vide = screen.getByTestId("colonne-blocked");
@@ -202,6 +218,7 @@ describe("Vue d'activité Celcat", () => {
   it("le bouton Rafraîchir demande un relevé sans promettre l'immédiat", async () => {
     const mock = stubFetch();
     render(<AdminCelcatView />);
+    await ouvrirOnglet(/contenu celcat/i);
 
     const bouton = await screen.findByRole("button", { name: /rafraîchir/i });
     fireEvent.click(bouton);

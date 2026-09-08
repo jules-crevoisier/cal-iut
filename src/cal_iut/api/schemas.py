@@ -717,6 +717,9 @@ class CelcatComparaisonResponse(BaseModel):
 
     semaine: int
     semaine_celcat: int
+    # Lundi de la semaine, pour afficher des DATES plutôt qu'un numéro : « lundi
+    # 07/09 » se vérifie d'un coup d'oeil, « semaine 1 » demande de compter.
+    lundi: str | None = None
     releve_le: str | None = None
     age_secondes: float | None = None
     perime: bool = True

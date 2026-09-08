@@ -124,7 +124,17 @@ export function AdminCelcatView() {
   const [messageReleve, setMessageReleve] = useState<string | null>(null);
   // Semaine comparée. Par défaut la première validée : c'est celle qui
   // compte pour la synchro, pas forcément la semaine courante.
-  const [semaineComparee, setSemaineComparee] = useState(1);
+  // Indice INTERNE (0-based), comme partout ailleurs : l'affichage montre
+  // `indice + 1`. Le sélecteur envoyait l'indice affiché, donc comparait la
+  // semaine suivante — repéré par Jules le 08/09/2026 (« semaine 1 égale
+  // semaine 2 dans vue promo non ? »).
+  const [semaineComparee, setSemaineComparee] = useState(0);
+  // Trois onglets plutôt qu'une page de six panneaux empilés (retour
+  // utilisateur 08/09/2026 : « là c'est illisible, trop de choses »). Le
+  // découpage suit l'usage, pas la technique : on VIENT pour piloter la
+  // saisie, ou pour vérifier ce qui s'est passé, ou pour confronter à
+  // Celcat — rarement pour les trois à la fois.
+  const [onglet, setOnglet] = useState<"pilotage" | "activite" | "celcat">("pilotage");
 
   const charger = useCallback(async () => {
     try {
@@ -259,6 +269,26 @@ export function AdminCelcatView() {
         </div>
       )}
 
+      <nav className="celcat-onglets" aria-label="Sections Celcat">
+        {([
+          ["pilotage", "Pilotage"],
+          ["activite", "Activité"],
+          ["celcat", "Contenu Celcat"],
+        ] as const).map(([cle, libelle]) => (
+          <button
+            key={cle}
+            type="button"
+            className={`celcat-onglet${onglet === cle ? " celcat-onglet--actif" : ""}`}
+            aria-current={onglet === cle ? "page" : undefined}
+            onClick={() => setOnglet(cle)}
+          >
+            {libelle}
+          </button>
+        ))}
+      </nav>
+
+      {onglet === "pilotage" ? (
+      <>
       <div className={`panel celcat-hero celcat-etape ${etat.saisie_active ? "celcat-hero--on" : "celcat-hero--off"}`}>
         <span className="celcat-etape-num">1</span>
         <div className="celcat-etape-corps">
@@ -411,6 +441,11 @@ export function AdminCelcatView() {
         </div>
       </div>
 
+      </>
+      ) : null}
+
+      {onglet === "celcat" ? (
+      <>
       {/* Ce que Celcat contient vraiment. L'API ne le lit jamais elle-même
           (son conteneur n'a ni VPN ni navigateur) : elle sert un relevé
           déposé par le sidecar, d'où l'âge affiché systématiquement. */}
@@ -468,7 +503,7 @@ export function AdminCelcatView() {
             onChange={(e) => setSemaineComparee(Number(e.target.value))}
           >
             {SEMAINES.map((n) => (
-              <option key={n} value={n}>
+              <option key={n} value={n - 1}>
                 Semaine {n}
               </option>
             ))}
@@ -477,6 +512,11 @@ export function AdminCelcatView() {
         <ComparaisonCelcat semaine={semaineComparee} />
       </div>
 
+      </>
+      ) : null}
+
+      {onglet === "activite" ? (
+      <>
       {/* Activité récente, en colonnes. Remplace la liste chronologique :
           « 12 échecs sur le même motif » et « 12 incidents distincts »
           n'appellent pas le même geste, et une liste à plat ne les
@@ -534,6 +574,8 @@ export function AdminCelcatView() {
           </div>
         )}
       </div>
+      </>
+      ) : null}
     </section>
   );
 }

@@ -40,10 +40,22 @@ function jour(n: number | null | undefined): string {
   return typeof n === "number" && n >= 0 && n < JOURS.length ? JOURS[n] : "—";
 }
 
+/** « mardi 08/09 » plutôt que « mardi » : un jour sans date oblige à
+ * recompter depuis le numéro de semaine pour savoir de quoi on parle —
+ * et c'est justement en comptant qu'on se trompe. */
+function jourDate(n: number | null | undefined, lundi: string | null): string {
+  const nom = jour(n);
+  if (!lundi || typeof n !== "number" || n < 0 || n >= JOURS.length) return nom;
+  const d = new Date(`${lundi}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return nom;
+  d.setDate(d.getDate() + n);
+  return `${nom} ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function texteLignes(lignes: LigneComparaison[]): string {
   return lignes
     .map((l) => {
-      const gauche = l.caliut ? `${jour(l.caliut.jour)} ${l.caliut.heure} ${l.caliut.salle ?? ""}` : "—";
+      const gauche = l.caliut ? `${jour(l.caliut.jour)} ${l.caliut.heure} ${l.caliut.salle ?? ""}` : "—";  // texte copié : le nom suffit
       const droite = l.celcat
         ? `${jour(l.celcat.jour)} ${l.celcat.heure ?? ""} ${l.celcat.salle ?? ""} (event_id=${l.celcat.event_id})`
         : "—";
@@ -92,7 +104,9 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
   return (
     <div data-testid="comparaison-celcat">
       <p className={donnees.perime ? "bad" : "muted"}>
-        Semaine {donnees.semaine} — {aAgir.length} écart(s) sur {toutes.length} séance(s)
+        Semaine {donnees.semaine + 1}
+        {donnees.lundi ? ` (du lundi ${donnees.lundi.split("-").reverse().slice(0, 2).join("/")})` : ""} —{" "}
+        {aAgir.length} écart(s) sur {toutes.length} séance(s)
         {donnees.perime ? " — relevé périmé, à rafraîchir" : ""}
       </p>
 
@@ -116,12 +130,12 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
                   <td>{l.session_id || l.course_code}</td>
                   <td>
                     {l.caliut
-                      ? `${jour(l.caliut.jour)} ${l.caliut.heure}${l.caliut.salle ? ` — ${l.caliut.salle}` : ""}`
+                      ? `${jourDate(l.caliut.jour, donnees.lundi)} ${l.caliut.heure}${l.caliut.salle ? ` — ${l.caliut.salle}` : ""}`
                       : "—"}
                   </td>
                   <td>
                     {l.celcat
-                      ? `${jour(l.celcat.jour)} ${l.celcat.heure ?? ""}${l.celcat.salle ? ` — ${l.celcat.salle}` : ""}`
+                      ? `${jourDate(l.celcat.jour, donnees.lundi)} ${l.celcat.heure ?? ""}${l.celcat.salle ? ` — ${l.celcat.salle}` : ""}`
                       : "—"}
                   </td>
                   <td>
