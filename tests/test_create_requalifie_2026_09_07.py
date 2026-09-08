@@ -30,6 +30,7 @@ from celcat_sync_helpers import (  # type: ignore[import-not-found]
     activer_saisie,
     jobs_en_attente,
     place,
+    poser_semaines_celcat,
     seance,
     vider_file,
 )
@@ -75,6 +76,7 @@ def test_un_create_dont_la_seance_a_reçu_un_event_id_devient_une_modification(
 
     vider_file()
     enfiler({"action": "create", "session_id": "s-create-vieilli", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     envoyes: list[int] = []
 
@@ -110,6 +112,7 @@ def test_un_create_dont_la_seance_n_a_toujours_pas_d_event_id_cree_bien(
 
     vider_file()
     enfiler({"action": "create", "session_id": "s-create-neuve", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     envoyes: list[int] = []
 

@@ -117,7 +117,14 @@ def test_un_drainage_reussi_laisse_une_trace_dans_le_journal(planning, monkeypat
     vérifier, c'est que le WORKER s'en serve. Écrire dans Celcat sans le
     consigner ramènerait à la situation d'origine — des compteurs à zéro
     alors que le travail est fait."""
-    from celcat_sync_helpers import SEMAINE, activer_saisie, place, seance, vider_file
+    from celcat_sync_helpers import (
+        SEMAINE,
+        activer_saisie,
+        place,
+        poser_semaines_celcat,
+        seance,
+        vider_file,
+    )
 
     from cal_iut.api.state import get_state
     from cal_iut.celcat.file_attente import enfiler
@@ -132,6 +139,7 @@ def test_un_drainage_reussi_laisse_une_trace_dans_le_journal(planning, monkeypat
 
     vider_file()
     enfiler({"action": "create", "session_id": "s-journalisee", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     monkeypatch.setattr(
         "cal_iut.celcat.nuit.resoudre_ids",

@@ -33,6 +33,7 @@ from celcat_sync_helpers import (  # type: ignore[import-not-found]
     activer_saisie,
     jobs_en_attente,
     place,
+    poser_semaines_celcat,
     seance,
     vider_file,
 )
@@ -102,6 +103,7 @@ def test_le_drainage_s_arrete_apres_la_limite_de_jobs(planning, monkeypatch) -> 
     for i in range(7):
         _placer(f"s-lot-{i}")
         enfiler({"action": "create", "session_id": f"s-lot-{i}", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     traites: list[str] = []
 
@@ -146,6 +148,7 @@ def test_sans_limite_le_drainage_traite_tout(planning, monkeypatch) -> None:
     for i in range(4):
         _placer(f"s-tout-{i}")
         enfiler({"action": "create", "session_id": f"s-tout-{i}", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     def _creer(page, entrees, **kw):
         from cal_iut.celcat.ecriture import ResultatEcriture
@@ -190,6 +193,7 @@ def test_une_ressource_introuvable_est_nommee_dans_l_echec(planning, monkeypatch
     vider_file()
     _placer("s-sans-salle")
     enfiler({"action": "create", "session_id": "s-sans-salle", "semaine": SEMAINE})
+    poser_semaines_celcat()
 
     def _resoudre_qui_echoue(*_a, **_k):
         from cal_iut.celcat.ecriture import RessourceIntrouvable
