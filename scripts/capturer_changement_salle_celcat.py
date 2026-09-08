@@ -40,6 +40,7 @@ Le canari est supprimé à la fin, y compris si l'expérience échoue.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -63,6 +64,29 @@ from cal_iut.celcat.rpc import (
 from cal_iut.celcat.rpc_config import charger_methodes
 
 INDICE_SEMAINE = 0
+
+
+class JournalRpc:
+    """Écoute les appels RPC pour récupérer le group_id que l'interface
+    utilise réellement — les identifiants de la base d'entraînement ne sont
+    pas ceux de la production, donc `celcat_groupes.yaml` ne sert à rien
+    ici."""
+
+    def __init__(self, page) -> None:
+        self.appels: list[dict] = []
+        page.on("response", self._noter)
+
+    def _noter(self, reponse) -> None:
+        req = reponse.request
+        if req.method != "POST" or "CTWebService.dll" not in reponse.url:
+            return
+        try:
+            envoi = json.loads(req.post_data or "{}")
+        except json.JSONDecodeError:
+            return
+        self.appels.append(
+            {"methode": str(envoi.get("method") or ""), "params": envoi.get("params") or []}
+        )
 
 
 def _ouvrir_groupes(page) -> None:
@@ -150,6 +174,7 @@ def principal() -> int:
         with sync_playwright() as p:
             navigateur = p.chromium.launch(headless=True)
             page = navigateur.new_page(viewport={"width": 1920, "height": 1080})
+            journal = JournalRpc(page)
             event_id = 0
             gid = 0
             try:
@@ -164,15 +189,30 @@ def principal() -> int:
                 if not nom_groupe:
                     print("aucun groupe « BUT MMI » sur la base d'entraînement", file=sys.stderr)
                     return 2
+                avant_ouverture = len(journal.appels)
                 nav.double_cliquer_texte(page, nom_groupe)
                 nav.attendre_texte(page, "Semaines de l'emploi du temps", delai=40)
                 page.wait_for_timeout(1500)
 
-                bruts = charger_edt(page, group_ids=None)
+                # `charger_edt` exige une LISTE de groupes : le serveur refuse
+                # un filtre nul (« expecting an array but received a variant »).
+                # On prend l'identifiant que l'interface vient elle-même
+                # d'utiliser.
+                load = next(
+                    (a for a in journal.appels[avant_ouverture:] if a["methode"] == "udlTimetables.load"),
+                    None,
+                )
+                vus = (load.get("params") or [{}])[0].get("GroupIDs") if load else None
+                if not vus:
+                    print("group_id introuvable dans les appels udlTimetables.load", file=sys.stderr)
+                    return 2
+                gid = int(vus[0])
+                print(f"  group_id={gid}")
+
+                bruts = charger_edt(page, group_ids=[gid])
                 if not bruts:
                     print("emploi du temps vide — impossible d'emprunter des ids", file=sys.stderr)
                     return 2
-                gid = int((bruts[0].get("groups") or [{}])[0].get("id") or 0)
                 evenements = [evenement_depuis_rpc(b, group_id=gid, groupe_nom=nom_groupe) for b in bruts]
 
                 # DEUX salles distinctes sont nécessaires : A pour créer le

@@ -95,52 +95,92 @@ def _ressource_reelle(page, type_id: int, id_cible: int) -> dict | None:
     return lots[0] if lots else None
 
 
-def _premier_id_ressource(brut_liste: object, cle_id: str) -> int | None:
-    """Identifiant de la ressource actuellement associée, ou None."""
-    if not isinstance(brut_liste, list) or not brut_liste:
-        return None
-    tete = brut_liste[0]
-    if not isinstance(tete, dict):
-        return None
-    for cle in ("id", cle_id):
-        if tete.get(cle) is not None:
-            try:
-                return int(tete[cle])
-            except (TypeError, ValueError):
-                return None
-    return None
+def _salles_fusionnees(
+    page, brut_liste: object, *, valeur: int | None, event_id: int | None
+) -> list[dict]:
+    """Les salles de l'évènement fusionné — en RETIRANT celles qu'on ne veut plus.
 
+    `save` FUSIONNE la liste des salles : poser `rooms: [nouvelle]` ajoute la
+    nouvelle et garde l'ancienne. Le cours se retrouve alors sur deux salles.
+    Signalé par Kyllian Bresson le 08/09/2026 — « Thomas Castellengo est sur
+    deux salles », avec la manip d'interface correspondante : glisser une
+    salle l'AJOUTE, il faut maintenir Maj pour qu'elle remplace.
 
-def _nom_ressource(brut_liste: object) -> str:
-    """Le nom lisible de la ressource actuelle, pour le motif de refus — un
-    identifiant numérique n'aide personne à aller regarder dans Celcat."""
-    if not isinstance(brut_liste, list) or not brut_liste:
-        return "?"
-    tete = brut_liste[0]
-    if not isinstance(tete, dict):
-        return "?"
-    return str(tete.get("name") or tete.get("unique_name") or tete.get("id") or "?")
+    LA CONVENTION, éprouvée sur URCA_FORMATION le 09/09/2026 par un canari
+    jetable (`scripts/capturer_changement_salle_celcat.py`) : un retrait se
+    demande en préfixant d'un signe moins TOUS les composants de la clé.
+    L'association évènement↔salle n'a pas d'identifiant propre — elle se
+    localise par le COUPLE `(event_id, room_id)`, visible dans le
+    sous-objet — donc les deux portent le signe :
 
+        {"-event_id": 1523417, "-room_id": 711593, "_type_": "Room"}
 
-class ChangementSalleSuspendu(RuntimeError):
-    """Remplacer une salle AJOUTE la nouvelle au lieu de retirer l'ancienne.
+    Les formes intermédiaires ont toutes été refusées, et chaque refus disait
+    précisément ce qui manquait :
 
-    Constaté en production le 08/09/2026 : les séances corrigées se sont
-    retrouvées sur DEUX salles (« H.007 + H.101 »), exactement celles dont
-    l'écart de salle venait d'être poussé.
+        {"-room_id": X}                    -> « Cannot LOCATE a record using
+                                                only a partial key »
+        {"-room_id": X, "event_id": E}     -> « Cannot DELETE a record using
+                                                only a partial key »
+        {"room_id": X, "-room_id": X}      -> « Champ '-room_id' non trouvé »
+                                                (le marqueur n'est lu qu'en
+                                                l'absence du champ normal)
 
-    La cause est juste en dessous — `_ressource_fusionnee` construit un objet
-    d'association neuf quand l'identifiant change, sans rien qui désigne
-    l'association EXISTANTE. Celcat ne peut donc pas savoir laquelle
-    remplacer : il en ajoute une et garde l'ancienne. C'est le pendant RPC du
-    glisser-sans-Maj décrit par Kyllian Bresson le même jour.
-
-    Le remède probable — envoyer `{"-room_id": ancienne}`, la convention déjà
-    prouvée pour supprimer un évènement (cf. `rpc.supprimer_evenement_rpc`) —
-    n'a jamais été essayé contre Celcat. L'essayer en production aggraverait
-    le problème s'il est faux : on refuse donc, visiblement, en attendant de
-    pouvoir le vérifier.
+    Retrait ET pose dans le MÊME appel : vérifié en direct, `[A.018]` devient
+    `[05_U07M_Info]`, une seule salle.
     """
+    actuelles = [r for r in (brut_liste or []) if isinstance(r, dict)] if isinstance(brut_liste, list) else []
+    if valeur is None:
+        # Aucune salle voulue : on ne touche à rien plutôt que de retirer
+        # celle qui est là — une séance sans salle vaut mieux qu'une séance
+        # dont on efface la salle sans savoir pourquoi.
+        return [dict(r) for r in actuelles]
+
+    a_retirer = [
+        r for r in actuelles
+        if (r.get("room_id") or r.get("id")) is not None
+        and int(r.get("room_id") or r.get("id")) != int(valeur)
+    ]
+    deja_la = any(
+        (r.get("room_id") or r.get("id")) is not None
+        and int(r.get("room_id") or r.get("id")) == int(valeur)
+        for r in actuelles
+    )
+
+    sortie: list[dict] = [
+        {"-event_id": event_id, "-room_id": int(r.get("room_id") or r.get("id")), "_type_": "Room"}
+        for r in a_retirer
+    ]
+    if deja_la:
+        # La bonne salle est déjà posée : on garde son sous-objet CHARGÉ —
+        # c'est la seule forme prouvée quand l'id ne change pas — en posant
+        # `room_id` explicitement, certains relevés ne portant que la clé
+        # générique `id` (cf. `lecture._premier_id`, qui lit les deux).
+        for r in actuelles:
+            if int(r.get("room_id") or r.get("id") or -1) == int(valeur):
+                garde = dict(r)
+                garde["room_id"] = valeur
+                if "id" in garde:
+                    garde["id"] = valeur
+                sortie.append(garde)
+        return sortie
+
+    reel = _ressource_reelle(page, _TYPE_RESSOURCE_ID["room_id"], valeur)
+    if reel is None:
+        raise EvenementIntrouvable(
+            f"ressource room_id={valeur} introuvable via udlResources.load"
+        )
+    sortie.append(
+        {
+            "room_id": valeur,
+            "event_id": event_id,
+            "dept_id": reel.get("dept_id"),
+            "unique_name": reel.get("unique_name"),
+            "name": reel.get("name"),
+            "weeks": None,
+        }
+    )
+    return sortie
 
 
 def _ressource_fusionnee(
@@ -230,30 +270,15 @@ def fusionner_deltas(
         page, brut.get("modules"), cle_id="module_id", valeur=_id(ids, "module_id"),
         event_id=id_evenement,
     )
-    # LA SALLE EST SUSPENDUE tant qu'un remplacement ajoute au lieu de
-    # retirer (cf. `ChangementSalleSuspendu`). Refusé ici plutôt qu'écrit
-    # à moitié : `modifier_manquants` encaisse un échec isolé, donc le reste
-    # du lot passe, et le motif apparaît au bilan là où on le verra.
-    #
-    # Tout le RESTE continue — heure, jour, catégorie d'évènement, semaine.
-    # Suspendre la salle ne doit pas suspendre la correction des catégories
-    # fausses signalées par David Annebicque.
+    # LA SALLE SE REMPLACE EN RETIRANT L'ANCIENNE, jamais en posant seulement
+    # la nouvelle : `save` FUSIONNE la liste des salles, il ne la remplace
+    # pas. Poser `rooms: [nouvelle]` laisse l'ancienne en place et le cours se
+    # retrouve sur deux salles — signalé par Kyllian Bresson le 08/09/2026
+    # (« Thomas Castellengo est sur deux salles »), puis reproduit et mesuré
+    # sur URCA_FORMATION le 09/09.
     salle_voulue = _id(ids, "room_id", "salle_id")
-    salle_actuelle = _premier_id_ressource(brut.get("rooms"), "room_id")
-    if (
-        salle_voulue is not None
-        and salle_actuelle is not None
-        and salle_voulue != salle_actuelle
-    ):
-        raise ChangementSalleSuspendu(
-            f"changement de salle suspendu : Celcat ajoute la nouvelle salle au lieu de "
-            f"remplacer l'ancienne (event_id={id_evenement} est encore en "
-            f"{_nom_ressource(brut.get('rooms'))}). À corriger à la main dans Celcat, "
-            f"avec Maj en glissant la salle ou le bouton de retrait."
-        )
-    fusionne["rooms"] = _ressource_fusionnee(
-        page, brut.get("rooms"), cle_id="room_id", valeur=salle_voulue,
-        event_id=id_evenement,
+    fusionne["rooms"] = _salles_fusionnees(
+        page, brut.get("rooms"), valeur=salle_voulue, event_id=id_evenement
     )
     fusionne["staff"] = _ressource_fusionnee(
         page, brut.get("staff"), cle_id="staff_id", valeur=_id(ids, "staff_id"),
