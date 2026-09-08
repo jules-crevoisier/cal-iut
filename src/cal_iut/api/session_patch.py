@@ -213,28 +213,48 @@ def _controler_placement(state: object, session: object, placement: object, forc
             _libelle_jour_ferme(state, session.semestre, placement.week, placement.day),
         )
         indispo += _teacher_availability_violations(state, session, placement.week, placement.day, sl)
-    blocking = institutional + indispo
-    if blocking:
+    # Seul le verrou INSTITUTIONNEL est non contournable. L'indisponibilité
+    # enseignant, elle, se force — c'est la classification de référence de
+    # `main.py::_hard_constraint_context` (ligne « forceable += _teacher_
+    # availability_violations »), arbitrée le 03/09/2026 sur retour de
+    # Kyllian Bresson : « des fois ils acceptent de faire cours quand même ».
+    #
+    # Ce chemin-ci les confondait, et levait l'erreur QUEL QUE SOIT `force` :
+    # réaffecter un cours à un enseignant indisponible sur le papier était
+    # donc impossible, alors que le message affiché disait lui-même qu'un
+    # « placement manuel avec Forcer peut débloquer ». Signalé le 08/09/2026,
+    # capture à l'appui — c'était le seul endroit de l'application à traiter
+    # une indispo comme un verrou définitif, et c'est celui qu'on emprunte
+    # pour changer d'enseignant sans déplacer la séance.
+    pedago = _pedagogical_order_violations(
+        placement.week, placement.day, placement.slot, extra_blocked_pedago, allowed_weeks
+    )
+    forcables = pedago + indispo
+    if institutional:
         raise HTTPException(
             409,
             detail={
+                # `blocking_conflicts` reste un SOUS-ENSEMBLE de
+                # `hard_conflicts` (cf. schemas.ValidationResponse) : le motif
+                # institutionnel figure donc bien dans les deux, et les
+                # forçables l'accompagnent pour que l'écran les montre aussi
+                # — ils ne disparaissent pas sous prétexte qu'un verrou plus
+                # fort les précède.
                 "message": "Modification impossible",
-                "hard_conflicts": blocking,
-                "blocking_conflicts": blocking,
+                "hard_conflicts": institutional + forcables,
+                "blocking_conflicts": institutional,
                 "soft_warnings": [],
                 "suggestions": [],
                 "suggestions_note": None,
             },
         )
-    pedago = _pedagogical_order_violations(
-        placement.week, placement.day, placement.slot, extra_blocked_pedago, allowed_weeks
-    )
-    if pedago and not force:
+    if forcables and not force:
         raise HTTPException(
             409,
             detail={
                 "message": "Conflit",
-                "hard_conflicts": pedago,
+                "hard_conflicts": forcables,
+                "blocking_conflicts": [],
                 "soft_warnings": [],
                 "suggestions": [],
                 "suggestions_note": None,

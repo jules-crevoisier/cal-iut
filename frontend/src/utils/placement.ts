@@ -64,8 +64,14 @@ export function texteContraintes(detail: DetailConflit): string {
   if (detail.blocking_conflicts.length) {
     blocs.push(`Impossible (non forçable) :\n${detail.blocking_conflicts.join("\n")}`);
   }
-  if (detail.hard_conflicts.length) {
-    blocs.push(`Forçable :\n${detail.hard_conflicts.join("\n")}`);
+  // `blocking_conflicts` est par contrat un SOUS-ENSEMBLE de
+  // `hard_conflicts` (cf. schemas.ValidationResponse) : afficher
+  // `hard_conflicts` en entier répétait donc chaque motif bloquant sous
+  // « Forçable », en laissant croire qu'on pouvait forcer ce qui est
+  // justement non forçable (signalé le 08/09/2026, capture à l'appui).
+  const forcables = detail.hard_conflicts.filter((m) => !detail.blocking_conflicts.includes(m));
+  if (forcables.length) {
+    blocs.push(`Forçable :\n${forcables.join("\n")}`);
   }
   if (detail.soft_warnings.length) {
     blocs.push(`Avertissement :\n${detail.soft_warnings.join("\n")}`);
