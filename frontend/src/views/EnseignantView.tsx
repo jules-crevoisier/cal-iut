@@ -58,6 +58,19 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
   );
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
   const rowsThisWeek = solverWeek === null ? [] : allItems.filter((r) => r.w === solverWeek);
+  // Les parcours où cet enseignant a RÉELLEMENT cours cette semaine. Sans
+  // eux, `SessionGrid` ne filtrait pas les évènements de planning et chacun
+  // voyait les rentrées de tous les parcours — signalé par Romain Delon le
+  // 09/09/2026 (« sur les lundis, d'un parcours en particulier, les créneaux
+  // de rentrée »). Un enseignant n'a pas UN parcours : on passe donc la
+  // liste, pas une chaîne.
+  const parcoursDeLaSemaine = Array.from(
+    new Set(
+      rowsThisWeek.flatMap((r) =>
+        (r.g ?? []).map((g) => payload.groupParcours[g]).filter((p): p is string => Boolean(p)),
+      ),
+    ),
+  );
   const couleursParMatiere = usePreferences().couleursParMatiere;
 
   // Heures, pas un compte de séances — retour utilisateur 28/08/2026 (relayé
@@ -332,7 +345,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
           {solverWeek === null ? (
             <p className="muted">Semaine bloquée (vacances/fermeture).</p>
           ) : (
-            <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} showPromo />
+            <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} parcours={parcoursDeLaSemaine} onlyDay={narrow ? mobileDay : null} showPromo />
           )}
         </div>
       ) : (
@@ -346,7 +359,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
               {solverWeek === null ? (
                 <p className="muted">Semaine bloquée (vacances/fermeture).</p>
               ) : (
-                <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} onlyDay={narrow ? mobileDay : null} showPromo />
+                <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} parcours={parcoursDeLaSemaine} onlyDay={narrow ? mobileDay : null} showPromo />
               )}
             </div>
 
