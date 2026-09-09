@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -168,10 +169,26 @@ def _trouver(
     return _exiger(choisi, libelle, *cles)
 
 
+def _normaliser_groupe(nom: str) -> str:
+    """« BUT MMI  s5  TD EF - 2024 » -> « BUT MMI S5 TD EF »."""
+    return re.sub(r"\s*-\s*\d{4}\s*$", "", " ".join(nom.split())).strip().upper()
+
+
 def _trouver_groupe(page, libelle: str, nom: str) -> int:
+    """Le nom doit correspondre EXACTEMENT (aux espaces et à la casse près,
+    et au suffixe de cohorte « - 2024 » près).
+
+    La comparaison était « préfixe de » dans les deux sens. Tant que la
+    table ne portait que le S1 et trois groupes du S5, elle ne pouvait pas
+    se tromper. Complétée à 88 groupes le 09/09/2026, elle le pouvait : un
+    nom tronqué comme « BUT MMI S5 » aurait accroché « BUT MMI S5 TD AB »
+    et déversé une promotion entière sur le mauvais groupe. Un nom inconnu
+    doit être un refus, jamais un voisin plausible.
+    """
+    cible = _normaliser_groupe(nom)
     gid = None
     for cle, identifiant in _groupes_connus().items():
-        if nom == cle or nom.startswith(cle) or cle.startswith(nom):
+        if _normaliser_groupe(cle) == cible:
             gid = identifiant
             break
     if gid is None:

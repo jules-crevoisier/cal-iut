@@ -97,6 +97,27 @@ def creer_compte_actif_et_connecter(client, role: str = "edit") -> None:
 
 
 @pytest.fixture(autouse=True)
+def _catalogues_celcat_vides():
+    """Vide les caches de catalogue Celcat entre deux tests.
+
+    `ecriture._CATALOGUE` et `ecriture._GROUPES` sont des globales de module,
+    remplies au premier appel et jamais relues. Un test qui fait répondre
+    « salles » ou « matières » à une fausse page laissait donc sa réponse en
+    place pour tous les suivants : `test_should_resolve_numeric_ids_when_
+    resoudre_ids` échouait sur « matière TSBZ1307 » quand il tournait après
+    un test de drainage, et passait tout seul. Un test dont le verdict dépend
+    de ses voisins ne protège rien.
+    """
+    from cal_iut.celcat import ecriture
+
+    ecriture._CATALOGUE.clear()
+    ecriture._GROUPES = None
+    yield
+    ecriture._CATALOGUE.clear()
+    ecriture._GROUPES = None
+
+
+@pytest.fixture(autouse=True)
 def _fichiers_etat_isoles(tmp_path, monkeypatch):
     """Isole TOUS les petits fichiers JSON d'état persisté (`api/mailer.py`,
     `api/forced_pending.py`) vers un répertoire temporaire — sans ça,

@@ -1,5 +1,25 @@
-# IDs Timetabler Live URCA_2026 — relevés par recordIDs le 2026-09-01.
+# IDs Timetabler Live URCA_2026, cohorte 2024 — relevés par balayage de
+# `recordIDs` (udlResources.load, TYPE_GROUPES) le 2026-09-09.
 # Les noms sont sans le suffixe « - 2024 ».
+#
+# POURQUOI CE FICHIER EXISTE, ET POURQUOI IL DOIT ÊTRE COMPLET.
+# `udlResources.load` refuse d'énumérer le catalogue des groupes
+# (`ETooManyRecords`), exactement comme celui des matières. On ne peut donc
+# le lire que par plages d'identifiants, et le résultat est figé ici.
+#
+# Un groupe ABSENT de cette table ne produit pas un refus lisible : la
+# résolution échoue, `nuit.py::_group_id_pour` retombe sur `0`, et Celcat
+# répond « Impossible d'enregistrer l'événement, une des ressources
+# affectées a été supprimée » — un message qui parle de suppression alors
+# que rien n'a été supprimé. C'était le motif d'échec n°1 en production le
+# 09/09/2026 (17 jobs), tous sur `BUT MMI S5 TD EF` et `BUT MMI S5 TD GH`,
+# les deux groupes des BUT3 en alternance, qui manquaient ici.
+#
+# Les identifiants ne se suivent PAS par semestre : le S5 est éparpillé sur
+# quatre grappes (1648605, 1655558, 1660025, 1662681). Ne rien déduire d'un
+# numéro voisin — relever.
+
+
 "BUT MMI S1 CM": 1661971
 "BUT MMI S1 TD AB": 1661972
 "BUT MMI S1 TD CD": 1661973
@@ -13,19 +33,27 @@
 "BUT MMI S1 TP F": 1661981
 "BUT MMI S1 TP G": 1661982
 "BUT MMI S1 TP H": 1661983
-"BUT MMI S5 TD AB": 1660025
-"BUT MMI S5 TP A": 1660026
-"BUT MMI S5 TP B": 1660027
 
-# S3 (BUT2-DEV-FI) — absents jusqu'ici, cause du "groupe introuvable" qui
-# faisait tomber toute comparaison S3 en repli "à créer" par défaut.
-# Retrouvés le 04/09/2026 par balayage de plage d'IDs (udlResources.load,
-# TYPE_GROUPES) autour des clusters S1/S5 déjà connus.
+"BUT MMI S2 CM": 1663167
+"BUT MMI S2 TD AB": 1663168
+"BUT MMI S2 TD CD": 1663169
+"BUT MMI S2 TD EF": 1663170
+"BUT MMI S2 TD GH": 1663171
+"BUT MMI S2 TP A": 1663172
+"BUT MMI S2 TP B": 1663173
+"BUT MMI S2 TP C": 1663174
+"BUT MMI S2 TP D": 1663175
+"BUT MMI S2 TP E": 1663176
+"BUT MMI S2 TP F": 1663177
+"BUT MMI S2 TP G": 1663178
+"BUT MMI S2 TP H": 1663179
+
 "BUT MMI S3 CM": 1660013
 "BUT MMI S3 TD AB": 1660012
 "BUT MMI S3 TD CD": 1660014
 "BUT MMI S3 TD EF": 1660019
 "BUT MMI S3 TD GH": 1660022
+"BUT MMI S3 TD IJ": 1658766
 "BUT MMI S3 TP A": 1660015
 "BUT MMI S3 TP B": 1660016
 "BUT MMI S3 TP C": 1660017
@@ -34,9 +62,61 @@
 "BUT MMI S3 TP F": 1660021
 "BUT MMI S3 TP G": 1660023
 "BUT MMI S3 TP H": 1660024
-# TD IJ / TP I / TP J : trouvés dans le même balayage, hors du jeu S1/S3/S5
-# habituel (AB/CD/EF/GH + TP A-H) — origine à confirmer avant usage, gardés
-# en commentaire plutôt qu'utilisés à l'aveugle.
-# "BUT MMI S3 TD IJ": 1658766
-# "BUT MMI S3 TP I": 1658767
-# "BUT MMI S3 TP J": 1658768
+"BUT MMI S3 TP I": 1658767
+"BUT MMI S3 TP J": 1658768
+
+"BUT MMI S4 CM": 1662335
+"BUT MMI S4 TD AB": 1662336
+"BUT MMI S4 TD CD": 1662337
+"BUT MMI S4 TD EF": 1662342
+"BUT MMI S4 TD GH": 1662347
+"BUT MMI S4 TD IJ": 1662348
+"BUT MMI S4 TP A": 1662338
+"BUT MMI S4 TP B": 1662339
+"BUT MMI S4 TP C": 1662340
+"BUT MMI S4 TP D": 1662341
+"BUT MMI S4 TP E": 1662343
+"BUT MMI S4 TP F": 1662344
+"BUT MMI S4 TP G": 1662345
+"BUT MMI S4 TP H": 1662346
+"BUT MMI S4 TP I": 1662349
+"BUT MMI S4 TP J": 1662350
+
+"BUT MMI S5 TD AB": 1660025
+"BUT MMI S5 TD CD": 1655559
+"BUT MMI S5 TD EF": 1662681
+"BUT MMI S5 TD GH": 1662684
+"BUT MMI S5 TD IJ": 1658769
+"BUT MMI S5 TP A": 1660026
+"BUT MMI S5 TP B": 1660027
+"BUT MMI S5 TP C": 1648608
+"BUT MMI S5 TP D": 1655558
+"BUT MMI S5 TP E": 1662682
+"BUT MMI S5 TP F": 1662683
+"BUT MMI S5 TP G": 1648605
+"BUT MMI S5 TP H": 1648606
+"BUT MMI S5 TP I": 1658770
+"BUT MMI S5 TP J": 1658771
+
+"BUT MMI S6 TD AB": 1662351
+"BUT MMI S6 TD CD": 1662352
+"BUT MMI S6 TD EF": 1662674
+"BUT MMI S6 TD GH": 1662695
+"BUT MMI S6 TD IJ": 1662698
+"BUT MMI S6 TP A": 1662639
+"BUT MMI S6 TP B": 1662685
+"BUT MMI S6 TP C": 1662686
+"BUT MMI S6 TP D": 1662687
+"BUT MMI S6 TP E": 1662688
+"BUT MMI S6 TP F": 1662689
+"BUT MMI S6 TP G": 1662696
+"BUT MMI S6 TP H": 1662697
+"BUT MMI S6 TP I": 1662699
+"BUT MMI S6 TP J": 1662700
+
+# Non trouvés au balayage 1600000-1710000 : « BUT MMI S5 CM » et
+# « BUT MMI S6 CM ». Les promotions BUT3 (`but3-dev-fc-promo`,
+# `but3-creacom-fc-promo`, `but3-dev-fi-promo`) n'ont donc PAS de groupe CM
+# côté Celcat — à confirmer avec l'équipe pédagogique avant d'en inventer
+# un : écrire sur un groupe deviné poserait des cours sur la mauvaise
+# promotion.

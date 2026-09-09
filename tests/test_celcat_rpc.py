@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from cal_iut.celcat.navigateur import TYPE_GROUPES
 from cal_iut.celcat.rpc import (
     SessionCelcatTimeout,
     appeler,
@@ -38,8 +39,13 @@ class FaussePage:
     def evaluate(self, js, arg=None):
         self.journal.append((js, arg))
         methode = None
+        params = None
         if isinstance(arg, dict):
             methode = arg.get("methode") or arg.get("method")
+            params = arg.get("params")
+        groupes = self._groupes_demandes(methode, params)
+        if groupes is not None:
+            return self._ok(groupes)
         if methode and methode in self.reponses:
             val = self.reponses[methode]
             if isinstance(val, dict) and "error" in val:
@@ -53,6 +59,35 @@ class FaussePage:
         if methode and "load" in str(methode).lower():
             return self._ok(list(self.evenements_enregistres))
         return self._ok(None)
+
+    @staticmethod
+    def _groupes_demandes(methode: object, params: object) -> list[dict] | None:
+        """Répond au catalogue des GROUPES avec la vraie table.
+
+        Sans ça, `udlResources.load` retombait sur la réponse générique (la
+        liste des évènements enregistrés), `_trouver_groupe` ne trouvait
+        rien, et `nuit.py` écrivait avec `group_id=0`. Les tests de drainage
+        passaient donc en exerçant un chemin qui, en vrai, ne peut RIEN
+        écrire : Celcat refuse un groupe à zéro par « une des ressources
+        affectées a été supprimée » (production, 09/09/2026).
+
+        La table lue est celle du dépôt : la fausse Celcat porte les mêmes
+        groupes que la vraie, ni plus ni moins. Un identifiant absent de la
+        table reste donc introuvable ici aussi, et c'est voulu.
+        """
+        if methode != "udlResources.load" or not isinstance(params, list) or len(params) < 2:
+            return None
+        if params[0] != TYPE_GROUPES:
+            return None
+        from cal_iut.celcat.ecriture import _groupes_connus
+
+        par_id = {v: k for k, v in _groupes_connus().items()}
+        demandes = (params[1] or {}).get("recordIDs") or []
+        return [
+            {"group_id": int(i), "id": int(i), "name": par_id[int(i)]}
+            for i in demandes
+            if int(i) in par_id
+        ]
 
     @staticmethod
     def _ok(result: object) -> dict:
@@ -103,7 +138,7 @@ def test_should_raise_session_timeout_when_esessiontimeout() -> None:
 
 def test_should_not_import_playwright_when_rpc_module_loads() -> None:
     avant = set(sys.modules)
-    import cal_iut.celcat.rpc as rpc  # noqa: F401
+    from cal_iut.celcat import rpc  # noqa: F401
 
     nouveaux = set(sys.modules) - avant
     assert not any(m == "playwright" or m.startswith("playwright.") for m in nouveaux)
