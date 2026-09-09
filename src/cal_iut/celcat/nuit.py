@@ -977,9 +977,28 @@ def executer_job_nuit(
     if not doc.get("saisie_active"):
         return
 
-    validees = {int(s) for s in (doc.get("semaines_validees") or [])}
-    deja_lancees = {int(s) for s in (doc.get("semaines_lancees") or [])}
-    passees = set(semaines_celcat_passees())
+    # PASTILLES -> INDICES, une seule fois, ici.
+    #
+    # Tout l'état persisté et tout l'écran parlent en PASTILLES 1..30 : la
+    # liste de `AdminCelcatView` est `Array.from({length: 30}, (_, i) => i+1)`,
+    # `_semaines_celcat_completes` rend `[n for n in 1..30 if (n-1) not in
+    # indices]`, et `semaines_celcat_passees` est documentée « Chips 1..30 ».
+    # La pastille n désigne l'INDICE n-1 du planning.
+    #
+    # Ici, en revanche, la valeur sert d'indice : `lundis[semaine]` et
+    # `lignes_comparaison(semaine=...)`, comparé à `placement.week` qui est
+    # un indice 0-basé. Consommer la pastille telle quelle balayait donc la
+    # semaine SUIVANT celle qu'on avait validée — et rendait l'indice 0
+    # (semaine du 31/08/2026) inatteignable, la plus petite pastille valant
+    # 1. C'est ce qui laissait WRA507D-S5-TD-2 « absente de Celcat » sans
+    # qu'aucun passage ne puisse la créer (signalé le 09/09/2026 :
+    # « pourquoi on peut pas la régler, cela ? »).
+    #
+    # Le fichier d'état garde ses pastilles : les réécrire en indices
+    # réinterpréterait en silence ce qui est déjà enregistré en production.
+    validees = {int(s) - 1 for s in (doc.get("semaines_validees") or [])}
+    deja_lancees = {int(s) - 1 for s in (doc.get("semaines_lancees") or [])}
+    passees = {int(n) - 1 for n in semaines_celcat_passees()}
     semaines = validees - deja_lancees - passees
     state = get_state()
     journal = doc.get("journal") if isinstance(doc.get("journal"), dict) else {}
@@ -1047,12 +1066,13 @@ def executer_job_nuit(
         _consommer_file(page, doc, base=base, production_autorisee=production_autorisee)
 
     doc = charger()
-    lancees = {int(s) for s in (doc.get("semaines_lancees") or [])}
+    lancees = {int(s) - 1 for s in (doc.get("semaines_lancees") or [])}
     # Seules les semaines RÉELLEMENT balayées sont marquées. Marquer une
     # semaine qu'on n'a pas pu traiter (relevé absent, semaine hors
     # calendrier) la retirerait du balayage définitivement : elle ne
     # partirait jamais, en silence. C'est la panne des semaines 1, 2 et 3,
     # marquées « lancées » sans qu'un seul job ne parte (07/09/2026).
-    doc["semaines_lancees"] = sorted(lancees | semaines_faites)
+    # Retour en pastilles pour l'écran, qui lit ce champ tel quel.
+    doc["semaines_lancees"] = sorted({s + 1 for s in (lancees | semaines_faites)})
     doc["dernier_job"] = {"lance_le": datetime.now(UTC).isoformat()}
     sauver(doc)

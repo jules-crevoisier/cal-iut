@@ -3375,7 +3375,11 @@ def celcat_file_resynchroniser(
     if not demandees:
         # Par défaut, le périmètre que l'établissement a validé — c'est
         # exactement celui que `executer_job_nuit` a rempli à l'aveugle.
-        demandees = sorted({int(s) for s in (charger_celcat().get("semaines_validees") or [])})
+        # Pastilles 1..30 -> indices, comme dans `executer_job_nuit` : ce
+        # qui suit compare à `placement.week`, qui est un indice 0-basé.
+        demandees = sorted(
+            {int(s) - 1 for s in (charger_celcat().get("semaines_validees") or [])}
+        )
     if not demandees:
         raise HTTPException(409, "Aucune semaine validée : rien à resynchroniser.")
 

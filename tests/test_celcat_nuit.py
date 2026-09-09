@@ -61,7 +61,11 @@ def test_should_create_update_delete_only_semaines_validees_when_nightly_runs_an
     planning,
 ) -> None:
     activer_saisie(planning)
-    valide = planning.post("/celcat/valider", json={"semaines": [SEMAINE]})
+    # `/celcat/valider` reçoit des PASTILLES 1..30, comme l'écran les pose :
+    # la pastille n désigne l'indice n-1 du planning. Les séances de ce
+    # fixture sont posées à l'indice SEMAINE, donc c'est la pastille
+    # SEMAINE + 1 qu'il faut valider.
+    valide = planning.post("/celcat/valider", json={"semaines": [SEMAINE + 1]})
     assert valide.status_code == 200, valide.text
     vider_file()
     # Le balayage passe par la comparaison depuis le 08/09/2026 : il lui faut
