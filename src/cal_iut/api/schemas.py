@@ -667,6 +667,17 @@ class CelcatSaisieActiveRequest(BaseModel):
     active: bool
 
 
+class CelcatWorkerRequest(BaseModel):
+    """Met le worker du sidecar en marche ou en pause.
+
+    SÉPARÉ de `CelcatSaisieActiveRequest` : couper la saisie VIDE la file
+    d'attente. Une pause ne doit rien détruire — elle rend seulement le VPN,
+    partagé avec le compte Celcat de l'équipe.
+    """
+
+    actif: bool
+
+
 class CelcatValiderRequest(BaseModel):
     semaines: list[int]
 
@@ -798,6 +809,8 @@ class CelcatEtatResponse(BaseModel):
     saisie_active: bool
     semaines_validees: list[int] = []
     semaines_passees: list[int] = []
+    # Le worker du sidecar tourne-t-il ? Vrai par défaut.
+    worker_actif: bool = True
     semaines_lancees: list[int] = []
     # Chips 1..30 (S1) dont plus AUCUNE séance ne pourrait encore atterrir —
     # retour utilisateur 03/09/2026 : "si la semaine 1 est entièrement
