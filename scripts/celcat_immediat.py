@@ -38,11 +38,23 @@ def principal() -> int:
     parseur.add_argument(
         "--limite",
         type=int,
-        default=25,
+        default=0,
         help=(
-            "nombre maximum de jobs par cycle (0 = tous). Le premier drainage "
-            "réel a duré 2h11 sur 489 jobs, session VPN prise du début à la fin : "
-            "la file étant persistante, mieux vaut des cycles courts et répétés."
+            "nombre maximum de jobs par cycle (0 = tous, le défaut). Ce plafond "
+            "valait 25, proxy d'un coût de ~16 s/job qui n'existe plus : c'est "
+            "--duree-max qui borne désormais le cycle."
+        ),
+    )
+    parseur.add_argument(
+        "--duree-max",
+        type=float,
+        default=600.0,
+        dest="duree_max",
+        help=(
+            "budget de temps du cycle, en secondes (0 = sans limite). C'est la "
+            "vraie contrainte : la session du compte Celcat est PARTAGÉE avec "
+            "l'équipe et ne doit pas être tenue des heures. Ce qui dépasse "
+            "reste en file et repart au cycle suivant."
         ),
     )
     args = parseur.parse_args()
@@ -120,6 +132,7 @@ def principal() -> int:
                         base=args.base,
                         production_autorisee=args.production,
                         limite=args.limite,
+                        duree_max_s=args.duree_max,
                     )
                     # Le bilan, jamais un « drainée » de principe : c'est ce
                     # message trop optimiste qui a laissé passer plusieurs

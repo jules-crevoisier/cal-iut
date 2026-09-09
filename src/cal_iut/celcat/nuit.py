@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from cal_iut.api.state import get_state
@@ -432,6 +433,11 @@ class BilanDrainage:
     # ignorés ferait lire « 409 jobs perdus » là où il faut lire « 409 jobs
     # qui attendent que l'équipe ouvre les semaines ».
     differes: list[tuple[str, str]] = field(default_factory=list)
+    # Rempli quand le BUDGET DE TEMPS du cycle a arrêté le drainage avant la
+    # fin de la file. Ni un échec ni un différé : le travail reste à faire et
+    # repart au cycle suivant. Nommé plutôt que silencieux — un cycle qui
+    # s'arrête sans le dire ressemble exactement à un cycle qui a tout fait.
+    interrompu: str = ""
 
     def __bool__(self) -> bool:
         return self.en_attente > 0
@@ -473,6 +479,8 @@ class BilanDrainage:
                 f"{len(self.differes)} en attente d'une semaine posée "
                 f"— {self._par_motif(self.differes, 2)}"
             )
+        if self.interrompu:
+            parts.append(self.interrompu)
         return " — ".join(parts)
 
 
@@ -490,7 +498,13 @@ def _avec_cause(
 
 
 def _consommer_file(
-    page: Any, doc: dict[str, Any], *, base: str, production_autorisee: bool, limite: int = 0
+    page: Any,
+    doc: dict[str, Any],
+    *,
+    base: str,
+    production_autorisee: bool,
+    limite: int = 0,
+    duree_max_s: float = 0.0,
 ) -> BilanDrainage:
     """Draine `file_attente.lister()` et appelle la primitive RPC adaptée à
     chaque job (create/update/delete). Un job traité (succès OU refus de
@@ -516,12 +530,32 @@ def _consommer_file(
     # `_ecarter_semaines_non_posees`).
     jobs = _ecarter_semaines_non_posees(jobs, entrees, bilan)
     if limite > 0:
-        # Un cycle BORNÉ. Le premier drainage réel a duré 2h11 sur 489 jobs,
-        # session VPN du compte partagé prise du début à la fin et pas une
-        # ligne de journal entre-temps. La file étant persistante, ce qui
-        # n'est pas fait maintenant se fera au cycle suivant — il n'y a
-        # aucune raison de tout tenir en un seul passage.
         jobs = jobs[:limite]
+
+    # UN CYCLE BORNÉ PAR LE TEMPS, PAS PAR UN COMPTE.
+    #
+    # Ce qu'il fallait borner a toujours été la DURÉE : le premier drainage
+    # réel a tenu 2h11 sur 489 jobs, session du compte Celcat partagé prise
+    # du début à la fin. Le plafond de 25 jobs par cycle en était le proxy,
+    # calibré sur ces ~16 secondes par job.
+    #
+    # Ce coût-là n'existe plus. Il venait de trois choses, toutes corrigées
+    # depuis : six résolutions RPC par job (mises en cache par cycle le
+    # 08/09/2026), le scan des matières (88 chargements d'EDT plus une
+    # centaine de balayages de plages à CHAQUE module introuvable) et celui
+    # des groupes, tous deux remplacés par des tables relevées le
+    # 09/09/2026. Un compte calibré sur l'ancien coût borne aujourd'hui la
+    # mauvaise grandeur : il découpe en cinq passages ce qui tient en un,
+    # et fait payer cinq fois le VPN, la connexion et la déconnexion.
+    #
+    # Retour utilisateur, 09/09/2026 : « j'en ai marre du 20 par 20, pourquoi
+    # on passe pas tous d'un coup ? ». Réponse : on passe tout, tant que le
+    # cycle tient dans son budget. Ce qui dépasse reste en file et repart au
+    # cycle suivant — la file est persistante, rien ne se perd.
+    debut = monotonic()
+
+    def _budget_epuise() -> bool:
+        return duree_max_s > 0 and (monotonic() - debut) >= duree_max_s
 
     # Résolutions mises en cache LE TEMPS DE CE CYCLE. Chaque job coûtait
     # sinon six appels RPC (groupe, module, salle, personnel, catégorie,
@@ -562,6 +596,8 @@ def _consommer_file(
     for job in jobs:
         if job.get("action") != "create":
             continue
+        if _budget_epuise():
+            break
         sid_job = str(job.get("session_id") or "")
         entree = entrees.get(sid_job)
         if entree is None:
@@ -712,7 +748,7 @@ def _consommer_file(
             )
         )
         jobs_m[sid] = job
-    if elements_m:
+    if elements_m and not _budget_epuise():
         resultat_m = modifier_manquants(
             page,
             elements_m,
@@ -765,7 +801,7 @@ def _consommer_file(
             continue
         elements_s.append(ElementSuppression(session_id=sid, event_id=int(eid), group_id=int(gid)))
         jobs_s[sid] = job
-    if elements_s:
+    if elements_s and not _budget_epuise():
         resultat_s = supprimer_manquants(
             page,
             elements_s,
@@ -799,6 +835,13 @@ def _consommer_file(
             bilan.echecs.append((sid, f"suppression : {motif}"))
             journaliser(kind="echec", session_id=sid, motif=motif, regrouper=True)
 
+    if _budget_epuise():
+        restants = len(jobs) - len(a_retirer)
+        bilan.interrompu = (
+            f"budget de {int(duree_max_s)}s atteint, {max(restants, 0)} job(s) "
+            "repoussés au cycle suivant"
+        )
+
     if a_retirer:
         retirer_traites(a_retirer)
     # TOUT ce qui a été examiné sans être retiré repart en fin de file —
@@ -825,6 +868,7 @@ def drainer_file_immediate(
     base: str = BASE_ENTRAINEMENT,
     production_autorisee: bool = False,
     limite: int = 0,
+    duree_max_s: float = 0.0,
 ) -> BilanDrainage:
     """Consomme la file d'attente (create/update/delete) TOUT DE SUITE —
     jamais le balayage par semaine ni le marquage `semaines_lancees`,
@@ -846,7 +890,12 @@ def drainer_file_immediate(
     if not lister():
         return BilanDrainage()
     return _consommer_file(
-        page, doc, base=base, production_autorisee=production_autorisee, limite=limite
+        page,
+        doc,
+        base=base,
+        production_autorisee=production_autorisee,
+        limite=limite,
+        duree_max_s=duree_max_s,
     )
 
 
