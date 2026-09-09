@@ -305,6 +305,7 @@ def _ecarter_semaines_non_posees(
         if indice is None or indice in posees:
             retenus.append(job)
             continue
+        bilan.semaines_differees.add(int(indice))
         bilan.differes.append(
             (
                 str(job.get("session_id") or ""),
@@ -471,6 +472,11 @@ class BilanDrainage:
     # ignorés ferait lire « 409 jobs perdus » là où il faut lire « 409 jobs
     # qui attendent que l'équipe ouvre les semaines ».
     differes: list[tuple[str, str]] = field(default_factory=list)
+    # Les indices `weeks` Celcat concernés par ces différés. Gardés à part
+    # pour que le résumé puisse les rendre en une ligne courte au lieu d'une
+    # répartition par motif : ces jobs n'appellent aucune action de notre
+    # côté, et leur détail noyait tout le reste à chaque cycle.
+    semaines_differees: set[int] = field(default_factory=set)
     # Rempli quand le BUDGET DE TEMPS du cycle a arrêté le drainage avant la
     # fin de la file. Ni un échec ni un différé : le travail reste à faire et
     # repart au cycle suivant. Nommé plutôt que silencieux — un cycle qui
@@ -513,10 +519,23 @@ class BilanDrainage:
         if self.ignores:
             parts.append(f"{len(self.ignores)} ignoré(s) — {self._par_motif(self.ignores)}")
         if self.differes:
-            parts.append(
-                f"{len(self.differes)} en attente d'une semaine posée "
-                f"— {self._par_motif(self.differes, 2)}"
+            # COURT, ET C'EST LE POINT. La répartition par motif occupait la
+            # moitié de chaque ligne de journal — quatre-vingts jobs qui
+            # attendent que l'équipe pédagogique pose des semaines, répétés
+            # toutes les 90 secondes, pour une information qui ne change pas
+            # et n'appelle aucune action de notre côté. Elle masquait les
+            # échecs, qui sont la seule chose à lire (demande de Jules
+            # Crevoisier, 09/09/2026 : « enlever les runs qui sont pour les
+            # semaines pas posées, étant donné que l'on s'en fiche »).
+            #
+            # Les NUMÉROS de semaine restent : eux se lisent d'un coup d'œil
+            # et disent exactement ce qu'il reste à ouvrir dans Celcat.
+            detail = (
+                f" (semaines {', '.join(str(s) for s in sorted(self.semaines_differees))})"
+                if self.semaines_differees
+                else ""
             )
+            parts.append(f"{len(self.differes)} en attente d'une semaine non posée{detail}")
         if self.interrompu:
             parts.append(self.interrompu)
         return " — ".join(parts)
