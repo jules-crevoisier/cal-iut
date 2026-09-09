@@ -221,22 +221,37 @@ modules:
   WR508D: "TSB1508D"  # Hébergem cybersecu
   WR509D: "TSB1509D"  # IOT
   WR510D: "TSB1510D"  # Applications mobil
-  WRA301M: "TSBZC01M"  # Anglais
-  WRA302M: "TSBZC02M"  # Anglais Renforcé
-  WRA303M: "TSBZC03M"  # Design d'exp
-  WRA304M: "TSBZC04M"  # Culture numérique
-  WRA305M: "TSBZC05M"  # Stratégies de com
-  WRA306M: "TSBZC06M"  # Référencement
-  WRA308M: "TSBZC08M"  # Écrit. multimédia
-  WRA309M: "TSBZC09M"  # Créat. / design
-  WRA310M: "TSBZC10M"  # Culture artistiq.
-  WRA311M: "TSBZC11M"  # Pilotage projet
-  WRA312M: "TSBZC12M"  # Dév Front
-  WRA314M: "TSBZC14M"  # Gest. contenus
-  WRA315M: "TSBZC15M"  # traitement info
-  WRA316M: "TSBZC16M"  # Gestion de projet
-  WRA317M: "TSBZC17M"  # Eco. gest. droit
-  WRA318M: "TSBZC18M"  # PPP
+  # --- S3 CREACOM FC : nos codes finissent par M, les matières Celcat par C.
+  # Le suffixe M était une DÉDUCTION de notre part (WRA3xxM -> TSBZCxxM),
+  # jamais un relevé. Aucun code en TSBZC..M n'existe dans Celcat — d'où les
+  # « RessourceIntrouvable : matière TSBZC01M » de production le 09/09/2026.
+  #
+  # La règle vient de Kyllian lui-même : les trois seules lignes de ce bloc
+  # qu'il a confirmées le 04/09 (WRA307M, WRA313M, WRA319M) donnent TSBZC07C,
+  # TSBZC13C, TSBZC19C. Les 16 autres suivent le même schéma, et les 16 codes
+  # en C existent dans Celcat avec le nom du cours attendu (relevé du
+  # 09/09/2026, cf. data/config/celcat_matieres.yaml).
+  #
+  # À FAIRE CONFIRMER : « cette année les FC S3 sont combinés D + C = M »
+  # (Kyllian). Celcat porte toujours les deux matières séparées, C et D ;
+  # on écrit sur la C, celle du groupe CREACOM. Si les heures doivent être
+  # comptées sur la D, ce sont ces 16 lignes qu'il faut changer.
+  WRA301M: "TSBZC01C"  # Anglais           — Celcat : « WRA301C Anglais »
+  WRA302M: "TSBZC02C"  # Anglais Renforcé  — Celcat : « WRA302C Anglais Renforcé »
+  WRA303M: "TSBZC03C"  # Design d'exp      — Celcat : « WRA303C UX »
+  WRA304M: "TSBZC04C"  # Culture numérique — Celcat : « WRA304C Culture numérique »
+  WRA305M: "TSBZC05C"  # Stratégies de com — Celcat : « WRA305C Strat »
+  WRA306M: "TSBZC06C"  # Référencement     — Celcat : « WRA306C Référencement »
+  WRA308M: "TSBZC08C"  # Écrit. multimédia — Celcat : « WRA308C Ecriture »
+  WRA309M: "TSBZC09C"  # Créat. / design   — Celcat : « WRA309C Création »
+  WRA310M: "TSBZC10C"  # Culture artistiq. — Celcat : « WRA310C Culture artistiq »
+  WRA311M: "TSBZC11C"  # Pilotage projet   — Celcat : « WRA311C Motion design »
+  WRA312M: "TSBZC12C"  # Dév Front         — Celcat : « WRA312C Dvpt front »
+  WRA314M: "TSBZC14C"  # Gest. contenus    — Celcat : « WRA314C Dép services »
+  WRA315M: "TSBZC15C"  # traitement info   — Celcat : « WRA315C Traitement info »
+  WRA316M: "TSBZC16C"  # Gestion de projet — Celcat : « WRA316C Gestion de projet »
+  WRA317M: "TSBZC17C"  # Eco. gest. droit  — Celcat : « WRA317C Eco, Gestion »
+  WRA318M: "TSBZC18C"  # PPP               — Celcat : « WRA318C PPP »
   WRA501C: "TSBZE01C"  # Anglais
   WRA501D: "TSBZE010"  # Anglais
   WRA502C: "TSBZE02C"  # Management
@@ -273,10 +288,13 @@ modules:
   # même motif que ci-dessus, "WS303" seul n'existe pas dans le catalogue.
   WS303D: "TSBZ353D"   # Kyllian 04/09/2026 — lu WS303→WS303D, à confirmer si doute
   WS310D: "TSBZ360D"   # Portfolio S3-DEV-FI — Kyllian 04/09/2026
-  WSA301M: "TSBZC51M"  # Kyllian 04/09/2026
+  # TSBZC51M / TSBZC52M n'existent pas dans Celcat — même déduction en M que
+  # ci-dessus. Les matières relevées sont « WSA301C SAE Créa » (TSBZC51C) et
+  # « WSA302C Prod. Contenus » (TSBZC52C).
+  WSA301M: "TSBZC51C"  # Kyllian 04/09/2026 — suffixe corrigé M -> C le 09/09
   # Kyllian a écrit "WS302M" — lu comme WSA302M ("A" manquant) : entouré de
   # codes WSA3xx S3-CREACOM-FC, "WS302M" seul n'existe pas dans le catalogue.
-  WSA302M: "TSBZC52M"  # Kyllian 04/09/2026 — lu WS302M→WSA302M, à confirmer si doute
+  WSA302M: "TSBZC52C"  # Kyllian 04/09/2026 — lu WS302M→WSA302M ; suffixe corrigé M -> C le 09/09
   # Kyllian a écrit "WS310M" — lu comme WSA310M ("A" manquant), même motif.
   WSA310M: "TSBZC600"  # Portfolio S3-CREACOM-FC — Kyllian 04/09/2026 — lu WS310M→WSA310M, à confirmer si doute
   # ATTENTION Kyllian 04/09/2026 : "ancien code, il faut vérifier
@@ -291,7 +309,10 @@ modules:
   WSA510C: "TSBZE61C"  # Kyllian 04/09/2026
   WSA510D: "TSBZE61D"  # Kyllian 04/09/2026
   WS102: "TSBZ1252"    # Kyllian 04/09/2026
-  WS106: "TSBZ156"     # Kyllian 04/09/2026
+  # « TSBZ156 » (5 caractères après TSBZ) n'existe pas — un chiffre manquait à
+  # la saisie. Celcat porte « TSBZ1556 : WS106 Gestion de Projet », relevé le
+  # 09/09/2026 : le nom nomme le cours, il n'y a pas d'ambiguïté.
+  WS106: "TSBZ1556"    # Kyllian 04/09/2026 — coquille TSBZ156 corrigée le 09/09
   WS302D: "TSBZ352D"   # Kyllian 04/09/2026
 
 # --- ABSENTS de la liste fournie ------------------------------------------

@@ -1,0 +1,372 @@
+# IDs Timetabler Live URCA_2026 — matières du département MMI (préfixe TSB),
+# relevées par balayage de `recordIDs` (udlResources.load, TYPE_MATIERES)
+# le 2026-09-09 sur la plage 1570000-1610000.
+#
+# POURQUOI CE FICHIER EXISTE. Même raison que `celcat_groupes.yaml` :
+# `udlResources.load` refuse d'énumérer le catalogue des matières
+# (`ETooManyRecords`), et `customOnly: True` rend ZÉRO enregistrement. Le
+# catalogue ne se lit donc que par plages d'identifiants, et le relevé est
+# figé ici.
+#
+# CE QU'IL REMPLACE. `_modules_par_scan` cherchait à chaque appel : il
+# rechargeait l'EDT des 88 groupes un par un, puis balayait ±2500
+# identifiants autour des trois premiers modules ainsi vus — et, s'il n'en
+# avait vu aucun, autour de 1660000, qui est un identifiant de GROUPE, à
+# 65000 de la bonne plage. Un module ne pouvait donc être trouvé que s'il
+# était DÉJÀ posé quelque part. Les alternants BUT2 CREACOM, jamais saisis,
+# échouaient tous par « RessourceIntrouvable : matière ».
+#
+# La clé est le `unique_name` Celcat, la valeur son `module_id`. Le nom
+# lisible est en commentaire : c'est lui qui permet de vérifier qu'un code
+# désigne bien le cours attendu, sans ouvrir Celcat.
+
+
+"TSB0305C": 1590668  # WR305C Strat
+"TSB0351C": 1581057  # WS301C Dev et UX
+"TSB0353C": 1581061  # WS303C Dataviz
+"TSB0451C": 1595414  # WS401C Comm. visuelle
+"TSB1351D": 1581058  # WS301D Dev et UX
+"TSB1353D": 1581062  # WS303D Dataviz
+"TSB1451D": 1595415  # WS401D Développement Web
+"TSB1505D": 1584817  # WR505D Dvpt front avancé
+"TSB1506D": 1584818  # WR506D Dvpt back avancé
+"TSB1507D": 1584819  # WR507D Dispo interactifs
+"TSB1508D": 1584820  # WR508D Hébergem cybersecu
+"TSB1509D": 1584821  # WR509D IOT
+"TSB1510D": 1584822  # WR510D Applications mobil
+"TSB1551D": 1584823  # WS501D DWeb ou DI
+"TSB1552D": 1584825  # WS502D Jeu d'entreprise
+"TSB1602D": 1584830  # WR602D Dvpt web et disp
+"TSB1C52D": 1581068  # WSA302D Prod. de contenu
+"TSB2305C": 1588053  # WR305C Strat
+"TSB2305D": 1588055  # WR305D Strat
+"TSB2305S": 1588054  # WR305S Strat
+"TSB2309C": 1588059  # WR309C Création
+"TSB2309D": 1588060  # WR309D Création
+"TSB2309S": 1588061  # WR309S Création
+"TSB2313C": 1588070  # WR313C CMS Avancé
+"TSB2313D": 1588071  # WR313D Développement Back
+"TSB2313S": 1588072  # WR313S CMS Avancé
+"TSB2319C": 1588140  # WR319C Modélisation 3D
+"TSB2319D": 1588139  # WR319D Symfony
+"TSB2351S": 1581059  # WS301S Dev et UX
+"TSB2353S": 1581063  # WS303S Dataviz
+"TSB2401C": 1587326  # WR401C Anglais
+"TSB2401D": 1595403  # WR401D Anglais
+"TSB2402C": 1595416  # WS402C Prod. multimédia
+"TSB2402D": 1595417  # WS402D Dispo. interactifs
+"TSB2405C": 1595404  # WR405C Gestion de contenu
+"TSB2405D": 1595405  # WR405D Créa. & des. inter
+"TSB2406C": 1595406  # WR406C Culture artistique
+"TSB2406D": 1595407  # WR406D Dev front
+"TSB2407C": 1595408  # WR407C Audiovisuel Motion
+"TSB2407D": 1595409  # WR407D Développement back
+"TSB2408C": 1595410  # WR408C Ecriture multi.
+"TSB2408D": 1595411  # WR408D Dépl. de services
+"TSB2409C": 1595412  # WR409C Modélisation Unity
+"TSB2409D": 1595413  # WR409D Modélisation Unity
+"TSB2411C": 1595418  # WS411C Stage Créa
+"TSB2411D": 1595419  # WS411D Stage DWeb-DI
+"TSB2C00S": 1588163  # WRA320S Ecriture WEB
+"TSB2C05D": 1588156  # WRA305D Strat
+"TSB2C05S": 1588157  # WRA305S Strat
+"TSB2C09D": 1588158  # WRA309D Création
+"TSB2C09S": 1588159  # WRA309S Création
+"TSB2C13D": 1588160  # WRA313D Dev Back
+"TSB2C13S": 1588161  # WRA313S CMS Avancé
+"TSB2C20D": 1588162  # WRA320D Symfony
+"TSB2C52S": 1581067  # WSA302S Prod. de contenu
+"TSB2D01D": 1595421  # WRA401D Anglais
+"TSB2D01S": 1595422  # WRA401S Anglais
+"TSB2D02D": 1592694  # WSA402D Dev Web
+"TSB2D02S": 1592695  # WSA402S Communication
+"TSB2D05D": 1595426  # WRA405D Création design
+"TSB2D05S": 1595427  # WRA405S Strat de comm
+"TSB2D06D": 1595428  # WRA406D Dév front
+"TSB2D06S": 1595429  # WRA406S Storytelling
+"TSB2D07D": 1595467  # WRA407D Dév back
+"TSB2D07S": 1595468  # WRA407S Gestion contenus
+"TSB2D08D": 1595469  # WRA408D Déploiement serv
+"TSB2D09S": 1595472  # WRA409S SEO
+"TSB2D10D": 1595470  # WRA410D Modélisation Unit
+"TSB2D10S": 1595473  # WRA410S Budgetisation
+"TSB2D11D": 1586828  # WRA411D Applications mob
+"TSB2D12D": 1592696  # WSA412D Alternance
+"TSB2D12S": 1592697  # WSA412S Alternance
+"TSBZ1103": 1585131  # WR103 Ergo. Accessi.
+"TSBZ1104": 1585132  # WR104 Cult. Numérique
+"TSBZ1151": 1585146  # WS101 Audit Comm. Num.
+"TSBZ1202": 1585130  # WR102 Anglais renforcé
+"TSBZ1252": 1585147  # WS102 Plan de comm
+"TSBZ1307": 1585135  # WR107 Ecrit. Multimédia
+"TSBZ1308": 1585136  # WR108 Prod. Graphique
+"TSBZ1310": 1585138  # WR110 Prod. Audiovisuel
+"TSBZ1353": 1585148  # WS103 Design Graphique
+"TSBZ1354": 1585149  # WS104 Prod. Audiovisuel
+"TSBZ1357": 1586808  # WS107 Production podcast
+"TSBZ1412": 1585139  # WR112 Intégration
+"TSBZ1413": 1585140  # WR113 Développement Web
+"TSBZ1415": 1585141  # WR115 Hébergement
+"TSBZ1455": 1585150  # WS105 Prod. Site Web
+"TSBZ1517": 1585143  # WR117 Gestion de Projet
+"TSBZ1519": 1585145  # WR119 PPP
+"TSBZ1520": 1586807  # WR120 Soutien
+"TSBZ1556": 1585152  # WS106 Gestion de Projet
+"TSBZ15PJ": 1585154  # WS1PJ Projet Ens.
+"TSBZ1M01": 1585129  # WR101 Anglais
+"TSBZ1M05": 1585133  # WR105 Strat. de Comm.
+"TSBZ1M06": 1585134  # WR106 Expression Comm.
+"TSBZ1M09": 1585137  # WR109 Cult. Artistique
+"TSBZ1M16": 1585142  # WR116 Traitement Info
+"TSBZ1M18": 1585144  # WR118 Eco. Droit du Num.
+"TSBZ1M60": 1585151  # WS110 Portfolio
+"TSBZ1MBO": 1585153  # WS1BO Bonification
+"TSBZ1MCO": 1594410  # Cordées de la réussite
+"TSBZ2103": 1585209  # WR203 Ergo. Accessi.
+"TSBZ2104": 1585210  # WR204 Cult. Numérique
+"TSBZ2151": 1585295  # WS201 Explo. des Usages
+"TSBZ2202": 1585208  # WR202 Anglais renforcé
+"TSBZ2205": 1585211  # WR205 Strat. De Comm.
+"TSBZ2307": 1585282  # WR207 Ecrit. Multimédia
+"TSBZ2308": 1585283  # WR208 Prod. Graphique
+"TSBZ2309": 1585284  # WR209 Cult. Artistique
+"TSBZ2310": 1585285  # WR210 Prod. Audiovisuel
+"TSBZ2412": 1585287  # WR212 Intégration
+"TSBZ2413": 1585288  # WR213 Développement Web
+"TSBZ2414": 1585294  # WR214 Syst. Information
+"TSBZ2415": 1585289  # WR215 Hébergement
+"TSBZ2453": 1585297  # WS203 Site Web et BDD
+"TSBZ2517": 1585291  # WR217 Gestion de Projet
+"TSBZ2518": 1585292  # WR218 Eco. Droit du Num.
+"TSBZ2519": 1585293  # WR219 PPP
+"TSBZ2520": 1586809  # WR220 Soutien
+"TSBZ2554": 1585298  # WS204 Présence en ligne
+"TSBZ25PJ": 1585301  # WS2PJ Projet Ens.
+"TSBZ2M01": 1585207  # WR201 Anglais
+"TSBZ2M06": 1585212  # WR206 Expression Comm.
+"TSBZ2M11": 1585286  # WR211 Gest. de Contenus
+"TSBZ2M16": 1585290  # WR216 Traitement Info
+"TSBZ2M52": 1585296  # WS202 Comm. Produit
+"TSBZ2M60": 1585299  # WS210 Portfolio
+"TSBZ2MBO": 1585300  # WS2BO Bonification
+"TSBZ2MCO": 1600788  # Cordées de la réussite
+"TSBZ3010": 1588049  # WR301 Anglais
+"TSBZ301D": 1582737  # WR301 Anglais
+"TSBZ3020": 1588050  # WR302 LV2
+"TSBZ302D": 1583120  # WR302 Anglais renforcé
+"TSBZ3030": 1588051  # WR303 UX
+"TSBZ303D": 1583121  # WR303 Design d'expérience
+"TSBZ3040": 1588052  # WR304 Culture
+"TSBZ304D": 1583122  # WR304 Culture numérique
+"TSBZ3050": 1586829  # WR305 Strat de comm
+"TSBZ305D": 1583123  # WR305D Strat
+"TSBZ3060": 1588056  # WR306 Référencement
+"TSBZ306D": 1583124  # WR306 Référencement
+"TSBZ3070": 1588057  # WR307 Expression, comm
+"TSBZ307D": 1583125  # WR307 Expression comm
+"TSBZ3080": 1588058  # WR308 Ecriture
+"TSBZ308D": 1583126  # WR308 Ecriture
+"TSBZ3090": 1584775  # WR309 Création UI
+"TSBZ309D": 1583127  # WR309D Création
+"TSBZ3100": 1588062  # WR310 Culture artistique
+"TSBZ310D": 1583128  # WR310 Culture artistique
+"TSBZ3110": 1588063  # WR311 Audiovisuel Motion
+"TSBZ311D": 1583129  # WR311 Audiovisuel motion
+"TSBZ3120": 1588064  # WR312 Développement Front
+"TSBZ312D": 1583130  # WR312 Développement Front
+"TSBZ313D": 1583131  # WR313D Développement Back
+"TSBZ3140": 1588065  # WR314 Dépl. de services
+"TSBZ314D": 1583132  # WR314 Déploiemet services
+"TSBZ3150": 1588066  # WR315 Maths
+"TSBZ315D": 1583133  # WR315 Maths
+"TSBZ3160": 1588067  # WR316 Gestion de projet
+"TSBZ316D": 1583134  # WR316 Gestion de projet
+"TSBZ3170": 1588068  # WR317 Eco/Droit
+"TSBZ317D": 1583135  # WR317 Eco/Droit
+"TSBZ3180": 1588069  # WR318 PPP
+"TSBZ318D": 1583136  # WR318 PPP
+"TSBZ319D": 1583137  # WR319D Symfony
+"TSBZ351D": 1583138  # WS301D Dev et UX
+"TSBZ3520": 1581060  # WS302 Production de cont.
+"TSBZ352D": 1583139  # WS302 Prod contenu comm
+"TSBZ353D": 1590193  # WS303D Dataviz
+"TSBZ3600": 1581064  # WS310 Portfolio
+"TSBZ360D": 1583140  # WS310 Portfolio
+"TSBZ3BON": 1581065  # WS3BO Bonification
+"TSBZ3COR": 1583171  # WS3COR Cordées réussite
+"TSBZ3PRJ": 1581066  # WS3PJ Projet Ens.
+"TSBZ4010": 1586826  # WR401 Anglais
+"TSBZ401D": 1583168  # WR401D Anglais
+"TSBZ4020": 1595400  # WR402 Eco. Droit du numé
+"TSBZ402D": 1583169  # WR402 Eco et droit du num
+"TSBZ4030": 1595401  # WR403 Design d'expérience
+"TSBZ403D": 1583170  # WR403 Design d'expérience
+"TSBZ4040": 1595402  # WR404 Expression, comm
+"TSBZ404D": 1583848  # WR404 Expression comm
+"TSBZ405D": 1583849  # WR405D Création et design
+"TSBZ4060": 1584774  # WR406 Culture artistique
+"TSBZ406D": 1583850  # WR406D Devpt web
+"TSBZ407D": 1583851  # WR407D Devpt back
+"TSBZ408D": 1583852  # WR408D Deploiement servic
+"TSBZ409D": 1594256  # WR409D Modélisation Unity
+"TSBZ4100": 1595420  # WS410 Portfolio
+"TSBZ451D": 1594252  # WS401D Développement Web
+"TSBZ452D": 1594253  # WS402D Disp interactifs
+"TSBZ460D": 1594255  # WS410 Portfolio
+"TSBZ461D": 1594254  # WS411D Stage DWeb-DI
+"TSBZ4BON": 1586827  # WR4 Bonification S4
+"TSBZ4COR": 1583172  # WS4CO Cordées réussite
+"TSBZ5010": 1584813  # WR501D Anglais
+"TSBZ5020": 1584814  # WR502D Management qualité
+"TSBZ5030": 1584815  # WR503 Entrepreneuriat
+"TSBZ5040": 1584816  # WR504 PPP
+"TSBZ5600": 1584824  # WS510D Portfolio DWeb-DI
+"TSBZ5BON": 1584826  # WS5BO Bonification
+"TSBZ5COR": 1584828  # WS5CO Cordées
+"TSBZ5PRJ": 1584827  # WS5PJ Projet Ens.
+"TSBZ6010": 1584829  # WR601 Entrepreneuriat-RSE
+"TSBZ6600": 1583173  # WS610D Portfolio DWeb-DI
+"TSBZ6610": 1584831  # WS611D Stage Dweb-di
+"TSBZ6BON": 1584832  # WS6BO Bonification
+"TSBZ6COR": 1584834  # WS6CO Cordées
+"TSBZ6PRJ": 1584833  # WS6PJ Projet Ens.
+"TSBZC010": 1588141  # WRA301D Anglais
+"TSBZC01C": 1601359  # WRA301C Anglais
+"TSBZC020": 1588142  # WRA302D Anglais renforcé
+"TSBZC02C": 1601360  # WRA302C Anglais Renforcé
+"TSBZC030": 1588143  # WRA303 UX
+"TSBZC03C": 1583174  # WRA303C UX
+"TSBZC03D": 1582381  # WRA303D UX
+"TSBZC040": 1588144  # WRA304D Culture
+"TSBZC04C": 1601361  # WRA304C Culture numérique
+"TSBZC05C": 1582382  # WRA305C Strat
+"TSBZC05D": 1582383  # WRA305D Strat
+"TSBZC05S": 1582384  # WRA305S Strat
+"TSBZC060": 1588145  # WRA306D Référencement
+"TSBZC06C": 1601362  # WRA306C Référencement
+"TSBZC070": 1588146  # WRA307D Expression, comm
+"TSBZC07C": 1601363  # WRA307C Expression, com
+"TSBZC080": 1588147  # WRA308 Ecriture
+"TSBZC08C": 1594257  # WRA308C Ecriture
+"TSBZC08D": 1582385  # WRA308D Ecriture
+"TSBZC09C": 1582387  # WRA309C Création
+"TSBZC09D": 1582386  # WRA309D Création
+"TSBZC100": 1588148  # WRA310 Culture artistique
+"TSBZC10C": 1580766  # WRA310C Culture artistiq
+"TSBZC10D": 1582388  # WRA310D Culture artistiqu
+"TSBZC110": 1588149  # WRA311 Motion design
+"TSBZC11C": 1580768  # WRA311C Motion design
+"TSBZC11D": 1580767  # WRA311D Motion design
+"TSBZC120": 1588150  # WRA312 Dev Front
+"TSBZC12C": 1580824  # WRA312C Dvpt front
+"TSBZC12D": 1580769  # WRA312D Dvpt front
+"TSBZC13C": 1580826  # WRA313C Wordpress
+"TSBZC13D": 1580825  # WRA313D Dvpt back
+"TSBZC140": 1588151  # WRA314 Dépl. de services
+"TSBZC14C": 1580828  # WRA314C Dép services
+"TSBZC14D": 1580827  # WRA314D Dépl services
+"TSBZC150": 1588152  # WRA315D Maths
+"TSBZC15C": 1601364  # WRA315C Traitement info
+"TSBZC160": 1588153  # WRA316D Gestion de projet
+"TSBZC16C": 1601365  # WRA316C Gestion de projet
+"TSBZC170": 1588154  # WRA317D Eco/Droit
+"TSBZC17C": 1601366  # WRA317C Eco, Gestion
+"TSBZC180": 1588155  # WRA318D PPP
+"TSBZC18C": 1601367  # WRA318C PPP
+"TSBZC19C": 1580829  # WRA319C Mod 3D
+"TSBZC19D": 1580830  # WRA319D Symfony
+"TSBZC51C": 1594914  # WSA301C SAE Créa
+"TSBZC51D": 1580831  # WSA301D SAE Dev Web
+"TSBZC51S": 1580832  # WS301S SAE Strat de comm
+"TSBZC52C": 1580834  # WSA302C Prod. Contenus
+"TSBZC52D": 1580833  # WSA302D Com plurimédia
+"TSBZC600": 1581069  # WSA310M Portfolio
+"TSBZCBON": 1581070  # WSA3BON Bonification
+"TSBZCCOR": 1594919  # WSA3COR Cordées réussite
+"TSBZCPRJ": 1581071  # WSA3PRJ Projet Ens.
+"TSBZD010": 1580835  # WRA401D Anglais
+"TSBZD01C": 1599552  # WRA401C Anglais
+"TSBZD020": 1595423  # WRA402D Eco et droit num
+"TSBZD02C": 1599553  # WRA402C Eco, gestion
+"TSBZD030": 1595424  # WRA403D Design d'exp
+"TSBZD03C": 1599554  # WRA403C Design d'exp
+"TSBZD040": 1595425  # WRA404D Expression, comm
+"TSBZD04C": 1599555  # WRA404C Expression, com
+"TSBZD05C": 1580837  # WRA405C Gestion contenus
+"TSBZD05D": 1580836  # WRA405D Design interactif
+"TSBZD060": 1592698  # WSA410 Portfolio
+"TSBZD06C": 1580838  # WRA406C Culture artistiqu
+"TSBZD06D": 1580842  # WRA406D Dvpt front
+"TSBZD06S": 1583715  # WRA406S Storytelling
+"TSBZD07C": 1580839  # WRA407C Stratégie de Com
+"TSBZD07D": 1585654  # WRA407D Devpt back
+"TSBZD07S": 1583716  # WRA407S Strat de comm
+"TSBZD08C": 1580840  # WRA408C Motion Design
+"TSBZD08D": 1580843  # WRA408D Dep services
+"TSBZD08S": 1583717  # WRA408S SEO
+"TSBZD09C": 1580841  # WRA409C Game Development
+"TSBZD09D": 1580844  # WRA409D Game Development
+"TSBZD09S": 1583718  # WRA409S Budgetisation
+"TSBZD10C": 1583719  # WRA410CS Cryptographie
+"TSBZD190": 1595471  # WRA419 Cryptographie
+"TSBZD51C": 1583720  # WSA401C Campagne Comm
+"TSBZD51D": 1585655  # WSA401D Dev web
+"TSBZD51S": 1585657  # WSA401S Comm RS
+"TSBZD52C": 1583721  # WSA402C e-commerce
+"TSBZD52D": 1585656  # WSA402D Disp interactif
+"TSBZD52S": 1585658  # WSA402S E-commerce
+"TSBZD61C": 1594915  # WSA411C Alternance
+"TSBZD61D": 1594916  # WSA411D Alternance
+"TSBZD61S": 1594917  # TSBZD61S Alternance
+"TSBZDBON": 1586830  # WSA4BON Bonification
+"TSBZDCOR": 1594918  # WSA4COR Cordées réussite
+"TSBZE010": 1590177  # WRA501 Anglais
+"TSBZE01C": 1596926  # WRA501C Anglais
+"TSBZE020": 1589126  # WRA502 Manag qualité
+"TSBZE02C": 1596927  # WRA502C Management
+"TSBZE030": 1589127  # WRA503 Entrepreneuriat
+"TSBZE03C": 1596928  # WRA503C Entrepreneuriat
+"TSBZE040": 1589128  # WRA504 PPP
+"TSBZE04C": 1596929  # WRA504C PPP
+"TSBZE05C": 1583175  # WRA505C Dir Artistique
+"TSBZE05D": 1583179  # WRA505D Dév Front
+"TSBZE05S": 1583185  # WRA505S Stratégie de comm
+"TSBZE06C": 1583176  # WRA506C Com visuelle
+"TSBZE06D": 1583180  # WRA506D Dév Back
+"TSBZE06S": 1583186  # WRA506S Webmarketing
+"TSBZE07C": 1583177  # WRA507C Concept narrative
+"TSBZE07D": 1583181  # WRA507D Dispo interactifs
+"TSBZE07S": 1583187  # WRA507S Design d'expé
+"TSBZE08C": 1583178  # WRA508C Game Development
+"TSBZE08D": 1583182  # WRA508D Héberg et cyber
+"TSBZE08S": 1583188  # WRA508S Comm Evenement
+"TSBZE09D": 1583183  # WRA509D IA avancée
+"TSBZE10D": 1583184  # WRA510D Dev avancé AI
+"TSBZE51C": 1583189  # WSA501C Créa
+"TSBZE51D": 1583190  # WSA501D DWeb ou DI
+"TSBZE51S": 1583191  # WSA501S STrat-UX
+"TSBZE520": 1583192  # WSA502 Jeu d'entreprise
+"TSBZE52C": 1596930  # WSA502C Jeu d'entreprise
+"TSBZE61C": 1583193  # WSA510C Portfolio Créa
+"TSBZE61D": 1583194  # WSA510D Portfolio DWeb-DI
+"TSBZE61S": 1583195  # WSA510SPortfolio-Strat-UX
+"TSBZEBON": 1593064  # WSA5BON Bonification
+"TSBZECOR": 1593065  # WSA5COR Cordées réussite
+"TSBZEPRJ": 1582389  # WSA5PRJ Projet enseignant
+"TSBZF010": 1583196  # WRA601 Entrepreneuriat
+"TSBZF01C": 1596931  # WRA601C Entrepreneuriat
+"TSBZF02C": 1583197  # WRA602C Exp. utilisateur
+"TSBZF02D": 1583198  # WRA602D Développement Web
+"TSBZF02S": 1583199  # WRA602S Design d'expé
+"TSBZF03C": 1596932  # WRA603C Stratégie de com
+"TSBZF03S": 1583200  # WRA603S Stratégie de comm
+"TSBZF51C": 1583244  # WSA612C Alternance
+"TSBZF51D": 1583245  # WSA611D Alt DWeb-DI
+"TSBZF52S": 1583246  # WSA612S Alt Strat-UX
+"TSBZF61C": 1583247  # WSA610C Portfolio
+"TSBZF61D": 1583248  # WSA610D Portfolio DWeb-DI
+"TSBZF61S": 1583249  # WSA610S Portfolio StratUX
+"TSBZF66C": 1596933  # WSA666 Projet fin de BUT
+"TSBZF66D": 1596758  # WSA666 Projet fin BUT
+"TSBZFBON": 1593066  # WSA6BON Bonification
+"TSBZFCOR": 1599814  # Cordées de la réussite

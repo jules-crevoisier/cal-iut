@@ -78,7 +78,10 @@ def test_should_refuse_production_base_when_production_autorisee_false() -> None
 def test_should_resolve_numeric_ids_when_resoudre_ids() -> None:
     page = FaussePage()
     page.reponses["udlResources.load"] = [
-        {"id": 58186, "unique_name": "TSBZ1307", "name": "WR107 Ecrit. Multimédia"},
+        # Plus de matière ici : depuis le 09/09/2026 le module_id vient de
+        # `data/config/celcat_matieres.yaml` (le catalogue ne s'énumère pas),
+        # et la fausse page répond sur ce type avec la vraie table. Poser un
+        # id inventé ne prouverait plus rien.
         {"id": 1604422, "name": "H.105", "room_id": 1604422},
         {"id": 1610256, "unique_name": "34044", "name": "RIGUET Marine"},
         {"id": 431, "name": "[TD]"},
@@ -89,7 +92,7 @@ def test_should_resolve_numeric_ids_when_resoudre_ids() -> None:
         _entree(code_module="TSBZ1307", code_enseignant="34044", salle="H.105"),
         categorie="[TD]",
     )
-    assert ids["module_id"] == 58186
+    assert ids["module_id"] == 1585135  # TSBZ1307, relevé dans Celcat
     assert ids["room_id"] == 1604422
     assert ids["staff_id"] == 1610256
     assert ids["event_cat_id"] == 431

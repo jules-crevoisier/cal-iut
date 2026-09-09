@@ -20,7 +20,6 @@ from cal_iut.celcat.navigateur import (
     TYPE_SALLES,
 )
 from cal_iut.celcat.rpc import (
-    charger_edt,
     charger_ressources,
     enregistrer_evenement,
     event_id_retour,
@@ -35,8 +34,12 @@ _event_id_retour = event_id_retour
 _FILTRE_VIDE: dict[str, object] = {"customOnly": False, "includedDetails": []}
 _CATALOGUE: dict[int, list[dict]] = {}
 _GROUPES: dict[str, int] | None = None
+_MATIERES: dict[str, int] | None = None
 _CHEMIN_GROUPES = (
     Path(__file__).resolve().parents[3] / "data" / "config" / "celcat_groupes.yaml"
+)
+_CHEMIN_MATIERES = (
+    Path(__file__).resolve().parents[3] / "data" / "config" / "celcat_matieres.yaml"
 )
 
 __all__ = [
@@ -132,19 +135,47 @@ def _catalogue(page, type_id: int) -> list[dict]:
     return lots
 
 
+def _lire_table(chemin: Path) -> dict[str, int]:
+    """« "clé": 123  # commentaire » -> {"clé": 123}.
+
+    Volontairement sans PyYAML : ces deux tables sont des relevés plats, et
+    la lecture doit rester possible dans le sidecar, qui n'a pas toujours la
+    dépendance (constaté le 02/09/2026).
+    """
+    lus: dict[str, int] = {}
+    if not chemin.exists():
+        return lus
+    for ligne in chemin.read_text(encoding="utf-8").splitlines():
+        texte = ligne.split("#", 1)[0].strip()
+        if ":" not in texte:
+            continue
+        nom, brut = texte.split(":", 1)
+        try:
+            lus[nom.strip().strip('"')] = int(brut.strip())
+        except ValueError:
+            continue
+    return lus
+
+
 def _groupes_connus() -> dict[str, int]:
     global _GROUPES
     if _GROUPES is None:
-        lus: dict[str, int] = {}
-        if _CHEMIN_GROUPES.exists():
-            for ligne in _CHEMIN_GROUPES.read_text(encoding="utf-8").splitlines():
-                texte = ligne.split("#", 1)[0].strip()
-                if ":" not in texte:
-                    continue
-                nom, brut = texte.split(":", 1)
-                lus[nom.strip().strip('"')] = int(brut.strip())
-        _GROUPES = lus
+        _GROUPES = _lire_table(_CHEMIN_GROUPES)
     return _GROUPES
+
+
+def _matieres_connues() -> dict[str, int]:
+    """Code Celcat de la matière (« TSBZC01M ») -> module_id.
+
+    Même raison d'être que `_groupes_connus` : `udlResources.load` refuse
+    d'énumérer le catalogue des matières (`ETooManyRecords`), et
+    `customOnly: True` rend zéro enregistrement. Relevé par balayage de
+    plages de `recordIDs`, figé ici.
+    """
+    global _MATIERES
+    if _MATIERES is None:
+        _MATIERES = _lire_table(_CHEMIN_MATIERES)
+    return _MATIERES
 
 
 def _trouver(
@@ -158,11 +189,9 @@ def _trouver(
 ) -> int:
     if type_id == TYPE_GROUPES:
         return _trouver_groupe(page, libelle, prefixe or name)
-    lots: list[dict] = []
-    try:
-        lots = _catalogue(page, type_id)
-    except Exception:  # noqa: BLE001 — ETooManyRecords (matières)
-        lots = _modules_par_scan(page, unique_name) if unique_name else []
+    if type_id == TYPE_MATIERES:
+        return _trouver_matiere(page, libelle, unique_name, *cles)
+    lots = _catalogue(page, type_id)
     choisi = _choisir(
         lots, unique_name=unique_name, name=name, prefixe=prefixe
     )
@@ -199,34 +228,41 @@ def _trouver_groupe(page, libelle: str, nom: str) -> int:
     return _exiger(_choisir(lots, prefixe=nom), libelle, "group_id")
 
 
-def _modules_par_scan(page, code: str) -> list[dict]:
-    vus: list[dict] = []
-    for gid in _groupes_connus().values():
-        for ev in charger_edt(page, group_ids=[gid]):
-            for module in ev.get("modules") or []:
-                if isinstance(module, dict):
-                    vus.append(module)
-                    if str(module.get("unique_name") or "") == code:
-                        return [module]
-    ancres = [
-        int(m.get("module_id") or m.get("id"))
-        for m in vus
-        if m.get("module_id") or m.get("id")
-    ]
-    if not ancres:
-        ancres = [1660000]
-    for ancre in ancres[:3]:
-        debut, fin = max(1, ancre - 2500), ancre + 2500
-        for a in range(debut, fin, 400):
-            lots = charger_ressources(
-                page,
-                TYPE_MATIERES,
-                _filtre_ressource(record_ids=list(range(a, min(a + 400, fin)))),
-            )
-            choisi = _choisir(lots, unique_name=code)
-            if choisi:
-                return [choisi]
-    return []
+def _trouver_matiere(page, libelle: str, code: str, *cles: str) -> int:
+    """Le module_id vient de la TABLE, jamais d'une recherche à l'aveugle.
+
+    CE QUI ÉTAIT FAIT AVANT, et pourquoi ça ne pouvait pas marcher. Faute de
+    catalogue énumérable, `_modules_par_scan` cherchait en deux temps :
+
+    1. il rechargeait l'EDT des 88 groupes, un par un, et retenait les
+       modules déjà posés sur un évènement ;
+    2. sinon il balayait ±2500 identifiants autour des trois premiers
+       modules ainsi vus — et, s'il n'en avait vu aucun, autour de 1660000,
+       qui est un identifiant de GROUPE : la mauvaise plage de 65000.
+
+    Un module ne pouvait donc être trouvé que s'il servait DÉJÀ quelque
+    part. Or ceux qu'on cherche sont précisément ceux qui n'ont jamais été
+    posés : les alternants BUT2 CREACOM et BUT3. `WRA301M` -> `TSBZC01M`,
+    `WRA304M`, `WRA305M`… échouaient tous par « RessourceIntrouvable :
+    matière », en production le 09/09/2026.
+
+    Accessoirement, chaque échec coûtait 88 chargements d'EDT plus une
+    centaine d'appels de balayage, pour aboutir à rien. Les matières vivent
+    entre 1582737 et 1596928 ; elles sont relevées une fois pour toutes dans
+    `data/config/celcat_matieres.yaml`.
+
+    Un code absent de la table est un refus NOMMÉ, comme pour les groupes :
+    il dit quoi ajouter et où, au lieu de chercher longuement et d'échouer.
+    """
+    mid = _matieres_connues().get(code.strip().upper())
+    if mid is None:
+        raise RessourceIntrouvable(
+            f"{libelle} — code absent de data/config/celcat_matieres.yaml"
+        )
+    lots = charger_ressources(
+        page, TYPE_MATIERES, _filtre_ressource(record_ids=[mid])
+    )
+    return _exiger(_choisir(lots, unique_name=code), libelle, *cles)
 
 
 def _choisir(
