@@ -51,10 +51,17 @@ EVENT_ID = 1931666
 
 
 def _valider(semaine: int) -> None:
+    """`semaine` est un INDICE de planning, comme `placement.week`.
+
+    L'état persisté, lui, garde des PASTILLES 1..30 — c'est ce que pose
+    l'écran (`AdminCelcatView`), et la pastille n désigne l'indice n-1. La
+    conversion vit ici, en un seul endroit, pour que les tests continuent de
+    se lire « je valide la semaine de cette séance ».
+    """
     from cal_iut.celcat.etat import charger, sauver
 
     doc = charger()
-    doc["semaines_validees"] = [semaine]
+    doc["semaines_validees"] = [semaine + 1]
     doc["semaines_lancees"] = []
     sauver(doc)
 
