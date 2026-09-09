@@ -51,8 +51,14 @@ interface SessionGridProps {
   payload: AppPayload;
   rows: AppRow[]; // déjà filtrées à la semaine affichée
   week: number; // semaine SOLVEUR (pour les bandes SAE/férié/événement)
-  /** Parcours de référence pour les bandes PAC/événement (vide = toutes). */
-  parcours?: string;
+  /** Parcours de référence pour les bandes PAC/événement (vide = toutes).
+   *
+   *  Une LISTE est acceptée : un enseignant n'a pas UN parcours, il en a
+   *  autant que de cours qu'il donne. `EnseignantView` l'appelait sans rien,
+   *  si bien que le filtre ne s'appliquait jamais et que chacun voyait les
+   *  rentrées de tous les parcours (signalé par Romain Delon le
+   *  09/09/2026). */
+  parcours?: string | string[];
   showPac?: boolean;
   /** [tpA, tpB] : bascule la colonne TP en 2 sous-colonnes (comme la Vue Semaine). */
   split?: [string, string];
@@ -141,10 +147,16 @@ export function SessionGrid({
     }
   }
 
+  // Les parcours qui nous concernent. La prop vaut `""` par défaut — pas
+  // `undefined` — donc c'est le VIDE qui signifie « aucun filtre », et une
+  // chaîne vide gardée dans la liste filtrerait tout (défaut introduit puis
+  // attrapé par le test le 09/09/2026).
+  const parcoursVus = (Array.isArray(parcours) ? parcours : [parcours]).filter(Boolean);
+
   const saeByDay = new Map<number, string[]>();
   for (const s of payload.saeRows) {
     if (s.w !== week) continue;
-    if (parcours && s.p !== parcours) continue;
+    if (parcoursVus.length && !parcoursVus.includes(s.p)) continue;
     saeByDay.set(s.d, [...(saeByDay.get(s.d) ?? []), ...s.codes]);
   }
   const holidayByDay = new Map<number, { kind: string; label: string }>();
@@ -154,9 +166,16 @@ export function SessionGrid({
   const eventSlotByKey = new Map<string, string[]>();
   for (const e of payload.eventSlotRows) {
     if (e.w !== week) continue;
-    if (e.parcours.length && parcours && !e.parcours.includes(parcours)) continue;
+    // Un évènement sans parcours concerne tout le monde (cf.
+    // `planning_loader.ALL_PARCOURS`) — il passe toujours.
+    if (e.parcours.length && parcoursVus.length && !e.parcours.some((p) => parcoursVus.includes(p))) {
+      continue;
+    }
     const key = `${e.d}-${e.s}`;
-    eventSlotByKey.set(key, [...(eventSlotByKey.get(key) ?? []), e.label]);
+    const deja = eventSlotByKey.get(key) ?? [];
+    // Dédoublonné par libellé : deux parcours ont leur propre « Rentrée » au
+    // même créneau, et la lire deux fois n'apprend rien de plus.
+    if (!deja.includes(e.label)) eventSlotByKey.set(key, [...deja, e.label]);
   }
   const dayEventByDay = new Map<number, string[]>();
   for (const e of payload.eventRows) {
