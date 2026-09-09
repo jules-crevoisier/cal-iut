@@ -353,6 +353,43 @@ def _ids_pour(page: Any, entree: Any) -> tuple[dict, str | None]:
         return {}, f"{type(exc).__name__} : {exc}"
 
 
+def motif_groupe_absent(entree: Any) -> str:
+    """Le refus à opposer quand aucun `group_id` Celcat ne répond au nom du
+    groupe — au lieu d'écrire avec le `0` que rend `_group_id_pour`.
+
+    Le catalogue des groupes ne s'énumère pas (`ETooManyRecords`, comme les
+    matières) : il est figé dans `data/config/celcat_groupes.yaml`, relevé
+    par balayage de plages d'identifiants. Un groupe qui manque à cette
+    table n'a donc AUCUN moyen d'être résolu à la volée.
+
+    Laisser passer le `0` a coûté deux pannes distinctes, toutes deux
+    constatées en production le 09/09/2026 :
+
+    - en création, Celcat répondait « Impossible d'enregistrer l'événement,
+      une des ressources affectées a été supprimée » — 17 jobs, tous sur
+      `BUT MMI S5 TD EF` et `BUT MMI S5 TD GH`, les groupes des BUT3 en
+      alternance. Un message qui parle de suppression alors que rien n'a été
+      supprimé, et qui a coûté une enquête entière avant de désigner le vrai
+      coupable, deux lignes absentes d'un fichier de configuration ;
+
+    - en modification, c'était pire que confus. `localiser_evenement(...,
+      group_ids=[0])` ne trouve évidemment rien et lève « absent des
+      group_ids » — précisément le motif que `_evenement_a_disparu` lit
+      comme « l'évènement n'existe plus là-bas ». Le journal oubliait donc
+      l'`event_id` d'un évènement bien vivant, et le passage suivant en
+      créait un SECOND à côté. Une table de groupes incomplète fabriquait
+      des doublons.
+
+    Nommer la cause coûte un job en échec, visible et réparable en ajoutant
+    une ligne. La taire coûtait des doublons.
+    """
+    nom = str(getattr(entree, "nom_groupe_celcat", "") or "?")
+    return (
+        f"groupe Celcat introuvable : {nom} — à relever dans "
+        "data/config/celcat_groupes.yaml"
+    )
+
+
 def _group_id_pour(page: Any, entree: Any, group_id_connu: object) -> int:
     """Préfère le `group_id` déjà porté par le job (posé par `ops.py` ou par
     le job lui-même) ; sinon résout via le catalogue RPC, sinon 0 (échec
@@ -545,6 +582,16 @@ def _consommer_file(
         eid_connu = _event_id(row_connu) if isinstance(row_connu, dict) else None
 
         group_id = _groupe_cache(entree, job.get("group_id"))
+        if group_id <= 0:
+            # AVANT toute écriture, et avant la requalification en
+            # modification : les deux chemins passent par `group_id`.
+            motif_g = motif_groupe_absent(entree)
+            bilan.echecs.append((sid_job, motif_g))
+            journaliser(
+                kind="echec", session_id=sid_job, motif=motif_g,
+                course_code=getattr(entree, "course_code", None), regrouper=True,
+            )
+            continue
         ids, cause_ids = _ids_cache(entree)
         masque = _masque_pour(entree)
 
@@ -643,6 +690,18 @@ def _consommer_file(
         if cause_ids_m is not None:
             causes_m[sid] = cause_ids_m
         group_id = _groupe_cache(entree, job.get("group_id"))
+        if group_id <= 0:
+            # Sans ce refus, `localiser_evenement(..., group_ids=[0])` lève
+            # « absent des group_ids », que `_evenement_a_disparu` prend pour
+            # une suppression : l'event_id serait oublié et la séance
+            # recréée en double.
+            motif_g = motif_groupe_absent(entree)
+            bilan.echecs.append((sid, motif_g))
+            journaliser(
+                kind="echec", session_id=sid, motif=motif_g,
+                course_code=getattr(entree, "course_code", None), regrouper=True,
+            )
+            continue
         elements_m.append(
             ElementModification(
                 entree=entree,
