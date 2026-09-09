@@ -164,38 +164,47 @@ def test_should_fetch_the_real_target_room_record_when_fusionner_deltas_changes_
     nouvel id sur le sous-objet de l'ANCIENNE salle laisse un dept_id/nom
     incohérents avec la salle visée. Le correctif recharge le VRAI
     enregistrement de la salle visée via `udlResources.load`."""
-    brut = _wr106_brut()  # rooms[0] = {"id": 104105, "name": "H.105"} — autre salle
+    # PORTÉ SUR L'ENSEIGNANT le 08/09/2026 : le changement de SALLE est
+    # désormais suspendu (`ChangementSalleSuspendu`), Celcat ajoutant la
+    # nouvelle salle au lieu de retirer l'ancienne. Le comportement que ce
+    # test protège — recharger le VRAI enregistrement plutôt que greffer
+    # l'id sur l'ancien sous-objet — vaut pour toutes les ressources ; on
+    # l'éprouve donc sur celle qui n'est pas suspendue.
+    brut = _wr106_brut()
+    brut["staff"] = [{"id": 7001, "staff_id": 7001, "name": "RIGUET Marine"}]
     entree = _entree()
     ids = dict(_ids_valides())
-    ids["room_id"] = 104103  # différent de la salle 104105 du fixture
+    ids["staff_id"] = 7002  # différent de l'enseignant 7001 ci-dessus
     masque = _masque_valide()
     page = FaussePage()
     page.reponses["udlResources.load"] = [
-        {"room_id": 104103, "name": "H.103", "dept_id": 500001, "unique_name": "1700AR_010"}
+        {"staff_id": 7002, "name": "SANSON Jean", "dept_id": 500001, "unique_name": "JSA"}
     ]
 
     fusionne = fusionner_deltas(
         page, brut, entree=entree, ids=ids, group_id=GROUP_ID, masque=masque
     )
 
-    # La VRAIE salle 104103 est reprise telle quelle (nom, dept_id…), pas
-    # l'ancienne salle 104105 avec juste l'id changée.
-    assert fusionne["rooms"][0]["room_id"] == 104103
-    assert fusionne["rooms"][0]["name"] == "H.103"
-    assert fusionne["rooms"][0]["dept_id"] == 500001
-    assert "id" not in fusionne["rooms"][0] or fusionne["rooms"][0]["id"] == 104103
+    # Le VRAI enseignant 7002 est repris tel quel (nom, dept_id…), pas
+    # l'ancien avec juste l'id changée.
+    assert fusionne["staff"][0]["staff_id"] == 7002
+    assert fusionne["staff"][0]["name"] == "SANSON Jean"
+    assert fusionne["staff"][0]["dept_id"] == 500001
 
 
 def test_should_raise_evenement_introuvable_when_fusionner_deltas_targets_a_room_id_that_udlresources_load_does_not_return() -> None:
+    # Même portage que le test précédent : la salle est suspendue, on éprouve
+    # le refus sur l'enseignant.
     brut = _wr106_brut()
+    brut["staff"] = [{"id": 7001, "staff_id": 7001, "name": "RIGUET Marine"}]
     entree = _entree()
     ids = dict(_ids_valides())
-    ids["room_id"] = 104103  # différent du fixture ; absent de la réponse ci-dessous
+    ids["staff_id"] = 7002  # absent de la réponse ci-dessous
     masque = _masque_valide()
     page = FaussePage()
     page.reponses["udlResources.load"] = []
 
-    with pytest.raises(EvenementIntrouvable, match="104103"):
+    with pytest.raises(EvenementIntrouvable, match="7002"):
         fusionner_deltas(page, brut, entree=entree, ids=ids, group_id=GROUP_ID, masque=masque)
 
 
