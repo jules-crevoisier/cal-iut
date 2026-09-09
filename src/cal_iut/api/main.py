@@ -1533,7 +1533,45 @@ def _ics_all_day_sae_items(state: object, parcours: str | None) -> list:
         for s_ in getattr(state, "sessions", []) or []
         if getattr(s_, "course_code", None) and getattr(s_, "parcours", None)
     }
-    return fenetres_sae_pour_ics(planning.sae_windows, parcours, parcours_par_code)
+    return fenetres_sae_pour_ics(
+        planning.sae_windows,
+        parcours,
+        parcours_par_code,
+        updated_at=_ics_sae_modifie_le(state),
+    )
+
+
+def _ics_sae_modifie_le(state: object) -> object:
+    """Quand les fenêtres SAE ont changé pour la dernière fois.
+
+    Elles ne viennent pas de la base mais de fichiers de configuration :
+    aucun horodatage à lire, contrairement aux placements
+    (`CurrentPlacement.updated_at`). On prend donc la date de modification la
+    plus récente des fichiers qui les déterminent.
+
+    Sans cet horodatage, le `SEQUENCE` de chaque fenêtre valait 0 pour
+    toujours : un agenda DÉJÀ abonné ne remplace un évènement que si ce
+    numéro augmente, donc déplacer une SAE — ou corriger la façon dont on
+    l'écrit — ne parvenait jamais à ceux qui l'avaient déjà reçue. C'est
+    précisément ce qui aurait empêché le correctif « journée entière » du
+    09/09/2026 d'atteindre les agendas déjà abonnés.
+
+    Une date de fichier illisible rend None, jamais une exception : un flux
+    .ics sans numéro de révision reste utile, un flux en erreur non.
+    """
+    from datetime import datetime, timezone
+
+    racine = state.config_dir.parents[1]
+    horodatages = []
+    for motif in ("data/config/sae_corrections.yaml", "data/config/*.yaml"):
+        for chemin in racine.glob(motif):
+            try:
+                horodatages.append(chemin.stat().st_mtime)
+            except OSError:
+                continue
+    if not horodatages:
+        return None
+    return datetime.fromtimestamp(max(horodatages), tz=timezone.utc)
 
 
 def _ics_placements_updated_at(state: object) -> dict[str, object]:

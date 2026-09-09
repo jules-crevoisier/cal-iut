@@ -140,7 +140,10 @@ def _jours_qui_se_suivent(precedent, suivant) -> bool:
 
 
 def fenetres_sae_pour_ics(
-    fenetres: list, parcours: str | None, parcours_par_code: dict[str, str] | None = None
+    fenetres: list,
+    parcours: str | None,
+    parcours_par_code: dict[str, str] | None = None,
+    updated_at: datetime | None = None,
 ) -> list[IcsAllDayItem]:
     """Repères journée entière des SAE, pour un flux .ics.
 
@@ -163,6 +166,13 @@ def fenetres_sae_pour_ics(
     jours, une fenêtre restreinte à certains groupes TD ne restreignant pas
     comme une fenêtre sans restriction. Le flux .ics n'affiche qu'un repère,
     il n'a pas ce souci.
+
+    `updated_at` alimente le `SEQUENCE` de chaque plage. Une fenêtre SAE n'a
+    pas d'horodatage propre — elle vient de fichiers de planning, pas de la
+    base — donc l'appelant passe la date de dernière modification de CES
+    fichiers. C'est ce qui permet à un agenda déjà abonné de remplacer la
+    fenêtre quand elle bouge : sans numéro croissant, il garde la première
+    version reçue, indéfiniment.
     """
     connus = parcours_par_code or {}
     par_code: dict[str, dict] = {}
@@ -207,6 +217,7 @@ def fenetres_sae_pour_ics(
                     date_start=debut.isoformat(),
                     date_end=fin.isoformat(),
                     description=f"Semaine de projet/évaluation SAE — {entree['label']}",
+                    updated_at=updated_at,
                 )
             )
     items.sort(key=lambda i: (i.date_start, i.key))

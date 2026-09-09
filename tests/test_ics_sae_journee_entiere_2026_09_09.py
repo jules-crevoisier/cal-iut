@@ -30,6 +30,7 @@ branche-ci parce qu'elle a été écrite après.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from cal_iut.api.ics_feed import IcsAllDayItem, build_ics
 
@@ -142,3 +143,88 @@ def test_l_uid_ne_change_pas_avec_les_dates() -> None:
     bloc = _bloc(_ics(_fenetre(date_start="2026-10-26", date_end="2026-10-29")))
 
     assert "UID:groupe-but1-tp-c-sae-WS101-2026-10-20@cal-iut" in bloc
+
+
+# --------------------------------------------------------------------------
+# Le numéro de révision doit être RELIÉ, pas seulement possible
+# --------------------------------------------------------------------------
+
+
+def _sequences(items) -> list[int]:
+    ics = build_ics(
+        items=[], calendar_name="TP C", uid_prefix="g",
+        group_labels={}, teacher_labels={}, all_day_items=list(items),
+    )
+    return [
+        int(ligne.split(":", 1)[1])
+        for ligne in ics.split("\r\n")
+        if ligne.startswith("SEQUENCE:")
+    ]
+
+
+def _fenetre_source(jours: list):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        course_codes=["WS101"], label="WS101", parcours="BUT1",
+        dates=jours, group_labels=None,
+    )
+
+
+def test_la_date_de_modification_atteint_vraiment_les_plages() -> None:
+    """CE QUI MANQUAIT. Le champ `updated_at` existait sur `IcsAllDayItem`,
+    mais `fenetres_sae_pour_ics` ne le remplissait pas : `SEQUENCE` valait 0
+    pour toujours, et le correctif « journée entière » n'aurait jamais
+    atteint les agendas DÉJÀ abonnés — ils gardent la première version reçue
+    tant que le numéro n'augmente pas."""
+    from datetime import date
+
+    from cal_iut.api.ics_feed import fenetres_sae_pour_ics
+
+    jours = [date(2026, 10, 20), date(2026, 10, 21), date(2026, 10, 22)]
+    items = fenetres_sae_pour_ics(
+        [_fenetre_source(jours)], "BUT1",
+        updated_at=datetime(2026, 9, 9, 14, 0, tzinfo=UTC),
+    )
+
+    assert _sequences(items) == [362280], _sequences(items)
+
+
+def test_sans_date_de_modification_la_sequence_reste_a_zero() -> None:
+    """Le repli documenté : un flux sans numéro de révision reste utile."""
+    from datetime import date
+
+    from cal_iut.api.ics_feed import fenetres_sae_pour_ics
+
+    items = fenetres_sae_pour_ics([_fenetre_source([date(2026, 10, 20)])], "BUT1")
+
+    assert _sequences(items) == [0]
+
+
+def test_l_horodatage_vient_des_fichiers_qui_definissent_les_sae() -> None:
+    """Une fenêtre SAE n'a pas d'horodatage propre — elle vient de fichiers
+    de configuration, pas de la base. C'est leur date de modification qui
+    fait foi, et elle doit être lisible."""
+    from types import SimpleNamespace
+
+    from cal_iut.api.main import _ics_sae_modifie_le
+
+    racine = Path(__file__).resolve().parents[1]
+    horodatage = _ics_sae_modifie_le(
+        SimpleNamespace(config_dir=racine / "data" / "config")
+    )
+
+    assert horodatage is not None, "les fichiers de configuration existent"
+    assert horodatage.tzinfo is not None, "un horodatage naïf fausserait le calcul"
+
+
+def test_un_repertoire_absent_ne_fait_pas_echouer_le_flux() -> None:
+    """Un flux .ics sans numéro de révision reste utile ; un flux en erreur,
+    non."""
+    from types import SimpleNamespace
+
+    from cal_iut.api.main import _ics_sae_modifie_le
+
+    assert _ics_sae_modifie_le(
+        SimpleNamespace(config_dir=Path("/nexistepas/data/config"))
+    ) is None
