@@ -41,6 +41,34 @@ _PRIORITE = {
 }
 
 
+def _indice(valeur: Any) -> int:
+    """Un indice de semaine, ou -1 s'il n'y en a pas. ZÉRO EST UN INDICE.
+
+    Le filtre s'écrivait `int(getattr(p, "week", -1) or -1)`. Pour la
+    semaine 0 — la première semaine de cours, celle du 31 août 2026 —
+    `0 or -1` vaut -1 : AUCUN placement de cette semaine n'entrait dans la
+    comparaison. cal-iut paraissait ne rien y prévoir, et chaque cours que
+    Celcat y possède ressortait « en trop dans Celcat », c'est-à-dire
+    candidat à la SUPPRESSION.
+
+    Constaté le 09/09/2026 : 38 cours de BUT3 en alternance, tous réels,
+    tous posés par l'équipe pédagogique, sur la semaine que l'écran nomme
+    « Semaine 2 (31 août-4 sept.) » — l'indice 0 du planning. Ils étaient
+    restés invisibles tant que les groupes S5 TD EF et TD GH manquaient à
+    `celcat_groupes.yaml` : le relevé ne lisait pas leurs évènements. Les
+    ajouter (PR #150) a révélé le défaut, il ne l'a pas créé.
+
+    Le même piège existait sur `ev["semaine"]`, l'indice de masque Celcat,
+    dont 0 est une semaine parfaitement valide.
+    """
+    if valeur is None:
+        return -1
+    try:
+        return int(valeur)
+    except (TypeError, ValueError):
+        return -1
+
+
 def _heure_du_slot(slot: Any) -> str:
     try:
         indice = int(slot)
@@ -271,7 +299,7 @@ def comparer(
     simplement ailleurs dans l'année. C'est à l'appelant, qui a le
     calendrier, de faire cette conversion.
     """
-    du_planning = [p for p in placements if int(getattr(p, "week", -1) or -1) == int(semaine)]
+    du_planning = [p for p in placements if _indice(getattr(p, "week", None)) == int(semaine)]
     # Dédoublonnage par `event_id` : le relevé interroge 29 groupes, et un CM
     # commun à la promo est rendu une fois PAR groupe. Sans ça, le même
     # évènement apparaissait cinq fois « en trop » — liste illisible et
@@ -279,7 +307,7 @@ def comparer(
     candidats: list[dict] = []
     vus: set[int] = set()
     for ev in evenements:
-        if _est_technique(ev) or int(ev.get("semaine") or -1) != int(semaine_celcat):
+        if _est_technique(ev) or _indice(ev.get("semaine")) != int(semaine_celcat):
             continue
         identifiant = ev.get("event_id")
         if identifiant is not None:
