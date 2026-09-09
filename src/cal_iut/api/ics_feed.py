@@ -105,6 +105,111 @@ class IcsAllDayItem:
     description: str = ""
 
 
+def _plages_contigues(jours: list) -> list[tuple]:
+    """Découpe des jours triés en périodes continues.
+
+    Le WEEK-END NE COUPE PAS : vendredi puis lundi, c'est la même semaine de
+    projet qui se poursuit. Couper là serait aussi faux que de tout
+    fusionner — l'un affiche deux bandeaux pour une seule SAE, l'autre un
+    bandeau de trois mois pour quelques jours.
+    """
+    from datetime import timedelta
+
+    plages: list[tuple] = []
+    for jour in jours:
+        if plages and _jours_qui_se_suivent(plages[-1][1], jour):
+            plages[-1] = (plages[-1][0], jour)
+            continue
+        plages.append((jour, jour))
+    return plages
+
+
+def _jours_qui_se_suivent(precedent, suivant) -> bool:
+    """Deux jours de cours consécutifs — le samedi et le dimanche sautés."""
+    from datetime import timedelta
+
+    ecart = (suivant - precedent).days
+    if ecart <= 1:
+        return True
+    # Vendredi (4) -> lundi (0) : trois jours d'écart, aucun jour ouvré entre
+    # les deux.
+    return ecart <= 3 and precedent.weekday() == 4 and suivant.weekday() == 0
+
+
+def fenetres_sae_pour_ics(
+    fenetres: list, parcours: str | None, parcours_par_code: dict[str, str] | None = None
+) -> list[IcsAllDayItem]:
+    """Repères journée entière des SAE, pour un flux .ics.
+
+    UNE PLAGE PAR PÉRIODE RÉELLE. La version précédente posait un seul
+    évènement de `min(dates)` à `max(dates)` : les jours d'une SAE n'étant
+    pas contigus, onze fenêtres sur vingt en production ressortaient
+    déformées, dont `WS501D` — 22 jours réels étalés en un bandeau de 89
+    jours, vacances comprises (retour utilisateur 09/09/2026 : « c'est
+    complètement bugué »).
+
+    LES FENÊTRES DE MÊME CODE SONT FUSIONNÉES.
+    `planning_loader.appliquer_corrections_sae` ajoute les dates corrigées
+    dans une fenêtre SÉPARÉE, libellée « … (correction locale) » et sans
+    parcours. Pour un agenda c'est la même SAE : les garder distinctes
+    affichait la SAE en double, exposait un libellé de tuyauterie, et — le
+    parcours étant absent — la diffusait à TOUS les parcours.
+
+    Corrigé ici plutôt que dans `appliquer_corrections_sae`, qui sert aussi
+    au solveur : y fusionner les fenêtres changerait la sanctuarisation des
+    jours, une fenêtre restreinte à certains groupes TD ne restreignant pas
+    comme une fenêtre sans restriction. Le flux .ics n'affiche qu'un repère,
+    il n'a pas ce souci.
+    """
+    connus = parcours_par_code or {}
+    par_code: dict[str, dict] = {}
+    for fenetre in fenetres:
+        code = fenetre.course_codes[0] if fenetre.course_codes else fenetre.label
+        entree = par_code.setdefault(
+            code, {"jours": set(), "parcours": None, "label": code, "groupes": None}
+        )
+        entree["jours"] |= set(fenetre.dates or [])
+        # Le parcours et le libellé viennent de la fenêtre D'ORIGINE : une
+        # correction locale n'en porte pas, et son libellé est technique.
+        if fenetre.parcours:
+            entree["parcours"] = fenetre.parcours
+        if "(correction locale)" not in fenetre.label:
+            entree["label"] = fenetre.label
+            entree["groupes"] = fenetre.group_labels
+
+    items: list[IcsAllDayItem] = []
+    for code, entree in par_code.items():
+        # Quand aucune fenêtre ne déclare de parcours — le cas d'une
+        # correction locale dont la fenêtre d'origine a disparu —, on le
+        # retrouve dans les SÉANCES du même code. Sans ça, `WS310D`, qui est
+        # du BUT2-DEV-FI de part en part, remontait dans le flux de TOUS les
+        # parcours (constaté le 09/09/2026).
+        vise = entree["parcours"] or connus.get(code)
+        # Une SAE dont le parcours reste introuvable concerne tout le monde :
+        # se taire vaudrait moins bien que d'en montrer une de trop.
+        if vise is not None and vise != parcours:
+            continue
+        jours = sorted(entree["jours"])
+        if not jours:
+            continue
+        groupes = f" ({', '.join(entree['groupes'])})" if entree["groupes"] else ""
+        for debut, fin in _plages_contigues(jours):
+            items.append(
+                IcsAllDayItem(
+                    # UID par PLAGE : deux périodes de la même SAE sont deux
+                    # évènements distincts dans un agenda, et un UID partagé
+                    # les ferait s'écraser l'un l'autre.
+                    key=f"{code}-{debut.isoformat()}",
+                    title=f"SAE {entree['label']}{groupes}",
+                    date_start=debut.isoformat(),
+                    date_end=fin.isoformat(),
+                    description=f"Semaine de projet/évaluation SAE — {entree['label']}",
+                )
+            )
+    items.sort(key=lambda i: (i.date_start, i.key))
+    return items
+
+
 def _ics_escape(text: str) -> str:
     return str(text).replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n")
 
