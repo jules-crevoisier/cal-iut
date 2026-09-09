@@ -1511,31 +1511,29 @@ def _ics_items_for_placements(state: object, placements: list) -> list:
 
 
 def _ics_all_day_sae_items(state: object, parcours: str | None) -> list:
-    """`IcsAllDayItem` par fenêtre SAE du `parcours` donné (ou sans parcours
-    déclaré) — retour utilisateur 07/09/2026 : « les SAE il faut que ça
-    remonte » dans l'EDT/ICS. Jamais une réservation de créneau (cf.
-    `IcsAllDayItem`) : de vraies séances WS* viennent s'y placer plus tard,
-    à leurs propres horaires, sans lien avec cet item purement indicatif."""
-    from cal_iut.api.ics_feed import IcsAllDayItem
+    """Repères journée entière des fenêtres SAE — retour utilisateur
+    07/09/2026 : « les SAE il faut que ça remonte » dans l'EDT/ICS. Jamais
+    une réservation de créneau : de vraies séances WS* viennent s'y placer
+    plus tard, à leurs propres horaires, sans lien avec ce repère indicatif.
+
+    Le découpage en plages et la fusion des corrections locales vivent dans
+    `ics_feed.fenetres_sae_pour_ics` — une fonction PURE, testable sans état
+    applicatif ni fichiers de planning. C'est ce qui a permis de reproduire
+    le défaut du 09/09/2026 (un bandeau de 89 jours pour 22 jours de SAE)
+    sur des données minimales plutôt que sur toute la production.
+    """
+    from cal_iut.api.ics_feed import fenetres_sae_pour_ics
     from cal_iut.ingestion.planning_loader import load_mmi_planning_for_semestres
 
     planning = load_mmi_planning_for_semestres(state.config_dir.parents[1], [])
-    items = []
-    for window in planning.sae_windows:
-        if window.parcours is not None and window.parcours != parcours:
-            continue
-        if not window.dates:
-            continue
-        code = window.course_codes[0] if window.course_codes else window.label
-        groupes = f" ({', '.join(window.group_labels)})" if window.group_labels else ""
-        items.append(IcsAllDayItem(
-            key=code,
-            title=f"SAE {window.label}{groupes}",
-            date_start=min(window.dates).isoformat(),
-            date_end=max(window.dates).isoformat(),
-            description=f"Semaine de projet/évaluation SAE — {window.label}",
-        ))
-    return items
+    # Repli de parcours, pour les corrections locales dont la fenêtre
+    # d'origine a disparu : le code de la SAE se retrouve dans les séances.
+    parcours_par_code = {
+        str(getattr(s_, "course_code", "")): str(getattr(s_, "parcours", ""))
+        for s_ in getattr(state, "sessions", []) or []
+        if getattr(s_, "course_code", None) and getattr(s_, "parcours", None)
+    }
+    return fenetres_sae_pour_ics(planning.sae_windows, parcours, parcours_par_code)
 
 
 def _ics_placements_updated_at(state: object) -> dict[str, object]:
