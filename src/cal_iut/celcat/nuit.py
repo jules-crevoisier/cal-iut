@@ -354,6 +354,44 @@ def _ids_pour(page: Any, entree: Any) -> tuple[dict, str | None]:
         return {}, f"{type(exc).__name__} : {exc}"
 
 
+def motif_non_saisissable(entree: Any) -> str:
+    """Ce qui empêche d'écrire, dit AVANT d'essayer — et dit en français.
+
+    `resoudre_ids` traduit un champ vide en une recherche vide, et rend
+    « RessourceIntrouvable : personnel None » : le nom du champ, jamais la
+    raison. Or `mapping.py` la connaît déjà et la range dans
+    `entree.bloquants` — « aucun enseignant », « enseignant PTU sans code
+    Celcat », « module WR303D sans code Celcat ». Personne ne la lisait côté
+    drainage.
+
+    Le 09/09/2026, 14 jobs tournaient donc toutes les 90 secondes, avec pour
+    seule explication « personnel None » et sans aucune chance d'aboutir :
+    aucun passage ne pouvait inventer l'enseignant qui manque au planning.
+    Les nommer les rend réparables ; les retenter les rendait éternels.
+
+    ON NE BLOQUE QUE SUR LES TROIS CHAMPS QUE `resoudre_ids` EXIGE, lus sur
+    l'entrée elle-même plutôt que devinés depuis le texte des bloquants.
+    Bloquer sur tout `bloquants` non vide aurait aussi arrêté les séances à
+    deux intervenants — « Celcat n'en accepte qu'un, à trancher à la main » —
+    qui s'écrivent très bien aujourd'hui avec le premier déclaré. Signaler
+    n'est pas empêcher.
+    """
+    manquants = [
+        nom
+        for nom, valeur in (
+            ("enseignant", getattr(entree, "code_enseignant", None)),
+            ("matière", getattr(entree, "code_module", None)),
+            ("salle", getattr(entree, "salle", None)),
+        )
+        if not valeur
+    ]
+    if not manquants:
+        return ""
+    detail = "; ".join(str(b) for b in (getattr(entree, "bloquants", None) or []))
+    debut = f"séance non saisissable, {' et '.join(manquants)} manquant(s)"
+    return f"{debut} : {detail}" if detail else debut
+
+
 def motif_groupe_absent(entree: Any) -> str:
     """Le refus à opposer quand aucun `group_id` Celcat ne répond au nom du
     groupe — au lieu d'écrire avec le `0` que rend `_group_id_pour`.
@@ -473,7 +511,7 @@ class BilanDrainage:
         if self.echecs:
             parts.append(f"{len(self.echecs)} en échec — {self._par_motif(self.echecs)}")
         if self.ignores:
-            parts.append(f"{len(self.ignores)} ignoré(s) — {self._par_motif(self.ignores, 2)}")
+            parts.append(f"{len(self.ignores)} ignoré(s) — {self._par_motif(self.ignores)}")
         if self.differes:
             parts.append(
                 f"{len(self.differes)} en attente d'une semaine posée "
@@ -606,6 +644,12 @@ def _consommer_file(
             # silence (c'était le cas avant le 07/09/2026).
             bilan.ignores.append((sid_job, "séance inconnue de la maquette"))
             continue
+        motif_b = motif_non_saisissable(entree)
+        if motif_b:
+            # Reste en file : le jour où l'enseignant est affecté au
+            # planning, le job repart tout seul. Mais on n'essaie plus.
+            bilan.ignores.append((sid_job, motif_b))
+            continue
         # Le journal est relu ICI, au moment d'écrire — et non pas seulement
         # au moment d'enfiler, comme le fait `ops.py::_executer`. Entre les
         # deux instants, la séance a pu recevoir un event_id (saisie
@@ -721,6 +765,10 @@ def _consommer_file(
                     else "aucun event_id dans le job",
                 )
             )
+            continue
+        motif_b = motif_non_saisissable(entree)
+        if motif_b:
+            bilan.ignores.append((sid, motif_b))
             continue
         ids_m, cause_ids_m = _ids_cache(entree)
         if cause_ids_m is not None:
