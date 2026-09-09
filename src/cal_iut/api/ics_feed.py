@@ -103,6 +103,9 @@ class IcsAllDayItem:
     date_start: str  # ISO, premier jour INCLUS
     date_end: str  # ISO, dernier jour INCLUS (la RFC 5545 veut l'exclusif : géré ici)
     description: str = ""
+    # Alimente `SEQUENCE`, comme pour les séances : un agenda déjà abonné ne
+    # remplace un évènement que si le numéro de séquence a augmenté.
+    updated_at: datetime | None = None
 
 
 def _plages_contigues(jours: list) -> list[tuple]:
@@ -317,11 +320,27 @@ def build_ics(
             "BEGIN:VEVENT",
             f"UID:{uid_prefix}-sae-{it.key}@cal-iut",
             f"DTSTAMP:{dtstamp}",
+            # SEQUENCE, comme pour les séances. Sans lui, un agenda DÉJÀ
+            # abonné garde la première version d'une fenêtre SAE : la
+            # déplacer ou la raccourcir ne se voyait jamais chez ceux qui
+            # l'avaient déjà reçue. C'est exactement le défaut corrigé le
+            # 29/08/2026 sur les séances (retour de David Annebicque), resté
+            # sur cette branche-ci parce qu'elle a été écrite après.
+            f"SEQUENCE:{_sequence(it.updated_at)}",
             f"DTSTART;VALUE=DATE:{debut.strftime('%Y%m%d')}",
             f"DTEND;VALUE=DATE:{fin_exclusive.strftime('%Y%m%d')}",
             f"SUMMARY:{_ics_escape(it.title)}",
             f"DESCRIPTION:{_ics_escape(it.description)}",
             "TRANSP:TRANSPARENT",  # n'occupe pas le créneau dans les vues "disponibilité"
+            # `DTSTART;VALUE=DATE` SUFFIT À LA RFC 5545, PAS À OUTLOOK.
+            # Outlook (bureau et web) ne déduit pas « journée entière » de la
+            # seule absence d'heure : il affiche alors la fenêtre comme un
+            # rendez-vous à minuit, « 00h00 - 00h00 » — signalé le 09/09/2026
+            # sur « Semaine de projet/évaluation SAE — WS101 ». Ces deux
+            # champs propriétaires sont ce qu'il attend ; Google et Apple les
+            # ignorent, et continuent de lire `VALUE=DATE`.
+            "X-MICROSOFT-CDO-ALLDAYEVENT:TRUE",
+            "X-MICROSOFT-CDO-BUSYSTATUS:FREE",
             "END:VEVENT",
         ]
 
