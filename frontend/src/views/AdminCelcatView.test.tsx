@@ -56,6 +56,10 @@ function stubFetch(opts?: { etat?: typeof ETAT; extras?: typeof EXTRAS }): Retur
       const body = JSON.parse(String(init.body)) as { active: boolean };
       return jsonOk({ ...etat, saisie_active: body.active });
     }
+    if (cible.includes("/celcat/worker") && init?.method === "PATCH") {
+      const body = JSON.parse(String(init.body)) as { actif: boolean };
+      return jsonOk({ ...etat, worker_actif: body.actif });
+    }
     if (cible.includes("/celcat/valider") && init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as { semaines: number[] };
       return jsonOk({ ...etat, semaines_validees: body.semaines });
@@ -150,6 +154,53 @@ describe("AdminCelcatView", () => {
       expect(JSON.parse(String(saisie?.[1]?.body))).toEqual({ active: true });
     });
     expect(await screen.findByText("ÉCRITURE ON")).toBeInTheDocument();
+  });
+
+  // PAUSE DU WORKER (demande du 09/09/2026 : « un bouton qui active et
+  // désactive le worker qui utilise le VPN »). Le VPN et le compte Celcat
+  // sont partagés avec l'équipe : tant que le worker tourne, il prend le
+  // tunnel toutes les 90 secondes.
+  it("should PATCH /celcat/worker when the worker switch is toggled", async () => {
+    const mock = stubFetch();
+    render(<AdminCelcatView />);
+
+    fireEvent.click(await screen.findByRole("switch", { name: /worker/i }));
+
+    await waitFor(() => {
+      const appel = mock.mock.calls.find(
+        ([url, init]) => String(url).includes("/celcat/worker") && init?.method === "PATCH",
+      );
+      expect(appel).toBeDefined();
+      expect(JSON.parse(String(appel?.[1]?.body))).toEqual({ actif: false });
+    });
+  });
+
+  // LE point : ne jamais confondre les deux interrupteurs. Couper l'écriture
+  // (`PATCH /celcat/saisie`) VIDE la file d'attente côté serveur ; mettre le
+  // worker en pause ne doit rien détruire.
+  it("should never touch /celcat/saisie when pausing the worker", async () => {
+    const mock = stubFetch();
+    render(<AdminCelcatView />);
+
+    fireEvent.click(await screen.findByRole("switch", { name: /worker/i }));
+
+    await waitFor(() => {
+      expect(
+        mock.mock.calls.find(([url, init]) => String(url).includes("/celcat/worker") && init?.method === "PATCH"),
+      ).toBeDefined();
+    });
+    expect(
+      mock.mock.calls.find(([url, init]) => String(url).includes("/celcat/saisie") && init?.method === "PATCH"),
+    ).toBeUndefined();
+  });
+
+  it("should say the queue survives a worker pause", async () => {
+    stubFetch();
+    render(<AdminCelcatView />);
+
+    fireEvent.click(await screen.findByRole("switch", { name: /worker/i }));
+
+    expect(await screen.findByText(/VPN libre, la file est conservée/i)).toBeInTheDocument();
   });
 
   it("should show numbered steps 1, 2 and 3 and explain the night lot in step 2", async () => {

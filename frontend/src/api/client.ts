@@ -648,6 +648,9 @@ export function sendTeacherMails(codes: string[]): Promise<{ results: TeacherMai
 
 export interface CelcatEtat {
   saisie_active: boolean;
+  /** Le worker du sidecar tourne-t-il ? Le mettre en pause libère le VPN,
+   *  partagé avec le compte Celcat de l'équipe, SANS vider la file. */
+  worker_actif?: boolean;
   semaines_validees: number[];
   semaines_passees: number[];
   semaines_lancees: number[];
@@ -821,6 +824,15 @@ export function fetchCelcatEtat(): Promise<CelcatEtat> {
 
 export function patchCelcatSaisie(active: boolean): Promise<CelcatEtat> {
   return request("/celcat/saisie", { method: "PATCH", body: JSON.stringify({ active }) });
+}
+
+/** Marche/pause du worker du sidecar.
+ *
+ *  À NE PAS CONFONDRE avec `patchCelcatSaisie` : couper la saisie VIDE la
+ *  file d'attente côté serveur. Cette pause-ci ne détruit rien — elle rend
+ *  seulement le VPN, et le worker reprend là où il s'était arrêté. */
+export function patchCelcatWorker(actif: boolean): Promise<CelcatEtat> {
+  return request("/celcat/worker", { method: "PATCH", body: JSON.stringify({ actif }) });
 }
 
 export function validerSemainesCelcat(semaines: number[]): Promise<CelcatEtat> {

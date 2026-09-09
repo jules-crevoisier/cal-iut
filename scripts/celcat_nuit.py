@@ -28,7 +28,7 @@ sys.path.insert(0, str(RACINE / "src"))
 
 from cal_iut.celcat import navigateur as nav
 from cal_iut.celcat import reseau
-from cal_iut.celcat.etat import charger
+from cal_iut.celcat.etat import charger, worker_en_pause
 from cal_iut.celcat.nuit import executer_job_nuit
 
 
@@ -40,6 +40,14 @@ def principal() -> int:
     parseur.add_argument("--ecrire", action="store_true")
     parseur.add_argument("--production", action="store_true")
     args = parseur.parse_args()
+
+    # Le worker peut être mis en PAUSE depuis l'interface : le VPN et le
+    # compte Celcat sont partagés avec l'équipe, et un cycle toutes les 90
+    # secondes empêche quiconque d'ouvrir une session durable. La pause ne
+    # touche PAS à la file d'attente — elle reprendra telle quelle.
+    if worker_en_pause():
+        print("worker en pause — VPN non monté")
+        return 0
 
     doc = charger()
     if not doc.get("saisie_active"):

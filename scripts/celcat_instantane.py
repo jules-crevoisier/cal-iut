@@ -40,9 +40,11 @@ sys.path.insert(0, str(RACINE / "src"))
 from cal_iut.celcat import navigateur as nav
 from cal_iut.celcat import reseau
 from cal_iut.celcat.ecriture import resoudre_groupe
+from cal_iut.celcat.etat import worker_en_pause
 from cal_iut.celcat.instantane import consommer_demande, enregistrer, releve_du
 from cal_iut.celcat.lecture import evenement_depuis_rpc
 from cal_iut.celcat.rpc import charger_edt
+
 
 def _groupes_a_relever() -> list[str]:
     """Tous les groupes Celcat connus (`data/config/celcat_groupes.yaml`).
@@ -121,6 +123,14 @@ def principal() -> int:
     parseur.add_argument("--vpn", action="store_true")
     parseur.add_argument("--forcer", action="store_true", help="ignore la cadence de 2 h")
     args = parseur.parse_args()
+
+    # Le worker peut être mis en PAUSE depuis l'interface : le VPN et le
+    # compte Celcat sont partagés avec l'équipe, et un cycle toutes les 90
+    # secondes empêche quiconque d'ouvrir une session durable. La pause ne
+    # touche PAS à la file d'attente — elle reprendra telle quelle.
+    if worker_en_pause():
+        print("worker en pause — VPN non monté")
+        return 0
 
     if not args.forcer and not releve_du():
         print("instantané encore frais — rien à faire")

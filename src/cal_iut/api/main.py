@@ -64,6 +64,7 @@ from cal_iut.api.schemas import (
     CelcatJournalReconcilierResponse,
     CelcatPlanResponse,
     CelcatSaisieActiveRequest,
+    CelcatWorkerRequest,
     CelcatSaisieRequest,
     CelcatSaisieResponse,
     CelcatValiderRequest,
@@ -2844,6 +2845,7 @@ def _celcat_etat_public() -> CelcatEtatResponse:
         saisie_active=bool(doc.get("saisie_active")),
         semaines_validees=list(doc.get("semaines_validees") or []),
         semaines_passees=semaines_celcat_passees(),
+        worker_actif=bool(doc.get("worker_actif", True)),
         semaines_lancees=list(doc.get("semaines_lancees") or []),
         semaines_completes=_semaines_celcat_completes(),
         valide_le=doc.get("valide_le"),
@@ -3100,6 +3102,27 @@ def celcat_saisie_active(body: CelcatSaisieActiveRequest) -> CelcatEtatResponse:
         from cal_iut.celcat.file_attente import vider
 
         vider()
+    return _celcat_etat_public()
+
+
+@app.patch("/celcat/worker", response_model=CelcatEtatResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def celcat_worker_actif(body: CelcatWorkerRequest) -> CelcatEtatResponse:
+    """Met le worker du sidecar en marche ou en pause — SANS TOUCHER À RIEN.
+
+    Le VPN et le compte Celcat sont partagés avec l'équipe pédagogique : tant
+    que le worker tourne, il monte le tunnel toutes les 90 secondes et
+    personne ne peut ouvrir une session durable à côté. D'où ce bouton.
+
+    À NE PAS CONFONDRE AVEC `PATCH /celcat/saisie`, qui VIDE la file quand on
+    la coupe : s'en servir comme d'une pause perdrait toutes les corrections
+    en attente. Ici, la file, le journal et les semaines validées restent
+    exactement en l'état, et le worker reprend là où il s'était arrêté.
+    """
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    doc["worker_actif"] = bool(body.actif)
+    sauver(doc)
     return _celcat_etat_public()
 
 

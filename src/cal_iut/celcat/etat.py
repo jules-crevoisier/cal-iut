@@ -25,6 +25,14 @@ def _vide() -> dict[str, Any]:
     return {
         "version": 2,
         "saisie_active": False,
+        # Le worker du sidecar tourne-t-il ? Distinct de `saisie_active` :
+        # couper la saisie VIDE la file (cf. `PATCH /celcat/saisie`), ce qui
+        # perdrait les corrections en attente. Mettre le worker en pause ne
+        # touche à rien — il rend seulement le VPN, partagé avec le compte
+        # Celcat de l'équipe, et reprend là où il en était.
+        # Vrai par défaut : un état ancien, écrit avant ce champ, doit
+        # continuer de travailler, pas s'arrêter en silence.
+        "worker_actif": True,
         "semaines_validees": [],
         "semaines_lancees": [],
         "valide_le": None,
@@ -66,6 +74,7 @@ def _completer(data: dict[str, Any]) -> dict[str, Any]:
     doc.update(data)
     doc["version"] = 2
     doc["saisie_active"] = bool(doc.get("saisie_active"))
+    doc["worker_actif"] = bool(doc.get("worker_actif", True))
     semaines = doc.get("semaines_validees")
     doc["semaines_validees"] = [int(s) for s in semaines] if isinstance(semaines, list) else []
     lancees = doc.get("semaines_lancees")
@@ -133,6 +142,22 @@ def semaines_celcat_passees(*, today: date | None = None) -> list[int]:
         for n in range(1, NB_SEMAINES_LOT + 1)
         if week_status(calendrier, "S1", n - 1, jour) == "past"
     ]
+
+
+def worker_en_pause() -> bool:
+    """Le worker doit-il s'abstenir de TOUT accès réseau à ce tour ?
+
+    Le VPN et le compte Celcat sont PARTAGÉS avec l'équipe pédagogique : tant
+    que le worker tourne, il monte le tunnel toutes les 90 secondes et
+    personne d'autre ne peut se connecter durablement. Le 09/09/2026, une
+    recherche d'identifiant côté humain a dû être abandonnée pour cette
+    raison — le tunnel était coupé à chaque cycle.
+
+    Volontairement SÉPARÉ de `saisie_active`, qui vide la file d'attente
+    quand on la coupe (`PATCH /celcat/saisie`). Mettre le worker en pause ne
+    doit rien détruire : la file reste intacte et repart telle quelle.
+    """
+    return not charger().get("worker_actif", True)
 
 
 def definir_live(evenements: list[EvenementCelcat]) -> None:

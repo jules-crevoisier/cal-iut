@@ -20,6 +20,7 @@ import {
   ignorerExtraCelcat,
   lancerNuitCelcat,
   patchCelcatSaisie,
+  patchCelcatWorker,
   resynchroniserFileCelcat,
   validerSemainesCelcat,
   type CelcatEtat,
@@ -188,6 +189,18 @@ export function AdminCelcatView() {
     }
   };
 
+  const basculerWorker = async (actif: boolean) => {
+    setEnCours(true);
+    try {
+      setEtat(await patchCelcatWorker(actif));
+      setErreur(null);
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setEnCours(false);
+    }
+  };
+
   const valider = async () => {
     setEnCours(true);
     try {
@@ -327,6 +340,34 @@ export function AdminCelcatView() {
               <span className="celcat-switch-knob" />
             </button>
             <span>{etat.saisie_active ? "Live armé" : "Live désarmé"}</span>
+          </div>
+          {/* PAUSE DU WORKER, distincte de l'écriture ci-dessus.
+              Le VPN et le compte Celcat sont PARTAGÉS avec l'équipe : tant
+              que le worker tourne, il monte le tunnel toutes les 90 secondes
+              et personne ne peut ouvrir une session durable à côté. Le
+              09/09/2026, une recherche d'identifiant a dû être abandonnée
+              pour cette raison.
+
+              Ce bouton ne touche NI la file, NI le journal, NI les semaines
+              validées — contrairement au bouton d'écriture ci-dessus, dont
+              la coupure vide la file. */}
+          <div className="celcat-switch-row">
+            <button
+              type="button"
+              role="switch"
+              className="celcat-switch"
+              aria-checked={etat.worker_actif !== false}
+              aria-label="Worker Celcat (VPN)"
+              disabled={enCours}
+              onClick={() => void basculerWorker(etat.worker_actif === false)}
+            >
+              <span className="celcat-switch-knob" />
+            </button>
+            <span>
+              {etat.worker_actif === false
+                ? "Worker en pause — VPN libre, la file est conservée"
+                : "Worker actif — il prend le VPN toutes les 90 s"}
+            </span>
           </div>
           <div className="celcat-hero-meta">
             <span className={`pill mini ${etat.worker_ok ? "good" : "bad"}`}>
