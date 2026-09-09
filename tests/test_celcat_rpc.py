@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from cal_iut.celcat.navigateur import TYPE_GROUPES
+from cal_iut.celcat.navigateur import TYPE_GROUPES, TYPE_MATIERES
 from cal_iut.celcat.rpc import (
     SessionCelcatTimeout,
     appeler,
@@ -43,9 +43,9 @@ class FaussePage:
         if isinstance(arg, dict):
             methode = arg.get("methode") or arg.get("method")
             params = arg.get("params")
-        groupes = self._groupes_demandes(methode, params)
-        if groupes is not None:
-            return self._ok(groupes)
+        catalogue = self._catalogue_demande(methode, params)
+        if catalogue is not None:
+            return self._ok(catalogue)
         if methode and methode in self.reponses:
             val = self.reponses[methode]
             if isinstance(val, dict) and "error" in val:
@@ -61,8 +61,8 @@ class FaussePage:
         return self._ok(None)
 
     @staticmethod
-    def _groupes_demandes(methode: object, params: object) -> list[dict] | None:
-        """Répond au catalogue des GROUPES avec la vraie table.
+    def _catalogue_demande(methode: object, params: object) -> list[dict] | None:
+        """Répond aux catalogues GROUPES et MATIÈRES avec les vraies tables.
 
         Sans ça, `udlResources.load` retombait sur la réponse générique (la
         liste des évènements enregistrés), `_trouver_groupe` ne trouvait
@@ -77,14 +77,19 @@ class FaussePage:
         """
         if methode != "udlResources.load" or not isinstance(params, list) or len(params) < 2:
             return None
-        if params[0] != TYPE_GROUPES:
-            return None
-        from cal_iut.celcat.ecriture import _groupes_connus
+        from cal_iut.celcat.ecriture import _groupes_connus, _matieres_connues
 
-        par_id = {v: k for k, v in _groupes_connus().items()}
+        if params[0] == TYPE_GROUPES:
+            par_id = {v: k for k, v in _groupes_connus().items()}
+            cle, nomme = "group_id", "name"
+        elif params[0] == TYPE_MATIERES:
+            par_id = {v: k for k, v in _matieres_connues().items()}
+            cle, nomme = "module_id", "unique_name"
+        else:
+            return None
         demandes = (params[1] or {}).get("recordIDs") or []
         return [
-            {"group_id": int(i), "id": int(i), "name": par_id[int(i)]}
+            {cle: int(i), "id": int(i), nomme: par_id[int(i)]}
             for i in demandes
             if int(i) in par_id
         ]
