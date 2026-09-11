@@ -354,6 +354,35 @@ describe("AdminCelcatView", () => {
     );
   });
 
+  // Sélecteur de la comparaison : VALEUR = indice du solveur, jamais la
+  // position dans `weekRows`. Cette liste contient les semaines de vacances
+  // (bloquées, sans indice) : envoyer la position décalait la comparaison d'un
+  // cran après la Toussaint, de trois après Noël (payload de prod, 10/09/2026).
+  it("should send the solver week index, not the row position, after a holiday week", async () => {
+    const weekRows = [
+      { monday: "2026-10-19", label: "Semaine 9 (19–23 oct. 2026)", blocked: false, weekIndex: 7 },
+      { monday: "2026-10-26", label: "Semaine 10 (26–30 oct. 2026)", blocked: true, weekIndex: null },
+      { monday: "2026-11-02", label: "Semaine 11 (2–6 nov. 2026)", blocked: false, weekIndex: 8 },
+    ];
+    const mock = stubFetch();
+    const base = mock.getMockImplementation()!;
+    mock.mockImplementation((url: string, init?: RequestInit) =>
+      String(url).includes("/app-state") ? jsonOk({ weekRows }) : base(url, init),
+    );
+    render(<AdminCelcatView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /contenu celcat/i }));
+    await screen.findByRole("option", { name: /Semaine 11/ });
+    // Une semaine où l'IUT est fermé n'a rien à comparer.
+    expect(screen.queryByRole("option", { name: /Semaine 10 \(26/ })).toBeNull();
+
+    fireEvent.change(screen.getByRole("combobox", { name: /semaine/i }), { target: { value: "8" } });
+
+    await waitFor(() =>
+      expect(urlsDuMock(mock).some((u) => u.includes("/celcat/comparaison?semaine=8"))).toBe(true),
+    );
+  });
+
   it("should disable a past week and a launched week", async () => {
     stubFetch({
       etat: { ...ETAT, semaines_passees: [1], semaines_lancees: [3], semaines_validees: [3] },
