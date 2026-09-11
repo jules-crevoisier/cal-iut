@@ -31,6 +31,25 @@ import {
 
 const SEMAINES = Array.from({ length: 30 }, (_, i) => i + 1);
 
+/**
+ * Les semaines comparables, VALEUR = indice du solveur.
+ *
+ * `weekRows` est la séquence CONTINUE des semaines du département, vacances
+ * comprises (4 lignes bloquées en 2026-2027 : Toussaint et Noël). Le sélecteur
+ * envoyait la POSITION dans cette liste comme indice de semaine : juste jusqu'à
+ * la Toussaint, puis décalé d'un cran (« Semaine 11 (2–6 nov.) » comparait le
+ * 9 novembre), et de trois après Noël. Constaté sur le payload de production
+ * le 10/09/2026. Les lignes bloquées n'ont pas d'indice : elles sortent de la
+ * liste — il n'y a rien à comparer une semaine où l'IUT est fermé.
+ */
+function semainesDuSolveur(
+  rows: { label: string; weekIndex: number | null }[],
+): { indice: number; libelle: string }[] {
+  return rows
+    .filter((w): w is { label: string; weekIndex: number } => w.weekIndex !== null)
+    .map((w) => ({ indice: w.weekIndex, libelle: w.label }));
+}
+
 function classesSemaine(
   n: number,
   draft: number[],
@@ -144,7 +163,7 @@ export function AdminCelcatView() {
   // que l'indice interne — `weekRows[0]` s'appelle « Semaine 2 ». Deux
   // numérotations pour la même chose, c'est la garantie de comparer la
   // mauvaise semaine sans s'en apercevoir (constaté le 08/09/2026).
-  const [libellesSemaines, setLibellesSemaines] = useState<string[]>([]);
+  const [libellesSemaines, setLibellesSemaines] = useState<{ indice: number; libelle: string }[]>([]);
   const [onglet, setOnglet] = useState<"pilotage" | "activite" | "celcat">("pilotage");
   const [messageResync, setMessageResync] = useState<string | null>(null);
 
@@ -160,7 +179,7 @@ export function AdminCelcatView() {
       ]);
       // Sans bloquer l'écran si le planning n'est pas résolu.
       fetchAppState()
-        .then((p) => setLibellesSemaines((p.weekRows ?? []).map((w) => w.label)))
+        .then((p) => setLibellesSemaines(semainesDuSolveur(p.weekRows ?? [])))
         .catch(() => setLibellesSemaines([]));
       setEtat(e);
       setSemaines(e.semaines_validees);
@@ -558,13 +577,14 @@ export function AdminCelcatView() {
             value={semaineComparee}
             onChange={(e) => setSemaineComparee(Number(e.target.value))}
           >
-            {(libellesSemaines.length ? libellesSemaines : SEMAINES.map((n) => `Semaine ${n}`)).map(
-              (libelle, i) => (
-                <option key={libelle} value={i}>
-                  {libelle}
-                </option>
-              ),
-            )}
+            {(libellesSemaines.length
+              ? libellesSemaines
+              : SEMAINES.map((n) => ({ indice: n - 1, libelle: `Semaine ${n}` }))
+            ).map(({ indice, libelle }) => (
+              <option key={indice} value={indice}>
+                {libelle}
+              </option>
+            ))}
           </select>
         </label>
         <ComparaisonCelcat semaine={semaineComparee} />

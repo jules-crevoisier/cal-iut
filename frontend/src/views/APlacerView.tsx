@@ -26,7 +26,7 @@ import {
   type SeanceAPlacer,
   type SeancesAPlacer,
 } from "../api/client";
-import type { AppPayload } from "../types/app";
+import type { AppPayload, WeekRow } from "../types/app";
 import { ParkedCard } from "../features/park-week-move/ParkedCard";
 import { hasParked, type ParkUiState } from "../features/park-week-move/parkWeekMove";
 import { placerAvecConfirmation } from "../utils/placement";
@@ -37,6 +37,37 @@ const HORAIRES = ["08h00", "09h30", "11h00", "14h00", "15h30", "17h00"];
 // Vue Semaine (`MAX_WEEKS`, App.tsx) ; l'horizon RÉEL vient toujours du
 // serveur (`week_status`), qui refusera une semaine hors calendrier.
 const MAX_WEEKS = 24;
+
+/**
+ * Le libellé de LA GRILLE pour un indice de semaine du solveur.
+ *
+ * Deux numérotations coexistent, et cet écran mélangeait les deux. Le solveur
+ * compte les semaines d'ENSEIGNEMENT (`teaching_mondays`, vacances exclues) :
+ * l'indice 15 est le lundi 4 janvier 2027. La grille, elle, affiche les
+ * semaines du DÉPARTEMENT, vacances comprises : ce même indice 15 s'y appelle
+ * « Semaine 20 (4–8 janv. 2027) ». Cet écran affichait `indice + 1`.
+ *
+ * Signalé le 10/09/2026 : « j'ai une séance à valider en semaine 17 mais je ne
+ * la vois pas ». Elle était à l'indice 16 — « Semaine 21 (11–15 janv.) » dans
+ * la grille — et on la cherchait dans la « Semaine 17 (14–18 déc.) ». Et le
+ * « S18 » du sélecteur manuel, lu comme la « Semaine 18 » de la grille, faisait
+ * croire à une semaine de Noël, IUT fermé ; c'était le 18 janvier.
+ *
+ * Le libellé porte les DATES : il ne peut plus être confondu.
+ */
+function libelleSemaine(weekRows: WeekRow[] | undefined, indice: number): string {
+  const ligne = weekRows?.find((w) => w.weekIndex === indice);
+  return ligne?.label ?? `semaine ${indice + 1}`;
+}
+
+/** Les semaines où l'on peut poser une séance, sous leur libellé de grille.
+ *  Les semaines de vacances (`weekIndex === null`) n'y figurent pas : elles
+ *  n'ont pas d'indice solveur, rien ne peut y être posé. */
+function semainesChoisissables(weekRows: WeekRow[] | undefined): { indice: number; libelle: string }[] {
+  const ouvertes = (weekRows ?? []).filter((w): w is WeekRow & { weekIndex: number } => w.weekIndex !== null);
+  if (ouvertes.length) return ouvertes.map((w) => ({ indice: w.weekIndex, libelle: w.label }));
+  return Array.from({ length: MAX_WEEKS }, (_, w) => ({ indice: w, libelle: `semaine ${w + 1}` }));
+}
 
 function dateLisible(iso: string): string {
   if (!iso) return "";
@@ -273,6 +304,7 @@ export function APlacerView({
               }}
               onChoisirSurPromo={onChoisirSurPromo ?? (() => undefined)}
               payloadDisponible={Boolean(payload) && Boolean(onChoisirSurPromo)}
+              weekRows={payload?.weekRows}
             />
           ))}
         </div>
@@ -289,6 +321,7 @@ function CarteSeance({
   onRetiree,
   onChoisirSurPromo,
   payloadDisponible,
+  weekRows,
 }: {
   seance: SeanceAPlacer;
   version: number;
@@ -297,6 +330,8 @@ function CarteSeance({
   onRetiree: () => void;
   onChoisirSurPromo: (seance: SeanceAPlacer) => void;
   payloadDisponible: boolean;
+  /** Libellés de la grille — cf. `libelleSemaine`. */
+  weekRows?: WeekRow[];
 }) {
   const [ouverte, setOuverte] = useState(false);
   const [creneaux, setCreneaux] = useState<CreneauLibre[] | null>(null);
@@ -425,7 +460,7 @@ function CarteSeance({
       {ouverte && seance.placee_provisoirement && (
         <div className="aplacer-corps" id={panneauId}>
           <p className="muted small">
-            Posée en semaine {(seance.semaine_actuelle ?? 0) + 1} — {JOURS[seance.jour_actuel ?? 0]}{" "}
+            Posée en {libelleSemaine(weekRows, seance.semaine_actuelle ?? 0)} — {JOURS[seance.jour_actuel ?? 0]}{" "}
             {HORAIRES[seance.slot_actuel ?? 0]}, en forçant l'ordre pédagogique (une séance voisine du même cours
             devait normalement être avant/après). Vérifiez que ça reste pertinent avant de valider.
           </p>
@@ -516,10 +551,10 @@ function CarteSeance({
                 <label>
                   Semaine
                   <select value={semaineManuelle} onChange={(e) => setSemaineManuelle(Number(e.target.value))}>
-                    {Array.from({ length: MAX_WEEKS }, (_, w) => (
-                      <option key={w} value={w}>
-                        S{w + 1}
-                        {seance.semaines_possibles.includes(w) ? " · idéale" : ""}
+                    {semainesChoisissables(weekRows).map(({ indice, libelle }) => (
+                      <option key={indice} value={indice}>
+                        {libelle}
+                        {seance.semaines_possibles.includes(indice) ? " · idéale" : ""}
                       </option>
                     ))}
                   </select>
