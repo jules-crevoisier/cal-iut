@@ -3237,10 +3237,12 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     d'appliquer une règle implicite qui mélangerait les semaines en silence.
     """
     from cal_iut.celcat.comparaison import comparer
+    from cal_iut.celcat.etat import charger as charger_celcat
     from cal_iut.celcat.instantane import lire
     from cal_iut.celcat.lecture import indice_depuis_lundi
     from cal_iut.celcat.mapping import libelle_groupe_celcat, load_celcat_config
     from cal_iut.celcat.nuit import PREMIERE_SEMAINE_CELCAT
+    from cal_iut.celcat.planification import journal_event_ids
 
     state = get_state()
     releve = lire()
@@ -3303,6 +3305,12 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
             salles_celcat=cfg.salles,
             codes_celcat=set(cfg.modules),
             types_seance=types_seance,
+            # Ce que NOUS avons ecrit, et ou. Sans cette table, deux seances
+            # de meme matiere, meme groupe et meme jour peuvent echanger leur
+            # evenement d'un releve a l'autre — et l'ecran montrerait alors
+            # un ecart different a chaque rafraichissement, sur des donnees
+            # pourtant inchangees.
+            journal=journal_event_ids(charger_celcat()),
         )
         if releve.releve_le is not None
         else []

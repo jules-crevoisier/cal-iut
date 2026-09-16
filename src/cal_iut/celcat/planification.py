@@ -107,11 +107,40 @@ def contexte(state: Any) -> ContexteComparaison:
     )
 
 
+def journal_event_ids(doc: Any) -> dict[str, int]:
+    """La table `session_id -> event_id` tenue par `celcat/sync.py`.
+
+    Lue ici plutot que dans `comparaison.py`, qui doit rester une fonction
+    des seules donnees qu'on lui passe. Les valeurs y sont des CHAINES
+    (`marquer_saisi` les ecrit ainsi) : les convertir au bord evite que
+    chaque appelant refasse la meme conversion, et qu'un seul l'oublie.
+    """
+    brut = doc.get("journal") if isinstance(doc, dict) else None
+    if not isinstance(brut, dict):
+        return {}
+    table: dict[str, int] = {}
+    for session_id, ligne in brut.items():
+        if not isinstance(ligne, dict):
+            continue
+        try:
+            table[str(session_id)] = int(ligne["event_id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return table
+
+
 def lignes(
     state: Any, *, semaine: int, semaine_celcat: int, evenements: list[dict],
     ctx: ContexteComparaison | None = None,
+    journal: dict[str, int] | None = None,
 ) -> list[dict]:
-    """Le verdict séance par séance pour une semaine."""
+    """Le verdict séance par séance pour une semaine.
+
+    `journal` fixe l'identite des seances que nous avons deja ecrites, et
+    rend l'appariement stable d'un releve a l'autre. Facultatif : sans lui,
+    la comparaison retombe sur la ressemblance seule — c'est ce que faisait
+    tout le monde avant le 16/09/2026.
+    """
     c = ctx or contexte(state)
     return comparer(
         placements=list(state.timetable),
@@ -122,6 +151,7 @@ def lignes(
         salles_celcat=c.salles_celcat,
         codes_celcat=c.codes_celcat,
         types_seance=c.types_seance,
+        journal=journal,
     )
 
 

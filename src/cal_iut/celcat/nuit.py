@@ -36,6 +36,7 @@ from cal_iut.celcat.modification import ElementModification, modifier_manquants
 from cal_iut.celcat.navigateur import BASE_ENTRAINEMENT
 from cal_iut.celcat.ops import correspond_live
 from cal_iut.celcat.planification import contexte as contexte_comparaison
+from cal_iut.celcat.planification import journal_event_ids
 from cal_iut.celcat.planification import jobs_depuis_lignes
 from cal_iut.celcat.planification import lignes as lignes_comparaison
 from cal_iut.celcat.rpc import masquer_semaine
@@ -1053,6 +1054,7 @@ def executer_job_nuit(
                         semaine_celcat=indice,
                         evenements=releve.evenements,
                         ctx=ctx,
+                        journal=journal_event_ids(doc),
                     ),
                     semaine=semaine,
                     group_id_pour_nom=_group_id_celcat_depuis_nom,
