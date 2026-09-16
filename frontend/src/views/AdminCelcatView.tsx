@@ -8,6 +8,7 @@ import { ComparaisonCelcat } from "../components/ComparaisonCelcat";
 import { CopyButton } from "../components/CopyButton";
 import { EtatFileCelcat } from "../components/EtatFileCelcat";
 import { confirmAsync } from "../utils/confirmDialog";
+import { indexSemaineCourante } from "../utils/semaineCourante";
 
 import {
   ajouterExtraCelcat,
@@ -146,13 +147,19 @@ export function AdminCelcatView() {
   const [enCours, setEnCours] = useState(false);
   const [instantane, setInstantane] = useState<CelcatInstantane | null>(null);
   const [messageReleve, setMessageReleve] = useState<string | null>(null);
-  // Semaine comparée. Par défaut la première validée : c'est celle qui
-  // compte pour la synchro, pas forcément la semaine courante.
-  // Indice INTERNE (0-based), comme partout ailleurs : l'affichage montre
-  // `indice + 1`. Le sélecteur envoyait l'indice affiché, donc comparait la
-  // semaine suivante — repéré par Jules le 08/09/2026 (« semaine 1 égale
-  // semaine 2 dans vue promo non ? »).
-  const [semaineComparee, setSemaineComparee] = useState(0);
+  // Semaine comparée — indice INTERNE (0-based), comme partout ailleurs.
+  // Le sélecteur envoyait l'indice affiché, donc comparait la semaine
+  // suivante (repéré par Jules le 08/09/2026, « semaine 1 égale semaine 2
+  // dans vue promo non ? »).
+  //
+  // Le défaut valait `0`, c'est-à-dire la PREMIÈRE SEMAINE DE L'ANNÉE, alors
+  // que le commentaire d'origine annonçait « la première validée ». On
+  // arrivait donc sur une semaine passée depuis longtemps, et il fallait la
+  // changer à chaque visite pour voir celle qui compte. `indexSemaineCourante`
+  // rend ce service ailleurs depuis le 08/09/2026 (`App.tsx`, `PromoView`) ;
+  // elle n'était simplement pas appelée ici. `null` tant que le calendrier
+  // n'est pas chargé : mieux vaut ne pas comparer que comparer la mauvaise.
+  const [semaineComparee, setSemaineComparee] = useState<number | null>(null);
   // Trois onglets plutôt qu'une page de six panneaux empilés (retour
   // utilisateur 08/09/2026 : « là c'est illisible, trop de choses »). Le
   // découpage suit l'usage, pas la technique : on VIENT pour piloter la
@@ -179,7 +186,21 @@ export function AdminCelcatView() {
       ]);
       // Sans bloquer l'écran si le planning n'est pas résolu.
       fetchAppState()
-        .then((p) => setLibellesSemaines(semainesDuSolveur(p.weekRows ?? [])))
+        .then((p) => {
+          const rows = p.weekRows ?? [];
+          setLibellesSemaines(semainesDuSolveur(rows));
+          // On ouvre sur la semaine EN COURS, et on passe par le `weekIndex`
+          // de la ligne plutôt que par sa position : les semaines bloquées
+          // (vacances) creusent des trous dans `weekRows`, et compter les
+          // lignes donnerait la mauvaise dès la Toussaint passée.
+          setSemaineComparee((actuelle) => {
+            if (actuelle !== null) return actuelle;
+            const courante = rows[indexSemaineCourante(rows)];
+            if (courante?.weekIndex != null) return courante.weekIndex;
+            const premiere = semainesDuSolveur(rows)[0];
+            return premiere ? premiere.indice : 0;
+          });
+        })
         .catch(() => setLibellesSemaines([]));
       setEtat(e);
       setSemaines(e.semaines_validees);
@@ -574,7 +595,7 @@ export function AdminCelcatView() {
         <label>
           Semaine{" "}
           <select
-            value={semaineComparee}
+            value={semaineComparee ?? ""}
             onChange={(e) => setSemaineComparee(Number(e.target.value))}
           >
             {(libellesSemaines.length
@@ -587,7 +608,11 @@ export function AdminCelcatView() {
             ))}
           </select>
         </label>
-        <ComparaisonCelcat semaine={semaineComparee} />
+        {semaineComparee === null ? (
+          <p className="muted">Chargement du calendrier…</p>
+        ) : (
+          <ComparaisonCelcat semaine={semaineComparee} />
+        )}
       </div>
 
       </>

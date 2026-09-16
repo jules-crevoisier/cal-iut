@@ -738,6 +738,25 @@ export interface CelcatComparaison {
   lignes: LigneComparaison[];
 }
 
+/** Un écart que le serveur n'a PAS su traduire en correction, et pourquoi.
+ *
+ * Ces cas tombaient dans un `continue` muet : le tableau annonçait neuf
+ * écarts, le message cinq corrections, et rien n'expliquait les quatre
+ * autres. Un compteur qui ne tombe pas juste, sans explication, apprend à
+ * ne plus faire confiance à l'écran. */
+export interface EcartAbandonne {
+  statut: string;
+  session_id: string;
+  course_code: string;
+  event_id: number | null;
+  groupe: string | null;
+  /** Repère machine : `event_id_absent`, `groupe_inconnu`,
+   *  `suppression_epargnee`. */
+  raison: string;
+  /** La même chose en français, prête à afficher. */
+  explication: string;
+}
+
 export interface CelcatCorrection {
   modifications: number;
   creations: number;
@@ -746,6 +765,13 @@ export interface CelcatCorrection {
   hors_celcat: number;
   /** Suppressions volontairement laissées de côté (`supprimer: false`). */
   suppressions_ignorees: number;
+  /** Corrections qui attendaient DÉJÀ d'être poussées, donc non rajoutées.
+   *
+   *  C'est la réponse à « j'ai cliqué trois fois et rien ne bouge » : le
+   *  serveur déduplique, et l'écran annonçait quand même le compte entier à
+   *  chaque clic. Optionnel : un serveur plus ancien ne le renvoie pas. */
+  deja_en_file?: number;
+  abandonnes?: EcartAbandonne[];
   message: string;
 }
 

@@ -28,6 +28,7 @@ import {
   corrigerEcartsCelcat,
   fetchCelcatComparaison,
   type CelcatComparaison,
+  type CelcatCorrection,
   type LigneComparaison,
 } from "../api/client";
 import { confirmAsync } from "../utils/confirmDialog";
@@ -88,11 +89,66 @@ function texteLignes(lignes: LigneComparaison[]): string {
     .join("\n");
 }
 
+/** Ce que « Corriger » a réellement fait — pas ce qu'il voulait faire.
+ *
+ * Trois choses que le message seul ne disait pas, et dont l'absence poussait
+ * à recliquer (retour utilisateur du 16/09/2026) :
+ *
+ *   - combien de corrections ATTENDAIENT DÉJÀ. Le serveur déduplique, donc
+ *     recliquer n'ajoute rien — mais l'écran annonçait le compte entier à
+ *     chaque fois, ce qui se lisait « ça n'est pas parti » ;
+ *   - ce qui n'a PAS pu être traduit, avec sa raison. Neuf écarts au tableau
+ *     et cinq corrections au message, sans explication, apprennent à ne plus
+ *     croire les compteurs ;
+ *   - que rien n'est encore ÉCRIT dans Celcat. Le bouton met en file ; c'est
+ *     le worker qui écrit, et l'état de la file est juste en dessous.
+ */
+function CompteRenduCorrection({ correction }: { correction: CelcatCorrection }) {
+  const deja = correction.deja_en_file ?? 0;
+  const abandonnes = correction.abandonnes ?? [];
+  // Un même motif touche souvent plusieurs séances (un groupe absent de la
+  // table en bloque toutes les siennes). On groupe : « 12 fois la même
+  // cause » et « 12 causes distinctes » n'appellent pas le même geste.
+  const parExplication = new Map<string, string[]>();
+  for (const a of abandonnes) {
+    const cle = a.explication || a.raison;
+    parExplication.set(cle, [...(parExplication.get(cle) ?? []), a.session_id || `#${a.event_id}`]);
+  }
+
+  return (
+    <div className="celcat-compte-rendu" data-testid="compte-rendu-correction">
+      <p className={correction.total > 0 ? "muted" : "bad"}>{correction.message}</p>
+      {deja > 0 ? (
+        <p className="muted" data-testid="correction-deja-en-file">
+          {deja} correction(s) attendaient déjà d’être poussées — recliquer n’y change rien,
+          elles partiront au prochain passage.
+        </p>
+      ) : null}
+      {parExplication.size > 0 ? (
+        <details data-testid="correction-abandonnes">
+          <summary>
+            {abandonnes.length} écart(s) non traduit(s) en correction ({parExplication.size} cause
+            {parExplication.size > 1 ? "s" : ""})
+          </summary>
+          <ul>
+            {[...parExplication.entries()].map(([explication, seances]) => (
+              <li key={explication}>
+                <strong>{seances.length}×</strong> {explication}
+                <div className="muted">{seances.join(", ")}</div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 export function ComparaisonCelcat({ semaine }: { semaine: number }) {
   const [donnees, setDonnees] = useState<CelcatComparaison | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [voirIdentiques, setVoirIdentiques] = useState(false);
-  const [correction, setCorrection] = useState<string | null>(null);
+  const [correction, setCorrection] = useState<CelcatCorrection | null>(null);
   const [enCours, setEnCours] = useState(false);
 
   const charger = useCallback(async () => {
@@ -107,6 +163,14 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
   useEffect(() => {
     void charger();
   }, [charger]);
+
+  // Le compte rendu appartient à LA SEMAINE qui l'a produit. Sans cette
+  // remise à zéro, « 12 corrections mises en file » restait affiché sous la
+  // semaine suivante, qui n'avait rien reçu du tout.
+  useEffect(() => {
+    setCorrection(null);
+    setErreur(null);
+  }, [semaine]);
 
   if (erreur) return <p className="alerte" role="alert">{erreur}</p>;
   if (!donnees) return <p className="muted">Chargement…</p>;
@@ -140,8 +204,11 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
       // justement ce qui rend la confirmation des suppressions inutile.
       setEnCours(true);
       try {
-        setCorrection((await corrigerEcartsCelcat(semaine, { supprimer: false })).message);
+        setCorrection(await corrigerEcartsCelcat(semaine, { supprimer: false }));
         setErreur(null);
+        // Relire APRÈS avoir agi. Sans ça le tableau restait figé sur l'état
+        // d'avant le clic : rien ne bougeait à l'écran, et l'on recliquait.
+        await charger();
       } catch (e) {
         setErreur(e instanceof Error ? e.message : "Correction impossible");
       } finally {
@@ -166,9 +233,9 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
     if (!ok) return;
     setEnCours(true);
     try {
-      const r = await corrigerEcartsCelcat(semaine);
-      setCorrection(r.message);
+      setCorrection(await corrigerEcartsCelcat(semaine));
       setErreur(null);
+      await charger();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Correction impossible");
     } finally {
@@ -198,8 +265,11 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
               bouton n'a jamais agi que sur la semaine affichée, mais rien ne
               le disait (signalé le 08/09/2026). Le libellé porte donc
               maintenant sa portée. */}
+          {/* Le libellé change pendant l'attente : griser un bouton dont le
+              texte ne bouge pas ne dit pas si quelque chose se passe, et un
+              écran qui ne répond pas est un écran sur lequel on reclique. */}
           <button type="button" disabled={enCours} onClick={() => void corrigerTout()}>
-            Corriger les écarts de cette semaine
+            {enCours ? "Envoi des corrections…" : "Corriger les écarts de cette semaine"}
           </button>
           {/* Le mode sûr quand quelqu'un travaille dans Celcat en même temps :
               un écart mal poussé se re-corrige, une suppression non. Le
@@ -212,10 +282,10 @@ export function ComparaisonCelcat({ semaine }: { semaine: number }) {
               data-testid="corriger-sans-supprimer"
               onClick={() => void corrigerTout(false)}
             >
-              Corriger sans supprimer
+              {enCours ? "Envoi des corrections…" : "Corriger sans supprimer"}
             </button>
           ) : null}
-          {correction ? <p className="muted">{correction}</p> : null}
+          {correction ? <CompteRenduCorrection correction={correction} /> : null}
           {/* Ce qui attend et ce que le worker en a fait : sans ça, le
               bouton annonçait un envoi et plus rien ne suivait. */}
           <EtatFileCelcat />
