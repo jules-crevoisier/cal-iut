@@ -32,6 +32,10 @@ data/state/custom_sessions.json
 data/state/session_overrides.json
 data/state/mcp_journal.json
 data/state/celcat_sync.json
+# La file d'attente Celcat : un fichier par job depuis le 16/09/2026,
+# plus le tableau historique mis de cote par la migration.
+data/state/celcat_file/
+data/state/*.migre
 data/releves/celcat-rpc-en-tetes.json
 # Destinataires des notifications : donnee personnelle, et propre a
 # chaque deploiement (cf. api/notifications.py).
