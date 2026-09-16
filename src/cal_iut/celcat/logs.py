@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from cal_iut.celcat.fichiers import ecrire_json
+
 
 def _path() -> Path:
     return Path(__file__).resolve().parents[3] / "data" / "state" / "celcat_logs.json"
@@ -28,7 +30,7 @@ def _lire() -> list[dict[str, Any]]:
 def _ecrire(items: list[dict[str, Any]]) -> None:
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    ecrire_json(path, items)
 
 
 # Plafond du journal. Un fichier qui ne cesse de grossir finit par coûter

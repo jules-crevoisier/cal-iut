@@ -40,6 +40,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from cal_iut.celcat.fichiers import ecrire_json
+
 # Au-delà, le relevé est signalé périmé et un nouveau est dû.
 FRAICHEUR_SECONDES = 2 * 3600
 
@@ -89,20 +91,18 @@ def enregistrer(
 ) -> None:
     """Dépose un relevé. `releve_le` n'est explicite que pour les tests :
     en usage réel c'est l'instant de l'écriture."""
-    chemin = _path()
-    chemin.parent.mkdir(parents=True, exist_ok=True)
-    chemin.write_text(
-        json.dumps(
-            {
-                "releve_le": releve_le or datetime.now(timezone.utc).isoformat(),
-                "groupes": list(groupes),
-                "evenements": list(evenements),
-                "erreur": erreur,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+    # Atomique : le relevé est écrit par le sidecar et lu par l'API, deux
+    # conteneurs qui partagent le volume. Une lecture à mi-écriture rend un
+    # `Releve` VIDE, que tout l'aval lit comme « Celcat ne contient rien »
+    # — donc tout le planning à créer.
+    ecrire_json(
+        _path(),
+        {
+            "releve_le": releve_le or datetime.now(timezone.utc).isoformat(),
+            "groupes": list(groupes),
+            "evenements": list(evenements),
+            "erreur": erreur,
+        },
     )
 
 
@@ -142,11 +142,8 @@ def demander() -> None:
     Idempotent : cliquer trois fois ne provoque pas trois relevés — chacun
     prendrait le VPN partagé pour rien.
     """
-    chemin = _path_demande()
-    chemin.parent.mkdir(parents=True, exist_ok=True)
-    chemin.write_text(
-        json.dumps({"demande_le": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False),
-        encoding="utf-8",
+    ecrire_json(
+        _path_demande(), {"demande_le": datetime.now(timezone.utc).isoformat()}, indent=None
     )
 
 

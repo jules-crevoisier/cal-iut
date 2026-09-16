@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from cal_iut.celcat.fichiers import ecrire_json
+
 
 def _path() -> Path:
     return Path(__file__).resolve().parents[3] / "data" / "state" / "celcat_drainage.json"
@@ -61,24 +63,20 @@ def enregistrer(
 ) -> None:
     """Dépose le compte rendu d'un passage. Ne lève jamais : un worker ne
     doit pas échouer parce qu'il n'a pas pu écrire sa trace."""
-    chemin = _path()
     try:
-        chemin.parent.mkdir(parents=True, exist_ok=True)
-        chemin.write_text(
-            json.dumps(
-                {
-                    "passe_le": passe_le or datetime.now(UTC).isoformat(),
-                    "en_attente": en_attente,
-                    "reussis": reussis,
-                    "echecs": echecs,
-                    "ignores": ignores,
-                    "differes": differes,
-                    "resume": resume,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
+        # Atomique : `dernier()` lit ce fichier depuis l'AUTRE conteneur,
+        # et documente déjà le symptôme d'une lecture à mi-écriture.
+        ecrire_json(
+            _path(),
+            {
+                "passe_le": passe_le or datetime.now(UTC).isoformat(),
+                "en_attente": en_attente,
+                "reussis": reussis,
+                "echecs": echecs,
+                "ignores": ignores,
+                "differes": differes,
+                "resume": resume,
+            },
         )
     except OSError:
         return
