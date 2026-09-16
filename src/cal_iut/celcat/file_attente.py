@@ -159,7 +159,7 @@ def _poser(job: dict[str, Any]) -> bool:
     return True
 
 
-def enfiler(job: dict[str, Any]) -> None:
+def enfiler(job: dict[str, Any]) -> bool:
     """Ajoute un job, SANS jamais en empiler deux identiques.
 
     Deux chemins produisent le même job — le balayage `executer_job_nuit` et
@@ -175,9 +175,17 @@ def enfiler(job: dict[str, Any]) -> None:
     même job au même instant produisent toujours un seul fichier. L'ancienne
     version comparait une liste lue avant d'écrire : deux enfilages
     simultanés passaient tous les deux le test.
+
+    REND `True` SI LE JOB A ÉTÉ AJOUTÉ, `False` s'il était déjà là. La
+    déduplication était muette, et l'appelant comptait donc ses intentions
+    plutôt que ses effets : recliquer sur « Corriger » annonçait « 12
+    corrections mises en file » quand aucun job n'avait bougé. Un compte
+    rendu faux au moment précis où l'on cherche à vérifier est exactement ce
+    qui poussait à recliquer, à des heures différentes (retour utilisateur du
+    16/09/2026).
     """
     _migrer()
-    _poser(job)
+    return _poser(job)
 
 
 def lister() -> list[dict[str, Any]]:

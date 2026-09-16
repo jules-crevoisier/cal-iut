@@ -757,6 +757,16 @@ class CelcatCorrigerResponse(BaseModel):
     # suppression à faire » et « des suppressions épargnées » se lisent pareil
     # si on ne le dit pas.
     suppressions_ignorees: int = 0
+    # Ce qui etait DEJA en file, donc non rajoute. `enfiler` dedoublonne en
+    # silence : recliquer sur « Corriger » reaffichait « 12 corrections mises
+    # en file » alors que zero job avait ete ajoute. C est precisement ce
+    # compte rendu faux qui poussait a recliquer, a des heures differentes,
+    # en croyant que rien n etait parti (retour utilisateur, 16/09/2026).
+    deja_en_file: int = 0
+    # Les ecarts qu on n a PAS su traduire en job, avec leur raison. Ils
+    # tombaient jusqu ici dans un `continue` muet : l ecran annoncait neuf
+    # ecarts et cinq corrections, et rien n expliquait les quatre autres.
+    abandonnes: list[dict] = Field(default_factory=list)
     # Le compte rendu lisible. Il était CONSTRUIT par l'endpoint depuis
     # toujours, mais absent du schéma : Pydantic le supprimait donc à la
     # sérialisation, et l'écran affichait `undefined` après chaque

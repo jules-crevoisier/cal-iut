@@ -2852,8 +2852,43 @@ def _celcat_etat_public() -> CelcatEtatResponse:
         dernier_job=dernier if isinstance(dernier, dict) else None,
         derniere_ecriture_celcat=derniere_ecriture,
         compteurs=compteurs,
-        worker_ok=True,
+        worker_ok=_worker_joignable(),
     )
+
+
+# Au-delà, on considère que le worker ne répond plus. Il passe toutes les 30
+# secondes et dépose sa trace à chaque tour ; dix minutes de silence ne sont
+# donc pas un ralentissement, c'est un arrêt. La marge couvre le recul
+# progressif, qui monte jusqu'à trente minutes en cas d'échec répété — d'où
+# un seuil nettement plus large que la cadence nominale.
+_SILENCE_WORKER_SECONDES = 45 * 60
+
+
+def _worker_joignable() -> bool:
+    """Le worker a-t-il donné signe de vie récemment ?
+
+    `worker_ok` valait `True` EN DUR : la pastille « Worker joignable. »
+    restait verte worker mort, c'est-à-dire précisément quand elle devait
+    alerter. Elle affirmait donc que tout allait bien à l'écran où l'on vient
+    vérifier pourquoi rien ne bouge.
+
+    Le seul signal réel est l'âge du dernier passage, que le sidecar dépose
+    dans le volume partagé. Une pause DÉLIBÉRÉE n'est pas une panne : le
+    worker à l'arrêt sur demande est joignable, il ne travaille simplement
+    pas — et l'écran le dit déjà par ailleurs.
+    """
+    from cal_iut.celcat.drainage import dernier as dernier_passage
+    from cal_iut.celcat.etat import worker_en_pause
+
+    if worker_en_pause():
+        return True
+    bilan = dernier_passage()
+    if bilan.passe_le is None or bilan.age_secondes is None:
+        # Jamais passé : ni joignable ni en panne. On ne crie pas au loup sur
+        # un déploiement qui vient de démarrer — l'écran affiche déjà « le
+        # worker n'est pas encore passé », qui est l'information juste.
+        return True
+    return bilan.age_secondes <= _SILENCE_WORKER_SECONDES
 
 
 def _semaines_celcat_completes() -> list[int]:
@@ -3345,9 +3380,7 @@ def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> Cel
     un doublon à côté de l'évènement existant.
     """
     from cal_iut.celcat.etat import charger as charger_celcat
-    from cal_iut.celcat.file_attente import enfiler
     from cal_iut.celcat.instantane import lire
-    from cal_iut.celcat.ops import _group_id_celcat
 
     # Sans relevé, toutes les séances paraissent absentes : « tout corriger »
     # créerait alors un doublon de tout le planning.
@@ -3361,15 +3394,31 @@ def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> Cel
     _exiger_releve_exploitable(lire())
     # Sans saisie armée, `ops` ignore tout : les jobs partiraient dans le
     # vide et l'écran annoncerait un succès qui n'a pas eu lieu.
-    if not charger_celcat().get("saisie_active"):
+    doc_celcat = charger_celcat()
+    if not doc_celcat.get("saisie_active"):
         raise HTTPException(
             409,
             "La saisie Celcat est désarmée : les corrections ne partiraient pas. "
             "Activez l’écriture, puis relancez.",
         )
+    # LE WORKER AUSSI DOIT TOURNER. Seul `saisie_active` était vérifié : le
+    # worker en pause, les jobs s'empilaient et le message promettait quand
+    # même une poussée « en moins d'une minute ». Rien ne partait, jamais, et
+    # l'écran affirmait le contraire — de quoi recliquer indéfiniment (retour
+    # utilisateur du 16/09/2026). La file, elle, n'est pas touchée : elle
+    # repartira telle quelle à la reprise.
+    if doc_celcat.get("worker_actif", True) is False:
+        raise HTTPException(
+            409,
+            "Le worker Celcat est en pause : les corrections attendraient sans "
+            "jamais partir. Relancez-le depuis les réglages, puis réessayez.",
+        )
 
-    compte, hors, epargnees = _enfiler_ecarts_semaine(semaine, supprimer=supprimer)
+    compte, hors, epargnees, deja, abandonnes = _enfiler_ecarts_semaine(
+        semaine, supprimer=supprimer
+    )
     total = sum(compte.values())
+    total_deja = sum(deja.values())
     # Ce qui a été ÉPARGNÉ se dit, sinon « aucune suppression à faire » et
     # « des suppressions volontairement laissées » se lisent pareil.
     reste = (
@@ -3377,15 +3426,33 @@ def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> Cel
         if epargnees
         else ""
     )
+    # Ce qui attendait DÉJÀ se dit aussi. C'est la réponse à « j'ai cliqué
+    # trois fois et rien ne bouge » : les corrections étaient parties du
+    # premier coup, et les reclics n'ajoutaient rien.
+    encore = (
+        f" {total_deja} attendai(en)t déjà d'être poussée(s)."
+        if total_deja
+        else ""
+    )
+    # Et ce qu'on n'a PAS su traduire, plutôt qu'un écart de compteurs
+    # inexpliqué entre le tableau et le message.
+    bloques = [a for a in abandonnes if a.get("raison") != "suppression_epargnee"]
+    impossible = (
+        f" {len(bloques)} écart(s) n'ont pas pu être traduits : "
+        + " ; ".join(dict.fromkeys(str(a.get("explication") or "") for a in bloques))
+        if bloques
+        else ""
+    )
     return CelcatCorrigerResponse(
         modifications=compte["update"], creations=compte["create"],
         suppressions=compte["delete"], total=total, hors_celcat=hors,
         suppressions_ignorees=epargnees,
+        deja_en_file=total_deja, abandonnes=abandonnes,
         message=(
             f"{total} correction(s) mises en file — le worker les pousse à son "
-            f"prochain passage (moins d’une minute).{reste}"
+            f"prochain passage (moins d’une minute).{encore}{reste}{impossible}"
             if total
-            else f"Rien à corriger sur cette semaine.{reste}"
+            else f"Rien de nouveau à mettre en file.{encore}{reste}{impossible}"
         ),
     )
 
@@ -3456,14 +3523,18 @@ def celcat_file_resynchroniser(
     compte = {"update": 0, "create": 0, "delete": 0}
     hors = 0
     epargnees = 0
+    deja_total = 0
+    abandonnes: list[dict] = []
     for semaine in demandees:
-        partiel, hors_semaine, sans_suppr = _enfiler_ecarts_semaine(
+        partiel, hors_semaine, sans_suppr, deja, perdus = _enfiler_ecarts_semaine(
             semaine, supprimer=supprimer
         )
         for cle, valeur in partiel.items():
             compte[cle] += valeur
         hors += hors_semaine
         epargnees += sans_suppr
+        deja_total += sum(deja.values())
+        abandonnes.extend(perdus)
 
     total = sum(compte.values())
     reste = f" {epargnees} suppression(s) laissée(s) de côté." if epargnees else ""
@@ -3476,6 +3547,8 @@ def celcat_file_resynchroniser(
         suppressions_ignorees=epargnees,
         total=total,
         hors_celcat=hors,
+        deja_en_file=deja_total,
+        abandonnes=abandonnes,
         message=(
             f"{retires} job(s) retiré(s), {total} reconstruit(s) depuis la comparaison "
             f"({compte['update']} modification(s), {compte['create']} création(s), "
@@ -3514,7 +3587,7 @@ def _exiger_releve_exploitable(releve: object) -> None:
 
 def _enfiler_ecarts_semaine(
     semaine: int, *, supprimer: bool = True
-) -> tuple[dict[str, int], int, int]:
+) -> tuple[dict[str, int], int, int, dict[str, int], list[dict]]:
     """Enfile ce qui DIVERGE réellement sur une semaine, et rien d'autre.
 
     La comparaison est la source unique : ce qui concorde n'engendre aucun
@@ -3537,53 +3610,46 @@ def _enfiler_ecarts_semaine(
     « en trop » de la semaine 1 portaient des `event_id` très récents, sur les
     matières mêmes qu'un collègue corrigeait à la main : les supprimer aurait
     défait son travail, sans retour possible.
+
+    LA TRADUCTION EST CELLE DE `planification.jobs_depuis_lignes`, et non plus
+    une copie écrite ici. Cette copie existait depuis l'origine, alors même
+    que la docstring de `planification.py` dit pourquoi ce module a été
+    créé : « la dupliquer aurait garanti qu'elle diverge : c'est déjà arrivé
+    le 08/09/2026 ». Le bouton et le worker pouvaient donc déjà ne pas voir le
+    même monde. Un seul chemin de décision, désormais.
+
+    REND AUSSI ce qui était DÉJÀ en file, et ce qui a été abandonné avec sa
+    raison. `enfiler` déduplique en silence : compter les intentions faisait
+    annoncer « 12 corrections mises en file » quand aucun job n'avait bougé —
+    et c'est ce compte rendu faux qui poussait à recliquer.
     """
     from cal_iut.celcat.file_attente import enfiler
+    from cal_iut.celcat.planification import jobs_depuis_lignes
 
     state = get_state()
     comparaison = celcat_comparaison(semaine)
     compte = {"update": 0, "create": 0, "delete": 0}
-    hors = 0
-    suppressions_ignorees = 0
+    deja = {"update": 0, "create": 0, "delete": 0}
+    abandonnes: list[dict] = []
+    hors = sum(1 for l in comparaison.lignes if l.get("statut") == "hors_celcat")
 
-    for ligne in comparaison.lignes:
-        statut = ligne.get("statut")
-        if statut in ("identique", "hors_celcat"):
-            hors += 1 if statut == "hors_celcat" else 0
+    for job in jobs_depuis_lignes(
+        comparaison.lignes,
+        semaine=semaine,
+        group_id_pour_nom=lambda nom: _groupe_id_depuis_nom(state, nom),
+        avec_suppressions=supprimer,
+        abandonnes=abandonnes,
+    ):
+        action = str(job.get("action") or "")
+        if action not in compte:
             continue
+        if enfiler(job):
+            compte[action] += 1
+        else:
+            deja[action] += 1
 
-        session_id = str(ligne.get("session_id") or "")
-        celcat = ligne.get("celcat") or {}
-
-        if statut == "ecart" and celcat.get("event_id"):
-            enfiler({
-                "action": "update", "session_id": session_id,
-                "event_id": int(celcat["event_id"]), "semaine": semaine,
-            })
-            compte["update"] += 1
-        elif statut == "absente_celcat":
-            enfiler({"action": "create", "session_id": session_id, "semaine": semaine})
-            compte["create"] += 1
-        elif statut == "en_trop_celcat" and celcat.get("event_id"):
-            if not supprimer:
-                # Comptées, jamais tues : « aucune suppression » et « des
-                # suppressions écartées » se lisent pareil à l'écran si on
-                # ne le dit pas.
-                suppressions_ignorees += 1
-                continue
-            # `group_id` est indispensable : la suppression localise
-            # l'évènement par son groupe, un job sans lui resterait en file
-            # sans jamais pouvoir être traité.
-            gid = _groupe_id_depuis_nom(state, str(celcat.get("groupe") or ""))
-            if gid is None:
-                continue
-            enfiler({
-                "action": "delete", "session_id": session_id or f"celcat-{celcat['event_id']}",
-                "event_id": int(celcat["event_id"]), "group_id": gid, "semaine": semaine,
-            })
-            compte["delete"] += 1
-
-    return compte, hors, suppressions_ignorees
+    epargnees = sum(1 for a in abandonnes if a.get("raison") == "suppression_epargnee")
+    return compte, hors, epargnees, deja, abandonnes
 
 
 def _groupe_id_depuis_nom(state: object, nom: str) -> int | None:

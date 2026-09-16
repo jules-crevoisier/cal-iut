@@ -156,7 +156,12 @@ def lignes(
 
 
 def jobs_depuis_lignes(
-    lignes_comparaison: list[dict], *, semaine: int, group_id_pour_nom: Any
+    lignes_comparaison: list[dict],
+    *,
+    semaine: int,
+    group_id_pour_nom: Any,
+    avec_suppressions: bool = True,
+    abandonnes: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Traduit des verdicts en jobs de file — et RIEN pour ce qui concorde.
 
@@ -170,8 +175,36 @@ def jobs_depuis_lignes(
     `group_id_pour_nom` est passé par l'appelant plutôt que lu ici : la table
     des identifiants de groupe vit dans `data/config/celcat_groupes.yaml`, et
     la résolution diffère selon qu'on est côté API ou côté worker.
+
+    `avec_suppressions=False` traduit les modifications et les créations sans
+    toucher aux « en trop ». Un écart et une absence sont auto-limitants : si
+    quelqu'un a déjà corrigé dans Celcat, la comparaison rend « identique » et
+    rien ne part. Une suppression, non — un évènement peut ressortir « en
+    trop » parce qu'il fait double emploi, ou parce que notre rapprochement
+    l'a raté, et les deux sont indiscernables.
+
+    `abandonnes` recueille ce qu'on n'a PAS su traduire, avec sa raison. Ces
+    cas tombaient dans un `continue` muet : l'écran annonçait neuf écarts et
+    cinq corrections, sans que rien n'explique les quatre autres. Les nommer
+    est le minimum — ils ne partiront jamais tant que personne ne les voit.
     """
     jobs: list[dict[str, Any]] = []
+    perdus = abandonnes if abandonnes is not None else []
+
+    def _abandonner(ligne: dict, raison: str, explication: str) -> None:
+        celcat = ligne.get("celcat") or {}
+        perdus.append(
+            {
+                "statut": str(ligne.get("statut") or ""),
+                "session_id": str(ligne.get("session_id") or ""),
+                "course_code": str(ligne.get("course_code") or ""),
+                "event_id": celcat.get("event_id"),
+                "groupe": celcat.get("groupe"),
+                "raison": raison,
+                "explication": explication,
+            }
+        )
+
     for ligne in lignes_comparaison:
         statut = ligne.get("statut")
         if statut in ("identique", "hors_celcat"):
@@ -179,19 +212,50 @@ def jobs_depuis_lignes(
         session_id = str(ligne.get("session_id") or "")
         celcat = ligne.get("celcat") or {}
 
-        if statut == "ecart" and celcat.get("event_id"):
+        if statut == "ecart":
+            if not celcat.get("event_id"):
+                # Un écart suppose un évènement en face ; sans identifiant on
+                # ne peut ni le modifier, ni le recréer sans risquer un double.
+                _abandonner(
+                    ligne,
+                    "event_id_absent",
+                    "l'évènement Celcat n'a pas d'identifiant : rien à modifier, "
+                    "et le créer poserait un doublon",
+                )
+                continue
             jobs.append({
                 "action": "update", "session_id": session_id,
                 "event_id": int(celcat["event_id"]), "semaine": semaine,
             })
         elif statut == "absente_celcat":
             jobs.append({"action": "create", "session_id": session_id, "semaine": semaine})
-        elif statut == "en_trop_celcat" and celcat.get("event_id"):
+        elif statut == "en_trop_celcat":
+            if not celcat.get("event_id"):
+                _abandonner(
+                    ligne,
+                    "event_id_absent",
+                    "l'évènement Celcat n'a pas d'identifiant : impossible à supprimer",
+                )
+                continue
+            if not avec_suppressions:
+                _abandonner(
+                    ligne,
+                    "suppression_epargnee",
+                    "suppression laissée de côté : une suppression ne se rattrape pas",
+                )
+                continue
             # `group_id` est indispensable : la suppression localise
             # l'évènement par son groupe, un job sans lui resterait en file
             # sans jamais pouvoir être traité.
             gid = group_id_pour_nom(str(celcat.get("groupe") or ""))
             if gid is None:
+                nom = str(celcat.get("groupe") or "?")
+                _abandonner(
+                    ligne,
+                    "groupe_inconnu",
+                    f"le groupe « {nom} » manque à data/config/celcat_groupes.yaml : "
+                    "la suppression ne pourrait pas être localisée",
+                )
                 continue
             jobs.append({
                 "action": "delete",
