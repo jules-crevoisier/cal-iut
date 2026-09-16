@@ -21,6 +21,7 @@ des jours sans que rien ne le signale.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
 
@@ -276,6 +277,148 @@ def _vue_celcat(ev: dict) -> dict:
     }
 
 
+def _rang_placement(placement: Any) -> tuple:
+    """Ordre stable des seances d'une semaine : jour, creneau, identifiant."""
+    return (
+        int(getattr(placement, "day", -1) or 0),
+        int(getattr(placement, "slot", -1) or 0),
+        str(getattr(placement, "session_id", "")),
+    )
+
+
+def _rang_evenement(ev: dict) -> tuple:
+    """Ordre stable des evenements Celcat.
+
+    `event_id` ferme le tri : deux evenements qui partagent jour, heure et
+    salle existent (un CM dedouble), et sans ce dernier critere leur ordre
+    relatif resterait celui du retour RPC.
+    """
+    try:
+        identifiant = int(ev.get("event_id") or 0)
+    except (TypeError, ValueError):
+        identifiant = 0
+    return (
+        _indice(ev.get("jour")),
+        str(ev.get("heure_debut") or ""),
+        str(ev.get("salle") or ""),
+        identifiant,
+    )
+
+
+def _apparier(
+    du_planning: list[Any],
+    candidats: list[dict],
+    apparies: set[int],
+    *,
+    groupes_celcat: dict[str, str],
+    salles_celcat: dict[str, str],
+    types_seance: dict[str, str],
+    journal: dict[str, int],
+) -> dict[int, int]:
+    """Qui va avec qui — rang de la seance -> rang de l'evenement.
+
+    DEUX PASSES, et l'ordre compte.
+
+    1. LE JOURNAL D'ABORD. `celcat/sync.py` retient l'`event_id` de ce que
+       nous avons ecrit : c'est l'identite de la seance la-bas, pas une
+       heuristique. Quand il designe un evenement de la semaine, ces deux-la
+       vont ensemble, et aucune ressemblance ne peut les separer. C'est ce
+       qui rend l'appariement stable d'un releve a l'autre.
+
+       Le module est verifie quand meme : un journal perime pourrait
+       designer un evenement recycle par Celcat pour autre chose, et un
+       appariement au mauvais cours ferait corriger la mauvaise seance.
+
+    2. LE MEILLEUR CANDIDAT ENSUITE, pas le premier venu. `_correspond`
+       accepte volontairement un evenement dont l'heure differe — c'est
+       l'ecart qu'on veut signaler. Le premier trouve pouvait donc etre
+       celui de 14h quand celui de 15h30 concordait exactement. On compte
+       les divergences et on prend le minimum ; a egalite, le plus petit
+       `event_id`, pour que le resultat ne depende jamais de l'ordre
+       d'arrivee.
+    """
+    attribue: dict[int, int] = {}
+
+    par_event: dict[int, int] = {}
+    for rang, ev in enumerate(candidats):
+        try:
+            par_event.setdefault(int(ev.get("event_id") or 0), rang)
+        except (TypeError, ValueError):
+            continue
+
+    for rang_placement, placement in enumerate(du_planning):
+        brut = journal.get(str(getattr(placement, "session_id", "")))
+        try:
+            event_id = int(brut) if brut is not None else None
+        except (TypeError, ValueError):
+            event_id = None
+        if event_id is None:
+            continue
+        rang_candidat = par_event.get(event_id)
+        if rang_candidat is None or rang_candidat in apparies:
+            continue
+        code = str(getattr(placement, "course_code", "") or "").strip().upper()
+        module = str(candidats[rang_candidat].get("module") or "").strip()
+        if module and code and not _meme_module(code, module):
+            continue
+        attribue[rang_placement] = rang_candidat
+        apparies.add(rang_candidat)
+
+    for rang_placement, placement in enumerate(du_planning):
+        if rang_placement in attribue:
+            continue
+        meilleur: tuple[tuple[int, int], int] | None = None
+        for rang_candidat, ev in enumerate(candidats):
+            if rang_candidat in apparies:
+                continue
+            if not _correspond(placement, ev, groupes_celcat, salles_celcat):
+                continue
+            try:
+                identifiant = int(ev.get("event_id") or 0)
+            except (TypeError, ValueError):
+                identifiant = 0
+            score = (len(_ecarts(placement, ev, salles_celcat, types_seance)), identifiant)
+            if meilleur is None or score < meilleur[0]:
+                meilleur = (score, rang_candidat)
+        if meilleur is not None:
+            attribue[rang_placement] = meilleur[1]
+            apparies.add(meilleur[1])
+
+    return attribue
+
+
+def empreinte(lignes: list[dict]) -> str:
+    """Signature des DIVERGENCES d'une semaine — pas de son contenu.
+
+    Sert a repondre a « est-ce que la situation a change depuis le dernier
+    passage ? ». Deux usages, tous deux dans la boucle de reconciliation :
+    ne pas re-enfiler une semaine dont rien n'a bouge, et reperer un
+    battement — la meme divergence qui revient en changeant d'`event_id`,
+    signature d'un appariement instable qu'aucune ecriture ne reglera.
+
+    Ce qui concorde n'entre pas dans le calcul : une seance qui passe de
+    « ecart » a « identique » doit changer l'empreinte, mais deux releves
+    egalement conformes doivent rendre la meme.
+    """
+    parts = []
+    for ligne in sorted(lignes, key=lambda l: (str(l.get("statut")), str(l.get("session_id")))):
+        statut = str(ligne.get("statut") or "")
+        if statut in ("identique", "hors_celcat"):
+            continue
+        celcat = ligne.get("celcat") or {}
+        parts.append(
+            "|".join(
+                (
+                    statut,
+                    str(ligne.get("session_id") or ""),
+                    str(celcat.get("event_id") or ""),
+                    ",".join(str(e) for e in (ligne.get("ecarts") or [])),
+                )
+            )
+        )
+    return hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()
+
+
 def comparer(
     *,
     placements: list[Any],
@@ -286,8 +429,13 @@ def comparer(
     salles_celcat: dict[str, str] | None = None,
     codes_celcat: set[str] | None = None,
     types_seance: dict[str, str] | None = None,
+    journal: dict[str, int] | None = None,
 ) -> list[dict]:
     """Une ligne par séance, avec son verdict.
+
+    `journal` est la table `session_id -> event_id` tenue par
+    `celcat/sync.py` : ce que NOUS avons ecrit, et ou. Facultative, mais
+    c'est elle qui rend l'appariement stable (cf. `_apparier`).
 
     `semaine` est l'indice cal-iut, `semaine_celcat` l'indice `weeks` du
     relevé — les deux ne coïncident pas (cf. `PREMIERE_SEMAINE_CELCAT` : la
@@ -299,7 +447,23 @@ def comparer(
     simplement ailleurs dans l'année. C'est à l'appelant, qui a le
     calendrier, de faire cette conversion.
     """
-    du_planning = [p for p in placements if _indice(getattr(p, "week", None)) == int(semaine)]
+    # TRI AVANT TOUT APPARIEMENT, des deux cotes.
+    #
+    # L'appariement consomme les candidats dans l'ordre ou ils arrivent, et
+    # cet ordre venait de `udlTimetables.load`, que Celcat ne garantit pas
+    # stable d'un appel a l'autre. Deux seances de meme matiere, meme groupe
+    # et meme jour peuvent donc ECHANGER leur evenement entre deux releves :
+    # la comparaison rend alors un ecart different a chaque fois, sur des
+    # donnees pourtant identiques.
+    #
+    # Sans consequence tant que personne ne replanifiait tout seul. Mais une
+    # boucle de reconciliation pousserait l'heure A, relirait, pousserait
+    # l'heure B, indefiniment — sur un evenement Celcat bien reel. Le tri
+    # coute deux lignes et supprime la dependance a l'ordre de retour.
+    du_planning = sorted(
+        (p for p in placements if _indice(getattr(p, "week", None)) == int(semaine)),
+        key=_rang_placement,
+    )
     # Dédoublonnage par `event_id` : le relevé interroge 29 groupes, et un CM
     # commun à la promo est rendu une fois PAR groupe. Sans ça, le même
     # évènement apparaissait cinq fois « en trop » — liste illisible et
@@ -315,18 +479,23 @@ def comparer(
                 continue
             vus.add(int(identifiant))
         candidats.append(ev)
+    candidats.sort(key=_rang_evenement)
 
     lignes: list[dict] = []
     apparies: set[int] = set()
+    attribue = _apparier(
+        du_planning,
+        candidats,
+        apparies,
+        groupes_celcat=groupes_celcat or {},
+        salles_celcat=salles_celcat or {},
+        types_seance=types_seance or {},
+        journal=journal or {},
+    )
 
-    for placement in du_planning:
-        trouve = None
-        for i, ev in enumerate(candidats):
-            if i in apparies:
-                continue
-            if _correspond(placement, ev, groupes_celcat or {}, salles_celcat or {}):
-                trouve, _ = ev, apparies.add(i)
-                break
+    for rang_placement, placement in enumerate(du_planning):
+        indice_trouve = attribue.get(rang_placement)
+        trouve = candidats[indice_trouve] if indice_trouve is not None else None
         if trouve is None:
             # WR100BU (la BU), ÉCHANGE-IA, les rentrées : aucune équivalence
             # module dans Celcat, donc aucune vocation à y aller. Les

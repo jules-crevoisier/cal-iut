@@ -12,6 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from cal_iut.celcat.fichiers import ecrire_json
 from cal_iut.celcat.lecture import EvenementCelcat
 
 _LIVE: list[EvenementCelcat] = []
@@ -119,12 +120,13 @@ def charger() -> dict[str, Any]:
 
 
 def sauver(doc: dict[str, Any]) -> None:
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    # ATOMIQUE, et c'est ici que cela compte le plus. `charger()` ne lève
+    # pas devant un JSON tronqué : il retombe sur `_vide()`, et le
+    # `sauver()` suivant persiste alors ce vide. Le journal des
+    # correspondances séance -> event_id — seul rempart contre les
+    # doublons — serait perdu pour de bon, et tout le planning repartirait
+    # en création (cf. `celcat/fichiers.py`).
+    ecrire_json(_path(), doc, sort_keys=True)
 
 
 NB_SEMAINES_LOT = 30
