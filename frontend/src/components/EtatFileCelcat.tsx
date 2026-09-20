@@ -7,96 +7,81 @@
  * corriger ». Puis, capture à l'appui le même jour : « fix moi cette
  * interface, on ne comprend rien du tout là ».
  *
- * IL AVAIT RAISON DEUX FOIS. La première version ne montrait rien ; la
- * seconde montrait TOUT, d'un bloc — le résumé brut du worker, vingt lignes
- * de motifs d'échec au milieu desquelles les trois chiffres qui décident
- * (combien attendent, combien ont réussi, quand) étaient introuvables.
- *
- * L'écran est donc hiérarchisé :
+ * L'écran est hiérarchisé :
  *
  *   1. CE QUI ATTEND, en gros — le nombre et sa répartition ;
  *   2. CE QUE LE WORKER A FAIT en dernier, et QUAND — c'est le croisement des
  *      deux qui alerte : une file qui ne bouge pas MALGRÉ des passages
- *      réguliers est le signe d'une panne, et c'est exactement ce que trois
- *      jours de « file d'attente drainée » n'ont pas permis de voir ;
- *   3. LE DÉTAIL DES MOTIFS, replié. Il ne se lit pas tous les jours, mais
- *      quand on en a besoin il n'existe nulle part ailleurs que dans
- *      `docker compose logs`.
+ *      réguliers est le signe d'une panne ;
+ *   3. LE DÉTAIL DES MOTIFS, replié.
  *
- * Les jobs EN ATTENTE D'UNE SEMAINE POSÉE sont dits à part et en clair :
- * une file qui ne descend pas parce qu'elle attend l'équipe et une file qui
- * ne descend pas parce qu'elle échoue se ressemblent à l'écran et appellent
- * des gestes opposés.
+ * Les jobs EN ATTENTE D'UNE SEMAINE POSÉE sont dits à part et en clair : une
+ * file qui ne descend pas parce qu'elle attend l'équipe et une file qui ne
+ * descend pas parce qu'elle échoue appellent des gestes opposés.
  *
- * Se rafraîchit tout seul tant qu'il reste des jobs : après avoir cliqué, on
- * veut voir la file descendre sans recharger la page.
+ * DEPUIS LE 16/09/2026, ce composant n'interroge plus le serveur lui-même.
+ * Il était monté deux fois (onglets Activité et Contenu Celcat), chaque
+ * instance sondant de son côté, et il DISPARAISSAIT sans un mot quand son
+ * appel échouait — précisément au moment où l'on se demande si ça marche.
+ * La vue fait l'appel une seule fois ; ici, on affiche, y compris l'échec.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { CelcatFile } from "../api/client";
+import { ageLisible, pluriel } from "../utils/celcatStatut";
+import { segmentsResume } from "./segmentsResume";
 
-import { fetchCelcatFile, type CelcatFile } from "../api/client";
-import { ageLisible, segmentsResume } from "./segmentsResume";
-
-const LIBELLE_ACTION: Record<string, string> = {
-  create: "création",
-  update: "modification",
-  delete: "suppression",
+const LIBELLE_ACTION: Record<string, [string, string]> = {
+  create: ["création", "créations"],
+  update: ["modification", "modifications"],
+  delete: ["suppression", "suppressions"],
 };
 
-function pluriel(n: number, mot: string): string {
-  return `${n} ${mot}${n > 1 ? "s" : ""}`;
-}
-
-export function EtatFileCelcat() {
-  const [file, setFile] = useState<CelcatFile | null>(null);
-  const timer = useRef<number>(0);
-
-  const charger = useCallback(async () => {
-    try {
-      setFile(await fetchCelcatFile());
-    } catch {
-      setFile(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    void charger();
-    return () => window.clearTimeout(timer.current);
-  }, [charger]);
-
-  // Tant qu'il reste des jobs, on re-regarde : c'est le moment où l'on veut
-  // voir la file descendre. Une fois vide, on arrête — un écran qui
-  // interroge le serveur sans raison est un écran qu'on finit par fermer.
-  useEffect(() => {
-    if (!file || file.en_attente === 0) return;
-    timer.current = window.setTimeout(() => void charger(), 10_000);
-    return () => window.clearTimeout(timer.current);
-  }, [file, charger]);
-
-  // `typeof` et `?? {}` : une réponse inattendue ne doit pas faire tomber
-  // tout l'écran autour. C'est la troisième fois de la journée que cet
-  // oubli casse un panneau — les données d'API se protègent à l'entrée du
-  // composant, pas au cas par cas.
-  if (!file || typeof file.en_attente !== "number") return null;
+export function EtatFileCelcat({ file, erreur }: { file: CelcatFile | null; erreur?: string | null }) {
+  if (erreur) {
+    return (
+      <p className="celcat-texte-panne" data-testid="etat-file-celcat">
+        État de la file indisponible : {erreur}
+      </p>
+    );
+  }
+  // `typeof` : une réponse inattendue ne doit pas faire tomber l'écran autour.
+  if (!file || typeof file.en_attente !== "number") {
+    return (
+      <p className="celcat-sous-texte" data-testid="etat-file-celcat">
+        Lecture de la file…
+      </p>
+    );
+  }
 
   const detail = Object.entries(file.par_action ?? {})
-    .map(([action, n]) => pluriel(n, LIBELLE_ACTION[action] ?? action))
+    .map(([action, n]) => {
+      const mots = LIBELLE_ACTION[action];
+      return mots ? pluriel(n, mots[0], mots[1]) : `${n} ${action}`;
+    })
     .join(", ");
   const differes = typeof file.differes === "number" ? file.differes : 0;
   const motifs = segmentsResume(file.resume);
 
   return (
     <div className="celcat-file" data-testid="etat-file-celcat">
-      <p className={file.en_attente > 0 ? "bad" : "muted"}>
+      <p className={file.en_attente > 0 ? "celcat-file-compte" : "celcat-file-compte celcat-texte-ok"}>
         {file.en_attente === 0
           ? "File d’attente vide — tout est poussé."
-          : `${file.en_attente} correction(s) en attente${detail ? ` : ${detail}` : ""}.`}
+          : `${pluriel(file.en_attente, "correction", "corrections")} en attente${detail ? ` : ${detail}` : ""}.`}
       </p>
 
-      <p className="muted">
+      <p>
         {file.passe_le ? (
           <>
             Dernier passage du worker {ageLisible(file.age_secondes)} :{" "}
-            <strong>{file.reussis} réussi(s)</strong>, {file.echecs} en échec.
+            <strong>{pluriel(file.reussis, "réussie", "réussies")}</strong>
+            {file.echecs > 0 ? (
+              <>
+                , <strong className="celcat-texte-panne">{pluriel(file.echecs, "échec")}</strong>
+              </>
+            ) : (
+              ", aucun échec"
+            )}
+            .
           </>
         ) : (
           "Le worker n’est pas encore passé."
@@ -104,14 +89,14 @@ export function EtatFileCelcat() {
       </p>
 
       {differes > 0 ? (
-        <p className="muted" data-testid="file-differes">
-          Dont <strong>{differes}</strong> en attente d’une semaine encore non posée dans
-          Celcat — normal, rien à faire tant que l’équipe ne l’a pas saisie.
+        <p className="celcat-sous-texte" data-testid="file-differes">
+          Dont <strong>{differes}</strong> en attente d’une semaine pas encore posée dans Celcat — normal, rien à
+          faire tant que l’équipe ne l’a pas saisie.
         </p>
       ) : null}
 
       {motifs.length > 0 ? (
-        <details data-testid="file-motifs">
+        <details data-testid="file-motifs" className="celcat-repli">
           <summary>Détail des motifs ({motifs.length})</summary>
           <ul>
             {motifs.map((motif) => (

@@ -1,443 +1,463 @@
 /**
- * Onglet Administration Celcat — bandeau Live, 3 étapes, lot de nuit, extras, journal.
+ * L'écran Celcat, refondu le 16/09/2026 en un écran unique.
+ *
+ * Ce que ces tests protègent, dans l'ordre de lecture de l'écran :
+ *
+ *   1. le VERDICT de la semaine en cours d'abord, pas des réglages ;
+ *   2. « Corriger » va jusqu'à la VÉRIFICATION sur un relevé neuf — c'est la
+ *      réponse au retour « je dois cliquer plusieurs fois à des heures
+ *      différentes » ;
+ *   3. le geste par défaut ne supprime jamais ; supprimer montre ce qu'on
+ *      supprime ;
+ *   4. couper l'écriture, qui vide la file, demande confirmation ;
+ *   5. tout ce que l'ancien écran garantissait déjà (semaines, extras,
+ *      journal, relevé) reste garanti.
  */
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { confirmAsync } from "../utils/confirmDialog";
 import { AdminCelcatView } from "./AdminCelcatView";
 
+vi.mock("../utils/confirmDialog", () => ({ confirmAsync: vi.fn() }));
+
+const CADENCE = { intervalleMs: 5, limiteWorkerMs: 400, limiteReleveMs: 400, sondageFileMs: 60_000 };
+
+const LUNDI = "2026-09-14";
+
+/** Calendrier : la semaine en cours (celle d'aujourd'hui) a l'indice 7, et une
+ * semaine de vacances sans indice la précède — la position dans la liste ne
+ * doit jamais servir d'indice. */
+function weekRows() {
+  const aujourdhui = new Date();
+  const lundi = new Date(aujourdhui);
+  lundi.setDate(aujourdhui.getDate() - ((aujourdhui.getDay() + 6) % 7));
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const decale = (jours: number) => {
+    const d = new Date(lundi);
+    d.setDate(d.getDate() + jours);
+    return iso(d);
+  };
+  return [
+    { monday: decale(-14), label: "Semaine 9 (passée)", blocked: false, weekIndex: 6 },
+    { monday: decale(-7), label: "Semaine 10 (vacances)", blocked: true, weekIndex: null },
+    { monday: decale(0), label: "Semaine 11 (en cours)", blocked: false, weekIndex: 7 },
+    { monday: decale(7), label: "Semaine 12 (suivante)", blocked: false, weekIndex: 8 },
+  ];
+}
+
 const ETAT = {
-  saisie_active: false,
-  semaines_validees: [1],
-  semaines_passees: [] as number[],
-  semaines_lancees: [] as number[],
-  semaines_completes: [] as number[],
+  saisie_active: true,
+  worker_actif: true,
+  semaines_validees: [8],
+  semaines_passees: [1] as number[],
+  semaines_lancees: [3] as number[],
+  semaines_completes: [5] as number[],
   valide_le: "2026-09-01T10:00:00+00:00",
   dernier_job: null,
-  derniere_ecriture_celcat: null as string | null,
+  derniere_ecriture_celcat: "2026-09-16T08:42:00",
   compteurs: { created: 1, modified: 0, deleted: 0, blocked: 1 },
   worker_ok: true,
 };
 
-const EXTRAS = [
-  {
-    id: "extra-1",
-    statut: "ouvert",
-    course_code: "WR106",
-    libelle: "WR106 Expression Comm.",
-    event_id: 1931666,
+const ECART = {
+  statut: "ecart",
+  session_id: "WR116-S1-CM-1",
+  course_code: "WR116",
+  caliut: { jour: 1, heure: "15:30", salle: "Amphi 3 MMI", semaine: 7 },
+  celcat: {
+    event_id: 1931709, jour: 1, heure: "13:50", salle: "Amphi 3 MMI", salles: ["Amphi 3 MMI"],
+    categorie: "[CM]", module: "WR116 Traitement Info", groupe: "BUT MMI S1 CM",
   },
-];
-
-const LOGS = {
-  items: [
-    { kind: "created", motif: null, session_id: "s-a" },
-    { kind: "blocked", motif: "WR314D sans code Celcat", session_id: "s-d" },
-  ],
-  cursor: null,
+  ecarts: ["heure"],
+};
+const EN_TROP = {
+  statut: "en_trop_celcat",
+  session_id: "",
+  course_code: "WR402",
+  caliut: null,
+  celcat: {
+    event_id: 1953820, jour: 2, heure: "14:00", salle: "B003", salles: ["B003"],
+    categorie: "[TD]", module: "WR402 Anglais", groupe: "BUT MMI S3 TD AB",
+  },
+  ecarts: [],
+};
+const IDENTIQUE = {
+  statut: "identique",
+  session_id: "WR101-S1-TD-1",
+  course_code: "WR101",
+  caliut: { jour: 0, heure: "08:00", salle: "H.103", semaine: 7 },
+  celcat: {
+    event_id: 111, jour: 0, heure: "07:50", salle: "H.103", salles: ["H.103"],
+    categorie: "[TD]", module: "WR101 Anglais", groupe: "BUT MMI S1 TD AB",
+  },
+  ecarts: [],
 };
 
 function jsonOk(data: unknown): Promise<Response> {
   return Promise.resolve({ ok: true, json: async () => data } as Response);
 }
+function jsonKo(status: number, detail: string): Promise<Response> {
+  return Promise.resolve({ ok: false, status, statusText: "Erreur", json: async () => ({ detail }) } as Response);
+}
 
-function stubFetch(opts?: { etat?: typeof ETAT; extras?: typeof EXTRAS }): ReturnType<typeof vi.fn> {
-  const etat = opts?.etat ?? ETAT;
-  const extras = opts?.extras ?? EXTRAS;
+interface Scenario {
+  etat?: Partial<typeof ETAT>;
+  lignes?: unknown[];
+  /** Lignes rendues APRÈS le nouveau relevé. */
+  lignesApres?: unknown[];
+  releve?: Record<string, unknown>;
+  file?: Record<string, unknown>;
+  correction?: Record<string, unknown>;
+  /** Le worker ne repasse jamais. */
+  workerMuet?: boolean;
+  logs?: unknown[];
+  extras?: unknown[];
+}
+
+/** Un serveur qui se souvient : le worker repasse après une correction, et un
+ * relevé demandé finit par arriver. */
+function serveur(s: Scenario = {}) {
+  let etat = { ...ETAT, ...(s.etat ?? {}) };
+  let passage = "2026-09-16T10:00:00+00:00";
+  let releveLe = "2026-09-16T09:50:00+00:00";
+  let corrige = false;
+  let releveDemande = false;
+  let relu = false;
+
   const mock = vi.fn((url: string, init?: RequestInit) => {
-    const cible = String(url);
-    if (cible.includes("/celcat/extras") && !cible.includes("/ajouter") && !cible.includes("/ignorer")) {
-      return jsonOk({ extras });
+    const u = String(url);
+    const methode = init?.method ?? "GET";
+    if (u.includes("/app-state")) return jsonOk({ weekRows: weekRows() });
+    if (u.includes("/celcat/comparaison/corriger")) {
+      corrige = true;
+      return jsonOk({ total: 1, deja_en_file: 0, abandonnes: [], message: "1 correction mise en file", ...(s.correction ?? {}) });
     }
-    if (cible.includes("/celcat/logs")) {
-      return jsonOk(LOGS);
+    if (u.includes("/celcat/comparaison")) {
+      return jsonOk({
+        semaine: 7, semaine_celcat: 10, lundi: LUNDI, releve_le: releveLe, age_secondes: 300, perime: false,
+        lignes: relu && s.lignesApres ? s.lignesApres : (s.lignes ?? [ECART, IDENTIQUE]),
+        ...(s.releve ?? {}),
+      });
     }
-    if (cible.includes("/celcat/saisie") && init?.method === "PATCH") {
-      const body = JSON.parse(String(init.body)) as { active: boolean };
-      return jsonOk({ ...etat, saisie_active: body.active });
+    if (u.includes("/celcat/instantane/rafraichir")) {
+      releveDemande = true;
+      return jsonOk({ demande: true, message: "Relevé demandé" });
     }
-    if (cible.includes("/celcat/worker") && init?.method === "PATCH") {
-      const body = JSON.parse(String(init.body)) as { actif: boolean };
-      return jsonOk({ ...etat, worker_actif: body.actif });
+    if (u.includes("/celcat/instantane")) {
+      // Le relevé demandé « arrive » à la lecture suivante.
+      if (releveDemande && !relu) {
+        releveDemande = false;
+        relu = true;
+        releveLe = "2026-09-16T10:10:00+00:00";
+      }
+      return jsonOk({ evenements: [], groupes: [], releve_le: releveLe, age_secondes: 300, perime: false, demande_en_cours: false, erreur: null, ...(s.releve ?? {}) });
     }
-    if (cible.includes("/celcat/valider") && init?.method === "POST") {
-      const body = JSON.parse(String(init.body)) as { semaines: number[] };
-      return jsonOk({ ...etat, semaines_validees: body.semaines });
+    if (u.includes("/celcat/file")) {
+      if (corrige && !s.workerMuet) passage = "2026-09-16T10:06:00+00:00";
+      return jsonOk({
+        en_attente: corrige && !s.workerMuet ? 0 : 3, par_action: { update: 3 }, passe_le: passage, age_secondes: 40,
+        reussis: 5, echecs: 0, ignores: 0, differes: 0, resume: "", ...(s.file ?? {}),
+      });
     }
-    if (cible.includes("/celcat/lancer-nuit") && init?.method === "POST") {
-      const lancees = [...new Set([...(etat.semaines_lancees ?? []), ...(etat.semaines_validees ?? [])])].sort(
-        (a, b) => a - b,
-      );
-      return jsonOk({ ...etat, semaines_lancees: lancees });
+    if (u.includes("/celcat/logs")) return jsonOk({ items: s.logs ?? [], cursor: null });
+    if (u.includes("/celcat/extras") && methode === "GET") return jsonOk({ extras: s.extras ?? [] });
+    if (u.includes("/ajouter") || u.includes("/ignorer")) return jsonOk({ statut: "ok" });
+    if (u.includes("/celcat/saisie") && methode === "PATCH") {
+      etat = { ...etat, saisie_active: JSON.parse(String(init?.body)).active };
+      return jsonOk(etat);
     }
-    if (cible.includes("/ajouter") || cible.includes("/ignorer")) {
-      return jsonOk({ statut: "ok" });
+    if (u.includes("/celcat/worker") && methode === "PATCH") {
+      etat = { ...etat, worker_actif: JSON.parse(String(init?.body)).actif };
+      return jsonOk(etat);
     }
-    return jsonOk(etat);
+    if (u.includes("/celcat/valider")) {
+      etat = { ...etat, semaines_validees: JSON.parse(String(init?.body)).semaines };
+      return jsonOk(etat);
+    }
+    if (u.includes("/celcat/lancer-nuit")) return jsonOk(etat);
+    if (u.includes("/celcat/etat")) return jsonOk(etat);
+    return jsonKo(404, `route non simulée : ${u}`);
   });
   vi.stubGlobal("fetch", mock);
   return mock;
 }
 
-function urlsDuMock(mock: ReturnType<typeof vi.fn>): string[] {
-  return mock.mock.calls.map((appel) => String(appel[0]));
+const urls = (mock: ReturnType<typeof vi.fn>) => mock.mock.calls.map((c) => String(c[0]));
+
+async function ouvrir(scenario?: Scenario) {
+  const mock = serveur(scenario);
+  render(<AdminCelcatView cadence={CADENCE} />);
+  await screen.findByRole("heading", { level: 2, name: /écart|concorde|relevé/i });
+  return mock;
 }
 
-describe("AdminCelcatView", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
+beforeEach(() => {
+  vi.mocked(confirmAsync).mockReset();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("Écran Celcat — ce qu'on voit d'abord", () => {
+  it("ouvre sur le verdict de la semaine EN COURS, par son indice et non sa position", async () => {
+    const mock = await ouvrir();
+    // La ligne en cours est en 3e position mais porte l'indice 7.
+    expect(urls(mock).some((u) => u.includes("/celcat/comparaison?semaine=7"))).toBe(true);
+    expect((screen.getByRole("combobox", { name: /semaine comparée/i }) as HTMLSelectElement).value).toBe("7");
+    expect(screen.queryByRole("option", { name: /vacances/ })).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: /1 écart avec Celcat/ })).toBeTruthy();
   });
 
-  it("should show ÉCRITURE OFF, consequence, worker and no Celcat write yet in the hero", async () => {
-    stubFetch();
-    render(<AdminCelcatView />);
-
-    await screen.findByText("ÉCRITURE OFF");
-    expect(screen.getByText(/ne s’écrivent pas tout de suite/i)).toBeInTheDocument();
-    expect(screen.getByText("Worker joignable.")).toBeInTheDocument();
-    expect(screen.getByText(/Aucune modification encore appliquée dans Celcat/)).toBeInTheDocument();
-    // Le détail technique reste présent, mais secondaire.
-    expect(screen.getByText(/Dernier lot validé/)).toBeInTheDocument();
-    expect(screen.getByText(/2026-09-01/)).toBeInTheDocument();
-    expect(screen.getByText(/job de nuit n'a encore jamais tourné/)).toBeInTheDocument();
+  it("n'affiche plus d'onglets : réglages et activité sont repliés sous le verdict", async () => {
+    await ouvrir();
+    expect(screen.queryByRole("button", { name: /^pilotage$/i })).toBeNull();
+    expect(screen.getByTestId("reglages-celcat").hasAttribute("open")).toBe(false);
+    expect(screen.getByTestId("journal-celcat").hasAttribute("open")).toBe(false);
   });
 
-  it("should show the last real Celcat write prominently, distinct from the last validated batch", async () => {
-    // Retour utilisateur (03/09/2026) : "on voudrait la dernière fois
-    // qu'une modification faite dans l'app a été appliquée dans Celcat" —
-    // `valide_le` (action admin) ne doit plus être le signal principal.
-    stubFetch({
-      etat: {
-        ...ETAT,
-        dernier_job: { lance_le: "2026-09-03T08:00:00+00:00" },
-        derniere_ecriture_celcat: "2026-09-03T09:15:00+00:00",
-      },
-    });
-    render(<AdminCelcatView />);
-
-    await screen.findByText("ÉCRITURE OFF");
-    expect(screen.getByText(/Dernière modification appliquée dans Celcat.*2026-09-03T09:15/)).toBeInTheDocument();
-    expect(screen.getByText(/Dernier lot validé.*2026-09-01/)).toBeInTheDocument();
-    expect(screen.getByText(/Dernier passage du job de nuit.*2026-09-03T08:00/)).toBeInTheDocument();
+  it("donne l'état de l'écriture, du worker et du relevé avec un mot chacun", async () => {
+    await ouvrir();
+    expect(within(screen.getByTestId("signal-ecriture")).getByText("active")).toBeTruthy();
+    expect(within(screen.getByTestId("signal-worker")).getByText("actif")).toBeTruthy();
+    expect(within(screen.getByTestId("signal-releve")).getByText("à jour")).toBeTruthy();
   });
 
-  it("should show ÉCRITURE ON and the Live consequence when saisie is active", async () => {
-    stubFetch({ etat: { ...ETAT, saisie_active: true } });
-    render(<AdminCelcatView />);
-
-    await screen.findByText("ÉCRITURE ON");
-    expect(screen.getByText(/s’écrit tout de suite/i)).toBeInTheDocument();
+  it("annonce une concordance complète en tête", async () => {
+    await ouvrir({ lignes: [IDENTIQUE] });
+    expect(screen.getByRole("heading", { level: 2, name: /tout concorde avec celcat/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^corriger/i })).toBeNull();
   });
 
-  it("should expose a switch named écriture, off by default, without PATCH on first paint", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
-
-    const interrupteur = await screen.findByRole("switch", { name: /écriture/i });
-    expect(interrupteur).toHaveAttribute("aria-checked", "false");
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-
-    await waitFor(() => expect(urlsDuMock(mock).some((u) => u.includes("/celcat/etat"))).toBe(true));
-    expect(urlsDuMock(mock).some((u) => u.includes("/celcat/saisie"))).toBe(false);
+  it("propose de relire Celcat, et non de corriger, sur un relevé périmé", async () => {
+    await ouvrir({ releve: { perime: true, age_secondes: 3 * 3600 } });
+    expect(screen.getByRole("heading", { level: 2, name: /trop ancien/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /relire celcat/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^corriger/i })).toBeNull();
   });
 
-  it("should PATCH /celcat/saisie with active true when the switch is turned on", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
+  it("efface la comparaison d'une semaine quand on passe à la suivante", async () => {
+    const mock = await ouvrir();
+    fireEvent.click(screen.getByRole("button", { name: /semaine suivante/i }));
+    await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/comparaison?semaine=8"))).toBe(true));
+  });
+});
 
-    fireEvent.click(await screen.findByRole("switch", { name: /écriture/i }));
+describe("Corriger va jusqu'à la vérification", () => {
+  it("met en file SANS suppression, attend le worker, demande un relevé, puis relit", async () => {
+    const mock = await ouvrir({ lignes: [ECART, IDENTIQUE], lignesApres: [IDENTIQUE] });
 
-    await waitFor(() => {
-      const saisie = mock.mock.calls.find(([url, init]) => String(url).includes("/celcat/saisie") && init?.method === "PATCH");
-      expect(saisie).toBeDefined();
-      expect(JSON.parse(String(saisie?.[1]?.body))).toEqual({ active: true });
-    });
-    expect(await screen.findByText("ÉCRITURE ON")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /corriger l’écart/i }));
+
+    // LE TEST DU RETOUR UTILISATEUR : sans un second clic, l'écran finit sur
+    // le résultat vérifié — et plus sur les écarts d'avant.
+    await screen.findByRole("heading", { level: 2, name: /tout concorde avec celcat/i }, { timeout: 3000 });
+    const u = urls(mock);
+    expect(u.some((x) => x.includes("/comparaison/corriger?semaine=7&supprimer=false"))).toBe(true);
+    const corriger = u.findIndex((x) => x.includes("/comparaison/corriger"));
+    const demande = u.findIndex((x) => x.includes("/instantane/rafraichir"));
+    expect(demande).toBeGreaterThan(corriger);
+    expect(screen.getByTestId("suivi-boucle").textContent).toMatch(/vérifié sur un relevé tout frais/i);
   });
 
-  // PAUSE DU WORKER (demande du 09/09/2026 : « un bouton qui active et
-  // désactive le worker qui utilise le VPN »). Le VPN et le compte Celcat
-  // sont partagés avec l'équipe : tant que le worker tourne, il prend le
-  // tunnel toutes les 90 secondes.
-  it("should PATCH /celcat/worker when the worker switch is toggled", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
-
-    fireEvent.click(await screen.findByRole("switch", { name: /worker/i }));
-
-    await waitFor(() => {
-      const appel = mock.mock.calls.find(
-        ([url, init]) => String(url).includes("/celcat/worker") && init?.method === "PATCH",
-      );
-      expect(appel).toBeDefined();
-      expect(JSON.parse(String(appel?.[1]?.body))).toEqual({ actif: false });
-    });
-  });
-
-  // LE point : ne jamais confondre les deux interrupteurs. Couper l'écriture
-  // (`PATCH /celcat/saisie`) VIDE la file d'attente côté serveur ; mettre le
-  // worker en pause ne doit rien détruire.
-  it("should never touch /celcat/saisie when pausing the worker", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
-
-    fireEvent.click(await screen.findByRole("switch", { name: /worker/i }));
-
-    await waitFor(() => {
-      expect(
-        mock.mock.calls.find(([url, init]) => String(url).includes("/celcat/worker") && init?.method === "PATCH"),
-      ).toBeDefined();
-    });
-    expect(
-      mock.mock.calls.find(([url, init]) => String(url).includes("/celcat/saisie") && init?.method === "PATCH"),
-    ).toBeUndefined();
-  });
-
-  it("should say the queue survives a worker pause", async () => {
-    stubFetch();
-    render(<AdminCelcatView />);
-
-    fireEvent.click(await screen.findByRole("switch", { name: /worker/i }));
-
-    expect(await screen.findByText(/VPN libre, la file est conservée/i)).toBeInTheDocument();
-  });
-
-  it("should show numbered steps 1, 2 and 3 and explain the night lot in step 2", async () => {
-    stubFetch();
-    render(<AdminCelcatView />);
-
-    await screen.findByRole("switch", { name: /écriture/i });
-    // `getByText("1")` ne suffit plus : la vue d'activité affiche aussi des
-    // compteurs par colonne (08/09/2026). On cible les puces d'étape.
-    expect(screen.getAllByText("1").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("3").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: /armer l’écriture/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /lot de nuit/i })).toBeInTheDocument();
-    expect(screen.getByText(/lancer maintenant enfile le même lot/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /lancer maintenant/i })).toBeInTheDocument();
-  });
-
-  it("should name the submit lot de nuit and not expose a button named only Valider", async () => {
-    stubFetch();
-    render(<AdminCelcatView />);
-
-    await screen.findByRole("button", { name: /lot de nuit/i });
-    expect(screen.queryByRole("button", { name: /^valider$/i })).not.toBeInTheDocument();
-  });
-
-  it("should label weeks Semaine N, keep multi-select, and distinguish validated vs checked", async () => {
-    stubFetch();
-    render(<AdminCelcatView />);
-
-    const s1 = await screen.findByRole("button", { name: /^semaine 1 validée$/i });
-    const s2 = screen.getByRole("button", { name: /^semaine 2$/i });
-    expect(s1).toHaveClass("celcat-semaine--validee");
-    expect(s1).toHaveClass("celcat-semaine--cochee");
-    expect(s2).not.toHaveClass("celcat-semaine--validee");
-    expect(s2).not.toHaveClass("celcat-semaine--cochee");
-
-    fireEvent.click(s2);
-    expect(s2).toHaveClass("celcat-semaine--cochee");
-    expect(s2).not.toHaveClass("celcat-semaine--validee");
-
-    fireEvent.click(s2);
-    expect(s2).not.toHaveClass("celcat-semaine--cochee");
-  });
-
-  it("should mark a fully-placed week as complete, distinct from validée", async () => {
-    // Retour utilisateur (03/09/2026) : "si la semaine 1 est entièrement
-    // placée on la met comme placée" — semaine 1 est déjà "validée" dans
-    // ETAT, donc on le vérifie sur une semaine complète mais NON validée.
-    // Libellé reformulé le 04/09/2026 (retour utilisateur : l'ancien
-    // "entièrement placée" laissait croire à un envoi Celcat déjà fait).
-    stubFetch({ etat: { ...ETAT, semaines_completes: [2] } });
-    render(<AdminCelcatView />);
-
-    const s2 = await screen.findByRole("button", {
-      name: /^semaine 2 — planning complet, pas encore envoyé à celcat$/i,
-    });
-    expect(s2).toHaveClass("celcat-semaine--complete");
-    expect(s2).not.toHaveClass("celcat-semaine--validee");
-    expect(screen.getByText("planning complet")).toBeInTheDocument();
-  });
-
-  it("should POST /celcat/valider with the draft semaines when the night-lot button is pressed", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /^semaine 2$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /lot de nuit/i }));
-
-    await waitFor(() => {
-      const valider = mock.mock.calls.find(([url, init]) => String(url).includes("/celcat/valider") && init?.method === "POST");
-      expect(valider).toBeDefined();
-      expect(JSON.parse(String(valider?.[1]?.body))).toEqual({ semaines: [1, 2] });
-    });
-  });
-
-  it("should show Ajouter and Ignorer for an open extra and POST the matching extras routes", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
-
-    await screen.findByText(/WR106/);
-    fireEvent.click(screen.getByRole("button", { name: /ajouter WR106/i }));
-    await waitFor(() => {
-      expect(urlsDuMock(mock).some((u) => u.includes("/celcat/extras/extra-1/ajouter"))).toBe(true);
-    });
-    expect(screen.queryByText(/WR106/)).not.toBeInTheDocument();
-  });
-
-  it("should POST ignorer for an open extra", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /ignorer WR106/i }));
-    await waitFor(() => {
-      expect(urlsDuMock(mock).some((u) => u.includes("/celcat/extras/extra-1/ignorer"))).toBe(true);
-    });
-  });
-
-  it("should show Aucun extra ouvert and no Ajouter/Ignorer when extras are empty", async () => {
-    stubFetch({ extras: [] });
-    render(<AdminCelcatView />);
-
-    await screen.findByText("Aucun extra ouvert.");
-    expect(screen.queryByRole("button", { name: /ajouter/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /ignorer/i })).not.toBeInTheDocument();
-  });
-
-  it("should keep journal separate from extras with lisible kinds and motif", async () => {
-    stubFetch();
-    render(<AdminCelcatView />);
-
-    // Renommé « Activité » et passé en colonnes le 08/09/2026 : ce qui doit
-    // rester vrai, c'est que le journal reste SÉPARÉ des extras (pas de
-    // bouton d'action dedans) et qu'il montre le motif, pas seulement le
-    // fait qu'il y ait eu un échec.
-    // Derrière l'onglet « Activité » depuis le découpage du 08/09/2026.
-    fireEvent.click(await screen.findByRole("button", { name: /^activité$/i }));
-    const journal = await screen.findByRole("heading", { name: /^activité$/i });
-    const panneau = journal.closest(".panel");
-    expect(panneau).not.toBeNull();
-    expect(within(panneau as HTMLElement).queryByRole("button", { name: /ajouter/i })).not.toBeInTheDocument();
-    expect(within(panneau as HTMLElement).getByText(/sans code Celcat/i)).toBeInTheDocument();
-  });
-
-  it("should only call etat, extras ouvert, logs and instantane on mount, comparaison only when its tab is opened", async () => {
-    const mock = stubFetch();
-    render(<AdminCelcatView />);
-
-    await screen.findByRole("switch", { name: /écriture/i });
-    const chemins = urlsDuMock(mock);
-    expect(chemins.some((u) => u.includes("/celcat/etat"))).toBe(true);
-    expect(chemins.some((u) => u.includes("/celcat/extras?statut=ouvert"))).toBe(true);
-    expect(chemins.some((u) => u.includes("/celcat/logs?limit=50"))).toBe(true);
-    // 4e depuis le 08/09/2026 : l'instantané Celcat, servi par l'API depuis
-    // le relevé du sidecar (elle ne lit jamais Celcat elle-même).
-    expect(chemins.some((u) => u.includes("/celcat/instantane"))).toBe(true);
-    // La comparaison N'EST PAS chargée au montage : elle vit derrière
-    // l'onglet « Contenu Celcat » depuis le découpage du 08/09/2026, et ne
-    // se déclenche qu'à son ouverture — un écran de supervision n'a pas à
-    // payer le coût de tout ce qu'il pourrait montrer.
-    expect(chemins.some((u) => u.includes("/celcat/comparaison"))).toBe(false);
-    // `/app-state` en 5e : les LIBELLÉS réels des semaines. L'app numérote
-    // autrement que l'indice interne (`weekRows[0]` s'appelle « Semaine 2 »),
-    // et recalculer un numéro ici ferait comparer la mauvaise semaine.
-    expect(chemins.some((u) => u.includes("/app-state"))).toBe(true);
-    expect(chemins).toHaveLength(5);
-
-    fireEvent.click(screen.getByRole("button", { name: /contenu celcat/i }));
-    await waitFor(() =>
-      expect(urlsDuMock(mock).some((u) => u.includes("/celcat/comparaison"))).toBe(true),
+  it("dit où l'attente s'est arrêtée quand le worker ne repasse pas, sans rien perdre", async () => {
+    await ouvrir({ workerMuet: true });
+    fireEvent.click(screen.getByRole("button", { name: /corriger l’écart/i }));
+    await waitFor(
+      () => expect(screen.getByTestId("suivi-boucle").textContent).toMatch(/restent en file/),
+      { timeout: 3000 },
     );
   });
 
-  // Sélecteur de la comparaison : VALEUR = indice du solveur, jamais la
-  // position dans `weekRows`. Cette liste contient les semaines de vacances
-  // (bloquées, sans indice) : envoyer la position décalait la comparaison d'un
-  // cran après la Toussaint, de trois après Noël (payload de prod, 10/09/2026).
-  it("should send the solver week index, not the row position, after a holiday week", async () => {
-    const weekRows = [
-      { monday: "2026-10-19", label: "Semaine 9 (19–23 oct. 2026)", blocked: false, weekIndex: 7 },
-      { monday: "2026-10-26", label: "Semaine 10 (26–30 oct. 2026)", blocked: true, weekIndex: null },
-      { monday: "2026-11-02", label: "Semaine 11 (2–6 nov. 2026)", blocked: false, weekIndex: 8 },
-    ];
-    const mock = stubFetch();
+  it("dit ce qui attendait déjà, pour qu'on cesse de recliquer", async () => {
+    await ouvrir({ correction: { total: 0, deja_en_file: 3 } });
+    fireEvent.click(screen.getByRole("button", { name: /corriger l’écart/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("correction-deja-en-file").textContent).toMatch(/recliquer n’y change rien/),
+    );
+  });
+
+  it("nomme les écarts non traduits, groupés par cause", async () => {
+    const abandon = (sid: string) => ({
+      statut: "ecart", session_id: sid, course_code: "WRA507D", event_id: null, groupe: null,
+      raison: "event_id_absent", explication: "l'évènement Celcat n'a pas d'identifiant",
+    });
+    await ouvrir({ correction: { total: 0, deja_en_file: 0, abandonnes: [abandon("s-1"), abandon("s-2")] } });
+    fireEvent.click(screen.getByRole("button", { name: /corriger l’écart/i }));
+    const repli = await screen.findByTestId("correction-abandonnes");
+    expect(repli.textContent).toContain("2 écarts non traduits");
+    expect(repli.textContent).toContain("1 cause");
+    expect(repli.textContent).toContain("s-1, s-2");
+  });
+
+  it("montre le refus du serveur près du bouton, sans effacer le verdict", async () => {
+    const mock = await ouvrir();
     const base = mock.getMockImplementation()!;
     mock.mockImplementation((url: string, init?: RequestInit) =>
-      String(url).includes("/app-state") ? jsonOk({ weekRows }) : base(url, init),
+      String(url).includes("/comparaison/corriger")
+        ? jsonKo(409, "Le worker Celcat est en pause.")
+        : base(url, init),
     );
-    render(<AdminCelcatView />);
+    fireEvent.click(screen.getByRole("button", { name: /corriger l’écart/i }));
+    await waitFor(() => expect(screen.getByTestId("suivi-boucle").textContent).toContain("worker Celcat est en pause"));
+    expect(screen.getByRole("heading", { level: 2, name: /1 écart avec Celcat/ })).toBeTruthy();
+  });
+});
 
-    fireEvent.click(await screen.findByRole("button", { name: /contenu celcat/i }));
-    await screen.findByRole("option", { name: /Semaine 11/ });
-    // Une semaine où l'IUT est fermé n'a rien à comparer.
-    expect(screen.queryByRole("option", { name: /Semaine 10 \(26/ })).toBeNull();
+describe("Les suppressions restent humaines", () => {
+  it("liste les évènements en trop avant de proposer de les supprimer", async () => {
+    await ouvrir({ lignes: [ECART, EN_TROP] });
+    const panneau = screen.getByRole("region", { name: /1 évènement en trop/i });
+    expect(panneau.textContent).toContain("WR402 Anglais");
+    expect(panneau.textContent).toContain("mercredi 16/09");
+    expect(panneau.textContent).toContain("#1953820");
+  });
 
-    fireEvent.change(screen.getByRole("combobox", { name: /semaine/i }), { target: { value: "8" } });
+  it("ne supprime rien si la confirmation est refusée", async () => {
+    vi.mocked(confirmAsync).mockResolvedValue(false);
+    const mock = await ouvrir({ lignes: [ECART, EN_TROP] });
+    fireEvent.click(screen.getByRole("button", { name: /supprimer cet évènement/i }));
+    await waitFor(() => expect(confirmAsync).toHaveBeenCalled());
+    expect(urls(mock).some((u) => u.includes("/comparaison/corriger"))).toBe(false);
+  });
 
+  it("répète la liste dans la confirmation, puis corrige avec les suppressions", async () => {
+    vi.mocked(confirmAsync).mockResolvedValue(true);
+    const mock = await ouvrir({ lignes: [ECART, EN_TROP] });
+    fireEvent.click(screen.getByRole("button", { name: /supprimer cet évènement/i }));
     await waitFor(() =>
-      expect(urlsDuMock(mock).some((u) => u.includes("/celcat/comparaison?semaine=8"))).toBe(true),
+      expect(urls(mock).some((u) => u.includes("/comparaison/corriger?semaine=7") && !u.includes("supprimer=false"))).toBe(true),
     );
+    const [texte, options] = vi.mocked(confirmAsync).mock.calls[0];
+    expect(texte).toContain("WR402 Anglais");
+    expect(options?.confirmLabel).toMatch(/supprimer 1 évènement/i);
+  });
+});
+
+describe("Détail séance par séance", () => {
+  it("montre les deux côtés d'un écart avec son verdict en mot", async () => {
+    await ouvrir({ lignes: [ECART, IDENTIQUE] });
+    const detail = screen.getByTestId("comparaison-celcat");
+    expect(detail.hasAttribute("open")).toBe(true);
+    const tableau = within(detail).getByRole("table");
+    expect(tableau.textContent).toContain("mardi 15/09 15:30");
+    expect(tableau.textContent).toContain("mardi 15/09 13:50");
+    expect(within(tableau).getByText("À modifier")).toBeTruthy();
   });
 
-  it("should disable a past week and a launched week", async () => {
-    stubFetch({
-      etat: { ...ETAT, semaines_passees: [1], semaines_lancees: [3], semaines_validees: [3] },
+  it("replie les séances identiques derrière un compte", async () => {
+    await ouvrir({ lignes: [ECART, IDENTIQUE] });
+    expect(screen.queryByTestId("comparaison-identiques")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /afficher 1 séance identique/i }));
+    expect(screen.getByTestId("comparaison-identiques").textContent).toContain("lundi 14/09");
+  });
+});
+
+describe("Réglages", () => {
+  it("demande confirmation, avec le nombre de corrections perdues, avant de couper l'écriture", async () => {
+    vi.mocked(confirmAsync).mockResolvedValue(false);
+    const mock = await ouvrir();
+    fireEvent.click(screen.getByRole("switch", { name: /écriture dans celcat/i }));
+    await waitFor(() => expect(confirmAsync).toHaveBeenCalled());
+    expect(String(vi.mocked(confirmAsync).mock.calls[0][0])).toMatch(/3 corrections en attente seront abandonnées/);
+    expect(urls(mock).some((u) => u.includes("/celcat/saisie"))).toBe(false);
+  });
+
+  it("réactive l'écriture sans confirmation — c'est le geste sûr", async () => {
+    const mock = await ouvrir({ etat: { saisie_active: false } });
+    fireEvent.click(screen.getByRole("switch", { name: /écriture dans celcat/i }));
+    await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/saisie"))).toBe(true));
+    expect(confirmAsync).not.toHaveBeenCalled();
+  });
+
+  it("met le worker en pause sans jamais toucher à l'écriture, et le dit", async () => {
+    const mock = await ouvrir();
+    const interrupteur = screen.getByRole("switch", { name: /worker/i });
+    expect(interrupteur.getAttribute("aria-describedby")).toBeTruthy();
+    fireEvent.click(interrupteur);
+    await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/worker"))).toBe(true));
+    expect(urls(mock).some((u) => u.includes("/celcat/saisie"))).toBe(false);
+    await screen.findByText(/la file est conservée/i);
+  });
+
+  it("nomme les semaines par leur date et dit l'état de chacune en toutes lettres", async () => {
+    await ouvrir();
+    // Pastille 8 = indice 7 = « Semaine 11 (en cours) ».
+    const envoyee = screen.getByRole("button", { name: /^semaine 11 \(en cours\), enregistrée$/i });
+    expect(envoyee.getAttribute("aria-pressed")).toBe("true");
+    expect(envoyee.textContent).toContain("enregistrée");
+    const passee = screen.getByRole("button", { name: /^semaine 1, passée$/i });
+    expect(passee.getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("button", { name: /^semaine 5, planning complet$/i })).toBeTruthy();
+  });
+
+  it("dit qu'une semaine décochée va sortir du lot", async () => {
+    await ouvrir();
+    fireEvent.click(screen.getByRole("button", { name: /^semaine 11 \(en cours\), enregistrée$/i }));
+    expect(screen.getByRole("button", { name: /^semaine 11 \(en cours\), retirée$/i })).toBeTruthy();
+  });
+
+  it("enregistre la sélection puis l'envoie", async () => {
+    const mock = await ouvrir();
+    fireEvent.click(screen.getByRole("button", { name: /^semaine 12 \(suivante\)$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /envoyer maintenant/i }));
+    await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/lancer-nuit"))).toBe(true));
+    const corps = mock.mock.calls.find((c) => String(c[0]).includes("/celcat/valider"))?.[1]?.body;
+    expect(JSON.parse(String(corps)).semaines).toEqual([8, 9]);
+  });
+
+  it("explique pourquoi « Envoyer maintenant » est indisponible écriture coupée", async () => {
+    await ouvrir({ etat: { saisie_active: false } });
+    expect(screen.getByRole("button", { name: /envoyer maintenant/i })).toBeDisabled();
+    expect(screen.getByText(/attend que l’écriture dans celcat soit active/i)).toBeTruthy();
+  });
+
+  it("ajoute ou ignore un cours présent seulement dans Celcat", async () => {
+    const mock = await ouvrir({ extras: [{ id: "extra-1", statut: "ouvert", course_code: "WR106", libelle: "WR106 Expression" }] });
+    fireEvent.click(screen.getByRole("button", { name: /ajouter WR106 Expression/i }));
+    await waitFor(() => expect(urls(mock).some((u) => u.includes("/extras/extra-1/ajouter"))).toBe(true));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /ajouter WR106/i })).toBeNull());
+  });
+});
+
+describe("Activité récente", () => {
+  const LOGS = [
+    { kind: "created", session_id: "s-a", at: "2026-09-16T08:42:00" },
+    { kind: "echec", session_id: "s-b", motif: "groupe introuvable", repetitions: 87 },
+  ];
+
+  it("résume écritures et échecs sans avoir à ouvrir", async () => {
+    await ouvrir({ logs: LOGS });
+    const resume = screen.getByTestId("journal-celcat").querySelector("summary")!;
+    expect(resume.textContent).toContain("1 écriture");
+    expect(resume.textContent).toContain("1 échec ou blocage");
+  });
+
+  it("range chaque écriture, avec répétitions, motif et horodatage visible", async () => {
+    await ouvrir({ logs: LOGS });
+    expect(screen.getByTestId("colonne-created").textContent).toContain("16/09 à 08:42");
+    const echecs = screen.getByTestId("colonne-echec");
+    expect(echecs.textContent).toContain("87×");
+    expect(echecs.textContent).toContain("groupe introuvable");
+    // Le bouton Copier n'est plus DANS le titre, qui se lisait « Créées 1 Copier ».
+    expect(within(echecs).getByRole("heading").textContent).not.toContain("Copier");
+    expect(within(screen.getByTestId("colonne-deleted")).queryByRole("button", { name: /copier/i })).toBeNull();
+  });
+});
+
+describe("Système", () => {
+  it("dit que l'état de la file est indisponible au lieu de le masquer", async () => {
+    const mock = serveur();
+    const base = mock.getMockImplementation()!;
+    mock.mockImplementation((url: string, init?: RequestInit) =>
+      String(url).includes("/celcat/file") ? jsonKo(500, "panne") : base(url, init),
+    );
+    await act(async () => {
+      render(<AdminCelcatView cadence={CADENCE} />);
     });
-    render(<AdminCelcatView />);
-
-    const passee = await screen.findByRole("button", { name: /semaine 1 passée/i });
-    const lancee = screen.getByRole("button", { name: /semaine 3 lancée/i });
-    expect(passee).toBeDisabled();
-    expect(lancee).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^semaine 2$/i })).not.toBeDisabled();
-  });
-
-  it("should disable Lancer maintenant when saisie is off", async () => {
-    stubFetch();
-    render(<AdminCelcatView />);
-
-    const lancer = await screen.findByRole("button", { name: /lancer maintenant/i });
-    expect(lancer).toBeDisabled();
-  });
-
-  it("should POST /celcat/lancer-nuit when Lancer maintenant is clicked while saisie is on", async () => {
-    const mock = stubFetch({ etat: { ...ETAT, saisie_active: true, semaines_validees: [4] } });
-    render(<AdminCelcatView />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /lancer maintenant/i }));
-    await waitFor(() => {
-      expect(
-        mock.mock.calls.some(([url, init]) => String(url).includes("/celcat/lancer-nuit") && init?.method === "POST"),
-      ).toBe(true);
-    });
-  });
-
-  it("should save the checked weeks before launching when Lancer maintenant is clicked without Enregistrer first", async () => {
-    // Bug utilisateur du 05/09/2026, verbatim : « j'ai sélectionné et j'ai
-    // cliqué sur lancer maintenant et rien ne se passe » — cocher une
-    // semaine puis cliquer directement Lancer maintenant (sans passer par
-    // Enregistrer le lot de nuit) relançait l'ANCIEN lot déjà enregistré
-    // côté serveur, jamais la sélection cochée à l'écran.
-    const mock = stubFetch({ etat: { ...ETAT, saisie_active: true, semaines_validees: [] } });
-    render(<AdminCelcatView />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /^semaine 2$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /lancer maintenant/i }));
-
-    await waitFor(() => {
-      const appelValider = mock.mock.calls.find(
-        ([url, init]) => String(url).includes("/celcat/valider") && init?.method === "POST",
-      );
-      expect(appelValider).toBeDefined();
-      expect(JSON.parse(String(appelValider?.[1]?.body))).toEqual({ semaines: [2] });
-    });
-    const indexValider = mock.mock.calls.findIndex(([url]) => String(url).includes("/celcat/valider"));
-    const indexLancer = mock.mock.calls.findIndex(([url]) => String(url).includes("/celcat/lancer-nuit"));
-    expect(indexValider).toBeGreaterThanOrEqual(0);
-    expect(indexLancer).toBeGreaterThan(indexValider);
+    await waitFor(() => expect(screen.getByTestId("etat-file-celcat").textContent).toMatch(/indisponible/));
   });
 });
