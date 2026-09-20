@@ -175,3 +175,60 @@ def test_mapper_la_salle_debloque_la_seance_au_passage_suivant(
 
     assert tentees == ["s-salle-inconnue"], "la séance doit repartir d'elle-même"
     assert bilan.reussis == 1
+
+
+# --------------------------------------------------------------------------
+# Restreindre à la semaine regardée (demande du 20/09/2026)
+# --------------------------------------------------------------------------
+
+
+def _bloquer_en_file(session_id: str, semaine: int, motif: str) -> None:
+    """Un job en file ET une ligne de blocage — l'état réel d'une séance que
+    le worker écarte à chaque passage."""
+    from cal_iut.celcat.file_attente import enfiler
+    from cal_iut.celcat.logs import append
+
+    enfiler({"action": "create", "session_id": session_id, "semaine": semaine})
+    append(kind="blocked", session_id=session_id, motif=motif, regrouper=True)
+
+
+def test_les_blocages_se_limitent_a_la_semaine_regardee(planning) -> None:  # noqa: F811
+    """« il faut afficher les séances bloquées de la semaine uniquement ».
+
+    Le journal ne porte pas la semaine : c'est la FILE qui la porte, et on
+    les joint par `session_id`."""
+    from cal_iut.api.main import celcat_mappings
+
+    vider_file()
+    _bloquer_en_file("s-ici", 3, "salle « e-102 » sans équivalent Celcat")
+    _bloquer_en_file("s-ailleurs", 9, "enseignant JHU sans code Celcat")
+
+    vue = celcat_mappings(semaine=3)
+
+    assert [m["seances"] for m in vue.manquants] == [["s-ici"]]
+    assert vue.bloques_autres_semaines == 1, "ce qui bloque ailleurs se compte, il ne se tait pas"
+
+
+def test_sans_semaine_on_voit_tout(planning) -> None:  # noqa: F811
+    from cal_iut.api.main import celcat_mappings
+
+    vider_file()
+    _bloquer_en_file("s-ici", 3, "salle « e-102 » sans équivalent Celcat")
+    _bloquer_en_file("s-ailleurs", 9, "enseignant JHU sans code Celcat")
+
+    vue = celcat_mappings()
+
+    assert len(vue.manquants) == 2
+    assert vue.bloques_autres_semaines == 0
+
+
+def test_un_blocage_dont_le_job_a_quitte_la_file_disparait(planning) -> None:  # noqa: F811
+    """Un motif résolu cessait d'être vrai sans cesser d'être affiché : le
+    journal garde sa ligne, mais la séance n'attend plus rien."""
+    from cal_iut.api.main import celcat_mappings
+    from cal_iut.celcat.logs import append
+
+    vider_file()
+    append(kind="blocked", session_id="s-reglee", motif="salle « e-102 » sans équivalent", regrouper=True)
+
+    assert celcat_mappings().manquants == []

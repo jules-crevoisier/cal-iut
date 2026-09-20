@@ -100,21 +100,31 @@ export function BlocagesCelcat({
     ...mappings.salles.map((m) => ({ ...m, famille: "salles" as const })),
     ...mappings.enseignants.map((m) => ({ ...m, famille: "enseignants" as const })),
   ];
-  if (blocages.length === 0 && correspondances.length === 0) return null;
+  if (blocages.length === 0 && correspondances.length === 0 && !(mappings.bloques_autres_semaines ?? 0))
+    return null;
 
   const seances = blocages.reduce((n, b) => n + b.seances.length, 0);
+  const ailleurs = mappings.bloques_autres_semaines ?? 0;
 
   return (
     <section className="panel celcat-blocages" aria-labelledby="celcat-blocages-titre">
       <h2 id="celcat-blocages-titre">
         {blocages.length === 0
           ? "Correspondances ajoutées"
-          : `${pluriel(seances, "séance bloquée", "séances bloquées")}`}
+          : `${pluriel(seances, "séance bloquée", "séances bloquées")} cette semaine`}
       </h2>
       {blocages.length > 0 ? (
         <p className="celcat-aide">
           Le worker les écarte à chaque passage : il leur manque une correspondance. Une fois
           réglée, elles repartent d’elles-mêmes — elles n’ont jamais quitté la file.
+        </p>
+      ) : null}
+
+      {/* Filtrer sans le dire ferait croire que le reste s'est réglé. */}
+      {ailleurs > 0 ? (
+        <p className="celcat-sous-texte" data-testid="blocages-autres-semaines">
+          {pluriel(ailleurs, "autre blocage", "autres blocages")} sur d’autres semaines — changez de
+          semaine pour les traiter.
         </p>
       ) : null}
 
