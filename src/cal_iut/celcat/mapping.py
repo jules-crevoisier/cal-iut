@@ -57,17 +57,40 @@ def _code_renseigne(valeur: object) -> str | None:
 
 
 def load_celcat_config(config_dir: Path) -> CelcatConfig:
+    """La table de correspondance, YAML d'abord, surcouche par-dessus.
+
+    `celcat.yaml` vit dans l'image Docker : y ajouter une salle demandait un
+    déploiement. Les correspondances ajoutées depuis l'écran vivent dans le
+    volume partagé (`celcat/mappings.py`) et sont donc lues par le worker à
+    son passage suivant, sans redémarrage.
+
+    L'ordre est explicite : la surcouche a le dernier mot. Corriger depuis
+    l'écran une entrée que le YAML a fausse doit marcher tout de suite — sans
+    quoi on se retrouve à éditer deux endroits en se demandant lequel gagne.
+    """
+    from cal_iut.celcat import mappings
+
     path = config_dir / "celcat.yaml"
-    if not path.exists():
-        return CelcatConfig()
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    data = {}
+    if path.exists():
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+    enseignants = {
+        str(k).upper(): code
+        for k, v in (data.get("enseignants") or {}).items()
+        if (code := _code_renseigne(v))
+    }
+    salles = {str(k): str(v) for k, v in (data.get("salles") or {}).items() if v}
+    enseignants.update({
+        cle: code
+        for cle, valeur in mappings.table("enseignants").items()
+        if (code := _code_renseigne(valeur))
+    })
+    salles.update(mappings.table("salles"))
+
     return CelcatConfig(
-        enseignants={
-            str(k).upper(): code
-            for k, v in (data.get("enseignants") or {}).items()
-            if (code := _code_renseigne(v))
-        },
-        salles={str(k): str(v) for k, v in (data.get("salles") or {}).items() if v},
+        enseignants=enseignants,
+        salles=salles,
         types_seance=dict(data.get("types_seance") or {}),
         modules={str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v},
     )

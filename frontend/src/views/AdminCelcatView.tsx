@@ -34,13 +34,18 @@ import {
   fetchCelcatFile,
   fetchCelcatInstantane,
   fetchCelcatLogs,
+  fetchCelcatMappings,
+  definirMappingCelcat,
+  oublierMappingCelcat,
   type CelcatComparaison,
   type CelcatEtat,
   type CelcatExtra,
   type CelcatFile,
   type CelcatInstantane,
   type CelcatLog,
+  type CelcatMappings,
 } from "../api/client";
+import { BlocagesCelcat } from "../components/BlocagesCelcat";
 import { DetailComparaisonCelcat } from "../components/DetailComparaisonCelcat";
 import { EtatFileCelcat } from "../components/EtatFileCelcat";
 import { JournalCelcat } from "../components/JournalCelcat";
@@ -100,6 +105,9 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
   const [semaine, setSemaine] = useState<number | null>(null);
   const [comparaison, setComparaison] = useState<CelcatComparaison | null>(null);
   const [erreurComparaison, setErreurComparaison] = useState<string | null>(null);
+  const [mappings, setMappings] = useState<CelcatMappings | null>(null);
+  const [erreurMapping, setErreurMapping] = useState<string | null>(null);
+  const [mappingEnCours, setMappingEnCours] = useState(false);
 
   const chargerFile = useCallback(async () => {
     try {
@@ -120,6 +128,12 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     // L'instantané ne doit pas faire échouer l'écran : sans relevé, le
     // verdict le dit lui-même.
     setInstantane(await fetchCelcatInstantane().catch(() => null));
+  }, []);
+
+  const chargerMappings = useCallback(async () => {
+    // Ne bloque pas l'écran : sans cette liste, on perd le panneau des
+    // blocages, pas le verdict.
+    setMappings(await fetchCelcatMappings().catch(() => null));
   }, []);
 
   const chargerJournal = useCallback(async () => {
@@ -144,6 +158,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     void chargerSysteme();
     void chargerFile();
     void chargerJournal();
+    void chargerMappings();
     fetchAppState()
       .then((p) => {
         const rows = p.weekRows ?? [];
@@ -164,7 +179,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         setSemaines(Array.from({ length: 30 }, (_, i) => ({ indice: i, libelle: `Semaine ${i + 1} (dates indisponibles)` })));
         setSemaine((actuelle) => actuelle ?? 0);
       });
-  }, [chargerSysteme, chargerFile, chargerJournal]);
+  }, [chargerSysteme, chargerFile, chargerJournal, chargerMappings]);
 
   useEffect(() => {
     if (semaine === null) return;
@@ -185,6 +200,21 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     return () => window.clearTimeout(minuteur);
   }, [file, enAttente, chargerFile, chargerSysteme, cadence.sondageFileMs]);
 
+  const agirSurMapping = useCallback(async (action: () => Promise<CelcatMappings>) => {
+    setMappingEnCours(true);
+    setErreurMapping(null);
+    try {
+      setMappings(await action());
+      // La correspondance prend effet au passage suivant du worker : on relit
+      // le journal pour que les blocages réglés cessent d'être affichés.
+      await chargerJournal();
+    } catch (e) {
+      setErreurMapping(message(e, "Correspondance impossible à enregistrer"));
+    } finally {
+      setMappingEnCours(false);
+    }
+  }, [chargerJournal]);
+
   const boucle = useBoucleCelcat(semaine, {
     intervalleMs: cadence.intervalleMs,
     limiteWorkerMs: cadence.limiteWorkerMs,
@@ -195,6 +225,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         chargerSysteme(),
         chargerFile(),
         chargerJournal(),
+        chargerMappings(),
       ]);
     },
   });
@@ -249,6 +280,16 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
       {comparaison ? (
         <SuppressionsCelcat donnees={comparaison} occupe={boucle.occupe} onSupprimer={() => void boucle.corriger(true)} />
       ) : null}
+
+      <BlocagesCelcat
+        mappings={mappings}
+        occupe={mappingEnCours}
+        erreur={erreurMapping}
+        onMapper={(famille, cle, valeur) =>
+          void agirSurMapping(() => definirMappingCelcat(famille, cle, valeur))
+        }
+        onOublier={(famille, cle) => void agirSurMapping(() => oublierMappingCelcat(famille, cle))}
+      />
 
       <section className="panel celcat-en-route" aria-labelledby="celcat-en-route-titre">
         <h2 id="celcat-en-route-titre">En route vers Celcat</h2>

@@ -829,6 +829,63 @@ export interface CelcatFile {
   resume: string;
 }
 
+/** Une correspondance ajoutée depuis l'écran, par-dessus `celcat.yaml`. */
+export interface CelcatMapping {
+  cle: string;
+  valeur: string;
+  ajoute_le: string | null;
+  ajoute_par: string;
+}
+
+/** Une cause de blocage, telle que le worker l'a journalisée.
+ *
+ *  `famille` et `cle` disent si l'écran peut la régler lui-même : une salle
+ *  sans équivalent se mappe, une séance disparue de la maquette non. */
+export interface CelcatBlocage {
+  motif: string;
+  seances: string[];
+  tentatives: number;
+  famille: "salles" | "enseignants" | "";
+  cle: string;
+}
+
+export interface CelcatMappings {
+  salles: CelcatMapping[];
+  enseignants: CelcatMapping[];
+  /** Les salles que Celcat contient réellement, relevées sur l'instantané :
+   *  choisir dans une liste vraie évite d'inventer un nom que l'écriture
+   *  refusera ensuite en silence. */
+  salles_celcat: string[];
+  manquants: CelcatBlocage[];
+}
+
+export function fetchCelcatMappings(): Promise<CelcatMappings> {
+  return request("/celcat/mappings");
+}
+
+/** Ajoute ou corrige une correspondance. Prend effet au passage suivant du
+ *  worker, sans redéploiement : les séances bloquées repartent seules. */
+export function definirMappingCelcat(
+  famille: "salles" | "enseignants",
+  cle: string,
+  valeur: string,
+): Promise<CelcatMappings> {
+  return request("/celcat/mappings", {
+    method: "PUT",
+    body: JSON.stringify({ famille, cle, valeur }),
+  });
+}
+
+export function oublierMappingCelcat(
+  famille: "salles" | "enseignants",
+  cle: string,
+): Promise<CelcatMappings> {
+  return request(
+    `/celcat/mappings?famille=${encodeURIComponent(famille)}&cle=${encodeURIComponent(cle)}`,
+    { method: "DELETE" },
+  );
+}
+
 export function fetchCelcatFile(): Promise<CelcatFile> {
   return request("/celcat/file");
 }

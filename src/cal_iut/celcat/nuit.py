@@ -555,6 +555,31 @@ def _avec_cause(
     return [(sid, f"{motif} [ids irrésolus : {cause}]") for sid, motif in echecs]
 
 
+def _bloquer(session_id: str, motif: str, course_code: str | None = None) -> None:
+    """Journalise un job ÉCARTÉ, pour que l'écran puisse le montrer.
+
+    Ces cinq cas — séance disparue de la maquette, enseignant sans code
+    Celcat, salle sans équivalent, job sans event_id, suppression refusée —
+    n'existaient que dans `docker compose logs`, c'est-à-dire nulle part pour
+    qui utilise l'application. Le worker les réécartait toutes les quatre-
+    vingt-dix secondes sans que rien ne remonte, et la file paraissait
+    simplement ne pas descendre.
+
+    Demande de l'utilisateur, 20/09/2026 : « il faut faire en sorte d'avoir
+    des logs sur ce qu'il se passe, exemple : prof non attribué dans Celcat,
+    salle non mappée ».
+
+    `regrouper=True` est indispensable : un blocage revient à chaque passage,
+    et une ligne par tentative écrirait des milliers d'entrées identiques par
+    jour. Une seule ligne, dont le compteur de tentatives dit depuis combien
+    de temps ça dure.
+    """
+    journaliser(
+        kind="blocked", session_id=session_id, motif=motif,
+        course_code=course_code, regrouper=True,
+    )
+
+
 def _consommer_file(
     page: Any,
     doc: dict[str, Any],
@@ -663,12 +688,14 @@ def _consommer_file(
             # nommer est le minimum, sans quoi il tourne indéfiniment en
             # silence (c'était le cas avant le 07/09/2026).
             bilan.ignores.append((sid_job, "séance inconnue de la maquette"))
+            _bloquer(sid_job, "séance inconnue de la maquette")
             continue
         motif_b = motif_non_saisissable(entree)
         if motif_b:
             # Reste en file : le jour où l'enseignant est affecté au
             # planning, le job repart tout seul. Mais on n'essaie plus.
             bilan.ignores.append((sid_job, motif_b))
+            _bloquer(sid_job, motif_b, getattr(entree, "course_code", None))
             continue
         # Le journal est relu ICI, au moment d'écrire — et non pas seulement
         # au moment d'enfiler, comme le fait `ops.py::_executer`. Entre les
@@ -777,18 +804,16 @@ def _consommer_file(
         entree = entrees.get(sid)
         eid = job.get("event_id")
         if entree is None or eid in (None, ""):
-            bilan.ignores.append(
-                (
-                    sid,
-                    "séance inconnue de la maquette"
-                    if entree is None
-                    else "aucun event_id dans le job",
-                )
+            motif_i = (
+                "séance inconnue de la maquette" if entree is None else "aucun event_id dans le job"
             )
+            bilan.ignores.append((sid, motif_i))
+            _bloquer(sid, motif_i)
             continue
         motif_b = motif_non_saisissable(entree)
         if motif_b:
             bilan.ignores.append((sid, motif_b))
+            _bloquer(sid, motif_b, getattr(entree, "course_code", None))
             continue
         ids_m, cause_ids_m = _ids_cache(entree)
         if cause_ids_m is not None:
@@ -895,6 +920,7 @@ def _consommer_file(
             # — le compter comme réussi masquerait une suppression qui
             # n'aura jamais lieu.
             bilan.ignores.append((sid, f"suppression refusée : {motif}"))
+            _bloquer(sid, f"suppression refusée : {motif}")
         # Échec RPC d'une suppression : personne ne le lisait jusqu'ici, si
         # bien qu'une suppression impossible restait en file SANS jamais
         # apparaître au bilan — invisible et immobile, la pire combinaison
