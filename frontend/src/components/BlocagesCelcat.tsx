@@ -27,6 +27,29 @@ import { useState } from "react";
 import type { CelcatBlocage, CelcatMappings } from "../api/client";
 import { dateLisible, pluriel } from "../utils/celcatStatut";
 
+/** Que faire d'un blocage qu'aucune correspondance ne règle.
+ *
+ * « Rien à mapper » ne suffit pas : il faut dire OÙ regarder. Le 20/09/2026,
+ * sept séances de WR303D étaient annoncées « inconnues de la maquette »
+ * alors qu'elles y figuraient toutes — elles n'avaient simplement plus de
+ * place au planning. */
+function conseil(motif: string): string {
+  if (motif.includes("sans placement")) {
+    return (
+      "Rien à mapper ici : cette séance n’a plus de place au planning. Replacez-la depuis " +
+      "« À placer » si elle doit aller dans Celcat ; sinon, reconstruisez la file depuis les " +
+      "réglages — cela ne retire que les jobs des semaines enregistrées."
+    );
+  }
+  if (motif.includes("suppression refusée")) {
+    return "Un garde-fou a refusé cette suppression : l’évènement est protégé, férié ou fantôme.";
+  }
+  if (motif.includes("event_id")) {
+    return "Ce job vise un évènement Celcat sans identifiant : reconstruisez la file pour le recalculer.";
+  }
+  return "Rien à mapper ici.";
+}
+
 const AIDE_FAMILLE: Record<string, string> = {
   salles: "Sous quel nom Celcat connaît-il cette salle ?",
   enseignants: "Identifiant Celcat de cet enseignant (un nombre, visible dans Celcat).",
@@ -154,10 +177,7 @@ export function BlocagesCelcat({
                 onMapper={onMapper}
               />
             ) : (
-              <p className="celcat-sous-texte">
-                Rien à mapper ici : cette séance n’existe plus dans la maquette. Reconstruisez la
-                file depuis les réglages pour l’en retirer.
-              </p>
+              <p className="celcat-sous-texte">{conseil(b.motif)}</p>
             )}
           </li>
         ))}

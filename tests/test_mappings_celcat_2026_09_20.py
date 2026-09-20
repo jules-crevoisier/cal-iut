@@ -124,4 +124,4 @@ def test_les_motifs_de_blocage_disent_quoi_mapper() -> None:
 
     assert (_famille_du_motif(salle), _cle_du_motif(salle)) == ("salles", "e-102")
     assert (_famille_du_motif(prof), _cle_du_motif(prof)) == ("enseignants", "JHU")
-    assert _famille_du_motif("séance inconnue de la maquette") == ""
+    assert _famille_du_motif("séance sans placement au planning") == ""

@@ -33,7 +33,7 @@ const PROF = {
 };
 
 const ORPHELINE = {
-  motif: "séance inconnue de la maquette",
+  motif: "séance sans placement au planning (retirée, ou planning régénéré depuis)",
   seances: ["WR303D-S3-TP-1-but2-dev-fi-tp-c"],
   tentatives: 120,
   famille: "" as const,
@@ -103,11 +103,16 @@ describe("Ce qui bloque la recopie Celcat", () => {
     expect(within(bloc).getByLabelText(/équivalent celcat de JHU/i).getAttribute("list")).toBeNull();
   });
 
-  it("ne propose pas de mapper une séance disparue de la maquette", () => {
+  it("dit où regarder pour une séance qui n'a plus de place au planning", () => {
+    // Le 20/09/2026, sept séances de WR303D étaient annoncées « inconnues de
+    // la maquette » alors qu'elles y figuraient toutes : elles n'avaient
+    // simplement plus de placement. « Rien à mapper » ne suffit pas, il faut
+    // dire OÙ regarder.
     poser();
     const bloc = screen.getByTestId("blocage-autre");
     expect(within(bloc).queryByRole("button", { name: /mapper/i })).toBeNull();
-    expect(bloc.textContent).toMatch(/n’existe plus dans la maquette/i);
+    expect(bloc.textContent).toMatch(/replacez-la depuis « À placer »/i);
+    expect(bloc.textContent).toMatch(/semaines enregistrées/i);
   });
 
   it("n'envoie rien tant que le champ est vide", () => {
