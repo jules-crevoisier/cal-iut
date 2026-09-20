@@ -3683,7 +3683,7 @@ def _groupe_id_depuis_nom(state: object, nom: str) -> int | None:
     response_model=CelcatMappingsResponse,
     dependencies=[Depends(accounts.require_role("admin"))],
 )
-def celcat_mappings() -> CelcatMappingsResponse:
+def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
     """Les correspondances ajoutées depuis l'écran, et ce qui manque encore.
 
     `celcat.yaml` vit dans l'image Docker : ajouter une salle demandait un
@@ -3693,12 +3693,32 @@ def celcat_mappings() -> CelcatMappingsResponse:
     `manquants` est le cœur de la réponse : les séances que le worker écarte
     faute de correspondance, avec leur motif. Sans elles, l'écran afficherait
     une table vide sans dire ce qu'il faut y mettre.
+
+    `semaine` restreint à la semaine regardée (demande du 20/09/2026 : « il
+    faut afficher les séances bloquées de la semaine uniquement »). Ce qui
+    bloque ailleurs est COMPTÉ à part, jamais tu : trente blocages réduits à
+    six sans un mot feraient croire que les autres se sont réglés.
+
+    LE JOURNAL NE PORTE PAS LA SEMAINE — c'est la FILE qui la porte. On les
+    joint donc par `session_id`, ce qui écarte du même coup les blocages dont
+    le job a quitté la file : un motif résolu cessait sinon d'être vrai sans
+    cesser d'être affiché.
     """
     from cal_iut.celcat import mappings
+    from cal_iut.celcat.file_attente import lister as jobs_en_file
     from cal_iut.celcat.instantane import lire
     from cal_iut.celcat.logs import tous as tous_les_logs
 
     doc = mappings.charger()
+
+    semaine_par_session: dict[str, int | None] = {}
+    for job in jobs_en_file():
+        brut = job.get("semaine")
+        try:
+            sem = int(brut) if brut is not None else None
+        except (TypeError, ValueError):
+            sem = None
+        semaine_par_session[str(job.get("session_id") or "")] = sem
 
     def _entrees(famille: str) -> list[dict]:
         return [
@@ -3722,8 +3742,17 @@ def celcat_mappings() -> CelcatMappingsResponse:
     # Ce qui bloque, groupé par motif — la même information que le journal,
     # mais réduite à ce qu'une correspondance peut débloquer.
     manquants: dict[str, dict] = {}
+    ailleurs = 0
     for ligne in tous_les_logs():
         if ligne.get("kind") != "blocked":
+            continue
+        sid = str(ligne.get("session_id") or "")
+        if sid not in semaine_par_session:
+            # Le job n'est plus en file : le blocage a été réglé, ou la
+            # séance a été retirée. L'afficher encore serait un mensonge.
+            continue
+        if semaine is not None and semaine_par_session[sid] != semaine:
+            ailleurs += 1
             continue
         motif = str(ligne.get("motif") or "")
         entree = manquants.setdefault(
@@ -3731,7 +3760,6 @@ def celcat_mappings() -> CelcatMappingsResponse:
             {"motif": motif, "seances": [], "tentatives": 0, "famille": _famille_du_motif(motif),
              "cle": _cle_du_motif(motif)},
         )
-        sid = str(ligne.get("session_id") or "")
         if sid and sid not in entree["seances"]:
             entree["seances"].append(sid)
         entree["tentatives"] += int(ligne.get("repetitions") or 1)
@@ -3741,6 +3769,7 @@ def celcat_mappings() -> CelcatMappingsResponse:
         enseignants=_entrees("enseignants"),
         salles_celcat=salles_celcat,
         manquants=sorted(manquants.values(), key=lambda m: -m["tentatives"]),
+        bloques_autres_semaines=ailleurs,
     )
 
 
@@ -3774,7 +3803,7 @@ def _cle_du_motif(motif: str) -> str:
     dependencies=[Depends(accounts.require_role("admin"))],
 )
 def celcat_mappings_definir(
-    body: CelcatMappingRequest, request: Request
+    body: CelcatMappingRequest, request: Request, semaine: int | None = None
 ) -> CelcatMappingsResponse:
     """Ajoute ou corrige une correspondance, et la rend active tout de suite.
 
@@ -3789,7 +3818,7 @@ def celcat_mappings_definir(
         mappings.definir(body.famille, body.cle, body.valeur, par=utilisateur)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
-    return celcat_mappings()
+    return celcat_mappings(semaine)
 
 
 @app.delete(
@@ -3797,14 +3826,16 @@ def celcat_mappings_definir(
     response_model=CelcatMappingsResponse,
     dependencies=[Depends(accounts.require_role("admin"))],
 )
-def celcat_mappings_oublier(famille: str, cle: str) -> CelcatMappingsResponse:
+def celcat_mappings_oublier(
+    famille: str, cle: str, semaine: int | None = None
+) -> CelcatMappingsResponse:
     from cal_iut.celcat import mappings
 
     try:
         mappings.oublier(famille, cle)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
-    return celcat_mappings()
+    return celcat_mappings(semaine)
 
 
 @app.get(

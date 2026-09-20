@@ -130,10 +130,10 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     setInstantane(await fetchCelcatInstantane().catch(() => null));
   }, []);
 
-  const chargerMappings = useCallback(async () => {
+  const chargerMappings = useCallback(async (indice: number | null) => {
     // Ne bloque pas l'écran : sans cette liste, on perd le panneau des
     // blocages, pas le verdict.
-    setMappings(await fetchCelcatMappings().catch(() => null));
+    setMappings(await fetchCelcatMappings(indice).catch(() => null));
   }, []);
 
   const chargerJournal = useCallback(async () => {
@@ -158,7 +158,6 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     void chargerSysteme();
     void chargerFile();
     void chargerJournal();
-    void chargerMappings();
     fetchAppState()
       .then((p) => {
         const rows = p.weekRows ?? [];
@@ -179,7 +178,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         setSemaines(Array.from({ length: 30 }, (_, i) => ({ indice: i, libelle: `Semaine ${i + 1} (dates indisponibles)` })));
         setSemaine((actuelle) => actuelle ?? 0);
       });
-  }, [chargerSysteme, chargerFile, chargerJournal, chargerMappings]);
+  }, [chargerSysteme, chargerFile, chargerJournal]);
 
   useEffect(() => {
     if (semaine === null) return;
@@ -188,7 +187,10 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     setComparaison(null);
     setErreurComparaison(null);
     void chargerComparaison(semaine);
-  }, [semaine, chargerComparaison]);
+    // Les blocages suivent la semaine regardée : « il faut afficher les
+    // séances bloquées de la semaine uniquement » (20/09/2026).
+    void chargerMappings(semaine);
+  }, [semaine, chargerComparaison, chargerMappings]);
 
   const enAttente = file?.en_attente ?? 0;
   useEffect(() => {
@@ -225,7 +227,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         chargerSysteme(),
         chargerFile(),
         chargerJournal(),
-        chargerMappings(),
+        chargerMappings(semaine),
       ]);
     },
   });
@@ -286,9 +288,11 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         occupe={mappingEnCours}
         erreur={erreurMapping}
         onMapper={(famille, cle, valeur) =>
-          void agirSurMapping(() => definirMappingCelcat(famille, cle, valeur))
+          void agirSurMapping(() => definirMappingCelcat(famille, cle, valeur, semaine))
         }
-        onOublier={(famille, cle) => void agirSurMapping(() => oublierMappingCelcat(famille, cle))}
+        onOublier={(famille, cle) =>
+          void agirSurMapping(() => oublierMappingCelcat(famille, cle, semaine))
+        }
       />
 
       <section className="panel celcat-en-route" aria-labelledby="celcat-en-route-titre">

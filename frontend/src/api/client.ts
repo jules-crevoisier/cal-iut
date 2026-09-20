@@ -857,10 +857,15 @@ export interface CelcatMappings {
    *  refusera ensuite en silence. */
   salles_celcat: string[];
   manquants: CelcatBlocage[];
+  /** Ce qui bloque sur d'AUTRES semaines — compté, jamais tu : filtrer sans
+   *  le dire ferait croire que le reste s'est réglé. */
+  bloques_autres_semaines?: number;
 }
 
-export function fetchCelcatMappings(): Promise<CelcatMappings> {
-  return request("/celcat/mappings");
+/** `semaine` restreint les blocages à celle qu'on regarde. */
+export function fetchCelcatMappings(semaine?: number | null): Promise<CelcatMappings> {
+  const q = semaine === null || semaine === undefined ? "" : `?semaine=${semaine}`;
+  return request(`/celcat/mappings${q}`);
 }
 
 /** Ajoute ou corrige une correspondance. Prend effet au passage suivant du
@@ -869,8 +874,10 @@ export function definirMappingCelcat(
   famille: "salles" | "enseignants",
   cle: string,
   valeur: string,
+  semaine?: number | null,
 ): Promise<CelcatMappings> {
-  return request("/celcat/mappings", {
+  const q = semaine === null || semaine === undefined ? "" : `?semaine=${semaine}`;
+  return request(`/celcat/mappings${q}`, {
     method: "PUT",
     body: JSON.stringify({ famille, cle, valeur }),
   });
@@ -879,9 +886,11 @@ export function definirMappingCelcat(
 export function oublierMappingCelcat(
   famille: "salles" | "enseignants",
   cle: string,
+  semaine?: number | null,
 ): Promise<CelcatMappings> {
+  const s = semaine === null || semaine === undefined ? "" : `&semaine=${semaine}`;
   return request(
-    `/celcat/mappings?famille=${encodeURIComponent(famille)}&cle=${encodeURIComponent(cle)}`,
+    `/celcat/mappings?famille=${encodeURIComponent(famille)}&cle=${encodeURIComponent(cle)}${s}`,
     { method: "DELETE" },
   );
 }

@@ -812,6 +812,9 @@ class CelcatMappingsResponse(BaseModel):
     # choisir dans une liste réelle vaut mieux que saisir un nom au jugé.
     salles_celcat: list[str] = Field(default_factory=list)
     manquants: list[dict] = Field(default_factory=list)
+    # Ce qui bloque sur d'AUTRES semaines. Compté, jamais tu : filtrer trente
+    # blocages à six sans le dire ferait croire que les autres sont réglés.
+    bloques_autres_semaines: int = 0
 
 
 class CelcatMappingRequest(BaseModel):

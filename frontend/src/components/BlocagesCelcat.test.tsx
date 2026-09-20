@@ -135,6 +135,25 @@ describe("Ce qui bloque la recopie Celcat", () => {
     expect(onOublier).toHaveBeenCalledWith("salles", "e-102");
   });
 
+  it("dit que les blocages affichés sont ceux de la semaine regardée", () => {
+    poser();
+    expect(screen.getByRole("heading", { level: 2, name: /cette semaine/i })).toBeTruthy();
+  });
+
+  it("compte ce qui bloque ailleurs au lieu de le taire", () => {
+    // Filtrer trente blocages à six sans un mot ferait croire que les autres
+    // se sont réglés.
+    poser({ mappings: mappings({ bloques_autres_semaines: 24 }) });
+    expect(screen.getByTestId("blocages-autres-semaines").textContent).toMatch(
+      /24 autres blocages sur d’autres semaines/i,
+    );
+  });
+
+  it("reste visible quand la semaine est saine mais qu'il bloque ailleurs", () => {
+    poser({ mappings: mappings({ manquants: [], bloques_autres_semaines: 3 }) });
+    expect(screen.getByTestId("blocages-autres-semaines")).toBeTruthy();
+  });
+
   it("disparaît quand il n'y a ni blocage ni correspondance", () => {
     const { container } = render(
       <BlocagesCelcat
