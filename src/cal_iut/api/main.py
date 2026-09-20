@@ -1,6 +1,7 @@
 """API REST FastAPI — générateur d'emplois du temps IUT MMI Troyes."""
 
 import hashlib
+import re
 import sys
 import threading
 import uuid
@@ -57,6 +58,8 @@ from cal_iut.api.schemas import (
     CelcatResyncResponse,
     CelcatEtatResponse,
     CelcatFileResponse,
+    CelcatMappingRequest,
+    CelcatMappingsResponse,
     CelcatInstantaneDemandeResponse,
     CelcatInstantaneResponse,
     CelcatExtraActionResponse,
@@ -3673,6 +3676,135 @@ def _groupe_id_depuis_nom(state: object, nom: str) -> int | None:
         return int(data[nom])
     except (KeyError, TypeError, ValueError):
         return None
+
+
+@app.get(
+    "/celcat/mappings",
+    response_model=CelcatMappingsResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_mappings() -> CelcatMappingsResponse:
+    """Les correspondances ajoutées depuis l'écran, et ce qui manque encore.
+
+    `celcat.yaml` vit dans l'image Docker : ajouter une salle demandait un
+    déploiement. Cette surcouche vit dans le volume partagé et prend effet au
+    passage suivant du worker.
+
+    `manquants` est le cœur de la réponse : les séances que le worker écarte
+    faute de correspondance, avec leur motif. Sans elles, l'écran afficherait
+    une table vide sans dire ce qu'il faut y mettre.
+    """
+    from cal_iut.celcat import mappings
+    from cal_iut.celcat.instantane import lire
+    from cal_iut.celcat.logs import tous as tous_les_logs
+
+    doc = mappings.charger()
+
+    def _entrees(famille: str) -> list[dict]:
+        return [
+            {"cle": cle, "valeur": str(e.get("valeur") or ""),
+             "ajoute_le": e.get("ajoute_le"), "ajoute_par": str(e.get("ajoute_par") or "")}
+            for cle, e in sorted(doc.get(famille, {}).items())
+        ]
+
+    # Les salles que Celcat contient RÉELLEMENT, prises sur le dernier relevé :
+    # choisir dans une liste vraie évite d'inventer un nom que l'écriture
+    # refusera ensuite silencieusement.
+    salles_celcat = sorted(
+        {
+            nom
+            for ev in lire().evenements
+            for nom in ([ev.get("salle")] + list(ev.get("salles") or []))
+            if isinstance(nom, str) and nom.strip()
+        }
+    )
+
+    # Ce qui bloque, groupé par motif — la même information que le journal,
+    # mais réduite à ce qu'une correspondance peut débloquer.
+    manquants: dict[str, dict] = {}
+    for ligne in tous_les_logs():
+        if ligne.get("kind") != "blocked":
+            continue
+        motif = str(ligne.get("motif") or "")
+        entree = manquants.setdefault(
+            motif,
+            {"motif": motif, "seances": [], "tentatives": 0, "famille": _famille_du_motif(motif),
+             "cle": _cle_du_motif(motif)},
+        )
+        sid = str(ligne.get("session_id") or "")
+        if sid and sid not in entree["seances"]:
+            entree["seances"].append(sid)
+        entree["tentatives"] += int(ligne.get("repetitions") or 1)
+
+    return CelcatMappingsResponse(
+        salles=_entrees("salles"),
+        enseignants=_entrees("enseignants"),
+        salles_celcat=salles_celcat,
+        manquants=sorted(manquants.values(), key=lambda m: -m["tentatives"]),
+    )
+
+
+# « salle « e-102 » sans équivalent Celcat » -> famille `salles`, clé `e-102`.
+# Lu sur le motif plutôt que porté par le journal : le journal est écrit par
+# le worker, et lui ajouter des champs obligerait les deux conteneurs à être
+# déployés ensemble pour que l'écran fonctionne.
+_MOTIF_SALLE = re.compile(r"salle\s+«\s*([^»]+?)\s*»")
+_MOTIF_ENSEIGNANT = re.compile(r"enseignant\s+([A-Z]{2,4})\s+sans code")
+
+
+def _famille_du_motif(motif: str) -> str:
+    if _MOTIF_SALLE.search(motif):
+        return "salles"
+    if _MOTIF_ENSEIGNANT.search(motif):
+        return "enseignants"
+    return ""
+
+
+def _cle_du_motif(motif: str) -> str:
+    for regle in (_MOTIF_SALLE, _MOTIF_ENSEIGNANT):
+        trouve = regle.search(motif)
+        if trouve:
+            return trouve.group(1).strip()
+    return ""
+
+
+@app.put(
+    "/celcat/mappings",
+    response_model=CelcatMappingsResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_mappings_definir(
+    body: CelcatMappingRequest, request: Request
+) -> CelcatMappingsResponse:
+    """Ajoute ou corrige une correspondance, et la rend active tout de suite.
+
+    Aucun redémarrage : `load_celcat_config` relit la surcouche à chaque
+    appel, et le worker la relit à son passage suivant. Les séances bloquées
+    sur cette clé repartent d'elles-mêmes — elles n'ont jamais quitté la file.
+    """
+    from cal_iut.celcat import mappings
+
+    utilisateur = getattr(getattr(request.state, "user", None), "email", "") or ""
+    try:
+        mappings.definir(body.famille, body.cle, body.valeur, par=utilisateur)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return celcat_mappings()
+
+
+@app.delete(
+    "/celcat/mappings",
+    response_model=CelcatMappingsResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_mappings_oublier(famille: str, cle: str) -> CelcatMappingsResponse:
+    from cal_iut.celcat import mappings
+
+    try:
+        mappings.oublier(famille, cle)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    return celcat_mappings()
 
 
 @app.get(

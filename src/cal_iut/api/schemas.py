@@ -789,6 +789,37 @@ class CelcatResyncResponse(CelcatCorrigerResponse):
     message: str = ""
 
 
+class CelcatMappingEntree(BaseModel):
+    """Une correspondance ajoutée depuis l'écran, avec son origine."""
+
+    cle: str
+    valeur: str
+    ajoute_le: str | None = None
+    ajoute_par: str = ""
+
+
+class CelcatMappingsResponse(BaseModel):
+    """Ce que l'écran peut compléter, et ce qui bloque faute de l'être.
+
+    `manquants` est le point : une liste de correspondances vide ne dit pas
+    s'il manque quelque chose. Les séances réellement bloquées, avec leur
+    motif, disent quoi mapper — et se lisent sans ouvrir `docker logs`.
+    """
+
+    salles: list[CelcatMappingEntree] = Field(default_factory=list)
+    enseignants: list[CelcatMappingEntree] = Field(default_factory=list)
+    # Les valeurs que Celcat connaît vraiment, relevées sur l'instantané :
+    # choisir dans une liste réelle vaut mieux que saisir un nom au jugé.
+    salles_celcat: list[str] = Field(default_factory=list)
+    manquants: list[dict] = Field(default_factory=list)
+
+
+class CelcatMappingRequest(BaseModel):
+    famille: str
+    cle: str
+    valeur: str
+
+
 class CelcatFileResponse(BaseModel):
     """Ce qui attend, et ce que le worker a fait en dernier.
 
