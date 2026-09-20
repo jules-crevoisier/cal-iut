@@ -118,12 +118,22 @@ export function BlocagesCelcat({
   onOublier: (famille: "salles" | "enseignants", cle: string) => void;
 }) {
   if (!mappings) return null;
-  const blocages = mappings.manquants ?? [];
+  const tous = mappings.manquants ?? [];
+  // Un blocage dont aucune séance n'est placée n'appartient à aucune
+  // semaine : le ranger sous celle qu'on regarde le faisait apparaître là où
+  // la comparaison ne mentionne rien (« pourquoi on parle de 303 alors qu'il
+  // n'est pas dans les différences ? », 20/09/2026).
+  const blocages = tous.filter((b) => !b.sans_semaine);
+  const horsSemaine = tous.filter((b) => b.sans_semaine);
   const correspondances = [
     ...mappings.salles.map((m) => ({ ...m, famille: "salles" as const })),
     ...mappings.enseignants.map((m) => ({ ...m, famille: "enseignants" as const })),
   ];
-  if (blocages.length === 0 && correspondances.length === 0 && !(mappings.bloques_autres_semaines ?? 0))
+  if (
+    tous.length === 0 &&
+    correspondances.length === 0 &&
+    !(mappings.bloques_autres_semaines ?? 0)
+  )
     return null;
 
   const seances = blocages.reduce((n, b) => n + b.seances.length, 0);
@@ -133,7 +143,9 @@ export function BlocagesCelcat({
     <section className="panel celcat-blocages" aria-labelledby="celcat-blocages-titre">
       <h2 id="celcat-blocages-titre">
         {blocages.length === 0
-          ? "Correspondances ajoutées"
+          ? horsSemaine.length > 0
+            ? "Rien ne bloque cette semaine"
+            : "Correspondances ajoutées"
           : `${pluriel(seances, "séance bloquée", "séances bloquées")} cette semaine`}
       </h2>
       {blocages.length > 0 ? (
@@ -182,6 +194,39 @@ export function BlocagesCelcat({
           </li>
         ))}
       </ul>
+
+      {horsSemaine.length > 0 ? (
+        <details className="celcat-repli" data-testid="blocages-hors-semaine">
+          <summary>
+            {pluriel(
+              horsSemaine.reduce((n, b) => n + b.seances.length, 0),
+              "job sans séance placée",
+              "jobs sans séance placée",
+            )}
+          </summary>
+          <p className="celcat-aide">
+            Ces jobs ne relèvent d’aucune semaine : la séance qu’ils nomment n’est plus placée au
+            planning, et la comparaison ne peut donc rien en dire.
+          </p>
+          <ul className="celcat-liste">
+            {horsSemaine.map((b) => (
+              <li key={b.motif} className="celcat-blocage" data-testid="blocage-autre">
+                <div className="celcat-blocage-entete">
+                  <strong>{b.motif}</strong>
+                  <span className="celcat-sous-texte">
+                    {pluriel(b.seances.length, "séance")} · {pluriel(b.tentatives, "tentative")}
+                  </span>
+                </div>
+                <div className="celcat-sous-texte">
+                  {b.seances.slice(0, 6).join(", ")}
+                  {b.seances.length > 6 ? ` et ${b.seances.length - 6} autre(s)` : ""}
+                </div>
+                <p className="celcat-sous-texte">{conseil(b.motif)}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {correspondances.length > 0 ? (
         <details className="celcat-repli" data-testid="mappings-existants">

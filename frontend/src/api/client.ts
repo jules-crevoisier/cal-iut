@@ -697,6 +697,8 @@ export interface CelcatInstantane {
   perime: boolean;
   demande_en_cours: boolean;
   erreur: string | null;
+  nb_evenements?: number;
+  nb_groupes?: number;
 }
 
 /** Une ligne de la comparaison Celcat / cal-iut. Le rapprochement est fait
@@ -847,6 +849,10 @@ export interface CelcatBlocage {
   tentatives: number;
   famille: "salles" | "enseignants" | "";
   cle: string;
+  /** Aucune des séances concernées n'est placée au planning : ce blocage
+   *  n'appartient donc à AUCUNE semaine. Le ranger sous celle qu'on regarde
+   *  le ferait apparaître là où la comparaison ne mentionne rien. */
+  sans_semaine?: boolean;
 }
 
 export interface CelcatMappings {
@@ -899,8 +905,10 @@ export function fetchCelcatFile(): Promise<CelcatFile> {
   return request("/celcat/file");
 }
 
-export function fetchCelcatInstantane(): Promise<CelcatInstantane> {
-  return request("/celcat/instantane");
+/** `leger` (le défaut) omet les 2337 évènements — 790 Ko qu'aucun écran
+ *  n'affiche, et dont le poids faisait échouer l'appel. */
+export function fetchCelcatInstantane(leger = true): Promise<CelcatInstantane> {
+  return request(`/celcat/instantane${leger ? "?leger=1" : ""}`);
 }
 
 /** Demande un relevé. Le sidecar l'honore à son prochain passage (moins

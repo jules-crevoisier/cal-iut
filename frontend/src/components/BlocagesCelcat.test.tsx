@@ -34,6 +34,7 @@ const PROF = {
 
 const ORPHELINE = {
   motif: "séance sans placement au planning (retirée, ou planning régénéré depuis)",
+  sans_semaine: true,
   seances: ["WR303D-S3-TP-1-but2-dev-fi-tp-c"],
   tentatives: 120,
   famille: "" as const,
@@ -69,7 +70,7 @@ function poser(props: Partial<Parameters<typeof BlocagesCelcat>[0]> = {}) {
 describe("Ce qui bloque la recopie Celcat", () => {
   it("compte les séances bloquées et dit qu'elles repartiront seules", () => {
     poser();
-    expect(screen.getByRole("heading", { level: 2, name: /6 séances bloquées/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: /5 séances bloquées/i })).toBeTruthy();
     expect(screen.getByText(/repartent d’elles-mêmes/i)).toBeTruthy();
   });
 
@@ -101,6 +102,16 @@ describe("Ce qui bloque la recopie Celcat", () => {
     const bloc = screen.getByTestId("blocage-enseignants");
     expect(bloc.textContent).toMatch(/identifiant celcat/i);
     expect(within(bloc).getByLabelText(/équivalent celcat de JHU/i).getAttribute("list")).toBeNull();
+  });
+
+  it("range hors semaine ce qui n'est plus placé, au lieu de le mêler aux écarts", () => {
+    // « pourquoi on parle de 303 alors qu'il n'est pas dans les différences ? »
+    // Un job dont la séance n'est plus placée n'appartient à aucune semaine.
+    poser();
+    expect(screen.getByRole("heading", { level: 2, name: /5 séances bloquées cette semaine/i })).toBeTruthy();
+    const hors = screen.getByTestId("blocages-hors-semaine");
+    expect(hors.textContent).toMatch(/1 job sans séance placée/i);
+    expect(hors.textContent).toMatch(/ne relèvent d’aucune semaine/i);
   });
 
   it("dit où regarder pour une séance qui n'a plus de place au planning", () => {

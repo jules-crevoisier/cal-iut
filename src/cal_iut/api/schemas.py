@@ -711,6 +711,10 @@ class CelcatInstantaneResponse(BaseModel):
     # Pourquoi le dernier relevé a échoué (VPN, session expirée…) — un
     # instantané vide sans explication renverrait au silence qu'on répare.
     erreur: str | None = None
+    # Comptes, toujours servis — même quand `leger` omet les listes : ils
+    # disent que le relevé existe sans transporter 790 Ko pour le prouver.
+    nb_evenements: int = 0
+    nb_groupes: int = 0
 
 
 class CelcatInstantaneDemandeResponse(BaseModel):
