@@ -3,7 +3,7 @@
 CE QU'ON LISAIT EN PRODUCTION, le 20/09/2026, à chaque passage, à l'identique :
 
     398 job(s) — 0 réussi(s) — 2 en échec — 30 ignoré(s) —
-    25× séance inconnue de la maquette (ex. WR303D-S3-TP-1-but2-dev-fi-tp-c) |
+    25× séance sans placement au planning (ex. WR303D-S3-TP-1-but2-dev-fi-tp-c) |
     3× séance non saisissable, enseignant manquant(s) : enseignant JHU sans
        code Celcat |
     2× séance non saisissable, salle manquant(s) : salle « e-102 » sans
@@ -99,7 +99,10 @@ def test_une_seance_disparue_de_la_maquette_est_nommee(planning, monkeypatch) ->
 
     lignes = _bloques()
     assert [l["session_id"] for l in lignes] == ["s-fantome"]
-    assert lignes[0]["motif"] == "séance inconnue de la maquette"
+    # « sans placement », et non « inconnue de la maquette » : les sept
+    # séances de WR303D signalées le 20/09/2026 figuraient toutes à la
+    # maquette — elles n'avaient plus de place au planning.
+    assert lignes[0]["motif"].startswith("séance sans placement au planning")
 
 
 def test_un_blocage_qui_dure_compte_ses_tentatives_sur_une_seule_ligne(

@@ -49,6 +49,14 @@ from cal_iut.celcat.sync import marquer_saisi, marquer_supprime
 # script : les scripts ne sont pas un module importable en amont de `src/`.
 PREMIERE_SEMAINE_CELCAT = 34
 
+# Le motif d'un job dont la séance n'a AUCUN placement au planning courant.
+# Nommé « sans placement », et non « inconnue de la maquette » : les entrées
+# se construisent sur `state.timetable`, donc sur les placements. Une séance
+# retirée du planning, ou dont l'identifiant a changé à la régénération,
+# existe très bien dans la maquette — et l'ancien libellé envoyait la
+# chercher là où elle n'a jamais manqué.
+SANS_PLACEMENT = "séance sans placement au planning (retirée, ou planning régénéré depuis)"
+
 
 def _event_id(row: dict[str, Any]) -> int | None:
     brut = row.get("event_id")
@@ -687,8 +695,17 @@ def _consommer_file(
             # Le job restera en file sans jamais pouvoir être traité : le
             # nommer est le minimum, sans quoi il tourne indéfiniment en
             # silence (c'était le cas avant le 07/09/2026).
-            bilan.ignores.append((sid_job, "séance inconnue de la maquette"))
-            _bloquer(sid_job, "séance inconnue de la maquette")
+            #
+            # « SANS PLACEMENT », et non « inconnue de la maquette » :
+            # `entrees_pour_state` se construit sur `state.timetable`,
+            # c'est-à-dire sur les PLACEMENTS. Une séance retirée du planning
+            # — ou dont l'identifiant a changé à la régénération — existe très
+            # bien dans la maquette. L'ancien libellé envoyait chercher une
+            # séance disparue là où il fallait regarder « À placer »
+            # (signalé le 20/09/2026 sur sept séances de WR303D, toutes
+            # présentes au planning).
+            bilan.ignores.append((sid_job, SANS_PLACEMENT))
+            _bloquer(sid_job, SANS_PLACEMENT)
             continue
         motif_b = motif_non_saisissable(entree)
         if motif_b:
@@ -805,7 +822,7 @@ def _consommer_file(
         eid = job.get("event_id")
         if entree is None or eid in (None, ""):
             motif_i = (
-                "séance inconnue de la maquette" if entree is None else "aucun event_id dans le job"
+                SANS_PLACEMENT if entree is None else "aucun event_id dans le job"
             )
             bilan.ignores.append((sid, motif_i))
             _bloquer(sid, motif_i)
@@ -940,7 +957,7 @@ def _consommer_file(
         retirer_traites(a_retirer)
     # TOUT ce qui a été examiné sans être retiré repart en fin de file —
     # défini par soustraction plutôt que cas par cas, parce que l'énumération
-    # oubliait déjà un cas : « séance inconnue de la maquette » est classée
+    # oubliait déjà un cas : « séance sans placement » est classée
     # « ignoré » mais RESTE en file, et squattait donc la tête aussi
     # sûrement qu'un échec (vu dans les journaux du 08/09/2026, avec
     # WR303D-S3-TD-2). Par soustraction, tout nouveau cas de ce genre est
