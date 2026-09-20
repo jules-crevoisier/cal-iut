@@ -3885,71 +3885,564 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   }
 }
 
-/* ══════════════ Celcat (AdminCelcatView) — même chrome que Comptes ══════════════ */
+/* ══════════════ Celcat (AdminCelcatView) — écran unique ══════════════
 
-.celcat-etape {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
+   Refonte du 16/09/2026, après une critique design notée 16/40. Mêmes
+   primitives que le reste de l'application (`.panel`, `.btn`, `.pill`, jetons
+   de couleur) : le contrat `.orchestrator/architect-contract-celcat-ui.md`
+   interdit un monde visuel à part, et il a raison — un écran d'admin se
+   reconnaît à ce qu'il ressemble au reste.
+
+   Quatre règles que ce bloc applique :
+
+   - CALME QUAND ÇA VA. Le vert discret dit « rien à faire », l'ambre « à
+     regarder », le rouge est réservé aux pannes et à l'irréversible. L'état
+     normal (« écriture active ») était en rouge alarme ;
+   - aucune couleur codée en dur : `#d9822b`, `#8e44ad` et `var(--bordure,
+     #e2e2e2)` — un jeton jamais défini — ne suivaient pas le mode sombre ;
+   - 44 px de cible sur mobile, sans exception : les boutons qui écrivaient en
+     production faisaient 21 px, le sélecteur 19 ;
+   - mobile d'abord, à 320 px. */
+
+.view.celcat {
+  gap: 14px;
 }
 
-.celcat-etape-num {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--surface-2);
+/* Le H1 est celui du shell : la vue commence à H2. Elle sautait à H3. */
+.view.celcat h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.view.celcat h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+/* `.pill` vaut 0,68 rem, soit 10,9 px : sous le seuil lisible, relevé par le
+   détecteur sur chaque verdict du tableau. Corrigé ICI seulement — le reste
+   de l'application n'est pas dans le périmètre. */
+.view.celcat .pill {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+}
+
+.view.celcat .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+@media (min-width: 768px) and (pointer: fine) {
+  .view.celcat .btn {
+    min-height: 38px;
+  }
+}
+
+/* Le texte blanc de `.btn--accent` tombait à ~2,6:1 en mode sombre, où
+   l'accent devient un violet clair — sur l'action principale de l'écran.
+   `--surface` s'inverse avec le thème : sombre sur accent clair, blanc sur
+   accent foncé, lisible dans les deux cas. */
+.view.celcat .btn--accent,
+.view.celcat .btn--danger:hover:not(:disabled) {
+  color: var(--surface);
+}
+
+.view.celcat .btn:focus-visible,
+.view.celcat summary:focus-visible,
+.celcat-switch:focus-visible,
+.celcat-semaine:focus-visible,
+.celcat-table-conteneur:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.view.celcat select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--ink);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  /* 16 px : en dessous, iOS zoome la page au focus. */
+  font: inherit;
+  font-size: 1rem;
 }
 
-.celcat-etape-corps {
-  flex: 1;
+.view.celcat .alerte {
+  margin: 0;
+}
+
+/* ── Textes ── */
+
+.celcat-sous-texte {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.celcat-aide {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.celcat-texte-ok {
+  color: var(--good-text);
+}
+
+.celcat-texte-attention {
+  margin: 0;
+  color: var(--warn-text);
+}
+
+.celcat-texte-panne {
+  color: var(--bad-text);
+}
+
+/* ── État du système ── */
+
+.celcat-signaux {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 0;
+}
+
+/* Sur mobile, un signal en bon état tient sur une ligne : son explication
+   ne dit rien qu'on ait besoin de lire, et les trois signaux empilés
+   repoussaient le verdict sous la ligne de flottaison. Un signal qui
+   demande attention garde, lui, sa phrase. */
+@media (max-width: 767.98px) {
+  .celcat-signal {
+    padding: 8px 12px;
+  }
+
+  .celcat-signal--ok {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 8px;
+  }
+
+  .celcat-signal--ok dt {
+    margin: 0;
+  }
+
+  .celcat-signal--ok .celcat-signal-detail {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .celcat-signaux {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.celcat-signal {
   min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.celcat-signal dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.celcat-signal dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+}
+
+.celcat-signal-detail {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.celcat-signal--attention {
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+}
+
+.celcat-signal--panne {
+  border-color: color-mix(in srgb, var(--bad) 50%, var(--border));
+  background: var(--bad-soft);
+}
+
+/* ── Verdict de la semaine ── */
+
+.celcat-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.celcat-verdict--attention {
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+}
+
+.celcat-verdict--panne {
+  border-color: color-mix(in srgb, var(--bad) 55%, var(--border));
+}
+
+.celcat-semaine-nav {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Sous 480 px, le libellé daté (« Semaine 3 (14–18 sept. 2026) ») était
+   tronqué entre les deux flèches. Il prend toute la ligne ; les flèches
+   passent dessous, de part et d'autre. */
+@media (max-width: 479.98px) {
+  .celcat-semaine-nav {
+    grid-template-columns: 44px 1fr 44px;
+    grid-template-areas: "choix choix choix" "prec . suiv";
+  }
+
+  .celcat-semaine-nav > :nth-child(1) {
+    grid-area: prec;
+  }
+
+  .celcat-semaine-nav > :nth-child(2) {
+    grid-area: choix;
+  }
+
+  .celcat-semaine-nav > :nth-child(3) {
+    grid-area: suiv;
+  }
+}
+
+@media (min-width: 768px) {
+  .celcat-semaine-nav {
+    grid-template-columns: 44px minmax(0, 22rem) 44px;
+  }
+}
+
+.view.celcat .celcat-nav-fleche {
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.view.celcat .celcat-verdict-titre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 1.3rem;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.celcat-verdict-detail {
+  max-width: 72ch;
+  margin: -4px 0 0;
+}
+
+.celcat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.celcat-verdict > .celcat-sous-texte {
+  margin: -4px 0 0;
+}
+
+.celcat-suivi {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Vide tant que rien n'est en cours, mais TOUJOURS dans le DOM : une région
+   live ajoutée après coup n'est pas annoncée par les lecteurs d'écran. */
+.celcat-suivi:empty {
+  margin-top: -12px;
+  padding: 0;
+  border: 0;
+}
+
+.celcat-suivi p {
+  margin: 0;
+  max-width: 72ch;
+}
+
+.celcat-etapes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.celcat-etape-suivi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.celcat-etape-suivi--a-venir {
+  color: var(--muted);
+}
+
+.celcat-compte-rendu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.celcat-compte-rendu p {
+  margin: 0;
+}
+
+/* ── Évènements en trop ── */
+
+.celcat-suppressions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-color: color-mix(in srgb, var(--bad) 40%, var(--border));
+}
+
+.celcat-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.celcat-liste-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+
+/* ── En route vers Celcat ── */
+
+.celcat-en-route,
+.celcat-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.celcat-file p {
+  margin: 0;
+  max-width: 80ch;
+}
+
+.celcat-file-compte {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* ── Replis : détail, activité, réglages ── */
+
+.celcat-detail > summary,
+.celcat-journal > summary,
+.celcat-reglages > summary {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  min-height: 44px;
+  padding: 10px 32px 10px 0;
+  margin: -10px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.celcat-detail > summary::-webkit-details-marker,
+.celcat-journal > summary::-webkit-details-marker,
+.celcat-reglages > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron dessiné par la bordure : pas de glyphe unicode en guise d'icône. */
+.celcat-detail > summary::after,
+.celcat-journal > summary::after,
+.celcat-reglages > summary::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: translateY(-70%) rotate(45deg);
+  transition: transform 0.15s ease-out;
+}
+
+.celcat-detail[open] > summary::after,
+.celcat-journal[open] > summary::after,
+.celcat-reglages[open] > summary::after {
+  transform: translateY(-30%) rotate(-135deg);
+}
+
+.celcat-detail[open] > summary,
+.celcat-journal[open] > summary,
+.celcat-reglages[open] > summary {
+  margin-bottom: 12px;
+}
+
+.celcat-detail[open],
+.celcat-journal[open] {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.celcat-etape-corps h3 {
-  margin: 0;
-}
-
-.celcat-etape-corps > p {
-  margin: 0;
-  color: var(--ink);
-}
-
-.celcat-hero-statut {
-  margin: 0;
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
-}
-
-.celcat-hero--on .celcat-hero-statut {
-  color: var(--bad-text);
-}
-
-.celcat-hero-consequence {
-  margin: 0;
-}
-
-.celcat-switch-row {
+.celcat-repli summary {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
 }
 
+.celcat-repli summary::-webkit-details-marker {
+  display: none;
+}
+
+/* « Détail des motifs » se lisait comme du texte ordinaire : rien ne disait
+   qu'il s'ouvre. */
+.celcat-repli summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease-out;
+}
+
+.celcat-repli[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.celcat-repli ul {
+  max-height: 40vh;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  overflow-y: auto;
+}
+
+.celcat-repli li {
+  margin-bottom: 6px;
+  /* Les identifiants de séance n'ont pas d'espace
+     (`WRA305M-S3-TD-1-but2-creacom-fc-td-gh`) : sans césure, ils débordent. */
+  overflow-wrap: anywhere;
+}
+
+/* ── Tableau des écarts ──
+   Il défile dans son propre conteneur : à 320 px, quatre colonnes ne tiennent
+   pas, et faire défiler la PAGE rendrait tout le reste pénible. Le verdict
+   est en deuxième colonne, pour rester visible sans défiler. */
+
+.celcat-table-conteneur {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.comparaison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.comparaison-table th,
+.comparaison-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.comparaison-table thead th {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.comparaison-table tbody th {
+  font-weight: 600;
+}
+
+.comparaison-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+/* ── Réglages ── */
+
+.celcat-reglage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--border);
+}
+
+.celcat-reglages .alerte,
+.celcat-reglages [role="status"] {
+  margin: 0 0 10px;
+}
+
+.celcat-interrupteur {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.celcat-interrupteur p {
+  margin: 0;
+}
+
+.celcat-interrupteur-nom {
+  font-weight: 600;
+}
+
+/* Allumé en couleur d'ACCENT, plus en rouge : « active » est l'état voulu. */
 .celcat-switch {
   position: relative;
+  flex: 0 0 52px;
   width: 52px;
-  min-width: 52px;
+  height: 44px;
   min-height: 44px;
   padding: 0;
   border: 1px solid var(--border);
@@ -3959,8 +4452,8 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 }
 
 .celcat-switch[aria-checked="true"] {
-  background: var(--bad-soft);
-  border-color: var(--bad);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .celcat-switch:disabled {
@@ -3970,58 +4463,41 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 
 .celcat-switch-knob {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 7px;
+  left: 7px;
   width: 28px;
   height: 28px;
   border-radius: 50%;
   background: var(--ink-soft);
-  transition: left 0.15s;
+  transition: left 0.15s ease-out;
 }
 
 .celcat-switch[aria-checked="true"] .celcat-switch-knob {
-  left: 16px;
-  background: var(--bad);
-}
-
-.celcat-hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  color: var(--ink);
-}
-
-/* Détail technique secondaire (dernier lot validé / job de nuit) — plus
-   petit que `.celcat-hero-meta`, volontairement moins visible : le signal
-   qui compte (dernière modif réellement appliquée dans Celcat) est
-   au-dessus. */
-.celcat-hero-detail {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
+  left: 15px;
+  background: var(--accent);
 }
 
 .celcat-semaines {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: 6px;
 }
 
 .celcat-semaine {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 44px;
+  justify-content: space-between;
+  gap: 4px 6px;
   min-height: 44px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-2);
   color: var(--ink);
-  font-family: var(--font);
-  font-size: 0.8rem;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
   cursor: pointer;
 }
 
@@ -4030,89 +4506,50 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   background: var(--accent-soft);
 }
 
-.celcat-semaine--validee {
-  box-shadow: inset 0 0 0 1px var(--good);
-}
-
-/* Retour utilisateur (03/09/2026) : semaine entièrement placée, mais pas
-   encore validée pour le lot de nuit — distinct de "validée" (pointillé
-   plutôt que trait plein, pour ne pas se confondre avec le vert plein). */
-.celcat-semaine--complete {
-  box-shadow: inset 0 0 0 1px var(--teal);
-  border-style: dotted;
-}
-
 .celcat-semaine--retiree {
   border-style: dashed;
   border-color: var(--warn);
-  background: var(--warn-soft);
 }
 
-.celcat-semaine--passee,
-.celcat-semaine--lancee,
-.celcat-semaine--disabled {
-  opacity: 0.55;
+.celcat-semaine--bloquee {
+  color: var(--muted);
+}
+
+.celcat-semaine[aria-disabled="true"] {
   cursor: not-allowed;
-}
-
-.celcat-lot-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .celcat-extras,
 .celcat-journal-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  list-style: none;
+  gap: 8px;
   margin: 0;
   padding: 0;
+  list-style: none;
 }
 
-/* Vue d'activité en colonnes (retour utilisateur 08/09/2026 : « un peu comme
-   un kanban »). Mobile d'abord — une colonne à 320 px, puis autant que la
-   largeur en permet : sur un écran étroit, des colonnes serrées côte à côte
-   seraient illisibles alors que c'est précisément l'écran qu'on consulte en
-   vitesse pour savoir si ça passe. */
-/* État de la file Celcat. Retour utilisateur 08/09/2026, capture à l'appui :
-   « fix moi cette interface, on ne comprend rien du tout là » — le compte
-   rendu du worker s'affichait d'un seul bloc, vingt lignes sans respiration
-   où les chiffres qui décident étaient introuvables. Les motifs vivent
-   désormais dans un repli, et chacun sur sa ligne. */
-.celcat-file p {
-  margin: 0 0 6px;
-}
-
-.celcat-file details {
-  margin-top: 8px;
-}
-
-.celcat-file summary {
-  cursor: pointer;
-  /* Cible tactile : le repli se consulte au téléphone, en réunion. */
-  min-height: 44px;
+.celcat-extra,
+.celcat-journal-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-}
-
-.celcat-file details ul {
-  margin: 6px 0 0;
-  padding-left: 18px;
-  /* Une liste de motifs peut être longue : elle défile chez elle plutôt que
-     de repousser le tableau de comparaison hors de l'écran. */
-  max-height: 40vh;
-  overflow-y: auto;
-}
-
-.celcat-file details li {
-  margin-bottom: 6px;
-  /* Les motifs portent des identifiants de séance sans espaces
-     (`WRA305M-S3-TD-1-but2-creacom-fc-td-gh`) : sans cette césure, ils
-     débordent la colonne à 320 px. */
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
   overflow-wrap: anywhere;
 }
+
+.celcat-extra-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Activité ── */
 
 .celcat-kanban {
   display: grid;
@@ -4122,104 +4559,42 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
 
 @media (min-width: 768px) {
   .celcat-kanban {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   }
 }
 
 .celcat-kanban-col {
-  min-width: 0; /* sans quoi un motif long élargit la colonne au lieu de passer à la ligne */
-  border: 1px solid var(--bordure, #e2e2e2);
-  border-radius: 8px;
+  min-width: 0;
   padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
-.celcat-kanban-col h4 {
-  margin: 0 0 8px;
-  font-size: 0.95rem;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.celcat-kanban-col .celcat-journal-item {
-  word-break: break-word; /* les identifiants de séance sont longs et sans espace */
-}
-
-.celcat-extra,
-.celcat-journal-item {
+.celcat-kanban-entete {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-
-.celcat-extra-actions {
-  display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 8px;
 }
 
-@media (max-width: 560px) {
-  .celcat-etape {
-    flex-direction: column;
-  }
-}
-
-/* Comparaison Celcat / cal-iut (08/09/2026). Le tableau scrolle dans son
-   propre conteneur : à 320 px, quatre colonnes ne tiennent pas, et laisser
-   la PAGE défiler horizontalement rendrait tout le reste pénible. */
-.celcat-comparaison .comparaison-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  display: block;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-
-.celcat-comparaison .comparaison-table th,
-.celcat-comparaison .comparaison-table td {
-  border-bottom: 1px solid var(--bordure, #e2e2e2);
-  padding: 6px 10px;
-  text-align: left;
-}
-
-/* Le verdict se lit à la couleur avant de se lire au texte — mais la pastille
-   porte toujours le mot : la couleur seule exclurait qui la distingue mal. */
-.celcat-comparaison .comparaison-ecart td:first-child { border-left: 3px solid #d9822b; }
-.celcat-comparaison .comparaison-absente_celcat td:first-child { border-left: 3px solid #c0392b; }
-.celcat-comparaison .comparaison-en_trop_celcat td:first-child { border-left: 3px solid #8e44ad; }
-
-/* Onglets Celcat (08/09/2026) — l'écran empilait six panneaux : armement,
-   semaines, extras, relevé, comparaison, activité. Retour utilisateur :
-   « là c'est illisible, trop de choses ». Le découpage suit l'usage, pas la
-   technique : on vient piloter la saisie, OU vérifier ce qui s'est passé,
-   OU confronter à Celcat — rarement les trois à la fois. */
-.celcat-onglets {
+.celcat-kanban-entete h3 {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
 }
 
-.celcat-onglet {
-  border: 1px solid var(--bordure, #e2e2e2);
-  background: transparent;
-  border-radius: 999px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font: inherit;
-  /* 44 px de haut : une cible tactile confortable, l'écran se consulte
-     aussi depuis un téléphone entre deux cours. */
-  min-height: 44px;
+.celcat-horodatage {
+  margin-left: auto;
 }
 
-.celcat-onglet--actif {
-  border-color: currentColor;
-  font-weight: 600;
+@media (prefers-reduced-motion: reduce) {
+  .celcat-switch-knob,
+  .celcat-repli summary::before,
+  .celcat-detail > summary::after,
+  .celcat-journal > summary::after,
+  .celcat-reglages > summary::after {
+    transition: none;
+  }
 }

@@ -1,740 +1,275 @@
 /**
- * Administration Celcat — bandeau Live, 3 étapes, lot de nuit, extras, journal.
- * Chrome identique à Comptes (panels, boutons, pills).
+ * Administration Celcat — un seul écran, dans l'ordre où l'on décide.
+ *
+ * Refonte du 16/09/2026, après une critique design notée 16/40 et ce retour
+ * utilisateur : « j'ai l'impression de devoir cliquer plusieurs fois à des
+ * heures différentes sur "Corriger les écarts de cette semaine" pour que ça
+ * les corrige vraiment ».
+ *
+ * Les trois onglets (Pilotage / Activité / Contenu Celcat) suivaient la
+ * tuyauterie du système : chaque pièce technique avait son panneau, et aucun
+ * ne répondait d'un coup d'œil à « est-ce que ça concorde ? ». On arrivait
+ * sur des réglages ; le verdict, gris, était deux clics plus loin.
+ *
+ * L'écran se lit désormais de haut en bas :
+ *
+ *   1. l'état du système — écriture, worker, relevé — sans lequel rien ne part ;
+ *   2. le VERDICT de la semaine en cours, et le geste qui corrige, suivi
+ *      jusqu'à la vérification sur un relevé neuf ;
+ *   3. les évènements en trop, seul geste resté humain ;
+ *   4. ce qui est en route vers Celcat ;
+ *   5. repliés : le détail séance par séance, l'activité, les réglages.
+ *
+ * Le style reste celui de la maison (`.orchestrator/architect-contract-celcat-ui.md`) :
+ * mêmes panneaux, boutons, pastilles et jetons. Seule la clause « un seul
+ * module React » est tombée, sa justification ne tenant plus.
  */
 import { useCallback, useEffect, useState } from "react";
 
-import { ComparaisonCelcat } from "../components/ComparaisonCelcat";
-import { CopyButton } from "../components/CopyButton";
-import { EtatFileCelcat } from "../components/EtatFileCelcat";
-import { confirmAsync } from "../utils/confirmDialog";
-import { indexSemaineCourante } from "../utils/semaineCourante";
-
 import {
-  ajouterExtraCelcat,
+  fetchAppState,
+  fetchCelcatComparaison,
   fetchCelcatEtat,
   fetchCelcatExtras,
-  fetchAppState,
+  fetchCelcatFile,
   fetchCelcatInstantane,
   fetchCelcatLogs,
-  rafraichirCelcatInstantane,
-  ignorerExtraCelcat,
-  lancerNuitCelcat,
-  patchCelcatSaisie,
-  patchCelcatWorker,
-  resynchroniserFileCelcat,
-  validerSemainesCelcat,
+  type CelcatComparaison,
   type CelcatEtat,
   type CelcatExtra,
+  type CelcatFile,
   type CelcatInstantane,
   type CelcatLog,
 } from "../api/client";
+import { DetailComparaisonCelcat } from "../components/DetailComparaisonCelcat";
+import { EtatFileCelcat } from "../components/EtatFileCelcat";
+import { JournalCelcat } from "../components/JournalCelcat";
+import { ReglagesCelcat } from "../components/ReglagesCelcat";
+import { StatutCelcat } from "../components/StatutCelcat";
+import { SuppressionsCelcat } from "../components/SuppressionsCelcat";
+import { VerdictCelcat, type SemaineChoisissable } from "../components/VerdictCelcat";
+import { useBoucleCelcat } from "../hooks/useBoucleCelcat";
+import { indexSemaineCourante } from "../utils/semaineCourante";
 
-const SEMAINES = Array.from({ length: 30 }, (_, i) => i + 1);
+/** Tant que des corrections attendent, on relit la file à ce rythme. Une
+ * fois vide, on arrête : un écran qui interroge le serveur sans raison est
+ * un écran qu'on finit par fermer. */
+const SONDAGE_FILE_MS = 10_000;
 
 /**
  * Les semaines comparables, VALEUR = indice du solveur.
  *
- * `weekRows` est la séquence CONTINUE des semaines du département, vacances
- * comprises (4 lignes bloquées en 2026-2027 : Toussaint et Noël). Le sélecteur
- * envoyait la POSITION dans cette liste comme indice de semaine : juste jusqu'à
- * la Toussaint, puis décalé d'un cran (« Semaine 11 (2–6 nov.) » comparait le
- * 9 novembre), et de trois après Noël. Constaté sur le payload de production
- * le 10/09/2026. Les lignes bloquées n'ont pas d'indice : elles sortent de la
- * liste — il n'y a rien à comparer une semaine où l'IUT est fermé.
+ * `weekRows` est la séquence CONTINUE des semaines, vacances comprises. Le
+ * sélecteur envoyait la POSITION dans cette liste comme indice : juste
+ * jusqu'à la Toussaint, puis décalé d'un cran (constaté sur le payload de
+ * production le 10/09/2026). Les lignes bloquées n'ont pas d'indice : elles
+ * sortent de la liste — il n'y a rien à comparer une semaine fermée.
  */
-function semainesDuSolveur(
-  rows: { label: string; weekIndex: number | null }[],
-): { indice: number; libelle: string }[] {
+function semainesDuSolveur(rows: { label: string; weekIndex: number | null }[]): SemaineChoisissable[] {
   return rows
     .filter((w): w is { label: string; weekIndex: number } => w.weekIndex !== null)
     .map((w) => ({ indice: w.weekIndex, libelle: w.label }));
 }
 
-function classesSemaine(
-  n: number,
-  draft: number[],
-  validees: number[],
-  passees: number[],
-  lancees: number[],
-  completes: number[],
-): string {
-  const cochee = draft.includes(n);
-  const validee = validees.includes(n);
-  const passee = passees.includes(n);
-  const lancee = lancees.includes(n);
-  const complete = completes.includes(n);
-  const classes = ["celcat-semaine"];
-  if (cochee) classes.push("celcat-semaine--cochee");
-  if (validee) classes.push("celcat-semaine--validee");
-  if (validee && !cochee) classes.push("celcat-semaine--retiree");
-  if (passee) classes.push("celcat-semaine--passee");
-  if (lancee) classes.push("celcat-semaine--lancee");
-  if (complete && !validee && !passee && !lancee) classes.push("celcat-semaine--complete");
-  if (passee || lancee) classes.push("celcat-semaine--disabled");
-  return classes.join(" ");
+function message(e: unknown, repli: string): string {
+  return e instanceof Error ? e.message : repli;
 }
 
-function libelleSemaine(
-  n: number,
-  passees: number[],
-  lancees: number[],
-  validees: number[],
-  completes: number[],
-): string {
-  if (passees.includes(n)) return `Semaine ${n} passée`;
-  if (lancees.includes(n)) return `Semaine ${n} lancée`;
-  if (validees.includes(n)) return `Semaine ${n} validée`;
-  // "planning complet", pas "placée dans Celcat" — retour utilisateur
-  // (03/09/2026) : la formulation précédente laissait croire que ces
-  // semaines étaient déjà envoyées à Celcat, alors que ça ne dit que « plus
-  // aucune séance manquante côté planning », rien sur Celcat.
-  if (completes.includes(n)) return `Semaine ${n} — planning complet, pas encore envoyé à Celcat`;
-  return `Semaine ${n}`;
+/** Cadences de la boucle de vérification. Facultatives : `App` monte la vue
+ * sans rien passer ; les tests les raccourcissent pour ne pas attendre des
+ * minutes réelles. */
+export interface CadenceCelcat {
+  intervalleMs?: number;
+  limiteWorkerMs?: number;
+  limiteReleveMs?: number;
+  sondageFileMs?: number;
 }
 
-/** Colonnes de la vue d'activité, dans l'ordre de lecture : ce qui s'est
- * bien passé d'abord, ce qui coince en dernier — c'est là que le regard doit
- * s'arrêter. */
-const COLONNES: Array<{ kind: string; titre: string; ton: string }> = [
-  { kind: "created", titre: "Créées", ton: "good" },
-  { kind: "modified", titre: "Modifiées", ton: "good" },
-  { kind: "deleted", titre: "Supprimées", ton: "" },
-  { kind: "echec", titre: "Échecs", ton: "bad" },
-  { kind: "blocked", titre: "Bloquées", ton: "bad" },
-];
-
-/** « il y a 47 min » — l'âge d'un relevé compte autant que son contenu :
- * présenté sans lui, un relevé de trois heures passerait pour l'état
- * courant. */
-function ageLisible(secondes: number | null): string {
-  if (secondes === null) return "";
-  if (secondes < 60) return "il y a moins d’une minute";
-  const minutes = Math.floor(secondes / 60);
-  if (minutes < 60) return `il y a ${minutes} min`;
-  const heures = Math.floor(minutes / 60);
-  const reste = minutes % 60;
-  return reste ? `il y a ${heures} h ${reste} min` : `il y a ${heures} h`;
-}
-
-/** Ce qu'on colle dans un message ou un ticket : l'identifiant de séance,
- * l'évènement Celcat pour aller vérifier, le nombre de tentatives pour
- * juger de l'ampleur, et le motif. Relire à l'écran pour retaper à côté est
- * exactement la friction qui fait qu'un problème n'est pas signalé. */
-function texteColonne(titre: string, lignes: CelcatLog[]): string {
-  const entete = `${titre} (${lignes.length})`;
-  const corps = lignes.map((l) => {
-    const morceaux = [l.session_id ?? l.course_code ?? "?"];
-    if (l.event_id) morceaux.push(`event_id=${l.event_id}`);
-    if (l.repetitions && l.repetitions > 1) morceaux.push(`${l.repetitions} tentatives`);
-    if (l.at) morceaux.push(l.at);
-    if (l.motif) morceaux.push(l.motif);
-    return `- ${morceaux.join(" | ")}`;
-  });
-  return [entete, ...corps].join("\n");
-}
-
-function libelleExtra(extra: CelcatExtra): string {
-  return extra.course_code || extra.libelle || extra.module_nom || extra.id;
-}
-
-export function AdminCelcatView() {
+export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = {}) {
   const [etat, setEtat] = useState<CelcatEtat | null>(null);
+  const [erreurEtat, setErreurEtat] = useState<string | null>(null);
+  const [instantane, setInstantane] = useState<CelcatInstantane | null>(null);
+  const [file, setFile] = useState<CelcatFile | null>(null);
+  const [erreurFile, setErreurFile] = useState<string | null>(null);
   const [extras, setExtras] = useState<CelcatExtra[]>([]);
   const [logs, setLogs] = useState<CelcatLog[]>([]);
-  const [semaines, setSemaines] = useState<number[]>([]);
-  const [erreur, setErreur] = useState<string | null>(null);
-  const [enCours, setEnCours] = useState(false);
-  const [instantane, setInstantane] = useState<CelcatInstantane | null>(null);
-  const [messageReleve, setMessageReleve] = useState<string | null>(null);
-  // Semaine comparée — indice INTERNE (0-based), comme partout ailleurs.
-  // Le sélecteur envoyait l'indice affiché, donc comparait la semaine
-  // suivante (repéré par Jules le 08/09/2026, « semaine 1 égale semaine 2
-  // dans vue promo non ? »).
-  //
-  // Le défaut valait `0`, c'est-à-dire la PREMIÈRE SEMAINE DE L'ANNÉE, alors
-  // que le commentaire d'origine annonçait « la première validée ». On
-  // arrivait donc sur une semaine passée depuis longtemps, et il fallait la
-  // changer à chaque visite pour voir celle qui compte. `indexSemaineCourante`
-  // rend ce service ailleurs depuis le 08/09/2026 (`App.tsx`, `PromoView`) ;
-  // elle n'était simplement pas appelée ici. `null` tant que le calendrier
-  // n'est pas chargé : mieux vaut ne pas comparer que comparer la mauvaise.
-  const [semaineComparee, setSemaineComparee] = useState<number | null>(null);
-  // Trois onglets plutôt qu'une page de six panneaux empilés (retour
-  // utilisateur 08/09/2026 : « là c'est illisible, trop de choses »). Le
-  // découpage suit l'usage, pas la technique : on VIENT pour piloter la
-  // saisie, ou pour vérifier ce qui s'est passé, ou pour confronter à
-  // Celcat — rarement pour les trois à la fois.
-  // Libellés RÉELS des semaines (« Semaine 3 (7–11 sept. 2026) ») plutôt
-  // qu'un « Semaine N » recalculé : l'app numérote les semaines autrement
-  // que l'indice interne — `weekRows[0]` s'appelle « Semaine 2 ». Deux
-  // numérotations pour la même chose, c'est la garantie de comparer la
-  // mauvaise semaine sans s'en apercevoir (constaté le 08/09/2026).
-  const [libellesSemaines, setLibellesSemaines] = useState<{ indice: number; libelle: string }[]>([]);
-  const [onglet, setOnglet] = useState<"pilotage" | "activite" | "celcat">("pilotage");
-  const [messageResync, setMessageResync] = useState<string | null>(null);
+  const [semaines, setSemaines] = useState<SemaineChoisissable[]>([]);
+  // Indice INTERNE de la semaine comparée. `null` tant que le calendrier n'est
+  // pas chargé : mieux vaut ne pas comparer que comparer la mauvaise. Le
+  // défaut était `0`, la première semaine de l'année.
+  const [semaine, setSemaine] = useState<number | null>(null);
+  const [comparaison, setComparaison] = useState<CelcatComparaison | null>(null);
+  const [erreurComparaison, setErreurComparaison] = useState<string | null>(null);
 
-  const charger = useCallback(async () => {
+  const chargerFile = useCallback(async () => {
     try {
-      const [e, x, l, i] = await Promise.all([
-        fetchCelcatEtat(),
-        fetchCelcatExtras("ouvert"),
-        fetchCelcatLogs(50),
-        // L'instantané ne doit pas faire échouer tout l'écran : le reste
-        // reste utile même si le sidecar n'a encore rien déposé.
-        fetchCelcatInstantane().catch(() => null),
-      ]);
-      // Sans bloquer l'écran si le planning n'est pas résolu.
-      fetchAppState()
-        .then((p) => {
-          const rows = p.weekRows ?? [];
-          setLibellesSemaines(semainesDuSolveur(rows));
-          // On ouvre sur la semaine EN COURS, et on passe par le `weekIndex`
-          // de la ligne plutôt que par sa position : les semaines bloquées
-          // (vacances) creusent des trous dans `weekRows`, et compter les
-          // lignes donnerait la mauvaise dès la Toussaint passée.
-          setSemaineComparee((actuelle) => {
-            if (actuelle !== null) return actuelle;
-            const courante = rows[indexSemaineCourante(rows)];
-            if (courante?.weekIndex != null) return courante.weekIndex;
-            const premiere = semainesDuSolveur(rows)[0];
-            return premiere ? premiere.indice : 0;
-          });
-        })
-        .catch(() => setLibellesSemaines([]));
-      setEtat(e);
-      setSemaines(e.semaines_validees);
-      setExtras(x.extras);
-      setLogs(l.items);
-      setInstantane(i);
-      setErreur(null);
-    } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Erreur de chargement");
+      setFile(await fetchCelcatFile());
+      setErreurFile(null);
+    } catch (e) {
+      setErreurFile(message(e, "serveur injoignable"));
+    }
+  }, []);
+
+  const chargerSysteme = useCallback(async () => {
+    try {
+      setEtat(await fetchCelcatEtat());
+      setErreurEtat(null);
+    } catch (e) {
+      setErreurEtat(message(e, "Erreur de chargement"));
+    }
+    // L'instantané ne doit pas faire échouer l'écran : sans relevé, le
+    // verdict le dit lui-même.
+    setInstantane(await fetchCelcatInstantane().catch(() => null));
+  }, []);
+
+  const chargerJournal = useCallback(async () => {
+    const [x, l] = await Promise.all([
+      fetchCelcatExtras("ouvert").catch(() => ({ extras: [] as CelcatExtra[] })),
+      fetchCelcatLogs(50).catch(() => ({ items: [] as CelcatLog[], cursor: null })),
+    ]);
+    setExtras(x.extras);
+    setLogs(l.items);
+  }, []);
+
+  const chargerComparaison = useCallback(async (indice: number) => {
+    try {
+      setComparaison(await fetchCelcatComparaison(indice));
+      setErreurComparaison(null);
+    } catch (e) {
+      setErreurComparaison(message(e, "Comparaison impossible"));
     }
   }, []);
 
   useEffect(() => {
-    void charger();
-  }, [charger]);
+    void chargerSysteme();
+    void chargerFile();
+    void chargerJournal();
+    fetchAppState()
+      .then((p) => {
+        const rows = p.weekRows ?? [];
+        const liste = semainesDuSolveur(rows);
+        setSemaines(liste);
+        setSemaine((actuelle) => {
+          if (actuelle !== null) return actuelle;
+          // La semaine EN COURS, par le `weekIndex` de sa ligne et jamais par
+          // sa position : les vacances creusent des trous dans `weekRows`.
+          const courante = rows[indexSemaineCourante(rows)];
+          if (courante?.weekIndex != null) return courante.weekIndex;
+          return liste[0]?.indice ?? 0;
+        });
+      })
+      .catch(() => {
+        // Sans calendrier, on retombe sur des numéros bruts plutôt que de
+        // bloquer tout l'écran — et on le signale par le libellé même.
+        setSemaines(Array.from({ length: 30 }, (_, i) => ({ indice: i, libelle: `Semaine ${i + 1} (dates indisponibles)` })));
+        setSemaine((actuelle) => actuelle ?? 0);
+      });
+  }, [chargerSysteme, chargerFile, chargerJournal]);
 
-  const basculerSaisie = async (active: boolean) => {
-    setEnCours(true);
-    try {
-      setEtat(await patchCelcatSaisie(active));
-      setErreur(null);
-    } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Erreur");
-    } finally {
-      setEnCours(false);
-    }
-  };
+  useEffect(() => {
+    if (semaine === null) return;
+    // On efface l'ancienne comparaison : la laisser affichée pendant le
+    // chargement faisait lire les écarts d'une semaine sous le nom d'une autre.
+    setComparaison(null);
+    setErreurComparaison(null);
+    void chargerComparaison(semaine);
+  }, [semaine, chargerComparaison]);
 
-  const basculerWorker = async (actif: boolean) => {
-    setEnCours(true);
-    try {
-      setEtat(await patchCelcatWorker(actif));
-      setErreur(null);
-    } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Erreur");
-    } finally {
-      setEnCours(false);
-    }
-  };
+  const enAttente = file?.en_attente ?? 0;
+  useEffect(() => {
+    if (enAttente === 0) return;
+    const minuteur = window.setTimeout(() => {
+      void chargerFile();
+      void chargerSysteme();
+    }, cadence.sondageFileMs ?? SONDAGE_FILE_MS);
+    return () => window.clearTimeout(minuteur);
+  }, [file, enAttente, chargerFile, chargerSysteme, cadence.sondageFileMs]);
 
-  const valider = async () => {
-    setEnCours(true);
-    try {
-      setEtat(await validerSemainesCelcat(semaines));
-      setErreur(null);
-    } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Erreur");
-    } finally {
-      setEnCours(false);
-    }
-  };
+  const boucle = useBoucleCelcat(semaine, {
+    intervalleMs: cadence.intervalleMs,
+    limiteWorkerMs: cadence.limiteWorkerMs,
+    limiteReleveMs: cadence.limiteReleveMs,
+    onVerifie: async () => {
+      await Promise.all([
+        semaine !== null ? chargerComparaison(semaine) : Promise.resolve(),
+        chargerSysteme(),
+        chargerFile(),
+        chargerJournal(),
+      ]);
+    },
+  });
 
-  const lancerMaintenant = async () => {
-    setEnCours(true);
-    try {
-      // Bug utilisateur du 05/09/2026 : cocher des semaines puis cliquer
-      // directement « Lancer maintenant » (sans passer par « Enregistrer
-      // le lot de nuit » d'abord) ne faisait RIEN — ce bouton appelait
-      // /celcat/lancer-nuit tout seul, qui ne connaît que le DERNIER lot
-      // déjà enregistré côté serveur (semaines_validees), jamais la
-      // sélection à l'écran. « Lancer maintenant » enregistre donc d'abord
-      // la sélection courante, exactement comme « Enregistrer le lot de
-      // nuit » le ferait, avant de lancer — un seul clic suffit désormais.
-      await validerSemainesCelcat(semaines);
-      setEtat(await lancerNuitCelcat());
-      setErreur(null);
-    } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Erreur");
-    } finally {
-      setEnCours(false);
-    }
-  };
-
-  const basculerSemaine = (n: number, verrouillee: boolean) => {
-    if (verrouillee) return;
-    setSemaines((prev) => (prev.includes(n) ? prev.filter((s) => s !== n) : [...prev, n].sort((a, b) => a - b)));
-  };
-
-  const traiterExtra = async (id: string, action: "ajouter" | "ignorer") => {
-    setEnCours(true);
-    try {
-      if (action === "ajouter") {
-        await ajouterExtraCelcat(id);
-      } else {
-        await ignorerExtraCelcat(id);
-      }
-      setExtras((prev) => prev.filter((x) => x.id !== id));
-      setErreur(null);
-    } catch (err) {
-      setErreur(err instanceof Error ? err.message : "Erreur");
-    } finally {
-      setEnCours(false);
-    }
-  };
-
-  if (erreur && !etat) {
+  if (erreurEtat && !etat) {
     return (
       <section className="view celcat">
-        <div className="panel">
-          <p className="alerte" role="alert">
-            {erreur}
-          </p>
-        </div>
+        <p className="alerte" role="alert">
+          Écran Celcat indisponible : {erreurEtat}
+        </p>
       </section>
     );
   }
 
   if (!etat) {
     return (
-      <section className="view celcat">
-        <div className="panel">
-          <p className="muted">Chargement…</p>
-        </div>
+      <section className="view celcat" aria-busy="true">
+        <p className="celcat-sous-texte">Chargement de l’état de Celcat…</p>
       </section>
     );
   }
 
-  const validees = etat.semaines_validees;
-  const passees = etat.semaines_passees ?? [];
-  const lancees = etat.semaines_lancees ?? [];
-  // Retour utilisateur (03/09/2026) : "si la semaine 1 est entièrement
-  // placée on la met comme placée" — distinct de « validée » (lot de nuit
-  // enregistré) : une semaine peut être entièrement placée sans qu'on ait
-  // encore décidé de l'envoyer à Celcat.
-  const completes = etat.semaines_completes ?? [];
-
   return (
     <section className="view celcat">
-      {erreur && (
-        <div className="panel">
-          <p className="alerte" role="alert">
-            {erreur}
-          </p>
-        </div>
+      {erreurEtat ? (
+        <p className="alerte" role="alert">
+          État de Celcat non rafraîchi : {erreurEtat}
+        </p>
+      ) : null}
+
+      <StatutCelcat etat={etat} instantane={instantane} file={file} />
+
+      {semaine === null ? (
+        <section className="panel celcat-verdict" aria-busy="true">
+          <p className="celcat-sous-texte">Chargement du calendrier…</p>
+        </section>
+      ) : (
+        <VerdictCelcat
+          semaines={semaines}
+          semaine={semaine}
+          onSemaine={setSemaine}
+          donnees={comparaison}
+          erreur={erreurComparaison}
+          boucle={boucle.etat}
+          occupe={boucle.occupe}
+          onCorriger={() => void boucle.corriger(false)}
+          onVerifier={() => void boucle.verifier()}
+          onArreter={boucle.arreter}
+        />
       )}
 
-      <nav className="celcat-onglets" aria-label="Sections Celcat">
-        {([
-          ["pilotage", "Pilotage"],
-          ["activite", "Activité"],
-          ["celcat", "Contenu Celcat"],
-        ] as const).map(([cle, libelle]) => (
-          <button
-            key={cle}
-            type="button"
-            className={`celcat-onglet${onglet === cle ? " celcat-onglet--actif" : ""}`}
-            aria-current={onglet === cle ? "page" : undefined}
-            onClick={() => setOnglet(cle)}
-          >
-            {libelle}
-          </button>
-        ))}
-      </nav>
-
-      {onglet === "pilotage" ? (
-      <>
-      <div className={`panel celcat-hero celcat-etape ${etat.saisie_active ? "celcat-hero--on" : "celcat-hero--off"}`}>
-        <span className="celcat-etape-num">1</span>
-        <div className="celcat-etape-corps">
-          <h3>Armer l’écriture</h3>
-          <p className="celcat-hero-statut">{etat.saisie_active ? "ÉCRITURE ON" : "ÉCRITURE OFF"}</p>
-          <p className="celcat-hero-consequence">
-            {etat.saisie_active
-              ? "Chaque modification du planning s’écrit tout de suite dans Celcat."
-              : "Les modifications du planning ne s’écrivent pas tout de suite dans Celcat."}
-          </p>
-          <div className="celcat-switch-row">
-            <button
-              type="button"
-              role="switch"
-              className="celcat-switch"
-              aria-checked={etat.saisie_active}
-              aria-label="Écriture Celcat"
-              disabled={enCours}
-              onClick={() => void basculerSaisie(!etat.saisie_active)}
-            >
-              <span className="celcat-switch-knob" />
-            </button>
-            <span>{etat.saisie_active ? "Live armé" : "Live désarmé"}</span>
-          </div>
-          {/* PAUSE DU WORKER, distincte de l'écriture ci-dessus.
-              Le VPN et le compte Celcat sont PARTAGÉS avec l'équipe : tant
-              que le worker tourne, il monte le tunnel toutes les 90 secondes
-              et personne ne peut ouvrir une session durable à côté. Le
-              09/09/2026, une recherche d'identifiant a dû être abandonnée
-              pour cette raison.
-
-              Ce bouton ne touche NI la file, NI le journal, NI les semaines
-              validées — contrairement au bouton d'écriture ci-dessus, dont
-              la coupure vide la file. */}
-          <div className="celcat-switch-row">
-            <button
-              type="button"
-              role="switch"
-              className="celcat-switch"
-              aria-checked={etat.worker_actif !== false}
-              aria-label="Worker Celcat (VPN)"
-              disabled={enCours}
-              onClick={() => void basculerWorker(etat.worker_actif === false)}
-            >
-              <span className="celcat-switch-knob" />
-            </button>
-            <span>
-              {etat.worker_actif === false
-                ? "Worker en pause — VPN libre, la file est conservée"
-                : "Worker actif — il prend le VPN toutes les 90 s"}
-            </span>
-          </div>
-          <div className="celcat-hero-meta">
-            <span className={`pill mini ${etat.worker_ok ? "good" : "bad"}`}>
-              {etat.worker_ok ? "Worker joignable." : "Worker injoignable."}
-            </span>
-            {/* Retour utilisateur (03/09/2026) : "on voudrait la dernière
-                fois qu'une modification faite dans l'app a été appliquée
-                dans Celcat" — c'est CE signal-là qui doit être le plus
-                visible, pas `valide_le` (qui ne marque que le dernier clic
-                sur « Enregistrer le lot de nuit », jamais une écriture
-                réelle). */}
-            <span>
-              {etat.derniere_ecriture_celcat
-                ? `Dernière modification appliquée dans Celcat : ${etat.derniere_ecriture_celcat}.`
-                : "Aucune modification encore appliquée dans Celcat."}
-            </span>
-          </div>
-          {/* Détail technique, secondaire : à quand remonte le dernier lot
-              VALIDÉ (étape 2) et le dernier passage du job de nuit — utile
-              pour diagnostiquer pourquoi rien n'a encore été appliqué
-              ci-dessus, pas la première chose à lire. */}
-          <p className="celcat-hero-detail muted">
-            {etat.valide_le ? `Dernier lot validé : ${etat.valide_le}.` : "Aucun lot validé."}{" "}
-            {etat.dernier_job?.lance_le
-              ? `Dernier passage du job de nuit : ${etat.dernier_job.lance_le}.`
-              : "Le job de nuit n'a encore jamais tourné."}
-          </p>
-        </div>
-      </div>
-
-      <div className="panel celcat-etape">
-        <span className="celcat-etape-num">2</span>
-        <div className="celcat-etape-corps">
-          <h3>Semaines du lot de nuit</h3>
-          <p>
-            Enregistrer le lot pour cette nuit. Lancer maintenant enfile le même lot tout de suite, sans attendre
-            minuit. Les semaines passées ou déjà lancées sont désactivées.
-          </p>
-          <div className="celcat-semaines">
-            {SEMAINES.map((n) => {
-              const validee = validees.includes(n);
-              const cochee = semaines.includes(n);
-              const verrouillee = passees.includes(n) || lancees.includes(n);
-              const pastille = passees.includes(n)
-                ? "passée"
-                : lancees.includes(n)
-                  ? "lancée"
-                  : validee
-                    ? "validée"
-                    : completes.includes(n)
-                      ? "planning complet"
-                      : null;
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  className={classesSemaine(n, semaines, validees, passees, lancees, completes)}
-                  aria-pressed={cochee}
-                  aria-label={libelleSemaine(n, passees, lancees, validees, completes)}
-                  disabled={verrouillee || enCours}
-                  onClick={() => basculerSemaine(n, verrouillee)}
-                >
-                  Semaine {n}
-                  {pastille ? (
-                    <span className="pill mini" aria-hidden="true">
-                      {pastille}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="celcat-lot-actions">
-            <button type="button" className="btn btn--accent" disabled={enCours} onClick={() => void valider()}>
-              Enregistrer le lot de nuit
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={enCours || !etat.saisie_active}
-              onClick={() => void lancerMaintenant()}
-            >
-              Lancer maintenant
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="panel celcat-etape">
-        <span className="celcat-etape-num">3</span>
-        <div className="celcat-etape-corps">
-          <h3>Extras Live</h3>
-          {extras.length === 0 ? (
-            <p className="muted">Aucun extra ouvert.</p>
-          ) : (
-            <ul className="celcat-extras">
-              {extras.map((x) => {
-                const label = libelleExtra(x);
-                return (
-                  <li key={x.id} className="celcat-extra">
-                    <strong>{label}</strong>
-                    <div className="celcat-extra-actions">
-                      <button
-                        type="button"
-                        className="btn btn--sm"
-                        disabled={enCours}
-                        aria-label={`Ajouter ${label}`}
-                        onClick={() => void traiterExtra(x.id, "ajouter")}
-                      >
-                        Ajouter
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--ghost"
-                        disabled={enCours}
-                        aria-label={`Ignorer ${label}`}
-                        onClick={() => void traiterExtra(x.id, "ignorer")}
-                      >
-                        Ignorer
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      </>
+      {comparaison ? (
+        <SuppressionsCelcat donnees={comparaison} occupe={boucle.occupe} onSupprimer={() => void boucle.corriger(true)} />
       ) : null}
 
-      {onglet === "celcat" ? (
-      <>
-      {/* Ce que Celcat contient vraiment. L'API ne le lit jamais elle-même
-          (son conteneur n'a ni VPN ni navigateur) : elle sert un relevé
-          déposé par le sidecar, d'où l'âge affiché systématiquement. */}
-      <div className="panel celcat-instantane" data-testid="instantane-celcat">
-        <h3>Contenu de Celcat</h3>
-        {!instantane?.releve_le ? (
-          <p className="muted">
-            Aucun relevé pour l’instant — Celcat n’a pas encore été consulté.
-          </p>
-        ) : (
-          <p className={instantane.perime ? "bad" : "muted"}>
-            {(instantane.evenements ?? []).length} évènement(s) sur{" "}
-            {(instantane.groupes ?? []).length} groupe(s),
-            relevé {ageLisible(instantane.age_secondes)}
-            {instantane.perime ? " — périmé, à rafraîchir" : ""}
-          </p>
-        )}
-        {instantane?.erreur ? (
-          // Un instantané vide sans explication ramènerait au silence que
-          // cet outil vient de passer deux jours à réparer.
-          <p className="bad">Dernier relevé en échec : {instantane.erreur}</p>
-        ) : null}
-        <button
-          type="button"
-          disabled={enCours}
-          onClick={async () => {
-            setEnCours(true);
-            try {
-              const r = await rafraichirCelcatInstantane();
-              setMessageReleve(r.message);
-              setErreur(null);
-            } catch (err) {
-              setErreur(err instanceof Error ? err.message : "Demande impossible");
-            } finally {
-              setEnCours(false);
-            }
-          }}
-        >
-          Rafraîchir
-        </button>
-        {messageReleve ? <p className="muted">{messageReleve}</p> : null}
-        {instantane?.demande_en_cours && !messageReleve ? (
-          <p className="muted">Relevé demandé — en attente du prochain passage.</p>
-        ) : null}
-      </div>
+      <section className="panel celcat-en-route" aria-labelledby="celcat-en-route-titre">
+        <h2 id="celcat-en-route-titre">En route vers Celcat</h2>
+        <EtatFileCelcat file={file} erreur={erreurFile} />
+      </section>
 
-      {/* Celcat vs cal-iut. Placé juste après l'instantané : c'est la même
-          question — ce que Celcat contient — mais confrontée au planning. */}
-      <div className="panel celcat-comparaison">
-        <h3>Comparer avec cal-iut</h3>
-        <label>
-          Semaine{" "}
-          <select
-            value={semaineComparee ?? ""}
-            onChange={(e) => setSemaineComparee(Number(e.target.value))}
-          >
-            {(libellesSemaines.length
-              ? libellesSemaines
-              : SEMAINES.map((n) => ({ indice: n - 1, libelle: `Semaine ${n}` }))
-            ).map(({ indice, libelle }) => (
-              <option key={indice} value={indice}>
-                {libelle}
-              </option>
-            ))}
-          </select>
-        </label>
-        {semaineComparee === null ? (
-          <p className="muted">Chargement du calendrier…</p>
-        ) : (
-          <ComparaisonCelcat semaine={semaineComparee} />
-        )}
-      </div>
+      {comparaison ? <DetailComparaisonCelcat donnees={comparaison} /> : null}
 
-      </>
-      ) : null}
+      <JournalCelcat logs={logs} />
 
-      {onglet === "activite" ? (
-      <>
-      {/* Repartir de la comparaison. La file se remplissait par balayage
-          aveugle du planning : 491 jobs dont 409 créations, là où la
-          comparaison n'en réclamait que 105 (le 08/09/2026). Ce bouton jette
-          ce qui attend sur les semaines validées et ne ré-enfile que ce qui
-          diverge réellement — « on veut uniquement modifier ce qui ne va
-          pas ». */}
-      <div className="panel">
-        <h3>File d’attente</h3>
-        <EtatFileCelcat />
-        <p className="muted">
-          Reconstruit la file à partir de la comparaison : ce qui concorde déjà avec Celcat
-          n’engendre plus aucun job. Ne touche que les semaines validées.
-        </p>
-        {/* Deux gestes, parce que le risque n'est pas le même. Reconstruire
-            les modifications et les créations est rattrapable ; supprimer ne
-            l'est pas — le 08/09/2026, dix-sept évènements ont disparu de
-            Celcat parce que des suppressions dormaient en file depuis le
-            matin, dont douze venus d'une saisie manuelle en cours. */}
-        {([
-          ["sans", "Reconstruire sans supprimer", false],
-          ["avec", "Reconstruire, suppressions comprises", true],
-        ] as const).map(([cle, libelle, supprimer]) => (
-          <button
-            key={cle}
-            type="button"
-            disabled={enCours}
-            data-testid={`resynchroniser-file-${cle}`}
-            onClick={() => {
-              void (async () => {
-                if (supprimer) {
-                  const ok = await confirmAsync(
-                    "Les évènements que Celcat a en trop seront SUPPRIMÉS définitivement.\n\n" +
-                      "À n’utiliser que si personne ne travaille dans Celcat en ce moment.",
-                    { title: "Reconstruire avec les suppressions", confirmLabel: "Reconstruire" },
-                  );
-                  if (!ok) return;
-                }
-                setEnCours(true);
-                try {
-                  const r = await resynchroniserFileCelcat(undefined, { supprimer });
-                  setMessageResync(r.message);
-                  setErreur(null);
-                } catch (e) {
-                  setErreur(e instanceof Error ? e.message : "Resynchronisation impossible");
-                } finally {
-                  setEnCours(false);
-                }
-              })();
-            }}
-          >
-            {libelle}
-          </button>
-        ))}
-        {messageResync ? <p className="muted">{messageResync}</p> : null}
-      </div>
-
-      {/* Activité récente, en colonnes. Remplace la liste chronologique :
-          « 12 échecs sur le même motif » et « 12 incidents distincts »
-          n'appellent pas le même geste, et une liste à plat ne les
-          distinguait pas. */}
-      <div className="panel celcat-journal">
-        <h3>Activité</h3>
-        {logs.length === 0 ? (
-          <p className="muted">Aucune entrée.</p>
-        ) : (
-          <div className="celcat-kanban">
-            {COLONNES.map((colonne) => {
-              const lignes = logs.filter((l) => l.kind === colonne.kind);
-              return (
-                <div
-                  key={colonne.kind}
-                  className="celcat-kanban-col"
-                  data-testid={`colonne-${colonne.kind}`}
-                >
-                  <h4>
-                    {colonne.titre} <span className={`pill mini ${colonne.ton}`}>{lignes.length}</span>
-                    {lignes.length > 0 ? (
-                      <CopyButton
-                        text={() => texteColonne(colonne.titre, lignes)}
-                        idleLabel="Copier"
-                        title={`Copier les ${lignes.length} ligne(s) de « ${colonne.titre} »`}
-                      />
-                    ) : null}
-                  </h4>
-                  {lignes.length === 0 ? (
-                    <p className="muted">—</p>
-                  ) : (
-                    <ul className="celcat-journal-list">
-                      {lignes.map((item, i) => (
-                        <li
-                          key={`${item.session_id ?? colonne.kind}-${i}`}
-                          className={`celcat-journal-item celcat-journal-item--${colonne.kind}`}
-                          title={item.at ?? undefined}
-                        >
-                          <strong>{item.session_id ?? item.course_code ?? "?"}</strong>
-                          {/* Le nombre de tentatives distingue un blocage
-                              installé d'un incident isolé — sans lui, les
-                              deux se ressemblent. */}
-                          {item.repetitions && item.repetitions > 1 ? (
-                            <span className="pill mini bad"> {item.repetitions}× </span>
-                          ) : null}
-                          {item.event_id ? <span className="muted"> #{item.event_id}</span> : null}
-                          {item.motif ? <div className="muted">{item.motif}</div> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      </>
-      ) : null}
+      <ReglagesCelcat
+        etat={etat}
+        setEtat={(e) => {
+          setEtat(e);
+          void chargerFile();
+        }}
+        file={file}
+        extras={extras}
+        setExtras={setExtras}
+        semaines={semaines}
+      />
     </section>
   );
 }
