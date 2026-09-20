@@ -34,6 +34,15 @@ data/state/mcp_journal.json
 data/state/celcat_sync.json
 # La file d'attente Celcat : un fichier par job depuis le 16/09/2026,
 # plus le tableau historique mis de cote par la migration.
+# Etat d execution du worker Celcat. celcat_instantane.json contient TOUT
+# l emploi du temps de l etablissement (2337 evenements) : une donnee
+# institutionnelle qui n a rien a faire dans le depot.
+data/state/celcat_instantane.json
+data/state/celcat_instantane_demande.json
+data/state/celcat_drainage.json
+data/state/celcat_logs.json
+data/state/celcat_extras.json
+data/state/celcat_mappings.json
 data/state/celcat_file/
 data/state/*.migre
 data/releves/celcat-rpc-en-tetes.json
