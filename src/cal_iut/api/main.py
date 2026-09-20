@@ -3217,7 +3217,7 @@ def celcat_logs(limit: int = 50, cursor: str | None = None) -> dict[str, object]
     response_model=CelcatInstantaneResponse,
     dependencies=[Depends(accounts.require_role("admin"))],
 )
-def celcat_instantane() -> CelcatInstantaneResponse:
+def celcat_instantane(leger: bool = False) -> CelcatInstantaneResponse:
     """Le dernier relevé Celcat déposé par le sidecar, avec son ÂGE.
 
     Cette route ne lit pas Celcat : le conteneur de l'application n'a ni VPN
@@ -3228,9 +3228,16 @@ def celcat_instantane() -> CelcatInstantaneResponse:
     from cal_iut.celcat.instantane import demande_en_cours, lire
 
     releve = lire()
+    # `leger` : les 2337 évènements pèsent 790 Ko, que plus aucun écran
+    # n'affiche — seuls comptent la fraîcheur et l'erreur éventuelle. Une
+    # réponse aussi lourde finissait par échouer, et l'écran, qui avalait
+    # l'erreur, annonçait alors « aucun relevé » alors qu'il en existait un
+    # de trente-six minutes (constaté le 20/09/2026).
     return CelcatInstantaneResponse(
-        evenements=list(releve.evenements),
-        groupes=list(releve.groupes),
+        evenements=[] if leger else list(releve.evenements),
+        groupes=[] if leger else list(releve.groupes),
+        nb_evenements=len(releve.evenements),
+        nb_groupes=len(releve.groupes),
         releve_le=releve.releve_le,
         age_secondes=releve.age_secondes,
         perime=releve.perime,
@@ -3706,19 +3713,29 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
     """
     from cal_iut.celcat import mappings
     from cal_iut.celcat.file_attente import lister as jobs_en_file
+    from cal_iut.celcat.nuit import SANS_PLACEMENT
     from cal_iut.celcat.instantane import lire
     from cal_iut.celcat.logs import tous as tous_les_logs
 
     doc = mappings.charger()
 
-    semaine_par_session: dict[str, int | None] = {}
-    for job in jobs_en_file():
-        brut = job.get("semaine")
-        try:
-            sem = int(brut) if brut is not None else None
-        except (TypeError, ValueError):
-            sem = None
-        semaine_par_session[str(job.get("session_id") or "")] = sem
+    # LA SEMAINE D'UN BLOCAGE VIENT DU PLACEMENT, PAS DU JOB.
+    #
+    # Le job porte la semaine pour laquelle il a été enfilé. Si la séance a
+    # depuis été déplacée — ou retirée du planning — cette semaine ne veut
+    # plus rien dire, et le blocage se rangeait sous une semaine où la
+    # comparaison ne mentionne rien. Signalé le 20/09/2026 : « pourquoi on
+    # parle de 303 alors qu'il n'est pas dans les différences ? ».
+    #
+    # Une séance SANS placement n'appartient donc à aucune semaine : elle est
+    # montrée à part, toujours, plutôt que rangée sous une semaine au hasard.
+    en_file = {str(job.get("session_id") or "") for job in jobs_en_file()}
+    semaine_du_placement: dict[str, int] = {}
+    for placement in getattr(get_state(), "timetable", []) or []:
+        sid = str(getattr(placement, "session_id", "") or "")
+        sem = getattr(placement, "week", None)
+        if sid and isinstance(sem, int):
+            semaine_du_placement[sid] = sem
 
     def _entrees(famille: str) -> list[dict]:
         return [
@@ -3747,22 +3764,32 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
         if ligne.get("kind") != "blocked":
             continue
         sid = str(ligne.get("session_id") or "")
-        if sid not in semaine_par_session:
+        if sid not in en_file:
             # Le job n'est plus en file : le blocage a été réglé, ou la
             # séance a été retirée. L'afficher encore serait un mensonge.
             continue
-        if semaine is not None and semaine_par_session[sid] != semaine:
+        place = semaine_du_placement.get(sid)
+        if semaine is not None and place is not None and place != semaine:
             ailleurs += 1
             continue
         motif = str(ligne.get("motif") or "")
+        # Les lignes écrites avant le 20/09/2026 portent l'ancien libellé.
+        # Les fondre dans le nouveau évite d'afficher deux fois le même
+        # blocage sous deux formulations.
+        if "inconnue de la maquette" in motif:
+            motif = SANS_PLACEMENT
         entree = manquants.setdefault(
             motif,
             {"motif": motif, "seances": [], "tentatives": 0, "famille": _famille_du_motif(motif),
-             "cle": _cle_du_motif(motif)},
+             "cle": _cle_du_motif(motif), "sans_semaine": True},
         )
         if sid and sid not in entree["seances"]:
             entree["seances"].append(sid)
         entree["tentatives"] += int(ligne.get("repetitions") or 1)
+        # Un blocage n'est « hors semaine » que si AUCUNE de ses séances n'est
+        # placée : une seule qui l'est suffit à le rattacher au calendrier.
+        if place is not None:
+            entree["sans_semaine"] = False
 
     return CelcatMappingsResponse(
         salles=_entrees("salles"),

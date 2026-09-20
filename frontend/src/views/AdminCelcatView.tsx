@@ -94,6 +94,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
   const [etat, setEtat] = useState<CelcatEtat | null>(null);
   const [erreurEtat, setErreurEtat] = useState<string | null>(null);
   const [instantane, setInstantane] = useState<CelcatInstantane | null>(null);
+  const [erreurInstantane, setErreurInstantane] = useState<string | null>(null);
   const [file, setFile] = useState<CelcatFile | null>(null);
   const [erreurFile, setErreurFile] = useState<string | null>(null);
   const [extras, setExtras] = useState<CelcatExtra[]>([]);
@@ -125,9 +126,16 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     } catch (e) {
       setErreurEtat(message(e, "Erreur de chargement"));
     }
-    // L'instantané ne doit pas faire échouer l'écran : sans relevé, le
-    // verdict le dit lui-même.
-    setInstantane(await fetchCelcatInstantane().catch(() => null));
+    // L'instantané ne doit pas faire échouer l'écran — mais son échec ne
+    // doit pas non plus se lire « aucun relevé » : la barre d'état affirmait
+    // « Celcat n'a pas encore été relu » pendant que le verdict disait
+    // « relevé pris il y a 36 min » (constaté le 20/09/2026).
+    try {
+      setInstantane(await fetchCelcatInstantane());
+      setErreurInstantane(null);
+    } catch (e) {
+      setErreurInstantane(message(e, "relevé illisible"));
+    }
   }, []);
 
   const chargerMappings = useCallback(async (indice: number | null) => {
@@ -258,7 +266,12 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         </p>
       ) : null}
 
-      <StatutCelcat etat={etat} instantane={instantane} file={file} />
+      <StatutCelcat
+        etat={etat}
+        instantane={instantane}
+        file={file}
+        erreurInstantane={erreurInstantane}
+      />
 
       {semaine === null ? (
         <section className="panel celcat-verdict" aria-busy="true">

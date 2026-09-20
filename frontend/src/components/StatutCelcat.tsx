@@ -16,12 +16,21 @@ export function StatutCelcat({
   etat,
   instantane,
   file,
+  erreurInstantane,
 }: {
   etat: CelcatEtat;
   instantane: CelcatInstantane | null;
   file: CelcatFile | null;
+  erreurInstantane?: string | null;
 }) {
-  const signaux = signauxSysteme(etat, instantane, file);
+  const signaux = signauxSysteme(etat, instantane, file).map((s) =>
+    // « Je n'ai pas pu lire l'état du relevé » et « Celcat n'a jamais été
+    // relu » sont deux choses différentes, et les confondre a fait afficher
+    // « aucun relevé » alors qu'il en existait un de trente-six minutes.
+    s.cle === "releve" && erreurInstantane
+      ? { ...s, etat: "indisponible", ton: "panne" as const, detail: erreurInstantane }
+      : s,
+  );
   return (
     <section className="celcat-statut" aria-label="État de la synchronisation Celcat">
       <dl className="celcat-signaux">
