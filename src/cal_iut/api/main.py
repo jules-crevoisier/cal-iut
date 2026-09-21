@@ -1742,7 +1742,35 @@ def _check_move_editable(
     """
     motifs = _semaines_non_modifiables(state, session_id, source_week, dest_week, force=force)
     if motifs:
-        raise HTTPException(409, motifs[0])
+        raise _refus_semaine_verrouillee(motifs)
+
+
+def _refus_semaine_verrouillee(motifs: list[str]) -> HTTPException:
+    """Le refus d'une semaine verrouillée, sous une forme que l'écran sait FORCER.
+
+    Il était levé en SIMPLE TEXTE (`HTTPException(409, motifs[0])`). Or
+    l'écran ne propose « Forcer » / « Créer quand même » que devant un
+    conflit STRUCTURÉ portant `hard_conflicts` (cf. `utils/placement.ts::
+    detailConflit`) : devant un texte, il l'affichait et s'arrêtait là. Un
+    verrou forçable, qu'aucun bouton ne permettait de forcer.
+
+    Signalé le 21/09/2026 : « je souhaite créer une séance, sur cette semaine
+    mais je ne peux pas la forcer ». Le glisser-déposer de la Vue Promo
+    échappait au défaut par sa vérification à blanc ; la création et le
+    placement manuel, qui n'en font pas, tombaient droit dessus.
+
+    PAS dans `blocking_conflicts` : ce verrou se lève en forçant, et l'y
+    mettre ferait afficher « Impossible (non forçable) » — précisément
+    l'inverse de ce qu'il est. Le libellé, lui, ne change pas : la Vue Promo
+    y cherche « non modifiable » pour titrer sa modale.
+    """
+    return HTTPException(409, detail={
+        "message": "Conflit",
+        "hard_conflicts": list(motifs),
+        "soft_warnings": [],
+        "suggestions": [],
+        "suggestions_note": None,
+    })
 
 
 def _semaines_non_modifiables(
@@ -4345,7 +4373,7 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     # semaine en cours doit rester possible quand on corrige à chaud.
     statut = week_status(state.calendar, session.semestre, body.week)
     if statut != "future" and not body.force:
-        raise HTTPException(409, f"Semaine {body.week + 1} non modifiable (statut : {statut})")
+        raise _refus_semaine_verrouillee([f"Semaine {body.week + 1} non modifiable (statut : {statut})"])
 
     # `force` contourne la synchro duo depuis le 28/08/2026 (retour
     # utilisateur : « il faut que je puisse forcer ») et l'ordre pédagogique
