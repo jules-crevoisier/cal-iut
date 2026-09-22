@@ -80,3 +80,28 @@ def test_sources_absentes_ou_illisibles_ne_font_rien_tomber(tmp_path) -> None:
     (tmp_path / "contraintes").mkdir()
     (tmp_path / "contraintes" / "05_enseignants_contraintes.json").write_text("{pas du json", encoding="utf-8")
     assert enseignants_declares(config) == {}
+
+
+def test_une_seance_creee_ne_remplace_pas_le_nom_par_le_code(etat_avec_seance) -> None:  # noqa: F811
+    """22/09/2026 : dès sa première séance (créée depuis l'interface, donc sans
+    prénom ni nom), Alexia s'affichait « APH »."""
+    from cal_iut.api.state import get_state
+    from cal_iut.models.entities import SessionType
+    from cal_iut.models.session import SessionToPlace
+    from cal_iut.solver.rooms import PlacedSessionWithRoom
+
+    etat = get_state()
+    seance = SessionToPlace(
+        id="c1", course_code="WS103", course_name="T", semestre="S1",
+        parcours="BUT1", annee="BUT1", session_type=SessionType.TP,
+        sequence_order=1, group_ids=["but1-td-ab"], teacher_codes=["APH"],
+    )
+    etat.sessions = [*etat.sessions, seance]
+    etat.sessions_by_id = {**etat.sessions_by_id, "c1": seance}
+    etat.timetable = [
+        *etat.timetable,
+        PlacedSessionWithRoom(session_id="c1", week=0, day=1, slot=0,
+                               course_code="WS103", group_ids=["but1-td-ab"], teacher_codes=["APH"]),
+    ]
+    _login_admin()
+    assert client.get("/app-state").json()["teacherLabels"]["APH"] == "Alexia Petit-Halajko"
