@@ -1009,6 +1009,17 @@ def _room_catalog(rooms: list[Room], rows: list[dict]) -> list[dict]:
                 # Cf. `Room.placement_auto` — retour utilisateur 22/09/2026,
                 # affiché comme marqueur « hors auto » (ReferenceView).
                 "placementAuto": room.placement_auto,
+                # Salles individuelles recouvertes par une salle fusionnée
+                # (ex. `h007_h008.combines = ["h007", "h008"]`, cf.
+                # `Room.combines` / `data/config/rooms.yaml`) — vide sur une
+                # salle normale. Ajouté le 22/09/2026 (todo département,
+                # Kyllian Bresson : « Planning des salles disponibles ») pour
+                # que la Vue « Salles libres » sache qu'occuper la salle
+                # fusionnée occupe aussi chaque moitié, et inversement — sans
+                # ça le frontend n'a aucun moyen de le déduire des seules
+                # lignes de planning (`AppRow.r` ne porte que le libellé de
+                # la salle réellement occupée).
+                "combines": list(room.combines),
             }
         )
     catalog.sort(key=lambda r: r["label"])

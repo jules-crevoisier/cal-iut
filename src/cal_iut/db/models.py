@@ -183,6 +183,40 @@ class McpKey(Base):
     user: Mapped["User"] = relationship(back_populates="mcp_keys")
 
 
+class Tache(Base):
+    """Tâche humaine du kanban partagé (22/09/2026, retour utilisateur Jules :
+    « on voudrait une partie kanban pour les choses à faire, exemple : ce
+    prof a dit qu'il ne serait pas présent ce jour, déplacer ») — distincte
+    de « À traiter » (`TodoView`, problèmes de qualité de données détectés
+    automatiquement par le solveur/l'audit) : ici, seulement ce qu'un humain
+    a noté pour l'équipe, jamais généré par le code.
+
+    `colonne` : "a_faire" | "en_cours" | "fait" — trois colonnes fixes,
+    pas de colonnes personnalisables (hors périmètre du besoin exprimé).
+    `ordre` en `Float` (pas `Integer`) pour permettre d'insérer une carte
+    entre deux autres sans renuméroter toute la colonne (glisser-déposer) —
+    même raisonnement que l'ordre des séances ailleurs dans le projet.
+    `fait_le` posé quand `colonne` passe à "fait", remis à `None` dès qu'elle
+    en ressort — sert à distinguer une carte fraîchement terminée d'une
+    carte qui traîne dans "fait" depuis longtemps si un jour un tri par date
+    est ajouté."""
+
+    __tablename__ = "taches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    titre: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    colonne: Mapped[str] = mapped_column(String(16), default="a_faire", index=True)
+    ordre: Mapped[float] = mapped_column(Float, default=0.0)
+    enseignant_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    date_debut: Mapped[date | None] = mapped_column(Date, nullable=True)
+    date_fin: Mapped[date | None] = mapped_column(Date, nullable=True)
+    cree_par: Mapped[str] = mapped_column(String(255))
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    maj_le: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    fait_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class TeacherPreference(Base):
     """Préférences apprises par enseignant/matière."""
 

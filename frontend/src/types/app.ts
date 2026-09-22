@@ -128,6 +128,13 @@ export interface RoomCatalogEntry {
   // choisissable à la main, juste jamais retenue seule par la génération
   // automatique — cf. `ReferenceView.tsx` (marqueur « hors auto »).
   placementAuto: boolean;
+  // Salles individuelles recouvertes par cette salle si elle est une fusion
+  // (ex. `h007_h008` → `["h007", "h008"]`), vide sinon — cf.
+  // `html_view.py::_room_catalog`. Ajouté le 22/09/2026 (todo département,
+  // Kyllian Bresson : « Planning des salles disponibles ») pour que la Vue
+  // « Salles libres » sache qu'occuper la salle fusionnée occupe aussi
+  // chaque moitié, et inversement.
+  combines: string[];
 }
 
 export interface CourseCatalogEntry {
@@ -226,5 +233,8 @@ export interface AppPayload {
   institutionalCalendar: InstitutionalEvent[];
 
   rooms: RoomCatalogEntry[];
+  /** Salles réservées par des tiers (`salles_reservees.yaml`), telles que
+   *  déclarées — optionnel : absent des anciens payloads et des fixtures. */
+  roomReservations?: { salle: string; date: string; slots: number[]; motif: string }[];
   courses: CourseCatalogEntry[];
 }

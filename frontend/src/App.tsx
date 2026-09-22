@@ -62,7 +62,9 @@ import { GroupeView } from "./views/GroupeView";
 import { PromoView } from "./views/PromoView";
 import { ReferenceView } from "./views/ReferenceView";
 import { APlacerView } from "./views/APlacerView";
+import { KanbanView } from "./views/KanbanView";
 import { SalleView } from "./views/SalleView";
+import { SallesLibresView } from "./views/SallesLibresView";
 import { TodoView } from "./views/TodoView";
 
 const DEFAULT_PARCOURS = "BUT1";
@@ -678,6 +680,9 @@ export function App() {
             onOpenSearch={() => setSearch(true)}
           />
         )}
+        {activeTab === "salles-libres" && appPayload && !readOnlyTarget && (
+          <SallesLibresView payload={appPayload} route={route} setRoute={setRoute} />
+        )}
         {activeTab === "promo" && appPayload && (!readOnlyTarget || readOnlyTarget === "promo") && (
           <PromoView
             payload={appPayload}
@@ -717,6 +722,9 @@ export function App() {
           <ContraintesView payload={appPayload} setRoute={setRoute} />
         )}
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
+        {activeTab === "taches" && appPayload && !readOnlyTarget && (
+          <KanbanView payload={appPayload} role={moi?.role} setRoute={setRoute} />
+        )}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
         {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}

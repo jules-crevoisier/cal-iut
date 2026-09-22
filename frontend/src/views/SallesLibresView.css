@@ -1,0 +1,131 @@
+/* Vue « Salles libres » (todo département 22/09/2026) — mêmes tokens que le
+   reste de l'appli (`--accent`, `--border`, `--surface-2`...), aucune valeur
+   ad-hoc. Mobile-first : à 320px, sélecteurs en boutons qui s'enroulent
+   (jamais de défilement horizontal de PAGE) + liste une colonne ; la grille
+   salles × créneaux n'apparaît qu'à partir de 768px (cf. SallesLibresView.tsx,
+   gardée par `useNarrowScreen`). */
+
+.salleslibres-jours,
+.salleslibres-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.salleslibres-slots {
+  margin-bottom: 12px;
+}
+
+/* Cible tactile ≥44px (CLAUDE.md) : `.btn--ghost` seul ne fixe pas de
+   hauteur minimale, ces boutons sont la commande principale de la vue. */
+.salleslibres-jours .btn,
+.salleslibres-slots .btn {
+  min-height: 44px;
+  flex: 1 1 auto;
+}
+
+.salleslibres-jours .btn.active,
+.salleslibres-slots .btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.salleslibres-filtres {
+  align-items: flex-end;
+}
+
+.salleslibres-filtres input[type="number"] {
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+  /* 16px minimum sur les champs (CLAUDE.md) — évite le zoom automatique
+     iOS/Android au focus. */
+  font-size: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.salleslibres-checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text) !important;
+}
+
+.salleslibres-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  accent-color: var(--accent);
+}
+
+.salleslibres-liste {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.salleslibres-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.salleslibres-item-label {
+  font-weight: 600;
+}
+
+.salleslibres-grille-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.salleslibres-grille {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+  font-size: 0.82rem;
+}
+
+.salleslibres-grille th,
+.salleslibres-grille td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.salleslibres-grille th {
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.salleslibres-cell.libre {
+  color: var(--muted);
+}
+
+.salleslibres-cell.occupee {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .salleslibres-jours .btn,
+  .salleslibres-slots .btn {
+    flex: 0 1 auto;
+    min-width: 120px;
+  }
+}

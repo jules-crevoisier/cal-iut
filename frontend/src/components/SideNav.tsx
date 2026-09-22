@@ -49,6 +49,11 @@ const NAV_GROUPS: NavGroup[] = [
       { id: "promo", label: "Vue Promo" },
       { id: "groupe", label: "Vue TD / TP" },
       { id: "salle", label: "Vue Salle" },
+      // Ajouté le 22/09/2026 (todo département, Kyllian Bresson :
+      // « Planning des salles disponibles ») — juste après « Vue Salle »
+      // (occupation d'UNE salle), sa question inverse : quelles salles sont
+      // libres sur tel créneau.
+      { id: "salles-libres", label: "Salles libres" },
     ],
   },
   {
@@ -60,7 +65,14 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "À faire",
-    items: [{ id: "apf", label: "À traiter" }],
+    // "Tâches" (22/09/2026, retour utilisateur Jules) : kanban partagé pour
+    // le suivi HUMAIN (« ce prof a dit qu'il ne serait pas présent ce jour,
+    // déplacer ») — distinct de « À traiter », qui reste le seul onglet
+    // alimenté automatiquement par le solveur/l'audit.
+    items: [
+      { id: "apf", label: "À traiter" },
+      { id: "taches", label: "Tâches" },
+    ],
   },
 ];
 

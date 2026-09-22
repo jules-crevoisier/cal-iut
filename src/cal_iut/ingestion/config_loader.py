@@ -141,6 +141,33 @@ def load_room_reservations(
     return reserve
 
 
+def load_room_reservation_entries(config_dir: Path) -> list[dict[str, object]]:
+    """Réservations de salles par des tiers, TELLES QUE DÉCLARÉES (salle, date,
+    créneaux, motif) — pour l'affichage, là où `load_room_reservations` les
+    convertit en index de créneaux pour l'affectation.
+
+    Ajouté le 22/09/2026 pour la vue « Salles libres » (todo département,
+    Kyllian Bresson) : sans elles, l'amphi pris par la Direction apparaissait
+    « libre » alors que l'affectation automatique, elle, le savait occupé.
+    """
+    chemin = config_dir / "salles_reservees.yaml"
+    if not chemin.exists():
+        return []
+    data = load_yaml(chemin) or {}
+    sortie: list[dict[str, object]] = []
+    for entree in data.get("reservations", []) or []:
+        try:
+            sortie.append({
+                "salle": str(entree["salle"]),
+                "date": str(entree["date"]),
+                "slots": [int(s) for s in entree.get("slots", []) or [] if 0 <= int(s) < 6],
+                "motif": str(entree.get("motif") or ""),
+            })
+        except (KeyError, TypeError, ValueError):
+            continue
+    return sortie
+
+
 def load_objective_weights(config_dir: Path) -> dict[str, int]:
     data = load_yaml(config_dir / "teacher_availability.yaml")
     weights = data.get("objective_weights", {})

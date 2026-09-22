@@ -92,6 +92,9 @@ from cal_iut.api.schemas import (
     SignupResponse,
     SlotSuggestionResponse,
     SolveRequest,
+    TacheCreateRequest,
+    TacheResponse,
+    TacheUpdateRequest,
     TeacherMailPreviewListResponse,
     TeacherMailPreviewResponse,
     TeacherMailSendResultResponse,
@@ -249,7 +252,7 @@ _PROTECTED_PREFIXES = (
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
-    "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
+    "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
 )
 
 
@@ -963,6 +966,11 @@ def app_state(request: Request) -> dict[str, object]:
             libelles[code] = nom
     payload["teacherLabels"] = dict(sorted(libelles.items()))
 
+    # Réservations de salles par des tiers (vue « Salles libres », 22/09/2026).
+    from cal_iut.ingestion.config_loader import load_room_reservation_entries
+
+    payload["roomReservations"] = load_room_reservation_entries(state.config_dir)
+
     # Session de compte (n'importe quel rôle actif) = payload complet. Lien
     # personnel public = version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`).
     # Filtré ICI, à la sortie, plutôt qu'en amont dans `build_payload` : une
@@ -1403,6 +1411,97 @@ def delete_exception(exception_id: int) -> dict[str, bool]:
     ok = repo.deactivate_exception(exception_id)
     if not ok:
         raise HTTPException(404, "Exception introuvable")
+    return {"deleted": True}
+
+
+def _tache_to_response(row) -> TacheResponse:
+    return TacheResponse(
+        id=row.id, titre=row.titre, description=row.description, colonne=row.colonne, ordre=row.ordre,
+        enseignant_code=row.enseignant_code,
+        date_debut=row.date_debut.isoformat() if row.date_debut else None,
+        date_fin=row.date_fin.isoformat() if row.date_fin else None,
+        cree_par=row.cree_par, cree_le=row.cree_le.isoformat(), maj_le=row.maj_le.isoformat(),
+        fait_le=row.fait_le.isoformat() if row.fait_le else None,
+    )
+
+
+def _parser_date_tache(valeur: str | None, champ: str) -> _date | None:
+    if valeur is None:
+        return None
+    try:
+        return _date.fromisoformat(valeur)
+    except ValueError as exc:
+        raise HTTPException(422, f"{champ} : date invalide (attendu AAAA-MM-JJ).") from exc
+
+
+def _valider_plage_dates(date_debut: _date | None, date_fin: _date | None) -> None:
+    if date_fin is not None and date_debut is None:
+        raise HTTPException(422, "date_fin ne peut pas être renseignée sans date_debut.")
+    if date_debut is not None and date_fin is not None and date_fin < date_debut:
+        raise HTTPException(422, "La date de fin doit être postérieure ou égale à la date de début.")
+
+
+@app.post("/taches", response_model=TacheResponse, dependencies=[Depends(accounts.require_role("edit"))])
+def create_tache(body: TacheCreateRequest, request: Request) -> TacheResponse:
+    user: User = request.state.user
+    date_debut = _parser_date_tache(body.date_debut, "date_debut")
+    date_fin = _parser_date_tache(body.date_fin, "date_fin")
+    _valider_plage_dates(date_debut, date_fin)
+    repo = get_repo()
+    row = repo.create_tache(
+        titre=body.titre, cree_par=user.email, description=body.description, colonne=body.colonne,
+        ordre=body.ordre, enseignant_code=body.enseignant_code, date_debut=date_debut, date_fin=date_fin,
+    )
+    return _tache_to_response(row)
+
+
+@app.get("/taches", response_model=list[TacheResponse])
+def list_taches() -> list[TacheResponse]:
+    repo = get_repo()
+    return [_tache_to_response(r) for r in repo.list_taches()]
+
+
+@app.patch("/taches/{tache_id}", response_model=TacheResponse, dependencies=[Depends(accounts.require_role("edit"))])
+def update_tache(tache_id: int, body: TacheUpdateRequest) -> TacheResponse:
+    repo = get_repo()
+    existante = repo.get_tache(tache_id)
+    if existante is None:
+        raise HTTPException(404, "Tâche introuvable.")
+
+    champs: dict[str, object] = {}
+    if body.titre is not None:
+        champs["titre"] = body.titre
+    if body.description is not None:
+        champs["description"] = body.description
+    if body.colonne is not None:
+        champs["colonne"] = body.colonne
+    if body.ordre is not None:
+        champs["ordre"] = body.ordre
+    if body.enseignant_code is not None:
+        champs["enseignant_code"] = body.enseignant_code
+
+    # Dates : validées contre le mélange futur(champs fournis)/existant, pas
+    # seulement contre ce que le PATCH apporte — un PATCH qui ne change QUE
+    # `date_fin` doit quand même être comparé à `date_debut` déjà en base.
+    date_debut = _parser_date_tache(body.date_debut, "date_debut") if body.date_debut is not None else existante.date_debut
+    date_fin = _parser_date_tache(body.date_fin, "date_fin") if body.date_fin is not None else existante.date_fin
+    if body.date_debut is not None:
+        champs["date_debut"] = date_debut
+    if body.date_fin is not None:
+        champs["date_fin"] = date_fin
+    _valider_plage_dates(date_debut, date_fin)
+
+    row = repo.update_tache(tache_id, **champs)
+    assert row is not None
+    return _tache_to_response(row)
+
+
+@app.delete("/taches/{tache_id}", dependencies=[Depends(accounts.require_role("edit"))])
+def delete_tache(tache_id: int) -> dict[str, bool]:
+    repo = get_repo()
+    ok = repo.delete_tache(tache_id)
+    if not ok:
+        raise HTTPException(404, "Tâche introuvable.")
     return {"deleted": True}
 
 
