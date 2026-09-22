@@ -30,23 +30,29 @@ export function listerGroupesParcours(payload: AppPayload, parcours: string): Gr
 }
 
 /**
- * IDs visibles pour un filtre groupe : cohort du groupe + tout groupe du
- * parcours dont la cohort contient ce groupe (ex. TP sous un TD choisi).
+ * IDs visibles pour un filtre groupe : la cohorte du groupe choisi, telle
+ * qu'envoyée par le serveur (`payload.groupCohort`, construite par
+ * `expand_group_filter` dans `src/cal_iut/models/group_scope.py` — lecture
+ * seule ici).
+ *
+ * Bug corrigé le 22/09/2026 (todo département, retour Kyllian Bresson :
+ * « quand je souhaite afficher uniquement le TP A, il m'affiche quand même
+ * le TP B »). La boucle qui suivait ajoutait, en plus de la cohorte du
+ * groupe choisi, TOUT groupe du parcours dont la cohorte CONTIENT ce
+ * groupe. Or côté serveur la cohorte d'un TD liste déjà TOUS ses TP
+ * enfants (TD AB -> TD AB + TP A + TP B + promo) : filtrer sur TP A faisait
+ * matcher la cohorte du TD AB (qui contient TP A) et réimportait donc TP B
+ * en entier. La cohorte du groupe choisi seule suffit dans les deux sens :
+ * - TP choisi  -> cohort[TP] = {TP, TD parent, promo} (jamais le TP frère).
+ * - TD choisi  -> cohort[TD] = {TD, tous ses TP, promo} (déjà complet).
  */
 export function idsVisiblesPourFiltre(
   payload: AppPayload,
-  parcours: string,
+  _parcours: string,
   filtre: FiltreGroupeId,
 ): Set<string> | null {
   if (filtre === "Tout") return null;
-  const visibles = new Set<string>(payload.groupCohort[filtre] ?? [filtre]);
-  for (const [gid, members] of Object.entries(payload.groupCohort)) {
-    if (payload.groupParcours[gid] !== parcours) continue;
-    if (!members.includes(filtre)) continue;
-    visibles.add(gid);
-    for (const m of members) visibles.add(m);
-  }
-  return visibles;
+  return new Set<string>(payload.groupCohort[filtre] ?? [filtre]);
 }
 
 export function filtrerRowsParGroupe(
