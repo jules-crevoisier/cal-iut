@@ -947,7 +947,13 @@ def app_state(request: Request) -> dict[str, object]:
 
     libelles = dict(payload.get("teacherLabels") or {})
     for code, nom in enseignants_declares(state.config_dir).items():
-        libelles.setdefault(code, nom)
+        # Un libellé qui n'est que le code n'est pas un nom : c'est ce que
+        # rend une séance CRÉÉE depuis l'interface, dont l'enseignant n'a ni
+        # prénom ni nom (seule la maquette les fournit). Signalement du
+        # 22/09/2026 : « Alexia a disparu, elle est remplacée uniquement par
+        # son raccourci APH » — dès sa première séance.
+        if libelles.get(code, code) == code:
+            libelles[code] = nom
     payload["teacherLabels"] = dict(sorted(libelles.items()))
 
     # Session de compte (n'importe quel rôle actif) = payload complet. Lien
