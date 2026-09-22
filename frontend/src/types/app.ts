@@ -122,6 +122,12 @@ export interface RoomCatalogEntry {
   type: string;
   equipment: string[];
   nSessions: number;
+  // Proposée au placement automatique (solveur + résolution API) — retour
+  // utilisateur 22/09/2026 : « supprimer la BU du placement automatique des
+  // salles car elle est utilisée pour un seul module ». `false` reste
+  // choisissable à la main, juste jamais retenue seule par la génération
+  // automatique — cf. `ReferenceView.tsx` (marqueur « hors auto »).
+  placementAuto: boolean;
 }
 
 export interface CourseCatalogEntry {

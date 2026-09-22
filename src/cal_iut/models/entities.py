@@ -88,6 +88,17 @@ class Room(BaseModel):
     # fusion (`room_type == COMBINED`) — ex. h007_h008.combines = [h007, h008].
     # Vide sur une salle "normale". Cf. solver/rooms.py::_build_conflict_map.
     combines: list[str] = Field(default_factory=list)
+    # Proposée au placement AUTOMATIQUE (solveur + résolution API) — retour
+    # utilisateur 22/09/2026 : « supprimer la BU du placement automatique des
+    # salles car elle est utilisée pour un seul module, celui de Valérie
+    # Mariot ». `False` retire la salle de tout choix AUTOMATIQUE (solveur,
+    # complétion, résolution sans `room_id` explicite), sans jamais l'empêcher
+    # d'un choix MANUEL (`changer_salle`) ni d'une règle `rooms.yaml` qui la
+    # NOMME explicitement (`RoomAssignmentRule.preferred_room_ids`, cf.
+    # `solver/rooms.py`) — explicite bat le drapeau. Défaut `True` :
+    # rétrocompatible avec toute salle existante (rooms.yaml ou salles
+    # ajoutées depuis l'interface) qui ne déclare pas ce champ.
+    placement_auto: bool = True
 
 
 class SchedulingConstraint(BaseModel):

@@ -83,6 +83,10 @@ function RoomsTable({
                 >
                   {r.label}
                 </button>
+                {/* Marqueur TEXTE, pas seulement couleur (retour utilisateur
+                    22/09/2026) : une salle hors placement automatique reste
+                    choisissable à la main, cf. `Room.placement_auto`. */}
+                {!r.placementAuto && <span className="badge">hors auto</span>}
               </td>
               <td>{r.capacity}</td>
               <td>{r.type}</td>

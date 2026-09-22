@@ -96,6 +96,7 @@ from cal_iut.api.schemas import (
     TeacherMailPreviewResponse,
     TeacherMailSendResultResponse,
     TimetableResponse,
+    UpdateRoomRequest,
     ValidationResponse,
     WeightsResponse,
     YearMeta,
@@ -2993,10 +2994,15 @@ def creer_salle(body: CreateRoomRequest) -> RoomMeta:
 
     Persistée dans le volume (`api/custom_rooms.py`), pas dans
     `data/config/rooms.yaml` qui est réécrit à chaque déploiement. Type
-    `standard` imposé : ces salles ne portent aucune règle d'affectation,
-    le solveur ne les choisira jamais seul — elles servent au choix MANUEL
-    de salle (Vue Promo). Voulu : une salle exceptionnelle ne doit pas
-    devenir une ressource que la génération automatique se met à utiliser.
+    `standard` imposé.
+
+    `placement_auto` (22/09/2026, retour utilisateur : « supprimer la BU du
+    placement automatique des salles car elle est utilisée pour un seul
+    module ») décide si cette salle peut être retenue par la génération
+    automatique (solveur, résolution API sans `room_id` explicite) — coché
+    par défaut. Décoché, elle reste TOUJOURS choisissable au choix MANUEL de
+    salle (Vue Promo, `changer_salle`) : c'est le seul comportement que
+    change ce champ, pas la visibilité de la salle.
     """
     from cal_iut.models.entities import Room, RoomType
 
@@ -3018,10 +3024,40 @@ def creer_salle(body: CreateRoomRequest) -> RoomMeta:
     if any(r.label.strip().lower() == libelle.lower() for r in state.rooms):
         raise HTTPException(409, f"Une salle nommée « {libelle} » existe déjà.")
 
-    salle = Room(id=room_id, label=libelle, capacity=body.capacity, room_type=RoomType.STANDARD)
+    salle = Room(
+        id=room_id, label=libelle, capacity=body.capacity, room_type=RoomType.STANDARD,
+        placement_auto=body.placement_auto,
+    )
     custom_rooms.add_custom_room(salle)
     state.rooms = state.rooms + [salle]
-    return RoomMeta(id=salle.id, label=salle.label, capacity=salle.capacity, room_type=salle.room_type.value)
+    return RoomMeta(
+        id=salle.id, label=salle.label, capacity=salle.capacity, room_type=salle.room_type.value,
+        placement_auto=salle.placement_auto,
+    )
+
+
+@app.patch("/rooms/{room_id}", response_model=RoomMeta, dependencies=[Depends(accounts.require_role("admin"))])
+def modifier_salle(room_id: str, body: UpdateRoomRequest) -> RoomMeta:
+    """Modifie une salle EXISTANTE — retour utilisateur 22/09/2026 :
+    « supprimer la BU du placement automatique des salles car elle est
+    utilisée pour un seul module, celui de Valérie Mariot ». Fonctionne pour
+    une salle du bâtiment (`rooms.yaml`) COMME pour une salle personnalisée
+    (créée depuis l'interface) — `custom_rooms.set_room_override` choisit lui
+    même où persister selon le cas (cf. sa docstring), `rooms.yaml` n'est
+    jamais réécrit.
+    """
+    state = get_state()
+    salle = next((r for r in state.rooms if r.id == room_id), None)
+    if salle is None:
+        raise HTTPException(404, f"Salle « {room_id} » inconnue")
+
+    custom_rooms.set_room_override(room_id, placement_auto=body.placement_auto)
+    salle_maj = salle.model_copy(update={"placement_auto": body.placement_auto})
+    state.rooms = [salle_maj if r.id == room_id else r for r in state.rooms]
+    return RoomMeta(
+        id=salle_maj.id, label=salle_maj.label, capacity=salle_maj.capacity,
+        room_type=salle_maj.room_type.value, placement_auto=salle_maj.placement_auto,
+    )
 
 
 def _apres_ecriture_planning(session_id: str, action: str) -> None:

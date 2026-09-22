@@ -241,6 +241,23 @@ class CreateRoomRequest(BaseModel):
 
     label: str = Field(min_length=1, max_length=80)
     capacity: int = Field(default=30, ge=1, le=1000)
+    # Coché par défaut (retour utilisateur 22/09/2026) — décocher réserve la
+    # salle à un usage précis (ex. BU) : elle reste choisissable à la main,
+    # jamais retenue seule par le placement automatique. Cf. `Room.
+    # placement_auto`.
+    placement_auto: bool = True
+
+
+class UpdateRoomRequest(BaseModel):
+    """Modification d'une salle EXISTANTE (`PATCH /rooms/{room_id}`, réservé
+    admin) — retour utilisateur 22/09/2026 : « supprimer la BU du placement
+    automatique des salles car elle est utilisée pour un seul module ».
+    Persistée dans l'overlay `data/state/custom_rooms.json` (cf. `api/
+    custom_rooms.py::set_room_override`), y compris pour une salle du
+    bâtiment (`rooms.yaml`, jamais réécrit) — survit ainsi à un redéploiement
+    sans passer par un correctif de code."""
+
+    placement_auto: bool
 
 
 class SlotSuggestionResponse(BaseModel):
@@ -279,6 +296,8 @@ class RoomMeta(BaseModel):
     label: str
     capacity: int
     room_type: str
+    # Cf. `Room.placement_auto` — retour utilisateur 22/09/2026.
+    placement_auto: bool = True
 
 
 class YearMeta(BaseModel):

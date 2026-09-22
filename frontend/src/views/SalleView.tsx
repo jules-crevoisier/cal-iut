@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { DayStrip, todayIndex } from "../components/DayStrip";
+import { RoomPlacementAutoField } from "../components/RoomPlacementAutoField";
 import { SessionGrid } from "../components/SessionGrid";
 import { WeekBar } from "../components/WeekBar";
 import { useNarrowScreen } from "../hooks/useNarrowScreen";
@@ -28,10 +29,19 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
   const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, route.sem));
   const [mobileDay, setMobileDay] = useState(todayIndex());
   const narrow = useNarrowScreen();
+  // Reflète immédiatement une modification de `placementAuto` (`PATCH
+  // /rooms/{id}`) sans attendre le prochain rechargement complet du payload
+  // — retour utilisateur 22/09/2026. `null` = pas encore modifié depuis
+  // l'ouverture de la fiche, on affiche alors la valeur du payload.
+  const [placementAutoLocal, setPlacementAutoLocal] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (route.sem !== null) setDisplayWeek(displayIndexForSolverWeek(payload, route.sem));
   }, [payload, route.sem]);
+
+  useEffect(() => {
+    setPlacementAutoLocal(null);
+  }, [id]);
 
   const label = room?.label ?? id;
   const allItems = useMemo(
@@ -52,6 +62,10 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
     (e) => e.kind === "room_unavailable" && e.active && e.room_id === room.id,
   );
 
+  // Cf. `RoomPlacementAutoField` : reflète une modification tout juste
+  // sauvegardée sans attendre le prochain chargement complet du payload.
+  const placementAuto = placementAutoLocal ?? room.placementAuto;
+
   return (
     <section className="view">
       <div className="panel">
@@ -59,7 +73,16 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
         {room.id !== room.label && <p className="muted mono">{room.id}</p>}
         <p className="muted">
           {room.type} · {room.capacity} places · {room.nSessions} séance(s) placée(s)
+          {/* Marqueur TEXTE, pas seulement couleur (retour utilisateur
+              22/09/2026) — une salle hors placement automatique reste
+              choisissable à la main. */}
+          {!placementAuto && <span className="badge">hors auto</span>}
         </p>
+        <RoomPlacementAutoField
+          roomId={room.id}
+          placementAuto={placementAuto}
+          onSaved={(v) => setPlacementAutoLocal(v)}
+        />
         {room.equipment.length > 0 && (
           <>
             <div className="raw-label">Équipement</div>
