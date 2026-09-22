@@ -104,6 +104,48 @@ def _duo_teacher_for_group(
     return None
 
 
+def _libelle_bloc(block: TeacherBlock) -> str:
+    """`block1`, `block2`… — vide quand la maquette n'en dit rien (`merge.py`
+    convertit un `null` en la chaîne « None »)."""
+    libelle = str(block.block or "").strip().lower()
+    return "" if libelle in ("", "none", "null") else libelle
+
+
+def _partage_du_contenu(
+    blocks: list[TeacherBlock], session_type: SessionType, nb_groupes: int
+) -> list[tuple[TeacherBlock, int]] | None:
+    """Blocs DIFFÉRENTS (`block1`, `block2`) = partage du CONTENU : chaque
+    enseignant fait SA partie du cours avec TOUS les groupes, le bloc 1 avant
+    le bloc 2.
+
+    Signalement du 22/09/2026 (Kyllian Bresson) : « la répartition par block a
+    été zappée ? Exemple sur le WR117, Joan a le block 1 et [l'autre] le 2. On
+    doit voir tous les groupes car on ne fait pas la même [chose]. Actuellement
+    je ne vois que EF et GH. » La répartition par défaut (cf.
+    `_teacher_for_group`) remplit groupe par groupe : le premier enseignant
+    prenait les TD AB et CD, le second EF et GH — un partage des GROUPES, juste
+    quand tous les enseignants sont sur le même bloc (57 cours sur 61 en S1/S3),
+    faux quand la maquette distingue les blocs (WR117, WR311D, WR312D).
+
+    Rend, par bloc dans l'ordre, le nombre de CRÉNEAUX qu'il assure dans
+    chaque groupe — ou None si ce n'est pas un partage du contenu, ou si les
+    volumes ne tombent pas juste (on garde alors la répartition par groupes
+    plutôt que d'inventer un découpage).
+    """
+    libelles = {_libelle_bloc(b) for b in blocks} - {""}
+    if len(libelles) < 2 or nb_groupes <= 0:
+        return None
+    parts: list[tuple[TeacherBlock, int]] = []
+    for block in sorted(blocks, key=lambda b: (_libelle_bloc(b) or "~", )):
+        total = round(block.td if session_type == SessionType.TD else block.tp)
+        if total <= 0:
+            continue
+        if total % nb_groupes:
+            return None
+        parts.append((block, total // nb_groupes))
+    return parts or None
+
+
 def _teacher_for_group(
     course: Course,
     session_type: SessionType,
@@ -111,6 +153,7 @@ def _teacher_for_group(
     group_ids: list[str],
     duos: list[TeacherDuo] | None = None,
     slots_before: int = 0,
+    partage_contenu: bool = True,
 ) -> Teacher:
     """
     Un enseignant par (groupe, position EN CRÉNEAUX dans la séquence de CE
@@ -152,6 +195,18 @@ def _teacher_for_group(
     per_group = course.volumes.get(session_type.value.lower(), 0)
     if per_group <= 0:
         return blocks[0].teacher
+
+    # Blocs différents : chaque enseignant voit TOUS les groupes, pour sa
+    # partie du cours (cf. `_partage_du_contenu`). `slots_before` est déjà la
+    # position DANS ce groupe.
+    partage = _partage_du_contenu(blocks, session_type, len(group_ids)) if partage_contenu else None
+    if partage is not None:
+        curseur = 0
+        for block, part in partage:
+            if slots_before < curseur + part:
+                return block.teacher
+            curseur += part
+        return partage[-1][0].teacher
 
     # `slots_before` compte des CRÉNEAUX de 1h30 déjà consommés par ce groupe,
     # pas des séances : sur un cours fusionné en blocs (`double_sessions.yaml`),
@@ -385,6 +440,16 @@ def expand_course_to_sessions(
     # liste complète des séances — contrairement au découpage séquentiel par
     # défaut, qui se décide séance par séance.
     alternating: dict[tuple[str, int], Teacher] = {}
+    # `mode: par_groupes` : garder le partage des GROUPES même quand les blocs
+    # diffèrent (cf. `_partage_du_contenu`). Sert au semestre impair
+    # 2026-2027, laissé tel quel sur décision du 22/09/2026.
+    par_groupes: set[str] = {
+        st.value
+        for rule in teacher_distributions or []
+        if rule.course_code == course.code and rule.semestre == course.semestre and rule.mode == "par_groupes"
+        for st in (SessionType.TD, SessionType.TP)
+        if rule.session_type is None or rule.session_type == st
+    }
     for rule in teacher_distributions or []:
         if rule.course_code != course.code or rule.semestre != course.semestre:
             continue
@@ -453,7 +518,8 @@ def expand_course_to_sessions(
             teacher = alternating.get((session_type.value, idx - 1))
             if teacher is None:
                 teacher = _teacher_for_group(
-                    course, session_type, group_id, target_ids, duos, slots_before=slots_before
+                    course, session_type, group_id, target_ids, duos, slots_before=slots_before,
+                    partage_contenu=session_type.value not in par_groupes,
                 )
             # `session_id` garde le type d'origine : il doit rester unique
             # face aux vraies séances TD du même cours et du même index.
