@@ -153,6 +153,7 @@ def _teacher_for_group(
     group_ids: list[str],
     duos: list[TeacherDuo] | None = None,
     slots_before: int = 0,
+    partage_contenu: bool = True,
 ) -> Teacher:
     """
     Un enseignant par (groupe, position EN CRÉNEAUX dans la séquence de CE
@@ -198,7 +199,7 @@ def _teacher_for_group(
     # Blocs différents : chaque enseignant voit TOUS les groupes, pour sa
     # partie du cours (cf. `_partage_du_contenu`). `slots_before` est déjà la
     # position DANS ce groupe.
-    partage = _partage_du_contenu(blocks, session_type, len(group_ids))
+    partage = _partage_du_contenu(blocks, session_type, len(group_ids)) if partage_contenu else None
     if partage is not None:
         curseur = 0
         for block, part in partage:
@@ -439,6 +440,16 @@ def expand_course_to_sessions(
     # liste complète des séances — contrairement au découpage séquentiel par
     # défaut, qui se décide séance par séance.
     alternating: dict[tuple[str, int], Teacher] = {}
+    # `mode: par_groupes` : garder le partage des GROUPES même quand les blocs
+    # diffèrent (cf. `_partage_du_contenu`). Sert au semestre impair
+    # 2026-2027, laissé tel quel sur décision du 22/09/2026.
+    par_groupes: set[str] = {
+        st.value
+        for rule in teacher_distributions or []
+        if rule.course_code == course.code and rule.semestre == course.semestre and rule.mode == "par_groupes"
+        for st in (SessionType.TD, SessionType.TP)
+        if rule.session_type is None or rule.session_type == st
+    }
     for rule in teacher_distributions or []:
         if rule.course_code != course.code or rule.semestre != course.semestre:
             continue
@@ -507,7 +518,8 @@ def expand_course_to_sessions(
             teacher = alternating.get((session_type.value, idx - 1))
             if teacher is None:
                 teacher = _teacher_for_group(
-                    course, session_type, group_id, target_ids, duos, slots_before=slots_before
+                    course, session_type, group_id, target_ids, duos, slots_before=slots_before,
+                    partage_contenu=session_type.value not in par_groupes,
                 )
             # `session_id` garde le type d'origine : il doit rester unique
             # face aux vraies séances TD du même cours et du même index.

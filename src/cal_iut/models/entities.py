@@ -384,7 +384,9 @@ class TeacherDistributionRule(BaseModel):
 
     course_code: str
     semestre: str
-    mode: Literal["sequentiel", "alterne"] = "alterne"
+    # `par_groupes` (22/09/2026) : un enseignant = des groupes entiers, même
+    # quand la maquette distingue les blocs (cf. `normalize._partage_du_contenu`).
+    mode: Literal["sequentiel", "alterne", "par_groupes"] = "alterne"
     session_type: SessionType | None = None  # None = tous les types
     # Ordre de passage. Vide = ordre de la maquette (cf. `_blocks_for_type`).
     teacher_order: list[str] = Field(default_factory=list)

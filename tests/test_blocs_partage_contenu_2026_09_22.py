@@ -25,6 +25,21 @@ CONFIG = Path(__file__).resolve().parents[1] / "data" / "config"
 
 @lru_cache(maxsize=1)
 def _seances():
+    """Ingestion SANS l'exception du semestre impair 2026-2027 (`mode:
+    par_groupes`) : c'est la règle telle qu'elle vaudra à partir du S2."""
+    from cal_iut.ingestion import pipeline
+
+    regles = [r for r in pipeline.load_teacher_distributions(CONFIG) if r.mode != "par_groupes"]
+    original = pipeline.load_teacher_distributions
+    pipeline.load_teacher_distributions = lambda _config_dir: regles
+    try:
+        return run_ingestion(CONFIG, semestre_group="odd").sessions
+    finally:
+        pipeline.load_teacher_distributions = original
+
+
+@lru_cache(maxsize=1)
+def _seances_reelles():
     return run_ingestion(CONFIG, semestre_group="odd").sessions
 
 
@@ -64,3 +79,16 @@ def test_un_meme_bloc_partage_toujours_les_groupes() -> None:
     """WR112 : quatre enseignants, tous `block1` — un sous-groupe chacun."""
     for compte in _repartition("WR112").values():
         assert len(compte) == 1, dict(compte)
+
+
+def test_le_semestre_impair_2026_2027_reste_tel_quel(monkeypatch) -> None:
+    """Décision du 22/09/2026 : « on laisse le S1 tel quel, la règle ne
+    s'applique qu'à partir du S2 » — exception déclarée en `mode:
+    par_groupes` dans `course_scheduling_rules.yaml`. Contrat : EXACTEMENT
+    la répartition d'avant la règle, séance par séance."""
+    from cal_iut.ingestion import normalize
+
+    reelles = {s.id: s.teacher_codes for s in _seances_reelles()}
+    monkeypatch.setattr(normalize, "_partage_du_contenu", lambda *a, **k: None)
+    avant = {s.id: s.teacher_codes for s in run_ingestion(CONFIG, semestre_group="odd").sessions}
+    assert reelles == avant

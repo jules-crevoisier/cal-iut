@@ -230,6 +230,29 @@ solver_scheduled_sae:
 # fin — cf. `teacher_order_rules`). `mode: alterne` fait au contraire tourner
 # les enseignants séance après séance, à volume inchangé.
 teacher_distribution:
+  # --- Semestre impair 2026-2027 : répartition PAR GROUPES conservée --------
+  # Depuis le 22/09/2026, des blocs différents dans la maquette (`block1`,
+  # `block2`) signifient un partage du CONTENU : chaque enseignant fait sa
+  # partie du cours avec TOUS les groupes (cf. `ingestion/normalize.py::
+  # _partage_du_contenu`, signalement de Kyllian Bresson sur WR117).
+  #
+  # Décision de Jules Crevoisier, 22/09/2026 : « on laisse le S1 tel quel, la
+  # règle ne s'applique qu'à partir du S2 ». Le planning en cours place souvent
+  # les groupes en parallèle : appliquer la règle aurait créé 27 doubles
+  # réservations d'enseignants. À RETIRER pour 2027-2028.
+  - course_code: WR117
+    semestre: S1
+    mode: par_groupes
+    note: "S1 2026-2027 laissé tel quel (décision du 22/09/2026)."
+  - course_code: WR311D
+    semestre: S3
+    mode: par_groupes
+    note: "S3 2026-2027 laissé tel quel (décision du 22/09/2026)."
+  - course_code: WR312D
+    semestre: S3
+    mode: par_groupes
+    note: "S3 2026-2027 laissé tel quel (décision du 22/09/2026)."
+
   - course_code: WRA507D
     semestre: S5
     mode: alterne
