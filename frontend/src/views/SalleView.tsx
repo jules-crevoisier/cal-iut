@@ -24,7 +24,15 @@ interface SalleViewProps {
 }
 
 export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewProps) {
-  const id = route.salle;
+  // Ouverte depuis le menu (« Vue Salle », 22/09/2026), la route ne porte
+  // AUCUNE salle : la fiche affichait alors « Salle « ? » introuvable »
+  // (signalement du 22/09/2026 en production). Comme la Vue Groupe et la Vue
+  // Enseignant, on ouvre donc sur une salle par défaut — la première du
+  // catalogue — et on laisse choisir avec le sélecteur ci-dessous.
+  // « Introuvable » reste réservé à une salle DEMANDÉE mais inconnue (lien
+  // périmé, id mal recopié).
+  const sallesTriees = [...payload.rooms].sort((a, b) => a.label.localeCompare(b.label, "fr"));
+  const id = route.salle || sallesTriees[0]?.id || "";
   const room = payload.rooms.find((r) => r.id === id) ?? payload.rooms.find((r) => r.label === id);
   const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, route.sem));
   const [mobileDay, setMobileDay] = useState(todayIndex());
@@ -55,7 +63,7 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
   for (const it of allItems) hoursByWeek.set(it.w, (hoursByWeek.get(it.w) ?? 0) + (it.dur || 1) * 1.5);
 
   if (!id || !room) {
-    return <FicheIntrouvable libelle="Salle" id={id || "?"} onOpenSearch={onOpenSearch} />;
+    return <FicheIntrouvable libelle="Salle" id={route.salle || "?"} onOpenSearch={onOpenSearch} />;
   }
 
   const indispos = payload.exceptions.filter(
@@ -69,6 +77,19 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
   return (
     <section className="view">
       <div className="panel">
+        <label className="salle-selecteur">
+          Salle
+          <select
+            value={room.id}
+            onChange={(e) => setRoute({ vue: "salle", salle: e.target.value })}
+          >
+            {sallesTriees.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label} — {r.capacity} places
+              </option>
+            ))}
+          </select>
+        </label>
         <h3>{room.label}</h3>
         {room.id !== room.label && <p className="muted mono">{room.id}</p>}
         <p className="muted">

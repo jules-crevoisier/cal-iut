@@ -37,4 +37,20 @@ describe("SalleView", () => {
     expect(screen.getAllByText("8h–9h30").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Vendredi").length).toBeGreaterThan(0);
   });
+
+  it("should open on a room and offer the selector when the route carries none", () => {
+    // Signalement du 22/09/2026 en production : l'entrée « Vue Salle » du menu
+    // n'ayant aucune salle en route, la fiche affichait « Salle « ? »
+    // introuvable » au lieu d'un écran utilisable.
+    const deuxSalles = emptyPayload({
+      rooms: [catalogRoom("h101", { label: "H.101" }), catalogRoom("h018", { label: "H.018" })],
+    });
+
+    render(
+      <SalleView payload={deuxSalles} route={testRoute({ vue: "salle", salle: "" })} setRoute={vi.fn()} />,
+    );
+
+    expect(screen.queryByText(/introuvable/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Salle")).toBeInTheDocument();
+  });
 });
