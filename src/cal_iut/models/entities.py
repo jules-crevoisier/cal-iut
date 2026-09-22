@@ -164,6 +164,12 @@ class TeacherDateSlotRule(BaseModel):
     date: str  # ISO (AAAA-MM-JJ)
     slots: list[int] = Field(default_factory=list)  # 0 = 8h-9h30 … 5 = 17h-18h30
     note: str | None = None
+    # NON forçable au placement manuel (22/09/2026). Une indisponibilité
+    # enseignant se force depuis le 03/09/2026 (« des fois ils acceptent de
+    # faire cours quand même ») ; celle-ci, non : demande explicite d'une
+    # « contrainte forte » que l'interface doit refuser, pour Romain Delon.
+    # Le solveur, lui, traite déjà toute règle datée comme dure.
+    stricte: bool = False
 
 
 class TeacherAvailability(BaseModel):

@@ -240,6 +240,49 @@ teachers:
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible du 15 au 30 octobre 2026"
 
+  # --- Romain Delon : indisponibilités FORTES, demande du 22/09/2026 --------
+  # « en contrainte forte les indisponibilités de Romain Delon […] il faut que
+  # dans l'interface on fasse en sorte que l'on ne puisse pas placer des
+  # séances de RDE à ces dates. »
+  #
+  # `stricte: true` : refusé au placement manuel, même avec « Forcer ». Ses
+  # autres indisponibilités (feuille officielle : 6-8 octobre, mardi dès
+  # 15h30, vendredis) restent forçables comme pour tout le monde.
+  - teacher_code: RDE  # Romain Delon
+    forbidden_date_slots:
+      - date: "2026-11-04"   # mercredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+      - date: "2026-11-05"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+      - date: "2026-11-06"   # vendredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+      - date: "2026-12-02"   # mercredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+      - date: "2026-12-03"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+      - date: "2026-12-04"   # vendredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+      - date: "2027-06-24"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+      - date: "2027-06-25"   # vendredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponibilité forte (demande du 22/09/2026)"
+        stricte: true
+
 # Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
   gap_penalty: 100
