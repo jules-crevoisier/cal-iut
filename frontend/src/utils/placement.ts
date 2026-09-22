@@ -81,17 +81,76 @@ export function texteContraintes(detail: DetailConflit): string {
   return blocs.join("\n\n");
 }
 
+// ── Date passée (item A, 22/09/2026) ──
+// « ne pas pouvoir déplacer ou créer de séances sur des dates passées ou
+// alors vraiment une popup pour le forcer » — décision de Jules : tout reste
+// forçable, mais la popup de confirmation doit être FORTE quand le conflit
+// touche une date déjà écoulée. Le serveur préfixe ces motifs-là par
+// « Date passée : » EXACTEMENT (cf. `api/main.py::_dates_passees_motifs`) —
+// c'est le seul signal dont le front dispose pour les reconnaître.
+const PREFIXE_DATE_PASSEE = "Date passée : ";
+const PHRASE_CELCAT_DATE_PASSEE =
+  "Cette séance a peut-être déjà eu lieu : la modification sera aussi envoyée vers Celcat.";
+
+export function estDatePassee(conflits: string[]): boolean {
+  return conflits.some((m) => m.startsWith(PREFIXE_DATE_PASSEE));
+}
+
+export interface OptionsForcage {
+  title?: string;
+  confirmLabel: string;
+  variant?: "default" | "danger";
+}
+
+/**
+ * Texte affiché + options de `confirmAsync` pour la popup de forçage —
+ * variante FORTE si un des conflits FORÇABLES (jamais un `blocking`, cf.
+ * appelants) touche une date déjà écoulée : titre dédié, le(s) message(s) de
+ * date en PREMIER, la phrase Celcat explicite, bouton de confirmation en
+ * danger (`ConfirmModal` applique `.btn--danger`). Le bouton Annuler garde
+ * le focus par défaut (`autoFocus`, `ConfirmModal.tsx`) — déjà le cas pour
+ * TOUTE confirmation, rien de plus à faire ici pour ça.
+ */
+export function texteEtOptionsForcage(
+  hard: string[],
+  blocking: string[],
+  soft: string[],
+  confirmLabelDefaut: string,
+): { texte: string; options: OptionsForcage } {
+  const forcables = hard.filter((m) => !blocking.includes(m));
+  if (!estDatePassee(forcables)) {
+    const blocs: string[] = [];
+    if (forcables.length) blocs.push(`Forçable :\n${forcables.join("\n")}`);
+    if (soft.length) blocs.push(`Avertissement :\n${soft.join("\n")}`);
+    return { texte: blocs.join("\n\n"), options: { confirmLabel: confirmLabelDefaut } };
+  }
+  const dates = forcables.filter((m) => m.startsWith(PREFIXE_DATE_PASSEE));
+  const autres = forcables.filter((m) => !m.startsWith(PREFIXE_DATE_PASSEE));
+  const blocs = [dates.join("\n"), PHRASE_CELCAT_DATE_PASSEE];
+  if (autres.length) blocs.push(`Forçable :\n${autres.join("\n")}`);
+  if (soft.length) blocs.push(`Avertissement :\n${soft.join("\n")}`);
+  return {
+    texte: blocs.join("\n\n"),
+    options: { title: "Modifier une date passée", confirmLabel: "Oui, modifier le passé", variant: "danger" },
+  };
+}
+
 async function gererConflitPuisForcer(
   detail: DetailConflit,
   titres: { impossible: string; confirmLabel: string },
   forcer: () => Promise<void>,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const texte = texteContraintes(detail);
   if (detail.blocking_conflicts.length > 0) {
-    await alerterAsync(texte, { title: titres.impossible });
+    await alerterAsync(texteContraintes(detail), { title: titres.impossible });
     return { ok: false, message: detail.blocking_conflicts.join(" · ") };
   }
-  const accepte = await confirmAsync(texte, { confirmLabel: titres.confirmLabel });
+  const { texte, options } = texteEtOptionsForcage(
+    detail.hard_conflicts,
+    detail.blocking_conflicts,
+    detail.soft_warnings,
+    titres.confirmLabel,
+  );
+  const accepte = await confirmAsync(texte, options);
   if (!accepte) return { ok: false, message: "Action annulée." };
   try {
     await forcer();

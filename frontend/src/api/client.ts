@@ -170,6 +170,34 @@ export async function adminUpdateUser(
   return request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
+// ── Sauvegardes JSON datées (item B, 22/09/2026) ──
+// Todo : « Avoir un fichier JSON backup des semaines et séances placées à
+// une date précise ». Réservé admin côté serveur (`Depends(require_role(
+// "admin"))`, cf. `api/main.py`) — pas de vérification de rôle ici, même
+// principe que `adminListUsers`/`adminUpdateUser` juste au-dessus.
+
+export interface SauvegardeMeta {
+  date: string; // AAAA-MM-JJ
+  taille_octets: number;
+  nb_placements: number;
+}
+
+export async function listSauvegardes(): Promise<SauvegardeMeta[]> {
+  const r = await request<{ sauvegardes: SauvegardeMeta[] }>("/sauvegardes");
+  return r.sauvegardes;
+}
+
+export async function creerSauvegardeMaintenant(): Promise<SauvegardeMeta> {
+  return request<SauvegardeMeta>("/sauvegardes", { method: "POST" });
+}
+
+/** URL de téléchargement direct — même patron que `exportCsvUrl()` :
+ * `window.open(sauvegardeUrl(jour), "_blank")`, jamais un `fetch` (laisse le
+ * navigateur gérer le téléchargement du fichier). */
+export function sauvegardeUrl(jour: string): string {
+  return `${BASE}/sauvegardes/${encodeURIComponent(jour)}`;
+}
+
 export function fetchMeta(): Promise<MetaResponse> {
   return request<MetaResponse>("/meta");
 }

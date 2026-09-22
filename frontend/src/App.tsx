@@ -36,6 +36,7 @@ import { Toolbar } from "./components/Toolbar";
 import { AdminCelcatView } from "./views/AdminCelcatView";
 import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
+import { SauvegardesView } from "./views/SauvegardesView";
 import { indexSemaineCourante } from "./utils/semaineCourante";
 import { buildTodoList } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
@@ -712,6 +713,7 @@ export function App() {
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
+        {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}
           </main>
         </div>

@@ -933,4 +933,25 @@ class CelcatJournalReconcilierRequest(BaseModel):
 class CelcatJournalReconcilierResponse(BaseModel):
     fusionnees: int
     deja_presentes: int
+
+
+# ── Sauvegardes JSON datées (item B, 22/09/2026) ──
+# Todo : « Avoir un fichier JSON backup des semaines et séances placées à une
+# date précise ». Cf. `api/sauvegardes.py` pour le format complet du fichier
+# téléchargé (`GET /sauvegardes/{date}`, hors schéma Pydantic — servi tel
+# quel comme fichier) ; ces deux schémas ne couvrent que la LISTE.
+
+
+class SauvegardeMeta(BaseModel):
+    """Une ligne de `GET /sauvegardes` — jamais le contenu complet du
+    fichier (potentiellement des milliers de placements), juste de quoi
+    peupler la liste et proposer le téléchargement."""
+
+    date: str  # AAAA-MM-JJ
+    taille_octets: int
+    nb_placements: int
+
+
+class SauvegardeListResponse(BaseModel):
+    sauvegardes: list[SauvegardeMeta]
     ignorees: list[str] = []

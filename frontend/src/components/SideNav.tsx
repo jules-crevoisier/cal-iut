@@ -65,6 +65,9 @@ const GROUPE_ADMIN: NavGroup = {
   items: [
     { id: "comptes", label: "Comptes" },
     { id: "celcat", label: "Celcat" },
+    // Sauvegardes JSON datées (item B, 22/09/2026 : « Avoir un fichier JSON
+    // backup des semaines et séances placées à une date précise »).
+    { id: "sauvegardes", label: "Sauvegardes" },
   ],
 };
 

@@ -24,6 +24,7 @@ export type RouteView =
   | "cours"
   | "comptes"
   | "celcat"
+  | "sauvegardes"
   | "mcp";
 
 /** Écrans du système de comptes (31/08/2026) — pré-authentification,

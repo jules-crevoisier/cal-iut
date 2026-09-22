@@ -1,0 +1,81 @@
+/* Sauvegardes JSON datées (item B, 22/09/2026) — mêmes tokens et la même
+   échelle d'espacement que `.admin-users-*` (styles/app.css) : aucune valeur
+   ad-hoc introduite ici, juste le layout propre à cette vue. Mobile-first :
+   une colonne à 320px, le bouton passe sur sa propre ligne sous le titre ;
+   à partir de 768px, le titre et le bouton se placent côte à côte. */
+
+.sauvegardes-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sauvegardes-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sauvegardes-actions h3 {
+  margin: 0 0 4px;
+}
+
+.sauvegardes-actions p {
+  margin: 0;
+}
+
+.sauvegardes-actions .btn {
+  align-self: stretch;
+  min-height: 44px;
+}
+
+@media (min-width: 768px) {
+  .sauvegardes-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sauvegardes-actions .btn {
+    align-self: auto;
+    flex-shrink: 0;
+  }
+}
+
+.sauvegardes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sauvegardes-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sauvegardes-identite {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sauvegardes-identite strong {
+  text-transform: capitalize;
+}
+
+.sauvegardes-row .btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}

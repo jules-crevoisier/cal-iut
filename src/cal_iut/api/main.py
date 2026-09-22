@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import accounts, auth, custom_rooms, custom_sessions, forced_pending, mailer, session_overrides
+from cal_iut.api import accounts, auth, custom_rooms, custom_sessions, forced_pending, mailer, sauvegardes, session_overrides
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     AdminUserListResponse,
@@ -48,6 +48,8 @@ from cal_iut.api.schemas import (
     RegenRequest,
     RegenResultResponse,
     ResetPasswordRequest,
+    SauvegardeListResponse,
+    SauvegardeMeta,
     CalendrierSaeResponse,
     SaeFenetreResponse,
     SaeJourResponse,
@@ -246,7 +248,7 @@ _PROTECTED_PREFIXES = (
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
-    "/regen", "/rooms", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
+    "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/timetable", "/weeks", "/weights",
 )
 
 
@@ -653,6 +655,10 @@ def startup() -> None:
         )
 
     charger_etat_applicatif()
+    # Sauvegarde du jour manquante (item B, 22/09/2026) : redémarrage un jour
+    # où personne n'a encore rien modifié — `_apres_ecriture_planning` ne
+    # tourne alors jamais, sans ce filet le jour n'aurait aucun instantané.
+    sauvegardes.snapshot_si_necessaire(get_state())
 
 
 def charger_etat_applicatif() -> None:
@@ -1741,7 +1747,14 @@ def ics_groupe(group_id: str) -> Response:
 
 
 def _check_move_editable(
-    state: object, session_id: str, source_week: int, dest_week: int, *, force: bool = False
+    state: object,
+    session_id: str,
+    source_week: int,
+    source_day: int,
+    dest_week: int,
+    dest_day: int,
+    *,
+    force: bool = False,
 ) -> None:
     """
     Rejette un déplacement (manuel, glisser-déposer) touchant une semaine
@@ -1762,8 +1775,15 @@ def _check_move_editable(
 
     Le garde-fou reste actif par défaut : forcer est un geste explicite,
     jamais le comportement normal.
+
+    `source_day`/`dest_day` (22/09/2026) : en plus du verrou de SEMAINE
+    ci-dessus, `_dates_passees_motifs` ajoute un motif à granularité JOUR —
+    cf. sa docstring pour la distinction (todo « ne pas pouvoir déplacer ou
+    créer de séances sur des dates passées [...] vraiment une popup pour le
+    forcer »).
     """
     motifs = _semaines_non_modifiables(state, session_id, source_week, dest_week, force=force)
+    motifs += _dates_passees_motifs(state, session_id, source_week, source_day, dest_week, dest_day, force=force)
     if motifs:
         raise _refus_semaine_verrouillee(motifs)
 
@@ -1819,6 +1839,87 @@ def _semaines_non_modifiables(
         for w in sorted({source_week, dest_week})
         if (status := week_status(state.calendar, semestre, w)) != "future"
     ]
+
+
+def _today() -> _date:
+    """Point d'injection UNIQUE pour « aujourd'hui » (item A, todo « ne pas
+    pouvoir déplacer ou créer de séances sur des dates passées [...] vraiment
+    une popup pour le forcer », revu le 22/09/2026 par Jules : tout reste
+    forçable, mais toucher le passé exige une confirmation forte).
+
+    Chaque appelant de `_dates_passees_motifs` passe par ICI plutôt que par
+    `date.today()` directement, pour que les tests gèlent la date avec
+    `monkeypatch.setattr(cal_iut.api.main, "_today", lambda: date(...))`."""
+    return _date.today()
+
+
+_JOURS_SEMAINE_FR = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+
+
+def _libelle_jour_date(d: _date) -> str:
+    """« lundi 21/09/2026 » — même format court que `_indisponibilites_strictes`
+    (`%d/%m/%Y`), avec le jour de semaine en toutes lettres devant : les deux
+    messages « Date passée » (cf. `_dates_passees_motifs`) le citent tels
+    quels dans le libellé exact validé par Jules."""
+    return f"{_JOURS_SEMAINE_FR[d.weekday()]} {d.strftime('%d/%m/%Y')}"
+
+
+def _dates_passees_motifs(
+    state: object,
+    session_id: str,
+    source_week: int | None,
+    source_day: int | None,
+    dest_week: int | None,
+    dest_day: int | None,
+    *,
+    force: bool = False,
+) -> list[str]:
+    """Item A (todo « ne pas pouvoir déplacer ou créer de séances sur des
+    dates passées ou alors vraiment une popup pour le forcer ») — décision de
+    Jules, propriétaire, le 22/09/2026 : TOUT reste forçable — créer, placer,
+    déplacer, patcher — mais toucher une date déjà écoulée doit déclencher
+    une confirmation FORTE. Cette fonction ne fait que DÉTECTER le cas, à
+    granularité JOUR (contrairement à `_semaines_non_modifiables`, qui
+    raisonne en semaine) ; c'est `_today()` ci-dessus qui sert de point
+    d'injection unique pour « aujourd'hui ».
+
+    RENDU, jamais levé — même contrat que `_semaines_non_modifiables` : bâtir
+    la liste est la responsabilité de l'appelant, qui la combine à ses
+    propres motifs (verrou de semaine, contraintes institutionnelles…) avant
+    de décider s'il lève `_refus_semaine_verrouillee`. TOUJOURS un
+    `hard_conflict` forçable, JAMAIS un `blocking_conflict` — cf. docstring
+    de `_refus_semaine_verrouillee`, le même principe s'applique ici.
+
+    `source_*` = où la séance est ACTUELLEMENT placée (`None` à la création,
+    qui n'a pas encore de position). `dest_*` = où elle va (ou RESTE, si
+    aucun déplacement n'est demandé — cf. les appelants qui patchent une
+    séance sur place). Chaque case produit AU PLUS un motif, avec un libellé
+    différent selon le rôle (« cette séance a déjà eu lieu » pour la source,
+    « est déjà écoulé » pour la destination) — jamais les deux pour la MÊME
+    date (patch d'identité sans déplacement : un seul message, celui de la
+    source, une case qui ne bouge pas n'est pas « une destination »).
+    """
+    if force:
+        return []
+    session = state.sessions_by_id.get(session_id)
+    semestre = session.semestre if session else resolve_semestre(state)
+    offset = semester_week_offset(state.calendar, semestre)
+
+    def _date_du_creneau(week: int | None, day: int | None) -> _date | None:
+        if week is None or day is None:
+            return None
+        return state.calendar.week_day_to_date(offset + week, day)
+
+    date_source = _date_du_creneau(source_week, source_day)
+    date_dest = _date_du_creneau(dest_week, dest_day)
+    today = _today()
+
+    motifs: list[str] = []
+    if date_source is not None and date_source < today:
+        motifs.append(f"Date passée : cette séance a déjà eu lieu ({_libelle_jour_date(date_source)}).")
+    if date_dest is not None and date_dest < today and date_dest != date_source:
+        motifs.append(f"Date passée : le {_libelle_jour_date(date_dest)} est déjà écoulé.")
+    return motifs
 
 
 def _is_duo_synced(session: object, duos: list) -> bool:
@@ -2326,6 +2427,9 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     # `_semaines_non_modifiables`). Un 409 ici casse le glisser-déposer au
     # lieu de proposer le forçage.
     verrou_semaine = _semaines_non_modifiables(state, session_id, match.week, body.week, force=body.force)
+    verrou_semaine += _dates_passees_motifs(
+        state, session_id, match.week, match.day, body.week, body.day, force=body.force
+    )
 
     # Règles institutionnelles/pédagogiques : contrôlées ICI, sur le
     # déplacement réellement demandé — pas seulement utilisées pour filtrer
@@ -2398,7 +2502,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
     if session and session.locked and not body.lock:
         raise HTTPException(409, "Session is locked")
 
-    _check_move_editable(state, session_id, match.week, body.week, force=body.force)
+    _check_move_editable(state, session_id, match.week, match.day, body.week, body.day, force=body.force)
 
     # Règles institutionnelles (PAC, fin de semestre FI, présence alternant
     # FC, événement planning officiel, SAE sanctuarisée) : JAMAIS
@@ -2553,7 +2657,17 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
     dependencies=[Depends(accounts.require_role("edit"))],
 )
 def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> PlacementResponse:
-    """Overlay enseignant / type / durée sur une séance de maquette."""
+    """Overlay enseignant / type / durée sur une séance de maquette.
+
+    Date passée (item A, 22/09/2026) : PAS de contrôle ajouté ici quand la
+    position ne bouge pas — ce cas ne passait déjà par AUCUN verrou de
+    semaine avant ce contrat (`_controler_placement`, `api/session_patch.py`,
+    ne le fait pas), et le contrat ne demande le contrôle QUE sur les chemins
+    d'écriture qui passent DÉJÀ par lui. Quand `appliquer_patch_seance`
+    repositionne réellement la séance, elle délègue à `move_session`, qui
+    lève déjà `_check_move_editable` (étendu, cf. plus haut) — couvert sans
+    rien ajouter ici.
+    """
     from cal_iut.api.session_patch import appliquer_patch_seance
 
     resultat = appliquer_patch_seance(
@@ -2631,6 +2745,20 @@ def echanger_placements(body: EchangeRequest) -> EchangeResponse:
     b.week, b.day, b.slot = pos_a
     ignorees = {body.session_a, body.session_b}
     try:
+        # Date passée (item A, 22/09/2026) : AVANT le reste des contrôles —
+        # `a`/`b` portent déjà leur position FINALE (post-échange, ci-dessus),
+        # `pos_a`/`pos_b` leur position D'ORIGINE. Chaque séance échangée peut
+        # donc quitter une date passée (source) ET/OU atterrir sur une date
+        # passée (destination = la place de l'autre).
+        for sid, origine, arrivee in (
+            (body.session_a, pos_a, (a.week, a.day, a.slot)),
+            (body.session_b, pos_b, (b.week, b.day, b.slot)),
+        ):
+            motifs_date = _dates_passees_motifs(
+                state, sid, origine[0], origine[1], arrivee[0], arrivee[1], force=body.force
+            )
+            if motifs_date:
+                raise _refus_semaine_verrouillee(motifs_date)
         durs, bloquants, doux = _controler_echange(state, [(a, seance_a, salle_a), (b, seance_b, salle_b)], ignorees, body.force)
     except Exception:
         _restaurer()
@@ -2897,13 +3025,18 @@ def creer_salle(body: CreateRoomRequest) -> RoomMeta:
 
 
 def _apres_ecriture_planning(session_id: str, action: str) -> None:
-    """File d'attente Celcat après un write planning. N'échoue jamais."""
+    """File d'attente Celcat après un write planning, PUIS sauvegarde
+    quotidienne (item B, 22/09/2026 — cf. `api/sauvegardes.py`) : au plus un
+    instantané par jour, pris au tout premier écrit du jour. Ni l'un ni
+    l'autre n'échoue jamais — une file Celcat ou une sauvegarde ratée ne doit
+    jamais faire échouer le placement qui vient de réussir."""
     try:
         from cal_iut.celcat.ops import apres_ecriture_planning
 
         apres_ecriture_planning(session_id, action)
     except Exception:
-        return
+        pass
+    sauvegardes.snapshot_si_necessaire(get_state())
 
 
 def _celcat_etat_public() -> CelcatEtatResponse:
@@ -4431,8 +4564,14 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     # (cf. `_check_move_editable`) : poser une séance manquante dans la
     # semaine en cours doit rester possible quand on corrige à chaud.
     statut = week_status(state.calendar, session.semestre, body.week)
-    if statut != "future" and not body.force:
-        raise _refus_semaine_verrouillee([f"Semaine {body.week + 1} non modifiable (statut : {statut})"])
+    verrou_semaine = (
+        [] if statut == "future" or body.force else [f"Semaine {body.week + 1} non modifiable (statut : {statut})"]
+    )
+    # Aucune position SOURCE : la séance n'est pas encore au planning — seule
+    # la destination peut être « Date passée » ici (item A, 22/09/2026).
+    verrou_semaine += _dates_passees_motifs(state, session_id, None, None, body.week, body.day, force=body.force)
+    if verrou_semaine:
+        raise _refus_semaine_verrouillee(verrou_semaine)
 
     # `force` contourne la synchro duo depuis le 28/08/2026 (retour
     # utilisateur : « il faut que je puisse forcer ») et l'ordre pédagogique
@@ -4818,6 +4957,14 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
                 ),
             )
         else:
+            # Date passée (item A, 22/09/2026) : PAS de contrôle ajouté ici —
+            # ce chemin (position INCHANGÉE) ne passait déjà par AUCUN verrou
+            # de semaine avant ce contrat (`_controler_placement` n'en
+            # contrôle aucun), et le contrat ne demande le contrôle QUE sur
+            # les chemins qui passent DÉJÀ par lui. Le cas REPOSITIONNÉ
+            # (branche `if repositionne` ci-dessus) délègue à `move_session`,
+            # qui lève déjà `_check_move_editable` (étendu) — couvert sans
+            # rien ajouter ici non plus.
             if placement is not None and identite:
                 _controler_placement(state, seance, placement, body.force)
             if body.room_id is not None and body.room_id != (placement.room_id if placement else None):
@@ -5406,6 +5553,55 @@ def _to_placement(p: PlacedSessionWithRoom, sessions_by_id: dict[str, SessionToP
         is_eval=s.is_eval if s else False,
         locked=s.locked if s else False,
         duration_slots=max(1, s.duration_slots) if s else 1,
+    )
+
+
+# ── Sauvegardes JSON datées (item B, 22/09/2026) ──
+# Todo : « Avoir un fichier JSON backup des semaines et séances placées à une
+# date précise ». Réservé admin comme le reste de l'administration Celcat/
+# comptes (`Depends(require_role("admin"))`) — cf. `api/sauvegardes.py` pour
+# le format du fichier et la logique d'écriture/purge (une par jour, 90
+# jours de rétention). PAS de restauration ici : hors périmètre du contrat
+# verrouillé — ce module ne fait que lister, prendre et servir des fichiers.
+
+
+@app.get("/sauvegardes", response_model=SauvegardeListResponse, dependencies=[Depends(accounts.require_role("admin"))])
+def lister_sauvegardes() -> SauvegardeListResponse:
+    return SauvegardeListResponse(sauvegardes=[SauvegardeMeta(**s) for s in sauvegardes.lister()])
+
+
+@app.post("/sauvegardes", response_model=SauvegardeMeta, dependencies=[Depends(accounts.require_role("admin"))])
+def creer_sauvegarde() -> SauvegardeMeta:
+    """Prend un instantané MAINTENANT, en écrasant celui du jour s'il existe
+    déjà — geste explicite, distinct du filet automatique
+    (`sauvegardes.snapshot_si_necessaire`, au plus un par jour SANS
+    écrasement)."""
+    sauvegardes.prendre_maintenant(get_state())
+    sauvegardes.purger_anciennes()
+    jour = next((s for s in sauvegardes.lister() if s["date"] == _date.today().isoformat()), None)
+    if jour is None:
+        # Ne devrait jamais arriver (on vient de l'écrire) — 500 explicite
+        # plutôt qu'un `KeyError` opaque si jamais le disque refuse l'écriture
+        # sans lever (cf. `ecrire_atomique`, qui lève normalement).
+        raise HTTPException(500, "Sauvegarde non trouvée après écriture.")
+    return SauvegardeMeta(**jour)
+
+
+@app.get("/sauvegardes/{jour}", dependencies=[Depends(accounts.require_role("admin"))])
+def telecharger_sauvegarde(jour: str) -> Response:
+    """Téléchargement direct du fichier JSON — validation STRICTE du format
+    AAAA-MM-JJ avant toute lecture disque (`sauvegardes.nom_fichier_valide`) :
+    aucune traversée de chemin possible via ce paramètre (`../../etc/passwd`
+    échoue au regex, jamais atteint `Path`)."""
+    if not sauvegardes.nom_fichier_valide(jour):
+        raise HTTPException(404, f"Sauvegarde « {jour} » introuvable.")
+    cible = sauvegardes.chemin(jour)
+    if not cible.exists():
+        raise HTTPException(404, f"Sauvegarde « {jour} » introuvable.")
+    return Response(
+        content=cible.read_bytes(),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="cal-iut-{jour}.json"'},
     )
 
 
