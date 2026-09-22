@@ -18,6 +18,18 @@
 # salle fusionnée et ses moitiés est bloqué par construction, cf.
 # `solver/rooms.py::_build_conflict_map`/`_is_free` — la crainte du
 # commentaire d'origine (double-booking) est donc levée pour ce mécanisme-là.
+#
+# `placement_auto` (22/09/2026, retour utilisateur : « supprimer la BU du
+# placement automatique des salles car elle est utilisée pour un seul
+# module ») : booléen optionnel sur une salle, absent = `true`. `false`
+# retire la salle de tout choix AUTOMATIQUE (solveur, résolution API sans
+# `room_id` explicite) sans jamais l'empêcher d'un choix MANUEL, ni d'une
+# règle `room_assignment_rules` qui la NOMME explicitement par `id` via
+# `preferred_room_ids` (cf. plus bas et `solver/rooms.py::_auto_eligible`) —
+# explicite bat le drapeau. Modifiable depuis l'interface (admin, `PATCH
+# /rooms/{room_id}`) sans redéploiement : la valeur posée depuis l'UI
+# l'emporte alors sur celle déclarée ici (cf. `api/custom_rooms.py::
+# merge_into`). Exemple : `placement_auto: false`.
 rooms:
   # --- RDC ---
   - id: h005
@@ -185,6 +197,14 @@ rooms:
 # Règles d'affectation salle. `_find_matching_rule` retient la DERNIÈRE règle qui
 # matche (session_types + course_code_patterns) -> règles génériques d'abord,
 # règles spécifiques par module ensuite pour qu'elles priment.
+#
+# `preferred_room_ids` (22/09/2026) : liste optionnelle d'`id` de salles NOMMÉES
+# explicitement par cette règle (en plus de `preferred_room_types`) — une salle
+# listée ici reste choisie par CETTE règle même si `placement_auto: false` la
+# retire de tout autre choix automatique (« explicite bat le drapeau », cf.
+# `Room.placement_auto` plus haut). Exemple : une règle dédiée au module de
+# Valérie Mariot pourrait porter `preferred_room_ids: [bu]` pour continuer à lui
+# affecter la BU même si celle-ci est sortie du placement automatique général.
 room_assignment_rules:
   # -- Défauts génériques --
   - session_types: [CM]

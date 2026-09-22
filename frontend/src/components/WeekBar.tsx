@@ -12,6 +12,7 @@
 import { useRef, useState } from "react";
 
 import type { WeekRow } from "../types/app";
+import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 
 interface WeekBarProps {
   weekRows: WeekRow[];
@@ -78,7 +79,14 @@ export function WeekBar({
         {weekRows.map((wr, i) => {
           const count = counts[i];
           const valeur = unit === "heures" ? `${count.toLocaleString("fr-FR")} h` : `${count} créneau(x) occupé(s)`;
-          const title = wr.blocked ? `${wr.label} — bloquée (vacances/fermeture)` : `${wr.label} — ${valeur}`;
+          // Semaine calendaire ISO en complément, dans l'info-bulle SEULEMENT
+          // (todo département, Kyllian Bresson) — la barre reste compacte,
+          // ~28 boutons à largeur minimale déjà serrés (cf. app.css).
+          const semaineCal = semaineCalendaireDepuisLundi(wr.monday);
+          const suffixeCal = semaineCal !== null ? ` (semaine calendaire ${semaineCal})` : "";
+          const title = wr.blocked
+            ? `${wr.label} — bloquée (vacances/fermeture)${suffixeCal}`
+            : `${wr.label} — ${valeur}${suffixeCal}`;
           // Retour utilisateur (11/08/2026) : "le % violet dois coressponde
           // au nombre de séance dans la semaine" — le plancher de 6 % hérité
           // du HTML (qui gardait un minimum visible même à 0 créneau) rendait

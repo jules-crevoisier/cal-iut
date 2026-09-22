@@ -39,7 +39,11 @@ export function ConfirmModal() {
           {/* Pas de bouton d'action quand il n'y a rien a forcer : cf.
               `alerterAsync` dans utils/confirmDialog.ts. */}
           {request.confirmLabel !== null && (
-            <button type="button" className="btn btn--accent" onClick={() => resolveConfirm(true)}>
+            <button
+              type="button"
+              className={`btn ${request.variant === "danger" ? "btn--danger" : "btn--accent"}`}
+              onClick={() => resolveConfirm(true)}
+            >
               {request.confirmLabel}
             </button>
           )}

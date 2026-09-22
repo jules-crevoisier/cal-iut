@@ -241,6 +241,23 @@ class CreateRoomRequest(BaseModel):
 
     label: str = Field(min_length=1, max_length=80)
     capacity: int = Field(default=30, ge=1, le=1000)
+    # Coché par défaut (retour utilisateur 22/09/2026) — décocher réserve la
+    # salle à un usage précis (ex. BU) : elle reste choisissable à la main,
+    # jamais retenue seule par le placement automatique. Cf. `Room.
+    # placement_auto`.
+    placement_auto: bool = True
+
+
+class UpdateRoomRequest(BaseModel):
+    """Modification d'une salle EXISTANTE (`PATCH /rooms/{room_id}`, réservé
+    admin) — retour utilisateur 22/09/2026 : « supprimer la BU du placement
+    automatique des salles car elle est utilisée pour un seul module ».
+    Persistée dans l'overlay `data/state/custom_rooms.json` (cf. `api/
+    custom_rooms.py::set_room_override`), y compris pour une salle du
+    bâtiment (`rooms.yaml`, jamais réécrit) — survit ainsi à un redéploiement
+    sans passer par un correctif de code."""
+
+    placement_auto: bool
 
 
 class SlotSuggestionResponse(BaseModel):
@@ -279,6 +296,8 @@ class RoomMeta(BaseModel):
     label: str
     capacity: int
     room_type: str
+    # Cf. `Room.placement_auto` — retour utilisateur 22/09/2026.
+    placement_auto: bool = True
 
 
 class YearMeta(BaseModel):
@@ -933,4 +952,25 @@ class CelcatJournalReconcilierRequest(BaseModel):
 class CelcatJournalReconcilierResponse(BaseModel):
     fusionnees: int
     deja_presentes: int
+
+
+# ── Sauvegardes JSON datées (item B, 22/09/2026) ──
+# Todo : « Avoir un fichier JSON backup des semaines et séances placées à une
+# date précise ». Cf. `api/sauvegardes.py` pour le format complet du fichier
+# téléchargé (`GET /sauvegardes/{date}`, hors schéma Pydantic — servi tel
+# quel comme fichier) ; ces deux schémas ne couvrent que la LISTE.
+
+
+class SauvegardeMeta(BaseModel):
+    """Une ligne de `GET /sauvegardes` — jamais le contenu complet du
+    fichier (potentiellement des milliers de placements), juste de quoi
+    peupler la liste et proposer le téléchargement."""
+
+    date: str  # AAAA-MM-JJ
+    taille_octets: int
+    nb_placements: int
+
+
+class SauvegardeListResponse(BaseModel):
+    sauvegardes: list[SauvegardeMeta]
     ignorees: list[str] = []

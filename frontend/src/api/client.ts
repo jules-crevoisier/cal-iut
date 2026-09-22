@@ -170,6 +170,34 @@ export async function adminUpdateUser(
   return request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
+// ── Sauvegardes JSON datées (item B, 22/09/2026) ──
+// Todo : « Avoir un fichier JSON backup des semaines et séances placées à
+// une date précise ». Réservé admin côté serveur (`Depends(require_role(
+// "admin"))`, cf. `api/main.py`) — pas de vérification de rôle ici, même
+// principe que `adminListUsers`/`adminUpdateUser` juste au-dessus.
+
+export interface SauvegardeMeta {
+  date: string; // AAAA-MM-JJ
+  taille_octets: number;
+  nb_placements: number;
+}
+
+export async function listSauvegardes(): Promise<SauvegardeMeta[]> {
+  const r = await request<{ sauvegardes: SauvegardeMeta[] }>("/sauvegardes");
+  return r.sauvegardes;
+}
+
+export async function creerSauvegardeMaintenant(): Promise<SauvegardeMeta> {
+  return request<SauvegardeMeta>("/sauvegardes", { method: "POST" });
+}
+
+/** URL de téléchargement direct — même patron que `exportCsvUrl()` :
+ * `window.open(sauvegardeUrl(jour), "_blank")`, jamais un `fetch` (laisse le
+ * navigateur gérer le téléchargement du fichier). */
+export function sauvegardeUrl(jour: string): string {
+  return `${BASE}/sauvegardes/${encodeURIComponent(jour)}`;
+}
+
 export function fetchMeta(): Promise<MetaResponse> {
   return request<MetaResponse>("/meta");
 }
@@ -415,14 +443,32 @@ export function placerSeance(
 
 /** Crée une salle hors bâtiment (retour utilisateur 28/08/2026). Rend la
  * salle créée — l'appelant doit rafraîchir `payload` pour qu'elle apparaisse
- * dans les listes déjà rendues. */
-export function creerSalle(body: { label: string; capacity: number }): Promise<{
+ * dans les listes déjà rendues. `placement_auto` coché par défaut (absent =
+ * `true` côté serveur) — retour utilisateur 22/09/2026. */
+export function creerSalle(body: { label: string; capacity: number; placement_auto?: boolean }): Promise<{
   id: string;
   label: string;
   capacity: number;
   room_type: string;
+  placement_auto: boolean;
 }> {
   return request("/rooms", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** Modifie une salle EXISTANTE (bâtiment ou perso) — réservé admin. Retour
+ * utilisateur 22/09/2026 : « supprimer la BU du placement automatique des
+ * salles car elle est utilisée pour un seul module, celui de Valérie
+ * Mariot ». Persisté côté serveur dans l'overlay salles perso, y compris
+ * pour une salle du bâtiment (`rooms.yaml` n'est jamais réécrit) — survit
+ * donc à un redéploiement sans correctif de code. */
+export function modifierSalle(roomId: string, body: { placement_auto: boolean }): Promise<{
+  id: string;
+  label: string;
+  capacity: number;
+  room_type: string;
+  placement_auto: boolean;
+}> {
+  return request(`/rooms/${encodeURIComponent(roomId)}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 /** Change UNIQUEMENT la salle, à créneau inchangé (retour utilisateur

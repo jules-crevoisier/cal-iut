@@ -140,6 +140,16 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
         session_overrides = None
     if session_overrides is not None:
         monkeypatch.setattr(session_overrides, "_path", lambda: tmp_path / "session_overrides.json")
+    # Sauvegardes JSON datées (item B, 22/09/2026) — `_apres_ecriture_planning`
+    # (api/main.py) en déclenche une à CHAQUE test qui écrit un placement,
+    # jamais isolé sinon aurait rempli le vrai `data/state/sauvegardes/` du
+    # dépôt à chaque run de suite.
+    try:
+        from cal_iut.api import sauvegardes
+    except ImportError:
+        sauvegardes = None
+    if sauvegardes is not None:
+        monkeypatch.setattr(sauvegardes, "SAUVEGARDES_DIR", tmp_path / "sauvegardes")
     try:
         from cal_iut.mcp import journal as mcp_journal
     except ImportError:

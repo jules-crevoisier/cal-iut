@@ -38,6 +38,8 @@ def load_rooms(config_dir: Path) -> list[Room]:
             room_type=RoomType(item["room_type"]),
             equipment=item.get("equipment", []),
             combines=item.get("combines", []),
+            # Absent = True (rétrocompat) — cf. `Room.placement_auto`.
+            placement_auto=bool(item.get("placement_auto", True)),
         )
         for item in data.get("rooms", [])
     ]

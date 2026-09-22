@@ -2975,6 +2975,20 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   font-size: .88rem;
 }
 
+/* Confirmation courte après « Créer et en ajouter une autre »
+   (CreerSeanceModal) — même gabarit que `.alerte`, teinte "succès" plutôt
+   qu'"attention" : la modale reste ouverte, ce message est la seule
+   confirmation visible que la création précédente a bien eu lieu. */
+.confirmmodal-info {
+  background: var(--good-soft);
+  border: 1px solid var(--good);
+  border-radius: 8px;
+  color: var(--good-text);
+  padding: .6rem .75rem;
+  margin: .5rem 0;
+  font-size: .88rem;
+}
+
 .aplacer-liste {
   display: flex;
   flex-direction: column;

@@ -1006,6 +1006,9 @@ def _room_catalog(rooms: list[Room], rows: list[dict]) -> list[dict]:
                 "type": room.room_type.value,
                 "equipment": list(room.equipment),
                 "nSessions": usage.get(room.label, 0),
+                # Cf. `Room.placement_auto` — retour utilisateur 22/09/2026,
+                # affiché comme marqueur « hors auto » (ReferenceView).
+                "placementAuto": room.placement_auto,
             }
         )
     catalog.sort(key=lambda r: r["label"])

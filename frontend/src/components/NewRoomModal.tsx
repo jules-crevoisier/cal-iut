@@ -20,6 +20,12 @@ interface NewRoomModalProps {
 export function NewRoomModal({ onCreated, onCancel }: NewRoomModalProps) {
   const [label, setLabel] = useState("");
   const [capacity, setCapacity] = useState(30);
+  // Coché par défaut — retour utilisateur 22/09/2026 : « supprimer la BU du
+  // placement automatique des salles car elle est utilisée pour un seul
+  // module ». Décocher réserve la salle à un usage précis : elle reste
+  // choisissable à la main, jamais retenue seule par la génération
+  // automatique.
+  const [placementAuto, setPlacementAuto] = useState(true);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -40,7 +46,7 @@ export function NewRoomModal({ onCreated, onCancel }: NewRoomModalProps) {
     setEnCours(true);
     setErreur(null);
     try {
-      const salle = await creerSalle({ label: nom, capacity });
+      const salle = await creerSalle({ label: nom, capacity, placement_auto: placementAuto });
       onCreated({ id: salle.id, label: salle.label });
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Création impossible");
@@ -64,8 +70,8 @@ export function NewRoomModal({ onCreated, onCancel }: NewRoomModalProps) {
       >
         <h3 id="newroom-titre">Nouvelle salle</h3>
         <p className="muted small">
-          Pour une salle hors bâtiment (autre site, salle empruntée…). Elle sera proposée au choix manuel de
-          salle, mais la génération automatique ne l'utilisera jamais d'elle-même.
+          Pour une salle hors bâtiment (autre site, salle empruntée…). Elle sera toujours proposée au choix
+          manuel de salle ; la case ci-dessous décide si la génération automatique peut aussi la choisir seule.
         </p>
 
         <label className="newroom-field">
@@ -90,6 +96,18 @@ export function NewRoomModal({ onCreated, onCancel }: NewRoomModalProps) {
             onChange={(e) => setCapacity(Math.max(1, Number(e.target.value) || 1))}
           />
         </label>
+
+        <label className="newroom-field newroom-field--checkbox">
+          <input
+            type="checkbox"
+            checked={placementAuto}
+            onChange={(e) => setPlacementAuto(e.target.checked)}
+          />
+          Proposée au placement automatique
+        </label>
+        <p className="muted small">
+          Décochez pour une salle réservée à un usage précis (ex. BU) : elle reste choisissable à la main.
+        </p>
 
         {erreur && <p className="alerte">{erreur}</p>}
 

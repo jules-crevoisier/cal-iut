@@ -96,6 +96,7 @@ export function catalogRoom(
     type: "TD",
     equipment: [],
     nSessions: 0,
+    placementAuto: true,
     ...extras,
   };
 }

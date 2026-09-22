@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { semaineCalendaireDepuisLundi } from "./utils/weekDisplay";
 import {
   applyFeedback,
   exportCsvUrl,
@@ -36,6 +37,7 @@ import { Toolbar } from "./components/Toolbar";
 import { AdminCelcatView } from "./views/AdminCelcatView";
 import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
+import { SauvegardesView } from "./views/SauvegardesView";
 import { indexSemaineCourante } from "./utils/semaineCourante";
 import { buildTodoList } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
@@ -561,6 +563,11 @@ export function App() {
                 <div className="section-header">
                   <h2>
                     {weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
+                    {/* Semaine calendaire ISO (todo département, 22/09/2026),
+                        calculée depuis le lundi réel — cf. PromoView. */}
+                    {semaineCalendaireDepuisLundi(weekRows[displayWeek]?.monday) !== null
+                      ? ` · semaine calendaire ${semaineCalendaireDepuisLundi(weekRows[displayWeek]?.monday)}`
+                      : ""}
                     <span className="count">{visiblePlacements.length} séances</span>
                   </h2>
                   <div className="legend">
@@ -712,6 +719,7 @@ export function App() {
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
+        {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}
           </main>
         </div>

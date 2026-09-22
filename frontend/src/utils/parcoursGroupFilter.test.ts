@@ -42,12 +42,18 @@ function payloadBut1(): AppPayload {
       "but1-tp-c": "tp",
       "but2-tp-a": "tp",
     },
+    // Forme RÉELLE envoyée par le serveur (`expand_group_filter`,
+    // src/cal_iut/models/group_scope.py) : la cohorte d'un TD contient
+    // TOUS ses TP enfants (TD AB -> TD AB + TP A + TP B + promo), celle
+    // d'un TP ne contient que lui-même + son TD parent + promo (jamais le
+    // TP frère). Le fixture précédent, plus simple, ne reproduisait pas
+    // cette forme et laissait passer le bug rapporté par Kyllian Bresson.
     groupCohort: {
       "but1-tp-a": ["but1-tp-a", "but1-td-ab", "but1-promo"],
       "but1-tp-b": ["but1-tp-b", "but1-td-ab", "but1-promo"],
       "but1-tp-c": ["but1-tp-c", "but1-td-cd", "but1-promo"],
-      "but1-td-ab": ["but1-td-ab", "but1-promo"],
-      "but1-td-cd": ["but1-td-cd", "but1-promo"],
+      "but1-td-ab": ["but1-td-ab", "but1-tp-a", "but1-tp-b", "but1-promo"],
+      "but1-td-cd": ["but1-td-cd", "but1-tp-c", "but1-promo"],
       "but1-promo": ["but1-promo"],
     },
   });
@@ -72,7 +78,8 @@ describe("filtrerRowsParGroupe", () => {
     placedRow({ id: "cm", w: 0, d: 0, s: 0, c: "WR100", t: "CM", g: ["but1-promo"] }),
     placedRow({ id: "td-ab", w: 0, d: 0, s: 1, c: "WR101", t: "TD", g: ["but1-td-ab"] }),
     placedRow({ id: "tp-a", w: 0, d: 1, s: 0, c: "WR115", t: "TP", g: ["but1-tp-a"] }),
-    placedRow({ id: "tp-c", w: 0, d: 1, s: 1, c: "WR116", t: "TP", g: ["but1-tp-c"] }),
+    placedRow({ id: "tp-b", w: 0, d: 1, s: 1, c: "WR117", t: "TP", g: ["but1-tp-b"] }),
+    placedRow({ id: "tp-c", w: 0, d: 1, s: 2, c: "WR116", t: "TP", g: ["but1-tp-c"] }),
   ];
   const parcoursIds = new Set([
     "but1-promo",
@@ -89,17 +96,31 @@ describe("filtrerRowsParGroupe", () => {
       "cm",
       "td-ab",
       "tp-a",
+      "tp-b",
       "tp-c",
     ]);
   });
 
-  it("should keep the TP cohort (TP + TD + CM promo) when a TP is selected", () => {
+  it("should keep the TP cohort (TP + TD + CM promo) when a TP is selected, never the sibling TP", () => {
+    // Bug rapporté par Kyllian Bresson (todo département) : « quand je
+    // souhaite afficher uniquement le TP A, il m'affiche quand même le TP
+    // B ». En cause : la cohorte serveur du TD AB contient déjà TP A ET TP
+    // B (`expand_group_filter`) — une boucle en trop dans
+    // `idsVisiblesPourFiltre` ajoutait alors TOUT le contenu de cette
+    // cohorte de TD dès qu'elle mentionnait le TP choisi, ramenant le TP
+    // frère par la bande.
     expect(
       filtrerRowsParGroupe(rows, "but1-tp-a", payloadBut1(), "BUT1", parcoursIds).map((r) => r.id),
     ).toEqual(["cm", "td-ab", "tp-a"]);
   });
 
-  it("should keep TD + CM when a TD is selected, not other TPs", () => {
+  it("should keep TD + its TPs + CM when a TD is selected, not the other TD's TP", () => {
+    expect(
+      filtrerRowsParGroupe(rows, "but1-td-ab", payloadBut1(), "BUT1", parcoursIds).map((r) => r.id),
+    ).toEqual(["cm", "td-ab", "tp-a", "tp-b"]);
+  });
+
+  it("should keep TD + CM when a TD without TP row data is selected, not other TPs", () => {
     expect(
       filtrerRowsParGroupe(rows, "but1-td-cd", payloadBut1(), "BUT1", parcoursIds).map((r) => r.id),
     ).toEqual(["cm", "tp-c"]);

@@ -22,6 +22,13 @@ export interface ConfirmRequest {
    *  proposer. */
   confirmLabel: string | null;
   cancelLabel: string;
+  /** Style du bouton de confirmation — "danger" pour un forçage qui touche
+   * une DATE DÉJÀ ÉCOULÉE (item A, 22/09/2026 : « ne pas pouvoir déplacer ou
+   * créer de séances sur des dates passées [...] vraiment une popup pour le
+   * forcer »). `ConfirmModal` applique `.btn--danger` au lieu de
+   * `.btn--accent` sur ce bouton quand ce champ vaut "danger" — le style
+   * existe déjà (cf. `styles/app.css`), rien à y ajouter. */
+  variant?: "default" | "danger";
 }
 
 type Listener = (request: ConfirmRequest | null) => void;
@@ -38,7 +45,7 @@ export function registerConfirmListener(fn: Listener): () => void {
 
 export function confirmAsync(
   message: string,
-  options?: { title?: string; confirmLabel?: string; cancelLabel?: string },
+  options?: { title?: string; confirmLabel?: string; cancelLabel?: string; variant?: "default" | "danger" },
 ): Promise<boolean> {
   return new Promise((resolve) => {
     // Une seule confirmation à la fois : une précédente encore ouverte est
@@ -55,6 +62,7 @@ export function confirmAsync(
       message,
       confirmLabel: options?.confirmLabel ?? "Forcer quand même",
       cancelLabel: options?.cancelLabel ?? "Annuler",
+      variant: options?.variant ?? "default",
     });
   });
 }

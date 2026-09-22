@@ -42,6 +42,7 @@ import {
 } from "../utils/teacherBusy";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
+import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { lettresGroupe } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
@@ -277,6 +278,7 @@ export function PromoView({
   }, [route?.parcours]);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
+  const semaineCalendaireAffichee = semaineCalendaireDepuisLundi(payload.weekRows[displayWeek]?.monday);
 
   const teacherBusyMap = useMemo(() => {
     if (solverWeek === null) return new Map<string, TeacherBusyHit>();
@@ -728,8 +730,27 @@ export function PromoView({
               : undefined
           }
           seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
+          // Pré-remplit semaine/jour depuis ce qui est AFFICHÉ dans Vue Promo
+          // (retour utilisateur, todo département, Kyllian Bresson : « rester
+          // sur la semaine à saisir, sur le jour à saisir ») — uniquement à
+          // la CRÉATION, une édition porte déjà ses propres semaine/jour.
+          // `solverWeek` peut être `null` (semaine bloquée affichée) : dans
+          // ce cas la modale garde son propre repli (dernière valeur connue
+          // ou première semaine), rien à forcer.
+          suggestion={
+            modaleSeance === "creer" ? { week: solverWeek ?? undefined, day } : null
+          }
           onCancel={() => setModaleSeance(null)}
-          onCree={(placement) => {
+          onCree={(placement, options) => {
+            // « Créer et en ajouter une autre » (garderOuverte) : la modale
+            // gère elle-même son repli/focus, on se contente de faire vivre
+            // les données affichées SANS fermer ni ré-annoncer par-dessus le
+            // message de confirmation déjà montré dans la modale.
+            if (options?.garderOuverte) {
+              onPlacementUpdated?.(placement);
+              onSeanceChangee?.();
+              return;
+            }
             setModaleSeance(null);
             setAnnonce(
               modaleSeance === "creer"
@@ -776,6 +797,12 @@ export function PromoView({
                 ? filtreParcoursSel
                 : filtreAnnee}{" "}
             — {DAY_LABELS[day]} — {payload.weekRows[displayWeek]?.label ?? ""}
+            {/* Semaine calendaire ISO en complément (todo département,
+                Kyllian Bresson : « indiquer la semaine calendaire en même
+                temps que la semaine universitaire ») — calculée depuis le
+                LUNDI réel (`weekRows[].monday`), jamais en reparsant le
+                libellé ci-dessus. */}
+            {semaineCalendaireAffichee !== null ? ` · semaine calendaire ${semaineCalendaireAffichee}` : ""}
           </h3>
           <div className="promo-filtres" role="group" aria-label="Filtrer la grille">
             <label className="promo-filtre">

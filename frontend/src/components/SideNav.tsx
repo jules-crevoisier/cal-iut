@@ -37,10 +37,18 @@ const NAV_GROUPS: NavGroup[] = [
     // (le lien personnel `mode=groupe` envoyé à un groupe d'étudiants en a
     // toujours besoin, cf. App.tsx `readOnlyTarget`), seul l'onglet visible
     // dans la nav disparaît.
+    //
+    // Réintroduites le 22/09/2026 (todo département, Kyllian Bresson :
+    // « donner accès aux enseignants de consulter le planning d'une ressource
+    // en particulier ou d'un parcours ou un TD ou un TP ») — les collègues ont
+    // désormais des comptes en lecture seule, qui voient ces onglets sans
+    // pouvoir rien modifier. « Vue Groupe » revient sous le nom « Vue TD / TP ».
     label: "Perspectives",
     items: [
       { id: "prof", label: "Vue Enseignant" },
       { id: "promo", label: "Vue Promo" },
+      { id: "groupe", label: "Vue TD / TP" },
+      { id: "salle", label: "Vue Salle" },
     ],
   },
   {
@@ -65,6 +73,9 @@ const GROUPE_ADMIN: NavGroup = {
   items: [
     { id: "comptes", label: "Comptes" },
     { id: "celcat", label: "Celcat" },
+    // Sauvegardes JSON datées (item B, 22/09/2026 : « Avoir un fichier JSON
+    // backup des semaines et séances placées à une date précise »).
+    { id: "sauvegardes", label: "Sauvegardes" },
   ],
 };
 

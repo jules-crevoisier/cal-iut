@@ -14,7 +14,7 @@
 import { echangerPlacements, movePlacement, validateMove } from "../api/client";
 import type { Placement } from "../types";
 import { alerterAsync, confirmAsync } from "./confirmDialog";
-import { detailConflit } from "./placement";
+import { detailConflit, texteEtOptionsForcage } from "./placement";
 
 /** Obstacles que « Forcer » ne lève pas : on prévient au lieu de proposer un
  *  bouton qui échouera (PAC / SAE pour WR* / férié). L'indispo enseignant et
@@ -47,7 +47,15 @@ export async function performMove(
         await annoncerBlocage(texte || bloquants.join("\n"), "Déplacement impossible");
         return false;
       }
-      const force = await confirmAsync(texte || forçables.join("\n"), { confirmLabel: "Forcer le déplacement" });
+      // Date passée (item A, 22/09/2026) : popup FORTE si `forçables`
+      // touche une date déjà écoulée — cf. `texteEtOptionsForcage`.
+      const { texte: texteConfirm, options } = texteEtOptionsForcage(
+        forçables,
+        bloquants,
+        soft,
+        "Forcer le déplacement",
+      );
+      const force = await confirmAsync(texteConfirm || forçables.join("\n"), options);
       if (!force) return false;
       const updated = await movePlacement(sessionId, { ...target, room_id: placement.room_id, force: true });
       onPlacementUpdated(updated);
@@ -103,9 +111,15 @@ export async function performSwap(
       await annoncerBlocage(detail.blocking_conflicts.join("\n"), "Échange impossible");
       return false;
     }
-    const force = await confirmAsync([...detail.hard_conflicts, ...detail.soft_warnings].join("\n"), {
-      confirmLabel: "Échanger quand même",
-    });
+    // Date passée (item A, 22/09/2026) : popup FORTE si l'échange touche
+    // une date déjà écoulée pour l'une des deux séances.
+    const { texte, options } = texteEtOptionsForcage(
+      detail.hard_conflicts,
+      detail.blocking_conflicts,
+      detail.soft_warnings,
+      "Échanger quand même",
+    );
+    const force = await confirmAsync(texte, options);
     if (!force) return false;
     try {
       const { placements } = await echangerPlacements(sessionA, sessionB, true);

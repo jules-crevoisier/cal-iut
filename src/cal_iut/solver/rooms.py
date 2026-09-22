@@ -2,7 +2,7 @@
 
 import fnmatch
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cal_iut.models.entities import Group, Room, RoomType, TeacherDuo
 from cal_iut.solver.cpsat import PlacedSession
@@ -16,6 +16,13 @@ class RoomAssignmentRule:
     fallback_room_types: list[RoomType]
     same_room_for_course: bool = False
     is_eval: bool | None = None  # None = indifférent ; True/False = filtre strict
+    # Salles NOMMÉES explicitement par cette règle (par `id`, pas par type) —
+    # retour utilisateur 22/09/2026 : une règle qui cite une salle exclue du
+    # placement automatique (`Room.placement_auto=False`, ex. BU) doit quand
+    # même pouvoir la lui affecter pour SON module (« explicite bat le
+    # drapeau »). Vide = aucune exception, comportement inchangé. Cf.
+    # `_auto_eligible`.
+    preferred_room_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -36,9 +43,27 @@ def parse_room_rules(raw_rules: list[dict[str, object]]) -> list[RoomAssignmentR
                 fallback_room_types=[RoomType(t) for t in raw.get("fallback_room_types", [])],
                 same_room_for_course=bool(raw.get("same_room_for_course", False)),
                 is_eval=None if raw_is_eval is None else bool(raw_is_eval),
+                preferred_room_ids=[str(r) for r in raw.get("preferred_room_ids", [])],
             )
         )
     return rules
+
+
+def _auto_eligible(rooms: list[Room], rule: RoomAssignmentRule | None) -> list[Room]:
+    """Salles retenues pour un choix AUTOMATIQUE de salle : exclut celles
+    dont `placement_auto` est `False`, SAUF si la règle qui matche cette
+    séance la NOMME explicitement par `id` (`preferred_room_ids`) — retour
+    utilisateur 22/09/2026 : « supprimer la BU du placement automatique des
+    salles car elle est utilisée pour un seul module » tout en gardant la
+    règle propre à ce module capable de continuer à la choisir.
+
+    Un choix MANUEL (`changer_salle`, `room_id` explicite dans la requête)
+    ne passe jamais par ici — cf. `api/main.py::changer_salle`, qui résout la
+    salle directement depuis `state.rooms` sans repasser par l'affectation
+    automatique.
+    """
+    explicites = set(rule.preferred_room_ids) if rule and rule.preferred_room_ids else set()
+    return [r for r in rooms if r.placement_auto or r.id in explicites]
 
 
 def _time_index(placement: PlacedSession) -> int:
@@ -354,6 +379,9 @@ def assign_rooms(
         preferred = rule.preferred_room_types if rule else [RoomType.STANDARD]
         fallback = rule.fallback_room_types if rule else [RoomType.STANDARD, RoomType.AMPHI]
         same_room = rule.same_room_for_course if rule else False
+        # Salles éligibles à CE choix automatique (exclut `placement_auto=
+        # False`, sauf nommage explicite par la règle) — cf. `_auto_eligible`.
+        auto_rooms = _auto_eligible(rooms, rule)
 
         occupied = _occupied_indices(placement, duration)
 
@@ -414,7 +442,7 @@ def assign_rooms(
             fitting = sorted(
                 [
                     r
-                    for r in rooms
+                    for r in auto_rooms
                     if r.capacity >= needed
                     and _is_free(room_schedule, conflicts, r.id, window)
                     and not (reserve_amphi and r.room_type == RoomType.AMPHI)
@@ -452,7 +480,7 @@ def assign_rooms(
             if st_value == "CM":
                 return []
             return sorted(
-                [r for r in rooms if _is_free(room_schedule, conflicts, r.id, window)],
+                [r for r in auto_rooms if _is_free(room_schedule, conflicts, r.id, window)],
                 key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),
             )
 
@@ -545,10 +573,15 @@ def find_room_for_slot(
     preferred = rule.preferred_room_types if rule else [RoomType.STANDARD]
     fallback = rule.fallback_room_types if rule else [RoomType.STANDARD, RoomType.AMPHI]
     reserve_amphi = st_value != "CM"
+    # `prefer_room_id`, ci-dessus, a déjà court-circuité cette recherche s'il
+    # convenait encore (choix conservé, pas un nouveau choix automatique). À
+    # partir d'ici, c'est un VRAI choix automatique : exclut `placement_auto
+    # =False`, sauf nommage explicite par la règle — cf. `_auto_eligible`.
+    auto_rooms = _auto_eligible(rooms, rule)
 
     candidates = sorted(
         [
-            r for r in rooms
+            r for r in auto_rooms
             if r.capacity >= needed
             and _is_free(room_schedule, conflicts, r.id, occupied_target)
             and not (reserve_amphi and r.room_type == RoomType.AMPHI)
@@ -557,7 +590,7 @@ def find_room_for_slot(
     )
     if not candidates:
         candidates = sorted(
-            [r for r in rooms if _is_free(room_schedule, conflicts, r.id, occupied_target)],
+            [r for r in auto_rooms if _is_free(room_schedule, conflicts, r.id, occupied_target)],
             key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),
         )
     return candidates[0] if candidates else None

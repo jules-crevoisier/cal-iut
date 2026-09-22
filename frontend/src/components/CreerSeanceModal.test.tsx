@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreerSeanceModal } from "./CreerSeanceModal";
 import type { Placement } from "../types";
 import { catalogCourse, emptyPayload } from "../test/payloadFixture";
+import { ecrireDernierWeekDay } from "../utils/creerSeancePrefs";
 
 const placement: Placement = {
   session_id: "maquette-1",
@@ -193,5 +194,164 @@ describe("CreerSeanceModal maquette mode", () => {
     expect(appel).toBeDefined();
     expect(appel?.[1]?.method).toBe("POST");
     expect(onCree).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Simplification du formulaire de création — todo département, retour
+ * Kyllian Bresson (22/09/2026) : « création de nouvelle séance à simplifier
+ * (rester sur la semaine à saisir, sur le jour à saisir), car pour chaque
+ * séance à créer le formulaire est long ».
+ */
+describe("CreerSeanceModal creation shortcuts", () => {
+  const payloadCreation = emptyPayload({
+    courses: [catalogCourse("WR101", "Cours existant", { parcours: "BUT1" })],
+    groupLabels: { "but1-td-ab": "TD AB" },
+    groupParcours: { "but1-td-ab": "BUT1" },
+    teacherLabels: { MRI: "Riguet Marine" },
+    rooms: [{ id: "h005", label: "H.005", capacity: 30, type: "standard", equipment: [], nSessions: 0 }],
+    weekRows: [
+      { monday: "2026-01-05", label: "S1", blocked: false, weekIndex: 0 },
+      { monday: "2026-01-12", label: "S2", blocked: false, weekIndex: 1 },
+    ],
+  });
+
+  const placementCree: Placement = {
+    session_id: "creee-1",
+    week: 1,
+    day: 2,
+    slot: 0,
+    course_code: "WR101",
+    course_name: "Cours existant",
+    session_type: "TD",
+    group_ids: ["but1-td-ab"],
+    teacher_codes: ["MRI"],
+    room_id: "h005",
+    room_label: "H.005",
+    is_eval: false,
+    locked: false,
+    duration_slots: 1,
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => placementCree,
+      }),
+    );
+    window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    window.sessionStorage.clear();
+  });
+
+  it("should pre-fill semaine and jour from the suggestion (week/day currently displayed in Vue Promo)", () => {
+    render(
+      <CreerSeanceModal
+        payload={payloadCreation}
+        suggestion={{ week: 1, day: 2 }}
+        onCree={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("Semaine")).toHaveValue("1");
+    expect(screen.getByLabelText("Jour")).toHaveValue("2");
+  });
+
+  it("should fall back to the last remembered week/day when no suggestion is given (opened outside Vue Promo)", () => {
+    ecrireDernierWeekDay({ week: 1, day: 3 });
+    render(<CreerSeanceModal payload={payloadCreation} onCree={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText("Semaine")).toHaveValue("1");
+    expect(screen.getByLabelText("Jour")).toHaveValue("3");
+  });
+
+  it("should default to the first week/day when there is neither a suggestion nor a remembered value", () => {
+    render(<CreerSeanceModal payload={payloadCreation} onCree={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText("Semaine")).toHaveValue("0");
+    expect(screen.getByLabelText("Jour")).toHaveValue("0");
+  });
+
+  it('should show "Créer et en ajouter une autre" only when creating a brand new session', () => {
+    render(<CreerSeanceModal payload={payloadCreation} onCree={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /créer et en ajouter une autre/i })).toBeInTheDocument();
+  });
+
+  it('should hide "Créer et en ajouter une autre" when editing an existing personalised session', () => {
+    render(
+      <CreerSeanceModal
+        payload={payloadCreation}
+        seanceExistante={placementCree}
+        onCree={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /créer et en ajouter une autre/i })).not.toBeInTheDocument();
+  });
+
+  it('should hide "Créer et en ajouter une autre" in maquette mode', () => {
+    render(
+      <CreerSeanceModal
+        payload={payloadCreation}
+        mode="maquette"
+        seanceExistante={placementCree}
+        onCree={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /créer et en ajouter une autre/i })).not.toBeInTheDocument();
+  });
+
+  it("should create, keep the modal open, reset the room, and advance the slot when clicking the secondary button", async () => {
+    const onCree = vi.fn();
+    render(
+      <CreerSeanceModal
+        payload={payloadCreation}
+        suggestion={{ week: 1, day: 2 }}
+        onCree={onCree}
+        onCancel={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("TD AB"));
+    fireEvent.change(screen.getByLabelText("Salle"), { target: { value: "h005" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /rechercher un enseignant/i }), {
+      target: { value: "Rigu" },
+    });
+    fireEvent.click(screen.getByRole("option", { name: /riguet marine/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /créer et en ajouter une autre/i }));
+
+    await waitFor(() => {
+      expect(onCree).toHaveBeenCalledWith(placementCree, { garderOuverte: true });
+    });
+
+    // La modale reste ouverte (le formulaire de création, pas le message
+    // "matière" qui disparaîtrait si elle se refermait).
+    expect(screen.getByText("Matière")).toBeInTheDocument();
+    // Semaine/jour et enseignant sont conservés, la salle est réinitialisée,
+    // le créneau avance d'un cran (9h30 -> 11h, cf. slots.ts).
+    expect(screen.getByLabelText("Semaine")).toHaveValue("1");
+    expect(screen.getByLabelText("Jour")).toHaveValue("2");
+    expect(screen.getByLabelText("Créneau")).toHaveValue("1");
+    expect(screen.getByLabelText("Salle")).toHaveValue("");
+    // Confirmation courte affichée (jour 2 = Mercredi, cf. slots.ts::DAY_LABELS).
+    expect(screen.getByText(/WR101 créée mercredi/i)).toBeInTheDocument();
+  });
+
+  it("should not close nor call the default onCree callback when using the secondary button", async () => {
+    const onCree = vi.fn();
+    render(
+      <CreerSeanceModal payload={payloadCreation} suggestion={{ week: 0, day: 0 }} onCree={onCree} onCancel={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByLabelText("TD AB"));
+    fireEvent.click(screen.getByRole("button", { name: /créer et en ajouter une autre/i }));
+    await waitFor(() => {
+      expect(onCree).toHaveBeenCalledTimes(1);
+    });
+    expect(onCree).toHaveBeenCalledWith(placementCree, { garderOuverte: true });
   });
 });

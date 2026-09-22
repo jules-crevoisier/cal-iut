@@ -74,6 +74,8 @@ export interface RoomMeta {
   label: string;
   capacity: number;
   room_type: string;
+  // Cf. `Room.placement_auto` (backend) — retour utilisateur 22/09/2026.
+  placement_auto: boolean;
 }
 
 export interface YearMeta {
