@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { CreerSeanceBody } from "../api/client";
 import { deposerPlacement } from "../api/client";
@@ -10,6 +10,7 @@ import {
   modifierSeanceMaquetteAvecConfirmation,
   modifierSeancePersonnaliseeAvecConfirmation,
 } from "../utils/placement";
+import { ecrireDernierWeekDay, lireDernierWeekDay } from "../utils/creerSeancePrefs";
 import { TeacherPicker } from "./TeacherPicker";
 
 const TYPES = ["CM", "TD", "TP", "PTUT"] as const;
@@ -29,7 +30,14 @@ interface CreerSeanceModalProps {
   /** Matière/groupe(s) déjà connus quand on ouvre depuis une ligne précise
    * (ex. Vue Promo, colonne d'un groupe) — pré-remplit sans forcer. */
   suggestion?: { courseCode?: string; groupId?: string; week?: number; day?: number } | null;
-  onCree: (placement: Placement) => void;
+  /** `options.garderOuverte` = appel depuis « Créer et en ajouter une autre »
+   * (retour utilisateur, todo département, Kyllian Bresson : « pour chaque
+   * séance à créer le formulaire est long ») : la modale reste ouverte,
+   * l'appelant doit se contenter de mettre à jour ses données (placements,
+   * payload) SANS fermer/réinitialiser quoi que ce soit ici — ce composant
+   * gère lui-même son repli partiel. Absent/`false` = comportement inchangé
+   * (« Créer et placer », modification) : l'appelant ferme la modale. */
+  onCree: (placement: Placement, options?: { garderOuverte?: boolean }) => void;
   onCancel: () => void;
   /** Retirer du planning (garde la séance au catalogue, elle rejoint « À
    * placer ») — retour utilisateur 03/09/2026 : un enseignant ne sait
@@ -80,12 +88,31 @@ export function CreerSeanceModal({
   const [dureeSlots, setDureeSlots] = useState(seanceExistante?.duration_slots ?? 1);
   const [isEval, setIsEval] = useState(seanceExistante?.is_eval ?? false);
   const [note, setNote] = useState("");
-  const [week, setWeek] = useState(seanceExistante?.week ?? suggestion?.week ?? payload.weekRows[0]?.weekIndex ?? 0);
-  const [day, setDay] = useState(seanceExistante?.day ?? suggestion?.day ?? 0);
+  // Semaine/jour : la Vue Promo pré-remplit toujours depuis ce qu'elle
+  // affiche (`suggestion`, prioritaire) — retour utilisateur (todo
+  // département, Kyllian Bresson 22/09/2026) : « rester sur la semaine à
+  // saisir, sur le jour à saisir ». Faute de suggestion (modale ouverte
+  // ailleurs), repli sur le dernier couple utilisé PENDANT cette session
+  // navigateur (`utils/creerSeancePrefs.ts`), jamais entre deux visites.
+  const [week, setWeek] = useState(
+    () => seanceExistante?.week ?? suggestion?.week ?? lireDernierWeekDay()?.week ?? payload.weekRows[0]?.weekIndex ?? 0,
+  );
+  const [day, setDay] = useState(
+    () => seanceExistante?.day ?? suggestion?.day ?? lireDernierWeekDay()?.day ?? 0,
+  );
   const [slot, setSlot] = useState(seanceExistante?.slot ?? 0);
   const [roomId, setRoomId] = useState(seanceExistante?.room_id ?? "");
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  // Confirmation courte après « Créer et en ajouter une autre » — la modale
+  // reste ouverte, ce message remplace le habituel "ferme + toast" du reste
+  // de l'appli pour confirmer que la création précédente a bien eu lieu.
+  const [confirmationCourte, setConfirmationCourte] = useState<string | null>(null);
+  // Formulaire de création SEULEMENT (jamais l'édition ni le mode maquette) :
+  // permet d'enchaîner plusieurs créations sans rouvrir tout le formulaire à
+  // chaque fois — champ visé par "focus back on first field" après création.
+  const premierChampRef = useRef<HTMLSelectElement>(null);
+  const estCreationPure = !seanceExistante && !modeMaquette;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -114,6 +141,19 @@ export function CreerSeanceModal({
   const changerType = (type: string) => {
     setSessionType(type);
     if (type !== "CM") setIsEval(false);
+  };
+
+  // Retient le dernier couple semaine/jour choisi À LA MAIN dans le
+  // formulaire de CRÉATION (jamais en édition/maquette, qui n'expriment pas
+  // une préférence pour la PROCHAINE création) — sert de repli la prochaine
+  // fois que la modale s'ouvre sans contexte Vue Promo.
+  const changerSemaine = (nouvelleSemaine: number) => {
+    setWeek(nouvelleSemaine);
+    if (estCreationPure) ecrireDernierWeekDay({ week: nouvelleSemaine, day });
+  };
+  const changerJour = (nouveauJour: number) => {
+    setDay(nouveauJour);
+    if (estCreationPure) ecrireDernierWeekDay({ week, day: nouveauJour });
   };
 
   const valider = async () => {
@@ -195,6 +235,66 @@ export function CreerSeanceModal({
     }
   };
 
+  /**
+   * « Créer et en ajouter une autre » — retour utilisateur (todo
+   * département, Kyllian Bresson 22/09/2026) : « pour chaque séance à créer
+   * le formulaire est long ». Crée la séance SANS fermer la modale : matière,
+   * type, groupe(s), semaine, jour et enseignant(s) restent tels quels (le
+   * contexte qui ne change typiquement pas d'une séance à l'autre pour une
+   * même matière/semaine) ; seuls la salle (jamais la même par défaut — le
+   * serveur la résout), l'éventuelle note et l'évaluation repartent à zéro,
+   * et le créneau avance d'un cran quand c'est possible (`slot+1`, sans
+   * dépasser le dernier de la journée).
+   *
+   * Diffère volontairement de `valider()` : appelle `onCree(..., { garderOuverte: true })`
+   * plutôt que de fermer, réinitialise l'état local ici même (l'appelant —
+   * Vue Promo — n'a, lui, qu'à mettre à jour placements/payload).
+   */
+  const creerEtAjouterAutre = async () => {
+    if (!courseChoisi) {
+      setErreur("Choisissez une matière.");
+      return;
+    }
+    if (groupIds.length === 0) {
+      setErreur("Cochez au moins un groupe.");
+      return;
+    }
+    setEnCours(true);
+    setErreur(null);
+    setConfirmationCourte(null);
+
+    const corps: CreerSeanceBody = {
+      course_code: courseChoisi.code,
+      session_type: sessionType,
+      group_ids: groupIds,
+      teacher_codes: teacherCodes,
+      duration_slots: dureeSlots,
+      is_eval: isEval,
+      note,
+      week,
+      day,
+      slot,
+      room_id: roomId || null,
+    };
+    const resultat = await creerSeanceAvecConfirmation(corps);
+    setEnCours(false);
+    if (!resultat.ok) {
+      setErreur(resultat.message);
+      return;
+    }
+
+    ecrireDernierWeekDay({ week, day });
+    onCree(resultat.placement, { garderOuverte: true });
+    setConfirmationCourte(
+      `${resultat.placement.course_code} créée ${DAY_LABELS[day].toLowerCase()} ${SLOT_TIMES[slot].label}.`,
+    );
+    setRoomId("");
+    setNote("");
+    setIsEval(false);
+    setSlot((s) => Math.min(s + 1, SLOT_TIMES.length - 1));
+    premierChampRef.current?.focus();
+  };
+
   const retirer = async () => {
     if (!seanceExistante) return;
     setEnCours(true);
@@ -236,7 +336,12 @@ export function CreerSeanceModal({
           {!modeMaquette && (
           <label className="newroom-field newroom-field--large">
             Matière
-            <select value={courseCode} disabled={!!seanceExistante} onChange={(e) => setCourseCode(e.target.value)}>
+            <select
+              ref={premierChampRef}
+              value={courseCode}
+              disabled={!!seanceExistante}
+              onChange={(e) => setCourseCode(e.target.value)}
+            >
               {coursTries.map((c) => (
                 <option key={`${c.code}-${c.parcours}`} value={c.code}>
                   {c.code} — {c.name} ({c.parcours})
@@ -309,7 +414,7 @@ export function CreerSeanceModal({
 
           <label className="newroom-field">
             Semaine
-            <select value={week} onChange={(e) => setWeek(Number(e.target.value))}>
+            <select value={week} onChange={(e) => changerSemaine(Number(e.target.value))}>
               {semainesDisponibles.map((w) => (
                 <option key={w.weekIndex} value={w.weekIndex}>
                   {w.label}
@@ -320,7 +425,7 @@ export function CreerSeanceModal({
 
           <label className="newroom-field">
             Jour
-            <select value={day} onChange={(e) => setDay(Number(e.target.value))}>
+            <select value={day} onChange={(e) => changerJour(Number(e.target.value))}>
               {DAY_LABELS.map((label, i) => (
                 <option key={label} value={i}>
                   {label}
@@ -354,6 +459,11 @@ export function CreerSeanceModal({
         </div>
 
         {erreur && <p className="alerte">{erreur}</p>}
+        {confirmationCourte && (
+          <p className="confirmmodal-info" role="status">
+            {confirmationCourte}
+          </p>
+        )}
 
         <div className="confirmmodal-actions">
           {seanceExistante && onRetiree && (
@@ -370,6 +480,17 @@ export function CreerSeanceModal({
           <button type="button" className="btn btn--ghost" onClick={onCancel}>
             Annuler
           </button>
+          {estCreationPure && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={enCours}
+              onClick={() => void creerEtAjouterAutre()}
+              title="Crée cette séance et garde le formulaire ouvert pour la suivante."
+            >
+              {enCours ? "…" : "Créer et en ajouter une autre"}
+            </button>
+          )}
           <button type="submit" className="btn btn--accent" disabled={enCours}>
             {enCours ? "…" : seanceExistante ? "Enregistrer" : "Créer et placer"}
           </button>

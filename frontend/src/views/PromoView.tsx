@@ -730,8 +730,27 @@ export function PromoView({
               : undefined
           }
           seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
+          // Pré-remplit semaine/jour depuis ce qui est AFFICHÉ dans Vue Promo
+          // (retour utilisateur, todo département, Kyllian Bresson : « rester
+          // sur la semaine à saisir, sur le jour à saisir ») — uniquement à
+          // la CRÉATION, une édition porte déjà ses propres semaine/jour.
+          // `solverWeek` peut être `null` (semaine bloquée affichée) : dans
+          // ce cas la modale garde son propre repli (dernière valeur connue
+          // ou première semaine), rien à forcer.
+          suggestion={
+            modaleSeance === "creer" ? { week: solverWeek ?? undefined, day } : null
+          }
           onCancel={() => setModaleSeance(null)}
-          onCree={(placement) => {
+          onCree={(placement, options) => {
+            // « Créer et en ajouter une autre » (garderOuverte) : la modale
+            // gère elle-même son repli/focus, on se contente de faire vivre
+            // les données affichées SANS fermer ni ré-annoncer par-dessus le
+            // message de confirmation déjà montré dans la modale.
+            if (options?.garderOuverte) {
+              onPlacementUpdated?.(placement);
+              onSeanceChangee?.();
+              return;
+            }
             setModaleSeance(null);
             setAnnonce(
               modaleSeance === "creer"
