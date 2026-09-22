@@ -104,6 +104,48 @@ def _duo_teacher_for_group(
     return None
 
 
+def _libelle_bloc(block: TeacherBlock) -> str:
+    """`block1`, `block2`… — vide quand la maquette n'en dit rien (`merge.py`
+    convertit un `null` en la chaîne « None »)."""
+    libelle = str(block.block or "").strip().lower()
+    return "" if libelle in ("", "none", "null") else libelle
+
+
+def _partage_du_contenu(
+    blocks: list[TeacherBlock], session_type: SessionType, nb_groupes: int
+) -> list[tuple[TeacherBlock, int]] | None:
+    """Blocs DIFFÉRENTS (`block1`, `block2`) = partage du CONTENU : chaque
+    enseignant fait SA partie du cours avec TOUS les groupes, le bloc 1 avant
+    le bloc 2.
+
+    Signalement du 22/09/2026 (Kyllian Bresson) : « la répartition par block a
+    été zappée ? Exemple sur le WR117, Joan a le block 1 et [l'autre] le 2. On
+    doit voir tous les groupes car on ne fait pas la même [chose]. Actuellement
+    je ne vois que EF et GH. » La répartition par défaut (cf.
+    `_teacher_for_group`) remplit groupe par groupe : le premier enseignant
+    prenait les TD AB et CD, le second EF et GH — un partage des GROUPES, juste
+    quand tous les enseignants sont sur le même bloc (57 cours sur 61 en S1/S3),
+    faux quand la maquette distingue les blocs (WR117, WR311D, WR312D).
+
+    Rend, par bloc dans l'ordre, le nombre de CRÉNEAUX qu'il assure dans
+    chaque groupe — ou None si ce n'est pas un partage du contenu, ou si les
+    volumes ne tombent pas juste (on garde alors la répartition par groupes
+    plutôt que d'inventer un découpage).
+    """
+    libelles = {_libelle_bloc(b) for b in blocks} - {""}
+    if len(libelles) < 2 or nb_groupes <= 0:
+        return None
+    parts: list[tuple[TeacherBlock, int]] = []
+    for block in sorted(blocks, key=lambda b: (_libelle_bloc(b) or "~", )):
+        total = int(round(block.td if session_type == SessionType.TD else block.tp))
+        if total <= 0:
+            continue
+        if total % nb_groupes:
+            return None
+        parts.append((block, total // nb_groupes))
+    return parts or None
+
+
 def _teacher_for_group(
     course: Course,
     session_type: SessionType,
@@ -152,6 +194,18 @@ def _teacher_for_group(
     per_group = course.volumes.get(session_type.value.lower(), 0)
     if per_group <= 0:
         return blocks[0].teacher
+
+    # Blocs différents : chaque enseignant voit TOUS les groupes, pour sa
+    # partie du cours (cf. `_partage_du_contenu`). `slots_before` est déjà la
+    # position DANS ce groupe.
+    partage = _partage_du_contenu(blocks, session_type, len(group_ids))
+    if partage is not None:
+        curseur = 0
+        for block, part in partage:
+            if slots_before < curseur + part:
+                return block.teacher
+            curseur += part
+        return partage[-1][0].teacher
 
     # `slots_before` compte des CRÉNEAUX de 1h30 déjà consommés par ce groupe,
     # pas des séances : sur un cours fusionné en blocs (`double_sessions.yaml`),
