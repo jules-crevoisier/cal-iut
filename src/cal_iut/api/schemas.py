@@ -952,6 +952,7 @@ class CelcatJournalReconcilierRequest(BaseModel):
 class CelcatJournalReconcilierResponse(BaseModel):
     fusionnees: int
     deja_presentes: int
+    ignorees: list[str] = []
 
 
 # ── Sauvegardes JSON datées (item B, 22/09/2026) ──
@@ -973,4 +974,3 @@ class SauvegardeMeta(BaseModel):
 
 class SauvegardeListResponse(BaseModel):
     sauvegardes: list[SauvegardeMeta]
-    ignorees: list[str] = []
