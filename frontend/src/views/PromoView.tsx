@@ -42,6 +42,7 @@ import {
 } from "../utils/teacherBusy";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
+import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { lettresGroupe } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
@@ -277,6 +278,7 @@ export function PromoView({
   }, [route?.parcours]);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
+  const semaineCalendaireAffichee = semaineCalendaireDepuisLundi(payload.weekRows[displayWeek]?.monday);
 
   const teacherBusyMap = useMemo(() => {
     if (solverWeek === null) return new Map<string, TeacherBusyHit>();
@@ -776,6 +778,12 @@ export function PromoView({
                 ? filtreParcoursSel
                 : filtreAnnee}{" "}
             — {DAY_LABELS[day]} — {payload.weekRows[displayWeek]?.label ?? ""}
+            {/* Semaine calendaire ISO en complément (todo département,
+                Kyllian Bresson : « indiquer la semaine calendaire en même
+                temps que la semaine universitaire ») — calculée depuis le
+                LUNDI réel (`weekRows[].monday`), jamais en reparsant le
+                libellé ci-dessus. */}
+            {semaineCalendaireAffichee !== null ? ` · semaine calendaire ${semaineCalendaireAffichee}` : ""}
           </h3>
           <div className="promo-filtres" role="group" aria-label="Filtrer la grille">
             <label className="promo-filtre">

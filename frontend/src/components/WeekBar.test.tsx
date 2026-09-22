@@ -49,6 +49,19 @@ describe("WeekBar caption", () => {
   });
 });
 
+describe("WeekBar calendar week in tooltip", () => {
+  // Todo département, retour Kyllian Bresson : « indiquer la semaine
+  // calendaire en même temps que la semaine universitaire ». La barre reste
+  // compacte (pas de texte visible en plus) — seule l'info-bulle/aria-label
+  // porte la semaine calendaire ISO, calculée depuis `monday`.
+  it("should append the ISO calendar week to the bar's aria-label, not to the caption text", () => {
+    render(<WeekBar {...baseProps} selected={1} />);
+    expect(screen.getByRole("button", { name: /semaine 8.*semaine calendaire 42/i })).toBeInTheDocument();
+    // Le texte visible de la légende, lui, reste inchangé (compact).
+    expect(screen.getByText("Semaine 8 (12–16 oct. 2026)")).toBeInTheDocument();
+  });
+});
+
 describe("WeekBar drop onto another week", () => {
   it("should call onDropWeek with the target display index", () => {
     const onDropWeek = vi.fn();
