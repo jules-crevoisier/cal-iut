@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from cal_iut.db.models import (
     PlanningRun,
     ScheduleException,
     SolverPlacement,
+    Tache,
     TeacherPreference,
 )
 
@@ -364,6 +365,83 @@ class PlanningRepository:
 
     def list_teacher_preferences(self) -> list[TeacherPreference]:
         return self.db.query(TeacherPreference).all()
+
+    # ----------------------------------------------------------------------
+    # Kanban « Tâches » humaines (22/09/2026) — cf. docstring de `Tache`
+    # (`db/models.py`) pour la distinction avec « À traiter ».
+    # ----------------------------------------------------------------------
+
+    def _prochain_ordre(self, colonne: str) -> float:
+        """Place une nouvelle carte SANS `ordre` explicite en fin de sa
+        colonne (max existant + 1), jamais à 0 — sinon elle sauterait
+        systématiquement devant toutes les cartes déjà présentes."""
+        maxi = (
+            self.db.query(Tache.ordre)
+            .filter(Tache.colonne == colonne)
+            .order_by(Tache.ordre.desc())
+            .first()
+        )
+        return (maxi[0] + 1.0) if maxi else 0.0
+
+    def create_tache(
+        self,
+        titre: str,
+        cree_par: str,
+        description: str | None = None,
+        colonne: str = "a_faire",
+        ordre: float | None = None,
+        enseignant_code: str | None = None,
+        date_debut: date | None = None,
+        date_fin: date | None = None,
+    ) -> Tache:
+        row = Tache(
+            titre=titre,
+            description=description,
+            colonne=colonne,
+            ordre=ordre if ordre is not None else self._prochain_ordre(colonne),
+            enseignant_code=enseignant_code,
+            date_debut=date_debut,
+            date_fin=date_fin,
+            cree_par=cree_par,
+            fait_le=datetime.now(UTC) if colonne == "fait" else None,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    def list_taches(self) -> list[Tache]:
+        return self.db.query(Tache).order_by(Tache.colonne, Tache.ordre).all()
+
+    def get_tache(self, tache_id: int) -> Tache | None:
+        return self.db.get(Tache, tache_id)
+
+    def update_tache(self, tache_id: int, **champs: object) -> Tache | None:
+        """Mise à jour partielle — seuls les champs présents dans `champs`
+        (déjà filtrés `is not None` par l'appelant, cf. `api/main.py`) sont
+        modifiés. Gère `fait_le` : posé à l'entrée dans "fait", effacé dès
+        que la carte en ressort — jamais laissé à une valeur périmée."""
+        row = self.db.get(Tache, tache_id)
+        if row is None:
+            return None
+        if "colonne" in champs and champs["colonne"] != row.colonne:
+            if champs["colonne"] == "fait":
+                row.fait_le = datetime.now(UTC)
+            else:
+                row.fait_le = None
+        for champ, valeur in champs.items():
+            setattr(row, champ, valeur)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    def delete_tache(self, tache_id: int) -> bool:
+        row = self.db.get(Tache, tache_id)
+        if row is None:
+            return False
+        self.db.delete(row)
+        self.db.commit()
+        return True
 
     def export_placements_json(self, run_id: int | None = None) -> str:
         run = self.db.get(PlanningRun, run_id) if run_id else self.get_latest_run()

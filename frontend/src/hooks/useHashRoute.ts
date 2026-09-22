@@ -19,6 +19,7 @@ export type RouteView =
   | "reference"
   | "contraintes"
   | "apf"
+  | "taches"
   | "aplacer"
   | "salle"
   | "salles-libres"

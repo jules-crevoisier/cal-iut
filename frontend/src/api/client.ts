@@ -1004,3 +1004,49 @@ export function ignorerExtraCelcat(id: string): Promise<{ statut: string }> {
 export function ajouterExtraCelcat(id: string): Promise<{ statut: string; session_id?: string }> {
   return request(`/celcat/extras/${encodeURIComponent(id)}/ajouter`, { method: "POST" });
 }
+
+/** Kanban « Tâches » (22/09/2026, retour utilisateur Jules) — tâches
+ *  HUMAINES partagées par l'équipe, distinctes de « À traiter » (généré
+ *  automatiquement). Reflète `api/schemas.py::TacheResponse`. */
+export interface Tache {
+  id: number;
+  titre: string;
+  description: string | null;
+  colonne: "a_faire" | "en_cours" | "fait";
+  ordre: number;
+  enseignant_code: string | null;
+  date_debut: string | null; // ISO "AAAA-MM-JJ"
+  date_fin: string | null; // ISO "AAAA-MM-JJ"
+  cree_par: string;
+  cree_le: string;
+  maj_le: string;
+  fait_le: string | null;
+}
+
+export interface TacheCreateBody {
+  titre: string;
+  description?: string | null;
+  colonne?: Tache["colonne"];
+  ordre?: number | null;
+  enseignant_code?: string | null;
+  date_debut?: string | null;
+  date_fin?: string | null;
+}
+
+export type TachePatchBody = Partial<TacheCreateBody>;
+
+export function fetchTaches(): Promise<Tache[]> {
+  return request("/taches");
+}
+
+export function creerTache(body: TacheCreateBody): Promise<Tache> {
+  return request("/taches", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function patchTache(id: number, body: TachePatchBody): Promise<Tache> {
+  return request(`/taches/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function supprimerTache(id: number): Promise<{ deleted: boolean }> {
+  return request(`/taches/${id}`, { method: "DELETE" });
+}
