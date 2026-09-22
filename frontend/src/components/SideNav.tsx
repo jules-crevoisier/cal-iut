@@ -49,6 +49,11 @@ const NAV_GROUPS: NavGroup[] = [
       { id: "promo", label: "Vue Promo" },
       { id: "groupe", label: "Vue TD / TP" },
       { id: "salle", label: "Vue Salle" },
+      // Ajouté le 22/09/2026 (todo département, Kyllian Bresson :
+      // « Planning des salles disponibles ») — juste après « Vue Salle »
+      // (occupation d'UNE salle), sa question inverse : quelles salles sont
+      // libres sur tel créneau.
+      { id: "salles-libres", label: "Salles libres" },
     ],
   },
   {

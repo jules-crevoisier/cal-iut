@@ -97,6 +97,7 @@ export function catalogRoom(
     equipment: [],
     nSessions: 0,
     placementAuto: true,
+    combines: [],
     ...extras,
   };
 }

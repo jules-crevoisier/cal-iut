@@ -63,6 +63,7 @@ import { PromoView } from "./views/PromoView";
 import { ReferenceView } from "./views/ReferenceView";
 import { APlacerView } from "./views/APlacerView";
 import { SalleView } from "./views/SalleView";
+import { SallesLibresView } from "./views/SallesLibresView";
 import { TodoView } from "./views/TodoView";
 
 const DEFAULT_PARCOURS = "BUT1";
@@ -677,6 +678,9 @@ export function App() {
             setRoute={setRoute}
             onOpenSearch={() => setSearch(true)}
           />
+        )}
+        {activeTab === "salles-libres" && appPayload && !readOnlyTarget && (
+          <SallesLibresView payload={appPayload} route={route} setRoute={setRoute} />
         )}
         {activeTab === "promo" && appPayload && (!readOnlyTarget || readOnlyTarget === "promo") && (
           <PromoView

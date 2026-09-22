@@ -21,6 +21,7 @@ export type RouteView =
   | "apf"
   | "aplacer"
   | "salle"
+  | "salles-libres"
   | "cours"
   | "comptes"
   | "celcat"
