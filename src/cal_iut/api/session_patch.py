@@ -193,6 +193,7 @@ def _controler_placement(state: object, session: object, placement: object, forc
         _as_placed,
         _build_conflict_map,
         _hard_constraint_context,
+        _indisponibilites_strictes,
         _institutional_violations,
         _libelle_jour_ferme,
         _pedagogical_order_violations,
@@ -212,7 +213,13 @@ def _controler_placement(state: object, session: object, placement: object, forc
             extra_blocked,
             _libelle_jour_ferme(state, session.semestre, placement.week, placement.day),
         )
-        indispo += _teacher_availability_violations(state, session, placement.week, placement.day, sl)
+        # Indisponibilité FORTE (`stricte: true`, 22/09/2026) : non forçable,
+        # y compris quand on réaffecte la séance sans la déplacer.
+        strictes = _indisponibilites_strictes(state, session, placement.week, placement.day, sl)
+        if strictes:
+            institutional += strictes
+        else:
+            indispo += _teacher_availability_violations(state, session, placement.week, placement.day, sl)
     # Seul le verrou INSTITUTIONNEL est non contournable. L'indisponibilité
     # enseignant, elle, se force — c'est la classification de référence de
     # `main.py::_hard_constraint_context` (ligne « forceable += _teacher_

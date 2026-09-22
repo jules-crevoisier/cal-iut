@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { CreerSeanceBody } from "../api/client";
-import { deposerPlacement, modifierSeancePersonnalisee } from "../api/client";
+import { deposerPlacement } from "../api/client";
 import type { Placement } from "../types";
 import type { AppPayload } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { creerSeanceAvecConfirmation, modifierSeanceMaquetteAvecConfirmation } from "../utils/placement";
+import {
+  creerSeanceAvecConfirmation,
+  modifierSeanceMaquetteAvecConfirmation,
+  modifierSeancePersonnaliseeAvecConfirmation,
+} from "../utils/placement";
 import { TeacherPicker } from "./TeacherPicker";
 
 const TYPES = ["CM", "TD", "TP", "PTUT"] as const;
@@ -149,7 +153,7 @@ export function CreerSeanceModal({
 
     if (seanceExistante) {
       try {
-        const placement = await modifierSeancePersonnalisee(seanceExistante.session_id, {
+        const resultat = await modifierSeancePersonnaliseeAvecConfirmation(seanceExistante.session_id, {
           session_type: sessionType,
           group_ids: groupIds,
           teacher_codes: teacherCodes,
@@ -161,9 +165,8 @@ export function CreerSeanceModal({
           slot,
           room_id: roomId || null,
         });
-        onCree(placement);
-      } catch (e) {
-        setErreur(e instanceof Error ? e.message : "Modification impossible");
+        if (resultat.ok) onCree(resultat.placement);
+        else setErreur(resultat.message);
       } finally {
         setEnCours(false);
       }

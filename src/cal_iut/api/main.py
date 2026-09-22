@@ -4727,15 +4727,59 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
             "par ce système peuvent être modifiées ici.",
         )
 
+    # Signalement du 22/09/2026 : « je ne peux pas encore modifier la séance
+    # une fois créée ». Trois défauts, sur la semaine en cours surtout — là où
+    # l'on crée en urgence :
+    #
+    # 1. L'écran renvoie TOUJOURS semaine/jour/créneau. Ce chemin rejouait
+    #    donc un DÉPLACEMENT même pour changer seulement l'enseignant, et le
+    #    déplacement butait sur le verrou de la semaine en cours. On ne
+    #    déplace plus que si la position change VRAIMENT ; sinon on contrôle
+    #    la séance sur place, comme le PATCH maquette
+    #    (`session_patch._controler_placement`).
+    # 2. Les champs étaient modifiés AVANT le contrôle, et jamais restaurés
+    #    en cas de refus : la séance en mémoire gardait une modification
+    #    refusée, que la prochaine écriture aurait persistée.
+    # 3. L'enseignant et les groupes n'étaient reportés que sur la séance,
+    #    pas sur son placement — celui que la grille affiche et que la
+    #    recopie Celcat lit.
+    from cal_iut.api.session_patch import _conflit_structure, _controler_placement
+
+    nouveau_type = seance.session_type
     if body.session_type is not None:
         try:
-            seance.session_type = SessionType(body.session_type.strip().upper())
+            nouveau_type = SessionType(body.session_type.strip().upper())
         except ValueError:
             raise HTTPException(400, f"Type de séance inconnu : {body.session_type!r}.") from None
     if body.group_ids is not None:
         inconnus = [g for g in body.group_ids if g not in {gr.id for gr in state.groups}]
         if inconnus:
             raise HTTPException(400, f"Groupe(s) inconnu(s) : {', '.join(inconnus)}")
+
+    placement = next((p for p in state.timetable if p.session_id == session_id), None)
+    avant = {
+        "session_type": seance.session_type, "group_ids": list(seance.group_ids),
+        "teacher_codes": list(seance.teacher_codes), "duration_slots": seance.duration_slots,
+        "is_eval": seance.is_eval, "note": seance.metadata.get("note"),
+    }
+    avant_placement = (
+        (list(placement.group_ids), list(placement.teacher_codes)) if placement is not None else None
+    )
+
+    def restaurer() -> None:
+        for champ, valeur in avant.items():
+            if champ == "note":
+                if valeur is None:
+                    seance.metadata.pop("note", None)
+                else:
+                    seance.metadata["note"] = valeur
+            else:
+                setattr(seance, champ, valeur)
+        if placement is not None and avant_placement is not None:
+            placement.group_ids, placement.teacher_codes = avant_placement
+
+    seance.session_type = nouveau_type
+    if body.group_ids is not None:
         seance.group_ids = list(body.group_ids)
     if body.teacher_codes is not None:
         seance.teacher_codes = [t.strip().upper() for t in body.teacher_codes if t.strip()]
@@ -4745,33 +4789,52 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         seance.is_eval = body.is_eval
     if body.note is not None:
         seance.metadata["note"] = body.note.strip()
+    if placement is not None:
+        placement.group_ids = list(seance.group_ids)
+        placement.teacher_codes = list(seance.teacher_codes)
 
-    repositionne = body.week is not None and body.day is not None and body.slot is not None
-    if repositionne:
-        resultat = move_session(
-            session_id,
-            MoveSessionRequest(
-                week=body.week, day=body.day, slot=body.slot,
-                room_id=body.room_id, lock=False, force=body.force,
-            ),
-        )
-    elif body.room_id is not None:
-        # Salle SEULE, sans repositionner. Le `room_id` n'était transmis
-        # qu'à l'intérieur du déplacement ci-dessus : l'envoyer seul rendait
-        # donc 200 en gardant l'ancienne salle — une réponse qui affirme le
-        # succès d'une action qui n'a pas eu lieu (constaté en production le
-        # 08/09/2026 sur « Présentation des services »). Or c'est la forme
-        # naturelle de la demande : « mets-la en A.018 ».
-        #
-        # Délégué à `changer_salle` plutôt que réimplémenté : c'est lui qui
-        # sait ne revérifier QUE le conflit de salle, sans refaire les
-        # contrôles de position qu'un créneau inchangé rendrait absurdes.
-        resultat = changer_salle(session_id, ChangeRoomRequest(room_id=body.room_id, force=body.force))
-    else:
-        match = _find_placement(state, session_id)
-        resultat = _to_placement(match, state.sessions_by_id)
+    identite = any(
+        v is not None
+        for v in (body.session_type, body.group_ids, body.teacher_codes, body.duration_slots, body.is_eval)
+    )
+    repositionne = (
+        placement is not None
+        and body.week is not None and body.day is not None and body.slot is not None
+        and (body.week, body.day, body.slot) != (placement.week, placement.day, placement.slot)
+    )
+    try:
+        if repositionne:
+            resultat = move_session(
+                session_id,
+                MoveSessionRequest(
+                    week=body.week, day=body.day, slot=body.slot,
+                    room_id=body.room_id, lock=False, force=body.force,
+                ),
+            )
+        else:
+            if placement is not None and identite:
+                _controler_placement(state, seance, placement, body.force)
+            if body.room_id is not None and body.room_id != (placement.room_id if placement else None):
+                # Salle SEULE, sans repositionner. Le `room_id` n'était transmis
+                # qu'à l'intérieur du déplacement : l'envoyer seul rendait donc
+                # 200 en gardant l'ancienne salle (constaté en production le
+                # 08/09/2026 sur « Présentation des services »). Délégué à
+                # `changer_salle`, qui ne revérifie QUE le conflit de salle.
+                resultat = changer_salle(session_id, ChangeRoomRequest(room_id=body.room_id, force=body.force))
+            else:
+                match = _find_placement(state, session_id)
+                resultat = _to_placement(match, state.sessions_by_id)
+    except HTTPException as exc:
+        restaurer()
+        raise _conflit_structure(exc) from exc
+    except Exception:
+        restaurer()
+        raise
 
     custom_sessions.update_custom_session(seance)
+    # Enseignant, groupes ou type changés sur place : Celcat doit suivre.
+    # `enfiler` déduplique, un second signal après `move_session` est sans effet.
+    _apres_ecriture_planning(session_id, "update")
     return resultat
 
 
