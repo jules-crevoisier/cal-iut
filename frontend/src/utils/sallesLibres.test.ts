@@ -104,6 +104,24 @@ describe("occupationSalles", () => {
   });
 });
 
+describe("réservations par des tiers (salles_reservees.yaml)", () => {
+  it("should mark a reserved room busy on its date and slots, with its motive", () => {
+    // Semaine 0 = lundi 2026-01-05 (fixture) ; jour 2 = mercredi 7 janvier.
+    const payload = emptyPayload({
+      rooms: [catalogRoom("h018", { label: "H.018" })],
+      roomReservations: [{ salle: "h018", date: "2026-01-07", slots: [1, 2], motif: "Direction" }],
+    });
+
+    const grille = occupationSalles(payload, 0, 2);
+
+    expect(grille.get("h018")?.[1]).toEqual([{ code: "Réservée", type: "reservation", groupes: ["Direction"] }]);
+    expect(grille.get("h018")?.[2]).not.toBeNull();
+    expect(grille.get("h018")?.[0]).toBeNull();
+    expect(occupationSalles(payload, 0, 1).get("h018")?.[1]).toBeNull();
+    expect(sallesLibresAuCreneau(payload, 0, 2, 1)).toEqual([]);
+  });
+});
+
 describe("sallesLibresAuCreneau", () => {
   const baseRooms = [
     catalogRoom("h101", { label: "H.101", capacity: 24, type: "standard" }),

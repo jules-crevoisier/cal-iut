@@ -963,6 +963,11 @@ def app_state(request: Request) -> dict[str, object]:
             libelles[code] = nom
     payload["teacherLabels"] = dict(sorted(libelles.items()))
 
+    # Réservations de salles par des tiers (vue « Salles libres », 22/09/2026).
+    from cal_iut.ingestion.config_loader import load_room_reservation_entries
+
+    payload["roomReservations"] = load_room_reservation_entries(state.config_dir)
+
     # Session de compte (n'importe quel rôle actif) = payload complet. Lien
     # personnel public = version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`).
     # Filtré ICI, à la sortie, plutôt qu'en amont dans `build_payload` : une

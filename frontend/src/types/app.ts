@@ -233,5 +233,8 @@ export interface AppPayload {
   institutionalCalendar: InstitutionalEvent[];
 
   rooms: RoomCatalogEntry[];
+  /** Salles réservées par des tiers (`salles_reservees.yaml`), telles que
+   *  déclarées — optionnel : absent des anciens payloads et des fixtures. */
+  roomReservations?: { salle: string; date: string; slots: number[]; motif: string }[];
   courses: CourseCatalogEntry[];
 }

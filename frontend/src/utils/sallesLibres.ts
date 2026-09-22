@@ -96,6 +96,26 @@ export function occupationSalles(
     }
   }
 
+  // Réservations par des tiers (ex. amphi pris par la Direction) : même
+  // effet qu'une séance sur la salle et ses fusions. Date réelle = lundi de
+  // la semaine solveur + jour, jamais un recalcul depuis le libellé.
+  const ligneSemaine = payload.weekRows.find((wr) => wr.weekIndex === week);
+  if (ligneSemaine?.monday) {
+    const [a, m, j] = ligneSemaine.monday.split("-").map(Number);
+    const jour = new Date(Date.UTC(a, m - 1, j + day));
+    const iso = jour.toISOString().slice(0, 10);
+    for (const resa of payload.roomReservations ?? []) {
+      if (resa.date !== iso) continue;
+      const entree: OccupationEntree = { code: "Réservée", type: "reservation", groupes: resa.motif ? [resa.motif] : [] };
+      for (const slot of resa.slots) {
+        marquer(resa.salle, slot, entree);
+        const room = payload.rooms.find((r) => r.id === resa.salle);
+        for (const partieId of room?.combines ?? []) marquer(partieId, slot, entree);
+        for (const combineeId of fusionsParPartie.get(resa.salle) ?? []) marquer(combineeId, slot, entree);
+      }
+    }
+  }
+
   return grille;
 }
 
