@@ -1,0 +1,21 @@
+# Enseignants que la feuille officielle « CONTRAINTES ENSEIGNANTS MMI
+# 2026_2027 » ne connaît pas encore — typiquement une arrivée en cours
+# d'année.
+#
+# La feuille reste la référence : dès qu'un enseignant y figure, c'est son nom
+# à elle qui s'affiche, et l'entrée ci-dessous peut être retirée.
+#
+# Sans ces entrées, un enseignant qui n'a encore AUCUNE séance n'apparaît pas
+# dans la liste de « Nouvelle séance » — on ne peut donc pas lui créer sa
+# première séance (cf. `src/cal_iut/ingestion/enseignants.py`).
+#
+# Son code Celcat, lui, se renseigne dans `celcat.yaml` (section
+# `enseignants`), sans quoi ses séances resteraient bloquées à la recopie.
+
+APH:
+  nom: "Alexia Petit-Halajko"
+  ajoute_le: "2026-09-22"
+  demande_par: "Jules Crevoisier"
+  # APH et non APE : APE est déjà Anne-Laure Perrone. Choix de l'équipe,
+  # relayé avec la demande.
+  code_celcat: "40584"
