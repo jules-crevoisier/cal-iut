@@ -458,6 +458,64 @@ class ExceptionResponse(BaseModel):
     active: bool = True
 
 
+_COLONNES_TACHE = ("a_faire", "en_cours", "fait")
+
+
+def _valider_titre_tache(v: str) -> str:
+    v = v.strip()
+    if not v:
+        raise ValueError("Le titre est obligatoire.")
+    return v
+
+
+class TacheCreateRequest(BaseModel):
+    """Carte du kanban « Tâches » (22/09/2026) — cf. `db/models.py::Tache`."""
+
+    titre: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    colonne: Literal["a_faire", "en_cours", "fait"] = "a_faire"
+    ordre: float | None = None
+    enseignant_code: str | None = None
+    date_debut: str | None = None  # ISO "YYYY-MM-DD"
+    date_fin: str | None = None  # ISO "YYYY-MM-DD" — >= date_debut, cf. main.py
+
+    _valider = field_validator("titre")(_valider_titre_tache)
+
+
+class TacheUpdateRequest(BaseModel):
+    """Mise à jour partielle — `None` = champ non fourni (même convention que
+    `PatchSeanceRequest`/`AdminUserUpdateRequest`, pas de distinction entre
+    "absent" et "remis à vide" pour les champs optionnels)."""
+
+    titre: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    colonne: Literal["a_faire", "en_cours", "fait"] | None = None
+    ordre: float | None = None
+    enseignant_code: str | None = None
+    date_debut: str | None = None
+    date_fin: str | None = None
+
+    @field_validator("titre")
+    @classmethod
+    def _valider(cls, v: str | None) -> str | None:
+        return _valider_titre_tache(v) if v is not None else v
+
+
+class TacheResponse(BaseModel):
+    id: int
+    titre: str
+    description: str | None = None
+    colonne: str
+    ordre: float
+    enseignant_code: str | None = None
+    date_debut: str | None = None
+    date_fin: str | None = None
+    cree_par: str
+    cree_le: str
+    maj_le: str
+    fait_le: str | None = None
+
+
 class RegenRequest(BaseModel):
     week: int = Field(ge=0)
     extend_next: bool = False

@@ -60,7 +60,14 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "À faire",
-    items: [{ id: "apf", label: "À traiter" }],
+    // "Tâches" (22/09/2026, retour utilisateur Jules) : kanban partagé pour
+    // le suivi HUMAIN (« ce prof a dit qu'il ne serait pas présent ce jour,
+    // déplacer ») — distinct de « À traiter », qui reste le seul onglet
+    // alimenté automatiquement par le solveur/l'audit.
+    items: [
+      { id: "apf", label: "À traiter" },
+      { id: "taches", label: "Tâches" },
+    ],
   },
 ];
 
