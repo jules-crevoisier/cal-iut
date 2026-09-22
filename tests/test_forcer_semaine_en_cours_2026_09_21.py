@@ -109,3 +109,12 @@ def test_le_libelle_du_verrou_ne_change_pas(client, route) -> None:  # noqa: F81
         )
     motif = next(m for m in _conflit_structure(reponse)["hard_conflicts"] if "non modifiable" in m)
     assert motif.startswith(f"Semaine {SEMAINE_VERROUILLEE + 1} non modifiable (statut : ")
+
+
+def test_creer_une_seance_pour_marc_nino_passe(client) -> None:  # noqa: F811
+    """22/09/2026 : MNI n'a encore aucune séance. Le serveur ne tient pas de
+    liste blanche d'enseignants — c'est l'écran qui ne le proposait pas (cf.
+    `test_enseignants_sans_seance_2026_09_22.py`). La création doit passer."""
+    reponse = _creer(client, teacher_codes=["MNI"], force=True)
+    assert reponse.status_code == 200, reponse.text
+    assert "MNI" in get_state().timetable[-1].teacher_codes

@@ -933,6 +933,23 @@ def app_state(request: Request) -> dict[str, object]:
         sae_supervisor_dates=ctx.sae_supervisor_dates,
     )
 
+    # TOUS les enseignants déclarés, pas seulement ceux qui ont déjà une
+    # séance. `build_payload` ne listait que les codes vus dans les
+    # placements : un vacataire qui n'enseigne encore rien n'apparaissait
+    # donc pas dans « Nouvelle séance », et on ne pouvait pas lui créer sa
+    # première séance. Demande du 22/09/2026 pour Marc Nino, pourtant déclaré
+    # dans la feuille officielle avec ses disponibilités.
+    #
+    # Complété ICI plutôt que dans `build_payload` : c'est l'écran React qui
+    # propose de créer une séance, et un nom tiré des séances existantes reste
+    # prioritaire — il est celui que tout le reste de l'écran affiche déjà.
+    from cal_iut.ingestion.enseignants import enseignants_declares
+
+    libelles = dict(payload.get("teacherLabels") or {})
+    for code, nom in enseignants_declares(state.config_dir).items():
+        libelles.setdefault(code, nom)
+    payload["teacherLabels"] = dict(sorted(libelles.items()))
+
     # Session de compte (n'importe quel rôle actif) = payload complet. Lien
     # personnel public = version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`).
     # Filtré ICI, à la sortie, plutôt qu'en amont dans `build_payload` : une
