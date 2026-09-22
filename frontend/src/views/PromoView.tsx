@@ -32,6 +32,7 @@ import { confirmAsync } from "../utils/confirmDialog";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 import { ParcoursWeekModal } from "../components/ParcoursWeekModal";
 import { couleursMatiere } from "../utils/couleursMatiere";
+import { cleSeances, fusionnerColonnes } from "../utils/fusionColonnes";
 import { performMove, performSwap } from "../utils/moveSession";
 import {
   teacherBusyByDaySlot,
@@ -441,6 +442,17 @@ export function PromoView({
     }
   }
 
+  // Un TD = une case pour ses deux TP, un CM = une case pour la promo
+  // (demande du 22/09/2026, cf. `utils/fusionColonnes.ts`). Largeur de chaque
+  // colonne, créneau par créneau : 0 = absorbée par la case de gauche.
+  const largeursParCreneau = SLOT_TIMES.map((_, s) =>
+    fusionnerColonnes(
+      cols.length,
+      (i) => cleSeances((byColSlot.get(`${i}-${s}`) ?? []).map((r) => r.id)),
+      (i) => colParcours[i],
+    ),
+  );
+
   const holiday = solverWeek === null ? undefined : payload.holidayRows.find((h) => h.w === solverWeek && h.d === day);
   const dayEvents =
     solverWeek === null ? undefined : payload.eventRows.find((e) => e.w === solverWeek && e.d === day)?.labels;
@@ -848,8 +860,10 @@ export function PromoView({
                     <tr>
                       <td className="timecell mono">{slot.label}</td>
                       {cols.map((c, i) => {
+                        const largeur = largeursParCreneau[s][i];
+                        if (largeur === 0) return null;
                         const entries = byColSlot.get(`${i}-${s}`) ?? [];
-                        const cellClass = `promocell ${colClass(i)}`;
+                        const cellClass = `promocell ${colClass(i)}${largeur > 1 ? " promocell--fusion" : ""}`;
                         const busyHit = teacherBusyOnCell(teacherBusyMap, day, s, entries);
                         const busyClass = busyHit ? " promocell--teacher-busy" : "";
                         const busyHint = busyHit ? (
@@ -914,6 +928,7 @@ export function PromoView({
                           return (
                             <td
                               key={c}
+                              colSpan={largeur > 1 ? largeur : undefined}
                               className={cellClass + eligibleClass + dropCls + busyClass}
                               {...placementProps}
                               {...dropHandlers(day, s)}
