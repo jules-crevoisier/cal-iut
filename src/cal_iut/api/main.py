@@ -2216,8 +2216,44 @@ def _conflits_deplacement(
             _libelle_jour_ferme(state, session.semestre, week, day),
         )
     forceable = _pedagogical_order_violations(week, day, slot, extra_blocked_pedago, allowed_weeks)
-    forceable += _teacher_availability_violations(state, session, week, day, slot)
+    strictes = _indisponibilites_strictes(state, session, week, day, slot)
+    if strictes:
+        # Déjà refusé sans appel : inutile d'ajouter le message « Forcer peut
+        # débloquer », qui dirait le contraire.
+        institutional = institutional + strictes
+    else:
+        forceable += _teacher_availability_violations(state, session, week, day, slot)
     return institutional, forceable
+
+
+def _indisponibilites_strictes(state: object, session: object, week: int, day: int, slot: int) -> list[str]:
+    """Indisponibilités datées marquées `stricte: true` dans
+    `teacher_availability.yaml` — les seules indisponibilités enseignant que
+    `force` ne lève PAS (cf. `TeacherDateSlotRule.stricte`).
+
+    Demande du 22/09/2026 : « en contrainte forte les indisponibilités de
+    Romain Delon […] il faut que dans l'interface on fasse en sorte que l'on
+    ne puisse pas placer des séances de RDE à ces dates »."""
+    codes = getattr(session, "teacher_codes", None) or []
+    if not codes or not state.teacher_availability:
+        return []
+    d = state.calendar.week_day_to_date(semester_week_offset(state.calendar, session.semestre) + week, day)
+    if d is None:
+        return []
+    iso = d.isoformat()
+    motifs: list[str] = []
+    for avail in state.teacher_availability:
+        if avail.teacher_code not in codes:
+            continue
+        for regle in avail.forbidden_date_slots or []:
+            if regle.stricte and regle.date == iso and slot in regle.slots:
+                note = f" : {regle.note}" if regle.note else ""
+                motifs.append(
+                    f"{avail.teacher_code} indisponible le {d.strftime('%d/%m/%Y')}{note} — "
+                    "contrainte forte, non forçable."
+                )
+                break
+    return motifs
 
 
 def _suggestions_for(state: object, session_id: str, match: object) -> tuple[list[SlotSuggestionResponse], str | None]:
