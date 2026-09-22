@@ -12,7 +12,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { confirmAsync } from "./confirmDialog";
-import { creerSeanceAvecConfirmation } from "./placement";
+import { creerSeanceAvecConfirmation, modifierSeancePersonnaliseeAvecConfirmation } from "./placement";
 
 vi.mock("./confirmDialog", () => ({ confirmAsync: vi.fn(), alerterAsync: vi.fn() }));
 
@@ -89,5 +89,42 @@ describe("Créer une séance sur la semaine en cours", () => {
 
     expect(confirmAsync).not.toHaveBeenCalled();
     expect(resultat).toEqual({ ok: false, message: VERROU });
+  });
+});
+
+describe("Modifier une séance créée (22/09/2026)", () => {
+  // « je ne peux pas encore modifier la séance une fois créée » : le ✎
+  // enregistrait sans jamais proposer de forcer.
+  it("propose « Enregistrer quand même », puis renvoie avec force", async () => {
+    vi.mocked(confirmAsync).mockResolvedValue(true);
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(
+        reponse(409, { detail: { message: "Conflit", hard_conflicts: [VERROU], soft_warnings: [] } }),
+      )
+      .mockReturnValueOnce(reponse(200, { session_id: "WR101-S1-TD-x", week: 3, day: 1, slot: 3 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resultat = await modifierSeancePersonnaliseeAvecConfirmation("WR101-S1-TD-x", { week: 3, day: 1, slot: 3 });
+
+    expect(vi.mocked(confirmAsync).mock.calls[0][1]?.confirmLabel).toBe("Enregistrer quand même");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/placements/personnalisees/WR101-S1-TD-x");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).force).toBe(true);
+    expect(resultat.ok).toBe(true);
+  });
+
+  it("ne propose pas de forcer un verrou non contournable", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      reponse(409, {
+        detail: { message: "Modification impossible", hard_conflicts: ["RDE indisponible"], blocking_conflicts: ["RDE indisponible"], soft_warnings: [] },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resultat = await modifierSeancePersonnaliseeAvecConfirmation("WR101-S1-TD-x", { teacher_codes: ["RDE"] });
+
+    expect(confirmAsync).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(resultat.ok).toBe(false);
   });
 });

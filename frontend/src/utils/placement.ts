@@ -16,8 +16,10 @@
 import {
   creerSeancePersonnalisee,
   modifierSeanceMaquette,
+  modifierSeancePersonnalisee,
   placerSeance,
   type CreerSeanceBody,
+  type ModifierSeanceBody,
   type PatchSeanceMaquetteBody,
 } from "../api/client";
 import type { Placement } from "../types";
@@ -172,6 +174,40 @@ export async function modifierSeanceMaquetteAvecConfirmation(
       { impossible: "Modification impossible", confirmLabel: "Enregistrer quand même" },
       async () => {
         placement = await modifierSeanceMaquette(sessionId, { ...corps, force: true });
+      },
+    );
+    if (!resultat.ok || !placement) {
+      return { ok: false, message: resultat.ok ? "Modification impossible" : resultat.message };
+    }
+    return { ok: true, placement };
+  }
+}
+
+/**
+ * Même confirmer-puis-forcer pour une séance CRÉÉE (✎ de la Vue Promo).
+ *
+ * Signalement du 22/09/2026 : « je ne peux pas encore modifier la séance une
+ * fois créée ». L'enregistrement appelait l'API en direct : devant un conflit
+ * forçable (semaine en cours, enseignant indisponible sur le papier…), il
+ * affichait l'erreur et s'arrêtait, sans jamais proposer de forcer.
+ */
+export async function modifierSeancePersonnaliseeAvecConfirmation(
+  sessionId: string,
+  corps: ModifierSeanceBody,
+): Promise<{ ok: true; placement: Placement } | { ok: false; message: string }> {
+  try {
+    return { ok: true, placement: await modifierSeancePersonnalisee(sessionId, corps) };
+  } catch (e) {
+    const detail = detailConflit(e);
+    if (!detail) {
+      return { ok: false, message: e instanceof Error ? e.message : "Modification impossible" };
+    }
+    let placement: Placement | null = null;
+    const resultat = await gererConflitPuisForcer(
+      detail,
+      { impossible: "Modification impossible", confirmLabel: "Enregistrer quand même" },
+      async () => {
+        placement = await modifierSeancePersonnalisee(sessionId, { ...corps, force: true });
       },
     );
     if (!resultat.ok || !placement) {
