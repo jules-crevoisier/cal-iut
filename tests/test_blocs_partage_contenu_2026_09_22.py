@@ -62,5 +62,5 @@ def test_le_bloc_1_passe_avant_le_bloc_2() -> None:
 
 def test_un_meme_bloc_partage_toujours_les_groupes() -> None:
     """WR112 : quatre enseignants, tous `block1` — un sous-groupe chacun."""
-    for (_type, _groupe), compte in _repartition("WR112").items():
+    for compte in _repartition("WR112").values():
         assert len(compte) == 1, dict(compte)

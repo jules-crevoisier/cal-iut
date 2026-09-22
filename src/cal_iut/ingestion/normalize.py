@@ -137,7 +137,7 @@ def _partage_du_contenu(
         return None
     parts: list[tuple[TeacherBlock, int]] = []
     for block in sorted(blocks, key=lambda b: (_libelle_bloc(b) or "~", )):
-        total = int(round(block.td if session_type == SessionType.TD else block.tp))
+        total = round(block.td if session_type == SessionType.TD else block.tp)
         if total <= 0:
             continue
         if total % nb_groupes:
