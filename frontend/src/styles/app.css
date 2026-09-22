@@ -2079,6 +2079,10 @@ table.promo-grid .pc5 { --pc: var(--bad); }
 table.promo-grid th.grp-band { background: color-mix(in srgb, var(--pc) 20%, var(--surface-2)); color: var(--pc); font-weight: 700; }
 table.promo-grid td.promocell { background: color-mix(in srgb, var(--pc, var(--surface-2)) 6%, var(--surface-2)); }
 table.promo-grid .grp-first { border-left: 3px solid var(--pc); }
+/* TD / CM sur une seule case (22/09/2026) : la case s'étend sur ses groupes
+   TP ; ses étiquettes se posent côte à côte plutôt que de s'empiler dans une
+   colonne étroite. */
+table.promo-grid td.promocell--fusion { text-align: left; }
 
 /* Placement direct depuis « À placer » (retour utilisateur 28/08/2026) —
    les cases du BON parcours deviennent cliquables ; les autres restent en
