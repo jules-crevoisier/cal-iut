@@ -101,7 +101,7 @@ export function TdWeekGrid({
   parcours = "",
   onlyDay = null,
 }: TdWeekGridProps) {
-  const [hover, setHover] = useState<{ placement: Placement; x: number; y: number } | null>(null);
+  const [hover, setHover] = useState<{ placement: Placement; x: number; y: number } | null>(null);
   const couleursParMatiere = usePreferences().couleursParMatiere;
   const days = onlyDay === null ? [0, 1, 2, 3, 4] : [onlyDay];
   const tpPair = resolveTpPair(tdGroupId, groups);
@@ -352,6 +352,10 @@ export function TdWeekGrid({
           <strong>{hover.placement.course_name || hover.placement.course_code}</strong>
           <div>
             {hover.placement.course_code} · {hover.placement.session_type}
+            {/* Horaire réel d'un évènement à horaire libre (retour Jules
+                23/09/2026) — la grille garde la séance dans sa case de
+                STOCKAGE (créneau 3), donc au moins écrire l'heure vraie. */}
+            {hover.placement.hor ? ` · ${hover.placement.hor}` : ""}
             {hover.placement.is_eval ? " · Éval" : ""}
           </div>
           <div>Groupe : {hover.placement.group_ids.map((id) => groupLabels[id] ?? id).join(", ")}</div>
@@ -394,6 +398,9 @@ function SessionBlock({
       <span className="td-block-code">{p.course_code}</span>
       <span className="td-block-meta">
         {p.session_type}
+        {/* Idem : additif, jamais affiché à la place du créneau de
+            stockage (cf. l'infobulle plus haut). */}
+        {p.hor ? ` · ${p.hor}` : ""}
         {short ? ` · ${short}` : ""}
       </span>
       {p.room_label && <span className="td-block-room">{p.room_label}</span>}

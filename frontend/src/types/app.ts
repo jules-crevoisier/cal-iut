@@ -27,6 +27,15 @@ export interface AppRow {
   /** Séance ajoutée depuis l'interface, distincte de la maquette — seule à
    * proposer modifier/supprimer (retour utilisateur 31/08/2026). */
   custom: boolean;
+  /** Évènement à horaire libre (retour Jules 23/09/2026, Kyllian Bresson :
+   * présentation PAC 13h15-14h) — libellé français de l'horaire RÉEL, ex.
+   * "13h15–14h". Absent tant qu'aucun horaire libre n'a été saisi. */
+  hor?: string;
+  /** `true` quand `hor` tombe dans la pause méridienne (12h30-14h) : la
+   * séance est STOCKÉE sur le créneau 3 (position de stockage uniquement),
+   * Vue Promo doit alors l'exclure de la cellule normale du créneau 3 et la
+   * rendre dans la ligne "pause" à la place. Absent/`false` sinon. */
+  midi?: boolean;
 }
 
 export interface WeekRow {

@@ -13,6 +13,9 @@ export interface Placement {
   is_eval: boolean;
   locked: boolean;
   duration_slots: number;
+  /** Évènement à horaire libre (retour Jules 23/09/2026) — libellé français
+   * de l'horaire RÉEL, ex. "13h15–14h". Absent sur toute séance normale. */
+  hor?: string | null;
 }
 
 export interface Quality {

@@ -332,6 +332,11 @@ export function SessionGrid({
           <strong>{hover.row.n || hover.row.c}</strong>
           <div>
             {hover.row.c} · {hover.row.t}
+            {/* Horaire réel d'un évènement à horaire libre (retour Jules
+                23/09/2026) — la grille garde la séance dans sa case de
+                STOCKAGE (créneau 3), donc au moins écrire l'heure vraie
+                à côté, plutôt que de laisser croire à 14h-15h30. */}
+            {hover.row.hor ? ` · ${hover.row.hor}` : ""}
             {hover.row.ev ? " · Éval" : ""}
           </div>
           <div>
@@ -442,6 +447,9 @@ function SessionBlock({
       </span>
       <span className="meta">
         <span className="code">{row.c}</span> · {row.t}
+        {/* Idem : horaire réel additif, jamais affiché à la place du
+            créneau de stockage (cf. l'infobulle plus haut). */}
+        {row.hor ? ` · ${row.hor}` : ""}
         {groupShort ? ` · ${groupShort}` : ""}
       </span>
     </button>

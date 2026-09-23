@@ -14,10 +14,12 @@
  */
 
 import {
+  creerEvenement,
   creerSeancePersonnalisee,
   modifierSeanceMaquette,
   modifierSeancePersonnalisee,
   placerSeance,
+  type CreerEvenementBody,
   type CreerSeanceBody,
   type ModifierSeanceBody,
   type PatchSeanceMaquetteBody,
@@ -208,6 +210,32 @@ export async function creerSeanceAvecConfirmation(
       { impossible: "Création impossible", confirmLabel: "Créer quand même" },
       async () => {
         placement = await creerSeancePersonnalisee({ ...corps, force: true });
+      },
+    );
+    if (!resultat.ok || !placement) return { ok: false, message: resultat.ok ? "Création impossible" : resultat.message };
+    return { ok: true, placement };
+  }
+}
+
+/** Même logique confirmer-puis-forcer, pour la création d'un évènement hors
+ * maquette (retour Jules 23/09/2026) — `POST /placements/evenements` porte
+ * les mêmes trois catégories de réponse que `POST /placements/personnalisees`. */
+export async function creerEvenementAvecConfirmation(
+  corps: CreerEvenementBody,
+): Promise<{ ok: true; placement: Placement } | { ok: false; message: string }> {
+  try {
+    return { ok: true, placement: await creerEvenement(corps) };
+  } catch (e) {
+    const detail = detailConflit(e);
+    if (!detail) {
+      return { ok: false, message: e instanceof Error ? e.message : "Création impossible" };
+    }
+    let placement: Placement | null = null;
+    const resultat = await gererConflitPuisForcer(
+      detail,
+      { impossible: "Création impossible", confirmLabel: "Créer quand même" },
+      async () => {
+        placement = await creerEvenement({ ...corps, force: true });
       },
     );
     if (!resultat.ok || !placement) return { ok: false, message: resultat.ok ? "Création impossible" : resultat.message };

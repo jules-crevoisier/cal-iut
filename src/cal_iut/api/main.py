@@ -3275,6 +3275,14 @@ def _entrees_celcat(state) -> list:
     entrees = []
     for p in state.timetable:
         session = state.sessions_by_id.get(p.session_id)
+        # Évènement à horaire libre tombé dans la pause méridienne (retour
+        # Jules 23/09/2026) : jamais traduit en entrée Celcat — SLOT_TIMES
+        # ne connaît que les six créneaux fixes, le traduire pousserait
+        # l'horaire FAUX de son créneau de stockage (14h-15h30 pour un
+        # évènement 13h15-14h). Même exclusion que le hook immédiat
+        # (`celcat/ops.py::_executer`), qui la journalise « blocked ».
+        if (getattr(session, "metadata", None) or {}).get("pause_midi"):
+            continue
         semestre = getattr(session, "semestre", "") or ""
         entrees.append(entree_pour_placement(
             cfg,
@@ -4935,6 +4943,92 @@ def _code_evenement(libelle: str) -> str:
     return code or "EVENEMENT"
 
 
+# ── Évènement à horaire libre (retour Jules 23/09/2026, Kyllian Bresson :
+# « m'ajouter une séance évènement [...] à 13h15 jusqu'à 14h [...] sans
+# mettre d'enseignant ») ──
+#
+# Les six créneaux fixes (8h-9h30 ... 17h-18h30) ne couvrent pas 13h15-14h
+# (pause méridienne). Décision de Jules : afficher un tel évènement à son
+# horaire RÉEL (Vue Promo, ligne "pause"), mais le STOCKER quand même sur le
+# créneau 3 (14h-15h30) — une position de stockage, jamais affichée telle
+# quelle, qui laisse `state.timetable` homogène (chaque placement porte
+# toujours `slot` dans 0..5) sans réécrire tout le modèle de données pour un
+# seul cas.
+_MINUTES_DEBUT_PAUSE = 12 * 60 + 30  # 12h30
+_MINUTES_FIN_PAUSE = 14 * 60  # 14h00 — exclu (créneau 3 normal à partir de là)
+_SLOT_STOCKAGE_PAUSE = 3
+
+
+def _minutes_horaire(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _dans_la_pause_meridienne(heure_debut: str) -> bool:
+    minutes = _minutes_horaire(heure_debut)
+    return _MINUTES_DEBUT_PAUSE <= minutes < _MINUTES_FIN_PAUSE
+
+
+def _libelle_horaire(horaire: dict[str, str]) -> str:
+    """Ex. `{"debut": "13:15", "fin": "14:00"}` -> "13h15–14h" — en dash,
+    jamais "14h00" (minutes rondes tronquées). Dupliqué à dessein dans
+    `celcat/ops.py::_libelle_horaire_pause` (même raison que `SLOT_TIMES`,
+    déjà dupliqué entre `export/` et `celcat/` : pas de dépendance croisée
+    entre les deux pour un si petit formatage)."""
+
+    def _un(hhmm: str) -> str:
+        h, m = hhmm.split(":")
+        return f"{int(h)}h" if m == "00" else f"{int(h)}h{m}"
+
+    return f"{_un(horaire['debut'])}–{_un(horaire['fin'])}"
+
+
+def _conflit_salle_pause_midi(
+    state: object, session_id: str, week: int, day: int, room_id: str | None, horaire: dict[str, str] | None
+) -> str | None:
+    """Deux évènements « pause méridienne » qui se recouvrent dans le temps
+    ne peuvent PAS partager la même salle — le SEUL contrôle qui reste actif
+    entre deux évènements (`validate_move` les exempte sinon complètement
+    l'un de l'autre — groupe, enseignant, salle — cf. son docstring, retour
+    Jules 23/09/2026).
+
+    Vérifié ICI, À PART de `validate_move`, plutôt que dans son unique point
+    d'exemption : `validate_move` ne voit jamais la salle RÉELLE des
+    séances comparées. Son unique fournisseur d'occupation, `_as_placed`
+    (cf. plus bas), convertit `PlacedSessionWithRoom` en `PlacedSession` —
+    qui n'a PAS de champ `room_id` — avant de le lui passer ; le paramètre
+    `room_id` de `validate_move` n'est donc déjà, pour TOUT appelant
+    existant (pas seulement les évènements), jamais comparé à une salle
+    réelle. Ce manque est PRÉEXISTANT à ce contrat et touche potentiellement
+    tout déplacement, pas seulement les évènements de la pause — corriger
+    `_as_placed`/`PlacedSession` pour le combler dépasse le périmètre
+    verrouillé ici (risque de changer, pour TOUS les appelants existants,
+    un comportement de conflit de salle resté silencieux jusqu'ici) ; cf.
+    le rapport de ce contrat.
+    """
+    if not room_id or not horaire:
+        return None
+    debut, fin = _minutes_horaire(horaire["debut"]), _minutes_horaire(horaire["fin"])
+    for p in state.timetable:
+        if p.session_id == session_id or p.week != week or p.day != day:
+            continue
+        if getattr(p, "room_id", None) != room_id:
+            continue
+        autre = state.sessions_by_id.get(p.session_id)
+        autre_meta = getattr(autre, "metadata", None) or {}
+        autre_horaire = autre_meta.get("horaire")
+        if not autre_meta.get("pause_midi") or not autre_horaire:
+            continue
+        a_debut = _minutes_horaire(autre_horaire["debut"])
+        a_fin = _minutes_horaire(autre_horaire["fin"])
+        if debut < a_fin and a_debut < fin:
+            return (
+                f"Conflit salle : {p.course_code} occupe déjà cette salle sur la pause "
+                f"méridienne ({_libelle_horaire(autre_horaire)})"
+            )
+    return None
+
+
 @app.post("/placements/evenements", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
     """Événement hors maquette affiché en clair sur l'EDT (réunion,
@@ -4958,6 +5052,23 @@ def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
     code = _code_evenement(body.libelle)
     session_id = _id_seance_personnalisee(code, body.semestre, "CM", body.group_ids)
 
+    # « Évènement à horaire libre » (retour Jules 23/09/2026) : optionnel,
+    # cf. `CreerEvenementRequest`/`_valider_horaire_libre` pour le format.
+    horaire = {"debut": body.heure_debut, "fin": body.heure_fin} if body.heure_debut and body.heure_fin else None
+    pause_midi = bool(horaire and _dans_la_pause_meridienne(horaire["debut"]))
+    # Position de STOCKAGE : le créneau 3, quel que soit le créneau demandé
+    # (cf. commentaire au-dessus de `_SLOT_STOCKAGE_PAUSE`) — jamais affichée
+    # telle quelle (Vue Promo la rend dans la ligne "pause").
+    slot_stockage = _SLOT_STOCKAGE_PAUSE if pause_midi else body.slot
+
+    if pause_midi:
+        conflit = _conflit_salle_pause_midi(state, session_id, body.week, body.day, body.room_id, horaire)
+        if conflit and not body.force:
+            raise HTTPException(409, detail={
+                "message": "Conflit", "hard_conflicts": [conflit],
+                "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+            })
+
     seance = SessionToPlace(
         id=session_id,
         course_code=code,
@@ -4970,7 +5081,11 @@ def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
         teacher_codes=[t.strip().upper() for t in body.teacher_codes if t.strip()],
         duration_slots=body.duration_slots,
         is_eval=False,
-        metadata={"custom_session": True, "evenement": True, "note": (body.note or "").strip()},
+        metadata={
+            "custom_session": True, "evenement": True, "note": (body.note or "").strip(),
+            **({"horaire": horaire} if horaire else {}),
+            **({"pause_midi": True} if pause_midi else {}),
+        },
     )
     state.sessions.append(seance)
     state.sessions_by_id[session_id] = seance
@@ -4979,7 +5094,7 @@ def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
         resultat = placer_seance(
             session_id,
             MoveSessionRequest(
-                week=body.week, day=body.day, slot=body.slot,
+                week=body.week, day=body.day, slot=slot_stockage,
                 room_id=body.room_id, lock=False, force=body.force,
             ),
         )
@@ -5041,6 +5156,11 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         "session_type": seance.session_type, "group_ids": list(seance.group_ids),
         "teacher_codes": list(seance.teacher_codes), "duration_slots": seance.duration_slots,
         "is_eval": seance.is_eval, "note": seance.metadata.get("note"),
+        # Évènement à horaire libre (retour Jules 23/09/2026) — mêmes
+        # métadonnées que `creer_evenement`, à restaurer comme les autres si
+        # le contrôle qui suit refuse la modification.
+        "horaire": seance.metadata.get("horaire"),
+        "pause_midi": bool(seance.metadata.get("pause_midi")),
     }
     avant_placement = (
         (list(placement.group_ids), list(placement.teacher_codes)) if placement is not None else None
@@ -5048,11 +5168,16 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
 
     def restaurer() -> None:
         for champ, valeur in avant.items():
-            if champ == "note":
+            if champ in ("note", "horaire"):
                 if valeur is None:
-                    seance.metadata.pop("note", None)
+                    seance.metadata.pop(champ, None)
                 else:
-                    seance.metadata["note"] = valeur
+                    seance.metadata[champ] = valeur
+            elif champ == "pause_midi":
+                if valeur:
+                    seance.metadata["pause_midi"] = True
+                else:
+                    seance.metadata.pop("pause_midi", None)
             else:
                 setattr(seance, champ, valeur)
         if placement is not None and avant_placement is not None:
@@ -5069,6 +5194,21 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         seance.is_eval = body.is_eval
     if body.note is not None:
         seance.metadata["note"] = body.note.strip()
+
+    # Horaire réel modifié (les deux champs vont toujours ensemble, cf.
+    # `_valider_horaire_libre`) — recalcule `pause_midi` depuis le nouvel
+    # horaire, exactement comme `creer_evenement`.
+    horaire_modifie = body.heure_debut is not None and body.heure_fin is not None
+    nouveau_pause_midi = bool(seance.metadata.get("pause_midi"))
+    if horaire_modifie:
+        nouvel_horaire = {"debut": body.heure_debut, "fin": body.heure_fin}
+        nouveau_pause_midi = _dans_la_pause_meridienne(body.heure_debut)
+        seance.metadata["horaire"] = nouvel_horaire
+        if nouveau_pause_midi:
+            seance.metadata["pause_midi"] = True
+        else:
+            seance.metadata.pop("pause_midi", None)
+
     if placement is not None:
         placement.group_ids = list(seance.group_ids)
         placement.teacher_codes = list(seance.teacher_codes)
@@ -5077,17 +5217,33 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         v is not None
         for v in (body.session_type, body.group_ids, body.teacher_codes, body.duration_slots, body.is_eval)
     )
+    # Position de STOCKAGE : comme `creer_evenement`, un évènement dans la
+    # pause méridienne se stocke TOUJOURS sur le créneau 3, quel que soit le
+    # créneau envoyé par le formulaire.
+    slot_cible = _SLOT_STOCKAGE_PAUSE if (body.slot is not None and nouveau_pause_midi) else body.slot
     repositionne = (
         placement is not None
-        and body.week is not None and body.day is not None and body.slot is not None
-        and (body.week, body.day, body.slot) != (placement.week, placement.day, placement.slot)
+        and body.week is not None and body.day is not None and slot_cible is not None
+        and (body.week, body.day, slot_cible) != (placement.week, placement.day, placement.slot)
     )
+    if nouveau_pause_midi and body.room_id is not None and placement is not None:
+        cible_semaine = body.week if body.week is not None else placement.week
+        cible_jour = body.day if body.day is not None else placement.day
+        conflit = _conflit_salle_pause_midi(
+            state, session_id, cible_semaine, cible_jour, body.room_id, seance.metadata.get("horaire"),
+        )
+        if conflit and not body.force:
+            restaurer()
+            raise HTTPException(409, detail={
+                "message": "Conflit", "hard_conflicts": [conflit],
+                "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+            })
     try:
         if repositionne:
             resultat = move_session(
                 session_id,
                 MoveSessionRequest(
-                    week=body.week, day=body.day, slot=body.slot,
+                    week=body.week, day=body.day, slot=slot_cible,
                     room_id=body.room_id, lock=False, force=body.force,
                 ),
             )
@@ -5688,6 +5844,7 @@ def _to_placement(p: PlacedSessionWithRoom, sessions_by_id: dict[str, SessionToP
         is_eval=s.is_eval if s else False,
         locked=s.locked if s else False,
         duration_slots=max(1, s.duration_slots) if s else 1,
+        hor=_libelle_horaire(s.metadata["horaire"]) if s and s.metadata.get("horaire") else None,
     )
 
 

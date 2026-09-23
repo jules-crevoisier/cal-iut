@@ -46,6 +46,7 @@ import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { lettresGroupe } from "../utils/years";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
+import { CreerEvenementModal } from "../components/CreerEvenementModal";
 import { WeekBar } from "../components/WeekBar";
 import { APlacerView } from "./APlacerView";
 import {
@@ -170,6 +171,12 @@ export function PromoView({
   // `"creer"` = formulaire vide ; un `Placement` = édition de cette séance.
   const [modaleSeance, setModaleSeance] = useState<"creer" | Placement | null>(null);
   const seanceModaleEnabled = roomEditEnabled;
+  // Évènement hors maquette (réunion, conférence...) — retour utilisateur
+  // 07/09/2026, étendu le 23/09/2026 (Kyllian Bresson, présentation PAC
+  // 13h15-14h) d'un horaire réel optionnel. Modale distincte de
+  // `CreerSeanceModal` : un évènement n'a pas de matière (`libelle` invente
+  // son propre code) ; même garde d'activation.
+  const [modaleEvenement, setModaleEvenement] = useState(false);
 
   const appliquerSalle = async (sessionId: string, roomId: string) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
@@ -428,10 +435,25 @@ export function PromoView({
   }, [payload.holidayRows, payload.saeRows, payload.eventRows, solverWeek]);
 
   const byColSlot = new Map<string, AppRow[]>();
+  // Évènements à horaire libre tombés dans la pause méridienne (`r.midi`,
+  // retour Jules 23/09/2026) : rendus à part, dans la ligne "pause" existante
+  // entre les créneaux 2 et 3 — JAMAIS dans la cellule normale du créneau 3,
+  // même si c'est là qu'ils sont STOCKÉS en mémoire (position de stockage
+  // uniquement, cf. `api/main.py::creer_evenement`).
+  const byColPause = new Map<string, AppRow[]>();
   if (solverWeek !== null) {
     for (const r of payload.rows) {
       if (isHiddenOnGrid(park, r.id)) continue;
       if (r.w !== solverWeek || r.d !== day) continue;
+      if (r.midi) {
+        cols.forEach((_, i) => {
+          if (!r.g.some((id) => colCohorts[i].has(id))) return;
+          const key = `${i}`;
+          if (!byColPause.has(key)) byColPause.set(key, []);
+          byColPause.get(key)!.push(r);
+        });
+        continue;
+      }
       const dur = Math.max(1, r.dur || 1);
       cols.forEach((_, i) => {
         if (!r.g.some((id) => colCohorts[i].has(id))) return;
@@ -453,6 +475,11 @@ export function PromoView({
       (i) => cleSeances((byColSlot.get(`${i}-${s}`) ?? []).map((r) => r.id)),
       (i) => colParcours[i],
     ),
+  );
+  const largeursPause = fusionnerColonnes(
+    cols.length,
+    (i) => cleSeances((byColPause.get(`${i}`) ?? []).map((r) => r.id)),
+    (i) => colParcours[i],
   );
 
   const holiday = solverWeek === null ? undefined : payload.holidayRows.find((h) => h.w === solverWeek && h.d === day);
@@ -719,7 +746,26 @@ export function PromoView({
             + Nouvelle séance
           </button>
         )}
+        {seanceModaleEnabled && (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setModaleEvenement(true)}>
+            + Évènement
+          </button>
+        )}
       </div>
+
+      {modaleEvenement && (
+        <CreerEvenementModal
+          payload={payload}
+          suggestion={{ week: solverWeek ?? undefined, day }}
+          onCancel={() => setModaleEvenement(false)}
+          onCree={(placement) => {
+            setModaleEvenement(false);
+            setAnnonce(`${placement.course_code} créé ${DAY_LABELS[placement.day]} ${SLOT_TIMES[placement.slot].label}.`);
+            onPlacementUpdated?.(placement);
+            onSeanceChangee?.();
+          }}
+        />
+      )}
 
       {modaleSeance && (
         <CreerSeanceModal
@@ -879,9 +925,36 @@ export function PromoView({
                     {s === 3 && (
                       <tr className="pause">
                         <td className="timecell" />
-                        {cols.map((c, i) => (
-                          <td key={c} className={colClass(i)} />
-                        ))}
+                        {cols.map((c, i) => {
+                          const largeur = largeursPause[i];
+                          if (largeur === 0) return null;
+                          const entries = byColPause.get(`${i}`) ?? [];
+                          if (!entries.length) {
+                            return <td key={c} className={colClass(i)} />;
+                          }
+                          return (
+                            <td
+                              key={c}
+                              colSpan={largeur > 1 ? largeur : undefined}
+                              className={`promocell pause-cell ${colClass(i)}${largeur > 1 ? " promocell--fusion" : ""}`}
+                            >
+                              {entries.map((r) => (
+                                <div
+                                  key={r.id}
+                                  style={couleursMatiere(r.c) as React.CSSProperties}
+                                  className="promo-chip promo-chip--midi"
+                                  title={`${r.n || r.c} — pause méridienne, hors des six créneaux fixes`}
+                                >
+                                  <span className="code">{r.n || r.c}</span>
+                                  <span className="ty">
+                                    {r.hor ?? ""}
+                                    {r.r ? ` · ${r.r}` : ""}
+                                  </span>
+                                </div>
+                              ))}
+                            </td>
+                          );
+                        })}
                       </tr>
                     )}
                     <tr>

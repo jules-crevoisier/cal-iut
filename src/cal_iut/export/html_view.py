@@ -60,6 +60,20 @@ INSTITUTIONAL_EVENTS = [
 ]
 
 
+def _libelle_horaire_export(horaire: dict[str, str]) -> str:
+    """Ex. `{"debut": "13:15", "fin": "14:00"}` -> "13h15–14h" — en dash,
+    jamais "14h00" (minutes rondes tronquées). Dupliqué à dessein dans
+    `api/main.py::_libelle_horaire` et `celcat/ops.py::_libelle_horaire_pause`
+    (même raison que `SLOT_TIMES`, déjà dupliqué entre `export/` et
+    `celcat/` : pas de dépendance croisée pour un si petit formatage)."""
+
+    def _un(hhmm: str) -> str:
+        h, m = hhmm.split(":")
+        return f"{int(h)}h" if m == "00" else f"{int(h)}h{m}"
+
+    return f"{_un(horaire['debut'])}–{_un(horaire['fin'])}"
+
+
 def _group_maps(groups: list[Group]) -> tuple[dict, dict, dict, dict, dict]:
     labels: dict[str, str] = {}
     kinds: dict[str, str] = {}
@@ -1225,6 +1239,18 @@ def build_payload(
                 # modifier/supprimer en Vue Promo, jamais affiché sur une
                 # séance de la maquette.
                 "custom": bool(session.metadata.get("custom_session")),
+                # Évènement à horaire libre (retour Jules 23/09/2026, Kyllian
+                # Bresson : présentation PAC 13h15-14h) — additif : absent
+                # sur toute séance normale. `midi` = stocké sur le créneau 3
+                # mais tombant dans la pause méridienne (12h30-14h) ; Vue
+                # Promo l'exclut alors de la cellule normale du créneau 3 et
+                # le rend dans la ligne "pause" (cf. `PromoView.tsx`).
+                # `hor` : le libellé de son horaire RÉEL, toujours présent
+                # dès qu'un `horaire` existe (même hors pause), pour que les
+                # autres vues (Semaine, Groupe, Enseignant, Salle) écrivent
+                # au moins l'heure vraie à côté du créneau de stockage.
+                **({"hor": _libelle_horaire_export(session.metadata["horaire"])} if session.metadata.get("horaire") else {}),
+                **({"midi": True} if session.metadata.get("pause_midi") else {}),
             }
         )
 

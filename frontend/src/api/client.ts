@@ -548,6 +548,38 @@ export function creerSeancePersonnalisee(body: CreerSeanceBody): Promise<Placeme
   });
 }
 
+// ── Évènement hors maquette (réunion, conférence...) affiché en clair sur
+// l'EDT — retour utilisateur 07/09/2026, étendu le 23/09/2026 (Kyllian
+// Bresson : « m'ajouter une séance évènement [...] à 13h15 jusqu'à 14h »)
+// d'un horaire réel optionnel, quand les six créneaux fixes ne suffisent
+// pas (ex. pause méridienne). Distinct de `CreerSeanceBody` : `libelle`
+// invente son propre `course_code`, jamais besoin d'une matière connue. ──
+
+export interface CreerEvenementBody {
+  libelle: string;
+  semestre: string;
+  group_ids: string[];
+  teacher_codes: string[];
+  duration_slots: number;
+  note?: string;
+  week: number;
+  day: number;
+  slot: number;
+  room_id?: string | null;
+  force?: boolean;
+  /** Optionnels, toujours ensemble, format "HH:MM" — cf. hint du formulaire :
+   * une heure entre 12h30 et 14h s'affiche dans la pause méridienne. */
+  heure_debut?: string | null;
+  heure_fin?: string | null;
+}
+
+export function creerEvenement(body: CreerEvenementBody): Promise<Placement> {
+  return request<Placement>("/placements/evenements", {
+    method: "POST",
+    body: JSON.stringify({ force: false, ...body }),
+  });
+}
+
 export interface ModifierSeanceBody {
   session_type?: string;
   group_ids?: string[];
@@ -560,6 +592,8 @@ export interface ModifierSeanceBody {
   slot?: number;
   room_id?: string | null;
   force?: boolean;
+  heure_debut?: string | null;
+  heure_fin?: string | null;
 }
 
 export function modifierSeancePersonnalisee(sessionId: string, body: ModifierSeanceBody): Promise<Placement> {
