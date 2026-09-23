@@ -62,6 +62,19 @@ def load_custom_sessions() -> list[SessionToPlace]:
                         "custom_session": True,
                         "note": item.get("note") or "",
                         "created_at": item.get("created_at"),
+                        # Évènement hors maquette (`POST /placements/evenements`,
+                        # 07/09/2026) et son horaire réel éventuel (retour Jules
+                        # 23/09/2026, « évènement à horaire libre ») — SANS ces
+                        # trois clés, un redémarrage (la prod réingère toujours
+                        # la maquette au démarrage) perdait le drapeau `evenement`
+                        # (ré-appliquait le verrou institutionnel à un évènement
+                        # censé en être exempt) et l'horaire/`pause_midi` d'un
+                        # évènement à horaire libre — poussé au mauvais créneau à
+                        # la prochaine écriture Celcat sans que rien ne le
+                        # rebloque.
+                        **({"evenement": True} if item.get("evenement") else {}),
+                        **({"horaire": item["horaire"]} if isinstance(item.get("horaire"), dict) else {}),
+                        **({"pause_midi": True} if item.get("pause_midi") else {}),
                     },
                 )
             )
@@ -90,6 +103,9 @@ def _ecrire(seances: list[SessionToPlace]) -> None:
                     "is_eval": s.is_eval,
                     "note": s.metadata.get("note") or "",
                     "created_at": s.metadata.get("created_at"),
+                    "evenement": bool(s.metadata.get("evenement")),
+                    "horaire": s.metadata.get("horaire"),
+                    "pause_midi": bool(s.metadata.get("pause_midi")),
                 }
                 for s in seances
             ],

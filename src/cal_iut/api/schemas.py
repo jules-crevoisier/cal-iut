@@ -3,7 +3,7 @@
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Vérification légère du format, pas RFC5322 complet : suffisante pour
 # rejeter une saisie clairement invalide avant qu'elle ne devienne un
@@ -12,6 +12,32 @@ from pydantic import BaseModel, Field, field_validator
 # jusqu'à l'échec silencieux de l'envoi Resend). Pas de dépendance
 # `email-validator` ajoutée pour ça seul : ce regex suffit au besoin réel.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# « Évènement à horaire libre » — retour Jules 23/09/2026 (Kyllian Bresson :
+# « m'ajouter une séance évènement [...] à 13h15 jusqu'à 14h [...] sans
+# mettre d'enseignant »). Les six créneaux fixes (8h-9h30 ... 17h-18h30) ne
+# couvrent pas 13h15-14h (pause méridienne, entre le créneau 2 et le
+# créneau 3) : `heure_debut`/`heure_fin` permettent de le représenter à son
+# horaire RÉEL plutôt que de le forcer sur un créneau qui ment.
+_RE_HEURE_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _valider_horaire_libre(heure_debut: str | None, heure_fin: str | None) -> None:
+    """Partagé par `CreerEvenementRequest` et
+    `ModifierSeancePersonnaliseeRequest` : les deux champs vont TOUJOURS
+    ensemble (jamais l'un sans l'autre), au format HH:MM, fin strictement
+    après début."""
+    if (heure_debut is None) != (heure_fin is None):
+        raise ValueError(
+            "« Heure de début » et « Heure de fin » vont ensemble : remplissez les deux, ou laissez les deux vides."
+        )
+    if heure_debut is None or heure_fin is None:
+        return
+    for nom, valeur in (("Heure de début", heure_debut), ("Heure de fin", heure_fin)):
+        if not _RE_HEURE_HHMM.match(valeur):
+            raise ValueError(f"{nom} invalide ({valeur!r}) — format attendu HH:MM.")
+    if heure_fin <= heure_debut:
+        raise ValueError("« Heure de fin » doit être après « Heure de début ».")
 
 
 def _valider_email(valeur: str) -> str:
@@ -182,6 +208,19 @@ class CreerEvenementRequest(BaseModel):
     slot: int = Field(ge=0, le=5)
     room_id: str | None = None
     force: bool = False
+    # « Évènement à horaire libre » (retour Jules 23/09/2026, Kyllian
+    # Bresson : « m'ajouter une séance évènement [...] à 13h15 jusqu'à
+    # 14h »). Optionnels, toujours ensemble, format "HH:MM". Un
+    # `heure_debut` dans la pause méridienne (>= 12h30 et < 14h) fait
+    # basculer la séance en `metadata["pause_midi"]` — cf.
+    # `main.py::creer_evenement`.
+    heure_debut: str | None = None
+    heure_fin: str | None = None
+
+    @model_validator(mode="after")
+    def _verifier_horaire(self) -> "CreerEvenementRequest":
+        _valider_horaire_libre(self.heure_debut, self.heure_fin)
+        return self
 
 
 class ModifierSeancePersonnaliseeRequest(BaseModel):
@@ -201,6 +240,15 @@ class ModifierSeancePersonnaliseeRequest(BaseModel):
     slot: int | None = Field(default=None, ge=0, le=5)
     room_id: str | None = None
     force: bool = False
+    # Même paire optionnelle que `CreerEvenementRequest` — édite l'horaire
+    # réel d'un évènement déjà créé (ex. corriger 13h15 en 13h30).
+    heure_debut: str | None = None
+    heure_fin: str | None = None
+
+    @model_validator(mode="after")
+    def _verifier_horaire(self) -> "ModifierSeancePersonnaliseeRequest":
+        _valider_horaire_libre(self.heure_debut, self.heure_fin)
+        return self
 
 
 class PatchSeanceRequest(BaseModel):
@@ -338,6 +386,14 @@ class PlacementResponse(BaseModel):
     # champ, une séance de 3h (`duration_slots=2`, ex. WSA501D) n'occupait
     # visuellement qu'UN seul créneau de 1h30, jamais les deux.
     duration_slots: int = 1
+    # Même raison que `duration_slots` juste au-dessus, pour le même champ
+    # que `export/html_view.py::build_payload` (`row["hor"]`) : la Vue
+    # Semaine (`TdWeekGrid.tsx`) construit sa grille depuis CETTE réponse,
+    # pas depuis `/app-state`. Un évènement à horaire libre (retour Jules
+    # 23/09/2026, présentation PAC 13h15-14h) reste affiché dans sa case de
+    # STOCKAGE (créneau 3) ; sans ce champ, rien n'y écrirait son horaire
+    # RÉEL. Absent/`None` sur toute séance normale.
+    hor: str | None = None
 
 
 class NotificationConfigRequest(BaseModel):

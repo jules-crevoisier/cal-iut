@@ -21,6 +21,18 @@ def _duration_of(session_id: str, sessions_by_id: dict[str, object] | None) -> i
     return max(1, int(getattr(sessions_by_id.get(session_id), "duration_slots", 1) or 1))
 
 
+def _est_pause_midi(session_id: str, sessions_by_id: dict[str, object] | None) -> bool:
+    """Un évènement à horaire libre (`metadata["pause_midi"]`, retour Jules
+    23/09/2026 : présentation PAC 13h15-14h) est STOCKÉ sur le créneau 3
+    comme n'importe quelle séance (cf. `main.py::creer_evenement`), mais ne
+    vit dans AUCUN des six créneaux réels — appelé depuis `validate_move`,
+    POINT UNIQUE de l'exemption d'occupation partagée (cf. son docstring)."""
+    if not sessions_by_id:
+        return False
+    session = sessions_by_id.get(session_id)
+    return bool(session is not None and (getattr(session, "metadata", None) or {}).get("pause_midi"))
+
+
 def _cohort_conflict(
     group_ids: list[str],
     other_group_ids: list[str],
@@ -103,12 +115,36 @@ def validate_move(
     occupes = set(range(debut, debut + duration))
 
     a_ignorer = {session_id} | (ignore_session_ids or set())
+    # Résolu UNE fois hors boucle : `session_id` ne change pas pendant
+    # l'itération sur `timetable`.
+    pause_source = _est_pause_midi(session_id, sessions_by_id)
     for placement in timetable:
         if placement.session_id in a_ignorer:
             continue
         autre_debut = _time_index(placement.week, placement.day, placement.slot)
         autre_duree = _duration_of(placement.session_id, sessions_by_id)
         if occupes.isdisjoint(range(autre_debut, autre_debut + autre_duree)):
+            continue
+
+        # Occupation partagée d'un évènement à horaire libre (retour Jules
+        # 23/09/2026) : POINT UNIQUE de son exemption, réutilisé par TOUS les
+        # appelants de `validate_move` (déplacement, placement, échange,
+        # changement de salle, suggestions — cf. `api/main.py::_as_placed`
+        # et ses appels). Un évènement stocké sur le créneau 3 pour
+        # représenter 13h15-14h ne vit dans AUCUN créneau réel : il ne
+        # bloque ni n'est bloqué par une séance normale qui, elle, occupe
+        # VRAIMENT ce créneau (groupe, enseignant, salle). Seule exception :
+        # deux évènements de la pause ne peuvent toujours pas partager la
+        # même salle physique — seul ce contrôle reste actif entre deux
+        # évènements.
+        pause_autre = _est_pause_midi(placement.session_id, sessions_by_id)
+        if pause_source or pause_autre:
+            if (
+                pause_source and pause_autre
+                and room_id
+                and getattr(placement, "room_id", None) in ({room_id} | (conflicting_room_ids or set()))
+            ):
+                hard.append(f"Conflit salle : {placement.course_code} occupe déjà cette salle")
             continue
 
         quand = (

@@ -310,6 +310,13 @@ def entrees_pour_state(state: object) -> dict[str, EntreeCelcat]:
     entrees: dict[str, EntreeCelcat] = {}
     for p in state.timetable:
         session = state.sessions_by_id.get(p.session_id)
+        # Même exclusion que `api/main.py::_entrees_celcat` et le hook
+        # immédiat (`ops.py::_executer`) — un évènement à horaire libre
+        # tombé dans la pause méridienne (retour Jules 23/09/2026) n'a
+        # jamais d'entrée Celcat, SLOT_TIMES ci-dessus ne connaissant que
+        # les six créneaux fixes.
+        if (getattr(session, "metadata", None) or {}).get("pause_midi"):
+            continue
         semestre = getattr(session, "semestre", "") or ""
         entrees[p.session_id] = entree_pour_placement(
             cfg,

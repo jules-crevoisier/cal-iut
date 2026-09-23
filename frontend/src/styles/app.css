@@ -2065,6 +2065,17 @@ table.promo-grid td.promocell {
   background: var(--surface-2);
 }
 table.promo-grid tr.pause td { height: 4px; padding: 0; border: none; }
+/* Évènement à horaire libre tombé dans la pause méridienne (retour Jules
+   23/09/2026 : présentation PAC 13h15-14h) — la ligne "pause" reste un
+   simple filet de 4px tant qu'elle est vide (règle ci-dessus), mais une
+   cellule qui porte un évènement (`.pause-cell`) reprend la hauteur/le
+   padding normaux d'une case de grille pour rester lisible. */
+table.promo-grid tr.pause td.pause-cell {
+  height: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
 
 /* Une teinte par parcours (bande d'en-tête + léger lavis sur toute la
    colonne) + trait plus épais au début de chaque nouveau parcours, sur
@@ -2145,6 +2156,14 @@ table.promo-grid td.promocell--placeable:focus-visible {
 .promo-chip .ty { color: var(--muted); display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.02em; }
 .promo-chip .rm { color: var(--muted); display: block; }
 .promo-chip .te { color: var(--muted); display: block; font-style: italic; }
+/* Évènement à horaire libre (pause méridienne, retour Jules 23/09/2026) —
+   accent distinct des types de séance normaux (CM/TD/TP) : ce n'est pas un
+   cours, sa case ne doit pas se confondre avec elles au premier coup d'œil. */
+.promo-chip--midi {
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+  margin-bottom: 0;
+}
 
 /* Salle modifiable sur place (retour utilisateur 28/08/2026 : « modifier
    uniquement les salles » depuis la Vue Promo). Le bouton reprend EXACTEMENT

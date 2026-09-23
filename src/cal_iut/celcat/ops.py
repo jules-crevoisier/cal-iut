@@ -154,6 +154,20 @@ def _trouver_evenement(event_id: int) -> EvenementCelcat | None:
     return evenement_connu(event_id)
 
 
+def _libelle_horaire_pause(horaire: dict[str, Any] | None) -> str:
+    """Même format que `export/html_view.py::_libelle_horaire` (dupliqué à
+    dessein, comme `SLOT_TIMES` juste au-dessus — même raison : `export/`
+    n'a rien à importer de `celcat/`, ni l'inverse)."""
+    if not horaire:
+        return "?"
+
+    def _un(hhmm: str) -> str:
+        h, m = hhmm.split(":")
+        return f"{int(h)}h" if m == "00" else f"{int(h)}h{m}"
+
+    return f"{_un(horaire.get('debut', ''))}–{_un(horaire.get('fin', ''))}"
+
+
 def _executer(session_id: str, action: str) -> None:
     doc = charger()
     if not doc.get("saisie_active"):
@@ -161,6 +175,29 @@ def _executer(session_id: str, action: str) -> None:
 
     state = get_state()
     session = state.sessions_by_id.get(session_id)
+
+    # Évènement à horaire libre tombé dans la pause méridienne
+    # (`metadata["pause_midi"]`, retour Jules 23/09/2026 : présentation PAC
+    # 13h15-14h). Le writer Celcat ne connaît que les six créneaux fixes
+    # (`SLOT_TIMES` ci-dessus) : l'évènement n'est STOCKÉ sur le créneau 3
+    # (14h-15h30) que pour l'affichage cal-iut (Vue Promo, ligne "pause"),
+    # jamais un horaire à pousser tel quel — le pousser enverrait 14h-15h30
+    # à Celcat pour un évènement qui a lieu 13h15-14h. Bloqué et journalisé
+    # AVANT même de regarder si un code Celcat existe : aucun horaire ne le
+    # sauverait ici, c'est le CRÉNEAU lui-même qui est faux.
+    if session is not None and (getattr(session, "metadata", None) or {}).get("pause_midi"):
+        motif = (
+            f"évènement hors créneau ({_libelle_horaire_pause(session.metadata.get('horaire'))}) : "
+            "à saisir à la main dans Celcat"
+        )
+        append_log(
+            kind="blocked",
+            motif=motif,
+            session_id=session_id,
+            course_code=getattr(session, "course_code", None),
+        )
+        return
+
     motif = _sans_code_celcat(session)
     if motif:
         append_log(
