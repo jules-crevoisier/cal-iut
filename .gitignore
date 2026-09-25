@@ -44,6 +44,9 @@ data/state/celcat_logs.json
 data/state/celcat_extras.json
 data/state/celcat_mappings.json
 data/state/celcat_file/
+# Suivi serveur d'une correction encore en vol (25/09/2026) — même raison que
+# le reste de l'état Celcat : propre à chaque déploiement, rien à versionner.
+data/state/celcat_correction_en_cours.json
 data/state/*.migre
 data/releves/celcat-rpc-en-tetes.json
 # Destinataires des notifications : donnee personnelle, et propre a
