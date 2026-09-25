@@ -43,6 +43,14 @@ ACCOUNT_SESSION_MAX_AGE_S = 30 * 24 * 3600  # 30 jours
 
 ROLE_ORDER: dict[str, int] = {"read_only": 0, "edit": 1, "admin": 2}
 
+# Statuts qu'un compte JAMAIS activé peut porter — cf. `User.activated_at`
+# (`db/models.py`) : `None` tant que le compte n'est passé ni par
+# `mark_email_confirmed` (adresse `ADMIN_EMAILS`) ni par `activate`
+# (`PATCH /admin/users/{id}`). Sert de garde à `DELETE /admin/users/{id}`
+# (25/09/2026) : un compte qui a un jour quitté cet ensemble a pu créer du
+# contenu qu'une suppression physique orphelinerait.
+PENDING_STATUSES: frozenset[str] = frozenset({"pending_email", "pending_admin_activation"})
+
 ADMIN_EMAILS: frozenset[str] = frozenset({
     "crevoisier.ju@gmail.com",
     "kyllian.bresson@univ-reims.fr",
