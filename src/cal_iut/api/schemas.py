@@ -532,6 +532,8 @@ class TacheCreateRequest(BaseModel):
     colonne: Literal["a_faire", "en_cours", "fait"] = "a_faire"
     ordre: float | None = None
     enseignant_code: str | None = None
+    # Qui doit agir (texte libre, ex. « Jules », « Kyllian ») — 25/09/2026.
+    concerne: str | None = Field(default=None, max_length=64)
     date_debut: str | None = None  # ISO "YYYY-MM-DD"
     date_fin: str | None = None  # ISO "YYYY-MM-DD" — >= date_debut, cf. main.py
 
@@ -548,6 +550,7 @@ class TacheUpdateRequest(BaseModel):
     colonne: Literal["a_faire", "en_cours", "fait"] | None = None
     ordre: float | None = None
     enseignant_code: str | None = None
+    concerne: str | None = Field(default=None, max_length=64)
     date_debut: str | None = None
     date_fin: str | None = None
 
@@ -564,6 +567,7 @@ class TacheResponse(BaseModel):
     colonne: str
     ordre: float
     enseignant_code: str | None = None
+    concerne: str | None = None
     date_debut: str | None = None
     date_fin: str | None = None
     cree_par: str
@@ -1088,3 +1092,29 @@ class SauvegardeMeta(BaseModel):
 
 class SauvegardeListResponse(BaseModel):
     sauvegardes: list[SauvegardeMeta]
+
+
+# ── Doublons salle / enseignant (retour Kyllian Bresson 25/09/2026) ──
+# Cf. `api/doublons.py` pour le calcul — module pur, ces schémas n'en sont
+# que la coquille HTTP.
+
+
+class DoublonSeanceResponse(BaseModel):
+    session_id: str
+    course_code: str
+    groupes: list[str]
+    salle: str | None = None
+    enseignants: list[str]
+
+
+class DoublonResponse(BaseModel):
+    semaine: int
+    jour: int
+    creneau: int
+    type: Literal["salle", "enseignant"]
+    ressource: str
+    seances: list[DoublonSeanceResponse]
+
+
+class DoublonsListResponse(BaseModel):
+    doublons: list[DoublonResponse]

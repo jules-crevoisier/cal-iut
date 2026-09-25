@@ -108,6 +108,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
   const [erreurComparaison, setErreurComparaison] = useState<string | null>(null);
   const [mappings, setMappings] = useState<CelcatMappings | null>(null);
   const [erreurMapping, setErreurMapping] = useState<string | null>(null);
+  const [confirmationMapping, setConfirmationMapping] = useState<string | null>(null);
   const [mappingEnCours, setMappingEnCours] = useState(false);
 
   const chargerFile = useCallback(async () => {
@@ -210,20 +211,31 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     return () => window.clearTimeout(minuteur);
   }, [file, enAttente, chargerFile, chargerSysteme, cadence.sondageFileMs]);
 
-  const agirSurMapping = useCallback(async (action: () => Promise<CelcatMappings>) => {
-    setMappingEnCours(true);
-    setErreurMapping(null);
-    try {
-      setMappings(await action());
-      // La correspondance prend effet au passage suivant du worker : on relit
-      // le journal pour que les blocages réglés cessent d'être affichés.
-      await chargerJournal();
-    } catch (e) {
-      setErreurMapping(message(e, "Correspondance impossible à enregistrer"));
-    } finally {
-      setMappingEnCours(false);
-    }
-  }, [chargerJournal]);
+  const agirSurMapping = useCallback(
+    async (action: () => Promise<CelcatMappings>, messageSucces: string) => {
+      setMappingEnCours(true);
+      setErreurMapping(null);
+      setConfirmationMapping(null);
+      try {
+        setMappings(await action());
+        // Confirmation en un mot : sans elle, un clic qui a marché ne se
+        // distingue en rien d'un clic resté sans effet (Kyllian Bresson,
+        // 25/09/2026 — « j'ai l'impression que le clic sur mapper ne
+        // fonctionne pas »). Le blocage, lui, disparaît déjà de `mappings`
+        // : `celcat_mappings()` ne le compte plus dès qu'une correspondance
+        // existe pour sa clé, sans attendre le prochain passage du worker.
+        setConfirmationMapping(messageSucces);
+        // La correspondance prend effet au passage suivant du worker : on relit
+        // le journal pour que les blocages réglés cessent d'être affichés.
+        await chargerJournal();
+      } catch (e) {
+        setErreurMapping(message(e, "Correspondance impossible à enregistrer"));
+      } finally {
+        setMappingEnCours(false);
+      }
+    },
+    [chargerJournal],
+  );
 
   const boucle = useBoucleCelcat(semaine, {
     intervalleMs: cadence.intervalleMs,
@@ -300,11 +312,18 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         mappings={mappings}
         occupe={mappingEnCours}
         erreur={erreurMapping}
+        confirmation={confirmationMapping}
         onMapper={(famille, cle, valeur) =>
-          void agirSurMapping(() => definirMappingCelcat(famille, cle, valeur, semaine))
+          void agirSurMapping(
+            () => definirMappingCelcat(famille, cle, valeur, semaine),
+            `Correspondance enregistrée : ${cle} → ${valeur}.`,
+          )
         }
         onOublier={(famille, cle) =>
-          void agirSurMapping(() => oublierMappingCelcat(famille, cle, semaine))
+          void agirSurMapping(
+            () => oublierMappingCelcat(famille, cle, semaine),
+            `Correspondance retirée : ${cle}.`,
+          )
         }
       />
 

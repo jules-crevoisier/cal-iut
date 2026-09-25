@@ -209,6 +209,14 @@ class Tache(Base):
     colonne: Mapped[str] = mapped_column(String(16), default="a_faire", index=True)
     ordre: Mapped[float] = mapped_column(Float, default=0.0)
     enseignant_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    # QUI doit agir — question de Kyllian Bresson, 25/09/2026 : « la liste des
+    # choses à faire, je l'indique où sur Tâches ? le problème c'est qu'il y a
+    # des modifications qui vous concernent et d'autres qui me concernent
+    # uniquement ». Volontairement un TEXTE LIBRE et non une liste fermée de
+    # comptes : une carte peut concerner quelqu'un qui n'a pas de compte
+    # (un enseignant, le service scolarité), et la liste des personnes
+    # change plus vite que le code. Vide = non attribuée.
+    concerne: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     date_debut: Mapped[date | None] = mapped_column(Date, nullable=True)
     date_fin: Mapped[date | None] = mapped_column(Date, nullable=True)
     cree_par: Mapped[str] = mapped_column(String(255))

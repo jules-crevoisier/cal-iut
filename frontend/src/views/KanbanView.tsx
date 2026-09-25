@@ -82,12 +82,26 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     void charger();
   }, [charger]);
 
+  const [filtreConcerne, setFiltreConcerne] = useState<string>("tout");
+
+  // Filtre « pour qui » (Kyllian Bresson, 25/09/2026 : « il y a des
+  // modifications qui vous concernent et d'autres qui me concernent
+  // uniquement ») — les valeurs proposées viennent des cartes existantes,
+  // jamais d'une liste figée dans le code.
+  const personnes = useMemo(
+    () => [...new Set((taches ?? []).map((t) => t.concerne).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b, "fr")),
+    [taches],
+  );
+
   const parColonne = useMemo(() => {
     const map: Record<Tache["colonne"], Tache[]> = { a_faire: [], en_cours: [], fait: [] };
-    for (const t of taches ?? []) map[t.colonne].push(t);
+    const retenues = (taches ?? []).filter(
+      (t) => filtreConcerne === "tout" || (filtreConcerne === "__sans__" ? !t.concerne : t.concerne === filtreConcerne),
+    );
+    for (const t of retenues) map[t.colonne].push(t);
     for (const c of COLONNES) map[c.id].sort((a, b) => a.ordre - b.ordre);
     return map;
-  }, [taches]);
+  }, [taches, filtreConcerne]);
 
   /** Applique un lot de correctifs de façon optimiste (une seule passe,
    * pour que deux cartes échangeant leur `ordre` — cf. `reordonner` —
@@ -256,11 +270,30 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
             Distinct de « À traiter », qui reste généré automatiquement.
           </p>
         </div>
-        {peutModifier && (
-          <button type="button" className="btn btn--accent" onClick={ouvrirCreation}>
-            + Nouvelle tâche
-          </button>
-        )}
+        <div className="kanban-header-actions">
+          <label className="kanban-filtre">
+            Pour qui
+            <select value={filtreConcerne} onChange={(e) => setFiltreConcerne(e.target.value)}>
+              <option value="tout">Tout le monde</option>
+              <option value="__sans__">Non attribuées</option>
+              {personnes.map((nom) => (
+                <option key={nom} value={nom}>
+                  {nom}
+                </option>
+              ))}
+            </select>
+          </label>
+          {peutModifier && (
+            <button type="button" className="btn btn--accent" onClick={ouvrirCreation}>
+              + Nouvelle tâche
+            </button>
+          )}
+        </div>
+        <datalist id="kanban-concerne-suggestions">
+          {personnes.map((nom) => (
+            <option key={nom} value={nom} />
+          ))}
+        </datalist>
       </div>
 
       {erreur && (
@@ -322,6 +355,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
                         onDrop={deposerSurCarte(t)}
                       >
                         <p className="kanban-card-titre">{t.titre}</p>
+                        {t.concerne && <span className="pill kanban-card-concerne">{t.concerne}</span>}
                         {(teacherLabel || datesLabel) && (
                           <p className="kanban-card-meta">
                             {[teacherLabel, datesLabel].filter(Boolean).join(" · ")}
@@ -459,6 +493,7 @@ function TacheModal({ payload, tache, onClose, onSaved }: TacheModalProps) {
   const [description, setDescription] = useState(tache?.description ?? "");
   const [colonne, setColonne] = useState<Tache["colonne"]>(tache?.colonne ?? "a_faire");
   const [enseignantCode, setEnseignantCode] = useState(tache?.enseignant_code ?? "");
+  const [concerne, setConcerne] = useState(tache?.concerne ?? "");
   const [dateDebut, setDateDebut] = useState(tache?.date_debut ?? "");
   const [dateFin, setDateFin] = useState(tache?.date_fin ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
@@ -498,6 +533,7 @@ function TacheModal({ payload, tache, onClose, onSaved }: TacheModalProps) {
       description: description.trim() || null,
       colonne,
       enseignant_code: enseignantCode || null,
+      concerne: concerne.trim(),
       date_debut: dateDebut || null,
       date_fin: dateDebut ? dateFin || dateDebut : null,
     };
@@ -554,6 +590,22 @@ function TacheModal({ payload, tache, onClose, onSaved }: TacheModalProps) {
                 </option>
               ))}
             </select>
+          </label>
+
+          {/* « Il y a des modifications qui vous concernent et d'autres qui
+              me concernent uniquement » (Kyllian Bresson, 25/09/2026) : une
+              carte dit pour qui elle est. Texte libre : la liste des gens
+              change plus vite que le code, et tous n'ont pas de compte. */}
+          <label className="newroom-field">
+            Pour qui (optionnel)
+            <input
+              type="text"
+              value={concerne}
+              maxLength={64}
+              placeholder="Jules, Kyllian, scolarité…"
+              list="kanban-concerne-suggestions"
+              onChange={(e) => setConcerne(e.target.value)}
+            />
           </label>
 
           <label className="newroom-field">

@@ -196,3 +196,24 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* « Pour qui » (25/09/2026) : filtre du bandeau et pastille de carte. */
+.kanban-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+.kanban-filtre {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.kanban-filtre select {
+  min-height: 44px;
+}
+.kanban-card-concerne {
+  margin-bottom: 4px;
+}

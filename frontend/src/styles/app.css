@@ -4345,6 +4345,19 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 
   outline-offset: 2px;
 }
 
+/* Confirmation courte après un « Mapper » réussi — même gabarit que
+   `.confirmmodal-info`, teinte "succès" : sans elle, un clic qui a marché ne
+   se distingue en rien d'un clic resté sans effet (25/09/2026). */
+.celcat-mapping-confirmation {
+  background: var(--good-soft);
+  border: 1px solid var(--good);
+  border-radius: 8px;
+  color: var(--good-text);
+  padding: .6rem .75rem;
+  margin: .5rem 0;
+  font-size: .88rem;
+}
+
 /* ── En route vers Celcat ── */
 
 .celcat-en-route,

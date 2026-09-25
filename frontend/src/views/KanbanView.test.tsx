@@ -16,6 +16,7 @@ function tache(overrides: Partial<Tache> & Pick<Tache, "id" | "titre">): Tache {
     colonne: "a_faire",
     ordre: 0,
     enseignant_code: null,
+    concerne: null,
     date_debut: null,
     date_fin: null,
     cree_par: "prof@example.test",
@@ -111,5 +112,25 @@ describe("KanbanView", () => {
 
     expect(await screen.findByText("Le titre est obligatoire.")).toBeInTheDocument();
     expect(appels.some((a) => a.method === "POST")).toBe(false);
+  });
+
+  it("should filter cards by who they concern", async () => {
+    // Kyllian Bresson, 25/09/2026 : « il y a des modifications qui vous
+    // concernent et d'autres qui me concernent uniquement ».
+    stubFetch([
+      tache({ id: 1, titre: "Mapper WSA507D", concerne: "Jules" }),
+      tache({ id: 2, titre: "Prevenir les BUT2", concerne: "Kyllian" }),
+      tache({ id: 3, titre: "A trier" }),
+    ]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Mapper WSA507D")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Pour qui"), { target: { value: "Kyllian" } });
+    expect(screen.queryByText("Mapper WSA507D")).not.toBeInTheDocument();
+    expect(screen.getByText("Prevenir les BUT2")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Pour qui"), { target: { value: "__sans__" } });
+    expect(screen.getByText("A trier")).toBeInTheDocument();
+    expect(screen.queryByText("Prevenir les BUT2")).not.toBeInTheDocument();
   });
 });
