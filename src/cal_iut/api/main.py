@@ -1417,7 +1417,7 @@ def delete_exception(exception_id: int) -> dict[str, bool]:
 def _tache_to_response(row) -> TacheResponse:
     return TacheResponse(
         id=row.id, titre=row.titre, description=row.description, colonne=row.colonne, ordre=row.ordre,
-        enseignant_code=row.enseignant_code,
+        enseignant_code=row.enseignant_code, concerne=row.concerne,
         date_debut=row.date_debut.isoformat() if row.date_debut else None,
         date_fin=row.date_fin.isoformat() if row.date_fin else None,
         cree_par=row.cree_par, cree_le=row.cree_le.isoformat(), maj_le=row.maj_le.isoformat(),
@@ -1450,7 +1450,8 @@ def create_tache(body: TacheCreateRequest, request: Request) -> TacheResponse:
     repo = get_repo()
     row = repo.create_tache(
         titre=body.titre, cree_par=user.email, description=body.description, colonne=body.colonne,
-        ordre=body.ordre, enseignant_code=body.enseignant_code, date_debut=date_debut, date_fin=date_fin,
+        ordre=body.ordre, enseignant_code=body.enseignant_code, concerne=body.concerne,
+        date_debut=date_debut, date_fin=date_fin,
     )
     return _tache_to_response(row)
 
@@ -1479,6 +1480,11 @@ def update_tache(tache_id: int, body: TacheUpdateRequest) -> TacheResponse:
         champs["ordre"] = body.ordre
     if body.enseignant_code is not None:
         champs["enseignant_code"] = body.enseignant_code
+    if body.concerne is not None:
+        # Chaîne vide acceptée = retirer l'attribution (une carte peut
+        # redevenir « pour personne en particulier »), contrairement aux
+        # autres champs où `None` signifie « non fourni ».
+        champs["concerne"] = body.concerne.strip() or None
 
     # Dates : validées contre le mélange futur(champs fournis)/existant, pas
     # seulement contre ce que le PATCH apporte — un PATCH qui ne change QUE

@@ -532,6 +532,8 @@ class TacheCreateRequest(BaseModel):
     colonne: Literal["a_faire", "en_cours", "fait"] = "a_faire"
     ordre: float | None = None
     enseignant_code: str | None = None
+    # Qui doit agir (texte libre, ex. « Jules », « Kyllian ») — 25/09/2026.
+    concerne: str | None = Field(default=None, max_length=64)
     date_debut: str | None = None  # ISO "YYYY-MM-DD"
     date_fin: str | None = None  # ISO "YYYY-MM-DD" — >= date_debut, cf. main.py
 
@@ -548,6 +550,7 @@ class TacheUpdateRequest(BaseModel):
     colonne: Literal["a_faire", "en_cours", "fait"] | None = None
     ordre: float | None = None
     enseignant_code: str | None = None
+    concerne: str | None = Field(default=None, max_length=64)
     date_debut: str | None = None
     date_fin: str | None = None
 
@@ -564,6 +567,7 @@ class TacheResponse(BaseModel):
     colonne: str
     ordre: float
     enseignant_code: str | None = None
+    concerne: str | None = None
     date_debut: str | None = None
     date_fin: str | None = None
     cree_par: str

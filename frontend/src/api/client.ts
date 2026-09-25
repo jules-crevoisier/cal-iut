@@ -1049,6 +1049,8 @@ export interface Tache {
   colonne: "a_faire" | "en_cours" | "fait";
   ordre: number;
   enseignant_code: string | null;
+  /** Qui doit agir (texte libre, ex. « Jules », « Kyllian ») — 25/09/2026. */
+  concerne: string | null;
   date_debut: string | null; // ISO "AAAA-MM-JJ"
   date_fin: string | null; // ISO "AAAA-MM-JJ"
   cree_par: string;
@@ -1063,6 +1065,7 @@ export interface TacheCreateBody {
   colonne?: Tache["colonne"];
   ordre?: number | null;
   enseignant_code?: string | null;
+  concerne?: string | null;
   date_debut?: string | null;
   date_fin?: string | null;
 }

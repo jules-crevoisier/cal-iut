@@ -391,6 +391,7 @@ class PlanningRepository:
         colonne: str = "a_faire",
         ordre: float | None = None,
         enseignant_code: str | None = None,
+        concerne: str | None = None,
         date_debut: date | None = None,
         date_fin: date | None = None,
     ) -> Tache:
@@ -400,6 +401,7 @@ class PlanningRepository:
             colonne=colonne,
             ordre=ordre if ordre is not None else self._prochain_ordre(colonne),
             enseignant_code=enseignant_code,
+            concerne=(concerne or "").strip() or None,
             date_debut=date_debut,
             date_fin=date_fin,
             cree_par=cree_par,
