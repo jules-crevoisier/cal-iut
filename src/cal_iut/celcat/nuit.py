@@ -970,7 +970,36 @@ def _consommer_file(
     a_repousser = [j for j in jobs if cle_job(j) not in retires]
     if a_repousser:
         repousser_en_fin(a_repousser)
+
+    # Demande de Jules Crevoisier, 25/09/2026 : « une fois que le worker
+    # passe pour corriger, on veut qu'en même temps il vérifie tous ces cas à
+    # nouveau, comme ça il met à jour en même temps les écarts. » Le relevé
+    # Celcat n'est sinon repris que toutes les deux heures, ou sur un clic
+    # (`instantane.py`) : sans cette demande, les écarts affichés restent
+    # ceux d'AVANT cette passe jusqu'à l'une ou l'autre. Seulement si quelque
+    # chose a RÉELLEMENT été écrit — une passe qui n'a rien réussi ne change
+    # rien dans Celcat, un relevé n'y apprendrait donc rien de neuf.
+    if bilan.reussis > 0:
+        _demander_releve_apres_drainage()
+
     return bilan
+
+
+def _demander_releve_apres_drainage() -> None:
+    """Pose le drapeau lu par `celcat_instantane.py` au tour suivant du
+    sidecar (`nuit-quotidienne.sh` l'appelle juste après le drainage, dans la
+    MÊME itération de boucle) — jamais un ordre immédiat, cf. la docstring de
+    `instantane.demander`.
+
+    Ne lève jamais : ne pas réussir à poser le drapeau ne doit pas faire
+    échouer un drainage qui, lui, a réussi. Un relevé simplement manqué se
+    rattrapera à la cadence normale (deux heures, ou un clic)."""
+    try:
+        from cal_iut.celcat.instantane import demander
+
+        demander()
+    except OSError:
+        pass
 
 
 def drainer_file_immediate(

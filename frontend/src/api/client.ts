@@ -998,6 +998,37 @@ export function rafraichirCelcatInstantane(): Promise<{ demande: boolean; messag
   return request("/celcat/instantane/rafraichir", { method: "POST" });
 }
 
+/** Une correction encore en vol pour une semaine, retrouvée après avoir
+ *  quitté l'onglet Celcat puis y être revenu (retour utilisateur du
+ *  25/09/2026). L'état vit CÔTÉ SERVEUR, jamais dans ce navigateur : Jules et
+ *  Kyllian travaillent depuis des postes différents, et c'est le MÊME worker
+ *  qu'ils attendent tous les deux.
+ *
+ *  `etat` :
+ *  - "absente" : rien en file pour cette semaine, ou déjà résolu ;
+ *  - "en_cours" : mise en file, en attente du worker et/ou d'un relevé frais ;
+ *  - "termine" : le worker est repassé ET un relevé plus récent est arrivé ;
+ *  - "expire" : le délai généreux (45 min) a couru sans conclure — les jobs
+ *    restent en file, seul CE SUIVI a cessé d'être fiable. */
+export interface CelcatCorrectionEnCours {
+  semaine: number;
+  etat: "absente" | "en_cours" | "termine" | "expire";
+  mise_en_file_le: string | null;
+  par: string;
+  total: number;
+  message: string;
+}
+
+export function fetchCelcatCorrectionEnCours(semaine: number): Promise<CelcatCorrectionEnCours> {
+  return request(`/celcat/comparaison/en-cours?semaine=${semaine}`);
+}
+
+/** Geste manuel de secours seulement — le suivi s'efface déjà tout seul une
+ *  fois le travail fini ou périmé. Ne touche jamais la file elle-même. */
+export function effacerCelcatCorrectionEnCours(semaine: number): Promise<CelcatCorrectionEnCours> {
+  return request(`/celcat/comparaison/en-cours?semaine=${semaine}`, { method: "DELETE" });
+}
+
 export function fetchCelcatEtat(): Promise<CelcatEtat> {
   return request("/celcat/etat");
 }

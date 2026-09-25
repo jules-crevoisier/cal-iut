@@ -36,6 +36,7 @@ from cal_iut.api.schemas import (
     CalendrierSaeResponse,
     CelcatComparaisonResponse,
     CelcatCompteurs,
+    CelcatCorrectionEnCoursResponse,
     CelcatCorrigerResponse,
     CelcatEntreeResponse,
     CelcatEtatResponse,
@@ -3788,7 +3789,9 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     response_model=CelcatCorrigerResponse,
     dependencies=[Depends(accounts.require_role("admin"))],
 )
-def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> CelcatCorrigerResponse:
+def celcat_comparaison_corriger(
+    request: Request, semaine: int = 0, supprimer: bool = True
+) -> CelcatCorrigerResponse:
     """Pousse les écarts d'une semaine vers Celcat — via la FILE D'ATTENTE.
 
     N'écrit jamais dans Celcat directement : chaque écart devient un job que
@@ -3799,6 +3802,12 @@ def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> Cel
 
     Un écart devient une MODIFICATION, jamais une création : créer poserait
     un doublon à côté de l'évènement existant.
+
+    ENREGISTRE AUSSI le suivi serveur de cette correction (`correction_en_
+    cours.py`), pour que revenir sur l'onglet plus tard RETROUVE l'attente au
+    lieu de reproposer « Corriger » comme si rien n'était parti (retour
+    utilisateur du 25/09/2026). Seulement s'il reste vraiment quelque chose en
+    file après cet appel — sinon il n'y a rien à suivre.
     """
     from cal_iut.celcat.etat import charger as charger_celcat
     from cal_iut.celcat.instantane import lire
@@ -3840,6 +3849,17 @@ def celcat_comparaison_corriger(semaine: int = 0, supprimer: bool = True) -> Cel
     )
     total = sum(compte.values())
     total_deja = sum(deja.values())
+
+    # Suivi SERVEUR de cette correction, pour que l'écran la RETROUVE en
+    # revenant sur l'onglet au lieu de reproposer « Corriger » (retour
+    # utilisateur du 25/09/2026). Rien à suivre si rien n'est resté en file —
+    # ni nouveau ni déjà présent.
+    if total + total_deja > 0:
+        from cal_iut.celcat.correction_en_cours import enregistrer as suivre_correction
+
+        utilisateur = getattr(getattr(request.state, "user", None), "email", "") or ""
+        suivre_correction(semaine, par=utilisateur, total=total + total_deja)
+
     # Ce qui a été ÉPARGNÉ se dit, sinon « aucune suppression à faire » et
     # « des suppressions volontairement laissées » se lisent pareil.
     reste = (
@@ -4420,6 +4440,51 @@ def celcat_extra_ajouter(extra_id: str) -> CelcatExtraActionResponse:
     extra["session_id"] = placement.session_id
     enregistrer(extra)
     return CelcatExtraActionResponse(statut="ajoute", session_id=placement.session_id)
+
+
+@app.get(
+    "/celcat/comparaison/en-cours",
+    response_model=CelcatCorrectionEnCoursResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_comparaison_en_cours(semaine: int = 0) -> CelcatCorrectionEnCoursResponse:
+    """Une correction envoyée pour cette semaine est-elle encore en vol ?
+
+    Répond au retour utilisateur du 25/09/2026 : quitter l'onglet Celcat puis
+    y revenir remettait « Corriger » en avant comme si rien n'était parti,
+    pendant que le worker n'était pas encore repassé. L'écran lit CET état au
+    montage pour reprendre l'attente au lieu de la reproposer — cf.
+    `useBoucleCelcat.ts` côté front et `celcat/correction_en_cours.py` côté
+    serveur, qui porte le détail du calcul.
+    """
+    from cal_iut.celcat.correction_en_cours import lire as lire_correction_en_cours
+
+    etat = lire_correction_en_cours(semaine)
+    return CelcatCorrectionEnCoursResponse(
+        semaine=etat.semaine, etat=etat.etat, mise_en_file_le=etat.mise_en_file_le,
+        par=etat.par, total=etat.total, message=etat.message,
+    )
+
+
+@app.delete(
+    "/celcat/comparaison/en-cours",
+    response_model=CelcatCorrectionEnCoursResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_comparaison_en_cours_effacer(semaine: int = 0) -> CelcatCorrectionEnCoursResponse:
+    """Efface le suivi d'une correction — geste manuel de secours seulement :
+    `celcat_comparaison_en_cours` l'efface déjà tout seul une fois le travail
+    fini ou périmé. Ne touche JAMAIS la file d'attente elle-même — un job
+    resté en échec doit pouvoir se retenter, suivi ou non."""
+    from cal_iut.celcat.correction_en_cours import effacer as effacer_correction_en_cours
+    from cal_iut.celcat.correction_en_cours import lire as lire_correction_en_cours
+
+    effacer_correction_en_cours(semaine)
+    etat = lire_correction_en_cours(semaine)
+    return CelcatCorrectionEnCoursResponse(
+        semaine=etat.semaine, etat=etat.etat, mise_en_file_le=etat.mise_en_file_le,
+        par=etat.par, total=etat.total, message=etat.message,
+    )
 
 
 @app.get("/corrections")

@@ -112,6 +112,9 @@ interface Scenario {
   correction?: Record<string, unknown>;
   /** Le worker ne repasse jamais. */
   workerMuet?: boolean;
+  /** Suivi serveur d'une correction en vol, lu au montage — retour
+   *  utilisateur du 25/09/2026. Par défaut, rien n'est en vol. */
+  correctionEnCours?: Record<string, unknown>;
   logs?: unknown[];
   extras?: unknown[];
   mappings?: Partial<{
@@ -168,6 +171,14 @@ function serveur(s: Scenario = {}) {
       return jsonOk(mappingsDoc);
     }
     if (u.includes("/app-state")) return jsonOk({ weekRows: weekRows() });
+    // AVANT le « /celcat/comparaison » générique plus bas : cette route en
+    // est un préfixe, et tomberait sinon dans la comparaison de séances.
+    if (u.includes("/celcat/comparaison/en-cours")) {
+      return jsonOk({
+        semaine: 7, etat: "absente", mise_en_file_le: null, par: "", total: 0, message: "",
+        ...(s.correctionEnCours ?? {}),
+      });
+    }
     if (u.includes("/celcat/comparaison/corriger")) {
       corrige = true;
       return jsonOk({ total: 1, deja_en_file: 0, abandonnes: [], message: "1 correction mise en file", ...(s.correction ?? {}) });
@@ -342,6 +353,36 @@ describe("Corriger va jusqu'à la vérification", () => {
     fireEvent.click(screen.getByRole("button", { name: /corriger l’écart/i }));
     await waitFor(() => expect(screen.getByTestId("suivi-boucle").textContent).toContain("worker Celcat est en pause"));
     expect(screen.getByRole("heading", { level: 2, name: /1 écart avec Celcat/ })).toBeTruthy();
+  });
+});
+
+describe("Reprend une correction encore en vol au montage", () => {
+  // Retour utilisateur du 25/09/2026 : « si on quitte et qu'on revient sur
+  // l'onglet Celcat, ça le remet en mode qu'on peut le recorriger. » L'écran
+  // lit désormais le suivi SERVEUR (`GET /celcat/comparaison/en-cours`) au
+  // montage, avant même le premier clic.
+  it("montre l'attente et désactive « Corriger » quand une correction est déjà en vol pour la semaine", async () => {
+    await ouvrir({
+      correctionEnCours: {
+        etat: "en_cours",
+        mise_en_file_le: "2026-09-16T09:58:00+00:00",
+        par: "kyllian@iut",
+        total: 3,
+        message: "Corrections envoyées — en attente du passage du worker…",
+      },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("suivi-boucle").textContent).toMatch(/en attente du passage du worker/i),
+    );
+    expect(screen.getByRole("button", { name: /^corriger/i })).toBeDisabled();
+  });
+
+  it("montre l'écran normal, avec « Corriger » disponible, quand rien n'est en vol", async () => {
+    await ouvrir();
+
+    expect(screen.getByTestId("suivi-boucle").textContent).toBe("");
+    expect(screen.getByRole("button", { name: /^corriger/i })).toBeEnabled();
   });
 });
 
