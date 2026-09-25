@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -126,7 +126,7 @@ def _refus_si_lecture_seule() -> dict[str, Any] | None:
 
 def _entree_journal(plan_id: str, force_utilise: bool, items: list[dict[str, Any]]) -> dict[str, Any]:
     entree: dict[str, Any] = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "plan_id": plan_id,
         "forced": force_utilise,
         "ops": [_journal_op(item) for item in items],
@@ -335,8 +335,7 @@ def _marquer(
     else:
         item["status"] = "ok"
         item["forceable"] = False
-        if "reason" in item:
-            del item["reason"]
+        item.pop("reason", None)
     return item
 
 
@@ -368,9 +367,10 @@ def _evaluer_place(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _evaluer_move(item: dict[str, Any]) -> dict[str, Any]:
+    from fastapi import HTTPException
+
     from cal_iut.api.main import validate_placement
     from cal_iut.api.schemas import MoveSessionRequest
-    from fastapi import HTTPException
 
     sid = str(item.get("session_id") or "")
     manquants = [c for c in ("week", "day", "slot") if item.get(c) is None]
@@ -566,12 +566,11 @@ def _analyser_creneau(
     session_id: str | None = None,
 ) -> dict[str, Any]:
     from cal_iut.api.main import (
-        _as_placed,
-        _build_conflict_map,
+        _DUO_SYNC_NOTE,
         _conflits_deplacement,
         _is_duo_synced,
         _resolve_room,
-        _DUO_SYNC_NOTE,
+        build_manual_conflict_map,
     )
     from cal_iut.api.validation import validate_move
     from cal_iut.calendar.academic import week_status
@@ -605,12 +604,15 @@ def _analyser_creneau(
         salle = _resolve_room(state, session, week, day, slot, None)
         salle_id = getattr(salle, "id", None)
 
+    # `state.timetable` tel quel (pas `_as_placed`, qui perdait `room_id` en
+    # route — même bug/correctif que `api/main.py::validate_placement`,
+    # 25/09/2026).
     validation = validate_move(
-        sid, week, day, slot, _as_placed(state.timetable),
+        sid, week, day, slot, state.timetable,
         list(session.group_ids or []), list(session.teacher_codes or []),
         salle_id,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
-        conflicting_room_ids=_build_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
+        conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
     )
     if not validation.valid:
         hard.extend(validation.hard_conflicts)
@@ -734,7 +736,6 @@ def _executer_item(item: dict[str, Any]) -> None:
         supprimer_seance_personnalisee(sid)
         return
 
-    from cal_iut.api.deposer import deposer_seance
     from cal_iut.api.session_patch import appliquer_patch_seance
 
     if action == "reshape" or item.get("duration_slots") is not None or item.get("slot") is not None:

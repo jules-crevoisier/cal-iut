@@ -1092,3 +1092,29 @@ class SauvegardeMeta(BaseModel):
 
 class SauvegardeListResponse(BaseModel):
     sauvegardes: list[SauvegardeMeta]
+
+
+# ── Doublons salle / enseignant (retour Kyllian Bresson 25/09/2026) ──
+# Cf. `api/doublons.py` pour le calcul — module pur, ces schémas n'en sont
+# que la coquille HTTP.
+
+
+class DoublonSeanceResponse(BaseModel):
+    session_id: str
+    course_code: str
+    groupes: list[str]
+    salle: str | None = None
+    enseignants: list[str]
+
+
+class DoublonResponse(BaseModel):
+    semaine: int
+    jour: int
+    creneau: int
+    type: Literal["salle", "enseignant"]
+    ressource: str
+    seances: list[DoublonSeanceResponse]
+
+
+class DoublonsListResponse(BaseModel):
+    doublons: list[DoublonResponse]
