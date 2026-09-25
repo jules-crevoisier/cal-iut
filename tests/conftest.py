@@ -150,6 +150,16 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
         sauvegardes = None
     if sauvegardes is not None:
         monkeypatch.setattr(sauvegardes, "SAUVEGARDES_DIR", tmp_path / "sauvegardes")
+    # Contrôle hebdomadaire des doublons (Jules Crevoisier, 25/09/2026) —
+    # `_apres_ecriture_planning` en déclenche un à chaque test qui écrit un
+    # placement (au plus un par semaine ISO), jamais isolé sinon aurait
+    # rempli le vrai `data/state/controle_doublons_hebdo.json` du dépôt.
+    try:
+        from cal_iut.api import controle_doublons_hebdo
+    except ImportError:
+        controle_doublons_hebdo = None
+    if controle_doublons_hebdo is not None:
+        monkeypatch.setattr(controle_doublons_hebdo, "_path", lambda: tmp_path / "controle_doublons_hebdo.json")
     try:
         from cal_iut.mcp import journal as mcp_journal
     except ImportError:

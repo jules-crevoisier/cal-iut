@@ -217,6 +217,21 @@ class Tache(Base):
     # (un enseignant, le service scolarité), et la liste des personnes
     # change plus vite que le code. Vide = non attribuée.
     concerne: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Catégorie — deux onglets au-dessus du tableau (Jules, dicté 25/09/2026 :
+    # « entre les affaires par rapport à l'emploi du temps [...] et les
+    # affaires à propos de la plateforme »). "edt" | "plateforme". NULLABLE
+    # et SANS défaut SQL : `_ajouter_colonnes_manquantes` (`db/session.py`)
+    # n'ajoute que des colonnes nullables sans valeur par défaut au niveau
+    # SQL — une tâche créée avant ce changement a donc `categorie=None` en
+    # base. Le défaut "edt" est appliqué à la création (`repository.create_tache`)
+    # et à la lecture d'une ligne ancienne (`api/main.py::_tache_to_response`),
+    # jamais au niveau SQL — même raisonnement que pour `priorite` ci-dessous.
+    categorie: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    # Urgence (même demande, 25/09/2026) — "normale" | "urgente". Une carte
+    # urgente porte un marqueur TEXTE (« Urgent », jamais la couleur seule)
+    # et passe en tête de sa colonne. Mêmes précautions nullable/défaut
+    # applicatif que `categorie`.
+    priorite: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     date_debut: Mapped[date | None] = mapped_column(Date, nullable=True)
     date_fin: Mapped[date | None] = mapped_column(Date, nullable=True)
     cree_par: Mapped[str] = mapped_column(String(255))

@@ -515,12 +515,30 @@ class ExceptionResponse(BaseModel):
 
 
 _COLONNES_TACHE = ("a_faire", "en_cours", "fait")
+# Deux onglets au-dessus du tableau (Jules, dicté 25/09/2026 : « entre les
+# affaires par rapport à l'emploi du temps [...] et les affaires à propos de
+# la plateforme ») et l'urgence d'une carte (même demande) — cf.
+# `db/models.py::Tache.categorie`/`priorite` pour le pourquoi du nullable.
+_CATEGORIES_TACHE = ("edt", "plateforme")
+_PRIORITES_TACHE = ("normale", "urgente")
 
 
 def _valider_titre_tache(v: str) -> str:
     v = v.strip()
     if not v:
         raise ValueError("Le titre est obligatoire.")
+    return v
+
+
+def _valider_categorie_tache(v: str | None) -> str | None:
+    if v is not None and v not in _CATEGORIES_TACHE:
+        raise ValueError('Catégorie invalide — attendu "edt" ou "plateforme".')
+    return v
+
+
+def _valider_priorite_tache(v: str | None) -> str | None:
+    if v is not None and v not in _PRIORITES_TACHE:
+        raise ValueError('Priorité invalide — attendu "normale" ou "urgente".')
     return v
 
 
@@ -534,10 +552,19 @@ class TacheCreateRequest(BaseModel):
     enseignant_code: str | None = None
     # Qui doit agir (texte libre, ex. « Jules », « Kyllian ») — 25/09/2026.
     concerne: str | None = Field(default=None, max_length=64)
+    # Onglet EDT / Plateforme et urgence (25/09/2026) — `mode="before"` sur
+    # les validateurs ci-dessous : un message FRANÇAIS doit remplacer le
+    # message anglais par défaut de `Literal` sur une valeur inconnue, donc
+    # la vérification doit s'exécuter AVANT que pydantic-core ne rejette la
+    # valeur de son côté.
+    categorie: Literal["edt", "plateforme"] = "edt"
+    priorite: Literal["normale", "urgente"] = "normale"
     date_debut: str | None = None  # ISO "YYYY-MM-DD"
     date_fin: str | None = None  # ISO "YYYY-MM-DD" — >= date_debut, cf. main.py
 
     _valider = field_validator("titre")(_valider_titre_tache)
+    _valider_categorie = field_validator("categorie", mode="before")(_valider_categorie_tache)
+    _valider_priorite = field_validator("priorite", mode="before")(_valider_priorite_tache)
 
 
 class TacheUpdateRequest(BaseModel):
@@ -551,6 +578,8 @@ class TacheUpdateRequest(BaseModel):
     ordre: float | None = None
     enseignant_code: str | None = None
     concerne: str | None = Field(default=None, max_length=64)
+    categorie: Literal["edt", "plateforme"] | None = None
+    priorite: Literal["normale", "urgente"] | None = None
     date_debut: str | None = None
     date_fin: str | None = None
 
@@ -558,6 +587,9 @@ class TacheUpdateRequest(BaseModel):
     @classmethod
     def _valider(cls, v: str | None) -> str | None:
         return _valider_titre_tache(v) if v is not None else v
+
+    _valider_categorie = field_validator("categorie", mode="before")(_valider_categorie_tache)
+    _valider_priorite = field_validator("priorite", mode="before")(_valider_priorite_tache)
 
 
 class TacheResponse(BaseModel):
@@ -568,6 +600,8 @@ class TacheResponse(BaseModel):
     ordre: float
     enseignant_code: str | None = None
     concerne: str | None = None
+    categorie: Literal["edt", "plateforme"]
+    priorite: Literal["normale", "urgente"]
     date_debut: str | None = None
     date_fin: str | None = None
     cree_par: str
@@ -1118,3 +1152,29 @@ class DoublonResponse(BaseModel):
 
 class DoublonsListResponse(BaseModel):
     doublons: list[DoublonResponse]
+
+
+# ── Contrôle hebdomadaire des doublons (Jules Crevoisier, 25/09/2026) ──
+# « on veut faire quelque chose qui vérifie chaque semaine [...] » — cf.
+# `api/controle_doublons_hebdo.py` pour la logique (filet une fois par
+# semaine ISO + historique borné), ces schémas n'en sont que la coquille HTTP.
+
+
+class DoublonHebdoRunResponse(BaseModel):
+    date: str  # AAAA-MM-JJ, jour calendaire du contrôle
+    semaine_iso: str  # AAAA-Www, ex. « 2026-W39 »
+    genere_le: str
+    total: int
+    par_type: dict[str, int]
+    doublons: list[DoublonResponse]
+    nouveaux: list[DoublonResponse]
+    resolus: list[DoublonResponse]
+    premier_controle: bool
+
+
+class DoublonHebdoResponse(BaseModel):
+    """`GET /controles/doublons/hebdo` — `dernier` est `None` tant qu'aucun
+    contrôle n'a encore tourné (ni filet automatique, ni « Vérifier
+    maintenant »)."""
+
+    dernier: DoublonHebdoRunResponse | None = None

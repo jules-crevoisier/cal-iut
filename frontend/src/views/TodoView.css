@@ -37,3 +37,37 @@
 .todo-doublons-actions .btn {
   min-height: 44px;
 }
+
+/* Contrôle hebdomadaire (Jules Crevoisier, 25/09/2026) — au-dessus de la
+   liste existante, une colonne d'abord (320px), même tokens. */
+.todo-hebdo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-hebdo-resume {
+  margin: 0;
+}
+
+.todo-hebdo .btn {
+  min-height: 44px;
+}
+
+/* Marque « nouveau » sur une ligne apparue depuis le contrôle précédent —
+   même échelle de badge que `.pill`, teinte distincte de `.pill.bad`
+   (compte total) pour ne pas se confondre avec un signal de gravité. */
+.pill.new {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+}

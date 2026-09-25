@@ -57,8 +57,12 @@ export interface Route {
    * "prof"/"groupe", ne cible aucune entité : la Vue Promo entière, en
    * lecture seule. Même mécanisme public que les deux autres (cf.
    * `api/auth.py::verify_personal_link_param` — seule la présence de `t`
-   * compte, jamais son contenu). */
-  mode: "prof" | "groupe" | "promo" | "";
+   * compte, jamais son contenu).
+   * "salles" (retour utilisateur 25/09/2026, Jules, dicté : « on met ça en
+   * lien public, comme ça les gens peuvent consulter ») — même mécanisme,
+   * cible le tableau d'occupation des salles (`vue=salles-libres`) plutôt
+   * qu'une entité ou toute la Vue Promo. */
+  mode: "prof" | "groupe" | "promo" | "salles" | "";
   /** Code du lien personnel (prof ou groupe) — public depuis le
    * 28/08/2026 (`api/auth.py`), seul moyen pour un lien personnel de
    * contourner le mot de passe partagé. Jamais envoyé au serveur par LE

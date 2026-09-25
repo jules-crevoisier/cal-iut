@@ -2,14 +2,24 @@
  * Vue « Salles libres » (todo département 22/09/2026, Kyllian Bresson :
  * « donner accès aux enseignants de consulter le planning d'une ressource en
  * particulier [...] » — ici sa question inverse : « quelles salles sont
- * libres sur ce créneau ? »). Lecture seule, ouverte à tous les rôles
- * connectés (y compris `read_only`) — même garde que `SalleView`
- * (`!readOnlyTarget`, cf. `App.tsx`), qui ne concerne que les LIENS publics
- * personnels, jamais le rôle de compte.
+ * libres sur ce créneau ? »).
  *
- * Mobile d'abord (320px) : sélecteur de créneau + liste des salles libres à
- * ce créneau. À partir de 768px (`useNarrowScreen`, cf. `SalleView`) : en
- * plus, une grille salles × 6 créneaux pour tout voir d'un coup.
+ * Recentrée sur le seul tableau d'occupation (retour utilisateur 25/09/2026,
+ * Jules, dicté : « on peut garder uniquement dans "Salles libres" le tableau
+ * occupation qui est très bien [...] on enlève les deux onglets [...] et on
+ * met ça en lien public [...] on met uniquement le tableau que tu as fait qui
+ * est très bien avec les salles ») — le sélecteur de créneau et la liste des
+ * salles libres, qui doublonnaient le tableau, sont retirés ; le tableau
+ * salles × créneaux reste seul, à toutes les largeurs (plus de coupure à
+ * 768px, cf. `useNarrowScreen` retiré). `readOnly` (lien public `mode=salles`,
+ * cf. App.tsx `readOnlyTarget`) coupe le seul lien de navigation du tableau
+ * (fiche salle) — aucune autre écriture n'a jamais existé sur cette vue.
+ *
+ * Mobile d'abord (320px) : semaine/jour/filtres en boutons qui s'enroulent
+ * (jamais de défilement horizontal de PAGE) ; le tableau, lui, défile
+ * horizontalement DANS son propre conteneur (`.salleslibres-grille-wrap`),
+ * colonne « Salle » fixée au bord grâce à `position: sticky` (cf.
+ * SallesLibresView.css).
  */
 
 import { useMemo, useState } from "react";
@@ -17,10 +27,9 @@ import { useMemo, useState } from "react";
 import "./SallesLibresView.css";
 
 import type { Route } from "../hooks/useHashRoute";
-import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { AppPayload } from "../types/app";
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
-import { occupationSalles, sallesLibresAuCreneau } from "../utils/sallesLibres";
+import { occupationSalles } from "../utils/sallesLibres";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { displayIndexForSolverWeek } from "../utils/weekDisplay";
 import { WeekBar } from "../components/WeekBar";
@@ -29,18 +38,19 @@ interface SallesLibresViewProps {
   payload: AppPayload;
   route: Route;
   setRoute: (patch: Partial<Route>) => void;
+  /** Lien public `mode=salles` (cf. App.tsx `readOnlyTarget`) — coupe le
+   * seul lien de navigation du tableau (ouvrir la fiche salle), qui sortirait
+   * sinon du planning public vers le reste de l'appli. */
+  readOnly?: boolean;
 }
 
-export function SallesLibresView({ payload, route, setRoute }: SallesLibresViewProps) {
-  const narrow = useNarrowScreen();
-
+export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesLibresViewProps) {
   const [displayWeek, setDisplayWeek] = useState(() =>
     route.sem !== null && route.sem !== undefined
       ? displayIndexForSolverWeek(payload, route.sem)
       : indexSemaineCourante(payload.weekRows),
   );
   const [day, setDay] = useState(() => (route.jour !== null && route.jour !== undefined ? route.jour : jourOuvreAujourdhui()));
-  const [slot, setSlot] = useState(0);
 
   const [capaciteMinSaisie, setCapaciteMinSaisie] = useState("");
   const [typeSalle, setTypeSalle] = useState("");
@@ -72,8 +82,6 @@ export function SallesLibresView({ payload, route, setRoute }: SallesLibresViewP
   const solverWeek = weekRow?.weekIndex ?? null;
   const holiday = solverWeek === null ? undefined : payload.holidayRows.find((h) => h.w === solverWeek && h.d === day);
 
-  const filtres = { capaciteMin, type: typeSalle || undefined, inclureHorsAuto };
-
   const sallesFiltrees = useMemo(
     () =>
       payload.rooms
@@ -87,12 +95,6 @@ export function SallesLibresView({ payload, route, setRoute }: SallesLibresViewP
   const occupation = useMemo(
     () => (solverWeek === null ? null : occupationSalles(payload, solverWeek, day)),
     [payload, solverWeek, day],
-  );
-
-  const librestAuCreneau = useMemo(
-    () => (solverWeek === null ? [] : sallesLibresAuCreneau(payload, solverWeek, day, slot, filtres)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [payload, solverWeek, day, slot, capaciteMin, typeSalle, inclureHorsAuto],
   );
 
   return (
@@ -161,91 +163,59 @@ export function SallesLibresView({ payload, route, setRoute }: SallesLibresViewP
           </p>
         </div>
       ) : (
-        <>
-          <div className="panel">
-            <div className="salleslibres-slots" role="group" aria-label="Créneau">
-              {SLOT_TIMES.map((s, i) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  className={`btn btn--ghost${i === slot ? " active" : ""}`}
-                  aria-pressed={i === slot}
-                  onClick={() => setSlot(i)}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-
+        <div className="panel salleslibres-grille-wrap">
+          <div className="salleslibres-grille-header">
+            <h3>Occupation — {DAY_LABELS[day]}</h3>
             <p className="muted" role="status">
               {sallesFiltrees.length === 0
                 ? "Aucune salle ne correspond aux filtres."
-                : librestAuCreneau.length === 0
-                  ? "Toutes les salles correspondant aux filtres sont occupées à ce créneau."
-                  : `${librestAuCreneau.length} salle(s) libre(s)`}
+                : `${sallesFiltrees.length} salle(s)`}
             </p>
-
-            {librestAuCreneau.length > 0 && (
-              <ul className="salleslibres-liste">
-                {librestAuCreneau.map((r) => (
-                  <li key={r.id} className="salleslibres-item">
-                    <span className="salleslibres-item-label">{r.label}</span>
-                    <span className="muted">
-                      {r.type} · {r.capacity} places
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
-
-          {!narrow && (
-            <div className="panel salleslibres-grille-wrap">
-              <h3>Occupation — {DAY_LABELS[day]}</h3>
-              {sallesFiltrees.length === 0 ? (
-                <p className="muted">Aucune salle ne correspond aux filtres.</p>
-              ) : (
-                <table className="salleslibres-grille">
-                  <thead>
-                    <tr>
-                      <th>Salle</th>
-                      {SLOT_TIMES.map((s) => (
-                        <th key={s.label}>{s.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sallesFiltrees.map((room) => (
-                      <tr key={room.id}>
-                        <td>
-                          <button
-                            type="button"
-                            className="linklike"
-                            onClick={() => setRoute({ vue: "salle", salle: room.id, sem: solverWeek })}
-                          >
-                            {room.label}
-                          </button>
+          {sallesFiltrees.length > 0 && (
+            <table className="salleslibres-grille">
+              <thead>
+                <tr>
+                  <th>Salle</th>
+                  {SLOT_TIMES.map((s) => (
+                    <th key={s.label}>{s.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sallesFiltrees.map((room) => (
+                  <tr key={room.id}>
+                    <td>
+                      {readOnly ? (
+                        room.label
+                      ) : (
+                        <button
+                          type="button"
+                          className="linklike"
+                          onClick={() => setRoute({ vue: "salle", salle: room.id, sem: solverWeek })}
+                        >
+                          {room.label}
+                        </button>
+                      )}
+                    </td>
+                    {SLOT_TIMES.map((_, slotIdx) => {
+                      const occ = occupation?.get(room.id)?.[slotIdx];
+                      return (
+                        <td key={slotIdx} className={`salleslibres-cell${occ ? " occupee" : " libre"}`}>
+                          {occ
+                            ? occ
+                                .map((e) => (e.groupes.length ? `${e.code} · ${e.groupes.join(", ")}` : e.code))
+                                .join(" ; ")
+                            : "Libre"}
                         </td>
-                        {SLOT_TIMES.map((_, slotIdx) => {
-                          const occ = occupation?.get(room.id)?.[slotIdx];
-                          return (
-                            <td key={slotIdx} className={`salleslibres-cell${occ ? " occupee" : " libre"}`}>
-                              {occ
-                                ? occ
-                                    .map((e) => (e.groupes.length ? `${e.code} · ${e.groupes.join(", ")}` : e.code))
-                                    .join(" ; ")
-                                : "Libre"}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-        </>
+        </div>
       )}
     </section>
   );

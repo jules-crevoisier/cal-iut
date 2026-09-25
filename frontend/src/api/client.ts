@@ -170,6 +170,15 @@ export async function adminUpdateUser(
   return request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
+/** Suppression physique (25/09/2026, retour utilisateur Jules : « supprimer
+ * les personnes en attente d'activation ») — réservée par le serveur aux
+ * comptes jamais activés (`pending_email`/`pending_admin_activation`,
+ * `Depends(require_role("admin"))` + `accounts.PENDING_STATUSES` côté
+ * `api/main.py`) ; un compte déjà actif renvoie un 409 avec `message`. */
+export async function adminDeleteUser(id: number): Promise<void> {
+  await request(`/admin/users/${id}`, { method: "DELETE" });
+}
+
 // ── Sauvegardes JSON datées (item B, 22/09/2026) ──
 // Todo : « Avoir un fichier JSON backup des semaines et séances placées à
 // une date précise ». Réservé admin côté serveur (`Depends(require_role(
@@ -1051,6 +1060,15 @@ export interface Tache {
   enseignant_code: string | null;
   /** Qui doit agir (texte libre, ex. « Jules », « Kyllian ») — 25/09/2026. */
   concerne: string | null;
+  /** Onglet du kanban (Jules, dicté 25/09/2026 : « entre les affaires par
+   *  rapport à l'emploi du temps [...] et les affaires à propos de la
+   *  plateforme ») — toujours "edt" ou "plateforme" en sortie d'API, jamais
+   *  `null` (une carte antérieure à ce champ est lue comme "edt" côté
+   *  serveur, cf. `api/main.py::_tache_to_response`). */
+  categorie: "edt" | "plateforme";
+  /** Urgence (même demande, 25/09/2026) — toujours "normale" ou "urgente"
+   *  en sortie d'API, même raisonnement que `categorie`. */
+  priorite: "normale" | "urgente";
   date_debut: string | null; // ISO "AAAA-MM-JJ"
   date_fin: string | null; // ISO "AAAA-MM-JJ"
   cree_par: string;
@@ -1066,6 +1084,8 @@ export interface TacheCreateBody {
   ordre?: number | null;
   enseignant_code?: string | null;
   concerne?: string | null;
+  categorie?: Tache["categorie"];
+  priorite?: Tache["priorite"];
   date_debut?: string | null;
   date_fin?: string | null;
 }
@@ -1120,4 +1140,37 @@ export interface Doublon {
 export function fetchDoublons(semaine?: number | null): Promise<Doublon[]> {
   const q = semaine === null || semaine === undefined ? "" : `?semaine=${semaine}`;
   return request<{ doublons: Doublon[] }>(`/controles/doublons${q}`).then((r) => r.doublons);
+}
+
+// ── Contrôle hebdomadaire des doublons (Jules Crevoisier, 25/09/2026) ──
+// « on veut faire quelque chose qui vérifie chaque semaine [...] » — filet
+// automatique côté serveur (`api/controle_doublons_hebdo.py`), ces deux
+// fonctions ne font que lire le dernier résultat et le déclencher à la
+// demande (« Vérifier maintenant »).
+
+export interface DoublonHebdoRun {
+  /** AAAA-MM-JJ — jour calendaire où le contrôle a tourné. */
+  date: string;
+  /** AAAA-Www (ISO 8601), ex. « 2026-W39 » — période du filet, jamais une
+   * semaine solveur/grille. */
+  semaine_iso: string;
+  genere_le: string;
+  total: number;
+  par_type: Record<string, number>;
+  doublons: Doublon[];
+  /** Apparus depuis le contrôle PRÉCÉDENT (clé stable semaine/jour/créneau/
+   * type/ressource) — vide au tout premier contrôle (`premier_controle`). */
+  nouveaux: Doublon[];
+  resolus: Doublon[];
+  /** `true` si aucun contrôle n'existait avant celui-ci — `nouveaux`/
+   * `resolus` n'ont alors aucun sens (rien à comparer). */
+  premier_controle: boolean;
+}
+
+export function fetchControleDoublonsHebdo(): Promise<DoublonHebdoRun | null> {
+  return request<{ dernier: DoublonHebdoRun | null }>("/controles/doublons/hebdo").then((r) => r.dernier);
+}
+
+export function executerControleDoublonsHebdo(): Promise<DoublonHebdoRun> {
+  return request<DoublonHebdoRun>("/controles/doublons/hebdo", { method: "POST" });
 }

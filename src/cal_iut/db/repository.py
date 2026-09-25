@@ -394,6 +394,12 @@ class PlanningRepository:
         concerne: str | None = None,
         date_debut: date | None = None,
         date_fin: date | None = None,
+        # Défauts appliqués ICI, pas en base (colonnes nullables sans défaut
+        # SQL — cf. `db/models.py::Tache.categorie`/`priorite`) : une tâche
+        # créée par ce chemin porte toujours une valeur explicite, seules les
+        # lignes antérieures à ce champ ont `None` en base.
+        categorie: str = "edt",
+        priorite: str = "normale",
     ) -> Tache:
         row = Tache(
             titre=titre,
@@ -402,6 +408,8 @@ class PlanningRepository:
             ordre=ordre if ordre is not None else self._prochain_ordre(colonne),
             enseignant_code=enseignant_code,
             concerne=(concerne or "").strip() or None,
+            categorie=categorie,
+            priorite=priorite,
             date_debut=date_debut,
             date_fin=date_fin,
             cree_par=cree_par,

@@ -16,6 +16,15 @@
  * (← → pour changer de colonne, ↑ ↓ pour réordonner) — ces derniers sont le
  * seul moyen clavier/tactile, jamais optionnels. Mise à jour optimiste avec
  * retour arrière + message d'erreur si le serveur refuse.
+ *
+ * Deux onglets EDT / Plateforme (Jules, dicté 25/09/2026 : « deux petits
+ * boutons qui seraient des onglets : entre les affaires par rapport à
+ * l'emploi du temps [...] et les affaires à propos de la plateforme ») —
+ * ici un vrai widget `role="tablist"`/`role="tab"`/`aria-selected` : ces
+ * boutons changent le contenu affiché SANS changer de page (contrairement
+ * aux boutons de `SideNav`, qui naviguent et utilisent `aria-current`,
+ * cf. son commentaire), donc la sémantique "tab" ARIA est celle qui
+ * correspond réellement au comportement.
  */
 
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
@@ -27,6 +36,7 @@ import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { confirmAsync } from "../utils/confirmDialog";
 import { libelleDatesTache, routeVersSeance, seancesConcernees } from "../utils/kanban";
+import { ecrireOngletTaches, lireOngletTaches } from "../utils/kanbanTabPrefs";
 import { SLOT_TIMES } from "../utils/slots";
 import "./KanbanView.css";
 
@@ -34,6 +44,11 @@ const COLONNES: { id: Tache["colonne"]; label: string }[] = [
   { id: "a_faire", label: "À faire" },
   { id: "en_cours", label: "En cours" },
   { id: "fait", label: "Fait" },
+];
+
+const CATEGORIES: { id: Tache["categorie"]; label: string }[] = [
+  { id: "edt", label: "Emploi du temps" },
+  { id: "plateforme", label: "Plateforme" },
 ];
 
 const FMT_COURT = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
@@ -68,6 +83,13 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   const [depliees, setDepliees] = useState<Set<number>>(new Set());
   const [draggingId, setDraggingId] = useState<number | null>(null);
 
+  // Onglet actif — restauré depuis `localStorage` au premier rendu, puis
+  // réécrit à chaque changement (cf. `utils/kanbanTabPrefs.ts`).
+  const [categorieActive, setCategorieActive] = useState<Tache["categorie"]>(() => lireOngletTaches());
+  useEffect(() => {
+    ecrireOngletTaches(categorieActive);
+  }, [categorieActive]);
+
   const charger = useCallback(async () => {
     try {
       const liste = await fetchTaches();
@@ -93,15 +115,39 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     [taches],
   );
 
+  // Compte par onglet — sur les cartes déjà filtrées « Pour qui », mais
+  // AVANT le filtre d'onglet lui-même (sinon l'onglet non sélectionné
+  // afficherait toujours 0) : cf. contrat de session, « le compte sur
+  // chaque onglet ».
+  const filtreesParConcerne = useMemo(
+    () =>
+      (taches ?? []).filter(
+        (t) => filtreConcerne === "tout" || (filtreConcerne === "__sans__" ? !t.concerne : t.concerne === filtreConcerne),
+      ),
+    [taches, filtreConcerne],
+  );
+
+  const parCategorie = useMemo(() => {
+    const compte: Record<Tache["categorie"], number> = { edt: 0, plateforme: 0 };
+    for (const t of filtreesParConcerne) compte[t.categorie]++;
+    return compte;
+  }, [filtreesParConcerne]);
+
   const parColonne = useMemo(() => {
     const map: Record<Tache["colonne"], Tache[]> = { a_faire: [], en_cours: [], fait: [] };
-    const retenues = (taches ?? []).filter(
-      (t) => filtreConcerne === "tout" || (filtreConcerne === "__sans__" ? !t.concerne : t.concerne === filtreConcerne),
-    );
+    const retenues = filtreesParConcerne.filter((t) => t.categorie === categorieActive);
     for (const t of retenues) map[t.colonne].push(t);
-    for (const c of COLONNES) map[c.id].sort((a, b) => a.ordre - b.ordre);
+    // Urgente en tête de sa colonne (marqueur TEXTE affiché sur la carte,
+    // cf. rendu ci-dessous) — à égalité d'urgence, ordre habituel (`ordre`).
+    for (const c of COLONNES) {
+      map[c.id].sort((a, b) => {
+        const urgenceA = a.priorite === "urgente" ? 0 : 1;
+        const urgenceB = b.priorite === "urgente" ? 0 : 1;
+        return urgenceA - urgenceB || a.ordre - b.ordre;
+      });
+    }
     return map;
-  }, [taches, filtreConcerne]);
+  }, [filtreesParConcerne, categorieActive]);
 
   /** Applique un lot de correctifs de façon optimiste (une seule passe,
    * pour que deux cartes échangeant leur `ordre` — cf. `reordonner` —
@@ -296,6 +342,32 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
         </datalist>
       </div>
 
+      {/* Onglets EDT / Plateforme — un vrai widget ARIA "tab" (cf. commentaire
+          d'en-tête du fichier) : `role="tablist"` sur le conteneur,
+          `role="tab"`/`aria-selected` sur chaque bouton, `aria-controls`
+          vers le panneau qu'il pilote (`kanban-board`, `role="tabpanel"`
+          ci-dessous). Roving tabindex minimal (seul l'onglet actif est dans
+          l'ordre de tabulation) — cohérent avec le comportement clavier
+          attendu d'un tablist. */}
+      <div className="panel kanban-tabs" role="tablist" aria-label="Catégorie de tâches">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            type="button"
+            role="tab"
+            id={`kanban-onglet-${cat.id}`}
+            aria-selected={categorieActive === cat.id}
+            aria-controls="kanban-board"
+            tabIndex={categorieActive === cat.id ? 0 : -1}
+            className={`kanban-tab ${categorieActive === cat.id ? "active" : ""}`}
+            onClick={() => setCategorieActive(cat.id)}
+          >
+            {cat.label}
+            <span className="pill mini">{parCategorie[cat.id]}</span>
+          </button>
+        ))}
+      </div>
+
       {erreur && (
         <div className="panel">
           <p className="alerte" role="alert">
@@ -304,7 +376,12 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
         </div>
       )}
 
-      <div className="kanban-board">
+      <div
+        className="kanban-board"
+        id="kanban-board"
+        role="tabpanel"
+        aria-labelledby={`kanban-onglet-${categorieActive}`}
+      >
         {COLONNES.map((colonne) => {
           const liste = parColonne[colonne.id];
           return (
@@ -354,6 +431,12 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
                         }}
                         onDrop={deposerSurCarte(t)}
                       >
+                        {/* Marqueur TEXTE, pas seulement une couleur (contrat de
+                            session) — « Urgent » se lit même sans distinguer les
+                            teintes. */}
+                        {t.priorite === "urgente" && (
+                          <span className="pill bad kanban-card-urgent">Urgent</span>
+                        )}
                         <p className="kanban-card-titre">{t.titre}</p>
                         {t.concerne && <span className="pill kanban-card-concerne">{t.concerne}</span>}
                         {(teacherLabel || datesLabel) && (
@@ -468,6 +551,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
         <TacheModal
           payload={payload}
           tache={tacheEnEdition}
+          categorieParDefaut={categorieActive}
           onClose={() => {
             setModaleOuverte(false);
             setTacheEnEdition(null);
@@ -484,14 +568,20 @@ interface TacheModalProps {
   /** Présent = édition, absent = création — même convention que
    * `CreerSeanceModal`. */
   tache: Tache | null;
+  /** Catégorie proposée à la création — celle de l'onglet ouvert, pour
+   * qu'une carte créée depuis « Plateforme » y reste par défaut. Sans effet
+   * en édition (la carte a déjà sa catégorie). */
+  categorieParDefaut: Tache["categorie"];
   onClose: () => void;
   onSaved: (t: Tache) => void;
 }
 
-function TacheModal({ payload, tache, onClose, onSaved }: TacheModalProps) {
+function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved }: TacheModalProps) {
   const [titre, setTitre] = useState(tache?.titre ?? "");
   const [description, setDescription] = useState(tache?.description ?? "");
   const [colonne, setColonne] = useState<Tache["colonne"]>(tache?.colonne ?? "a_faire");
+  const [categorie, setCategorie] = useState<Tache["categorie"]>(tache?.categorie ?? categorieParDefaut);
+  const [urgent, setUrgent] = useState(tache?.priorite === "urgente");
   const [enseignantCode, setEnseignantCode] = useState(tache?.enseignant_code ?? "");
   const [concerne, setConcerne] = useState(tache?.concerne ?? "");
   const [dateDebut, setDateDebut] = useState(tache?.date_debut ?? "");
@@ -532,6 +622,8 @@ function TacheModal({ payload, tache, onClose, onSaved }: TacheModalProps) {
       titre: titreNettoye,
       description: description.trim() || null,
       colonne,
+      categorie,
+      priorite: urgent ? "urgente" : "normale",
       enseignant_code: enseignantCode || null,
       concerne: concerne.trim(),
       date_debut: dateDebut || null,
@@ -590,6 +682,27 @@ function TacheModal({ payload, tache, onClose, onSaved }: TacheModalProps) {
                 </option>
               ))}
             </select>
+          </label>
+
+          {/* Onglet EDT / Plateforme (25/09/2026) — décide sous quel onglet
+              la carte apparaît sur le tableau. */}
+          <label className="newroom-field">
+            Catégorie
+            <select value={categorie} onChange={(e) => setCategorie(e.target.value as Tache["categorie"])}>
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* Urgence (même demande, 25/09/2026) — une case, pas un select :
+              deux valeurs seulement, et l'état par défaut ("normale") est le
+              plus courant. */}
+          <label className="newroom-field newroom-field--checkbox">
+            <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />
+            Urgent
           </label>
 
           {/* « Il y a des modifications qui vous concernent et d'autres qui
