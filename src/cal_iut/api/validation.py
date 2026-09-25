@@ -21,6 +21,14 @@ def _duration_of(session_id: str, sessions_by_id: dict[str, object] | None) -> i
     return max(1, int(getattr(sessions_by_id.get(session_id), "duration_slots", 1) or 1))
 
 
+def _code_module(session_id: str, sessions_by_id: dict[str, object] | None) -> str | None:
+    """Code matière de la séance déplacée — sert à reconnaître un duo
+    synchronisé dans deux moitiés d'une salle divisible."""
+    if not sessions_by_id:
+        return None
+    return getattr(sessions_by_id.get(session_id), "course_code", None)
+
+
 def _est_pause_midi(session_id: str, sessions_by_id: dict[str, object] | None) -> bool:
     """Un évènement à horaire libre (`metadata["pause_midi"]`, retour Jules
     23/09/2026 : présentation PAC 13h15-14h) est STOCKÉ sur le créneau 3
@@ -161,6 +169,14 @@ def validate_move(
             )
 
         if room_id and getattr(placement, "room_id", None) in ({room_id} | (conflicting_room_ids or set())):
+            # Deux MOITIÉS d'une salle divisible (H.007/H.008, H.201/H.203)
+            # occupées par le MÊME module : c'est le duo synchronisé, voulu
+            # (cf. `api/doublons.py::_duo_dans_deux_moities`). Seule la MÊME
+            # salle, ou deux modules différents, restent un conflit.
+            autre_salle = getattr(placement, "room_id", None)
+            meme_module = placement.course_code == _code_module(session_id, sessions_by_id)
+            if autre_salle != room_id and meme_module:
+                continue
             hard.append(f"Conflit salle : {placement.course_code} occupe déjà cette salle")
 
     if slot == 2 and day >= 0:
