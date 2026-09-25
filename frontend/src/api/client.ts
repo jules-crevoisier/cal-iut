@@ -170,6 +170,15 @@ export async function adminUpdateUser(
   return request(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
+/** Suppression physique (25/09/2026, retour utilisateur Jules : « supprimer
+ * les personnes en attente d'activation ») — réservée par le serveur aux
+ * comptes jamais activés (`pending_email`/`pending_admin_activation`,
+ * `Depends(require_role("admin"))` + `accounts.PENDING_STATUSES` côté
+ * `api/main.py`) ; un compte déjà actif renvoie un 409 avec `message`. */
+export async function adminDeleteUser(id: number): Promise<void> {
+  await request(`/admin/users/${id}`, { method: "DELETE" });
+}
+
 // ── Sauvegardes JSON datées (item B, 22/09/2026) ──
 // Todo : « Avoir un fichier JSON backup des semaines et séances placées à
 // une date précise ». Réservé admin côté serveur (`Depends(require_role(

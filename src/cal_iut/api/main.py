@@ -660,6 +660,42 @@ def admin_update_user(user_id: int, body: AdminUserUpdateRequest, request: Reque
     return _user_to_admin_response(target)
 
 
+@app.delete("/admin/users/{user_id}", response_model=None, dependencies=[Depends(accounts.require_role("admin"))])
+def admin_delete_user(user_id: int, request: Request) -> dict | JSONResponse:
+    """Supprime un compte JAMAIS activé (25/09/2026, retour utilisateur Jules :
+    « des personnes qui se sont trompées ou qu'on ne veut pas ») — corps
+    d'erreur à plat (`{"message": ...}`), même convention que
+    `admin_update_user` juste en dessous pour ses propres 400/404/409.
+
+    Refusé pour tout compte hors de `accounts.PENDING_STATUSES` (donc
+    `active` ou `disabled`) : supprimer physiquement orphelinerait ce que ce
+    compte a pu créer — `PATCH .../status=disabled` reste la bonne action
+    pour celui-là. Un admin ne peut jamais se supprimer lui-même (et de
+    toute façon, un admin est nécessairement `active`, jamais dans
+    `PENDING_STATUSES`)."""
+    repo = _account_repo()
+    target = repo.get_by_id(user_id)
+    if target is None:
+        return JSONResponse(status_code=404, content={"message": "Utilisateur introuvable."})
+
+    acting_admin: User = request.state.user  # posé par `require_auth`, toujours présent ici
+    if target.id == acting_admin.id:
+        return JSONResponse(
+            status_code=409,
+            content={"message": "Impossible de supprimer son propre compte."},
+        )
+    if target.status not in accounts.PENDING_STATUSES:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "message": "Ce compte a déjà été activé : désactivez-le plutôt que de le supprimer.",
+            },
+        )
+
+    repo.delete_user(target)
+    return {"ok": True}
+
+
 def _user_to_admin_response(user: object) -> AdminUserResponse:
     return AdminUserResponse(
         id=user.id,

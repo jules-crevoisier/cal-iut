@@ -60,6 +60,27 @@ class AccountRepository:
         user.status = status
         self.db.commit()
 
+    def delete_user(self, user: User) -> None:
+        """Suppression physique — réservée aux comptes jamais activés
+        (vérifié par l'appelant, `api/main.py::admin_delete_user`, via
+        `accounts.PENDING_STATUSES`) : un compte qui a un jour été actif a pu
+        créer du contenu (personnalisations, corrections...) qu'une
+        suppression physique orphelinerait, contrairement à
+        `set_status(..., "disabled")`.
+
+        `EmailToken.user_id`/`McpKey.user_id` sont NOT NULL (pas de
+        `ondelete="CASCADE"` ni de cascade ORM `delete-orphan` sur
+        `User.tokens`/`User.mcp_keys`, cf. `db/models.py`) : sans purger ces
+        lignes d'abord, SQLAlchemy tente de les détacher en mettant leur FK à
+        NULL et lève une `IntegrityError`. Un compte jamais activé n'a par
+        construction aucune `McpKey` (elle exige `require_role("read_only")`,
+        donc un compte `active`) ; le `delete` reste inoffensif si la liste
+        est vide."""
+        self.db.query(EmailToken).filter(EmailToken.user_id == user.id).delete(synchronize_session=False)
+        self.db.query(McpKey).filter(McpKey.user_id == user.id).delete(synchronize_session=False)
+        self.db.delete(user)
+        self.db.commit()
+
     def count_active_admins(self) -> int:
         return (
             self.db.query(User)
