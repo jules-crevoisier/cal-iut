@@ -188,4 +188,19 @@ describe("Ce qui bloque la recopie Celcat", () => {
     expect(screen.getByRole("alert").textContent).toContain("famille inconnue");
     expect(screen.getByTestId("blocage-salles")).toBeTruthy();
   });
+
+  // Signalement de Kyllian Bresson, 25/09/2026 : « j'ai l'impression que le
+  // clic sur mapper ne fonctionne pas. » Un clic qui a marché doit se voir.
+  it("montre un état occupé sur le bouton pendant l'envoi", () => {
+    poser({ occupe: true });
+    const bouton = within(screen.getByTestId("blocage-salles")).getByRole("button", { name: /mapper/i });
+    expect(bouton).toBeDisabled();
+    expect(bouton.textContent).toMatch(/mapper…/i);
+    expect(bouton.getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("affiche une confirmation après un enregistrement réussi", () => {
+    poser({ confirmation: "Correspondance enregistrée : e-102 → H.104." });
+    expect(screen.getByRole("status").textContent).toContain("e-102 → H.104");
+  });
 });

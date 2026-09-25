@@ -4131,20 +4131,31 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
             # Le job n'est plus en file : le blocage a été réglé, ou la
             # séance a été retirée. L'afficher encore serait un mensonge.
             continue
-        place = semaine_du_placement.get(sid)
-        if semaine is not None and place is not None and place != semaine:
-            ailleurs += 1
-            continue
         motif = str(ligne.get("motif") or "")
         # Les lignes écrites avant le 20/09/2026 portent l'ancien libellé.
         # Les fondre dans le nouveau évite d'afficher deux fois le même
         # blocage sous deux formulations.
         if "inconnue de la maquette" in motif:
             motif = SANS_PLACEMENT
+        famille = _famille_du_motif(motif)
+        cle = _cle_du_motif(motif)
+        # UNE CORRESPONDANCE EXISTE DÉJÀ POUR CETTE CLÉ : le blocage n'est
+        # plus « à mapper », il attend seulement le prochain passage du
+        # worker, qui le retentera de lui-même (`mappings.py`, `nuit.py`).
+        # Le job reste « en_file » jusqu'à ce passage — sans ce garde-fou,
+        # cliquer « mapper » enregistrait bien la correspondance mais
+        # l'écran continuait d'afficher le même blocage, identique, comme si
+        # le clic n'avait rien fait (Kyllian Bresson, 25/09/2026).
+        if famille and cle and cle in doc.get(famille, {}):
+            continue
+        place = semaine_du_placement.get(sid)
+        if semaine is not None and place is not None and place != semaine:
+            ailleurs += 1
+            continue
         entree = manquants.setdefault(
             motif,
-            {"motif": motif, "seances": [], "tentatives": 0, "famille": _famille_du_motif(motif),
-             "cle": _cle_du_motif(motif), "sans_semaine": True},
+            {"motif": motif, "seances": [], "tentatives": 0, "famille": famille,
+             "cle": cle, "sans_semaine": True},
         )
         if sid and sid not in entree["seances"]:
             entree["seances"].append(sid)
