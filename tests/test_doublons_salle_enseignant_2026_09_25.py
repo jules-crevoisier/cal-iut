@@ -41,9 +41,13 @@ def _seance(sid: str, groupe: str, prof: str, code: str = "ZZ1", duree: int = 1)
     )
 
 
-def _place(sid: str, week: int, day: int, slot: int, groupe: str, prof: str, room_id: str | None = None, room_label: str | None = None) -> PlacedSessionWithRoom:
+def _place(sid: str, week: int, day: int, slot: int, groupe: str, prof: str, room_id: str | None = None, room_label: str | None = None, code: str = "ZZ1") -> PlacedSessionWithRoom:
+    """`code` : deux MOITIÉS d'une salle divisible occupées par le MÊME code
+    matière sont un duo synchronisé, donc PAS un doublon (cf.
+    `doublons._duo_dans_deux_moities`, 25/09/2026). Les tests qui visent
+    « deux modules différents » passent donc deux codes distincts."""
     return PlacedSessionWithRoom(
-        session_id=sid, week=week, day=day, slot=slot, course_code="ZZ1",
+        session_id=sid, week=week, day=day, slot=slot, course_code=code,
         group_ids=[groupe], teacher_codes=[prof], room_id=room_id, room_label=room_label,
     )
 
@@ -117,7 +121,7 @@ def test_h201_et_h203_comptent_comme_la_meme_salle():
     b = _seance("b", "but2-td-cd", "AUTRE")
     tt = [
         _place("a", 5, 2, 3, "but1-td-ab", "MRI", "h201", "H.201"),
-        _place("b", 5, 2, 3, "but2-td-cd", "AUTRE", "h203", "H.203"),
+        _place("b", 5, 2, 3, "but2-td-cd", "AUTRE", "h203", "H.203", code="ZZ2"),
     ]
     resultat = doublons(_state([a, b], tt))
     assert len(resultat) == 1
@@ -131,7 +135,7 @@ def test_h201_et_sa_version_fusionnee_comptent_comme_la_meme_salle():
     b = _seance("b", "but2-td-cd", "AUTRE")
     tt = [
         _place("a", 5, 2, 3, "but1-td-ab", "MRI", "h201", "H.201"),
-        _place("b", 5, 2, 3, "but2-td-cd", "AUTRE", "h201_h203", "H.201-203"),
+        _place("b", 5, 2, 3, "but2-td-cd", "AUTRE", "h201_h203", "H.201-203", code="ZZ2"),
     ]
     resultat = doublons(_state([a, b], tt))
     assert len(resultat) == 1

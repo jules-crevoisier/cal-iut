@@ -56,6 +56,28 @@ def _seance_dict(p: object) -> dict[str, object]:
     }
 
 
+def _duo_dans_deux_moities(seances: list) -> bool:
+    """Deux MOITIÉS d'une salle divisible occupées par le MÊME module : voulu,
+    pas un doublon.
+
+    Kyllian Bresson (25/09/2026) : « pour H.201 et H.203, c'est en soi la même
+    salle, donc il ne faut pas deux MODULES DIFFÉRENTS en même temps dans ces
+    deux salles ». Le duo synchronisé fait exactement l'inverse : deux
+    enseignants, une moitié chacun, le même module au même créneau (cf.
+    `teacher_duos.yaml` et `solver/rooms.py::_duo_room_overrides`, qui garde
+    volontairement les deux moitiés indépendantes pour ça). Sans cette
+    exception, 69 des 180 doublons relevés en production le 25/09/2026
+    étaient ces duos — le vrai signal se noyait dedans.
+
+    La même salle occupée deux fois (pas deux moitiés) reste TOUJOURS un
+    doublon, même pour un seul module : deux groupes ne tiennent pas dans la
+    même pièce.
+    """
+    salles = {getattr(pp, "room_id", None) for pp in seances}
+    modules = {getattr(pp, "course_code", None) for pp in seances}
+    return len(salles) == len(seances) and len(modules) == 1
+
+
 def doublons(state: object, semaine: int | None = None) -> list[dict[str, object]]:
     """Scanne `state.timetable` et rend, pour chaque (semaine, jour, créneau)
     où une même ressource est mobilisée par au moins DEUX séances
@@ -123,6 +145,8 @@ def doublons(state: object, semaine: int | None = None) -> list[dict[str, object
         if len(uniques) < 2:
             continue
         seances = sorted(uniques.values(), key=lambda pp: pp.session_id)
+        if _duo_dans_deux_moities(seances):
+            continue
         salles_reelles = sorted({
             room_label_by_id.get(getattr(pp, "room_id", None), getattr(pp, "room_id", None))
             for pp in seances
