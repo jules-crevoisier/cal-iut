@@ -7,6 +7,7 @@ import threading
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC
 from datetime import date as _date
 from pathlib import Path
 
@@ -16,16 +17,56 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from cal_iut.api import accounts, auth, custom_rooms, custom_sessions, forced_pending, mailer, sauvegardes, session_overrides
+from cal_iut.api import (
+    accounts,
+    auth,
+    custom_rooms,
+    custom_sessions,
+    doublons,
+    forced_pending,
+    mailer,
+    sauvegardes,
+    session_overrides,
+)
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
 from cal_iut.api.schemas import (
     AdminUserListResponse,
     AdminUserResponse,
     AdminUserUpdateRequest,
+    CalendrierSaeResponse,
+    CelcatComparaisonResponse,
+    CelcatCompteurs,
+    CelcatCorrigerResponse,
+    CelcatEntreeResponse,
+    CelcatEtatResponse,
+    CelcatExtraActionResponse,
+    CelcatFileResponse,
+    CelcatInstantaneDemandeResponse,
+    CelcatInstantaneResponse,
+    CelcatJournalReconcilierRequest,
+    CelcatJournalReconcilierResponse,
+    CelcatMappingRequest,
+    CelcatMappingsResponse,
+    CelcatPlanResponse,
+    CelcatResyncResponse,
+    CelcatSaisieActiveRequest,
+    CelcatSaisieRequest,
+    CelcatSaisieResponse,
+    CelcatValiderRequest,
+    CelcatWorkerRequest,
+    ChangeRoomRequest,
+    CompletionResponse,
+    CreateRoomRequest,
+    CreerEvenementRequest,
+    CreerSeanceRequest,
+    CreneauLibreResponse,
+    CreneauxLibresResponse,
     DiffEntryResponse,
+    DiffResponse,
+    DoublonResponse,
+    DoublonsListResponse,
     EchangeRequest,
     EchangeResponse,
-    DiffResponse,
     ExceptionCreateRequest,
     ExceptionResponse,
     FeedbackAnalysisResponse,
@@ -34,11 +75,12 @@ from cal_iut.api.schemas import (
     GroupMeta,
     IngestRequest,
     LoginRequest,
-    MeResponse,
-    MetaResponse,
     McpKeyCreatedResponse,
     McpKeyListResponse,
     McpKeyResponse,
+    MeResponse,
+    MetaResponse,
+    ModifierSeancePersonnaliseeRequest,
     MoveSessionRequest,
     NotificationConfigRequest,
     NotificationConfigResponse,
@@ -48,40 +90,11 @@ from cal_iut.api.schemas import (
     RegenRequest,
     RegenResultResponse,
     ResetPasswordRequest,
-    SauvegardeListResponse,
-    SauvegardeMeta,
-    CalendrierSaeResponse,
+    RoomMeta,
     SaeFenetreResponse,
     SaeJourResponse,
-    CelcatCompteurs,
-    CelcatEntreeResponse,
-    CelcatComparaisonResponse,
-    CelcatCorrigerResponse,
-    CelcatResyncResponse,
-    CelcatEtatResponse,
-    CelcatFileResponse,
-    CelcatMappingRequest,
-    CelcatMappingsResponse,
-    CelcatInstantaneDemandeResponse,
-    CelcatInstantaneResponse,
-    CelcatExtraActionResponse,
-    CelcatJournalReconcilierRequest,
-    CelcatJournalReconcilierResponse,
-    CelcatPlanResponse,
-    CelcatSaisieActiveRequest,
-    CelcatWorkerRequest,
-    CelcatSaisieRequest,
-    CelcatSaisieResponse,
-    CelcatValiderRequest,
-    ChangeRoomRequest,
-    CompletionResponse,
-    CreerEvenementRequest,
-    CreerSeanceRequest,
-    ModifierSeancePersonnaliseeRequest,
-    CreneauLibreResponse,
-    CreneauxLibresResponse,
-    CreateRoomRequest,
-    RoomMeta,
+    SauvegardeListResponse,
+    SauvegardeMeta,
     SeanceAPlacerResponse,
     SeancePlaceeAutoResponse,
     SeanceRefuseeResponse,
@@ -117,8 +130,8 @@ from cal_iut.ingestion.config_loader import (
     load_groups,
     load_objective_weights,
     load_room_assignment_rules,
-    load_rooms,
     load_room_reservations,
+    load_rooms,
     load_teacher_availability,
     load_teacher_duos,
 )
@@ -129,7 +142,13 @@ from cal_iut.models.group_scope import expand_group_filter, related_group_ids
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.cpsat import PlacedSession, SolverConfig, TimetableSolver
 from cal_iut.solver.quality import compute_quality
-from cal_iut.solver.rooms import PlacedSessionWithRoom, _build_conflict_map, assign_rooms, parse_room_rules
+from cal_iut.solver.rooms import (
+    PlacedSessionWithRoom,
+    assign_rooms,
+    build_manual_conflict_map,
+    parse_room_rules,
+)
+
 
 def _export_semestre(state) -> str:
     """Semestre servant de référence temporelle à l'export (dates, numéros de
@@ -248,7 +267,7 @@ app.add_middleware(
 # buildés, favicon...) reste servi sans authentification : sans ça, le
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
-    "/admin", "/app-state", "/calendrier", "/celcat", "/corrections", "/diff", "/exceptions", "/export",
+    "/admin", "/app-state", "/calendrier", "/celcat", "/controles", "/corrections", "/diff", "/exceptions", "/export",
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
@@ -559,7 +578,12 @@ def auth_list_mcp_keys(request: Request) -> McpKeyListResponse:
 
 @app.post("/auth/mcp-keys", response_model=McpKeyCreatedResponse, dependencies=[Depends(accounts.require_role("read_only"))])
 def auth_create_mcp_key(request: Request) -> McpKeyCreatedResponse | JSONResponse:
-    from cal_iut.api.mcp_keys import MCP_MAX_ACTIVE_KEYS, generate_raw_mcp_token, hash_mcp_token, visible_prefix
+    from cal_iut.api.mcp_keys import (
+        MCP_MAX_ACTIVE_KEYS,
+        generate_raw_mcp_token,
+        hash_mcp_token,
+        visible_prefix,
+    )
 
     user: User = request.state.user
     repo = _account_repo()
@@ -1692,7 +1716,7 @@ def _ics_sae_modifie_le(state: object) -> object:
     Une date de fichier illisible rend None, jamais une exception : un flux
     .ics sans numéro de révision reste utile, un flux en erreur non.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     racine = state.config_dir.parents[1]
     horodatages = []
@@ -1704,7 +1728,7 @@ def _ics_sae_modifie_le(state: object) -> object:
                 continue
     if not horodatages:
         return None
-    return datetime.fromtimestamp(max(horodatages), tz=timezone.utc)
+    return datetime.fromtimestamp(max(horodatages), tz=UTC)
 
 
 def _ics_placements_updated_at(state: object) -> dict[str, object]:
@@ -2096,7 +2120,11 @@ def _hard_constraint_context(
         sae_windows_as_week_days,
     )
     from cal_iut.solver.constraints import sae_blocked_days_by_group, sae_blocked_days_by_parcours
-    from cal_iut.solver.decomposed import FI_MAX_WEEK_DEFAULT, _build_sequence_neighbors, _movable_bounds
+    from cal_iut.solver.decomposed import (
+        FI_MAX_WEEK_DEFAULT,
+        _build_sequence_neighbors,
+        _movable_bounds,
+    )
 
     week_offset = semester_week_offset(state.calendar, semestre)
     n_weeks = (max((p.week for p in state.timetable), default=-1)) + 1
@@ -2565,12 +2593,17 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
     # refusée (ou forcée en créant un vrai conflit) au moment de l'appliquer.
     # Concrètement : deux cours du même groupe FC se sont retrouvés à 14h00,
     # et cette vérification a répondu « aucun conflit ».
+    # `state.timetable` passé TEL QUEL (pas `_as_placed`, qui convertit en
+    # `PlacedSession` et perd `room_id`) — cf. `build_manual_conflict_map`
+    # ci-dessous pour pourquoi ce contrôle-ci a besoin de la salle RÉELLE,
+    # contrairement à `compute_quality`/`suggest_alternative_slots` plus haut
+    # qui n'en ont jamais eu besoin (rapport du 25/09/2026, Kyllian Bresson).
     result = validate_move(
-        session_id, body.week, body.day, body.slot, _as_placed(state.timetable), match.group_ids, match.teacher_codes,
+        session_id, body.week, body.day, body.slot, state.timetable, match.group_ids, match.teacher_codes,
         target_room_id,
         sessions_by_id=state.sessions_by_id,
         groups=state.groups,
-        conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+        conflicting_room_ids=build_manual_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
     )
     # `blocking_conflicts` DOIT rester un sous-ensemble de `hard_conflicts`
     # (cf. schemas.ValidationResponse.blocking_conflicts) : un message
@@ -2669,14 +2702,18 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             target_room_id = resolved_room.id
 
     validation = validate_move(
-        session_id, body.week, body.day, body.slot, _as_placed(state.timetable),
+        session_id, body.week, body.day, body.slot, state.timetable,
         match.group_ids, match.teacher_codes, target_room_id,
         # Sans ces deux-là, la validation ignorait la DURÉE des séances (un
         # bloc de 3h n'était vu que sur son premier créneau) et la COHORTE
         # étudiante (un TD posé sur le CM de sa promo passait sans conflit).
         sessions_by_id=state.sessions_by_id,
         groups=state.groups,
-        conflicting_room_ids=_build_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+        # `state.timetable` tel quel (pas `_as_placed`) : sans ça, le conflit
+        # de SALLE ne se déclenchait jamais (`room_id` disparaissait avant
+        # d'atteindre `validate_move` — bug réel trouvé le 25/09/2026, retour
+        # Kyllian Bresson, cf. `api/doublons.py`).
+        conflicting_room_ids=build_manual_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
     )
 
     if not validation.valid and not body.force:
@@ -2942,10 +2979,10 @@ def _controler_echange(
             durs += forcable
         resultat = validate_move(
             placement.session_id, placement.week, placement.day, placement.slot,
-            _as_placed(state.timetable), placement.group_ids, placement.teacher_codes, salle,
+            state.timetable, placement.group_ids, placement.teacher_codes, salle,
             sessions_by_id=state.sessions_by_id,
             groups=state.groups,
-            conflicting_room_ids=_build_conflict_map(state.rooms).get(salle, set()) if salle else None,
+            conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle, set()) if salle else None,
             ignore_session_ids=ignorees,
         )
         durs += resultat.hard_conflicts
@@ -3017,9 +3054,14 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     # sous-chaîne (« salle ») marcherait aujourd'hui mais casserait
     # silencieusement à la première reformulation du texte français.
     #
-    # Salles combinées incluses (`_build_conflict_map`) : réserver H.007-008
-    # doit voir H.007 et H.008 comme occupées, et réciproquement.
-    conflits_ids = {salle.id} | _build_conflict_map(state.rooms).get(salle.id, set())
+    # Salles combinées incluses (`build_manual_conflict_map`) : réserver
+    # H.007-008 doit voir H.007 et H.008 comme occupées, et réciproquement —
+    # ET, depuis le 25/09/2026 (retour Kyllian Bresson), H.007 et H.008
+    # doivent aussi se bloquer mutuellement entre elles (même salle physique),
+    # à la différence de `solver/rooms.py::_build_conflict_map` (affectation
+    # AUTOMATIQUE), qui les garde volontairement indépendantes pour le hack
+    # duo synchronisé — cf. le docstring de `build_manual_conflict_map`.
+    conflits_ids = {salle.id} | build_manual_conflict_map(state.rooms).get(salle.id, set())
     duree = max(1, getattr(session, "duration_slots", 1) or 1) if session else 1
     creneaux_vises = {match.slot + k for k in range(duree)}
     occupants = []
@@ -3414,7 +3456,7 @@ def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
 
     from cal_iut.celcat import navigateur as nav
     from cal_iut.celcat import reseau, sync
-    from cal_iut.celcat.driver import PiloteSimule, PilotePlaywright, Rythme, SaisieCelcat
+    from cal_iut.celcat.driver import PilotePlaywright, PiloteSimule, Rythme, SaisieCelcat
     from cal_iut.celcat.formulaire import charger_carte
 
     state = get_state()
@@ -3529,13 +3571,13 @@ def celcat_worker_actif(body: CelcatWorkerRequest) -> CelcatEtatResponse:
 
 @app.post("/celcat/valider", response_model=CelcatEtatResponse, dependencies=[Depends(accounts.require_role("admin"))])
 def celcat_valider(body: CelcatValiderRequest) -> CelcatEtatResponse:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from cal_iut.celcat.etat import charger, sauver
 
     doc = charger()
     doc["semaines_validees"] = [int(s) for s in body.semaines]
-    doc["valide_le"] = datetime.now(timezone.utc).isoformat()
+    doc["valide_le"] = datetime.now(UTC).isoformat()
     sauver(doc)
     return _celcat_etat_public()
 
@@ -4076,9 +4118,9 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
     """
     from cal_iut.celcat import mappings
     from cal_iut.celcat.file_attente import lister as jobs_en_file
-    from cal_iut.celcat.nuit import SANS_PLACEMENT
     from cal_iut.celcat.instantane import lire
     from cal_iut.celcat.logs import tous as tous_les_logs
+    from cal_iut.celcat.nuit import SANS_PLACEMENT
 
     doc = mappings.charger()
 
@@ -4773,11 +4815,11 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
 
     salle_id = getattr(salle, "id", None)
     validation = validate_move(
-        session_id, body.week, body.day, body.slot, _as_placed(state.timetable),
+        session_id, body.week, body.day, body.slot, state.timetable,
         list(session.group_ids or []), list(session.teacher_codes or []),
         salle_id,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
-        conflicting_room_ids=_build_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
+        conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
     )
     if not validation.valid and not body.force:
         raise HTTPException(409, detail={
@@ -4993,18 +5035,19 @@ def _conflit_salle_pause_midi(
     Jules 23/09/2026).
 
     Vérifié ICI, À PART de `validate_move`, plutôt que dans son unique point
-    d'exemption : `validate_move` ne voit jamais la salle RÉELLE des
-    séances comparées. Son unique fournisseur d'occupation, `_as_placed`
-    (cf. plus bas), convertit `PlacedSessionWithRoom` en `PlacedSession` —
-    qui n'a PAS de champ `room_id` — avant de le lui passer ; le paramètre
-    `room_id` de `validate_move` n'est donc déjà, pour TOUT appelant
-    existant (pas seulement les évènements), jamais comparé à une salle
-    réelle. Ce manque est PRÉEXISTANT à ce contrat et touche potentiellement
-    tout déplacement, pas seulement les évènements de la pause — corriger
-    `_as_placed`/`PlacedSession` pour le combler dépasse le périmètre
-    verrouillé ici (risque de changer, pour TOUS les appelants existants,
-    un comportement de conflit de salle resté silencieux jusqu'ici) ; cf.
-    le rapport de ce contrat.
+    d'exemption — pas (ou plus) parce que `validate_move` ignorerait la salle
+    réelle des séances comparées : depuis le 25/09/2026 (retour Kyllian
+    Bresson, « je dois faire des doublons » à la main faute de contrôle),
+    tous ses appelants réels lui passent `state.timetable` TEL QUEL (plus
+    `_as_placed`, qui convertissait `PlacedSessionWithRoom` en `PlacedSession`
+    et perdait `room_id` en route — cf. `move_session`/`placer_seance`/
+    `validate_placement`/`_controler_echange`). La vraie raison de séparer
+    CETTE fonction : elle compare des HORAIRES RÉELS en minutes (12h30-14h,
+    12h45-13h30, ...), alors que `validate_move` compare des CRÉNEAUX DE
+    STOCKAGE (tout évènement pause vit sur le créneau 3, cf.
+    `_SLOT_STOCKAGE_PAUSE`) — deux pauses non chevauchantes en vrai (13h-13h30
+    et 13h30-14h) partageraient pourtant le même créneau de stockage, et
+    `validate_move` ne sait pas départager les deux granularités.
     """
     if not room_id or not horaire:
         return None
@@ -5895,6 +5938,20 @@ def telecharger_sauvegarde(jour: str) -> Response:
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="cal-iut-{jour}.json"'},
     )
+
+
+# ── Doublons salle / enseignant (retour Kyllian Bresson 25/09/2026) ──
+# « une possibilité de vérification après placement pour salles et
+# enseignants en double [...] que je puisse corriger cela rapidement » — cf.
+# `api/doublons.py` pour le calcul (module pur), le fond du correctif
+# (`build_manual_conflict_map`, `validate_move` recevant enfin la vraie
+# salle) est documenté sur `move_session`/`validate_placement` plus haut.
+
+
+@app.get("/controles/doublons", response_model=DoublonsListResponse, dependencies=[Depends(accounts.require_role("edit"))])
+def controle_doublons(semaine: int | None = None) -> DoublonsListResponse:
+    state = get_state()
+    return DoublonsListResponse(doublons=[DoublonResponse(**d) for d in doublons.doublons(state, semaine)])
 
 
 from cal_iut.mcp.http_rpc import handle_mcp_post

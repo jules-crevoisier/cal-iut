@@ -265,6 +265,41 @@ def _build_conflict_map(rooms: list[Room]) -> dict[str, set[str]]:
     return conflicts
 
 
+def build_manual_conflict_map(rooms: list[Room]) -> dict[str, set[str]]:
+    """
+    Carte de conflits pour les CONTRÔLES MANUELS a posteriori (déplacement,
+    placement, échange, changement de salle, compte rendu de doublons) —
+    retour Kyllian Bresson 25/09/2026 : « pour H.201 et H.203, c'est en soi
+    la même salle, donc il ne faut pas deux modules différents en même temps
+    dans ces deux salles, pareil pour H.007 et H.008 ».
+
+    DISTINCTE de `_build_conflict_map` ci-dessus, qui reste INCHANGÉE et sert
+    toujours l'affectation AUTOMATIQUE du solveur (`assign_rooms`,
+    `find_room_for_slot`) : celle-ci a explicitement besoin que H.007 et
+    H.008 restent réservables INDÉPENDAMMENT l'une de l'autre (cloison
+    fermée) — c'est même le "hack Celcat" déjà en place pour les duos
+    synchronisés (`_duo_room_overrides` : 2 enseignants, 2 salles distinctes,
+    l'une H.007, l'autre H.008, EN MÊME TEMPS, volontairement). Réutiliser
+    `_build_conflict_map` tel quel ici casserait ce mécanisme en silence.
+
+    Part de `_build_conflict_map` (combinée <-> chaque partie) et y ajoute
+    partie <-> partie : les deux moitiés d'une même salle fusionnée
+    deviennent mutuellement en conflit, en plus de l'être chacune avec la
+    version fusionnée. Pour une paire (cas réel actuel), les trois identifiants
+    finissent avec le MÊME ensemble `{soi-même} | conflits` — une classe
+    d'équivalence utilisable telle quelle comme clé de regroupement (cf.
+    `api/doublons.py`).
+    """
+    conflicts = _build_conflict_map(rooms)
+    for r in rooms:
+        parts = list(r.combines)
+        for i, a in enumerate(parts):
+            for b in parts[i + 1 :]:
+                conflicts.setdefault(a, set()).add(b)
+                conflicts.setdefault(b, set()).add(a)
+    return conflicts
+
+
 def _is_free(
     room_schedule: dict[str, set[int]],
     conflicts: dict[str, set[str]],

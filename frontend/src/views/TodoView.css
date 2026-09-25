@@ -1,0 +1,39 @@
+/* Section « Doublons salle / enseignant » de l'écran « À traiter » (retour
+   Kyllian Bresson 25/09/2026) — mêmes tokens que le reste de l'appli
+   (`--border`, échelle d'espacement 4/8/12/16px), rien d'ad-hoc. Mobile
+   d'abord (320px) : titre + badge sur deux lignes si besoin, une colonne. */
+
+.todo-doublons-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+
+.todo-doublons-header h3 {
+  margin: 0;
+}
+
+.todo-doublons-semaine {
+  margin-top: 16px;
+}
+
+.todo-doublons-semaine:first-of-type {
+  margin-top: 8px;
+}
+
+.todo-doublons-semaine h4 {
+  margin: 0 0 8px;
+}
+
+.todo-doublons-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.todo-doublons-actions .btn {
+  min-height: 44px;
+}

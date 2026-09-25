@@ -190,14 +190,13 @@ def _conflit_structure(exc: HTTPException) -> HTTPException:
 
 def _controler_placement(state: object, session: object, placement: object, force: bool) -> None:
     from cal_iut.api.main import (
-        _as_placed,
-        _build_conflict_map,
         _hard_constraint_context,
         _indisponibilites_strictes,
         _institutional_violations,
         _libelle_jour_ferme,
         _pedagogical_order_violations,
         _teacher_availability_violations,
+        build_manual_conflict_map,
     )
 
     extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
@@ -268,18 +267,21 @@ def _controler_placement(state: object, session: object, placement: object, forc
             },
         )
     room_id = getattr(placement, "room_id", None)
+    # `state.timetable` tel quel (pas `_as_placed`, qui perdait `room_id` en
+    # route — bug réel trouvé le 25/09/2026, retour Kyllian Bresson, cf.
+    # `api/doublons.py` et `api/main.py::build_manual_conflict_map`).
     validation = validate_move(
         session.id,
         placement.week,
         placement.day,
         placement.slot,
-        _as_placed(state.timetable),
+        state.timetable,
         list(placement.group_ids),
         list(session.teacher_codes),
         room_id,
         sessions_by_id=state.sessions_by_id,
         groups=state.groups,
-        conflicting_room_ids=_build_conflict_map(state.rooms).get(room_id, set()) if room_id else None,
+        conflicting_room_ids=build_manual_conflict_map(state.rooms).get(room_id, set()) if room_id else None,
     )
     if not validation.valid and not force:
         raise HTTPException(

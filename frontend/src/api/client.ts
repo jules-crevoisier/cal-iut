@@ -1084,3 +1084,37 @@ export function patchTache(id: number, body: TachePatchBody): Promise<Tache> {
 export function supprimerTache(id: number): Promise<{ deleted: boolean }> {
   return request(`/taches/${id}`, { method: "DELETE" });
 }
+
+// ── Doublons salle / enseignant (retour Kyllian Bresson 25/09/2026) ──
+// « une possibilité de vérification après placement pour salles et
+// enseignants en double [...] que je puisse corriger cela rapidement » —
+// cf. `api/doublons.py` côté serveur (module pur) pour le calcul.
+
+export interface DoublonSeance {
+  session_id: string;
+  course_code: string;
+  /** `group_ids` bruts — résolus en libellés côté client, même convention
+   * que `payload.groupLabels` ailleurs (todo.ts, kanban.ts). */
+  groupes: string[];
+  salle: string | null;
+  /** Codes enseignants bruts — résolus via `payload.teacherLabels`. */
+  enseignants: string[];
+}
+
+export interface Doublon {
+  /** Indice SOLVEUR de la semaine (jamais l'indice d'affichage) — cf.
+   * mémoire projet « Trois numérotations de semaines ». */
+  semaine: number;
+  jour: number;
+  creneau: number;
+  type: "salle" | "enseignant";
+  /** Nom de l'enseignant (déjà résolu côté serveur) ou libellé(s) de
+   * salle(s) — jamais un code brut pour ce champ précis. */
+  ressource: string;
+  seances: DoublonSeance[];
+}
+
+export function fetchDoublons(semaine?: number | null): Promise<Doublon[]> {
+  const q = semaine === null || semaine === undefined ? "" : `?semaine=${semaine}`;
+  return request<{ doublons: Doublon[] }>(`/controles/doublons${q}`).then((r) => r.doublons);
+}
