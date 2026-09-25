@@ -28,15 +28,25 @@
  * corrections restent en file, et l'écran dit précisément où ça s'est
  * arrêté. Un worker en recul après des échecs répétés peut attendre trente
  * minutes entre deux passages — mieux vaut le dire que tourner en rond.
+ *
+ * ET ELLE REPREND APRÈS UN DÉPART. Retour utilisateur du 25/09/2026 : « si on
+ * quitte et qu'on revient sur l'onglet Celcat, ça le remet en mode qu'on peut
+ * le recorriger. » Cet état vivait seulement ici, en React — mort avec
+ * l'onglet. Le serveur porte désormais le même suivi
+ * (`cal_iut.celcat.correction_en_cours`, `GET/DELETE /celcat/comparaison/
+ * en-cours`) : au montage, ce hook le relit et REPREND l'attente au lieu de
+ * proposer un « Corriger » qui redirait ce qui est déjà parti.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   corrigerEcartsCelcat,
+  fetchCelcatCorrectionEnCours,
   fetchCelcatFile,
   fetchCelcatInstantane,
   rafraichirCelcatInstantane,
   type CelcatCorrection,
+  type CelcatCorrectionEnCours,
 } from "../api/client";
 
 export type EtapeBoucle =
@@ -169,6 +179,84 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
       message: e instanceof Error ? e.message : "La vérification a échoué.",
     }));
   }, []);
+
+  /** Relit le suivi serveur d'une correction pour `sem`, et REPREND l'attente
+   *  si elle est encore en vol — sans jamais reposer de correction. Appelée
+   *  au montage / changement de semaine (cf. l'effet ci-dessous). */
+  const reprendre = useCallback(
+    async (moi: number, sem: number) => {
+      let suivi: CelcatCorrectionEnCours;
+      try {
+        suivi = await fetchCelcatCorrectionEnCours(sem);
+      } catch {
+        // Silencieux : au pire l'écran reste au repos, rejouable à la main —
+        // mieux vaut ça qu'une erreur au montage pour un simple suivi.
+        return;
+      }
+      if (jeton.current !== moi) return;
+      if (suivi.etat === "absente") return;
+
+      if (suivi.etat === "termine") {
+        await terminer(moi, null);
+        return;
+      }
+
+      if (suivi.etat === "expire") {
+        setEtat({
+          etape: "interrompu",
+          verification: true,
+          correction: null,
+          message: suivi.message || "Corrections envoyées, toujours en file — rien n’est perdu.",
+        });
+        return;
+      }
+
+      // "en_cours" : on retrouve l'attente là où elle en était, sans en
+      // reposer une — exactement ce que quitter puis revenir sur l'onglet ne
+      // permettait pas avant ce suivi serveur (retour utilisateur du
+      // 25/09/2026).
+      setEtat({
+        etape: "attente_worker",
+        verification: true,
+        correction: null,
+        message: suivi.message || "Corrections envoyées — en attente du passage du worker…",
+      });
+      for (;;) {
+        if (!(await attendre(intervalle, moi))) return;
+        let suite: CelcatCorrectionEnCours;
+        try {
+          suite = await fetchCelcatCorrectionEnCours(sem);
+        } catch (e) {
+          erreur(moi, null, e);
+          return;
+        }
+        if (jeton.current !== moi) return;
+        if (suite.etat === "absente" || suite.etat === "termine") {
+          await terminer(moi, null);
+          return;
+        }
+        if (suite.etat === "expire") {
+          setEtat({
+            etape: "interrompu",
+            verification: true,
+            correction: null,
+            message: suite.message || "Corrections envoyées, toujours en file — rien n’est perdu.",
+          });
+          return;
+        }
+        // reste "en_cours" : reboucle.
+      }
+    },
+    [attendre, intervalle, terminer, erreur],
+  );
+
+  useEffect(() => {
+    if (semaine === null) return;
+    // Lu APRÈS l'effet de remise à REPOS (déclaré plus haut, donc exécuté en
+    // premier au même rendu) : `jeton.current` est déjà celui de cette
+    // semaine quand cet appel part.
+    void reprendre(jeton.current, semaine);
+  }, [semaine, reprendre]);
 
   /** Corrige la semaine, puis va jusqu'à la vérification. */
   const corriger = useCallback(

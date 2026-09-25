@@ -1024,6 +1024,28 @@ class CelcatFileResponse(BaseModel):
     resume: str = ""
 
 
+class CelcatCorrectionEnCoursResponse(BaseModel):
+    """Une correction encore en vol pour une semaine, retrouvée après avoir
+    quitté l'onglet Celcat puis y être revenu (retour utilisateur du
+    25/09/2026). L'état vit côté SERVEUR — Jules et Kyllian travaillent
+    depuis des postes différents, et c'est le MÊME worker qu'ils attendent.
+
+    `etat` :
+    - "absente" : rien en file pour cette semaine, ou déjà résolu ;
+    - "en_cours" : mise en file, en attente du worker et/ou d'un relevé frais ;
+    - "termine" : le worker est repassé ET un relevé plus récent est arrivé ;
+    - "expire" : le délai généreux (45 min) a couru sans conclure — les jobs
+      restent en file, seul CE SUIVI a cessé d'être fiable.
+    """
+
+    semaine: int
+    etat: str
+    mise_en_file_le: str | None = None
+    par: str = ""
+    total: int = 0
+    message: str = ""
+
+
 class CelcatEtatResponse(BaseModel):
     saisie_active: bool
     semaines_validees: list[int] = []
