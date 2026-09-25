@@ -217,3 +217,60 @@
 .kanban-card-concerne {
   margin-bottom: 4px;
 }
+
+/* Onglets EDT / Plateforme (25/09/2026) — mêmes tokens que le reste
+   (`--border`, `--surface-2`, `--accent`), tap target ≥44px. */
+.kanban-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.kanban-tab {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kanban-tab:hover:not(.active) {
+  border-color: var(--accent);
+}
+
+.kanban-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.kanban-tab.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+@media (min-width: 768px) {
+  .kanban-tabs {
+    align-self: flex-start;
+  }
+
+  .kanban-tab {
+    flex: 0 0 auto;
+  }
+}
+
+/* Marqueur « Urgent » (25/09/2026) — texte, jamais la couleur seule
+   (`.pill.bad` porte déjà un fond/bordure distincts, le mot suffit à lui
+   seul à identifier la carte). */
+.kanban-card-urgent {
+  align-self: flex-start;
+}

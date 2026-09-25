@@ -1051,6 +1051,15 @@ export interface Tache {
   enseignant_code: string | null;
   /** Qui doit agir (texte libre, ex. « Jules », « Kyllian ») — 25/09/2026. */
   concerne: string | null;
+  /** Onglet du kanban (Jules, dicté 25/09/2026 : « entre les affaires par
+   *  rapport à l'emploi du temps [...] et les affaires à propos de la
+   *  plateforme ») — toujours "edt" ou "plateforme" en sortie d'API, jamais
+   *  `null` (une carte antérieure à ce champ est lue comme "edt" côté
+   *  serveur, cf. `api/main.py::_tache_to_response`). */
+  categorie: "edt" | "plateforme";
+  /** Urgence (même demande, 25/09/2026) — toujours "normale" ou "urgente"
+   *  en sortie d'API, même raisonnement que `categorie`. */
+  priorite: "normale" | "urgente";
   date_debut: string | null; // ISO "AAAA-MM-JJ"
   date_fin: string | null; // ISO "AAAA-MM-JJ"
   cree_par: string;
@@ -1066,6 +1075,8 @@ export interface TacheCreateBody {
   ordre?: number | null;
   enseignant_code?: string | null;
   concerne?: string | null;
+  categorie?: Tache["categorie"];
+  priorite?: Tache["priorite"];
   date_debut?: string | null;
   date_fin?: string | null;
 }

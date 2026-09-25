@@ -17,6 +17,8 @@ function tache(overrides: Partial<Tache> & Pick<Tache, "id" | "titre">): Tache {
     ordre: 0,
     enseignant_code: null,
     concerne: null,
+    categorie: "edt",
+    priorite: "normale",
     date_debut: null,
     date_fin: null,
     cree_par: "prof@example.test",
@@ -64,6 +66,7 @@ describe("KanbanView", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   it("renders the three columns with their counts", async () => {
@@ -132,5 +135,85 @@ describe("KanbanView", () => {
     fireEvent.change(screen.getByLabelText("Pour qui"), { target: { value: "__sans__" } });
     expect(screen.getByText("A trier")).toBeInTheDocument();
     expect(screen.queryByText("Prevenir les BUT2")).not.toBeInTheDocument();
+  });
+
+  // Deux onglets EDT / Plateforme (Jules, dicté 25/09/2026 : « deux petits
+  // boutons qui seraient des onglets : entre les affaires par rapport à
+  // l'emploi du temps [...] et les affaires à propos de la plateforme »).
+
+  it("shows two tabs with role=tab/aria-selected and their counts, filtering the board", async () => {
+    stubFetch([
+      tache({ id: 1, titre: "Deplacer le TD", categorie: "edt" }),
+      tache({ id: 2, titre: "Bug export Celcat", categorie: "plateforme" }),
+      tache({ id: 3, titre: "Salle a corriger", categorie: "plateforme" }),
+    ]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Deplacer le TD")).toBeInTheDocument());
+
+    const tablist = screen.getByRole("tablist", { name: "Catégorie de tâches" });
+    expect(tablist).toBeInTheDocument();
+    const ongletEdt = screen.getByRole("tab", { name: /Emploi du temps/ });
+    const ongletPlateforme = screen.getByRole("tab", { name: /Plateforme/ });
+    expect(ongletEdt).toHaveAttribute("aria-selected", "true");
+    expect(ongletPlateforme).toHaveAttribute("aria-selected", "false");
+    expect(ongletEdt).toHaveTextContent("1");
+    expect(ongletPlateforme).toHaveTextContent("2");
+
+    // Onglet EDT actif par défaut : seule la carte EDT est visible.
+    expect(screen.getByText("Deplacer le TD")).toBeInTheDocument();
+    expect(screen.queryByText("Bug export Celcat")).not.toBeInTheDocument();
+
+    fireEvent.click(ongletPlateforme);
+    expect(screen.queryByText("Deplacer le TD")).not.toBeInTheDocument();
+    expect(screen.getByText("Bug export Celcat")).toBeInTheDocument();
+    expect(screen.getByText("Salle a corriger")).toBeInTheDocument();
+    expect(ongletPlateforme).toHaveAttribute("aria-selected", "true");
+    expect(ongletEdt).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("shows an Urgent text marker and sorts urgent cards first in their column", async () => {
+    stubFetch([
+      tache({ id: 1, titre: "Tache normale", ordre: 0, priorite: "normale" }),
+      tache({ id: 2, titre: "Tache urgente", ordre: 1, priorite: "urgente" }),
+    ]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Tache urgente")).toBeInTheDocument());
+
+    expect(screen.getByText("Urgent")).toBeInTheDocument();
+
+    const titres = screen.getAllByText(/^Tache (normale|urgente)$/).map((el) => el.textContent);
+    expect(titres).toEqual(["Tache urgente", "Tache normale"]);
+  });
+
+  it("sends categorie and priorite from the create form", async () => {
+    const appels = stubFetch([]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getAllByText("Aucune tâche.").length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Nouvelle tâche" }));
+    fireEvent.change(screen.getByPlaceholderText("ex. Prévenir Kyllian, absent jeudi"), {
+      target: { value: "Bug de la vue Salle" },
+    });
+    fireEvent.change(screen.getByLabelText("Catégorie"), { target: { value: "plateforme" } });
+    fireEvent.click(screen.getByLabelText("Urgent"));
+    fireEvent.click(screen.getByRole("button", { name: "Créer" }));
+
+    await waitFor(() => expect(appels.some((a) => a.method === "POST")).toBe(true));
+    const post = appels.find((a) => a.method === "POST");
+    expect((post?.body as { categorie?: string; priorite?: string })?.categorie).toBe("plateforme");
+    expect((post?.body as { categorie?: string; priorite?: string })?.priorite).toBe("urgente");
+  });
+
+  it("restores the active tab from storage after a reload", async () => {
+    window.localStorage.setItem("cal-iut:kanban:onglet:v1", "plateforme");
+    stubFetch([
+      tache({ id: 1, titre: "Carte EDT", categorie: "edt" }),
+      tache({ id: 2, titre: "Carte plateforme", categorie: "plateforme" }),
+    ]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Carte plateforme")).toBeInTheDocument());
+    expect(screen.queryByText("Carte EDT")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Plateforme/ })).toHaveAttribute("aria-selected", "true");
   });
 });
