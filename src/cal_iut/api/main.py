@@ -1442,6 +1442,11 @@ def _tache_to_response(row) -> TacheResponse:
     return TacheResponse(
         id=row.id, titre=row.titre, description=row.description, colonne=row.colonne, ordre=row.ordre,
         enseignant_code=row.enseignant_code, concerne=row.concerne,
+        # `None` = ligne créée avant ces champs (colonnes nullables sans
+        # défaut SQL, cf. `db/models.py::Tache`) — lue comme "edt" / "normale"
+        # ici, jamais renvoyée telle quelle (le schéma `Literal` la refuserait).
+        categorie=row.categorie or "edt",
+        priorite=row.priorite or "normale",
         date_debut=row.date_debut.isoformat() if row.date_debut else None,
         date_fin=row.date_fin.isoformat() if row.date_fin else None,
         cree_par=row.cree_par, cree_le=row.cree_le.isoformat(), maj_le=row.maj_le.isoformat(),
@@ -1475,6 +1480,7 @@ def create_tache(body: TacheCreateRequest, request: Request) -> TacheResponse:
     row = repo.create_tache(
         titre=body.titre, cree_par=user.email, description=body.description, colonne=body.colonne,
         ordre=body.ordre, enseignant_code=body.enseignant_code, concerne=body.concerne,
+        categorie=body.categorie, priorite=body.priorite,
         date_debut=date_debut, date_fin=date_fin,
     )
     return _tache_to_response(row)
@@ -1509,6 +1515,10 @@ def update_tache(tache_id: int, body: TacheUpdateRequest) -> TacheResponse:
         # redevenir « pour personne en particulier »), contrairement aux
         # autres champs où `None` signifie « non fourni ».
         champs["concerne"] = body.concerne.strip() or None
+    if body.categorie is not None:
+        champs["categorie"] = body.categorie
+    if body.priorite is not None:
+        champs["priorite"] = body.priorite
 
     # Dates : validées contre le mélange futur(champs fournis)/existant, pas
     # seulement contre ce que le PATCH apporte — un PATCH qui ne change QUE
