@@ -114,6 +114,15 @@ interface Scenario {
   workerMuet?: boolean;
   logs?: unknown[];
   extras?: unknown[];
+  mappings?: Partial<{
+    salles: unknown[];
+    enseignants: unknown[];
+    salles_celcat: string[];
+    manquants: unknown[];
+    bloques_autres_semaines: number;
+  }>;
+  /** `PUT /celcat/mappings` répond en erreur avec ce message. */
+  mappingEchec?: string;
 }
 
 /** Un serveur qui se souvient : le worker repasse après une correction, et un
@@ -125,10 +134,39 @@ function serveur(s: Scenario = {}) {
   let corrige = false;
   let releveDemande = false;
   let relu = false;
+  let mappingsDoc = {
+    salles: [] as unknown[],
+    enseignants: [] as unknown[],
+    salles_celcat: ["H.104"],
+    manquants: [] as unknown[],
+    bloques_autres_semaines: 0,
+    ...(s.mappings ?? {}),
+  };
 
   const mock = vi.fn((url: string, init?: RequestInit) => {
     const u = String(url);
     const methode = init?.method ?? "GET";
+    if (u.includes("/celcat/mappings")) {
+      if (methode === "PUT") {
+        if (s.mappingEchec) return jsonKo(400, s.mappingEchec);
+        const corps = JSON.parse(String(init?.body)) as { famille: string; cle: string; valeur: string };
+        mappingsDoc = {
+          ...mappingsDoc,
+          // Le blocage réglé ne réapparaît plus tant qu'un mapping existe
+          // pour sa clé — c'est la promesse vérifiée ici, pas rejouée.
+          manquants: mappingsDoc.manquants.filter(
+            (m) => (m as { cle?: string }).cle !== corps.cle,
+          ),
+          [corps.famille]: [
+            ...(mappingsDoc[corps.famille as "salles" | "enseignants"] as unknown[]),
+            { cle: corps.cle, valeur: corps.valeur, ajoute_le: "2026-09-25T10:00:00", ajoute_par: "kyllian@iut" },
+          ],
+        };
+        return jsonOk(mappingsDoc);
+      }
+      if (methode === "DELETE") return jsonOk(mappingsDoc);
+      return jsonOk(mappingsDoc);
+    }
     if (u.includes("/app-state")) return jsonOk({ weekRows: weekRows() });
     if (u.includes("/celcat/comparaison/corriger")) {
       corrige = true;
@@ -445,6 +483,58 @@ describe("Activité récente", () => {
     // Le bouton Copier n'est plus DANS le titre, qui se lisait « Créées 1 Copier ».
     expect(within(echecs).getByRole("heading").textContent).not.toContain("Copier");
     expect(within(screen.getByTestId("colonne-deleted")).queryByRole("button", { name: /copier/i })).toBeNull();
+  });
+});
+
+describe("Mapper une correspondance Celcat", () => {
+  // Signalement de Kyllian Bresson, 25/09/2026 : « j'ai l'impression que le
+  // clic sur mapper ne fonctionne pas. » Le clic enregistrait bien la
+  // correspondance, mais le blocage restait affiché à l'identique, sans un
+  // mot de confirmation, jusqu'au passage suivant du worker.
+  const BLOCAGE_SALLE = {
+    motif:
+      "séance non saisissable, salle manquant(s) : salle « e-102 » sans équivalent Celcat (cf. data/config/celcat.yaml)",
+    seances: ["WR112-S1-TD-1"],
+    tentatives: 5,
+    famille: "salles",
+    cle: "e-102",
+  };
+
+  it("enregistre la correspondance, fait disparaître le blocage et confirme, sans second clic", async () => {
+    const mock = await ouvrir({ mappings: { manquants: [BLOCAGE_SALLE] } });
+    const bloc = await screen.findByTestId("blocage-salles");
+
+    fireEvent.change(within(bloc).getByLabelText(/équivalent celcat de e-102/i), {
+      target: { value: "H.104" },
+    });
+    fireEvent.click(within(bloc).getByRole("button", { name: /mapper/i }));
+
+    await waitFor(() => {
+      const put = mock.mock.calls.find(
+        (c) => String(c[0]).includes("/celcat/mappings") && c[1]?.method === "PUT",
+      );
+      expect(put).toBeTruthy();
+      expect(JSON.parse(String(put?.[1]?.body))).toEqual({ famille: "salles", cle: "e-102", valeur: "H.104" });
+    });
+
+    // Le blocage disparaît de la liste des « non mappées »…
+    await waitFor(() => expect(screen.queryByTestId("blocage-salles")).toBeNull());
+    // … et une phrase confirme que le clic a bien fait quelque chose.
+    expect(screen.getByText(/correspondance enregistrée : e-102 → h\.104/i)).toBeTruthy();
+  });
+
+  it("montre l'erreur du serveur et laisse le blocage en place s'il refuse", async () => {
+    await ouvrir({ mappings: { manquants: [BLOCAGE_SALLE] }, mappingEchec: "salle invalide" });
+    const bloc = await screen.findByTestId("blocage-salles");
+
+    fireEvent.change(within(bloc).getByLabelText(/équivalent celcat de e-102/i), {
+      target: { value: "?!!" },
+    });
+    fireEvent.click(within(bloc).getByRole("button", { name: /mapper/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("salle invalide"));
+    expect(screen.getByTestId("blocage-salles")).toBeTruthy();
+    expect(screen.queryByText(/correspondance enregistrée/i)).toBeNull();
   });
 });
 

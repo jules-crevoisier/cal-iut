@@ -90,8 +90,16 @@ function FormulaireMapping({
           onChange={(e) => setValeur(e.target.value)}
         />
       </label>
-      <button type="submit" className="btn btn--accent" disabled={occupe || !valeur.trim()}>
-        Mapper
+      {/* Le libellé change pendant l'envoi : un bouton désactivé sans autre
+          signe se lit comme un clic resté sans effet (25/09/2026, Kyllian
+          Bresson). */}
+      <button
+        type="submit"
+        className="btn btn--accent"
+        disabled={occupe || !valeur.trim()}
+        aria-busy={occupe}
+      >
+        {occupe ? "Mapper…" : "Mapper"}
       </button>
       {famille === "salles" ? (
         <datalist id={listeId}>
@@ -108,12 +116,18 @@ export function BlocagesCelcat({
   mappings,
   occupe,
   erreur,
+  confirmation,
   onMapper,
   onOublier,
 }: {
   mappings: CelcatMappings | null;
   occupe: boolean;
   erreur: string | null;
+  /** Une phrase courte après un enregistrement réussi. Sans elle, cliquer
+   *  « mapper » ne se distingue en rien d'un clic resté sans effet — la
+   *  correspondance était bien enregistrée (25/09/2026, Kyllian Bresson),
+   *  mais rien ne le disait. */
+  confirmation?: string | null;
   onMapper: (famille: "salles" | "enseignants", cle: string, valeur: string) => void;
   onOublier: (famille: "salles" | "enseignants", cle: string) => void;
 }) {
@@ -132,7 +146,8 @@ export function BlocagesCelcat({
   if (
     tous.length === 0 &&
     correspondances.length === 0 &&
-    !(mappings.bloques_autres_semaines ?? 0)
+    !(mappings.bloques_autres_semaines ?? 0) &&
+    !confirmation
   )
     return null;
 
@@ -166,6 +181,12 @@ export function BlocagesCelcat({
       {erreur ? (
         <p className="alerte" role="alert">
           {erreur}
+        </p>
+      ) : null}
+
+      {confirmation ? (
+        <p className="celcat-mapping-confirmation" role="status" aria-live="polite">
+          {confirmation}
         </p>
       ) : null}
 
