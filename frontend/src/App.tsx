@@ -148,7 +148,12 @@ export function App() {
         ? "groupe"
         : route.mode === "promo"
           ? "promo"
-          : null;
+          : // Lien public « Salles libres » (retour utilisateur 25/09/2026,
+            // Jules, dicté : « on met ça en lien public ») — même mécanisme
+            // que "promo", cible le tableau d'occupation plutôt qu'une entité.
+            route.mode === "salles"
+            ? "salles-libres"
+            : null;
   const activeTab: RouteView = readOnlyTarget ?? (route.vue || "semaine");
 
   // Système de comptes (31/08/2026, remplace le mot de passe partagé) —
@@ -489,7 +494,9 @@ export function App() {
                   ? `Planning de ${appPayload.teacherLabels[route.prof] ?? route.prof}`
                   : readOnlyTarget === "promo"
                     ? "Vue Promo — toutes les promotions"
-                    : // Parcours en préfixe — retour utilisateur 28/08/2026 :
+                    : readOnlyTarget === "salles-libres"
+                      ? "Occupation des salles"
+                      : // Parcours en préfixe — retour utilisateur 28/08/2026 :
                       // « pourquoi on a pas le nom complet du groupe dessus ».
                       // Le libellé seul ("TD EF") existe en double identique
                       // entre plusieurs parcours (cf. ReferenceView.tsx, même
@@ -502,7 +509,10 @@ export function App() {
                       }`}
               </h1>
               <p>Vue en lecture seule — pour toute correction, contactez le responsable des emplois du temps.</p>
-              <ReglageCouleurs prefs={prefs} setPrefs={setPrefs} />
+              {/* Sans effet sur le tableau d'occupation (aucune couleur par
+                  matière) — proposer ce réglage ici n'y ferait rien voir de
+                  différent, autant ne pas l'offrir. */}
+              {readOnlyTarget !== "salles-libres" && <ReglageCouleurs prefs={prefs} setPrefs={setPrefs} />}
             </header>
           )}
 
@@ -680,8 +690,13 @@ export function App() {
             onOpenSearch={() => setSearch(true)}
           />
         )}
-        {activeTab === "salles-libres" && appPayload && !readOnlyTarget && (
-          <SallesLibresView payload={appPayload} route={route} setRoute={setRoute} />
+        {activeTab === "salles-libres" && appPayload && (!readOnlyTarget || readOnlyTarget === "salles-libres") && (
+          <SallesLibresView
+            payload={appPayload}
+            route={route}
+            setRoute={setRoute}
+            readOnly={readOnlyTarget === "salles-libres"}
+          />
         )}
         {activeTab === "promo" && appPayload && (!readOnlyTarget || readOnlyTarget === "promo") && (
           <PromoView

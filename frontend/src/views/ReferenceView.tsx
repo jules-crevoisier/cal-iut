@@ -240,6 +240,14 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
     }));
 
   const lienPromo = buildLink({ vue: "promo", mode: "promo", t: "promo" });
+  // Lien public « Salles libres » (retour utilisateur 25/09/2026, Jules,
+  // dicté : « on met ça en lien public, comme ça les gens peuvent consulter
+  // [...] le tableau que tu as fait qui est très bien avec les salles ») —
+  // même mécanisme que le lien Vue Promo ci-dessus : présence de `t` suffit
+  // (`api/auth.py::verify_personal_link_param`), lecture seule, aucun compte
+  // requis. « Salles libres » n'est plus un onglet de la nav (SideNav.tsx) :
+  // ce lien devient son seul point d'accès.
+  const lienSalles = buildLink({ vue: "salles-libres", mode: "salles", t: "salles" });
 
   return (
     <div className="panel">
@@ -277,6 +285,22 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
         <span className="lien-boutons">
           <CopyButton text={lienPromo} idleLabel="Copier le lien" />
           <OpenLinkButton href={lienPromo} />
+        </span>
+      </div>
+
+      {/* Lien public « Salles libres » (retour utilisateur 25/09/2026) — même
+          principe que ci-dessus : un seul lien, pas par destinataire, le
+          tableau d'occupation des salles en lecture seule. */}
+      <div className="panel-liens-promo">
+        <div>
+          <strong>Occupation des salles — accès public</strong>
+          <p className="muted small">
+            Un seul lien : le tableau salles × créneaux en lecture seule, sans mot de passe.
+          </p>
+        </div>
+        <span className="lien-boutons">
+          <CopyButton text={lienSalles} idleLabel="Copier le lien" />
+          <OpenLinkButton href={lienSalles} />
         </span>
       </div>
       {showMailModal && <SendTeacherMailsModal onClose={() => setShowMailModal(false)} />}

@@ -43,17 +43,19 @@ const NAV_GROUPS: NavGroup[] = [
     // en particulier ou d'un parcours ou un TD ou un TP ») — les collègues ont
     // désormais des comptes en lecture seule, qui voient ces onglets sans
     // pouvoir rien modifier. « Vue Groupe » revient sous le nom « Vue TD / TP ».
+    //
+    // « Vue Salle » et « Salles libres » retirées à leur tour le 25/09/2026
+    // (retour utilisateur Jules, dicté : « on enlève les deux onglets qu'on a
+    // là [...] et on met ça en lien public [...] uniquement le tableau que tu
+    // as fait qui est très bien avec les salles ») — « Salles libres » devient
+    // un lien public (`mode=salles`, cf. App.tsx `readOnlyTarget`) plutôt
+    // qu'un onglet de la nav ; les deux composants et leurs routes restent
+    // (recherche globale, lien personnel « Vue Salle »).
     label: "Perspectives",
     items: [
       { id: "prof", label: "Vue Enseignant" },
       { id: "promo", label: "Vue Promo" },
       { id: "groupe", label: "Vue TD / TP" },
-      { id: "salle", label: "Vue Salle" },
-      // Ajouté le 22/09/2026 (todo département, Kyllian Bresson :
-      // « Planning des salles disponibles ») — juste après « Vue Salle »
-      // (occupation d'UNE salle), sa question inverse : quelles salles sont
-      // libres sur tel créneau.
-      { id: "salles-libres", label: "Salles libres" },
     ],
   },
   {

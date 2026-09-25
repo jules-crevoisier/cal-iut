@@ -1,5 +1,11 @@
 /**
  * Contrat SideNav : plus d'onglet « À placer » ; « À traiter » reste.
+ *
+ * Retour utilisateur 25/09/2026 (Jules, dicté) : « Vue Salle » et « Salles
+ * libres » retirées de « Perspectives » — « Salles libres » devient un lien
+ * public (`mode=salles`), « Vue Salle » reste joignable par la recherche et
+ * les liens perso. Les deux routes/composants restent, seuls les deux
+ * boutons de la nav disparaissent.
  */
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -39,6 +45,12 @@ describe("SideNav groups", () => {
     render(<SideNav {...baseProps} email="prof@example.test" onLogout={vi.fn()} />);
     expect(screen.getByRole("button", { name: /clé api/i })).toBeInTheDocument();
     expect(screen.getByText("prof@example.test")).toBeInTheDocument();
+  });
+
+  it("should not offer Vue Salle or Salles libres in the nav", () => {
+    render(<SideNav {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /vue salle/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /salles libres/i })).not.toBeInTheDocument();
   });
 
   it("should show Administration Celcat only when moi.role is admin", () => {

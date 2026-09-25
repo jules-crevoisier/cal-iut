@@ -1,31 +1,30 @@
 /* Vue « Salles libres » (todo département 22/09/2026) — mêmes tokens que le
    reste de l'appli (`--accent`, `--border`, `--surface-2`...), aucune valeur
-   ad-hoc. Mobile-first : à 320px, sélecteurs en boutons qui s'enroulent
-   (jamais de défilement horizontal de PAGE) + liste une colonne ; la grille
-   salles × créneaux n'apparaît qu'à partir de 768px (cf. SallesLibresView.tsx,
-   gardée par `useNarrowScreen`). */
+   ad-hoc.
 
-.salleslibres-jours,
-.salleslibres-slots {
+   Recentrée sur le seul tableau d'occupation (retour utilisateur 25/09/2026,
+   Jules, dicté) : le tableau salles × créneaux est affiché à TOUTES les
+   largeurs, y compris 320px — jamais de défilement horizontal de PAGE, le
+   tableau défile dans son propre conteneur (`.salleslibres-grille-wrap`) et
+   sa première colonne (« Salle ») reste fixée au bord grâce à
+   `position: sticky`, pour qu'on sache toujours à quelle salle une cellule
+   défilée appartient. Semaine/jour/filtres restent en boutons qui
+   s'enroulent, jamais coupés par ce défilement. */
+
+.salleslibres-jours {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.salleslibres-slots {
-  margin-bottom: 12px;
-}
-
 /* Cible tactile ≥44px (CLAUDE.md) : `.btn--ghost` seul ne fixe pas de
    hauteur minimale, ces boutons sont la commande principale de la vue. */
-.salleslibres-jours .btn,
-.salleslibres-slots .btn {
+.salleslibres-jours .btn {
   min-height: 44px;
   flex: 1 1 auto;
 }
 
-.salleslibres-jours .btn.active,
-.salleslibres-slots .btn.active {
+.salleslibres-jours .btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -64,28 +63,17 @@
   accent-color: var(--accent);
 }
 
-.salleslibres-liste {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
+.salleslibres-grille-header {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
+  margin: 0 0 12px;
 }
 
-.salleslibres-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  min-height: 44px;
-  justify-content: center;
-}
-
-.salleslibres-item-label {
-  font-weight: 600;
+.salleslibres-grille-header h3 {
+  margin: 0;
 }
 
 .salleslibres-grille-wrap {
@@ -113,6 +101,24 @@
   white-space: nowrap;
 }
 
+/* Colonne « Salle » fixée au bord gauche du conteneur défilant — sans elle,
+   faire défiler la grille pour lire un créneau tardif perd de vue à quelle
+   salle la ligne appartient (retour utilisateur 25/09/2026, table lue à
+   320px). `z-index` : au-dessus des autres cellules (1), l'en-tête
+   au-dessus de la colonne elle-même (2), pour rester lisible au croisement. */
+.salleslibres-grille th:first-child,
+.salleslibres-grille td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.salleslibres-grille thead th:first-child {
+  background: var(--surface-2);
+  z-index: 2;
+}
+
 .salleslibres-cell.libre {
   color: var(--muted);
 }
@@ -123,8 +129,7 @@
 }
 
 @media (min-width: 768px) {
-  .salleslibres-jours .btn,
-  .salleslibres-slots .btn {
+  .salleslibres-jours .btn {
     flex: 0 1 auto;
     min-width: 120px;
   }
