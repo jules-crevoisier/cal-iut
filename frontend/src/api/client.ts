@@ -1132,3 +1132,36 @@ export function fetchDoublons(semaine?: number | null): Promise<Doublon[]> {
   const q = semaine === null || semaine === undefined ? "" : `?semaine=${semaine}`;
   return request<{ doublons: Doublon[] }>(`/controles/doublons${q}`).then((r) => r.doublons);
 }
+
+// ── Contrôle hebdomadaire des doublons (Jules Crevoisier, 25/09/2026) ──
+// « on veut faire quelque chose qui vérifie chaque semaine [...] » — filet
+// automatique côté serveur (`api/controle_doublons_hebdo.py`), ces deux
+// fonctions ne font que lire le dernier résultat et le déclencher à la
+// demande (« Vérifier maintenant »).
+
+export interface DoublonHebdoRun {
+  /** AAAA-MM-JJ — jour calendaire où le contrôle a tourné. */
+  date: string;
+  /** AAAA-Www (ISO 8601), ex. « 2026-W39 » — période du filet, jamais une
+   * semaine solveur/grille. */
+  semaine_iso: string;
+  genere_le: string;
+  total: number;
+  par_type: Record<string, number>;
+  doublons: Doublon[];
+  /** Apparus depuis le contrôle PRÉCÉDENT (clé stable semaine/jour/créneau/
+   * type/ressource) — vide au tout premier contrôle (`premier_controle`). */
+  nouveaux: Doublon[];
+  resolus: Doublon[];
+  /** `true` si aucun contrôle n'existait avant celui-ci — `nouveaux`/
+   * `resolus` n'ont alors aucun sens (rien à comparer). */
+  premier_controle: boolean;
+}
+
+export function fetchControleDoublonsHebdo(): Promise<DoublonHebdoRun | null> {
+  return request<{ dernier: DoublonHebdoRun | null }>("/controles/doublons/hebdo").then((r) => r.dernier);
+}
+
+export function executerControleDoublonsHebdo(): Promise<DoublonHebdoRun> {
+  return request<DoublonHebdoRun>("/controles/doublons/hebdo", { method: "POST" });
+}
