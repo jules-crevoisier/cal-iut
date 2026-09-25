@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from cal_iut.api import (
     accounts,
     auth,
+    controle_doublons_hebdo,
     custom_rooms,
     custom_sessions,
     doublons,
@@ -63,6 +64,8 @@ from cal_iut.api.schemas import (
     CreneauxLibresResponse,
     DiffEntryResponse,
     DiffResponse,
+    DoublonHebdoResponse,
+    DoublonHebdoRunResponse,
     DoublonResponse,
     DoublonsListResponse,
     EchangeRequest,
@@ -687,6 +690,11 @@ def startup() -> None:
     # où personne n'a encore rien modifié — `_apres_ecriture_planning` ne
     # tourne alors jamais, sans ce filet le jour n'aurait aucun instantané.
     sauvegardes.snapshot_si_necessaire(get_state())
+    # Contrôle doublons de la semaine manquant (Jules Crevoisier, 25/09/2026)
+    # — même filet, même raison : un redémarrage un lundi où personne n'a
+    # encore rien modifié ne doit pas laisser passer la semaine sans
+    # contrôle (cf. `api/controle_doublons_hebdo.py`).
+    controle_doublons_hebdo.verifier_si_necessaire(get_state())
 
 
 def charger_etat_applicatif() -> None:
@@ -3210,9 +3218,12 @@ def modifier_salle(room_id: str, body: UpdateRoomRequest) -> RoomMeta:
 def _apres_ecriture_planning(session_id: str, action: str) -> None:
     """File d'attente Celcat après un write planning, PUIS sauvegarde
     quotidienne (item B, 22/09/2026 — cf. `api/sauvegardes.py`) : au plus un
-    instantané par jour, pris au tout premier écrit du jour. Ni l'un ni
-    l'autre n'échoue jamais — une file Celcat ou une sauvegarde ratée ne doit
-    jamais faire échouer le placement qui vient de réussir."""
+    instantané par jour, pris au tout premier écrit du jour. PUIS contrôle
+    doublons de la semaine (Jules Crevoisier, 25/09/2026 — cf. `api/
+    controle_doublons_hebdo.py`) : au plus un contrôle par semaine ISO, pris
+    au tout premier écrit de la semaine. Aucun des trois n'échoue jamais —
+    une file Celcat, une sauvegarde ou un contrôle raté ne doit jamais faire
+    échouer le placement qui vient de réussir."""
     try:
         from cal_iut.celcat.ops import apres_ecriture_planning
 
@@ -3220,6 +3231,7 @@ def _apres_ecriture_planning(session_id: str, action: str) -> None:
     except Exception:
         pass
     sauvegardes.snapshot_si_necessaire(get_state())
+    controle_doublons_hebdo.verifier_si_necessaire(get_state())
 
 
 def _celcat_etat_public() -> CelcatEtatResponse:
@@ -5969,6 +5981,34 @@ def telecharger_sauvegarde(jour: str) -> Response:
 def controle_doublons(semaine: int | None = None) -> DoublonsListResponse:
     state = get_state()
     return DoublonsListResponse(doublons=[DoublonResponse(**d) for d in doublons.doublons(state, semaine)])
+
+
+# ── Contrôle hebdomadaire AUTOMATIQUE des doublons (Jules Crevoisier,
+# 25/09/2026) ── « on veut faire quelque chose qui vérifie chaque semaine
+# [...] » — le filet lui-même tourne SANS écran (`_apres_ecriture_planning`
+# et `startup()`, cf. `api/controle_doublons_hebdo.py`) ; ces deux endpoints
+# ne font que SERVIR le dernier résultat et permettre de le déclencher à la
+# demande (« Vérifier maintenant », écran « À traiter »).
+
+
+@app.get(
+    "/controles/doublons/hebdo",
+    response_model=DoublonHebdoResponse,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+def controle_doublons_hebdo_dernier() -> DoublonHebdoResponse:
+    run = controle_doublons_hebdo.dernier()
+    return DoublonHebdoResponse(dernier=DoublonHebdoRunResponse(**run) if run else None)
+
+
+@app.post(
+    "/controles/doublons/hebdo",
+    response_model=DoublonHebdoRunResponse,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+def controle_doublons_hebdo_executer() -> DoublonHebdoRunResponse:
+    run = controle_doublons_hebdo.executer_maintenant(get_state())
+    return DoublonHebdoRunResponse(**run)
 
 
 from cal_iut.mcp.http_rpc import handle_mcp_post

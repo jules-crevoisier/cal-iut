@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { Doublon } from "../api/client";
-import { fetchDoublons } from "../api/client";
+import type { Doublon, DoublonHebdoRun } from "../api/client";
+import { executerControleDoublonsHebdo, fetchControleDoublonsHebdo, fetchDoublons } from "../api/client";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
+import { estNouveau, libelleControleHebdo } from "../utils/controleDoublonsHebdo";
 import { coursEnConflit, grouperDoublonsParSemaine, libelleCreneauDoublon, routeVersDoublon } from "../utils/doublons";
 import { buildTodoList } from "../utils/todo";
 import "./TodoView.css";
@@ -43,6 +44,48 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
     [payload, doublons],
   );
 
+  // Contrôle HEBDOMADAIRE automatique (Jules Crevoisier, 25/09/2026, dicté :
+  // « on veut faire quelque chose qui vérifie chaque semaine [...] »). Le
+  // filet tourne côté serveur SANS écran (`api/controle_doublons_hebdo.py`,
+  // hooké dans `_apres_ecriture_planning`/`startup()`) — cette section
+  // n'affiche que son DERNIER résultat, distinct de la liste ci-dessus (qui
+  // recalcule les doublons EN DIRECT à chaque ouverture de l'écran).
+  // `undefined` = pas encore chargé, `null` = jamais exécuté (aucun run en
+  // historique).
+  const [controleHebdo, setControleHebdo] = useState<DoublonHebdoRun | null | undefined>(undefined);
+  const [executionHebdoEnCours, setExecutionHebdoEnCours] = useState(false);
+
+  useEffect(() => {
+    let annule = false;
+    fetchControleDoublonsHebdo()
+      .then((dernier) => {
+        if (!annule) setControleHebdo(dernier);
+      })
+      // Ne bloque jamais l'écran : ce résumé est un complément à la liste
+      // ci-dessus, pas une donnée dont dépend le reste de « À traiter »
+      // (même esprit que `verifier_si_necessaire` côté serveur, qui ne
+      // lève jamais).
+      .catch(() => {
+        if (!annule) setControleHebdo(null);
+      });
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  const verifierMaintenant = useCallback(async () => {
+    setExecutionHebdoEnCours(true);
+    try {
+      const resultat = await executerControleDoublonsHebdo();
+      setControleHebdo(resultat);
+    } catch {
+      // Le dernier résultat connu reste affiché — jamais d'écran cassé pour
+      // un contrôle manuel raté.
+    } finally {
+      setExecutionHebdoEnCours(false);
+    }
+  }, []);
+
   return (
     <section className="view">
       <div className="panel">
@@ -69,6 +112,19 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
       </div>
 
       <div className="panel">
+        {controleHebdo !== undefined && (
+          <div className="todo-hebdo">
+            {controleHebdo === null ? (
+              <p className="muted">Le contrôle hebdomadaire des doublons n'a jamais encore tourné.</p>
+            ) : (
+              <p className="todo-hebdo-resume">{libelleControleHebdo(controleHebdo)}</p>
+            )}
+            <button type="button" className="btn" onClick={() => void verifierMaintenant()} disabled={executionHebdoEnCours}>
+              {executionHebdoEnCours ? "Vérification…" : "Vérifier maintenant"}
+            </button>
+          </div>
+        )}
+
         <div className="todo-doublons-header">
           <h3>Doublons salle / enseignant</h3>
           {doublons !== null && doublons.length > 0 && (
@@ -120,6 +176,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
                   <span className="sev">{d.type === "salle" ? "salle" : "enseignant"}</span>
                   <span>
                     <strong>{d.ressource}</strong>
+                    {estNouveau(controleHebdo ?? null, d) && <span className="pill new">nouveau</span>}
                     <div className="sub">
                       {libelleCreneauDoublon(payload, d.semaine, d.jour, d.creneau)} — {coursEnConflit(d)}
                     </div>

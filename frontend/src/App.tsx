@@ -8,6 +8,7 @@ import {
   extractTeachers,
   fetchAppState,
   fetchDiff,
+  fetchDoublons,
   fetchFeedbackAnalysis,
   fetchMeta,
   fetchMoi,
@@ -203,6 +204,25 @@ export function App() {
     }
   }, []);
 
+  // Total des doublons salle/enseignant (retour Kyllian Bresson 25/09/2026,
+  // cf. `api/doublons.py`) — chargé ICI (pas seulement dans `TodoView`, qui
+  // a son propre fetch pour sa liste détaillée) pour alimenter le badge de
+  // la nav (`todoCount` ci-dessous, cf. `SideNav`) même quand l'onglet « À
+  // traiter » n'a jamais été ouvert. Live (comme `TodoView`), pas le
+  // contrôle hebdomadaire (`GET /controles/doublons/hebdo`) : le badge doit
+  // rester juste même si le filet automatique n'a pas encore tourné cette
+  // semaine.
+  const [doublonsCount, setDoublonsCount] = useState(0);
+  const refreshDoublonsCount = useCallback(async () => {
+    try {
+      const liste = await fetchDoublons();
+      setDoublonsCount(liste.length);
+    } catch {
+      // Le badge garde son dernier total connu — jamais d'écran cassé pour
+      // un chiffre secondaire.
+    }
+  }, []);
+
   useEffect(() => {
     // Lien perso (readOnlyTarget) : le paramètre `t` fait le travail d'auth
     // tout seul (public depuis le 28/08/2026), peu importe `moi` (qui reste
@@ -212,7 +232,8 @@ export function App() {
     if (!readOnlyTarget && moi?.status !== "active") return;
     void refreshMeta();
     void refreshAppState();
-  }, [refreshMeta, refreshAppState, readOnlyTarget, moi]);
+    void refreshDoublonsCount();
+  }, [refreshMeta, refreshAppState, refreshDoublonsCount, readOnlyTarget, moi]);
 
   const loadTimetable = useCallback(async () => {
     try {
@@ -325,8 +346,13 @@ export function App() {
   // mauvais index y aurait régénéré la MAUVAISE semaine).
   const solverWeek = weekRows[displayWeek]?.weekIndex ?? null;
   const visiblePlacements = solverWeek === null ? [] : placements.filter((p) => p.week === solverWeek);
-  const todoCount = appPayload ? buildTodoList(appPayload).length : 0;
-  const todoHasBad = appPayload ? buildTodoList(appPayload).some((i) => i.sev === "bad") : false;
+  // Doublons salle/enseignant (retour Kyllian Bresson 25/09/2026) inclus
+  // dans le compte : le badge « À traiter » doit refléter TOUT ce que cet
+  // écran signale, pas seulement `buildTodoList` — un doublon EST quelque
+  // chose « qui demande une décision », même s'il vient d'un calcul séparé
+  // (`refreshDoublonsCount` ci-dessus).
+  const todoCount = (appPayload ? buildTodoList(appPayload).length : 0) + doublonsCount;
+  const todoHasBad = (appPayload ? buildTodoList(appPayload).some((i) => i.sev === "bad") : false) || doublonsCount > 0;
 
   const handleYearChange = (nextYear: number) => {
     setYear(nextYear);

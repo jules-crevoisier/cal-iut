@@ -1118,3 +1118,29 @@ class DoublonResponse(BaseModel):
 
 class DoublonsListResponse(BaseModel):
     doublons: list[DoublonResponse]
+
+
+# ── Contrôle hebdomadaire des doublons (Jules Crevoisier, 25/09/2026) ──
+# « on veut faire quelque chose qui vérifie chaque semaine [...] » — cf.
+# `api/controle_doublons_hebdo.py` pour la logique (filet une fois par
+# semaine ISO + historique borné), ces schémas n'en sont que la coquille HTTP.
+
+
+class DoublonHebdoRunResponse(BaseModel):
+    date: str  # AAAA-MM-JJ, jour calendaire du contrôle
+    semaine_iso: str  # AAAA-Www, ex. « 2026-W39 »
+    genere_le: str
+    total: int
+    par_type: dict[str, int]
+    doublons: list[DoublonResponse]
+    nouveaux: list[DoublonResponse]
+    resolus: list[DoublonResponse]
+    premier_controle: bool
+
+
+class DoublonHebdoResponse(BaseModel):
+    """`GET /controles/doublons/hebdo` — `dernier` est `None` tant qu'aucun
+    contrôle n'a encore tourné (ni filet automatique, ni « Vérifier
+    maintenant »)."""
+
+    dernier: DoublonHebdoRunResponse | None = None
