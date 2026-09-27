@@ -28,6 +28,17 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
   const chargerDoublons = useCallback(async () => {
     try {
       const liste = await fetchDoublons();
+      // Signalement de Jules le 27/09/2026 (« je ne vois pas la section ») :
+      // une réponse d'une forme inattendue rendait `liste` `undefined`, et
+      // `doublons.length` faisait alors tomber TOUT l'écran « À traiter » —
+      // écran blanc, sans le moindre message. Un front et un back décalés
+      // d'un déploiement suffisent à produire ça. On refuse donc ici tout ce
+      // qui n'est pas une liste, et on le DIT.
+      if (!Array.isArray(liste)) {
+        setDoublons([]);
+        setErreurDoublons("Réponse inattendue du serveur pour les doublons.");
+        return;
+      }
       setDoublons(liste);
       setErreurDoublons(null);
     } catch (e) {
@@ -88,29 +99,6 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
 
   return (
     <section className="view">
-      <div className="panel">
-        <h3>Ce qui demande une décision</h3>
-        <p className="muted">
-          Agrégé depuis la sortie brute du solveur : contraintes enseignantes violées, journées trouées. Chaque
-          ligne ouvre le créneau concerné.
-        </p>
-        {items.length === 0 ? (
-          <p className="muted">Rien à signaler : aucune contrainte violée, aucune journée trouée.</p>
-        ) : (
-          <div className="todolist">
-            {items.map((it, i) => (
-              <button key={i} type="button" className={`todo-item ${it.sev}`} onClick={() => setRoute(it.route)}>
-                <span className="sev">{it.sev === "bad" ? "à corriger" : "à revoir"}</span>
-                <span>
-                  <strong>{it.title}</strong>
-                  <div className="sub">{it.sub}</div>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className="panel">
         {controleHebdo !== undefined && (
           <div className="todo-hebdo">
@@ -187,6 +175,31 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
           </div>
         ))}
       </div>
+
+      <div className="panel">
+        <h3>Ce qui demande une décision</h3>
+        <p className="muted">
+          Agrégé depuis la sortie brute du solveur : contraintes enseignantes violées, journées trouées. Chaque
+          ligne ouvre le créneau concerné.
+        </p>
+        {items.length === 0 ? (
+          <p className="muted">Rien à signaler : aucune contrainte violée, aucune journée trouée.</p>
+        ) : (
+          <div className="todolist">
+            {items.map((it, i) => (
+              <button key={i} type="button" className={`todo-item ${it.sev}`} onClick={() => setRoute(it.route)}>
+                <span className="sev">{it.sev === "bad" ? "à corriger" : "à revoir"}</span>
+                <span>
+                  <strong>{it.title}</strong>
+                  <div className="sub">{it.sub}</div>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+
     </section>
   );
 }

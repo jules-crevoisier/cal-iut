@@ -119,4 +119,29 @@ describe("TodoView — doublons salle / enseignant", () => {
 
     await waitFor(() => expect(screen.getByText("Aucun doublon détecté.")).toBeInTheDocument());
   });
+
+  it("should survive an unexpected response shape instead of blanking the screen", async () => {
+    // Signalement de Jules, 27/09/2026 : « je ne vois pas la section ». Une
+    // réponse d'une forme inattendue (front et back décalés d'un
+    // déploiement) rendait la liste `undefined` et faisait tomber TOUT
+    // l'écran — écran blanc, sans message.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        const chemin = String(url);
+        if (chemin.includes("/controles/doublons/hebdo")) {
+          return Promise.resolve({ ok: true, json: async () => ({ dernier: null, historique: [] }) });
+        }
+        if (chemin.includes("/controles/doublons")) {
+          return Promise.resolve({ ok: true, json: async () => ({ pas_la_bonne_cle: [] }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+
+    render(<TodoView payload={emptyPayload()} setRoute={vi.fn()} />);
+
+    expect(screen.getByText("Doublons salle / enseignant")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Réponse inattendue du serveur/)).toBeInTheDocument());
+  });
 });
