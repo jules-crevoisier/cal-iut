@@ -297,7 +297,14 @@ def _ecarter_semaines_non_posees(
             attendus[indice] = attendus.get(indice, 0) + 1
 
     releve = lire()
-    posees = semaines_posees(releve.evenements, attendus=attendus)
+    # Les semaines qu'un humain a explicitement autorisées s'ajoutent à celles
+    # que le relevé juge posées (28/09/2026) : sans ça, une semaine que
+    # l'équipe attend de cal-iut reste bloquée à jamais, puisque c'est
+    # justement Celcat qui est vide (cf. `etat._vide`).
+    from cal_iut.celcat.etat import charger as _charger_etat
+
+    autorisees = {int(s) for s in (_charger_etat().get("semaines_creation_autorisee") or [])}
+    posees = semaines_posees(releve.evenements, attendus=attendus) | autorisees
     presents = cours_par_semaine(releve.evenements)
 
     retenus: list[dict[str, Any]] = []

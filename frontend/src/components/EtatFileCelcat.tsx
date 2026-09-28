@@ -35,7 +35,20 @@ const LIBELLE_ACTION: Record<string, [string, string]> = {
   delete: ["suppression", "suppressions"],
 };
 
-export function EtatFileCelcat({ file, erreur }: { file: CelcatFile | null; erreur?: string | null }) {
+export function EtatFileCelcat({
+  file,
+  erreur,
+  semaineCelcat,
+  creationAutorisee,
+  onAutoriserCreation,
+}: {
+  file: CelcatFile | null;
+  erreur?: string | null;
+  /** Indice du masque Celcat de la semaine affichée (`comparaison.semaine_celcat`). */
+  semaineCelcat?: number | null;
+  creationAutorisee?: boolean;
+  onAutoriserCreation?: (autorisee: boolean) => void;
+}) {
   if (erreur) {
     return (
       <p className="celcat-texte-panne" data-testid="etat-file-celcat">
@@ -89,10 +102,31 @@ export function EtatFileCelcat({ file, erreur }: { file: CelcatFile | null; erre
       </p>
 
       {differes > 0 ? (
-        <p className="celcat-sous-texte" data-testid="file-differes">
-          Dont <strong>{differes}</strong> en attente d’une semaine pas encore posée dans Celcat — normal, rien à
-          faire tant que l’équipe ne l’a pas saisie.
-        </p>
+        <div className="celcat-sous-texte" data-testid="file-differes">
+          {/* Le texte disait « normal, rien à faire tant que l’équipe ne l’a
+              pas saisie » : c’est ce qui a laissé 492 corrections attendre
+              indéfiniment une saisie manuelle que personne n’allait faire
+              (signalement du 28/09/2026). On dit maintenant ce que ça bloque,
+              ET comment le lever. */}
+          <p>
+            Dont <strong>{differes}</strong> en attente d’une semaine que Celcat n’a pas encore ouverte. Le worker
+            n’y crée rien tant que l’équipe ne l’a pas saisie — ou tant que vous ne l’autorisez pas ici.
+          </p>
+          {semaineCelcat !== null && semaineCelcat !== undefined && onAutoriserCreation ? (
+            creationAutorisee ? (
+              <p>
+                <strong>Création autorisée</strong> sur la semaine affichée.{" "}
+                <button type="button" className="btn btn--sm" onClick={() => onAutoriserCreation(false)}>
+                  Retirer l’autorisation
+                </button>
+              </p>
+            ) : (
+              <button type="button" className="btn btn--sm" onClick={() => onAutoriserCreation(true)}>
+                Autoriser la création sur la semaine affichée
+              </button>
+            )
+          ) : null}
+        </div>
       ) : null}
 
       {motifs.length > 0 ? (

@@ -743,6 +743,7 @@ export interface CelcatEtat {
   semaines_validees: number[];
   semaines_passees: number[];
   semaines_lancees: number[];
+  semaines_creation_autorisee?: number[];
   semaines_completes: number[];
   valide_le: string | null;
   dernier_job: Record<string, string> | null;
@@ -1036,6 +1037,20 @@ export function fetchCelcatCorrectionEnCours(semaine: number): Promise<CelcatCor
  *  fois le travail fini ou périmé. Ne touche jamais la file elle-même. */
 export function effacerCelcatCorrectionEnCours(semaine: number): Promise<CelcatCorrectionEnCours> {
   return request(`/celcat/comparaison/en-cours?semaine=${semaine}`, { method: "DELETE" });
+}
+
+/**
+ * Autorise (ou retire l'autorisation de) la CRÉATION sur une semaine que
+ * Celcat a encore vide — signalement du 28/09/2026 : « elle est en lancé
+ * mais elle n'est toujours pas passée ». Le worker refuse par défaut de
+ * créer sur une semaine non posée ; ceci est la levée, semaine par semaine.
+ * `semaineCelcat` est l'indice du MASQUE Celcat (`comparaison.semaine_celcat`).
+ */
+export function autoriserCreationSemaineCelcat(semaineCelcat: number, autorisee: boolean): Promise<CelcatEtat> {
+  return request<CelcatEtat>("/celcat/semaines/creation", {
+    method: "PATCH",
+    body: JSON.stringify({ semaine_celcat: semaineCelcat, autorisee }),
+  });
 }
 
 export function fetchCelcatEtat(): Promise<CelcatEtat> {

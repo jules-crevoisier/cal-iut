@@ -38,6 +38,7 @@ from cal_iut.api.schemas import (
     CelcatComparaisonResponse,
     CelcatCompteurs,
     CelcatCorrectionEnCoursResponse,
+    CelcatAutoriserCreationRequest,
     CelcatCorrigerResponse,
     CelcatEntreeResponse,
     CelcatEtatResponse,
@@ -3312,6 +3313,7 @@ def _celcat_etat_public() -> CelcatEtatResponse:
         semaines_passees=semaines_celcat_passees(),
         worker_actif=bool(doc.get("worker_actif", True)),
         semaines_lancees=list(doc.get("semaines_lancees") or []),
+        semaines_creation_autorisee=list(doc.get("semaines_creation_autorisee") or []),
         semaines_completes=_semaines_celcat_completes(),
         valide_le=doc.get("valide_le"),
         dernier_job=dernier if isinstance(dernier, dict) else None,
@@ -3610,6 +3612,40 @@ def celcat_saisie_active(body: CelcatSaisieActiveRequest) -> CelcatEtatResponse:
         from cal_iut.celcat.file_attente import vider
 
         vider()
+    return _celcat_etat_public()
+
+
+@app.patch(
+    "/celcat/semaines/creation",
+    response_model=CelcatEtatResponse,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def celcat_autoriser_creation(body: CelcatAutoriserCreationRequest) -> CelcatEtatResponse:
+    """Autorise la CRÉATION sur une semaine que Celcat a encore vide.
+
+    Signalement du 28/09/2026 : « on a lancé cette semaine-là avec le worker,
+    elle est en lancé mais elle n'est toujours pas passée ». Le worker refuse
+    de créer sur une semaine que le relevé ne voit pas « posée » — garde-fou
+    voulu (ne jamais écrire dans une semaine que l'équipe n'a pas ouverte,
+    cf. `celcat/semaines_posees.py`). Mais quand c'est justement à cal-iut de
+    remplir la semaine, la garde attend une saisie manuelle qui ne viendra
+    jamais : 492 créations en attente, zéro passage.
+
+    Cette levée est donc EXPLICITE, par semaine, et jamais devinée : c'est un
+    humain qui dit « cette semaine-là, vas-y ». Les autres garde-fous du
+    worker (catégorie d'évènement, masque d'une seule semaine, journal
+    anti-doublon) restent tous en place.
+    """
+    from cal_iut.celcat.etat import charger, sauver
+
+    doc = charger()
+    autorisees = {int(s) for s in (doc.get("semaines_creation_autorisee") or [])}
+    if body.autorisee:
+        autorisees.add(int(body.semaine_celcat))
+    else:
+        autorisees.discard(int(body.semaine_celcat))
+    doc["semaines_creation_autorisee"] = sorted(autorisees)
+    sauver(doc)
     return _celcat_etat_public()
 
 

@@ -10,7 +10,7 @@
  * fait une fois pour tout l'écran) ; il doit en revanche DIRE quand l'appel a
  * échoué, au lieu de disparaître.
  */
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { CelcatFile } from "../api/client";
@@ -64,9 +64,45 @@ describe("État de la file Celcat", () => {
     expect(repli.textContent).not.toContain("0 réussi(s)");
   });
 
-  it("dit à part ce qui attend une semaine non posée, et que c'est normal", () => {
+  // Le texte disait « normal, rien à faire tant que l'équipe ne l'a pas
+  // saisie ». Signalement du 28/09/2026 : c'est exactement ce qui a laissé
+  // 492 corrections attendre une saisie manuelle que personne n'allait
+  // faire — la semaine en question, c'était à cal-iut de la remplir. On dit
+  // donc maintenant ce qui bloque ET comment le lever.
+  it("dit ce qui attend une semaine non ouverte, et comment le débloquer", () => {
     render(<EtatFileCelcat file={{ ...VIDE, en_attente: 4, differes: 4 }} />);
-    expect(screen.getByTestId("file-differes").textContent).toMatch(/normal, rien à faire/);
+    const texte = screen.getByTestId("file-differes").textContent ?? "";
+    expect(texte).toMatch(/que Celcat n’a pas encore ouverte/);
+    expect(texte).toMatch(/tant que vous ne l’autorisez pas/);
+  });
+
+  it("propose d'autoriser la création sur la semaine affichée", () => {
+    const clics: boolean[] = [];
+    render(
+      <EtatFileCelcat
+        file={{ ...VIDE, en_attente: 4, differes: 4 }}
+        semaineCelcat={40}
+        creationAutorisee={false}
+        onAutoriserCreation={(v) => clics.push(v)}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Autoriser la création/ }));
+    expect(clics).toEqual([true]);
+  });
+
+  it("montre l'autorisation en place et permet de la retirer", () => {
+    const clics: boolean[] = [];
+    render(
+      <EtatFileCelcat
+        file={{ ...VIDE, en_attente: 4, differes: 4 }}
+        semaineCelcat={40}
+        creationAutorisee
+        onAutoriserCreation={(v) => clics.push(v)}
+      />,
+    );
+    expect(screen.getByTestId("file-differes").textContent).toMatch(/Création autorisée/);
+    fireEvent.click(screen.getByRole("button", { name: /Retirer l’autorisation/ }));
+    expect(clics).toEqual([false]);
   });
 
   it("dit que l'état est indisponible au lieu de disparaître", () => {

@@ -277,8 +277,20 @@ def test_should_return_409_when_post_celcat_lancer_nuit_and_saisie_is_off(
 
 def test_should_mark_validees_as_lancees_when_post_celcat_lancer_nuit_and_saisie_is_on(
     client_admin,
+    monkeypatch,
 ) -> None:
+    from cal_iut.celcat import etat as etat_celcat
     from cal_iut.celcat.instantane import enregistrer
+
+    # Le balayage saute les semaines DÉJÀ PASSÉES. Les pastilles 4 et 5
+    # désignent des semaines de septembre 2026 : à partir du 28/09/2026, la
+    # pastille 4 est passée et le test tombait tout seul, sans qu'une seule
+    # ligne de code ait changé (constaté ce jour-là en CI). L'intention du
+    # test — « valider puis lancer marque les semaines comme lancées » — n'a
+    # rien à voir avec le calendrier : on fige donc ce point-là.
+    # Importée DANS la fonction (`nuit.py:1054`) : c'est donc le module
+    # d'origine qu'il faut figer, pas le nom local.
+    monkeypatch.setattr(etat_celcat, "semaines_celcat_passees", lambda **_: [])
 
     client_admin.patch("/celcat/saisie", json={"active": True})
     client_admin.post("/celcat/valider", json={"semaines": [4, 5]})

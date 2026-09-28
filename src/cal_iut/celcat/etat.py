@@ -36,6 +36,18 @@ def _vide() -> dict[str, Any]:
         "worker_actif": True,
         "semaines_validees": [],
         "semaines_lancees": [],
+        # Semaines Celcat (indices du masque, cf. `lecture.indice_depuis_lundi`)
+        # qu'un humain autorise EXPLICITEMENT à la création, alors que le
+        # relevé les voit encore vides.
+        #
+        # Signalement du 28/09/2026 : la semaine en cours n'était pas saisie
+        # dans Celcat, `semaines_posees` la jugeait donc « non posée », et les
+        # 155 créations attendaient une semaine que personne n'allait remplir
+        # à la main — la garde tournait contre son but. Elle reste la règle
+        # par défaut (ne jamais écrire dans une semaine que l'équipe n'a pas
+        # ouverte) ; ceci en est la levée, décidée par un humain, semaine par
+        # semaine, et jamais devinée.
+        "semaines_creation_autorisee": [],
         "valide_le": None,
         "journal": {},
         "ignores": {},
@@ -80,6 +92,10 @@ def _completer(data: dict[str, Any]) -> dict[str, Any]:
     doc["semaines_validees"] = [int(s) for s in semaines] if isinstance(semaines, list) else []
     lancees = doc.get("semaines_lancees")
     doc["semaines_lancees"] = [int(s) for s in lancees] if isinstance(lancees, list) else []
+    autorisees = doc.get("semaines_creation_autorisee")
+    doc["semaines_creation_autorisee"] = (
+        sorted({int(s) for s in autorisees}) if isinstance(autorisees, list) else []
+    )
     journal = doc.get("journal")
     if not isinstance(journal, dict):
         journal = {}
