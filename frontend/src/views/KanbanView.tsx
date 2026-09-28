@@ -35,8 +35,9 @@ import { creerTache, fetchTaches, patchTache, supprimerTache } from "../api/clie
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { confirmAsync } from "../utils/confirmDialog";
-import { libelleDatesTache, routeVersSeance, seancesConcernees } from "../utils/kanban";
+import { libelleDatesTache, routeVersSeance, seancesConcernees, texteTache } from "../utils/kanban";
 import { ecrireOngletTaches, lireOngletTaches } from "../utils/kanbanTabPrefs";
+import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
 import "./KanbanView.css";
 
@@ -105,6 +106,9 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   }, [charger]);
 
   const [filtreConcerne, setFiltreConcerne] = useState<string>("tout");
+  // Carte tout juste copiée — confirmation brève (demande de Jules,
+  // 28/09/2026 : « un petit bouton copier qui copie toutes les infos »).
+  const [copiee, setCopiee] = useState<number | null>(null);
 
   // Filtre « pour qui » (Kyllian Bresson, 25/09/2026 : « il y a des
   // modifications qui vous concernent et d'autres qui me concernent
@@ -484,6 +488,34 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
                             )}
                           </div>
                         )}
+
+                        <div className="kanban-card-copie">
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm"
+                            aria-label={`Copier toutes les informations de « ${t.titre} »`}
+                            onClick={() => {
+                              void (async () => {
+                                await copyToClipboard(
+                                  texteTache(t, {
+                                    nomEnseignant: t.enseignant_code
+                                      ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code
+                                      : null,
+                                    seances: seances ?? [],
+                                    libelleSeance: ({ row, dateIso }) =>
+                                      `${formatDateCourte(dateIso)} · ${SLOT_TIMES[row.s].label} · ${row.c} · ${row.g
+                                        .map((g) => payload.groupLabels[g] ?? g)
+                                        .join("/")}`,
+                                  }),
+                                );
+                                setCopiee(t.id);
+                                window.setTimeout(() => setCopiee((id) => (id === t.id ? null : id)), 2000);
+                              })();
+                            }}
+                          >
+                            {copiee === t.id ? "Copié" : "Copier"}
+                          </button>
+                        </div>
 
                         {peutModifier && (
                           <div className="kanban-card-actions">

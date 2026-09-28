@@ -274,3 +274,13 @@
 .kanban-card-urgent {
   align-self: flex-start;
 }
+
+/* Bouton « Copier » d'une carte (28/09/2026) — visible aussi en lecture
+   seule : copier ne modifie rien. */
+.kanban-card-copie {
+  margin-top: 6px;
+}
+.kanban-card-copie .btn {
+  min-height: 44px;
+}
+

@@ -104,3 +104,77 @@ export function libelleDatesTache(dateDebut: string | null, dateFin: string | nu
   if (Number.isNaN(fin.getTime())) return FMT_JOUR_ANNEE.format(debut);
   return `${FMT_JOUR.format(debut)} – ${FMT_JOUR_ANNEE.format(fin)}`;
 }
+
+const LIBELLE_COLONNE: Record<string, string> = {
+  a_faire: "À faire",
+  en_cours: "En cours",
+  fait: "Fait",
+};
+
+const LIBELLE_CATEGORIE: Record<string, string> = {
+  edt: "Emploi du temps",
+  plateforme: "Plateforme",
+};
+
+/**
+ * Toute une tâche en texte brut, prête à coller dans un mail ou un message.
+ *
+ * Demande de Jules, 28/09/2026 : « dans les tâches, je voudrais bien un
+ * petit bouton copier qui copie toutes les infos d'une tâche ». Donc TOUT
+ * ce que la carte porte — y compris les séances concernées, qui sont la
+ * raison d'être de la carte quand un enseignant s'absente —, jamais un
+ * simple copier du titre.
+ *
+ * Les libellés sont ceux de l'écran (« À faire », « Emploi du temps ») et
+ * non les valeurs stockées : le texte part vers un humain, pas vers l'API.
+ */
+export function texteTache(
+  tache: {
+    titre: string;
+    description?: string | null;
+    colonne: string;
+    categorie?: string | null;
+    priorite?: string | null;
+    concerne?: string | null;
+    enseignant_code?: string | null;
+    date_debut?: string | null;
+    date_fin?: string | null;
+    cree_par?: string;
+  },
+  options: { nomEnseignant?: string | null; seances?: SeanceConcernee[]; libelleSeance?: (s: SeanceConcernee) => string } = {},
+): string {
+  const lignes: string[] = [];
+  const urgent = tache.priorite === "urgente" ? "[Urgent] " : "";
+  lignes.push(`${urgent}${tache.titre}`);
+
+  const situation = [
+    LIBELLE_CATEGORIE[tache.categorie ?? "edt"] ?? tache.categorie,
+    LIBELLE_COLONNE[tache.colonne] ?? tache.colonne,
+    tache.concerne ? `pour ${tache.concerne}` : null,
+  ].filter(Boolean);
+  lignes.push(situation.join(" · "));
+
+  const nomProf = options.nomEnseignant ?? tache.enseignant_code;
+  if (nomProf) lignes.push(`Enseignant : ${nomProf}`);
+  const dates = libelleDatesTache(tache.date_debut ?? null, tache.date_fin ?? null);
+  if (dates) lignes.push(`Dates : ${dates}`);
+
+  const seances = options.seances ?? [];
+  if (seances.length > 0) {
+    lignes.push(`Séances concernées (${seances.length}) :`);
+    for (const s of seances) {
+      lignes.push(`  - ${options.libelleSeance ? options.libelleSeance(s) : `${s.dateIso} ${s.row.c}`}`);
+    }
+  }
+
+  if (tache.description?.trim()) {
+    lignes.push("");
+    lignes.push(tache.description.trim());
+  }
+  if (tache.cree_par) {
+    lignes.push("");
+    lignes.push(`Créée par ${tache.cree_par}`);
+  }
+  return lignes.join("\n");
+}
+

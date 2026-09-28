@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyPayload, placedRow } from "../test/payloadFixture";
-import { dateReelleRow, libelleDatesTache, routeVersSeance, seancesConcernees } from "./kanban";
+import { texteTache, dateReelleRow, libelleDatesTache, routeVersSeance, seancesConcernees } from "./kanban";
 
 const payload = emptyPayload({
   weekRows: [
@@ -85,5 +85,51 @@ describe("libelleDatesTache", () => {
 
   it("formats a multi-day range", () => {
     expect(libelleDatesTache("2026-09-25", "2026-10-02")).toBe("25 sept. – 2 oct. 2026");
+  });
+});
+
+describe("texteTache — bouton Copier (28/09/2026)", () => {
+  // Jules : « un petit bouton copier qui copie toutes les infos d'une tâche ».
+  const base = {
+    titre: "Déplacer les TD de KBR",
+    description: "Il sera en formation.",
+    colonne: "a_faire",
+    categorie: "edt",
+    priorite: "normale",
+    concerne: "Jules",
+    enseignant_code: "KBR",
+    date_debut: "2026-10-08",
+    date_fin: null,
+    cree_par: "kyllian.bresson@univ-reims.fr",
+  };
+
+  it("reprend tout ce que la carte affiche", () => {
+    const texte = texteTache(base, { nomEnseignant: "Kyllian Bresson" });
+    expect(texte).toContain("Déplacer les TD de KBR");
+    expect(texte).toContain("Emploi du temps · À faire · pour Jules");
+    expect(texte).toContain("Enseignant : Kyllian Bresson");
+    expect(texte).toMatch(/Dates : 8 oct\. 2026/);
+    expect(texte).toContain("Il sera en formation.");
+    expect(texte).toContain("Créée par kyllian.bresson@univ-reims.fr");
+  });
+
+  it("annonce l'urgence en tête", () => {
+    expect(texteTache({ ...base, priorite: "urgente" })).toMatch(/^\[Urgent\] /);
+  });
+
+  it("liste les séances concernées, la raison d'être de la carte", () => {
+    const texte = texteTache(base, {
+      seances: [
+        { row: { id: "s1", c: "WR107", s: 1, w: 5, d: 3, g: [], te: ["KBR"] } as never, dateIso: "2026-10-08" },
+      ],
+      libelleSeance: ({ row }) => `jeudi 8 oct. · ${row.c}`,
+    });
+    expect(texte).toContain("Séances concernées (1) :");
+    expect(texte).toContain("  - jeudi 8 oct. · WR107");
+  });
+
+  it("ne met pas de ligne vide pour ce qui n'est pas renseigné", () => {
+    const texte = texteTache({ titre: "À trier", colonne: "a_faire" });
+    expect(texte).toBe("À trier\nEmploi du temps · À faire");
   });
 });
