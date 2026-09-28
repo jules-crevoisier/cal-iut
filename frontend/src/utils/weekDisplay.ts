@@ -3,11 +3,28 @@
  * d'une semaine SOLVEUR — liens et recherche ne connaissent que l'index solveur.
  */
 import type { AppPayload } from "../types/app";
+import { indexSemaineCourante } from "./semaineCourante";
 
+/**
+ * Sans semaine dans le lien (`route.sem === null`), on ouvre sur la SEMAINE
+ * EN COURS, jamais sur la première de l'année.
+ *
+ * Retour de Jules, 28/09/2026 : « sur les liens publics on arrive à la
+ * semaine en cours, c'est quand même mieux ». Un lien personnel envoyé à un
+ * enseignant ou à un groupe (`#vue=prof&prof=KBR&mode=prof&t=…`) ne porte
+ * jamais de semaine : les vues Enseignant, Groupe, Salle et Cours
+ * s'ouvraient donc sur la semaine 1, fin août — un planning que plus
+ * personne ne regarde. La Vue Promo avait déjà été corrigée le 08/09/2026
+ * (« on arrive semaine 2 alors que l'on est semaine 3 ») ; c'est le même
+ * défaut, resté dans les quatre autres vues.
+ *
+ * Une semaine EXPLICITE dans le lien reste prioritaire : un lien « telle
+ * séance, telle semaine » doit ouvrir cette semaine-là, même passée.
+ */
 export function displayIndexForSolverWeek(payload: AppPayload, solverWeek: number | null): number {
-  if (solverWeek === null) return 0;
+  if (solverWeek === null) return indexSemaineCourante(payload.weekRows);
   const idx = payload.weekRows.findIndex((w) => w.weekIndex === solverWeek);
-  return idx >= 0 ? idx : 0;
+  return idx >= 0 ? idx : indexSemaineCourante(payload.weekRows);
 }
 
 /**
