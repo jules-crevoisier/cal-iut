@@ -216,4 +216,26 @@ describe("KanbanView", () => {
     expect(screen.queryByText("Carte EDT")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Plateforme/ })).toHaveAttribute("aria-selected", "true");
   });
+
+  it("should copy every detail of a card to the clipboard", async () => {
+    // Jules, 28/09/2026 : « un petit bouton copier qui copie toutes les
+    // infos d'une tâche ».
+    const copies: string[] = [];
+    Object.assign(navigator, {
+      clipboard: { writeText: (texte: string) => { copies.push(texte); return Promise.resolve(); } },
+    });
+    stubFetch([
+      tache({ id: 1, titre: "Deplacer les TD de KBR", concerne: "Jules", enseignant_code: "KBR", priorite: "urgente" }),
+    ]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Deplacer les TD de KBR")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Copier toutes les informations/ }));
+
+    await waitFor(() => expect(copies).toHaveLength(1));
+    expect(copies[0]).toContain("[Urgent] Deplacer les TD de KBR");
+    expect(copies[0]).toContain("Kyllian Bresson");
+    expect(copies[0]).toContain("pour Jules");
+    await waitFor(() => expect(screen.getByText("Copié")).toBeInTheDocument());
+  });
 });
