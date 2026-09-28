@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  autoriserCreationSemaineCelcat,
   fetchAppState,
   fetchCelcatComparaison,
   fetchCelcatEtat,
@@ -329,7 +330,25 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
 
       <section className="panel celcat-en-route" aria-labelledby="celcat-en-route-titre">
         <h2 id="celcat-en-route-titre">En route vers Celcat</h2>
-        <EtatFileCelcat file={file} erreur={erreurFile} />
+        <EtatFileCelcat
+          file={file}
+          erreur={erreurFile}
+          semaineCelcat={comparaison?.semaine_celcat ?? null}
+          creationAutorisee={
+            comparaison ? (etat?.semaines_creation_autorisee ?? []).includes(comparaison.semaine_celcat) : false
+          }
+          onAutoriserCreation={(autorisee) => {
+            if (!comparaison) return;
+            void (async () => {
+              try {
+                setEtat(await autoriserCreationSemaineCelcat(comparaison.semaine_celcat, autorisee));
+                await chargerFile();
+              } catch (e) {
+                setErreurFile(e instanceof Error ? e.message : "Autorisation impossible.");
+              }
+            })();
+          }}
+        />
       </section>
 
       {comparaison ? <DetailComparaisonCelcat donnees={comparaison} /> : null}

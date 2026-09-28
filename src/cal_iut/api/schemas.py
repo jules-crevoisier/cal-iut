@@ -834,6 +834,20 @@ class CelcatSaisieResponse(BaseModel):
     actions: list[str] = []
 
 
+class CelcatAutoriserCreationRequest(BaseModel):
+    """Autoriser (ou retirer l'autorisation de) la création sur une semaine
+    CELCAT que le relevé voit encore vide — signalement du 28/09/2026.
+
+    `semaine_celcat` est l'indice du MASQUE Celcat (celui que
+    `GET /celcat/comparaison` rend sous `semaine_celcat`), pas l'indice du
+    solveur ni la pastille de la grille : c'est lui que le worker compare à
+    `semaines_posees`, et mélanger les trois numérotations a déjà coûté cher.
+    """
+
+    semaine_celcat: int = Field(ge=0)
+    autorisee: bool = True
+
+
 class CelcatSaisieActiveRequest(BaseModel):
     active: bool
 
@@ -1053,6 +1067,9 @@ class CelcatEtatResponse(BaseModel):
     # Le worker du sidecar tourne-t-il ? Vrai par défaut.
     worker_actif: bool = True
     semaines_lancees: list[int] = []
+    # Semaines CELCAT (indices du masque) autorisées à la création par un
+    # humain alors que le relevé les voit vides — cf. `etat._vide`, 28/09/2026.
+    semaines_creation_autorisee: list[int] = []
     # Chips 1..30 (S1) dont plus AUCUNE séance ne pourrait encore atterrir —
     # retour utilisateur 03/09/2026 : "si la semaine 1 est entièrement
     # placée on la met comme placée". Calculé par différence, comme
