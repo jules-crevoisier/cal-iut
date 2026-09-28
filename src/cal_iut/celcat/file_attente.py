@@ -332,8 +332,8 @@ def repousser_en_fin(identites: list[dict[str, Any]]) -> None:
         ecrire_json(chemin, job)
 
 
-def marquer_echec(identite: dict[str, Any], motif: str) -> None:
-    """Compte un échec sur ce job et retient son motif.
+def marquer_echec(identite: dict[str, Any], motif: str) -> int:
+    """Compte un échec sur ce job et retient son motif. Rend le nouveau compte.
 
     Existe pour que la quarantaine soit possible : un job qui échoue pour la
     même raison depuis quatre-vingt-sept tours n'a aucune chance d'aboutir au
@@ -341,20 +341,75 @@ def marquer_echec(identite: dict[str, Any], motif: str) -> None:
     Celcat partagé. Le compteur repart à un quand le MOTIF change — une
     panne réseau puis un vrai refus sont deux histoires différentes.
 
-    N'écarte rien par elle-même : elle compte, et c'est le drainage qui
-    décidera. Écarter en silence est exactement ce qui a coûté trois jours.
+    N'écarte rien par elle-même : elle compte, et c'est l'appelant qui
+    décidera (cf. `nuit.py::_verifier_refus_droits`, seuil de 5 échecs
+    identiques pour un refus Celcat « droits insuffisants », 28/09/2026).
+    Écarter en silence est exactement ce qui a coûté trois jours.
     """
     chemin = _repertoire() / _nom(cle_job(identite))
     job = _lire_job(chemin)
     if job is None:
-        return
+        return 0
     precedent = str(job.get("dernier_motif") or "")
     try:
         compte = int(job.get("echecs") or 0)
     except (TypeError, ValueError):
         compte = 0
-    job["echecs"] = compte + 1 if motif == precedent else 1
+    nouveau = compte + 1 if motif == precedent else 1
+    job["echecs"] = nouveau
     job["dernier_motif"] = motif
+    ecrire_json(chemin, job)
+    return nouveau
+
+
+def obtenir(identite: dict[str, Any]) -> dict[str, Any] | None:
+    """Le job tel qu'il est ACTUELLEMENT sur disque — pour relire un compteur
+    qu'on vient de poser (`marquer_echec`, `marquer_disparu_detecte`) sans
+    recharger toute la file, ou pour vérifier son `statut` avant d'agir."""
+    return _lire_job(_repertoire() / _nom(cle_job(identite)))
+
+
+def marquer_bloque(identite: dict[str, Any], motif: str) -> None:
+    """Met un job en quarantaine : il reste en file (jamais retiré en
+    silence — un job écarté sans trace est précisément ce qui a coûté trois
+    jours début septembre), mais cesse d'être RETENTÉ à chaque passage —
+    lui aussi coûte une session du compte Celcat partagé à chaque tour.
+
+    Visible dans le journal (`kind='blocked'`) ET dans la file elle-même,
+    pour les deux publics : qui lit le journal, qui lit `/celcat/file`.
+    """
+    chemin = _repertoire() / _nom(cle_job(identite))
+    job = _lire_job(chemin)
+    if job is None:
+        return
+    job["statut"] = "bloque"
+    job["dernier_motif"] = motif
+    ecrire_json(chemin, job)
+
+
+def est_bloque(job: dict[str, Any]) -> bool:
+    return str(job.get("statut") or "") == "bloque"
+
+
+def marquer_disparu_detecte(identite: dict[str, Any], *, detecte_le: str) -> None:
+    """Note l'instant de la PREMIÈRE fois où ce job précis a vu son évènement
+    Celcat introuvable (« absent des group_ids » / « l'enregistrement
+    n'existe pas »).
+
+    `setdefault` est essentiel : réécrire cet horodatage à chaque passage
+    empêcherait jamais le relevé (rafraîchi toutes les deux heures) de
+    devenir plus récent que lui, et la résolution ne pourrait jamais
+    démarrer — cf. `nuit.py::_resoudre_evenement_disparu`, qui exige un
+    relevé PLUS RÉCENT que cette détection avant de décider quoi que ce
+    soit.
+    """
+    chemin = _repertoire() / _nom(cle_job(identite))
+    job = _lire_job(chemin)
+    if job is None:
+        return
+    if "disparu_detecte_le" in job:
+        return
+    job["disparu_detecte_le"] = detecte_le
     ecrire_json(chemin, job)
 
 

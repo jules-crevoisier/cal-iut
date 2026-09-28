@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
 from typing import Any
@@ -16,11 +17,17 @@ from cal_iut.celcat.extras import lister as lister_extras
 from cal_iut.celcat.file_attente import (
     cle_job,
     enfiler,
+    est_bloque,
     lister,
+    marquer_bloque,
+    marquer_disparu_detecte,
+    marquer_echec,
     repousser_en_fin,
     retirer_traites,
 )
+from cal_iut.celcat.file_attente import obtenir as obtenir_job
 from cal_iut.celcat.formulaire import charger_carte
+from cal_iut.celcat.instantane import demander as demander_releve
 from cal_iut.celcat.instantane import lire as lire_instantane
 from cal_iut.celcat.lecture import (
     EvenementCelcat,
@@ -36,8 +43,7 @@ from cal_iut.celcat.modification import ElementModification, modifier_manquants
 from cal_iut.celcat.navigateur import BASE_ENTRAINEMENT
 from cal_iut.celcat.ops import correspond_live
 from cal_iut.celcat.planification import contexte as contexte_comparaison
-from cal_iut.celcat.planification import journal_event_ids
-from cal_iut.celcat.planification import jobs_depuis_lignes
+from cal_iut.celcat.planification import jobs_depuis_lignes, journal_event_ids
 from cal_iut.celcat.planification import lignes as lignes_comparaison
 from cal_iut.celcat.rpc import masquer_semaine
 from cal_iut.celcat.rpc_config import charger_methodes
@@ -56,6 +62,23 @@ PREMIERE_SEMAINE_CELCAT = 34
 # existe très bien dans la maquette — et l'ancien libellé envoyait la
 # chercher là où elle n'a jamais manqué.
 SANS_PLACEMENT = "séance sans placement au planning (retirée, ou planning régénéré depuis)"
+
+# Au-delà, une séance dont l'event_id Celcat reste introuvable cycle après
+# cycle n'a plus de raison d'aboutir au tour suivant : on arrête de la
+# retenter et on le dit (signalement du 28/09/2026 : event_id=1953851,
+# 3 015 tentatives ; event_id=1945020, 7 700+ depuis le 11/09).
+EVENEMENT_PERDU_TENTATIVES_MAX = 3
+
+# Au-delà, un refus RPC identique sur la même séance n'est plus une panne
+# passagère mais un manque de droits sur une ressource d'un autre département
+# — rien que nous puissions réparer en retentant (signalement du 28/09/2026,
+# WR319D).
+REFUS_DROITS_SEUIL = 5
+
+MOTIF_REFUS_DROITS = (
+    "Celcat refuse : droits insuffisants sur une ressource d'un autre "
+    "département — à saisir à la main"
+)
 
 
 def _event_id(row: dict[str, Any]) -> int | None:
@@ -222,6 +245,269 @@ def _evenement_a_disparu(motif: str) -> bool:
     """
     texte = str(motif or "")
     return "absent des group_ids" in texte or "L'enregistrement n'existe pas" in texte
+
+
+def _est_refus_droits(motif: str) -> bool:
+    """Celcat refuse par manque de DROITS sur une ressource d'un autre
+    département — ex. « RPC Celcat : 'You need modify access to ALL
+    resource timetables…' » (WR319D, 28/09/2026). Rien que nous puissions
+    réparer côté cal-iut : c'est une habilitation à demander à la main, pas
+    une panne à retenter."""
+    return "need modify access to all resource timetables" in str(motif or "").lower()
+
+
+def _verifier_refus_droits(job: dict[str, Any] | None, session_id: str, motif: str) -> None:
+    """Compte les refus « droits insuffisants » sur CE job, et le met en
+    quarantaine après `REFUS_DROITS_SEUIL` répétitions IDENTIQUES.
+
+    `marquer_echec` repart déjà à un si le motif change (panne réseau, puis
+    refus — deux histoires différentes) : c'est exactement ce qu'il faut
+    ici, un même job qui échoue tour à tour pour des raisons différentes ne
+    doit pas être bloqué sur un motif qu'il a cessé de rencontrer.
+    """
+    if job is None or not _est_refus_droits(motif):
+        return
+    compte = marquer_echec(job, motif)
+    if compte < REFUS_DROITS_SEUIL:
+        return
+    marquer_bloque(job, MOTIF_REFUS_DROITS)
+    _bloquer(session_id, MOTIF_REFUS_DROITS)
+
+
+def _purger_si_session_disparue(
+    job: dict[str, Any],
+    session_id: str,
+    state: Any,
+    a_retirer: list[dict[str, Any]],
+    bilan: BilanDrainage,
+) -> bool:
+    """Purge un job dont la SÉANCE n'existe plus DU TOUT dans la maquette
+    (`state.sessions_by_id`) — jamais un job simplement sans PLACEMENT
+    courant, qui peut très bien revenir (cf. `SANS_PLACEMENT`, qui couvre les
+    deux et ne doit continuer de le faire que pour le premier cas).
+
+    LE GARDE-FOU QUI COMPTE PLUS QUE LA PURGE ELLE-MÊME. Le 07/09/2026, le
+    worker a tourné avec un état applicatif VIDE (aucune séance chargée) et a
+    écarté 463 jobs comme « séance inconnue de la maquette » — un état vide
+    fait paraître TOUTE séance disparue. `state.sessions_by_id` VIDE ne purge
+    donc jamais rien, quoi qu'il arrive : c'est la même règle que celle déjà
+    écrite pour le relevé Celcat (`executer_job_nuit`, « relevé absent ou
+    vide »), appliquée cette fois à la maquette.
+
+    UN SECOND GARDE-FOU, décidé le 28/09/2026 après relecture : un état non
+    vide peut quand même être HORS PÉRIMÈTRE pour CE job précis. Le worker
+    peut tourner avec un état chargé sur un seul groupe de semestres
+    (`semestre_group=odd|even`, cf. `ingestion/pipeline.py`) — bascule prévue
+    sur le S2 dans quelques mois. Un état qui ne contient QUE des séances de
+    S1/S3/S5 ne prouve RIEN sur une séance de S2 : ce serait la même famille
+    de panne que le 07/09/2026, à l'échelle d'un semestre plutôt que de tout
+    l'état. On exige donc qu'AU MOINS UNE séance de l'état partage le
+    semestre du job — lu dans son `session_id` (deuxième segment,
+    ex. « WR501D-S5-TP-8-… » -> « S5 »). Illisible -> on ne purge pas : on ne
+    devine jamais un semestre.
+
+    JOURNALISE D'ABORD, retire ENSUITE — décision du lead du 28/09/2026. La
+    purge reste ce que l'équipe lisait déjà dans le panneau des blocages
+    (`kind="blocked"`, motif `SANS_PLACEMENT`, la même ligne qu'un job
+    simplement sans placement) : la faire disparaître en silence de la file
+    supprimerait l'information que l'équipe vient justement lire là.
+
+    Rend `True` si le job a été purgé (l'appelant ne doit alors plus le
+    traiter comme un ignoré ordinaire).
+    """
+    if not state.sessions_by_id:
+        return False
+    if session_id in state.sessions_by_id:
+        return False
+    semestre = _semestre_depuis_session_id(session_id)
+    if semestre is None:
+        return False
+    meme_semestre = any(
+        str(getattr(s, "semestre", "") or "").strip().upper() == semestre
+        for s in state.sessions_by_id.values()
+    )
+    if not meme_semestre:
+        return False
+    _bloquer(session_id, SANS_PLACEMENT)
+    a_retirer.append(job)
+    bilan.purges.append((session_id, SANS_PLACEMENT))
+    return True
+
+
+def _semestre_depuis_session_id(session_id: str) -> str | None:
+    """Le semestre porté par un identifiant de séance — ex.
+    « WR501D-S5-TP-8-but3-dev-fc-tp-a » -> « S5 » (deuxième segment, tiret
+    comme séparateur). Rend `None` si illisible : on ne devine jamais un
+    semestre, cf. `_purger_si_session_disparue`."""
+    morceaux = str(session_id or "").split("-")
+    if len(morceaux) < 2:
+        return None
+    segment = morceaux[1].strip().upper()
+    return segment if re.fullmatch(r"S\d+", segment) else None
+
+
+def _groupe_couvert_par_releve(nom_groupe: str, groupes_releve: list[str]) -> bool:
+    """Le relevé interroge un sous-ensemble de groupes à chaque passage
+    (`instantane.enregistrer(..., groupes=[...])`) : l'absence d'un
+    évènement n'y prouve rien tant que son GROUPE n'a pas été interrogé."""
+    if not nom_groupe:
+        return False
+    cible = nom_groupe.strip().upper()
+    return any(str(g or "").strip().upper() == cible for g in groupes_releve)
+
+
+def _resoudre_evenement_disparu(
+    job: dict[str, Any],
+    entree: Any,
+    motif: str,
+    *,
+    state: Any,
+    ctx: Any,
+    a_retirer: list[dict[str, Any]],
+) -> None:
+    """Décide du sort d'une modification qui échoue parce que son `event_id`
+    ne désigne plus rien dans Celcat — signalement du 28/09/2026
+    (event_id=1953851, 3 015 tentatives ; event_id=1945020, 7 700+ depuis
+    le 11/09). LE DANGER : créer un doublon à côté d'un évènement qui existe
+    toujours ailleurs — c'est l'incident du 08/09/2026.
+
+    Ne décide JAMAIS sur un relevé qui ne prouve rien : il faut un relevé
+    PLUS RÉCENT que la disparition constatée, ET qui interroge le groupe de
+    cette séance. Sans l'un des deux, le job reste EXACTEMENT tel quel (même
+    `event_id`, même statut) — un relevé frais est simplement redemandé, et
+    le tour suivant retentera la même modification, ce qui est correct
+    puisque rien n'a changé.
+
+    Une fois ces deux conditions réunies : on cherche un évènement
+    correspondant avec la MÊME logique d'appariement que la vue de
+    comparaison (`celcat/comparaison.py` via `celcat/planification.py`,
+    JAMAIS un second matcher réécrit ici). Trouvé -> le journal est réécrit
+    sur ce nouvel `event_id`, et une modification normale repart dessus au
+    tour suivant. Pas trouvé -> le journal est oublié et une création est
+    enfilée, qui passera par TOUS ses propres garde-fous (semaines posées,
+    catégorie, masque de semaines).
+
+    Plafonné à `EVENEMENT_PERDU_TENTATIVES_MAX` tentatives : au-delà, la
+    séance est bloquée plutôt que retentée indéfiniment — c'est précisément
+    la boucle stable du signalement.
+    """
+    session_id = str(job.get("session_id") or "")
+    event_id_perdu = job.get("event_id")
+    maintenant = datetime.now(UTC).isoformat()
+
+    actuel = obtenir_job(job) or job
+    if est_bloque(actuel):
+        # Déjà en quarantaine : rien à refaire tant qu'un humain ne l'a pas
+        # relancée (le motif n'a par construction pas pu changer, personne
+        # ne retente ce job).
+        return
+
+    detecte_le = actuel.get("disparu_detecte_le")
+    if not detecte_le:
+        # Première fois qu'on voit CE job perdre son évènement : on note
+        # l'instant et on redemande un relevé, sans rien décider — agir sur
+        # un relevé antérieur à la disparition n'apprend rien de nouveau.
+        marquer_disparu_detecte(job, detecte_le=maintenant)
+        demander_releve()
+        return
+
+    releve = lire_instantane()
+    if releve.releve_le is None:
+        demander_releve()
+        return
+    try:
+        releve_dt = datetime.fromisoformat(releve.releve_le)
+        detecte_dt = datetime.fromisoformat(detecte_le)
+    except ValueError:
+        demander_releve()
+        return
+    if releve_dt <= detecte_dt:
+        # Le relevé n'a pas encore été rafraîchi DEPUIS la disparition
+        # constatée : il ne prouve rien de plus que la dernière fois.
+        demander_releve()
+        return
+
+    nom_groupe = str(ctx.groupes_celcat.get(session_id, "") or "")
+    if not _groupe_couvert_par_releve(nom_groupe, releve.groupes):
+        demander_releve()
+        return
+
+    tentatives = int(actuel.get("tentatives_event_perdu") or 0)
+    if tentatives >= EVENEMENT_PERDU_TENTATIVES_MAX:
+        motif_bloque = (
+            f"évènement Celcat introuvable (event_id={event_id_perdu}) après "
+            f"{tentatives} tentative(s) de résolution : à vérifier à la main"
+        )
+        marquer_bloque(job, motif_bloque)
+        _bloquer(session_id, motif_bloque, getattr(entree, "course_code", None))
+        return
+
+    # LA MÊME LOGIQUE D'APPARIEMENT QUE LA COMPARAISON, jamais un second
+    # matcher. `journal={}` : le journal désigne justement l'event_id PERDU,
+    # le repasser referait échouer l'appariement « journal d'abord » pour la
+    # même raison — c'est la comparaison à la ressemblance seule qui peut
+    # trouver un event_id différent.
+    indice_celcat = _indice_pour(entree)
+    if indice_celcat is None:
+        demander_releve()
+        return
+    verdicts = lignes_comparaison(
+        state,
+        semaine=entree.semaine,
+        semaine_celcat=indice_celcat,
+        evenements=releve.evenements,
+        ctx=ctx,
+        journal={},
+    )
+    ligne = next((v for v in verdicts if v.get("session_id") == session_id), None)
+    nouvel_event: int | None = None
+    if ligne is not None and ligne.get("statut") in ("identique", "ecart"):
+        candidat = (ligne.get("celcat") or {}).get("event_id")
+        if candidat:
+            nouvel_event = int(candidat)
+
+    # RETIRER TOUT DE SUITE, ET NE PAS AJOUTER `job` À `a_retirer`. Un job
+    # « create » sans `event_id` a la MÊME clé de fichier (`action`,
+    # `session_id`, "") que le job requalifié qu'on résout, s'il était
+    # lui-même une création : les deux se nomment identiquement sur disque.
+    #
+    # Deux pièges, découverts l'un après l'autre en écrivant les tests de ce
+    # correctif (28/09/2026) :
+    #  1. Retirer seulement via `a_retirer` (traité à la fin de
+    #     `_consommer_file`) laisse le fichier existant en place le temps de
+    #     l'appel — `enfiler` refuse alors d'écraser un job déjà là et NE
+    #     FAIT RIEN. Remède : retirer ICI, avant d'enfiler.
+    #  2. Mais AJOUTER quand même `job` à `a_retirer` fait retirer une
+    #     SECONDE fois à la fin du cycle — au MÊME chemin de fichier, qui
+    #     porte désormais le remplacement fraîchement enfilé. Le
+    #     remplacement disparaît alors tout aussi silencieusement.
+    # `a_retirer` reste donc étranger à cette fonction : `jobs` (côté
+    # appelant) contient encore l'ancien job en mémoire, et sera repoussé en
+    # fin de file au pire — jamais perdu, cf. `repousser_en_fin` qui ignore
+    # un chemin devenu illisible ou déjà repris par un autre job.
+    retirer_traites([job])
+
+    if nouvel_event is not None:
+        marquer_saisi(entree, event_id=nouvel_event, group_id=job.get("group_id"))
+        enfiler(
+            {
+                "action": "update",
+                "session_id": session_id,
+                "event_id": nouvel_event,
+                "semaine": job.get("semaine"),
+                "tentatives_event_perdu": tentatives + 1,
+            }
+        )
+    else:
+        marquer_supprime(session_id)
+        enfiler(
+            {
+                "action": "create",
+                "session_id": session_id,
+                "semaine": job.get("semaine"),
+                "tentatives_event_perdu": tentatives + 1,
+            }
+        )
 
 
 def _group_id_celcat_depuis_nom(nom: str) -> int | None:
@@ -493,6 +779,13 @@ class BilanDrainage:
     # répartition par motif : ces jobs n'appellent aucune action de notre
     # côté, et leur détail noyait tout le reste à chaque cycle.
     semaines_differees: set[int] = field(default_factory=set)
+    # Jobs RETIRÉS de la file parce que leur séance n'existe plus DU TOUT
+    # dans la maquette (`state.sessions_by_id`), jamais un simple job sans
+    # placement courant (28/09/2026 — cf. `_purger_si_session_disparue`).
+    # Distincts des ignorés : un ignoré reste en file dans l'attente d'un
+    # placement qui revient, un purgé ne reviendra pas — le confondre avec
+    # « 40 jobs perdus » masquerait que la file, elle, a bien avancé.
+    purges: list[tuple[str, str]] = field(default_factory=list)
     # Rempli quand le BUDGET DE TEMPS du cycle a arrêté le drainage avant la
     # fin de la file. Ni un échec ni un différé : le travail reste à faire et
     # repart au cycle suivant. Nommé plutôt que silencieux — un cycle qui
@@ -534,6 +827,8 @@ class BilanDrainage:
             parts.append(f"{len(self.echecs)} en échec — {self._par_motif(self.echecs)}")
         if self.ignores:
             parts.append(f"{len(self.ignores)} ignoré(s) — {self._par_motif(self.ignores)}")
+        if self.purges:
+            parts.append(f"{len(self.purges)} purgé(s) (séance retirée de la maquette)")
         if self.differes:
             # COURT, ET C'EST LE POINT. La répartition par motif occupait la
             # moitié de chaque ligne de journal — quatre-vingts jobs qui
@@ -617,9 +912,19 @@ def _consommer_file(
     bilan = BilanDrainage(en_attente=len(jobs))
     if not jobs:
         return bilan
+    # Les jobs BLOQUÉS (`marquer_bloque`, cf. `_verifier_refus_droits` et
+    # `_resoudre_evenement_disparu`) restent en file — jamais retirés en
+    # silence — mais cessent d'être RETENTÉS : ils coûtent sinon une session
+    # du compte Celcat partagé à chaque tour pour un motif qui ne changera
+    # pas tout seul. Comptés dans `en_attente` (ci-dessus, sur la liste
+    # complète) : ils n'ont pas disparu, ils attendent une main humaine.
+    jobs = [j for j in jobs if not est_bloque(j)]
+    if not jobs:
+        return bilan
     state = get_state()
     entrees = entrees_pour_state(state)
     methodes = charger_methodes(Path(state.config_dir))
+    ctx = contexte_comparaison(state)
     a_retirer: list[dict[str, Any]] = []
 
     # D'ABORD écarter ce qui vise une semaine que Celcat n'a pas ouverte,
@@ -699,6 +1004,13 @@ def _consommer_file(
         sid_job = str(job.get("session_id") or "")
         entree = entrees.get(sid_job)
         if entree is None:
+            # D'ABORD la purge : une séance dont l'identifiant a changé à la
+            # régénération, ou qui a été retirée de la maquette, ne reviendra
+            # jamais toute seule — la retenter à chaque passage n'apprend
+            # rien (signalement du 28/09/2026, 40 jobs de ce genre). Le
+            # garde-fou de l'état vide (07/09/2026) vit DANS cette fonction.
+            if _purger_si_session_disparue(job, sid_job, state, a_retirer, bilan):
+                continue
             # Le job restera en file sans jamais pouvoir être traité : le
             # nommer est le minimum, sans quoi il tourne indéfiniment en
             # silence (c'était le cas avant le 07/09/2026).
@@ -809,6 +1121,7 @@ def _consommer_file(
                 kind="echec", session_id=sid_e, motif=motif_e,
                 course_code=getattr(entree, "course_code", None), regrouper=True,
             )
+            _verifier_refus_droits(job, sid_e, motif_e)
 
     # --- update : un seul lot, ElementModification porte déjà ses propres
     # ids/masque/group_id (contrairement à creer_manquants). ---------------
@@ -828,6 +1141,8 @@ def _consommer_file(
         entree = entrees.get(sid)
         eid = job.get("event_id")
         if entree is None or eid in (None, ""):
+            if entree is None and _purger_si_session_disparue(job, sid, state, a_retirer, bilan):
+                continue
             motif_i = (
                 SANS_PLACEMENT if entree is None else "aucun event_id dans le job"
             )
@@ -891,18 +1206,31 @@ def _consommer_file(
             cause = causes_m.get(sid_e)
             motif_complet = f"{motif_e} [ids irrésolus : {cause}]" if cause else motif_e
             bilan.echecs.append((sid_e, motif_complet))
-            if _evenement_a_disparu(motif_e):
-                # L'`event_id` du journal ne désigne plus rien : le garder
-                # ferait requalifier la création en modification à CHAQUE
-                # passage, et la séance ne serait jamais recréée — une boucle
-                # parfaitement stable, avec toutes les apparences du travail.
-                # Huit séances y ont tourné le 08/09/2026 au soir, après que
-                # leurs évènements ont été supprimés de Celcat.
-                marquer_supprime(sid_e)
             journaliser(
                 kind="echec", session_id=sid_e, motif=motif_complet,
                 course_code=getattr(entrees.get(sid_e), "course_code", None), regrouper=True,
             )
+            job_e = jobs_m.get(sid_e)
+            if _evenement_a_disparu(motif_e):
+                # L'`event_id` du journal ne désigne plus rien. Le garder tel
+                # quel ferait requalifier la création en modification à
+                # CHAQUE passage — une boucle parfaitement stable, avec
+                # toutes les apparences du travail (huit séances y ont tourné
+                # le 08/09/2026 au soir). Mais l'oublier EN AVEUGLE, sans
+                # preuve fraîche que l'évènement a vraiment disparu, risque
+                # de recréer un doublon à côté d'un évènement toujours vivant
+                # (incident du 08/09/2026) : `_resoudre_evenement_disparu`
+                # n'agit donc que sur un relevé plus récent que la
+                # disparition constatée, et couvrant le groupe de la séance.
+                entree_e = entrees.get(sid_e)
+                if job_e is not None and entree_e is not None:
+                    _resoudre_evenement_disparu(
+                        job_e, entree_e, motif_complet, state=state, ctx=ctx, a_retirer=a_retirer
+                    )
+                else:
+                    marquer_supprime(sid_e)
+            else:
+                _verifier_refus_droits(job_e, sid_e, motif_e)
 
     # --- delete : group_id vient du job (row.get("group_id")), jamais résolu
     # ici — c'est `ops.py` qui le pose à l'enfilage. ------------------------
@@ -952,6 +1280,7 @@ def _consommer_file(
         for sid, motif in resultat_s.echecs:
             bilan.echecs.append((sid, f"suppression : {motif}"))
             journaliser(kind="echec", session_id=sid, motif=motif, regrouper=True)
+            _verifier_refus_droits(jobs_s.get(sid), sid, motif)
 
     if _budget_epuise():
         restants = len(jobs) - len(a_retirer)
@@ -1049,8 +1378,6 @@ def drainer_file_immediate(
 def executer_job_nuit(
     page: Any = None, *, base: str = BASE_ENTRAINEMENT, production_autorisee: bool = False
 ) -> None:
-    from datetime import datetime
-
     from cal_iut.celcat.etat import sauver, semaines_celcat_passees
 
     doc = charger()
