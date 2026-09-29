@@ -100,6 +100,7 @@ _TAGS_CONTROLES = ["v1 · contrôles"]
 _TAGS_SUIVI = ["v1 · suivi"]
 _TAGS_STATISTIQUES = ["v1 · statistiques"]
 _TAGS_ADMIN = ["v1 · administration"]
+_TAGS_SAE = ["v1 · SAE"]
 
 # Descriptions des sections de la doc interactive (`/api/v1/docs`).
 OPENAPI_TAGS = [
@@ -107,6 +108,8 @@ OPENAPI_TAGS = [
     {"name": "v1 · référentiel", "description": "Semaines, créneaux, enseignants, groupes, cours, parcours."},
     {"name": "v1 · séances", "description": "Séances placées (filtrables) et séances restant à placer."},
     {"name": "v1 · salles", "description": "Catalogue des salles et salles libres à un créneau."},
+    {"name": "v1 · SAE", "description": "Situations d'apprentissage et d'évaluation : maquette, encadrants, "
+     "jours réservés, séances placées et non placées."},
     {"name": "v1 · calendrier", "description": "Jours fériés, vacances, évènements, jours SAE, réservations de salles."},
     {"name": "v1 · contrôles", "description": "Écran « À traiter », doublons, contraintes et leur verdict."},
     {"name": "v1 · suivi", "description": "Modifications manuelles depuis la génération, tâches de l'équipe."},
@@ -120,6 +123,31 @@ def _exemple(contenu: object) -> dict[int | str, dict]:
     return {200: {"content": {"application/json": {"example": contenu}}}}
 
 JOURS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi")
+
+
+def est_sae(code: str) -> bool:
+    """Une SAE = un code de module `WS…` — même règle que le solveur, l'audit,
+    `/placements/manquantes` et le payload de l'écran (`startswith("WS")`)."""
+    return (code or "").upper().startswith("WS")
+
+
+def _journees_sae_par_parcours() -> dict[str | None, dict[str, list[str]]]:
+    """parcours → {date ISO → codes des SAE} : les journées SAE, dépliées des
+    PÉRIODES SAE (`ics_feed.periodes_sae`, la source des évènements journée
+    entière des flux .ics). Clé `None` : SAE dont le parcours est introuvable,
+    qui concerne alors tous les parcours (même règle que le .ics)."""
+    sortie: dict[str | None, dict[str, list[str]]] = {}
+    for periode in _config_sae()["periodes"]:
+        jours = sortie.setdefault(periode["parcours"], {})
+        for jour in periode["jours"]:
+            codes = jours.setdefault(jour.isoformat(), [])
+            if periode["code"] not in codes:
+                codes.append(periode["code"])
+    return sortie
+
+
+def _dans_journee_sae(journees: dict, parcours: str, date_iso: str | None) -> bool:
+    return bool(date_iso) and (date_iso in journees.get(parcours, {}) or date_iso in journees.get(None, {}))
 
 # Cache dédié : une entrée par (chemin, paramètres, variante) — plus de
 # combinaisons possibles que les routes historiques, d'où une borne à part.
@@ -206,6 +234,7 @@ class CoursV1(BaseModel):
     nb_placees: int
     enseignants: list[str]
     progression_definie: bool = Field(description="Vrai si la maquette fixe un ordre des séances (`ordre`).")
+    sae: bool = Field(description="Situation d'apprentissage et d'évaluation (code `WS…`), cf. `/api/v1/sae`.")
     ordonnancement: list[OrdonnancementV1] = Field(description="Contraintes d'ordre entre ce cours et d'autres.")
 
 
@@ -243,6 +272,12 @@ class SeanceV1(BaseModel):
     verrouillee: bool
     personnalisee: bool
     evenement: bool = Field(description="Évènement hors maquette (réunion, conférence…) créé depuis l'interface.")
+    sae: bool = Field(description="Séance d'une SAE (code `WS…`).")
+    dans_journee_sae: bool | None = Field(
+        default=None,
+        description="Pour une séance de SAE : tombe-t-elle sur une journée SAE de son parcours ? "
+        "`null` pour une séance qui n'est pas une SAE. Cf. `/api/v1/sae`.",
+    )
 
 
 class SeancesV1(BaseModel):
@@ -321,6 +356,12 @@ class SeanceNonPlaceeV1(BaseModel):
     semaine_actuelle: int | None = None
     jour_actuel: int | None = None
     creneau_actuel: int | None = None
+    sae: bool = Field(default=False, description="Séance d'une SAE (code `WS…`).")
+    statut: Literal["a_placer", "en_attente_validation", "hors_solveur"] = Field(
+        default="a_placer",
+        description="`hors_solveur` : séance de SAE que la génération ne place pas (organisée par ses "
+        "enseignants sur les jours réservés) — listée seulement avec `inclure_sae=true`.",
+    )
 
 
 class SeancesNonPlaceesV1(BaseModel):
@@ -675,6 +716,151 @@ class CelcatEtatV1(BaseModel):
     file: CelcatFileV1
 
 
+class JourSaeReserveV1(BaseModel):
+    date: str
+    semaine: int | None = Field(description="Index solveur (`null` hors de l'année affichée).")
+    numero_semaine: int | None
+    jour: int | None
+    groupes: list[str] = Field(description="TD concernés si la SAE ne réserve le jour qu'à une partie de la "
+                                           "promo (libellés courts, ex. `AB`) ; vide = tout le parcours.")
+
+
+class PhaseEncadrementV1(BaseModel):
+    debut: str
+    fin: str
+    sauf: list[str] = Field(description="Dates retirées de la phase.")
+    note: str | None
+
+
+class EncadrantSaeV1(BaseModel):
+    code: str
+    nom: str
+    phases: list[PhaseEncadrementV1] = Field(
+        description="Fenêtres déclarées dans `sae_teacher_phases.yaml` ; vide = tous les jours de la SAE."
+    )
+    jours: list[str] = Field(
+        description="Jours où l'enseignant est compté comme encadrant (moins disponible pour un autre cours)."
+    )
+
+
+class SeanceSaeV1(SeanceV1):
+    journee_sae: str | None = Field(description="Identifiant de la journée SAE (`parcours|date`) où elle tombe.")
+    exception: bool = Field(description="Hors journée SAE, mais c'est déclaré (cf. `motif_exception`).")
+    motif_exception: str | None
+    anomalie: bool = Field(description="Hors journée SAE sans exception déclarée : à vérifier.")
+
+
+class SaeV1(BaseModel):
+    code: str
+    intitule: str
+    parcours: str
+    semestre: str
+    annee: str
+    planifiee_par_solveur: bool = Field(
+        description="Vrai pour les rares SAE que la génération place elle-même (`solver_scheduled_sae`, ex. "
+        "WSA501D). Sinon la SAE est organisée par ses enseignants sur ses jours réservés."
+    )
+    commentaire_edt: str | None = Field(description="Commentaire de la maquette à l'attention de l'EDT.")
+    nb_cm: int
+    nb_td: int
+    nb_tp: int
+    nb_evaluations: int
+    nb_seances_maquette: int
+    nb_placees: int
+    nb_non_placees: int
+    enseignants: list[str] = Field(description="Enseignants de la maquette (codes).")
+    enseignants_noms: list[str]
+    encadrants: list[EncadrantSaeV1] = Field(description="Référents déclarés au calendrier des SAE.")
+    jours_reserves: list[JourSaeReserveV1] = Field(
+        description="Jours réservés à la SAE : aucun cours classique du parcours n'y est placé."
+    )
+    nb_dans_journee_sae: int
+    nb_exceptions: int = Field(description="Placées hors journée SAE, exception déclarée.")
+    nb_anomalies: int = Field(description="Placées hors journée SAE sans exception déclarée.")
+    seances: list[SeanceSaeV1] = Field(description="Cours de la SAE placés au planning.")
+    non_placees: list[SeanceNonPlaceeV1] = Field(description="Cours de la maquette absents du planning.")
+
+
+class SaesV1(BaseModel):
+    total: int = Field(description="SAE listées (une par code, semestre et parcours).")
+    nb_seances_maquette: int
+    nb_placees: int
+    nb_non_placees: int
+    nb_dans_journee_sae: int
+    nb_exceptions: int
+    nb_anomalies: int
+    anomalies: list[SeanceSaeV1] = Field(description="Cours de SAE placés hors journée SAE sans exception déclarée.")
+    sae: list[SaeV1]
+
+
+class SaeJourneeRefV1(BaseModel):
+    code: str
+    intitule: str
+    origine: Literal["calendrier_officiel", "correction_locale"] = Field(
+        description="`calendrier_officiel` : fichier DATES SAE de l'établissement "
+        "(`contraintes/09_dates_sae.json`) ; `correction_locale` : ajoutée par `sae_corrections.yaml`."
+    )
+    motif: str | None = Field(description="Motif de la correction locale.")
+
+
+class EncadrantJourneeV1(BaseModel):
+    code: str
+    nom: str
+    sae: str
+
+
+class PeriodeSaeV1(BaseModel):
+    id: str = Field(description="`code-date_debut` — l'UID de l'évènement dans les flux .ics.")
+    code: str
+    intitule: str | None = Field(description="Intitulé du module dans la maquette.")
+    libelle: str
+    titre: str = Field(description="Titre de l'évènement .ics (« SAE WS502D (AB) »).")
+    description: str = Field(description="Description de l'évènement .ics.")
+    parcours: str | None = Field(description="`null` : parcours introuvable, la SAE concerne tous les parcours.")
+    groupes: list[str] = Field(description="TD concernés (libellés courts) ; vide = tout le parcours.")
+    date_debut: str = Field(description="Premier jour, inclus.")
+    date_fin: str = Field(description="Dernier jour, inclus.")
+    jours: list[str] = Field(description="Jours réellement réservés (le week-end ne coupe pas une période).")
+    nb_jours: int
+    semaines: list[int] = Field(description="Index solveur des semaines couvertes (connues).")
+    numeros_semaine: list[int] = Field(description="« Semaine N » du département des semaines couvertes.")
+
+
+class JourneeSaeV1(BaseModel):
+    id: str = Field(description="`parcours|date`.")
+    date: str
+    semaine: int | None
+    numero_semaine: int | None
+    jour: int
+    jour_nom: str
+    parcours: str | None = Field(description="`null` : parcours introuvable, la SAE concerne tous les parcours.")
+    groupes: list[str] = Field(description="TD concernés (libellés courts) si la SAE ne réserve le jour qu'à une "
+                                           "partie de la promo ; vide = tout le parcours.")
+    journee_entiere: bool = Field(description="Toujours vrai : une journée SAE bloque les 6 créneaux.")
+    creneaux: list[int]
+    sae: list[SaeJourneeRefV1]
+    encadrants: list[EncadrantJourneeV1] = Field(description="Enseignants attendus sur la SAE ce jour-là.")
+    seances: list[SeanceV1] = Field(description="Cours de SAE du parcours effectivement placés ce jour-là.")
+
+
+class JourneesSaeV1(BaseModel):
+    total: int
+    par_parcours: dict[str, int]
+    journees: list[JourneeSaeV1]
+
+
+class SaeDetailV1(BaseModel):
+    code: str
+    intitule: str
+    declinaisons: list[SaeV1]
+
+
+class ExportSaeV1(BaseModel):
+    periodes: list[PeriodeSaeV1] = Field(description="Semaines de projet SAÉ (évènements journée entière des .ics).")
+    journees: list[JourneeSaeV1] = Field(description="Une ligne par jour SAE et par parcours.")
+    cours: list[SaeV1] = Field(description="Cours de SAE (maquette, placés, non placés), cf. `/api/v1/sae`.")
+
+
 class ExportV1(BaseModel):
     revision: int
     modifie_le: str
@@ -692,6 +878,7 @@ class ExportV1(BaseModel):
     calendrier: CalendrierV1
     modifications: list[ModificationV1]
     taches: list[TacheV1]
+    sae: ExportSaeV1
 
 
 # ── Outils communs ──────────────────────────────────────────────────────
@@ -829,7 +1016,7 @@ def _cours() -> list[CoursV1]:
             code=c["code"], nom=c["name"], semestre=c["semestre"], parcours=c["parcours"],
             nb_cm=c["nCM"], nb_td=c["nTD"], nb_tp=c["nTP"], nb_evaluations=c["nEval"],
             nb_placees=c["nPlaced"], enseignants=list(c["teachers"]),
-            progression_definie=bool(c.get("progressionDefined")),
+            progression_definie=bool(c.get("progressionDefined")), sae=est_sae(c["code"]),
             ordonnancement=[
                 OrdonnancementV1(position=o["position"], cible=o["target"]) for o in c.get("ordonnancement") or []
             ],
@@ -864,6 +1051,7 @@ def _seances(placements: list) -> list[SeanceV1]:
     payload = _payload()
     libelles_groupes = payload.get("groupLabels") or {}
     noms = _libelles_enseignants()
+    journees = _journees_sae_par_parcours()
     sortie = []
     for p in placements:
         pl = main._to_placement(p, state.sessions_by_id)
@@ -893,7 +1081,10 @@ def _seances(placements: list) -> list[SeanceV1]:
             horaire_libre=isinstance(horaire, dict) and bool(horaire.get("debut")),
             evaluation=pl.is_eval, verrouillee=pl.locked,
             personnalisee=bool(s and s.metadata.get("custom_session")),
-            evenement=bool(s and s.metadata.get("evenement")),
+            evenement=bool(s and s.metadata.get("evenement")), sae=est_sae(pl.course_code),
+            dans_journee_sae=(
+                _dans_journee_sae(journees, s.parcours if s else "", date_iso) if est_sae(pl.course_code) else None
+            ),
         ))
     sortie.sort(key=lambda x: (x.date or "", x.debut, x.id))
     return sortie
@@ -907,6 +1098,7 @@ def _placements_filtres(
     salle: str | None = None,
     cours: str | None = None,
     parcours: str | None = None,
+    sae: bool | None = None,
 ) -> list:
     """Filtres groupe/enseignant/salle/semaine : `_filter_timetable`, le même
     que `/timetable` — un groupe TD inclut donc ses TP et les CM de sa promo
@@ -923,6 +1115,8 @@ def _placements_filtres(
             p for p in placements
             if getattr(state.sessions_by_id.get(p.session_id), "parcours", None) == parcours
         ]
+    if sae is not None:
+        placements = [p for p in placements if est_sae(p.course_code) == sae]
     return placements
 
 
@@ -1220,6 +1414,7 @@ def seances(
     salle: str | None = Query(None, description="Id de salle (ex. `h018`)."),
     cours: str | None = Query(None, description="Code du cours (ex. `WR101`)."),
     parcours: str | None = Query(None, description="Parcours (ex. `BUT2-DEV-FI`)."),
+    sae: bool | None = Query(None, description="`true` : seulement les séances de SAE ; `false` : sans elles."),
     du: date | None = _Q_DU,
     au: date | None = _Q_AU,
     limite: int | None = _Q_LIMITE,
@@ -1231,6 +1426,7 @@ def seances(
     def _construire(_v: str) -> SeancesV1:
         placements = _placements_filtres(
             semaine=semaine, enseignant=enseignant, groupe=groupe, salle=salle, cours=cours, parcours=parcours,
+            sae=sae,
         )
         return _paginer(_seances(placements), du, au, limite, decalage)
 
@@ -1271,32 +1467,87 @@ def _role_au_moins(request: Request, minimum: str) -> bool:
 # ── Séances non placées ─────────────────────────────────────────────────
 
 
+def _depuis_manquante(m) -> SeanceNonPlaceeV1:
+    """Une entrée de `GET /placements/manquantes`, au format v1."""
+    return SeanceNonPlaceeV1(
+        id=m.session_id, cours_code=m.course_code, cours_nom=m.course_name, type=m.session_type,
+        semestre=m.semestre, parcours=m.parcours, annee=m.annee, duree_creneaux=m.duration_slots,
+        duree_libelle=m.duree_libelle, groupes=list(m.group_ids), groupes_libelles=list(m.groupes_libelles),
+        enseignants=list(m.teacher_codes), enseignants_noms=list(m.enseignants_libelles),
+        ordre=m.sequence_order, semaines_possibles=list(m.semaines_possibles), raison=m.raison,
+        placee_provisoirement=bool(m.placee_provisoirement), semaine_actuelle=m.semaine_actuelle,
+        jour_actuel=m.jour_actuel, creneau_actuel=m.slot_actuel, sae=est_sae(m.course_code),
+        statut="en_attente_validation" if m.placee_provisoirement else "a_placer",
+    )
+
+
+_RAISON_SAE_HORS_SOLVEUR = (
+    "Cours de SAE organisé par ses enseignants sur les journées SAE du parcours : la génération ne le place "
+    "pas (« + Nouvelle séance » pour le poser à la main)."
+)
+_RAISON_SAE_SOLVEUR = "SAE planifiée par la génération (`solver_scheduled_sae`), mais ce cours n'a pas été placé."
+
+
+def _sae_non_placees_hors_liste(manquantes: dict) -> list[SeanceNonPlaceeV1]:
+    """Cours de SAE absents du planning ET de `/placements/manquantes` (qui
+    les écarte, retour utilisateur du 04/09/2026) — avec leur raison.
+    `semaines_possibles` = semaines des journées SAE du parcours."""
+    main = _main()
+    state = main.get_state()
+    places = {p.session_id for p in state.timetable}
+    planifiees = _config_sae()["planifiees"]
+    journees = _journees_sae_par_parcours()
+    lundis = {w: r[0] for w, r in _reperes().items()}
+
+    def _semaines(parcours_: str) -> list[int]:
+        dates = [*journees.get(parcours_, {}), *journees.get(None, {})]
+        return sorted({q[0] for d in dates if (q := vues.semaine_de_date(lundis, d))})
+
+    libelle_groupe = {g.id: g.label for g in state.groups}
+    noms = _libelles_enseignants()
+    sortie = []
+    for s in state.sessions:
+        if not est_sae(s.course_code) or s.id in places or s.id in manquantes:
+            continue
+        par_solveur = (s.course_code.upper(), s.semestre) in planifiees
+        duree = max(1, s.duration_slots or 1)
+        sortie.append(SeanceNonPlaceeV1(
+            id=s.id, cours_code=s.course_code, cours_nom=s.course_name,
+            type=str(getattr(s.session_type, "value", s.session_type)), semestre=s.semestre, parcours=s.parcours,
+            annee=s.annee, duree_creneaux=duree, duree_libelle=main._LIBELLES_DUREE.get(duree, "?"),
+            groupes=list(s.group_ids or []), groupes_libelles=[libelle_groupe.get(g, g) for g in s.group_ids or []],
+            enseignants=list(s.teacher_codes or []), enseignants_noms=[noms.get(c, c) for c in s.teacher_codes or []],
+            ordre=s.sequence_order,
+            semaines_possibles=_semaines(s.parcours),
+            raison=_RAISON_SAE_SOLVEUR if par_solveur else _RAISON_SAE_HORS_SOLVEUR, placee_provisoirement=False,
+            sae=True, statut="a_placer" if par_solveur else "hors_solveur",
+        ))
+    sortie.sort(key=lambda m: (m.parcours, m.cours_code, m.ordre or 0, m.id))
+    return sortie
+
+
 def _non_placees(
     *, parcours: str | None = None, cours: str | None = None, enseignant: str | None = None,
-    semaine: int | None = None,
+    semaine: int | None = None, inclure_sae: bool = False,
 ) -> SeancesNonPlaceesV1:
     """`GET /placements/manquantes` (panneau « À placer »), tel quel :
-    calcul par DIFFÉRENCE maquette − planning, SAE hors solveur exclues."""
+    calcul par DIFFÉRENCE maquette − planning, SAE hors solveur exclues —
+    sauf `inclure_sae`, qui ajoute les cours de SAE non placés."""
     brut = _main().seances_manquantes()
+    candidates = [_depuis_manquante(m) for m in brut.manquantes]
+    if inclure_sae:
+        candidates += _sae_non_placees_hors_liste({m.session_id for m in brut.manquantes})
     seances = []
-    for m in brut.manquantes:
+    for m in candidates:
         if parcours and m.parcours != parcours:
             continue
-        if cours and m.course_code != cours:
+        if cours and m.cours_code != cours:
             continue
-        if enseignant and enseignant not in m.teacher_codes:
+        if enseignant and enseignant not in m.enseignants:
             continue
         if semaine is not None and semaine not in m.semaines_possibles:
             continue
-        seances.append(SeanceNonPlaceeV1(
-            id=m.session_id, cours_code=m.course_code, cours_nom=m.course_name, type=m.session_type,
-            semestre=m.semestre, parcours=m.parcours, annee=m.annee, duree_creneaux=m.duration_slots,
-            duree_libelle=m.duree_libelle, groupes=list(m.group_ids), groupes_libelles=list(m.groupes_libelles),
-            enseignants=list(m.teacher_codes), enseignants_noms=list(m.enseignants_libelles),
-            ordre=m.sequence_order, semaines_possibles=list(m.semaines_possibles), raison=m.raison,
-            placee_provisoirement=bool(m.placee_provisoirement), semaine_actuelle=m.semaine_actuelle,
-            jour_actuel=m.jour_actuel, creneau_actuel=m.slot_actuel,
-        ))
+        seances.append(m)
     par_parcours: dict[str, int] = {}
     for s in seances:
         par_parcours[s.parcours] = par_parcours.get(s.parcours, 0) + 1
@@ -1330,13 +1581,21 @@ def seances_non_placees(
     cours: str | None = Query(None, description="Code du cours."),
     enseignant: str | None = Query(None, description="Code enseignant."),
     semaine: int | None = Query(None, ge=0, description="Seulement celles qui peuvent aller dans cette semaine."),
+    inclure_sae: bool = Query(
+        False, description="Ajoute les cours de SAE non placés (`statut: hors_solveur`), que l'écran « À placer » "
+        "n'affiche pas.",
+    ),
 ) -> Response:
     """Séances de la maquette absentes du planning — le panneau « À placer »
     de la Vue Promo : type, groupes, enseignants, durée, semaines possibles
     et raison en clair. Les séances posées en forçant l'ordre pédagogique,
-    pas encore validées, y restent (`placee_provisoirement`)."""
+    pas encore validées, y restent (`placee_provisoirement`).
+
+    Comme l'écran, les cours de SAE organisés par leurs enseignants n'y sont
+    pas : `inclure_sae=true` les ajoute (`statut: hors_solveur`), ou voir
+    `/api/v1/sae`."""
     return _repondre(request, lambda _v: _non_placees(
-        parcours=parcours, cours=cours, enseignant=enseignant, semaine=semaine,
+        parcours=parcours, cours=cours, enseignant=enseignant, semaine=semaine, inclure_sae=inclure_sae,
     ))
 
 
@@ -1852,6 +2111,420 @@ def calendrier(request: Request, semaine: int | None = _Q_SEMAINE) -> Response:
     return _repondre(request, lambda _v: _calendrier(semaine))
 
 
+# ── SAE : journées et cours ─────────────────────────────────────────────
+
+
+_memo_config_sae: tuple[int, dict] | None = None
+
+
+def _config_sae() -> dict:
+    """Configuration SAE, lue par les MÊMES fonctions que `/app-state`
+    (`main._build_app_context`) : fenêtres du calendrier officiel + corrections
+    locales, phases d'encadrement, SAE que la génération place elle-même.
+    Relue une fois par révision (ces fichiers sont des sondes de révision)."""
+    global _memo_config_sae
+    numero = revision.actuelle().numero
+    if _memo_config_sae is not None and _memo_config_sae[0] == numero:
+        return _memo_config_sae[1]
+    config = _lire_config_sae()
+    _memo_config_sae = (numero, config)
+    return config
+
+
+def _lire_config_sae() -> dict:
+    from cal_iut.api.ics_feed import periodes_sae
+    from cal_iut.ingestion.config_loader import (
+        load_sae_teacher_phases,
+        load_solver_scheduled_sae,
+        load_yaml,
+    )
+    from cal_iut.ingestion.planning_loader import PlanningBundle, sae_supervisor_dates_by_teacher
+
+    main = _main()
+    state = main.get_state()
+    # MÊMES fenêtres que les flux .ics (tous semestres, corrections locales,
+    # repli de parcours par les séances) : API et agendas ne divergent pas.
+    fenetres, parcours_par_code = main.sources_fenetres_sae(state)
+    # Jours d'encadrement de chaque référent, fenêtre par fenêtre : même
+    # fonction que les compromis « Encadrement SAE » des contraintes.
+    encadrement = [sae_supervisor_dates_by_teacher(PlanningBundle(sae_windows=[f]), state.config_dir) for f in fenetres]
+
+    motifs_corrections: dict[tuple[str, str], str] = {}
+    chemin = state.config_dir / "sae_corrections.yaml"
+    if chemin.exists():
+        for c in (load_yaml(chemin) or {}).get("corrections") or []:
+            for d in c.get("ajouter") or []:
+                motifs_corrections[(str(c.get("course_code")), str(d))] = " ".join(str(c.get("motif") or "").split())
+
+    notes_solveur: dict[tuple[str, str], str] = {}
+    regles = state.config_dir / "course_scheduling_rules.yaml"
+    if regles.exists():
+        for e in (load_yaml(regles) or {}).get("solver_scheduled_sae") or []:
+            notes_solveur[(str(e["course_code"]).upper(), str(e["semestre"]))] = " ".join(str(e.get("note") or "").split())
+    return {
+        "periodes": periodes_sae(fenetres, parcours_par_code),
+        "fenetres": fenetres, "encadrement": encadrement, "phases": load_sae_teacher_phases(state.config_dir),
+        "corrections": motifs_corrections, "planifiees": load_solver_scheduled_sae(state.config_dir),
+        "notes_solveur": notes_solveur,
+    }
+
+
+def _intitules_sae() -> dict[str, str]:
+    sortie: dict[str, str] = {}
+    for s in _main().get_state().sessions:
+        if est_sae(s.course_code):
+            sortie.setdefault(s.course_code, s.course_name)
+    return sortie
+
+
+def _commentaire_edt(sessions: list) -> str | None:
+    """Commentaire de la maquette pour l'EDT (entités HTML décodées ;
+    `UPDATE_OMEGA` est un marqueur technique, pas un commentaire)."""
+    import html
+
+    for s in sessions:
+        brut = s.metadata.get("commentaire_edt")
+        if brut and brut != "UPDATE_OMEGA":
+            return html.unescape(str(brut)).strip() or None
+    return None
+
+
+def _seances_sae_placees() -> list[SeanceV1]:
+    state = _main().get_state()
+    return _seances([p for p in state.timetable if est_sae(p.course_code)])
+
+
+def _id_journee(parcours: str | None, date_iso: str) -> str:
+    return f"{parcours or 'tous'}|{date_iso}"
+
+
+def _marquer(seance: SeanceV1, cfg: dict, journees: dict) -> SeanceSaeV1:
+    """Journée SAE, exception déclarée ou anomalie d'un cours de SAE placé.
+
+    Règle : un cours de SAE n'a lieu QUE sur une journée SAE de son parcours.
+    Seule exception déclarée à ce jour : les SAE que la génération place
+    elle-même (`solver_scheduled_sae`, ex. WSA501D, sans aucune date au
+    calendrier officiel)."""
+    journee = None
+    if seance.dans_journee_sae and seance.date:
+        cle = seance.parcours if seance.date in journees.get(seance.parcours, {}) else None
+        journee = _id_journee(cle, seance.date)
+    exception = not seance.dans_journee_sae and (seance.cours_code.upper(), seance.semestre) in cfg["planifiees"]
+    motif = None
+    if exception:
+        note = cfg["notes_solveur"].get((seance.cours_code.upper(), seance.semestre)) or ""
+        motif = "SAE placée par la génération (`solver_scheduled_sae`)" + (f" : {note}" if note else ".")
+    return SeanceSaeV1(
+        **seance.model_dump(), journee_sae=journee, exception=exception, motif_exception=motif,
+        anomalie=not seance.dans_journee_sae and not exception,
+    )
+
+
+def _saes(parcours: str | None = None, semaine: int | None = None, code: str | None = None) -> SaesV1:
+    """Une entrée par SAE (code, semestre, parcours) : maquette, encadrants,
+    journées réservées, cours placés (marqués) et non placés."""
+    main = _main()
+    state = main.get_state()
+    cfg = _config_sae()
+    journees = _journees_sae_par_parcours()
+    reperes = _reperes()
+    noms = _libelles_enseignants()
+    catalogue = {(c.code, c.semestre, c.parcours): c for c in _cours()}
+    manquantes = {m.session_id: _depuis_manquante(m) for m in main.seances_manquantes().manquantes}
+    hors_liste = {m.id: m for m in _sae_non_placees_hors_liste(set(manquantes))}
+    places = {s.id: _marquer(s, cfg, journees) for s in _seances_sae_placees()}
+    lundis = {w: r[0] for w, r in reperes.items()}
+
+    groupes_maquette: dict[tuple[str, str, str], list] = {}
+    for s in state.sessions:
+        if est_sae(s.course_code) and (code is None or s.course_code == code):
+            groupes_maquette.setdefault((s.course_code, s.semestre, s.parcours), []).append(s)
+
+    sortie = []
+    for (c, semestre, prc), sessions in sorted(groupes_maquette.items(), key=lambda kv: (vues.cle_parcours(kv[0][2]), kv[0][1], kv[0][0])):
+        if parcours and prc != parcours:
+            continue
+        fenetres = [(f, enc) for f, enc in zip(cfg["fenetres"], cfg["encadrement"], strict=True) if c in f.course_codes]
+        groupes_td = sorted({g for f, _e in fenetres for g in f.group_labels or []})
+        dates_sae = sorted({
+            d for cle in (prc, None) for d, codes in journees.get(cle, {}).items() if c in codes
+        })
+        jours = [(d, vues.semaine_de_date(lundis, d)) for d in dates_sae]
+        seances = sorted((places[s.id] for s in sessions if s.id in places), key=lambda x: (x.date or "", x.debut, x.id))
+        non_placees = [manquantes.get(s.id) or hors_liste.get(s.id) for s in sessions if s.id not in places]
+        non_placees = [m for m in non_placees if m is not None]
+        if semaine is not None:
+            jours = [(d, q) for d, q in jours if q and q[0] == semaine]
+            seances = [x for x in seances if x.semaine == semaine]
+            if not jours and not seances:
+                continue
+        encadrants: dict[str, EncadrantSaeV1] = {}
+        for f, enc in fenetres:
+            for prof in f.teachers:
+                phases = [
+                    PhaseEncadrementV1(debut=ph.debut, fin=ph.fin, sauf=list(ph.exclure), note=ph.note)
+                    for ph in cfg["phases"] if ph.course_code == c.upper() and ph.teacher_code == prof.upper()
+                ]
+                deja = encadrants.get(prof)
+                dates = sorted({*(deja.jours if deja else []), *(d.isoformat() for d in enc.get(prof, set()))})
+                encadrants[prof] = EncadrantSaeV1(code=prof, nom=noms.get(prof, prof), phases=phases, jours=dates)
+        profs = sorted({t for s in sessions for t in s.teacher_codes or []})
+        cat = catalogue.get((c, semestre, prc))
+        sortie.append(SaeV1(
+            code=c, intitule=sessions[0].course_name, parcours=prc, semestre=semestre, annee=sessions[0].annee,
+            planifiee_par_solveur=(c.upper(), semestre) in cfg["planifiees"], commentaire_edt=_commentaire_edt(sessions),
+            nb_cm=cat.nb_cm if cat else 0, nb_td=cat.nb_td if cat else 0, nb_tp=cat.nb_tp if cat else 0,
+            nb_evaluations=cat.nb_evaluations if cat else 0, nb_seances_maquette=len(sessions),
+            nb_placees=sum(1 for s in sessions if s.id in places), nb_non_placees=len(non_placees),
+            enseignants=profs, enseignants_noms=[noms.get(x, x) for x in profs],
+            encadrants=sorted(encadrants.values(), key=lambda e: e.code),
+            jours_reserves=[
+                JourSaeReserveV1(
+                    date=d, semaine=q[0] if q else None, numero_semaine=_numero_semaine(d),
+                    jour=date.fromisoformat(d).weekday(), groupes=groupes_td,
+                )
+                for d, q in jours
+            ],
+            nb_dans_journee_sae=sum(1 for x in seances if x.dans_journee_sae),
+            nb_exceptions=sum(1 for x in seances if x.exception), nb_anomalies=sum(1 for x in seances if x.anomalie),
+            seances=seances, non_placees=non_placees,
+        ))
+    anomalies = [x for e in sortie for x in e.seances if x.anomalie]
+    return SaesV1(
+        total=len(sortie), nb_seances_maquette=sum(e.nb_seances_maquette for e in sortie),
+        nb_placees=sum(e.nb_placees for e in sortie), nb_non_placees=sum(e.nb_non_placees for e in sortie),
+        nb_dans_journee_sae=sum(e.nb_dans_journee_sae for e in sortie),
+        nb_exceptions=sum(e.nb_exceptions for e in sortie), nb_anomalies=len(anomalies),
+        anomalies=anomalies, sae=sortie,
+    )
+
+
+def _numero_semaine(date_iso: str) -> int:
+    from cal_iut.calendar.academic import department_week_number
+
+    jour = date.fromisoformat(date_iso)
+    return department_week_number(jour - timedelta(days=jour.weekday()))
+
+
+def _periodes_sae(
+    parcours: str | None = None, semaine: int | None = None, du: date | None = None, au: date | None = None,
+    code: str | None = None,
+) -> list[PeriodeSaeV1]:
+    """Les semaines de projet SAÉ : `ics_feed.periodes_sae`, la fonction même
+    qui produit les évènements journée entière des flux .ics. Filtre
+    `parcours` comme un flux .ics : une SAE au parcours introuvable
+    (`parcours: null`) concerne tous les parcours."""
+    from cal_iut.api.ics_feed import description_periode_sae, titre_periode_sae
+
+    intitules = _intitules_sae()
+    lundis = {w: r[0] for w, r in _reperes().items()}
+    sortie = []
+    for p in _config_sae()["periodes"]:
+        if parcours and p["parcours"] is not None and p["parcours"] != parcours:
+            continue
+        if code and p["code"] != code:
+            continue
+        if du and p["fin"] < du or au and p["debut"] > au:
+            continue
+        jours = [j.isoformat() for j in p["jours"]]
+        semaines = sorted({q[0] for j in jours if (q := vues.semaine_de_date(lundis, j))})
+        if semaine is not None and semaine not in semaines:
+            continue
+        sortie.append(PeriodeSaeV1(
+            id=f"{p['code']}-{p['debut'].isoformat()}", code=p["code"], intitule=intitules.get(p["code"]),
+            libelle=p["label"], titre=titre_periode_sae(p), description=description_periode_sae(p),
+            parcours=p["parcours"], groupes=list(p["groupes"] or []), date_debut=p["debut"].isoformat(),
+            date_fin=p["fin"].isoformat(), jours=jours, nb_jours=len(jours), semaines=semaines,
+            numeros_semaine=sorted({_numero_semaine(j) for j in jours}),
+        ))
+    return sortie
+
+
+def _journees_sae(
+    parcours: str | None = None, semaine: int | None = None, du: date | None = None, au: date | None = None,
+) -> JourneesSaeV1:
+    """Journées SAE : les périodes SAE dépliées jour par jour, par parcours,
+    avec leur origine, les encadrants attendus et les cours de SAE placés ce
+    jour-là."""
+    from cal_iut.export.formatter import SLOT_TIMES
+
+    cfg = _config_sae()
+    lundis = {w: r[0] for w, r in _reperes().items()}
+    noms = _libelles_enseignants()
+    intitules = _intitules_sae()
+    groupes_par_code = {p["code"]: p["groupes"] or [] for p in cfg["periodes"]}
+    places: dict[str, list[SeanceV1]] = {}
+    for s in _seances_sae_placees():
+        if s.date:
+            places.setdefault(s.date, []).append(s)
+    sortie = []
+    par_parcours: dict[str, int] = {}
+    for prc, jours in _journees_sae_par_parcours().items():
+        if parcours and prc is not None and prc != parcours:
+            continue
+        for iso, codes in jours.items():
+            q = vues.semaine_de_date(lundis, iso)
+            if semaine is not None and (not q or q[0] != semaine):
+                continue
+            if (du and iso < du.isoformat()) or (au and iso > au.isoformat()):
+                continue
+            jour_date = date.fromisoformat(iso)
+            refs, groupes, encadrants = [], set(), []
+            for c in codes:
+                motif = cfg["corrections"].get((c, iso))
+                refs.append(SaeJourneeRefV1(
+                    code=c, intitule=intitules.get(c, c),
+                    origine="correction_locale" if motif is not None else "calendrier_officiel", motif=motif or None,
+                ))
+                groupes.update(groupes_par_code.get(c, []))
+                for f, enc in zip(cfg["fenetres"], cfg["encadrement"], strict=True):
+                    if c not in f.course_codes or jour_date not in f.dates:
+                        continue
+                    for prof in f.teachers:
+                        if jour_date in enc.get(prof, set()) and not any(
+                            e.code == prof and e.sae == c for e in encadrants
+                        ):
+                            encadrants.append(EncadrantJourneeV1(code=prof, nom=noms.get(prof, prof), sae=c))
+            seances = [
+                s for s in places.get(iso, [])
+                if s.cours_code in codes or (prc is not None and s.parcours == prc)
+            ]
+            sortie.append(JourneeSaeV1(
+                id=_id_journee(prc, iso), date=iso, semaine=q[0] if q else None, numero_semaine=_numero_semaine(iso),
+                jour=jour_date.weekday(), jour_nom=JOURS[jour_date.weekday()] if jour_date.weekday() < 5 else "",
+                parcours=prc, groupes=sorted(groupes), journee_entiere=True, creneaux=list(range(len(SLOT_TIMES))),
+                sae=refs, encadrants=encadrants, seances=seances,
+            ))
+            cle = prc or "tous"
+            par_parcours[cle] = par_parcours.get(cle, 0) + 1
+    sortie.sort(key=lambda j: (j.date, vues.cle_parcours(j.parcours or "")))
+    return JourneesSaeV1(total=len(sortie), par_parcours=par_parcours, journees=sortie)
+
+
+_EXEMPLE_SEANCE_SAE = {
+    "id": "WSA501D-S5-TD-3-but3-dev-fc", "cours_code": "WSA501D", "cours_nom": "Projet tuteuré",
+    "type": "TD", "parcours": "BUT3-DEV-FC", "semestre": "S5", "groupes": ["but3-dev-fc"],
+    "groupes_libelles": ["BUT3 DEV FC"], "enseignants": ["KBR"], "enseignants_noms": ["KYLLIAN BRESSON"],
+    "salle_id": "h101", "salle_libelle": "H.101", "semaine": 6, "numero_semaine": 8, "date": "2026-10-13",
+    "jour": 1, "jour_nom": "mardi", "creneau": 3, "duree_creneaux": 2, "debut": "14:00", "fin": "17:00",
+    "horaire_libre": False, "evaluation": False, "verrouillee": False, "personnalisee": False,
+    "evenement": False, "sae": True, "dans_journee_sae": False, "journee_sae": None, "exception": True,
+    "motif_exception": "SAE placée par la génération (`solver_scheduled_sae`) : …", "anomalie": False,
+}
+_EXEMPLE_SAE = {
+    "code": "WS101", "intitule": "Auditer une communication numérique", "parcours": "BUT1", "semestre": "S1",
+    "annee": "BUT1", "planifiee_par_solveur": False, "commentaire_edt": None, "nb_cm": 1, "nb_td": 12,
+    "nb_tp": 8, "nb_evaluations": 1, "nb_seances_maquette": 21, "nb_placees": 0, "nb_non_placees": 21,
+    "enseignants": ["MRI"], "enseignants_noms": ["MARINE RIGUET"],
+    "encadrants": [{"code": "MRI", "nom": "MARINE RIGUET", "phases": [], "jours": ["2026-10-19", "2026-10-20"]}],
+    "jours_reserves": [{"date": "2026-10-19", "semaine": 7, "numero_semaine": 9, "jour": 0, "groupes": []}],
+    "nb_dans_journee_sae": 0, "nb_exceptions": 0, "nb_anomalies": 0, "seances": [],
+    "non_placees": [{"id": "WS101-S1-TD-1-but1-td-ab", "cours_code": "WS101", "type": "TD", "…": "…",
+                     "sae": True, "statut": "hors_solveur", "raison": _RAISON_SAE_HORS_SOLVEUR}],
+}
+_EXEMPLE_SAES = {
+    "total": 21, "nb_seances_maquette": 712, "nb_placees": 17, "nb_non_placees": 695, "nb_dans_journee_sae": 0,
+    "nb_exceptions": 17, "nb_anomalies": 0, "anomalies": [], "sae": [_EXEMPLE_SAE],
+}
+_EXEMPLE_JOURNEES = {"total": 1, "par_parcours": {"BUT1": 1}, "journees": [{
+    "id": "BUT1|2026-10-19", "date": "2026-10-19", "semaine": 7, "numero_semaine": 9, "jour": 0,
+    "jour_nom": "lundi", "parcours": "BUT1", "groupes": [], "journee_entiere": True, "creneaux": [0, 1, 2, 3, 4, 5],
+    "sae": [{"code": "WS101", "intitule": "Auditer une communication numérique", "origine": "calendrier_officiel",
+             "motif": None}],
+    "encadrants": [{"code": "MRI", "nom": "MARINE RIGUET", "sae": "WS101"}], "seances": [],
+}]}
+
+
+@router.get(
+    "/sae", response_model=SaesV1, tags=_TAGS_SAE,
+    summary="Cours de SAE : maquette, encadrants, placés, non placés", responses=_exemple(_EXEMPLE_SAES),
+)
+def liste_sae(
+    request: Request,
+    parcours: str | None = Query(None, description="Parcours (ex. `BUT1`)."),
+    semaine: int | None = Query(
+        None, ge=0, description="SAE ayant une journée réservée ou un cours placé cette semaine (listes réduites à "
+        "cette semaine, sauf `non_placees`).",
+    ),
+) -> Response:
+    """Une entrée par SAE (code `WS…`, semestre, parcours) : volumes de la
+    maquette, enseignants, référents et leurs phases d'encadrement, journées
+    réservées, cours placés et cours non placés (avec la raison).
+
+    Règle : un cours de SAE n'a lieu QUE sur une journée SAE de son parcours.
+    Chaque cours placé dit s'il y est (`dans_journee_sae`) ; hors journée,
+    `exception` si c'est déclaré (SAE placée par la génération,
+    `solver_scheduled_sae`), sinon `anomalie` — listées en tête (`anomalies`)."""
+    return _repondre(request, lambda _v: _saes(parcours, semaine))
+
+
+_Q_DU_PERIODE = Query(None, description="Périodes qui se terminent à partir de cette date (ISO).")
+_Q_AU_PERIODE = Query(None, description="Périodes qui commencent au plus tard à cette date (ISO).")
+_EXEMPLE_PERIODES = [{
+    "id": "WS501D-2026-10-19", "code": "WS501D",
+    "intitule": "Développer pour le web ou Concevoir un dispositif interactif", "libelle": "WS501D",
+    "titre": "SAE WS501D", "description": "Semaine de projet/évaluation SAE — WS501D", "parcours": "BUT3-DEV-FI",
+    "groupes": [], "date_debut": "2026-10-19", "date_fin": "2026-10-22",
+    "jours": ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"], "nb_jours": 4, "semaines": [7],
+    "numeros_semaine": [9],
+}]
+
+
+@router.get(
+    "/sae/periodes", response_model=list[PeriodeSaeV1], tags=_TAGS_SAE,
+    summary="Semaines de projet SAÉ (comme les .ics)", responses=_exemple(_EXEMPLE_PERIODES),
+)
+def sae_periodes(
+    request: Request,
+    parcours: str | None = Query(
+        None, description="Parcours ; les SAE au parcours introuvable (`parcours: null`) sont toujours incluses."
+    ),
+    semaine: int | None = _Q_SEMAINE,
+    du: date | None = _Q_DU_PERIODE,
+    au: date | None = _Q_AU_PERIODE,
+) -> Response:
+    """Une entrée par période continue de jours SAE (le week-end ne coupe
+    pas) : exactement les évènements journée entière « Semaine de
+    projet/évaluation SAE — … » des flux .ics, même source, même découpage,
+    même `id` (UID de l'évènement)."""
+    return _repondre(request, lambda _v: _periodes_sae(parcours, semaine, du, au))
+
+
+@router.get(
+    "/sae/journees", response_model=JourneesSaeV1, tags=_TAGS_SAE,
+    summary="Journées SAE (calendrier réservé)", responses=_exemple(_EXEMPLE_JOURNEES),
+)
+def journees_sae(
+    request: Request,
+    parcours: str | None = Query(None, description="Parcours (ex. `BUT1`)."),
+    semaine: int | None = _Q_SEMAINE,
+    du: date | None = _Q_DU,
+    au: date | None = _Q_AU,
+) -> Response:
+    """Les journées réservées aux SAE, par parcours — le bandeau « SAE » de
+    la Vue Promo : aucun cours classique du parcours n'y est placé. Pour
+    chacune : SAE concernée(s) et d'où vient la journée (calendrier officiel
+    ou correction locale), groupes concernés, encadrants attendus, et les
+    cours de SAE effectivement placés ce jour-là."""
+    return _repondre(request, lambda _v: _journees_sae(parcours, semaine, du, au))
+
+
+@router.get(
+    "/sae/{code}", response_model=SaeDetailV1, tags=_TAGS_SAE,
+    summary="Une SAE", responses=_exemple({"code": "WS101", "intitule": "…", "declinaisons": [_EXEMPLE_SAE]}),
+)
+def une_sae(code: str, request: Request) -> Response:
+    """Même contenu qu'une entrée de `/api/v1/sae`, pour chaque parcours où
+    la SAE existe."""
+    def _construire(_v: str) -> SaeDetailV1:
+        declinaisons = _saes(code=code).sae
+        if not declinaisons:
+            raise HTTPException(404, f"SAE « {code} » inconnue.")
+        return SaeDetailV1(code=code, intitule=declinaisons[0].intitule, declinaisons=declinaisons)
+
+    return _repondre(request, _construire)
+
+
 # ── Celcat (admin) ──────────────────────────────────────────────────────
 
 
@@ -1933,6 +2606,7 @@ def export(request: Request) -> Response:
             salles=_salles(), cours=_cours(), seances=_seances(list(state.timetable)),
             seances_non_placees=_non_placees().seances, contraintes=_contraintes(), calendrier=_calendrier(),
             modifications=_modifications().modifications, taches=_taches(),
+            sae=ExportSaeV1(periodes=_periodes_sae(), journees=_journees_sae().journees, cours=_saes().sae),
         )
 
     return _repondre(request, _construire)

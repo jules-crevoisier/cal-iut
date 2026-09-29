@@ -2241,6 +2241,20 @@ def _ics_all_day_sae_items(state: object, parcours: str | None) -> list:
     sur des données minimales plutôt que sur toute la production.
     """
     from cal_iut.api.ics_feed import fenetres_sae_pour_ics
+
+    fenetres, parcours_par_code = sources_fenetres_sae(state)
+    return fenetres_sae_pour_ics(
+        fenetres,
+        parcours,
+        parcours_par_code,
+        updated_at=_ics_sae_modifie_le(state),
+    )
+
+
+def sources_fenetres_sae(state: object) -> tuple[list, dict[str, str]]:
+    """Fenêtres SAE (tous semestres, corrections locales comprises) et repli
+    de parcours par code — l'entrée de `ics_feed.periodes_sae`, partagée par
+    les flux .ics et l'API v1 (`api/v1.py`) pour qu'ils ne divergent pas."""
     from cal_iut.ingestion.planning_loader import load_mmi_planning_for_semestres
 
     planning = load_mmi_planning_for_semestres(state.config_dir.parents[1], [])
@@ -2251,12 +2265,7 @@ def _ics_all_day_sae_items(state: object, parcours: str | None) -> list:
         for s_ in getattr(state, "sessions", []) or []
         if getattr(s_, "course_code", None) and getattr(s_, "parcours", None)
     }
-    return fenetres_sae_pour_ics(
-        planning.sae_windows,
-        parcours,
-        parcours_par_code,
-        updated_at=_ics_sae_modifie_le(state),
-    )
+    return list(planning.sae_windows), parcours_par_code
 
 
 def _ics_sae_modifie_le(state: object) -> object:
