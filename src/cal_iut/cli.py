@@ -710,6 +710,26 @@ def _afficher_proposition(prop: dict) -> None:
             print(f"  - {v}")
 
 
+def cmd_sauvegarder_base(args: argparse.Namespace) -> int:
+    """Sauvegarde cohérente de la base SQLite (cf. `api/sauvegardes_db.py`) :
+    le fichier du jour dans `data/state/sauvegardes_db/`, ou `--sortie`.
+    Écrase la sauvegarde du jour si elle existe déjà (demande explicite)."""
+    from cal_iut.api import sauvegardes_db
+    from cal_iut.api.state import DB_PATH
+
+    source = Path(args.base) if args.base else DB_PATH
+    try:
+        cible = sauvegardes_db.sauvegarder(source, Path(args.sortie) if args.sortie else None)
+    except Exception as exc:  # noqa: BLE001 — message lisible, code retour non nul
+        print(f"Sauvegarde impossible : {exc}", file=sys.stderr)
+        return 1
+    if not args.sortie:
+        for jour in sauvegardes_db.purger_anciennes():
+            print(f"Sauvegarde du {jour} supprimée (plus de {sauvegardes_db.RETENTION_JOURS} jours)")
+    print(f"Base sauvegardée : {cible} ({cible.stat().st_size} octets)")
+    return 0
+
+
 def cmd_lisser(args: argparse.Namespace) -> int:
     """Lisse le planning d'une promo (cf. `api/lissage.py`) : propose, et
     n'applique qu'avec `--appliquer`. `--prod` travaille sur la production
@@ -1337,6 +1357,14 @@ def main() -> int:
     lisser_parser.add_argument("--appliquer", action="store_true", help="écrire réellement (sinon simulation)")
     lisser_parser.add_argument("--json", default=None, help="enregistrer la proposition dans ce fichier")
     lisser_parser.set_defaults(func=cmd_lisser)
+
+    sauvegarder_base_parser = sub.add_parser(
+        "sauvegarder-base",
+        help="Sauvegarder la base SQLite (copie cohérente, data/state/sauvegardes_db/, 30 jours)",
+    )
+    sauvegarder_base_parser.add_argument("--base", default=None, help="base à sauvegarder (défaut : data/state/cal-iut.db)")
+    sauvegarder_base_parser.add_argument("--sortie", default=None, help="fichier de sortie (défaut : sauvegarde du jour)")
+    sauvegarder_base_parser.set_defaults(func=cmd_sauvegarder_base)
 
     reseau_parser = sub.add_parser(
         "celcat-reseau", help="Vérifier l'accès à Celcat (VPN AnyConnect)"

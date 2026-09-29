@@ -714,6 +714,15 @@
     INFEASIBLE: ['bad', 'Infaisable'],
   };
   const ICON = { pass: '✓', fail: '!', info: 'i' };
+  // Échappement HTML de toute donnée insérée via `innerHTML` (audit
+  // 29/09/2026, P1-8) : codes enseignants, libellés, notes, salles, motifs
+  // sont saisis par des personnes. Sans lui, un code enseignant du type
+  // `<IMG SRC=X ONERROR=...>` s'exécutait chez quiconque ouvrait la page.
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
 
   // `weekRows` = séquence CONTINUE de semaines "département" (y compris les
   // semaines bloquées/vacances, sans index solveur) ; l'ancien `nWeeks` basé
@@ -835,8 +844,8 @@
   ];
   document.getElementById('stats').innerHTML = stats.map(([l, v, sub]) => `
     <div class="stat">
-      <span class="label">${l}</span>
-      <span class="value mono">${v}${sub ? `<small> ${sub}</small>` : ''}</span>
+      <span class="label">${esc(l)}</span>
+      <span class="value mono">${esc(v)}${sub ? `<small> ${esc(sub)}</small>` : ''}</span>
     </div>`).join('');
 
   // ---------- calendrier institutionnel ----------
@@ -846,8 +855,8 @@
       ? new Date(ev.start).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
       : `${new Date(ev.start).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} – ${new Date(ev.end).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
     return `<div class="timeline-item ${ev.kind}">
-      <span class="kind">${KIND_LABELS_CAL[ev.kind] || ev.kind}</span>
-      <span class="label">${ev.label}</span>
+      <span class="kind">${esc(KIND_LABELS_CAL[ev.kind] || ev.kind)}</span>
+      <span class="label">${esc(ev.label)}</span>
       <span class="dates mono">${range}</span>
     </div>`;
   }).join('');
@@ -929,10 +938,10 @@
     const cls = editable ? (r.locked ? ' locked-session' : '') : '';
     const lockBadge = editable && r.locked ? '<span class="lockbadge" title="Verrouillée">🔒</span>' : '';
     return `
-      <div class="session type-${r.t}${r.ev ? ' eval' : ''}${viol ? ' viol' : ''}${cls}"${draggableAttr} data-session-id="${r.id || ''}">
-        <span class="code">${r.c}${lockBadge}</span>
-        <span class="meta">${r.t}${r.ev ? ' · éval' : ''}${durLabel}</span>
-        <span class="meta">${r.r || '—'} · ${r.te.join(', ')}</span>
+      <div class="session type-${esc(r.t)}${r.ev ? ' eval' : ''}${viol ? ' viol' : ''}${cls}"${draggableAttr} data-session-id="${esc(r.id || '')}">
+        <span class="code">${esc(r.c)}${lockBadge}</span>
+        <span class="meta">${esc(r.t)}${r.ev ? ' · éval' : ''}${durLabel}</span>
+        <span class="meta">${esc(r.r || '—')} · ${esc(r.te.join(', '))}</span>
       </div>`;
   }
 
@@ -1050,15 +1059,15 @@
           </div></td>`;
         } else if (holiday) {
           const title = holiday.kind === 'vacances' ? 'Vacances' : 'Férié';
-          html += `<td class="slotcell"><div class="holiday-cell"><span class="holiday-title">${title}</span><span class="holiday-label">${holiday.label}</span></div></td>`;
+          html += `<td class="slotcell"><div class="holiday-cell"><span class="holiday-title">${title}</span><span class="holiday-label">${esc(holiday.label)}</span></div></td>`;
         } else if (isPacLock) {
           html += '<td class="slotcell"><div class="pac-cell">PAC</div></td>';
         } else if (saeCodes) {
-          html += `<td class="slotcell"><div class="sae-cell"><span class="sae-title">SAE</span><span class="sae-codes">${saeCodes.join(', ')}</span></div></td>`;
+          html += `<td class="slotcell"><div class="sae-cell"><span class="sae-title">SAE</span><span class="sae-codes">${esc(saeCodes.join(', '))}</span></div></td>`;
         } else if (eventsAtSlot) {
-          html += `<td class="slotcell"><div class="event-cell">${eventsAtSlot.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+          html += `<td class="slotcell"><div class="event-cell">${eventsAtSlot.map(e => `<span class="event-label">${esc(e)}</span>`).join('')}</div></td>`;
         } else if (dayEvent) {
-          html += `<td class="slotcell"${dropAttr}><div class="event-cell">${dayEvent.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+          html += `<td class="slotcell"${dropAttr}><div class="event-cell">${dayEvent.map(e => `<span class="event-label">${esc(e)}</span>`).join('')}</div></td>`;
         } else {
           html += `<td class="slotcell"${dropAttr}></td>`;
         }
@@ -1104,14 +1113,14 @@
   function showConflictModal(hardConflicts, suggestions, note) {
     return new Promise((resolve) => {
       const modal = document.getElementById('conflictModal');
-      document.getElementById('conflictList').innerHTML = (hardConflicts || []).map((c) => `<div>• ${c}</div>`).join('');
+      document.getElementById('conflictList').innerHTML = (hardConflicts || []).map((c) => `<div>• ${esc(c)}</div>`).join('');
       const sugList = document.getElementById('conflictSuggestions');
       if (suggestions && suggestions.length) {
-        sugList.innerHTML = suggestions.map((s, i) => `<button type="button" class="subtabbtn" data-idx="${i}">${s.label}</button>`).join('');
+        sugList.innerHTML = suggestions.map((s, i) => `<button type="button" class="subtabbtn" data-idx="${i}">${esc(s.label)}</button>`).join('');
       } else if (note) {
         // Motif précis (ex. duo synchronisé) : prioritaire sur le message
         // générique "aucune alternative trouvée".
-        sugList.innerHTML = `<span style="color:var(--warn); font-size:.82rem;">⚠ ${note}</span>`;
+        sugList.innerHTML = `<span style="color:var(--warn); font-size:.82rem;">⚠ ${esc(note)}</span>`;
       } else {
         sugList.innerHTML = '<span style="color:var(--ink-soft); font-size:.82rem;">Aucune alternative trouvée automatiquement dans les 6 prochaines semaines — essayez une régénération de semaine.</span>';
       }
@@ -1377,7 +1386,7 @@
     const rawBox = document.getElementById('teacherRaw');
     if (!t || !t.hasConstraint) {
       callout.className = 'callout';
-      callout.innerHTML = `<span class="icon">i</span><span>Aucune contrainte déclarée dans le fichier CONTRAINTES ENSEIGNANTS pour ${payload.teacherLabels[code] || code}.</span>`;
+      callout.innerHTML = `<span class="icon">i</span><span>Aucune contrainte déclarée dans le fichier CONTRAINTES ENSEIGNANTS pour ${esc(payload.teacherLabels[code] || code)}.</span>`;
       rawBox.innerHTML = '<p style="color:var(--ink-soft); font-size:.85rem;">—</p>';
       return;
     }
@@ -1385,17 +1394,17 @@
     callout.className = 'callout ' + (ok ? 'pass' : 'fail');
     callout.innerHTML = `<span class="icon">${ok ? '✓' : '!'}</span><span>${
       ok
-        ? `Contrainte respectée sur les ${t.nPlaced} séance(s) placée(s) pour ${t.name}.`
-        : `${t.violations.length} violation(s) détectée(s) sur les ${t.nPlaced} séance(s) placée(s) pour ${t.name}.`
+        ? `Contrainte respectée sur les ${t.nPlaced} séance(s) placée(s) pour ${esc(t.name)}.`
+        : `${t.violations.length} violation(s) détectée(s) sur les ${t.nPlaced} séance(s) placée(s) pour ${esc(t.name)}.`
     }</span>`;
 
     const parts = [];
-    if (t.rawIndisponibilites) parts.push(`<div class="raw-label">Indisponibilités déclarées</div><div class="raw">${t.rawIndisponibilites}</div>`);
-    if (t.rawDisponibilites) parts.push(`<div class="raw-label">Disponibilités déclarées</div><div class="raw">${t.rawDisponibilites}</div>`);
-    if (t.rawContraintes) parts.push(`<div class="raw-label">Contraintes / progression</div><div class="raw">${t.rawContraintes}</div>`);
+    if (t.rawIndisponibilites) parts.push(`<div class="raw-label">Indisponibilités déclarées</div><div class="raw">${esc(t.rawIndisponibilites)}</div>`);
+    if (t.rawDisponibilites) parts.push(`<div class="raw-label">Disponibilités déclarées</div><div class="raw">${esc(t.rawDisponibilites)}</div>`);
+    if (t.rawContraintes) parts.push(`<div class="raw-label">Contraintes / progression</div><div class="raw">${esc(t.rawContraintes)}</div>`);
     if (t.violations.length) {
       parts.push(`<div class="raw-label">Violations détectées</div><div class="slotlist">${
-        t.violations.map(v => `<span class="slotchip">${v.course_code} — ${v.date || ('sem.' + (v.week + 1) + ' ' + DAY_LABELS[v.day] + ' ' + SLOT_TIMES[v.slot][0])}</span>`).join('')
+        t.violations.map(v => `<span class="slotchip">${esc(v.course_code)} — ${esc(v.date || ('sem.' + (v.week + 1) + ' ' + DAY_LABELS[v.day] + ' ' + SLOT_TIMES[v.slot][0]))}</span>`).join('')
       }</div>`);
     }
     rawBox.innerHTML = parts.join('');
@@ -1464,7 +1473,7 @@
         const when = it.date ? DATE_FMT.format(it.date) : DAY_LABELS[it.d];
         const end = SLOT_TIMES[Math.min(5, it.s + (it.dur || 1) - 1)][1];
         const groups = (it.g || []).map(g => payload.groupLabels[g] || g).join(', ');
-        return `<span class="slotchip">${when} ${SLOT_TIMES[it.s][0]}–${end} · ${it.c}${groups ? ' · ' + groups : ''}${it.r ? ' · ' + it.r : ''}</span>`;
+        return `<span class="slotchip">${esc(when)} ${SLOT_TIMES[it.s][0]}–${end} · ${esc(it.c)}${groups ? ' · ' + esc(groups) : ''}${it.r ? ' · ' + esc(it.r) : ''}</span>`;
       }).join('');
       html += '</div>';
     }
@@ -1590,11 +1599,11 @@
   function linkRow(label, code, items, link, extra) {
     const slots = items.reduce((n, it) => n + (it.dur || 1), 0);
     return `<tr>
-      <td style="text-align:left;"><strong>${label}</strong> <span class="mono" style="color:var(--ink-soft);">${code}</span></td>
+      <td style="text-align:left;"><strong>${esc(label)}</strong> <span class="mono" style="color:var(--ink-soft);">${esc(code)}</span></td>
       <td>${items.length}</td>
       <td>${(slots * 1.5).toLocaleString('fr-FR')} h</td>
-      <td><button type="button" class="subtabbtn" data-copy="${link}" style="padding:3px 9px; font-size:.72rem;">Copier le lien</button></td>
-      <td><button type="button" class="subtabbtn" data-ics="${code}" style="padding:3px 9px; font-size:.72rem;">.ics</button></td>
+      <td><button type="button" class="subtabbtn" data-copy="${esc(link)}" style="padding:3px 9px; font-size:.72rem;">Copier le lien</button></td>
+      <td><button type="button" class="subtabbtn" data-ics="${esc(code)}" style="padding:3px 9px; font-size:.72rem;">.ics</button></td>
       ${extra || ''}
     </tr>`;
   }
@@ -1622,7 +1631,7 @@
         // masquer le bouton, ce qui ferait croire que la fonction ne marche pas.
         const known = !!emails[code];
         const mailCell = `<td><a class="subtabbtn" style="padding:3px 9px; font-size:.72rem; text-decoration:none; display:inline-block;"
-             href="${mailtoFor(code)}" title="${known ? emails[code] : 'Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml'}">
+             href="${esc(mailtoFor(code))}" title="${esc(known ? emails[code] : 'Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml')}">
              Écrire${known ? '' : ' ⚠'}</a></td>`;
         return linkRow(payload.teacherLabels[code] || code, code, sessionsForTeacher(code), teacherLink(code), mailCell);
       }).join('')
@@ -1735,7 +1744,7 @@
       const cls = saeCodesAny ? ' sae' : holiday ? ' holiday' : hasEvent ? ' event' : '';
       const title = holiday ? holiday.label : saeCodesAny ? 'Journée SAE (sanctuarisée, au moins un parcours)' : (hasEvent || []).join(', ');
       return `<button type="button" class="daybtn${d === selectedDayPromo ? ' active' : ''}${cls}"
-        data-day="${d}" title="${title}">${label}${cls ? ' •' : ''}</button>`;
+        data-day="${d}" title="${esc(title)}">${label}${cls ? ' •' : ''}</button>`;
     }).join('');
     bar.querySelectorAll('.daybtn').forEach(btn => {
       btn.addEventListener('click', () => { selectedDayPromo = Number(btn.dataset.day); renderPromoTab(); });
@@ -1794,8 +1803,8 @@
 
     let html = '<thead>';
     html += '<tr><th class="timecol" rowspan="2"></th>' +
-      colGroups.map((g, gi) => `<th colspan="${g.cols.length}" class="grp-band pc${gi % 6}">${g.parcours}</th>`).join('') + '</tr>';
-    html += '<tr>' + cols.map((c, i) => `<th class="${colClass(i)}">${payload.groupLabels[c] || c}</th>`).join('') + '</tr>';
+      colGroups.map((g, gi) => `<th colspan="${g.cols.length}" class="grp-band pc${gi % 6}">${esc(g.parcours)}</th>`).join('') + '</tr>';
+    html += '<tr>' + cols.map((c, i) => `<th class="${colClass(i)}">${esc(payload.groupLabels[c] || c)}</th>`).join('') + '</tr>';
     html += '</thead><tbody>';
     for (let s = 0; s < 6; s++) {
       if (s === 3) html += `<tr class="pause"><td class="timecell">Pause</td>${cols.map((c, i) => `<td class="${colClass(i)}"></td>`).join('')}</tr>`;
@@ -1813,22 +1822,22 @@
             const teacherNames = r.te.map(tc => payload.teacherLabels[tc] || tc).join(', ');
             const durLabel = (r.dur || 1) > 1 ? ` · ${((r.dur || 1) * 1.5).toFixed(1).replace('.0', '')}h` : '';
             return `
-            <div class="promo-chip type-${r.t}${r.ev ? ' eval' : ''}${highlighted ? ' chip-highlight' : ''}">
-              <span class="code">${r.c}</span>
-              <span class="ty">${r.t}${r.ev ? ' · éval' : ''}${durLabel}</span>
-              <span class="rm">${r.r || '—'}</span>
-              <span class="te">${teacherNames || '—'}</span>
+            <div class="promo-chip type-${esc(r.t)}${r.ev ? ' eval' : ''}${highlighted ? ' chip-highlight' : ''}">
+              <span class="code">${esc(r.c)}</span>
+              <span class="ty">${esc(r.t)}${r.ev ? ' · éval' : ''}${durLabel}</span>
+              <span class="rm">${esc(r.r || '—')}</span>
+              <span class="te">${esc(teacherNames || '—')}</span>
             </div>`;
           }).join('') + '</td>';
         } else if (holiday) {
           const title = holiday.kind === 'vacances' ? 'Vacances' : 'Férié';
-          html += `<td class="${cellClass}"><div class="holiday-cell"><span class="holiday-title">${title}</span><span class="holiday-label">${holiday.label}</span></div></td>`;
+          html += `<td class="${cellClass}"><div class="holiday-cell"><span class="holiday-title">${title}</span><span class="holiday-label">${esc(holiday.label)}</span></div></td>`;
         } else if (saeCodes) {
-          html += `<td class="${cellClass}"><div class="sae-cell"><span class="sae-title">SAE</span><span class="sae-codes">${saeCodes.join(', ')}</span></div></td>`;
+          html += `<td class="${cellClass}"><div class="sae-cell"><span class="sae-title">SAE</span><span class="sae-codes">${esc(saeCodes.join(', '))}</span></div></td>`;
         } else if (eventsAtSlot) {
-          html += `<td class="${cellClass}"><div class="event-cell">${eventsAtSlot.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+          html += `<td class="${cellClass}"><div class="event-cell">${eventsAtSlot.map(e => `<span class="event-label">${esc(e)}</span>`).join('')}</div></td>`;
         } else if (dayEvents) {
-          html += `<td class="${cellClass}"><div class="event-cell">${dayEvents.map(e => `<span class="event-label">${e}</span>`).join('')}</div></td>`;
+          html += `<td class="${cellClass}"><div class="event-cell">${dayEvents.map(e => `<span class="event-label">${esc(e)}</span>`).join('')}</div></td>`;
         } else {
           html += `<td class="${cellClass}"></td>`;
         }
@@ -1848,25 +1857,25 @@
   const roomsTable = document.getElementById('roomsTable');
   roomsTable.innerHTML = `<thead><tr><th>Salle</th><th>Capacité</th><th>Type</th><th>Équipement</th><th>Séances</th></tr></thead><tbody>` +
     (payload.rooms || []).map(r => `<tr>
-      <td><b>${r.label}</b></td>
-      <td class="mono">${r.capacity}</td>
-      <td>${r.type}</td>
-      <td>${r.equipment.map(e => `<span class="tag">${e}</span>`).join('')}</td>
+      <td><b>${esc(r.label)}</b></td>
+      <td class="mono">${esc(r.capacity)}</td>
+      <td>${esc(r.type)}</td>
+      <td>${r.equipment.map(e => `<span class="tag">${esc(e)}</span>`).join('')}</td>
       <td class="mono">${r.nSessions}</td>
     </tr>`).join('') + '</tbody>';
 
   const coursesTable = document.getElementById('coursesTable');
   coursesTable.innerHTML = `<thead><tr><th>Code</th><th>Nom</th><th>Parcours</th><th>CM</th><th>TD</th><th>TP</th><th>Éval</th><th>Enseignant(s)</th><th>Ordonnancement</th></tr></thead><tbody>` +
     (payload.courses || []).map(c => `<tr>
-      <td class="mono"><b>${c.code}</b></td>
-      <td>${c.name}</td>
-      <td>${c.parcours}</td>
+      <td class="mono"><b>${esc(c.code)}</b></td>
+      <td>${esc(c.name)}</td>
+      <td>${esc(c.parcours)}</td>
       <td class="mono">${c.nCM}</td>
       <td class="mono">${c.nTD}</td>
       <td class="mono">${c.nTP}</td>
       <td class="mono">${c.nEval}</td>
-      <td>${c.teachers.map(t => `<span class="tag">${payload.teacherLabels[t] || t}</span>`).join('')}</td>
-      <td>${c.ordonnancement.map(o => `<span class="tag">${o.position} ${o.target}</span>`).join('') || '—'}</td>
+      <td>${c.teachers.map(t => `<span class="tag">${esc(payload.teacherLabels[t] || t)}</span>`).join('')}</td>
+      <td>${c.ordonnancement.map(o => `<span class="tag">${esc(o.position)} ${esc(o.target)}</span>`).join('') || '—'}</td>
     </tr>`).join('') + '</tbody>';
 
   document.getElementById('refSubtabbar').addEventListener('click', (e) => {
@@ -1884,7 +1893,7 @@
   // ============ ONGLET CONTRAINTES ============
   document.getElementById('globalRuleChecks').innerHTML = (payload.ruleChecks || []).map(c => `
     <div class="check ${c.status}"><span class="icon">${ICON[c.status]}</span>
-      <span class="txt"><b>${c.label}</b><div class="sub">${c.detail}</div></span></div>`).join('');
+      <span class="txt"><b>${esc(c.label)}</b><div class="sub">${esc(c.detail)}</div></span></div>`).join('');
 
   document.getElementById('teacherConstraintList').innerHTML = (payload.teachers || [])
     .filter(t => t.hasConstraint)
@@ -1892,14 +1901,14 @@
       const ok = t.violations.length === 0;
       return `<div class="teacher-card">
         <header>
-          <h4>${t.name} <span class="code mono">${t.code}</span></h4>
+          <h4>${esc(t.name)} <span class="code mono">${esc(t.code)}</span></h4>
           <span class="pill mini ${ok ? 'good' : 'bad'}">${ok ? 'Respectée' : t.violations.length + ' violation(s)'}</span>
         </header>
-        ${t.rawIndisponibilites ? `<div><div class="raw-label">Indisponibilités</div><div class="raw">${t.rawIndisponibilites}</div></div>` : ''}
-        ${t.rawDisponibilites ? `<div><div class="raw-label">Disponibilités</div><div class="raw">${t.rawDisponibilites}</div></div>` : ''}
-        ${t.rawContraintes ? `<div><div class="raw-label">Contraintes / progression</div><div class="raw">${t.rawContraintes}</div></div>` : ''}
+        ${t.rawIndisponibilites ? `<div><div class="raw-label">Indisponibilités</div><div class="raw">${esc(t.rawIndisponibilites)}</div></div>` : ''}
+        ${t.rawDisponibilites ? `<div><div class="raw-label">Disponibilités</div><div class="raw">${esc(t.rawDisponibilites)}</div></div>` : ''}
+        ${t.rawContraintes ? `<div><div class="raw-label">Contraintes / progression</div><div class="raw">${esc(t.rawContraintes)}</div></div>` : ''}
         ${!ok ? `<div class="violations">${t.violations.length} créneau(x) en conflit avec la contrainte déclarée, sur ${t.nPlaced} séances placées.</div>
-          <div class="slotlist">${t.violations.map(v => `<span class="slotchip">${v.course_code} — ${v.date || ('sem.' + (v.week + 1) + ' ' + DAY_LABELS[v.day])}</span>`).join('')}</div>` : ''}
+          <div class="slotlist">${t.violations.map(v => `<span class="slotchip">${esc(v.course_code)} — ${esc(v.date || ('sem.' + (v.week + 1) + ' ' + DAY_LABELS[v.day]))}</span>`).join('')}</div>` : ''}
       </div>`;
     }).join('') || '<p style="color:var(--ink-soft);">Aucune contrainte enseignant déclarée pour ce jeu de données.</p>';
 
@@ -2003,11 +2012,11 @@
     list.innerHTML = items.length ? items.map(e => `
       <div class="teacher-card">
         <header>
-          <h4 style="font-size:.86rem;">${e.kind === 'teacher_absence' ? 'Absence' : 'Salle indispo'} — ${e.exception_date}</h4>
-          <button type="button" class="subtabbtn" data-del="${e.id}" style="padding:3px 9px; font-size:.72rem;">Supprimer</button>
+          <h4 style="font-size:.86rem;">${e.kind === 'teacher_absence' ? 'Absence' : 'Salle indispo'} — ${esc(e.exception_date)}</h4>
+          <button type="button" class="subtabbtn" data-del="${esc(e.id)}" style="padding:3px 9px; font-size:.72rem;">Supprimer</button>
         </header>
         <div style="font-size:.82rem; color:var(--ink-soft);">
-          ${e.kind === 'teacher_absence' ? (payload.teacherLabels[e.teacher_code] || e.teacher_code) : (e.room_id || '—')}${e.reason ? ' — ' + e.reason : ''}
+          ${esc(e.kind === 'teacher_absence' ? (payload.teacherLabels[e.teacher_code] || e.teacher_code) : (e.room_id || '—'))}${e.reason ? ' — ' + esc(e.reason) : ''}
         </div>
       </div>`).join('') : '<p style="color:var(--ink-soft); font-size:.84rem;">Aucune exception active.</p>';
     list.querySelectorAll('[data-del]').forEach((btn) => {
@@ -2172,8 +2181,8 @@
     searchSel = 0;
     searchResults.innerHTML = searchHits.length
       ? searchHits.map((h, i) => `<button type="button" class="hit${i === 0 ? ' sel' : ''}" data-i="${i}">
-          <span class="kind">${h.kind}</span>
-          <span><strong>${h.label}</strong>${h.sub ? `<div class="sub">${h.sub}</div>` : ''}</span>
+          <span class="kind">${esc(h.kind)}</span>
+          <span><strong>${esc(h.label)}</strong>${h.sub ? `<div class="sub">${esc(h.sub)}</div>` : ''}</span>
         </button>`).join('')
       : '<div class="searchempty">Aucun résultat.</div>';
   }
@@ -2308,7 +2317,7 @@
     box.innerHTML = items.length
       ? items.map((it, i) => `<button type="button" class="todo-item ${it.sev}" data-i="${i}">
           <span class="sev">${it.sev === 'bad' ? 'à corriger' : 'à revoir'}</span>
-          <span><strong>${it.title}</strong><div class="sub">${it.sub}</div></span>
+          <span><strong>${esc(it.title)}</strong><div class="sub">${esc(it.sub)}</div></span>
         </button>`).join('')
       : '<p style="color:var(--ink-soft); font-size:.85rem;">Rien à signaler : aucune contrainte violée, aucune journée trouée.</p>';
     box.onclick = (e) => {

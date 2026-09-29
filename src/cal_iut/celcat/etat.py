@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from cal_iut.celcat.fichiers import ecrire_json
+from cal_iut.celcat.fichiers import ecrire_json, verrou_fichier
 from cal_iut.celcat.lecture import EvenementCelcat
 
 _LIVE: list[EvenementCelcat] = []
@@ -116,6 +116,20 @@ def _completer(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(doc.get("queue"), list):
         doc["queue"] = []
     return doc
+
+
+def verrou():
+    """Section critique « charger, modifier, sauver » sur `celcat_sync.json`,
+    partagé par le backend et `celcat-nuit` (audit 29/09/2026, P1-14) :
+
+        with verrou():
+            doc = charger()
+            doc[...] = ...
+            sauver(doc)
+
+    Sans lui, la ligne de journal écrite par l'un pouvait disparaître sous
+    l'écriture de l'autre (cf. `fichiers.verrou_fichier`)."""
+    return verrou_fichier(_path())
 
 
 def charger() -> dict[str, Any]:

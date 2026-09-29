@@ -30,6 +30,15 @@ def _ecrire(items: list[dict[str, Any]]) -> None:
     ecrire_json(_path(), items)
 
 
+def _verrouille(fn):
+    """Écrit par le worker (relevé des extras) et par le backend (ignorer,
+    ajouter) : lecture-modification-écriture sous verrou (P1-14)."""
+    from cal_iut.celcat.fichiers import sous_verrou_fichier
+
+    return sous_verrou_fichier(lambda: _path())(fn)
+
+
+@_verrouille
 def enregistrer(extra: dict[str, Any]) -> None:
     items = _lire()
     identifiant = extra.get("id")

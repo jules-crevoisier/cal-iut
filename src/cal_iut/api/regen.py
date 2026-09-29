@@ -8,8 +8,9 @@ mais appelée depuis là-bas (job asynchrone, même patron que `/solve/async`).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from cal_iut.api.verrou import verrou_planning
 from cal_iut.calendar.academic import semester_week_offset, week_status
 from cal_iut.db.models import ScheduleException
 from cal_iut.db.repository import PlanningRepository
@@ -48,6 +49,9 @@ class RegenResult:
     touched_weeks: list[int]
     placements: list[PlacedSessionWithRoom]
     message: str = ""
+    # Séances dont la position ou la salle a réellement changé : celles-là,
+    # et seulement celles-là, partent dans la file Celcat.
+    deplacees: list[str] = field(default_factory=list)
 
 
 def resolve_semestre(state) -> str:
@@ -125,6 +129,19 @@ def _merge_adhoc_teacher_exceptions(
     return list(merged.values())
 
 
+def positions_portee(timetable: list, weeks: list[int]) -> dict[str, tuple]:
+    """Position (semaine, jour, créneau, salle) de chaque séance posée dans
+    les semaines de la portée. Comparée au début du calcul et au moment de la
+    fusion : si elle a changé, quelqu'un a modifié ces semaines pendant la
+    résolution (P1-4)."""
+    week_set = set(weeks)
+    return {
+        p.session_id: (p.week, p.day, p.slot, getattr(p, "room_id", None))
+        for p in timetable
+        if p.week in week_set
+    }
+
+
 def _placement_dict(p: PlacedSessionWithRoom) -> dict[str, object]:
     return {
         "session_id": p.session_id,
@@ -142,6 +159,13 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
     if len(weeks) not in (1, 2) or (len(weeks) == 2 and weeks[1] != weeks[0] + 1):
         raise RegenError("La régénération porte sur 1 semaine, ou 2 semaines consécutives")
     check_weeks_editable(state, weeks)
+
+    # Instantané de la portée AVANT le calcul, pris sous le verrou pour être
+    # cohérent. Le calcul lui-même (jusqu'à 150 s) tourne SANS le verrou : les
+    # autres écritures continuent, et la fusion vérifie qu'aucune n'a touché
+    # ces semaines entre-temps.
+    with verrou_planning:
+        positions_depart = positions_portee(state.timetable, weeks)
 
     semestre = resolve_semestre(state)
     week_offset = semester_week_offset(state.calendar, semestre)
@@ -304,21 +328,47 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
         reserved=getattr(state, "room_reservations", None),
     )
 
-    # Écrit UNIQUEMENT les séances touchées dans l'état en mémoire (jamais un
-    # remplacement global de `state.timetable`).
-    by_id = {p.session_id: p for p in with_rooms}
-    state.timetable = [by_id.get(p.session_id, p) for p in state.timetable]
+    deplacees = fusionner(state, repo, weeks, positions_depart, with_rooms)
+    return RegenResult(status=status, touched_weeks=weeks, placements=with_rooms, message="", deplacees=deplacees)
 
-    if state.current_run_id:
-        repo.upsert_current_placements(state.current_run_id, [_placement_dict(p) for p in with_rooms])
-        for p in with_rooms:
-            old = placement_by_session.get(p.session_id)
-            if old:
-                repo.save_correction(
-                    state.current_run_id, p.session_id,
-                    {"week": old.week, "day": old.day, "slot": old.slot},
-                    {"week": p.week, "day": p.day, "slot": p.slot},
-                    False, False, p.course_code, p.teacher_codes,
-                )
 
-    return RegenResult(status=status, touched_weeks=weeks, placements=with_rooms, message="")
+def fusionner(
+    state, repo: PlanningRepository, weeks: list[int],
+    positions_depart: dict[str, tuple], with_rooms: list[PlacedSessionWithRoom],
+) -> list[str]:
+    """Écrit le résultat d'une régénération, sous le verrou d'écriture du
+    planning (P1-4). Rend les séances réellement déplacées.
+
+    Si une séance de la portée a été déplacée, posée, retirée ou a changé de
+    salle pendant le calcul, le résultat ne tient pas compte de cette
+    décision humaine : on abandonne sans rien écrire plutôt que de l'écraser.
+    """
+    with verrou_planning:
+        if positions_portee(state.timetable, weeks) != positions_depart:
+            libelle = " et ".join(f"semaine {w + 1}" for w in weeks)
+            raise RegenError(
+                f"Le planning ({libelle}) a été modifié pendant le calcul : "
+                "régénération abandonnée, rien n'a été écrit. Relancez-la."
+            )
+
+        # Écrit UNIQUEMENT les séances touchées dans l'état en mémoire (jamais un
+        # remplacement global de `state.timetable`).
+        by_id = {p.session_id: p for p in with_rooms}
+        state.timetable = [by_id.get(p.session_id, p) for p in state.timetable]
+
+        if state.current_run_id:
+            repo.upsert_current_placements(state.current_run_id, [_placement_dict(p) for p in with_rooms])
+            for p in with_rooms:
+                old = positions_depart.get(p.session_id)
+                if old:
+                    repo.save_correction(
+                        state.current_run_id, p.session_id,
+                        {"week": old[0], "day": old[1], "slot": old[2]},
+                        {"week": p.week, "day": p.day, "slot": p.slot},
+                        False, False, p.course_code, p.teacher_codes,
+                    )
+
+    return [
+        p.session_id for p in with_rooms
+        if positions_depart.get(p.session_id) != (p.week, p.day, p.slot, getattr(p, "room_id", None))
+    ]

@@ -46,6 +46,7 @@ from typing import Any
 
 from ortools.sat.python import cp_model
 
+from cal_iut.api.verrou import verrou_planning
 from cal_iut.calendar.academic import semester_week_offset, week_status
 from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
 
@@ -750,34 +751,39 @@ def appliquer(state: Any, proposition: Proposition) -> ResultatApplication:
     """Écrit la proposition, déplacement par déplacement, par le chemin d'un
     déplacement manuel. S'arrête au premier refus (le planning a changé
     depuis la proposition) : ce qui est déjà passé reste valide, puisque
-    chaque étape l'a été à elle seule."""
+    chaque étape l'a été à elle seule.
+
+    Toute la séquence tient le verrou d'écriture du planning (P1-4) : lire
+    l'occupation puis enchaîner les déplacements sans qu'une autre écriture
+    s'intercale. `move_session` le reprend (verrou réentrant)."""
     from fastapi import HTTPException
 
     from cal_iut.api.main import move_session
     from cal_iut.api.schemas import MoveSessionRequest
 
-    groupes = _groupes_du_parcours(state, proposition.parcours)
-    occupation = {
-        p.session_id: (p.week, p.day, p.slot)
-        for p in state.timetable
-        if set(p.group_ids or []) & groupes
-    }
-    durees = {sid: _duree(state.sessions_by_id[sid]) for sid in occupation if sid in state.sessions_by_id}
-    etapes = ordre_application(proposition.deplacements, occupation, durees)
-    appliques: list[str] = []
-    for m, _ in etapes:
-        w, d, sl = m.vers
-        try:
-            move_session(m.session_id, MoveSessionRequest(week=w, day=d, slot=sl, force=False))
-        except HTTPException as exc:
-            restants = [x.session_id for x in proposition.deplacements if x.session_id not in appliques]
-            return ResultatApplication(
-                appliques=appliques,
-                echec={"session_id": m.session_id, "vers": list(m.vers), "detail": exc.detail},
-                restants=restants,
-            )
-        if m.session_id not in appliques and any(
-            x.session_id == m.session_id and x.vers == m.vers for x in proposition.deplacements
-        ):
-            appliques.append(m.session_id)
-    return ResultatApplication(appliques=appliques, echec=None, restants=[])
+    with verrou_planning:
+        groupes = _groupes_du_parcours(state, proposition.parcours)
+        occupation = {
+            p.session_id: (p.week, p.day, p.slot)
+            for p in state.timetable
+            if set(p.group_ids or []) & groupes
+        }
+        durees = {sid: _duree(state.sessions_by_id[sid]) for sid in occupation if sid in state.sessions_by_id}
+        etapes = ordre_application(proposition.deplacements, occupation, durees)
+        appliques: list[str] = []
+        for m, _ in etapes:
+            w, d, sl = m.vers
+            try:
+                move_session(m.session_id, MoveSessionRequest(week=w, day=d, slot=sl, force=False))
+            except HTTPException as exc:
+                restants = [x.session_id for x in proposition.deplacements if x.session_id not in appliques]
+                return ResultatApplication(
+                    appliques=appliques,
+                    echec={"session_id": m.session_id, "vers": list(m.vers), "detail": exc.detail},
+                    restants=restants,
+                )
+            if m.session_id not in appliques and any(
+                x.session_id == m.session_id and x.vers == m.vers for x in proposition.deplacements
+            ):
+                appliques.append(m.session_id)
+        return ResultatApplication(appliques=appliques, echec=None, restants=[])

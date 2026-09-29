@@ -34,11 +34,88 @@ LE TEMPORAIRE VIT DANS LE MÊME RÉPERTOIRE que la cible, jamais dans `/tmp` :
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import tempfile
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+try:
+    import fcntl
+except ImportError:  # Windows (poste de développement) : pas de verrou inter-processus
+    fcntl = None
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+# Un verrou de thread par fichier protégé, et la profondeur d'imbrication :
+# seul le `with` le plus externe d'un thread prend le verrou de fichier.
+_verrous_locaux: dict[str, tuple[threading.RLock, list[int]]] = {}
+_verrous_locaux_garde = threading.Lock()
+
+
+def _verrou_local(cle: str) -> tuple[threading.RLock, list[int]]:
+    with _verrous_locaux_garde:
+        if cle not in _verrous_locaux:
+            _verrous_locaux[cle] = (threading.RLock(), [0])
+        return _verrous_locaux[cle]
+
+
+@contextmanager
+def verrou_fichier(chemin: Path) -> Iterator[None]:
+    """Section critique « lire, modifier, écrire » sur un fichier d'état
+    partagé par DEUX processus (audit 29/09/2026, P1-14).
+
+    `ecrire_atomique` garantit qu'un lecteur ne voit jamais un fichier à
+    moitié écrit, pas que deux écrivains ne s'écrasent pas : le backend et
+    `celcat-nuit` relisent `celcat_sync.json`, le modifient chacun de leur
+    côté puis le réécrivent — la ligne de journal du premier peut
+    disparaître sous l'écriture du second, et la nuit suivante recréerait
+    l'évènement dans Celcat (doublon).
+
+    Verrou exclusif `fcntl.flock` sur `<fichier>.lock` (le fichier d'état
+    lui-même est remplacé par renommage : le verrouiller ne protégerait
+    rien), doublé d'un verrou de thread pour les threads du même processus.
+    Réentrant dans un même thread. Sans `fcntl` (Windows), seul le verrou
+    de thread reste : pas de second processus sur un poste de développement.
+    """
+    chemin = Path(chemin)
+    verrou, profondeur = _verrou_local(str(chemin.resolve()))
+    with verrou:
+        profondeur[0] += 1
+        try:
+            if profondeur[0] > 1 or fcntl is None:
+                yield
+                return
+            chemin.parent.mkdir(parents=True, exist_ok=True)
+            with open(chemin.with_name(chemin.name + ".lock"), "a") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        finally:
+            profondeur[0] -= 1
+
+
+def sous_verrou_fichier(chemin: Callable[[], Path]) -> Callable[[F], F]:
+    """Décorateur : exécute la fonction sous `verrou_fichier(chemin())`.
+
+    `chemin` est une fonction, appelée à chaque exécution : les tests
+    redirigent `_path` des modules vers un répertoire temporaire."""
+
+    def decorer(fn: F) -> F:
+        @functools.wraps(fn)
+        def _sous_verrou(*args: Any, **kwargs: Any) -> Any:
+            with verrou_fichier(chemin()):
+                return fn(*args, **kwargs)
+
+        return _sous_verrou  # type: ignore[return-value]
+
+    return decorer
 
 
 def ecrire_atomique(chemin: Path, texte: str, *, encoding: str = "utf-8") -> None:

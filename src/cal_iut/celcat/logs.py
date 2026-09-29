@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cal_iut.celcat.fichiers import ecrire_json
+from cal_iut.celcat.fichiers import ecrire_json, sous_verrou_fichier
 
 
 def _path() -> Path:
@@ -39,6 +39,9 @@ def _ecrire(items: list[dict[str, Any]]) -> None:
 MAX_ENTREES = 2000
 
 
+# Écrit par le worker ET par le backend : lecture-modification-écriture
+# sous verrou inter-processus (P1-14), sinon une ligne de l'un disparaît.
+@sous_verrou_fichier(lambda: _path())
 def append(
     *,
     kind: str,

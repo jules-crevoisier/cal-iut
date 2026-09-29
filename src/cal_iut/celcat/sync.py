@@ -23,6 +23,7 @@ il vaut mieux qu'il soit écrit ici que découvert plus tard.
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,10 +35,26 @@ def _path() -> Path:
     return Path(__file__).resolve().parents[3] / "data" / "state" / "celcat_sync.json"
 
 
+def _sous_verrou_etat(fn):
+    """Lecture-modification-écriture de `celcat_sync.json` sous le verrou
+    inter-processus de `etat.verrou` (P1-14) : le worker et le backend
+    écrivent tous deux ce journal."""
+
+    @functools.wraps(fn)
+    def _avec_verrou(*args, **kwargs):
+        from cal_iut.celcat.etat import verrou
+
+        with verrou():
+            return fn(*args, **kwargs)
+
+    return _avec_verrou
+
+
 def _load() -> dict[str, dict[str, str]]:
     return journal()
 
 
+@_sous_verrou_etat
 def _save(data: dict[str, dict[str, str]]) -> None:
     from cal_iut.celcat.etat import charger, sauver
 
@@ -53,6 +70,7 @@ def journal() -> dict[str, dict[str, str]]:
     return brut if isinstance(brut, dict) else {}
 
 
+@_sous_verrou_etat
 def marquer_saisi(
     entree: EntreeCelcat, *, event_id: int | None = None, group_id: int | None = None
 ) -> None:
@@ -75,6 +93,7 @@ def marquer_saisi(
     sauver(doc)
 
 
+@_sous_verrou_etat
 def reconcilier(lignes: list[dict]) -> tuple[int, int, list[str]]:
     """Comble les trous du journal LOCAL avec des correspondances déjà
     constatées ailleurs (typiquement : une saisie poussée depuis une autre
@@ -118,6 +137,7 @@ def reconcilier(lignes: list[dict]) -> tuple[int, int, list[str]]:
     return fusionnees, deja_presentes, ignorees
 
 
+@_sous_verrou_etat
 def marquer_supprime(session_id: str) -> None:
     from cal_iut.celcat.etat import charger, sauver
 
