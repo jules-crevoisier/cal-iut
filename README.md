@@ -334,9 +334,18 @@ cal-iut export --format html --per-teacher data/generated/par-enseignant
 | `GET /api/v1/seances` | Séances filtrables (semaine, enseignant, groupe, salle, cours, parcours, dates), paginables |
 | `GET /api/v1/{semaines,creneaux,enseignants,groupes,salles,cours,parcours}` | Référentiels (+ `/{id}` et `/{id}/seances`) |
 | `GET /api/v1/salles/libres` | Salles libres à un créneau (séances, réservations, salles liées) |
+| `GET /api/v1/seances/non-placees` | Séances restant à placer (panneau « À placer ») |
+| `GET /api/v1/a-traiter` | Écran « À traiter » (gravité à corriger / à revoir, filtres semaine, parcours, enseignant) |
+| `GET /api/v1/controles/doublons` | Salle ou enseignant pris deux fois (rôle edit) |
+| `GET /api/v1/contraintes`, `GET /api/v1/enseignants/{code}/contraintes` | Règles globales, contraintes déclarées, verdict, écarts, absences |
+| `GET /api/v1/charges` | Heures par enseignant, groupe, cours, parcours ; occupation des salles (par semaine) |
+| `GET /api/v1/{modifications,taches,calendrier}` | Déplacements manuels, tâches de suivi, fériés / évènements / SAE / réservations |
+| `GET /api/v1/celcat/etat` | Synchronisation Celcat et file d'attente (admin) |
 | `GET /api/v1/export` | Tout en un appel, pour synchroniser un client |
 
-API v1 en lecture seule, documentée dans [`docs/API.md`](docs/API.md). Toutes
+API v1 en lecture seule, documentée dans [`docs/API.md`](docs/API.md) (tableau
+récapitulatif, clé API, exemples) et, en interactif, sur `/api/v1/docs` (compte
+connecté ; schéma `/api/v1/openapi.json`). Toutes
 les lectures lourdes (`/app-state`, `/meta`, `/timetable`, `/diff`, `/ics/*`,
 `/api/v1/*`) portent un `ETag` dérivé de la révision de l'état : `If-None-Match`
 → `304` sans corps tant que rien n'a changé. Réponses ≥ 1 Ko compressées en
@@ -345,7 +354,8 @@ un lien personnel `?t=` ne lit que ce qu'affiche sa page (cf. `docs/API.md`).
 
 Sécurité (audit du 29/09/2026, `docs/AUDIT-2026-09.md`) : cookie `Secure`
 (`CAL_IUT_COOKIE_SECURE=0` pour du HTTP local), sessions révocables,
-limitation de débit sur `/auth/*`, écriture atomique des fichiers d'état.
+limitation de débit sur `/auth/*` et `/api/v1/*`, écriture atomique des fichiers
+d'état, schéma OpenAPI de l'appli non public (seul celui de v1, derrière un compte).
 
 ## Architecture
 
