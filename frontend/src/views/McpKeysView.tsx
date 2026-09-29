@@ -122,9 +122,8 @@ export function McpKeysView() {
     <section className="view cles">
       <div className="page-outils cles-outils">
         <p className="page-note">
-          Une clé permet à Claude (connecteur MCP) ou à un script (<code>cal-iut prod diff/pull/push</code>) d’agir avec
-          les droits de votre compte, sans votre mot de passe. Prévoyez une clé par usage : on en révoque une sans casser
-          les autres.
+          Une clé agit avec les droits de votre compte, sans votre mot de passe — connecteur MCP de Claude ou script (
+          <code>cal-iut prod diff/pull/push</code>). Prévoyez une clé par usage : on en révoque une sans casser les autres.
         </p>
         <ActionsDePage>
           <button type="button" className="btn btn--primary" disabled={enCours} onClick={() => void generer()}>

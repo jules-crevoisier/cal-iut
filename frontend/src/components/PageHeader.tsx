@@ -23,24 +23,27 @@ const STATUS_MAP: Record<string, [string, string]> = {
   INFEASIBLE: ["bad", "Solveur : infaisable"],
 };
 
-export const TITRES_VUES: Record<RouteView, [string, string]> = {
+/** [titre, ligne d'explication, ligne COURTE]. La ligne courte remplace la
+ *  longue dans la barre supérieure quand la page y met ses actions (la place
+ *  manque) ; sans elle, rien ne s'affiche à côté du titre dans ce cas. */
+export const TITRES_VUES: Record<RouteView, [string, string, string?]> = {
   accueil: ["Accueil", "La semaine en un coup d'œil : ce qui demande une décision, la charge par promo."],
   semaine: ["Vue Semaine", "Le planning d'un groupe, d'un enseignant ou d'une salle, semaine par semaine."],
-  prof: ["Vue Enseignant", "Planning, contraintes déclarées et interventions du semestre d'un enseignant."],
-  promo: ["Vue Promo", "Toutes les promotions sur une même grille, jour par jour — c'est ici qu'on déplace les séances."],
-  groupe: ["Vue TD / TP", "Le planning d'un groupe d'étudiants."],
-  cours: ["Vue Cours", "Toutes les séances d'une ressource ou d'une SAE."],
-  salle: ["Vue Salle", "L'occupation d'une salle, semaine par semaine."],
+  prof: ["Vue Enseignant", "Planning, contraintes déclarées et interventions du semestre d'un enseignant.", "Planning et contraintes"],
+  promo: ["Vue Promo", "Toutes les promotions sur une même grille, jour par jour — c'est ici qu'on déplace les séances.", "Toutes les promos, jour par jour"],
+  groupe: ["Vue TD / TP", "Le planning d'un groupe d'étudiants.", "Le planning d'un groupe"],
+  cours: ["Vue Cours", "Toutes les séances d'une ressource ou d'une SAE.", "Ressources et SAE"],
+  salle: ["Vue Salle", "L'occupation d'une salle, semaine par semaine.", "Occupation des salles"],
   "salles-libres": ["Salles libres", "Qui occupe quelle salle, créneau par créneau."],
   reference: ["Référence", "Salles, cours, calendrier institutionnel, liens de partage et notifications."],
   contraintes: ["Contraintes", "Chaque règle, avec son verdict recalculé sur le planning actuel."],
   apf: ["À traiter", "Ce qui demande une décision : séances non placées, doublons, violations, journées trouées."],
   aplacer: ["À placer", "Les séances que le solveur n'a pas su placer."],
-  taches: ["Tâches", "Le suivi de l'équipe : absences signalées, déplacements à faire, points à suivre."],
+  taches: ["Tâches", "Le suivi de l'équipe : absences signalées, déplacements à faire, points à suivre.", "Le suivi de l'équipe"],
   comptes: ["Comptes", "Activer, changer le rôle ou désactiver les comptes."],
   celcat: ["Celcat", "Concordance entre ce planning et Celcat, et file des corrections envoyées."],
-  sauvegardes: ["Sauvegardes", "Une copie datée des séances placées, chaque jour où le planning change."],
-  mcp: ["Clé API", "Clés d'accès pour Claude (MCP) et les scripts qui lisent l'API."],
+  sauvegardes: ["Sauvegardes", "Une copie datée des séances placées, chaque jour où le planning change.", "Une copie par jour de changement"],
+  mcp: ["Clé API", "Clés d'accès pour Claude (MCP) et les scripts qui lisent l'API.", "Accès pour Claude (MCP) et les scripts"],
 };
 
 interface PageHeaderProps {

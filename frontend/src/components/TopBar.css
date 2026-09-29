@@ -32,10 +32,13 @@
   align-items: baseline;
   gap: 12px;
   min-width: 0;
-  flex: 0 1 auto;
+  /* Le titre prend la place libre : le sous-titre ne se coupe que si la
+     ligne est vraiment trop courte pour lui. */
+  flex: 1 1 auto;
 }
 
 .topbar-titre h1 {
+  flex-shrink: 0;
   margin: 0;
   font-size: 1.4rem;
   font-weight: 600;
@@ -51,7 +54,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 40ch;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* ── Semaine partagée ── */
@@ -278,6 +282,15 @@
   }
 }
 
+/* Semaine + actions de page sur une ligne étroite (1024–1400 px) : les dates
+   de la semaine cèdent la place (le nom et la liste des semaines restent),
+   le titre de la vue n'est jamais coupé. */
+@media (min-width: 1024px) and (max-width: 1400px) {
+  .topbar:has(.topbar-actions:not(:empty)) .topbar-semaine-dates {
+    display: none;
+  }
+}
+
 @media (max-width: 1023.98px) {
   .topbar {
     flex-wrap: wrap;
@@ -358,10 +371,30 @@
 }
 
 
+/* Ligne courte (`TITRES_VUES`, 3e case) : seulement à la place de la longue,
+   ci-dessous. */
+.topbar-titre p.topbar-sous-titre-court {
+  display: none;
+}
+
 /* Avec des actions de page, le sous-titre coupé (« Toutes l… ») n'apprend
-   rien : on le retire tant que la ligne est trop courte pour lui. */
+   rien : on le retire tant que la ligne est trop courte pour lui, et la ligne
+   courte de la vue prend sa place (tant qu'il y a de la place : ≤ 1400 px,
+   plus de sous-titre du tout, cf. plus haut). */
 @media (max-width: 1680px) {
   .topbar:has(.topbar-actions:not(:empty)) .topbar-titre p {
     display: none;
   }
+}
+
+@media (min-width: 1400.02px) and (max-width: 1680px) {
+  .topbar:has(.topbar-actions:not(:empty)) .topbar-titre p.topbar-sous-titre-court {
+    display: block;
+  }
+}
+
+/* Mesurée trop étroite (cf. `useSousTitreEntier`) : la place reste réservée,
+   le texte coupé ne s'affiche pas. */
+.topbar-titre p.topbar-sous-titre-court[data-coupe] {
+  visibility: hidden;
 }

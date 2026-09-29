@@ -79,6 +79,28 @@ export function ActionsDePage({ children }: { children: ReactNode }) {
   return <div className="page-outils-actions">{children}</div>;
 }
 
+/** La ligne courte n'existe que pour être lue ENTIÈRE : coupée (« Toutes
+ *  l… »), elle n'apprend rien. On la masque (`data-coupe`) tant que la barre
+ *  est trop étroite pour elle — mesuré, pas deviné par une largeur d'écran
+ *  (les actions de page et la semaine changent d'une vue à l'autre). */
+function useSousTitreEntier() {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const p = ref.current;
+    const barre = p?.closest(".topbar");
+    if (!p || !barre || typeof ResizeObserver === "undefined") return;
+    const mesurer = () => {
+      p.removeAttribute("data-coupe");
+      if (p.scrollWidth > p.clientWidth + 1) p.setAttribute("data-coupe", "");
+    };
+    const obs = new ResizeObserver(mesurer);
+    obs.observe(barre);
+    mesurer();
+    return () => obs.disconnect();
+  });
+  return ref;
+}
+
 export function TopBar({
   vue,
   payload,
@@ -87,8 +109,9 @@ export function TopBar({
   onOuvrirRecherche,
   onOuvrirNavigation,
 }: TopBarProps) {
-  const [titre, sousTitre] = TITRES_VUES[vue] ?? ["cal-iut", ""];
+  const [titre, sousTitre, sousTitreCourt] = TITRES_VUES[vue] ?? ["cal-iut", ""];
   const avecSemaine = VUES_A_SEMAINE.has(vue) && !!payload?.weekRows.length;
+  const refCourt = useSousTitreEntier();
 
   return (
     <header className="topbar no-print">
@@ -98,6 +121,11 @@ export function TopBar({
       <div className="topbar-titre">
         <h1>{titre}</h1>
         {sousTitre && <p title={sousTitre}>{sousTitre}</p>}
+        {sousTitreCourt && (
+          <p ref={refCourt} className="topbar-sous-titre-court" title={sousTitre}>
+            {sousTitreCourt}
+          </p>
+        )}
       </div>
 
       {avecSemaine && payload && (
