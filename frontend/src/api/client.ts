@@ -60,22 +60,143 @@ export function messageErreur(body: unknown, repli: string): string {
   return repli;
 }
 
-async function executer<T>(url: string, init?: RequestInit): Promise<T> {
+/** Nature d'un échec d'appel (audit du 29/09/2026, P1-13). Avant, toute
+ * erreur se ressemblait : une coupure réseau affichait l'écran de connexion
+ * (`fetchMoi`) ou « aucun planning » (`/app-state`).
+ * - `session` : 401, la session n'existe pas ou plus → écran de connexion ;
+ * - `panne` : pas de réponse exploitable (réseau coupé, délai dépassé, 5xx
+ *   sans message de l'application — passerelle, plantage) → bandeau
+ *   « Serveur injoignable », l'écran garde ce qu'il montrait ;
+ * - `refus` : le serveur a répondu et dit pourquoi (4xx, ou 5xx avec un
+ *   message de l'application) → message à l'endroit de l'action. */
+export type GenreErreurApi = "session" | "panne" | "refus";
+
+export class ErreurApi extends Error {
+  readonly status: number | null;
+  readonly genre: GenreErreurApi;
+
+  constructor(message: string, status: number | null, genre: GenreErreurApi) {
+    super(message);
+    this.name = "ErreurApi";
+    this.status = status;
+    this.genre = genre;
+  }
+}
+
+export function estPanne(e: unknown): boolean {
+  return e instanceof ErreurApi && e.genre === "panne";
+}
+
+export function estSessionAbsente(e: unknown): boolean {
+  return e instanceof ErreurApi && e.genre === "session";
+}
+
+/** Délai des LECTURES (GET). Toutes lisent l'état déjà en mémoire du
+ * serveur (la plus lourde, `/app-state`, coûte ≈ 150 ms à recalculer) :
+ * 30 s sans réponse, c'est une panne, pas une lenteur. Les ÉCRITURES n'en
+ * ont volontairement aucun : certaines durent (envoi des mails aux
+ * enseignants, un par un), et abandonner côté navigateur n'annulerait rien
+ * côté serveur — on afficherait « échec » pour une action qui aboutit. */
+export const DELAI_LECTURE_MS = 30_000;
+
+/** État de la liaison avec le serveur, diffusé à qui l'écoute (`App.tsx`,
+ * pour le bandeau de panne et l'écran de connexion). Une vue qui attrape
+ * son erreur pour afficher son propre message n'empêche donc pas le
+ * bandeau d'apparaître. */
+export type EvenementLiaison = "panne" | "retablie" | "session-absente";
+type EcouteurLiaison = (evenement: EvenementLiaison) => void;
+
+const ecouteursLiaison = new Set<EcouteurLiaison>();
+let liaisonEnPanne = false;
+
+export function ecouterLiaison(ecouteur: EcouteurLiaison): () => void {
+  ecouteursLiaison.add(ecouteur);
+  return () => {
+    ecouteursLiaison.delete(ecouteur);
+  };
+}
+
+/** Pour les tests : repart d'une liaison saine, sans écouteur. */
+export function reinitialiserLiaison(): void {
+  ecouteursLiaison.clear();
+  liaisonEnPanne = false;
+}
+
+function diffuser(evenement: EvenementLiaison): void {
+  if (evenement === "panne") {
+    liaisonEnPanne = true;
+    ecouteursLiaison.forEach((e) => e("panne"));
+    return;
+  }
+  // Toute réponse, même un refus, prouve que le serveur répond. « Rétablie »
+  // n'est diffusé qu'en sortie de panne : pas un évènement par appel.
+  const etaitEnPanne = liaisonEnPanne;
+  liaisonEnPanne = false;
+  if (etaitEnPanne) ecouteursLiaison.forEach((e) => e("retablie"));
+  if (evenement === "session-absente") ecouteursLiaison.forEach((e) => e("session-absente"));
+}
+
+function panne(message: string, status: number | null): ErreurApi {
+  diffuser("panne");
+  return new ErreurApi(message, status, "panne");
+}
+
+/** Le corps porte-t-il un message de l'APPLICATION (`detail`/`message`) ?
+ * Distingue un 503 voulu (« envoi de mail indisponible », `/health`
+ * dégradé) d'un 502/503 de la passerelle ou d'un plantage (texte brut). */
+function messageApplicatif(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const b = body as Record<string, unknown>;
+  return typeof b.message === "string" || (b.detail !== undefined && b.detail !== null);
+}
+
+async function executer<T>(url: string, init?: RequestInit, delaiMs: number | null = null): Promise<T> {
   // Volontairement AUCUNE option `cache` : le mode par défaut laisse le
   // navigateur garder les réponses et les revalider lui-même (`If-None-Match`
   // sur l'ETag que pose le serveur, `Cache-Control: no-cache`). Tant que rien
   // n'a changé côté serveur, `/app-state` (≈ 590 Ko) revient en 304 vide et
   // le navigateur ressert sa copie — ce code n'en voit rien, il reçoit un 200
   // ordinaire. Un `cache: "no-store"` ici annulerait tout ce mécanisme.
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(messageErreur(body, res.statusText));
+  const controleur = delaiMs !== null && !init?.signal ? new AbortController() : null;
+  const minuterie = controleur ? setTimeout(() => controleur.abort(), delaiMs ?? 0) : null;
+  const expire = () => controleur?.signal.aborted === true;
+  try {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        ...init,
+        ...(controleur ? { signal: controleur.signal } : {}),
+      });
+    } catch {
+      throw panne(expire() ? "Le serveur ne répond pas (délai dépassé)." : "Serveur injoignable.", null);
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      if (res.status >= 500 && !messageApplicatif(body)) {
+        throw panne(res.status === 500 ? "Le serveur a rencontré une erreur." : "Serveur injoignable.", res.status);
+      }
+      const message = messageErreur(body, res.statusText || `Erreur ${res.status}`);
+      if (res.status === 401) {
+        diffuser("session-absente");
+        throw new ErreurApi(message, 401, "session");
+      }
+      diffuser("retablie");
+      throw new ErreurApi(message, res.status, "refus");
+    }
+    let corps: T;
+    try {
+      corps = (await res.json()) as T;
+    } catch {
+      // Corps coupé (délai dépassé en pleine lecture) ou page HTML d'une
+      // passerelle servie en 200 : pas une réponse de l'application.
+      throw panne(expire() ? "Le serveur ne répond pas (délai dépassé)." : "Réponse du serveur illisible.", res.status);
+    }
+    diffuser("retablie");
+    return corps;
+  } finally {
+    if (minuterie !== null) clearTimeout(minuterie);
   }
-  return res.json() as Promise<T>;
 }
 
 // Lectures (GET) en vol, par URL complète — cf. `request`.
@@ -103,7 +224,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // cache reste celui du navigateur (ETag, cf. `executer`).
   const enVol = lecturesEnVol.get(url);
   if (enVol) return enVol as Promise<T>;
-  const promesse = executer<T>(url, init).finally(() => lecturesEnVol.delete(url));
+  const promesse = executer<T>(url, init, DELAI_LECTURE_MS).finally(() => lecturesEnVol.delete(url));
   lecturesEnVol.set(url, promesse);
   return promesse;
 }
@@ -131,13 +252,36 @@ export async function checkAuthStatus(): Promise<boolean> {
   return r.authenticated;
 }
 
-/** `null` = pas connecté (401) plutôt qu'une exception — App.tsx distingue
- * ainsi "pas de session" de "erreur réseau" sans essayer/attraper partout. */
+/** `null` = pas connecté (401). Toute autre erreur (panne réseau, serveur en
+ * erreur) REMONTE : avant, elle rendait `null` elle aussi, et une coupure
+ * réseau affichait l'écran de connexion à quelqu'un de bien connecté (audit
+ * du 29/09/2026, P1-13). */
 export async function fetchMoi(): Promise<MoiResponse | null> {
   try {
     return await request<MoiResponse>("/auth/me");
-  } catch {
-    return null;
+  } catch (e) {
+    if (estSessionAbsente(e)) return null;
+    throw e;
+  }
+}
+
+/** Santé du serveur (`GET /health`). Un 503 `degraded` n'est pas une panne :
+ * c'est le serveur qui dit qu'un planning est enregistré mais n'a pas pu
+ * être chargé (audit du 29/09/2026, P1-6) — les écrans montreraient sinon un
+ * planning vide sans que rien ne le signale. */
+export interface EtatSante {
+  status: "ok" | "degraded";
+  detail?: string;
+}
+
+export async function fetchSante(): Promise<EtatSante> {
+  try {
+    return await request<EtatSante>("/health");
+  } catch (e) {
+    if (e instanceof ErreurApi && e.status === 503 && e.genre === "refus") {
+      return { status: "degraded", detail: e.message };
+    }
+    throw e;
   }
 }
 

@@ -34,9 +34,12 @@ export function RoomPlacementAutoField({ roomId, placementAuto, onSaved }: RoomP
 
   useEffect(() => {
     let annule = false;
-    fetchMoi().then((moi) => {
-      if (!annule) setEstAdmin(moi?.role === "admin");
-    });
+    fetchMoi()
+      .then((moi) => {
+        if (!annule) setEstAdmin(moi?.role === "admin");
+      })
+      // Panne : la case reste masquée, le bandeau d'`App.tsx` dit pourquoi.
+      .catch(() => undefined);
     return () => {
       annule = true;
     };
