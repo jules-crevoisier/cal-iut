@@ -13,6 +13,7 @@
  */
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { TriangleAlert } from "lucide-react";
 
 import "./ErrorBoundary.css";
 
@@ -50,6 +51,9 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!erreur) return this.props.children;
     return (
       <div className="panel erreur-ecran" role="alert">
+        <span className="erreur-ecran-marque" aria-hidden="true">
+          <TriangleAlert size={18} />
+        </span>
         <h2>Cet écran a rencontré une erreur</h2>
         <p>
           Rien n'a été modifié. Rechargez la page ; si l'erreur revient, ouvrez un autre écran et signalez-la avec le

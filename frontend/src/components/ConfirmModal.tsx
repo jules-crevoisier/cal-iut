@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { TriangleAlert } from "lucide-react";
 
 import { registerConfirmListener, resolveConfirm, type ConfirmRequest } from "../utils/confirmDialog";
 import "./ConfirmModal.css";
@@ -19,6 +20,10 @@ import "./ConfirmModal.css";
  *
  * Le bouton Annuler garde le focus par défaut : Entrée sur une modale
  * ouverte par erreur ne confirme jamais rien.
+ *
+ * Refonte v2 (même jour, direction « Lumière / Nuit ») : en-tête, corps et
+ * pied séparés, les boutons à droite dans un pied gris clair ; la variante
+ * « danger » porte une petite marque rouge (icône) plutôt qu'un liseré.
  */
 
 /** Paragraphes séparés par une ligne vide ; un paragraphe dont toutes les
@@ -112,9 +117,16 @@ export function ConfirmModal() {
         aria-describedby="confirmmodal-message"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="confirmmodal-titre" className="confirmdlg-titre">
-          {request.title}
-        </h3>
+        <div className="confirmdlg-tete">
+          {danger && (
+            <span className="confirmdlg-marque" aria-hidden="true">
+              <TriangleAlert size={16} />
+            </span>
+          )}
+          <h3 id="confirmmodal-titre" className="confirmdlg-titre">
+            {request.title}
+          </h3>
+        </div>
         <Message texte={request.message} />
         <div className="confirmmodal-actions">
           <button ref={annuler} type="button" className="btn" onClick={() => resolveConfirm(false)}>

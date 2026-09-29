@@ -1,28 +1,49 @@
-/* Écran en erreur (cf. `ErrorBoundary.tsx`). */
-.erreur-ecran {
-  max-width: 720px;
-  margin: 24px auto;
-  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
+/* Écran en erreur (cf. `ErrorBoundary.tsx`) — refonte v2 du 29/09/2026 :
+   une carte sobre, une petite marque rouge, l'action principale noire. */
+.panel.erreur-ecran {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 640px;
+  margin: 48px auto;
+  padding: 24px;
+}
+
+.erreur-ecran-marque {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bad-soft);
+  color: var(--bad);
 }
 
 .erreur-ecran h2 {
-  margin: 0 0 6px;
-  font-size: 1.05rem;
-  color: var(--bad-text);
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .erreur-ecran p {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   color: var(--ink-soft);
 }
 
 .erreur-ecran-actions {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+}
+
+.erreur-ecran details {
+  align-self: stretch;
 }
 
 .erreur-ecran summary {
   cursor: pointer;
   color: var(--ink-soft);
+  font-size: 13px;
 }
 
 .erreur-ecran pre {
@@ -31,9 +52,9 @@
   max-height: 260px;
   overflow: auto;
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 12px;
   white-space: pre-wrap;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
 }

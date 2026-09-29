@@ -1,21 +1,26 @@
-/* Question « couleurs par matière ou par type » (PreferencesModal). */
+/* Question « couleurs par matière ou par type » (PreferencesModal).
+   Refonte v2 du 29/09/2026 (direction « Lumière / Nuit ») : les aperçus
+   reprennent les cartes de cours en aplats pastel, sans barre latérale. */
 
-.prefsmodal {
-  width: min(600px, 100%);
-  max-width: 600px;
-  padding: 20px;
+.panel.prefsmodal {
+  width: min(620px, 100%);
+  max-width: 620px;
+  padding: 22px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
 }
 
 .prefsmodal h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .prefs-texte {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.88rem;
+  font-size: 14px;
 }
 
 .prefs-choix {
@@ -36,8 +41,8 @@
   flex-direction: column;
   align-items: stretch;
   gap: 2px;
-  padding: 12px;
-  border: 1px solid var(--border-strong);
+  padding: 14px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--ink);
@@ -48,8 +53,8 @@
 }
 
 .prefs-option:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
 }
 
 .prefs-option:focus-visible {
@@ -63,7 +68,7 @@
 
 .prefs-option-sens {
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: 12.5px;
 }
 
 .prefs-apercu {
@@ -73,16 +78,18 @@
   margin-top: 10px;
 }
 
+/* Aperçu = une carte de cours : aplat pastel, bord fin, code en Geist Mono. */
 .prefs-puce {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: baseline;
   gap: 8px;
-  padding: 4px 8px;
-  border-left: 3px solid var(--puce-barre, var(--border-strong));
-  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  border: 1px solid var(--puce-bord, var(--border));
+  border-radius: var(--radius);
   background: var(--puce-fond, var(--surface-2));
-  font-size: 0.78rem;
+  color: var(--puce-encre, var(--ink));
+  font-size: 12px;
 }
 
 .prefs-puce-code {
@@ -94,43 +101,47 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink-soft);
+  font-weight: 500;
 }
 
 .prefs-puce-type {
-  font-size: 0.7rem;
+  font-size: 10.5px;
   font-weight: 600;
-  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  opacity: 0.75;
 }
 
 .prefs-puce--cm {
-  --puce-barre: var(--type-cm);
-  --puce-fond: color-mix(in srgb, var(--type-cm) 10%, var(--surface));
+  --puce-fond: var(--cm-bg);
+  --puce-bord: var(--cm-bd);
+  --puce-encre: var(--cm-fg);
 }
 
 .prefs-puce--td {
-  --puce-barre: var(--type-td);
-  --puce-fond: color-mix(in srgb, var(--type-td) 12%, var(--surface));
+  --puce-fond: var(--td-bg);
+  --puce-bord: var(--td-bd);
+  --puce-encre: var(--td-fg);
 }
 
 .prefs-puce--tp {
-  --puce-barre: var(--type-tp);
-  --puce-fond: color-mix(in srgb, var(--type-tp) 12%, var(--surface));
+  --puce-fond: var(--tp-bg);
+  --puce-bord: var(--tp-bd);
+  --puce-encre: var(--tp-fg);
 }
 
 .prefs-puce--matiere {
-  --puce-barre: var(--matiere-barre);
   --puce-fond: var(--matiere-fond);
+  --puce-bord: color-mix(in srgb, var(--matiere-barre) 30%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .prefs-puce--matiere {
-    --puce-barre: var(--matiere-barre-sombre);
     --puce-fond: var(--matiere-fond-sombre);
+    --puce-bord: color-mix(in srgb, var(--matiere-barre-sombre) 40%, transparent);
   }
 }
 
 :root[data-theme="dark"] .prefs-puce--matiere {
-  --puce-barre: var(--matiere-barre-sombre);
   --puce-fond: var(--matiere-fond-sombre);
+  --puce-bord: color-mix(in srgb, var(--matiere-barre-sombre) 40%, transparent);
 }
