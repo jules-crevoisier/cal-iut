@@ -105,6 +105,46 @@ def _teacher_names(sessions: list[SessionToPlace]) -> dict[str, str]:
     return names
 
 
+# Motifs d'écart à la disponibilité déclarée d'un enseignant. Tous sont des
+# contraintes DURES pour le solveur, sauf `encadrement_sae` : une date bloquée
+# UNIQUEMENT parce que l'enseignant encadre une SAE ce jour-là est une
+# préférence en mode mou (`--no-sae-supervisor-hard`), un compromis attendu
+# (cf. docs/DATA.md §59).
+ECART_CRENEAU_INTERDIT = "creneau_interdit"
+ECART_HORS_LISTE_BLANCHE = "hors_liste_blanche"
+ECART_DATE_DECLAREE = "date_declaree"
+ECART_ENCADREMENT_SAE = "encadrement_sae"
+ECART_HORS_DATES_DE_VENUE = "hors_dates_de_venue"
+
+
+def ecarts_disponibilite(
+    avail: TeacherAvailability, jour: int, creneau: int, quand: date | None, dates_sae: set | None = None,
+) -> list[str]:
+    """Motifs pour lesquels une séance (jour, créneau, date) ne respecte pas
+    la disponibilité déclarée `avail`. Vide = respectée.
+
+    SOURCE DE VÉRITÉ UNIQUE du verdict par enseignant (`_teacher_payload`,
+    payload `/app-state`) ET de la règle globale « Indisponibilités et listes
+    blanches » (`_rule_checks`). Avant (signalé le 29/09/2026), seule la règle
+    globale regardait les listes blanches (`allowed_slots`/`allowed_dates`) :
+    elle était en échec sur 37 séances (ex. JBA hors liste blanche) pendant
+    que chaque enseignant, pris un par un, affichait « respectée ».
+    """
+    motifs: list[str] = []
+    if (jour, creneau) in {tuple(x) for x in (avail.forbidden_slots or [])}:
+        motifs.append(ECART_CRENEAU_INTERDIT)
+    autorises = {tuple(x) for x in (avail.allowed_slots or [])}
+    if autorises and (jour, creneau) not in autorises:
+        motifs.append(ECART_HORS_LISTE_BLANCHE)
+    if quand is not None:
+        iso = quand.isoformat()
+        if iso in {str(d) for d in ((avail.metadata or {}).get("forbidden_dates") or [])}:
+            motifs.append(ECART_ENCADREMENT_SAE if quand in (dates_sae or set()) else ECART_DATE_DECLAREE)
+        if avail.allowed_dates and iso not in set(avail.allowed_dates):
+            motifs.append(ECART_HORS_DATES_DE_VENUE)
+    return motifs
+
+
 def _teacher_payload(
     teacher_availability: list[TeacherAvailability],
     sessions_by_id: dict[str, SessionToPlace],
@@ -124,6 +164,7 @@ def _teacher_payload(
     for t in teacher_availability:
         placed = by_teacher.get(t.teacher_code, [])
         forbidden_slots = set(tuple(x) for x in t.forbidden_slots)
+        a_liste_blanche = bool(t.allowed_slots or t.allowed_dates)
         forbidden_dates_raw = t.metadata.get("forbidden_dates") or []
         forbidden_dates = {date.fromisoformat(str(d)) for d in forbidden_dates_raw}
         # Dates ajoutées à `forbidden_dates` UNIQUEMENT parce que cet
@@ -140,25 +181,34 @@ def _teacher_payload(
         # disponibilité déclarée, cf. docs/DATA.md §59).
         sae_dates_this_teacher = sae_supervisor_dates.get(t.teacher_code, set())
 
+        # Même calcul que la règle globale (`ecarts_disponibilite`). Forme des
+        # entrées inchangée pour l'écran : `week`/`day`/`slot` pour un écart de
+        # créneau, `date` pour un écart de date ; `reason` = "declared" (vraie
+        # violation) ou "sae_supervision" (compromis accepté) ; `motif` précise
+        # lequel des cinq cas.
         recurring_violations = []
         date_violations = []
         for p in placed:
-            if (p["day"], p["slot"]) in forbidden_slots:
-                recurring_violations.append(
-                    {"week": p["week"], "day": p["day"], "slot": p["slot"], "course_code": p["course_code"]}
-                )
-            if calendar is not None and forbidden_dates:
-                d = calendar.week_day_to_date(week_offset + p["week"], p["day"])
-                if d in forbidden_dates:
+            d = calendar.week_day_to_date(week_offset + p["week"], p["day"]) if calendar is not None else None
+            for motif in ecarts_disponibilite(t, p["day"], p["slot"], d, sae_dates_this_teacher):
+                if motif in (ECART_CRENEAU_INTERDIT, ECART_HORS_LISTE_BLANCHE):
+                    ligne = {"week": p["week"], "day": p["day"], "slot": p["slot"], "course_code": p["course_code"]}
+                    if motif == ECART_HORS_LISTE_BLANCHE:
+                        ligne.update(reason="declared", motif=motif)
+                    else:
+                        ligne["motif"] = motif
+                    recurring_violations.append(ligne)
+                else:
                     date_violations.append(
                         {
                             "date": d.isoformat(),
                             "course_code": p["course_code"],
-                            "reason": "sae_supervision" if d in sae_dates_this_teacher else "declared",
+                            "reason": "sae_supervision" if motif == ECART_ENCADREMENT_SAE else "declared",
+                            "motif": motif,
                         }
                     )
 
-        has_constraint = bool(forbidden_slots or forbidden_dates or t.notes)
+        has_constraint = bool(forbidden_slots or forbidden_dates or a_liste_blanche or t.notes)
         if not has_constraint and not placed:
             continue
 
@@ -870,36 +920,38 @@ def _rule_checks(
     if teacher_availability and calendar is not None:
         violations: list[str] = []
         verifiees = 0
+        libelles = {
+            ECART_CRENEAU_INTERDIT: "le {iso} créneau {creneau}",
+            ECART_HORS_LISTE_BLANCHE: "hors liste blanche, {iso}",
+            ECART_DATE_DECLAREE: "le {iso} (date déclarée)",
+            ECART_HORS_DATES_DE_VENUE: "hors dates de venue, {iso}",
+        }
         for avail in teacher_availability:
-            interdits = {tuple(x) for x in (avail.forbidden_slots or [])}
-            autorises = {tuple(x) for x in (avail.allowed_slots or [])}
-            dates_interdites = set((avail.metadata or {}).get("forbidden_dates") or [])
-            dates_autorisees = set(avail.allowed_dates or [])
-            if not (interdits or autorises or dates_interdites or dates_autorisees):
+            if not (
+                avail.forbidden_slots or avail.allowed_slots or avail.allowed_dates
+                or (avail.metadata or {}).get("forbidden_dates")
+            ):
                 continue
+            # Une date bloquée UNIQUEMENT parce que l'enseignant encadre une
+            # SAE ce jour-là est une préférence en mode mou, pas un interdit :
+            # elle a son propre indicateur (`sae_supervisor`), on ne la compte
+            # pas ici.
+            supervision = set((sae_supervisor_dates or {}).get(avail.teacher_code, set()))
             for p_row in placements:
                 if avail.teacher_code not in p_row["teacher_codes"]:
                     continue
                 verifiees += 1
                 jour, creneau = p_row["day"], p_row["slot"]
                 quand = calendar.week_day_to_date(week_offset + p_row["week"], jour)
-                iso = quand.isoformat() if quand else ""
-                # Une date bloquée UNIQUEMENT parce que l'enseignant encadre une
-                # SAE ce jour-là est une préférence en mode mou, pas un interdit :
-                # elle a son propre indicateur (`sae_supervisor`), on ne la
-                # compte pas ici.
-                supervision = set(
-                    (sae_supervisor_dates or {}).get(avail.teacher_code, set())
-                )
-                sae_ce_jour = quand is not None and quand in supervision
-                if (jour, creneau) in interdits:
-                    violations.append(f"{avail.teacher_code} le {iso} créneau {creneau}")
-                elif autorises and (jour, creneau) not in autorises:
-                    violations.append(f"{avail.teacher_code} hors liste blanche, {iso}")
-                elif iso in dates_interdites and not sae_ce_jour:
-                    violations.append(f"{avail.teacher_code} le {iso} (date déclarée)")
-                elif dates_autorisees and iso not in dates_autorisees:
-                    violations.append(f"{avail.teacher_code} hors dates de venue, {iso}")
+                durs = [
+                    m for m in ecarts_disponibilite(avail, jour, creneau, quand, supervision)
+                    if m != ECART_ENCADREMENT_SAE
+                ]
+                if durs:
+                    iso = quand.isoformat() if quand else ""
+                    violations.append(
+                        f"{avail.teacher_code} " + libelles[durs[0]].format(iso=iso, creneau=creneau)
+                    )
         if verifiees:
             checks.append({
                 "id": "teacher_availability",
