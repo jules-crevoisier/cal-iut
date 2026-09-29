@@ -246,8 +246,10 @@ export function Toolbar(props: ToolbarProps) {
             value={props.couleursParMatiere ? "matiere" : "type"}
             onChange={(e) => props.onCouleursChange(e.target.value === "matiere")}
           >
-            <option value="type">Par type de séance</option>
-            <option value="matiere">Par matière</option>
+            {/* Mêmes libellés que le réglage des liens publics (`App.tsx`,
+                `ReglageCouleurs`) : un seul vocabulaire pour un seul réglage. */}
+            <option value="type">Couleurs par type</option>
+            <option value="matiere">Couleurs par matière</option>
           </select>
         </label>
       </div>

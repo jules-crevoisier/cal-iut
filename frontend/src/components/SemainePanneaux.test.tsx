@@ -197,6 +197,15 @@ describe("Toolbar de la Vue Semaine", () => {
     expect(screen.queryByLabelText("Semestre")).not.toBeInTheDocument();
   });
 
+  it("should name the colour options like the public links do", () => {
+    const onCouleursChange = vi.fn();
+    render(<Toolbar {...props} onWeekChange={vi.fn()} onCouleursChange={onCouleursChange} />);
+    expect(screen.getByRole("option", { name: "Couleurs par type" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Couleurs par matière" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Couleurs"), { target: { value: "matiere" } });
+    expect(onCouleursChange).toHaveBeenCalledWith(true);
+  });
+
   it("should show teacher names, not only codes, in teacher mode", () => {
     render(
       <Toolbar {...props} viewMode="teacher" teacherLabels={{ JLE: "JOAN LEFEVRE" }} onWeekChange={vi.fn()} />,

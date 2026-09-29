@@ -5,7 +5,7 @@
  * d'administration (`/diff`, `/feedback/analysis`, `/controles/doublons`...)
  * répondrait 401 côté serveur depuis l'audit de septembre 2026 (P0-2).
  */
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -56,5 +56,12 @@ describe("App en lien public", () => {
     // partait en 401 à chaque ouverture (erreur rouge dans la console).
     const horsListe = chemins.filter((c) => !LECTURES_PUBLIQUES.some((p) => c.startsWith(p)));
     expect(horsListe).toEqual([]);
+  });
+
+  it("names the colour options like the Vue Semaine toolbar does", async () => {
+    window.history.replaceState(null, "", "/#mode=promo&t=promo");
+    render(<App />);
+    expect(await screen.findByRole("option", { name: "Couleurs par type" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Couleurs par matière" })).toBeInTheDocument();
   });
 });
