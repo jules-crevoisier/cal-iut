@@ -332,7 +332,17 @@
   .topbar-actions {
     order: 4;
     width: 100%;
+    gap: 6px;
     overflow-x: auto;
+  }
+
+  .topbar-actions > * {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .topbar-actions > .btn:not(.btn--icon) {
+    padding-inline: 10px;
   }
 }
 
@@ -347,3 +357,11 @@
   }
 }
 
+
+/* Avec des actions de page, le sous-titre coupé (« Toutes l… ») n'apprend
+   rien : on le retire tant que la ligne est trop courte pour lui. */
+@media (max-width: 1680px) {
+  .topbar:has(.topbar-actions:not(:empty)) .topbar-titre p {
+    display: none;
+  }
+}
