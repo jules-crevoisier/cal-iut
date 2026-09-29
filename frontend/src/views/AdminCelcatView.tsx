@@ -14,9 +14,11 @@
  * Refonte du 29/09/2026 — l'écran se lit de haut en bas, puis en deux
  * colonnes :
  *
- *   1. une barre : la semaine comparée, et sur la même ligne l'état du
- *      système (écriture, robot d'envoi, lecture de Celcat) ;
- *   2. le VERDICT de la semaine, ses compteurs, et le geste qui corrige,
+ *   1. une barre à plat : l'état du système (écriture, robot d'envoi,
+ *      lecture de Celcat) ; la semaine comparée est celle de la barre
+ *      supérieure, partagée par tous les écrans (refonte v2) ;
+ *   2. les compteurs en tuiles (à modifier, à créer, en trop, identiques,
+ *      en file), puis le VERDICT de la semaine et le geste qui corrige,
  *      suivi jusqu'à la vérification sur une lecture fraîche de Celcat ;
  *   3. à gauche, ce qu'on regarde : les écarts séance par séance, puis les
  *      évènements en trop (seul geste resté humain) ; à droite, ce qui est
@@ -56,8 +58,11 @@ import { ReglagesCelcat } from "../components/ReglagesCelcat";
 import { StatutCelcat } from "../components/StatutCelcat";
 import { SuppressionsCelcat } from "../components/SuppressionsCelcat";
 import { NavigationSemaine, VerdictCelcat, type SemaineChoisissable } from "../components/VerdictCelcat";
+import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 import { useBoucleCelcat } from "../hooks/useBoucleCelcat";
+import type { AppPayload } from "../types/app";
 import { indexSemaineCourante } from "../utils/semaineCourante";
+import "../styles/outils.css";
 import "./AdminCelcatView.css";
 
 /** Tant que des corrections attendent, on relit la file à ce rythme. Une
@@ -107,7 +112,16 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
   // Indice INTERNE de la semaine comparée. `null` tant que le calendrier n'est
   // pas chargé : mieux vaut ne pas comparer que comparer la mauvaise. Le
   // défaut était `0`, la première semaine de l'année.
-  const [semaine, setSemaine] = useState<number | null>(null);
+  const [semaineLocale, setSemaine] = useState<number | null>(null);
+  // Refonte v2 (29/09/2026) : sous la barre supérieure, la semaine comparée
+  // est la semaine PARTAGÉE de l'application (on la choisit une fois, chaque
+  // écran suit) ; le sélecteur local ne reste que hors de la coque.
+  const semaineGlobale = useSemaineGlobale();
+  const [lignes, setLignes] = useState<AppPayload["weekRows"] | null>(null);
+  const ligneGlobale = semaineGlobale && lignes ? lignes[semaineGlobale.index] : undefined;
+  const semaine: number | null = semaineGlobale ? (ligneGlobale?.weekIndex ?? null) : semaineLocale;
+  // Semaine fermée (vacances) : rien à comparer, et on le dit.
+  const semaineFermee = !!semaineGlobale && !!ligneGlobale && ligneGlobale.weekIndex === null;
   // La semaine d'aujourd'hui, pour y revenir d'un clic.
   const [courante, setCourante] = useState<number | null>(null);
   const [comparaison, setComparaison] = useState<CelcatComparaison | null>(null);
@@ -176,6 +190,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     fetchAppState()
       .then((p) => {
         const rows = p.weekRows ?? [];
+        setLignes(rows);
         const liste = semainesDuSolveur(rows);
         setSemaines(liste);
         // La semaine EN COURS, par le `weekIndex` de sa ligne et jamais par
@@ -198,7 +213,10 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
   }, [chargerSysteme, chargerFile, chargerJournal]);
 
   useEffect(() => {
-    if (semaine === null) return;
+    if (semaine === null) {
+      setComparaison(null);
+      return;
+    }
     // On efface l'ancienne comparaison : la laisser affichée pendant le
     // chargement faisait lire les écarts d'une semaine sous le nom d'une autre.
     setComparaison(null);
@@ -290,8 +308,8 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         </p>
       ) : null}
 
-      <div className="celcat-barre">
-        {semaine !== null ? (
+      <div className="page-outils celcat-barre">
+        {semaineGlobale ? null : semaine !== null ? (
           <NavigationSemaine
             semaines={semaines}
             semaine={semaine}
@@ -305,16 +323,27 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         <StatutCelcat etat={etat} instantane={instantane} file={file} erreurInstantane={erreurInstantane} />
       </div>
 
-      {semaine !== null ? (
+      {semaineFermee ? (
+        <section className="panel celcat-fermee" role="status">
+          <h2>{ligneGlobale?.label ?? "Semaine"} : pas de cours</h2>
+          <p className="celcat-sous-texte">
+            Semaine fermée (vacances ou semaine bloquée) : rien à comparer avec Celcat. Choisissez une autre semaine
+            dans la barre du haut.
+          </p>
+        </section>
+      ) : semaine !== null ? (
         <VerdictCelcat
           donnees={comparaison}
           erreur={erreurComparaison}
           boucle={boucle.etat}
           occupe={boucle.occupe}
+          enFile={file ? file.en_attente : null}
           onCorriger={() => void boucle.corriger(false)}
           onVerifier={() => void boucle.verifier()}
           onArreter={boucle.arreter}
         />
+      ) : semaineGlobale ? (
+        <p className="celcat-sous-texte">Chargement du calendrier…</p>
       ) : null}
 
       <div className="celcat-colonnes">

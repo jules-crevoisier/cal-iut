@@ -16,6 +16,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ContexteSemaine } from "../contexts/SemaineGlobale";
 import { confirmAsync } from "../utils/confirmDialog";
 import { AdminCelcatView } from "./AdminCelcatView";
 
@@ -585,10 +586,41 @@ describe("Mapper une correspondance Celcat", () => {
 });
 
 describe("Refonte du 29/09/2026", () => {
-  it("compte les écarts par nature dans le verdict", async () => {
+  it("compte les écarts par nature, en tuiles en tête d'écran", async () => {
     await ouvrir({ lignes: [ECART, EN_TROP, IDENTIQUE] });
     const compteurs = screen.getByTestId("verdict-compteurs");
-    expect(compteurs.textContent).toBe("à modifier1à créer0en trop1identique1");
+    const valeur = (libelle: string) =>
+      within(compteurs).getByText(libelle).closest(".tuile")?.querySelector(".tuile-valeur")?.textContent;
+    expect(valeur("À modifier")).toBe("1");
+    expect(valeur("À créer")).toBe("0");
+    expect(valeur("En trop")).toBe("1");
+    expect(valeur("Identique")).toBe("1");
+    expect(valeur("En file vers Celcat")).toBeTruthy();
+  });
+
+  it("sous la barre supérieure, compare la semaine PARTAGÉE, sans sélecteur local", async () => {
+    const mock = serveur();
+    // Index d'AFFICHAGE 5 = « Semaine 12 (suivante) », indice solveur 8.
+    render(
+      <ContexteSemaine.Provider value={{ index: 5, setIndex: vi.fn() }}>
+        <AdminCelcatView cadence={CADENCE} />
+      </ContexteSemaine.Provider>,
+    );
+    await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/comparaison?semaine=8"))).toBe(true));
+    expect(urls(mock).some((u) => u.includes("/celcat/comparaison?semaine=7"))).toBe(false);
+    expect(screen.queryByRole("combobox", { name: /semaine comparée/i })).toBeNull();
+  });
+
+  it("dit qu'une semaine de vacances n'a rien à comparer", async () => {
+    const mock = serveur();
+    // Index d'AFFICHAGE 3 = « Semaine 10 (vacances) », sans indice solveur.
+    render(
+      <ContexteSemaine.Provider value={{ index: 3, setIndex: vi.fn() }}>
+        <AdminCelcatView cadence={CADENCE} />
+      </ContexteSemaine.Provider>,
+    );
+    expect(await screen.findByText(/rien à comparer avec Celcat/)).toBeTruthy();
+    expect(urls(mock).some((u) => u.includes("/celcat/comparaison"))).toBe(false);
   });
 
   it("souligne la valeur qui diffère, des deux côtés", async () => {
