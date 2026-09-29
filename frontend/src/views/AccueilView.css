@@ -250,15 +250,15 @@
 }
 
 .accueil-ligne {
+  position: relative;
   display: grid;
   grid-template-columns: 7.5em 1fr;
   align-items: baseline;
   gap: 10px;
   width: 100%;
-  padding: 7px 8px 7px 10px;
+  padding: 7px 8px 7px 20px;
   border: none;
-  border-left: 2px solid transparent;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius);
   background: none;
   color: var(--ink);
   font: inherit;
@@ -271,12 +271,20 @@
   background: var(--surface-2);
 }
 
-.accueil-ligne.is-bad {
-  border-left-color: var(--bad);
+.accueil-ligne.is-bad::before,
+.accueil-ligne.is-warn::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bad);
 }
 
-.accueil-ligne.is-warn {
-  border-left-color: var(--warn);
+.accueil-ligne.is-warn::before {
+  background: var(--warn);
 }
 
 .accueil-ligne > svg {

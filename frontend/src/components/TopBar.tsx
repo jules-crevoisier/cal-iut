@@ -6,18 +6,21 @@
  *   - LA semaine affichée, partagée par toutes les vues du planning (cf.
  *     `contexts/SemaineGlobale.tsx`) — flèches, retour à aujourd'hui, et la
  *     liste de toutes les semaines de l'année pour sauter loin ;
- *   - la recherche (Ctrl+K), l'état de la synchronisation, le compte.
+ *   - les actions de la page ouverte (`ActionsDePage`, rendues ici par
+ *     portail : « Nouvelle séance », « Lisser une promo »…).
+ * Maquette « Lumière » validée le 29/09/2026 : titre, semaine et actions sur
+ * une seule ligne ; la recherche et le compte sont dans la navigation.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, LogOut, KeyRound, Menu, Monitor, Moon, Search, Sun } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronLeft, ChevronRight, Menu, Search } from "lucide-react";
 
 import type { RouteView } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { indexSemaineCourante } from "../utils/semaineCourante";
 import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { TITRES_VUES } from "./PageHeader";
-import { choisirTheme, lireTheme, type Theme } from "../utils/theme";
 import "./TopBar.css";
 
 /** Vues qui affichent UNE semaine : la navigation n'a de sens que là. */
@@ -58,11 +61,22 @@ interface TopBarProps {
   onSemaine: (index: number) => void;
   onOuvrirRecherche: () => void;
   onOuvrirNavigation: () => void;
-  email?: string;
-  onCle: () => void;
-  onDeconnexion: () => void;
-  /** `true` = serveur injoignable (cf. `BandeauPanne`). */
-  panne: boolean;
+}
+
+const ID_ACTIONS = "topbar-actions";
+
+/**
+ * Actions propres à une vue, affichées à droite de la barre supérieure
+ * (bouton principal en dernier). Sans barre (liens publics, tests), elles
+ * restent à leur place dans la vue.
+ */
+export function ActionsDePage({ children }: { children: ReactNode }) {
+  const [cible, setCible] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setCible(document.getElementById(ID_ACTIONS));
+  }, []);
+  if (cible) return createPortal(children, cible);
+  return <div className="page-outils-actions">{children}</div>;
 }
 
 export function TopBar({
@@ -72,14 +86,9 @@ export function TopBar({
   onSemaine,
   onOuvrirRecherche,
   onOuvrirNavigation,
-  email,
-  onCle,
-  onDeconnexion,
-  panne,
 }: TopBarProps) {
   const [titre, sousTitre] = TITRES_VUES[vue] ?? ["cal-iut", ""];
   const avecSemaine = VUES_A_SEMAINE.has(vue) && !!payload?.weekRows.length;
-  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
   return (
     <header className="topbar no-print">
@@ -96,24 +105,15 @@ export function TopBar({
       )}
 
       <div className="topbar-droite">
-        <button type="button" className="topbar-recherche" onClick={onOuvrirRecherche} aria-keyshortcuts="Control+K">
-          <Search size={16} aria-hidden="true" />
-          <span className="topbar-recherche-texte">Enseignant, cours, salle, groupe…</span>
-          <kbd>{mac ? "⌘ K" : "Ctrl K"}</kbd>
-        </button>
-        <span
-          className={`topbar-synchro ${panne ? "is-panne" : ""}`}
-          role="status"
-          title={
-            panne
-              ? "Serveur injoignable : les modifications des collègues n'arrivent plus."
-              : "À jour : les modifications des collègues s'affichent d'elles-mêmes."
-          }
+        <div className="topbar-actions" id={ID_ACTIONS} />
+        <button
+          type="button"
+          className="topbar-recherche-mobile"
+          onClick={onOuvrirRecherche}
+          aria-label="Rechercher"
         >
-          <span className="topbar-synchro-point" aria-hidden="true" />
-          <span className="topbar-synchro-texte">{panne ? "Hors ligne" : "À jour"}</span>
-        </span>
-        {email && <MenuCompte email={email} onCle={onCle} onDeconnexion={onDeconnexion} />}
+          <Search size={18} aria-hidden="true" />
+        </button>
       </div>
     </header>
   );
@@ -241,91 +241,6 @@ function NavigationSemaine({
             );
           })}
         </ul>
-      )}
-    </div>
-  );
-}
-
-function MenuCompte({ email, onCle, onDeconnexion }: { email: string; onCle: () => void; onDeconnexion: () => void }) {
-  const [ouvert, setOuvert] = useState(false);
-  const [theme, setTheme] = useState<Theme>(() => lireTheme());
-  const racine = useRef<HTMLDivElement>(null);
-  const initiales = email
-    .split("@")[0]!
-    .split(/[._-]/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((m) => m[0]!.toUpperCase())
-    .join("");
-
-  useEffect(() => {
-    if (!ouvert) return;
-    const fermer = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent) {
-        if (e.key === "Escape") setOuvert(false);
-        return;
-      }
-      if (!racine.current?.contains(e.target as Node)) setOuvert(false);
-    };
-    document.addEventListener("mousedown", fermer);
-    document.addEventListener("keydown", fermer);
-    return () => {
-      document.removeEventListener("mousedown", fermer);
-      document.removeEventListener("keydown", fermer);
-    };
-  }, [ouvert]);
-
-  return (
-    <div className="topbar-compte" ref={racine}>
-      <button
-        type="button"
-        className="topbar-avatar"
-        aria-haspopup="menu"
-        aria-expanded={ouvert}
-        aria-label={`Compte ${email}`}
-        onClick={() => setOuvert((o) => !o)}
-      >
-        {initiales || "?"}
-      </button>
-      {ouvert && (
-        <div className="topbar-menu-compte" role="menu">
-          <p className="topbar-menu-email">{email}</p>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOuvert(false);
-              onCle();
-            }}
-          >
-            <KeyRound size={16} aria-hidden="true" /> Clé API
-          </button>
-          <div className="topbar-theme" role="radiogroup" aria-label="Thème">
-            {(
-              [
-                ["systeme", "Système", Monitor],
-                ["clair", "Clair", Sun],
-                ["sombre", "Sombre", Moon],
-              ] as const
-            ).map(([valeur, libelle, Icone]) => (
-              <button
-                key={valeur}
-                type="button"
-                role="radio"
-                aria-checked={theme === valeur}
-                onClick={() => {
-                  choisirTheme(valeur);
-                  setTheme(valeur);
-                }}
-              >
-                <Icone size={14} aria-hidden="true" /> {libelle}
-              </button>
-            ))}
-          </div>
-          <button type="button" role="menuitem" onClick={onDeconnexion}>
-            <LogOut size={16} aria-hidden="true" /> Déconnexion
-          </button>
-        </div>
       )}
     </div>
   );

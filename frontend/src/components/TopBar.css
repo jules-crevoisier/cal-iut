@@ -1,4 +1,6 @@
-/* Barre supérieure (refonte du 29/09/2026) — cf. TopBar.tsx. */
+/* Barre supérieure (refonte du 29/09/2026, maquette « Lumière » validée) :
+   titre + une ligne, semaine, actions de la page — sur une seule ligne, à
+   plat sur le fond de page. */
 
 .topbar {
   position: sticky;
@@ -7,11 +9,9 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 56px;
-  padding: 8px 24px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
-  border-bottom: 1px solid var(--border);
+  min-height: 64px;
+  padding: 14px 24px 10px;
+  background: var(--bg);
 }
 
 .topbar-menu {
@@ -29,27 +29,29 @@
 
 .topbar-titre {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 12px;
   min-width: 0;
   flex: 0 1 auto;
 }
 
 .topbar-titre h1 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.4rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 
 .topbar-titre p {
   margin: 0;
-  font-size: 0.78rem;
-  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 42ch;
+  max-width: 40ch;
 }
 
 /* ── Semaine partagée ── */
@@ -57,8 +59,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-inline: auto;
+  gap: 6px;
+  margin-left: auto;
   flex: 0 0 auto;
 }
 
@@ -66,8 +68,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -86,21 +88,20 @@
 
 .topbar-semaine-choix {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  height: 34px;
-  padding: 0 10px 0 12px;
-  border: 1px solid var(--border);
+  height: 32px;
+  padding: 0 6px 0 8px;
+  border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--surface);
+  background: none;
   color: var(--ink);
   font: inherit;
   cursor: pointer;
-  align-items: center;
-  min-width: 250px;
 }
 
-.topbar-semaine-choix:hover {
+.topbar-semaine-choix:hover,
+.topbar-semaine-choix[aria-expanded="true"] {
   background: var(--surface-2);
 }
 
@@ -136,12 +137,11 @@
 }
 
 .topbar-semaine-ouvrir {
-  margin-left: auto;
-  color: var(--muted);
+  color: var(--ink-faint);
 }
 
 .topbar-aujourdhui {
-  height: 34px;
+  height: 32px;
   padding: 0 10px;
   margin-left: 4px;
   border: 1px solid var(--border);
@@ -236,163 +236,44 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Droite ── */
+/* ── Droite : actions de la page (cf. `ActionsDePage`) ── */
 .topbar-droite {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-left: auto;
 }
 
 .topbar-semaine + .topbar-droite {
-  margin-left: 0;
+  margin-left: 12px;
 }
 
-.topbar-recherche {
-  display: inline-flex;
+.topbar-actions {
+  display: flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
-  width: 280px;
-  padding: 0 8px 0 10px;
-  border: 1px solid var(--border);
+}
+
+.topbar-actions:empty {
+  display: none;
+}
+
+.topbar-recherche-mobile {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
   border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.86rem;
-  cursor: text;
-  text-align: left;
-}
-
-.topbar-recherche:hover {
-  border-color: var(--border-strong);
-}
-
-.topbar-recherche-texte {
-  flex: 1;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.topbar-recherche kbd {
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  padding: 1px 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--muted);
-}
-
-.topbar-synchro {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.topbar-synchro-point {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--good);
-}
-
-.topbar-synchro.is-panne {
-  color: var(--bad-text);
-}
-
-.topbar-synchro.is-panne .topbar-synchro-point {
-  background: var(--bad);
-}
-
-.topbar-compte {
-  position: relative;
-}
-
-.topbar-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: none;
-  background: var(--surface-3);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-
-.topbar-menu-compte {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 60;
-  min-width: 240px;
-  padding: 6px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-pop);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.topbar-menu-email {
-  margin: 0;
-  padding: 6px 10px 8px;
-  font-size: 0.8rem;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.topbar-menu-compte button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: var(--radius-sm);
   background: none;
   color: var(--ink);
-  font: inherit;
-  font-size: 0.88rem;
-  text-align: left;
   cursor: pointer;
-}
-
-.topbar-menu-compte button:hover {
-  background: var(--surface-2);
 }
 
 @media (max-width: 1400px) {
   .topbar-titre p,
-  .topbar-calendaire,
-  .topbar-synchro-texte {
-    display: none;
-  }
-
-  .topbar-recherche {
-    width: 200px;
-  }
-}
-
-@media (max-width: 1180px) {
-  .topbar-recherche {
-    width: auto;
-  }
-
-  .topbar-recherche-texte,
-  .topbar-recherche kbd {
+  .topbar-calendaire {
     display: none;
   }
 }
@@ -400,12 +281,19 @@
 @media (max-width: 1023.98px) {
   .topbar {
     flex-wrap: wrap;
+    min-height: 0;
     padding: 6px 12px;
     gap: 8px;
+    border-bottom: 1px solid var(--border);
   }
 
-  .topbar-menu {
+  .topbar-menu,
+  .topbar-recherche-mobile {
     display: inline-flex;
+  }
+
+  .topbar-titre h1 {
+    font-size: 1.1rem;
   }
 
   .topbar-semaine {
@@ -414,53 +302,48 @@
     margin: 0;
   }
 
+  .topbar-droite {
+    display: contents;
+  }
+
+  .topbar-recherche-mobile {
+    order: 1;
+    margin-left: auto;
+  }
+
   .topbar-semaine-choix {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
+    justify-content: center;
+  }
+
+  .topbar-fleche,
+  .topbar-aujourdhui {
+    flex: none;
   }
 
   .topbar-semaines {
     left: 0;
     width: min(360px, calc(100vw - 24px));
   }
+
+  /* Sur téléphone, les actions de page restent atteignables sans pousser le
+     titre hors de l'écran : une ligne à elles, qui défile si besoin. */
+  .topbar-actions {
+    order: 4;
+    width: 100%;
+    overflow-x: auto;
+  }
 }
 
 @media (max-width: 560px) {
   .topbar-semaine-dates,
-  .topbar-semaine-statut,
-  .topbar-synchro-texte {
+  .topbar-semaine-statut {
     display: none;
   }
 
   .topbar-semaine-nom {
     white-space: nowrap;
   }
-
-  .topbar-titre h1 {
-    font-size: 1rem;
-  }
 }
 
-.topbar-theme {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
-  margin: 4px 4px 2px;
-  padding: 3px;
-  border-radius: var(--radius);
-  background: var(--surface-3);
-}
-
-.topbar-menu-compte .topbar-theme button {
-  justify-content: center;
-  gap: 5px;
-  padding: 5px 6px;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.topbar-menu-compte .topbar-theme button[aria-checked="true"] {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--rail-active-ring);
-}

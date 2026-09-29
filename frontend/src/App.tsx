@@ -626,6 +626,9 @@ export function App() {
               onClose={() => setNavOpen(false)}
               estAdmin={moi?.role === "admin"}
               email={moi?.email}
+              role={moi?.role}
+              panne={panne}
+              onCle={() => setRoute({ vue: "mcp" })}
               onLogout={() => {
                 void logout().finally(() => {
                   window.location.assign("/");
@@ -654,14 +657,6 @@ export function App() {
               onSemaine={setDisplayWeek}
               onOuvrirRecherche={() => setSearch(true)}
               onOuvrirNavigation={() => setNavOpen(true)}
-              email={moi?.email}
-              onCle={() => setRoute({ vue: "mcp" })}
-              onDeconnexion={() => {
-                void logout().finally(() => {
-                  window.location.assign("/");
-                });
-              }}
-              panne={panne}
             />
           )}
 
