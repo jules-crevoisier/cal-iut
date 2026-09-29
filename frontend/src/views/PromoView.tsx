@@ -1162,7 +1162,7 @@ export function PromoView({
                               </span>
                             </button>
                           ) : (
-                            g.parcours
+                            <span className="grp-band-libelle">{g.parcours}</span>
                           )}
                         </th>
                       ))}

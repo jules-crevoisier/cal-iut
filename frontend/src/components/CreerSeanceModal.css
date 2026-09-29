@@ -1,0 +1,203 @@
+/* ══════════════ Modales « Nouvelle séance » / « Nouvel évènement » /
+   « Nouvelle salle » (Vue Promo) ══════════════
+   Les champs reprennent l'apparence commune (socle d'`app.css`) : les
+   anciens `.newroom-field` (fond gris, rayon 10 px, 42 px de haut) restent
+   définis dans `app.css` pour les autres écrans, et sont ramenés ici à la
+   norme, dans ces modales seulement. */
+
+.seancemodal {
+  width: min(560px, 100%);
+  max-height: min(90vh, 860px);
+  overflow-y: auto;
+  box-shadow: var(--shadow-pop);
+}
+
+/* Nouvelle séance : deux blocs côte à côte dès que la place le permet. */
+.seancemodal:has(.seancemodal-corps) {
+  width: min(880px, 100%);
+}
+
+.seancemodal-corps {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 820px) {
+  .seancemodal-corps {
+    grid-template-columns: 1.25fr 1fr;
+  }
+}
+
+.seancemodal-bloc {
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.seancemodal-bloc legend {
+  padding: 0 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.seancemodal-grille {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 560px) {
+  .seancemodal-grille {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .seancemodal-grille .newroom-field--large {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Champs à la norme du socle, dans ces modales. */
+.seancemodal .newroom-field,
+.newroommodal .newroom-field {
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.seancemodal .newroom-field input:not([type="checkbox"]),
+.seancemodal .newroom-field select,
+.seancemodal .newroom-field textarea,
+.newroommodal .newroom-field input:not([type="checkbox"]),
+.newroommodal .newroom-field select {
+  background-color: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  padding: 5px 9px;
+  min-height: var(--control-h);
+}
+
+.seancemodal .newroom-field select,
+.newroommodal .newroom-field select {
+  padding-right: 28px;
+}
+
+.seancemodal .newroom-field input:focus-visible,
+.seancemodal .newroom-field select:focus-visible,
+.seancemodal .newroom-field textarea:focus-visible,
+.newroommodal .newroom-field input:focus-visible,
+.newroommodal .newroom-field select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+  border-color: var(--focus);
+}
+
+.seancemodal .newroom-field--checkbox,
+.newroommodal .newroom-field--checkbox {
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.seancemodal .newroom-field-groupes {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  gap: 2px 14px;
+}
+
+.seancemodal .newroom-field-groupes label {
+  font-size: 0.85rem;
+  min-height: 26px;
+}
+
+.seancemodal .newroom-field-groupes input {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Choix des enseignants (TeacherPicker) ── */
+.teacher-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.teacher-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+  align-items: center;
+}
+
+.teacher-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 1px 4px 1px 8px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.teacher-picker-chip button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink-soft);
+  padding: 0 4px;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.teacher-picker-chip button:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.teacher-picker-recherche {
+  position: relative;
+}
+
+.teacher-picker-liste {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+.teacher-picker-liste [role="option"] {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.teacher-picker-liste [role="option"]:hover,
+.teacher-picker-liste [role="option"][aria-selected="true"] {
+  background: var(--accent-soft);
+}
+
+.teacher-picker-vide {
+  padding: 6px 12px;
+}

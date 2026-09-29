@@ -30,6 +30,7 @@ import type { AppPayload, WeekRow } from "../types/app";
 import { ParkedCard } from "../features/park-week-move/ParkedCard";
 import { hasParked, type ParkUiState } from "../features/park-week-move/parkWeekMove";
 import { placerAvecConfirmation } from "../utils/placement";
+import { nomComplet } from "../utils/nomEnseignant";
 import "./APlacerView.css";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
@@ -447,7 +448,7 @@ function CarteSeance({
           {seance.placee_provisoirement && <span className="aplacer-etat">Forcée, à valider</span>}
           <span className="sub">
             {seance.session_type} · {seance.duree_libelle} · {seance.groupes_libelles.join(", ")} ·{" "}
-            {seance.enseignants_libelles.join(", ")}
+            {seance.enseignants_libelles.map(nomComplet).join(", ")}
           </span>
         </span>
         <span className={`aplacer-chevron${ouverte ? " ouvert" : ""}`} aria-hidden="true" />

@@ -7,6 +7,7 @@ import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { creerEvenementAvecConfirmation } from "../utils/placement";
 import { lireDernierWeekDay } from "../utils/creerSeancePrefs";
 import { TeacherPicker } from "./TeacherPicker";
+import "./CreerSeanceModal.css";
 
 const RE_HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
 

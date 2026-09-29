@@ -399,6 +399,19 @@ table.promo-grid th.grp-band {
   border-bottom: 0;
 }
 
+/* Nom du parcours aligné à gauche et collé au bord : centré sur 8 colonnes,
+   il sortait de l'écran dès qu'on faisait défiler la grille (téléphone). */
+table.promo-grid th.grp-band {
+  text-align: left;
+}
+
+.grp-band-libelle,
+table.promo-grid th.grp-band > .grp-band-btn {
+  display: inline-block;
+  position: sticky;
+  left: 84px;
+}
+
 table.promo-grid th.grp-col {
   font-weight: 600;
 }
@@ -821,6 +834,11 @@ table.promo-grid .sessiongrid-event {
   table.promo-grid th.timecell {
     white-space: normal;
     padding: 6px 4px;
+  }
+
+  .grp-band-libelle,
+  table.promo-grid th.grp-band > .grp-band-btn {
+    left: 64px;
   }
 
   table.promo-grid td.promocell {
