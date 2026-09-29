@@ -62,7 +62,9 @@ export function TimetableCalendar({
         slotMaxTime="19:00:00"
         slotDuration="00:30:00"
         snapDuration="01:30:00"
-        height="auto"
+        // Toute la hauteur de la carte sur poste de travail (le conteneur a
+        // une hauteur définie, cf. `Toolbar.css`) ; hauteur naturelle ailleurs.
+        height="100%"
         expandRows
         nowIndicator={false}
         editable={false}
@@ -72,6 +74,9 @@ export function TimetableCalendar({
         eventContent={(arg) => (
           <div className="fc-custom-event">
             <strong>{arg.event.title}</strong>
+            {arg.event.extendedProps.courseName && (
+              <span className="fc-event-nom">{arg.event.extendedProps.courseName}</span>
+            )}
             {arg.event.extendedProps.roomLabel && (
               <span className="fc-event-room">{arg.event.extendedProps.roomLabel}</span>
             )}

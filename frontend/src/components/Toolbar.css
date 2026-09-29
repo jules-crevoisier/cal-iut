@@ -1,122 +1,205 @@
-/* ══════════════ Vue Semaine (refonte du 29/09/2026) ══════════════
-   Barre d'outils (`Toolbar`) + mise en page du bloc Vue Semaine d'`App.tsx`
-   (grille à gauche, détail et modifications à droite). */
+/* ══════════════ Vue Semaine (gabarit v2, habillage « Lumière / Nuit ») ══════════════
+   Barre d'outils à plat (`Toolbar`), ruban fin des semaines, puis la
+   grille sur toute la hauteur utile et la colonne de droite (détail de la
+   séance ou semaine en bref, modifications et export) — mise en page du
+   bloc Vue Semaine d'`App.tsx`.
+   NB : app.css (`.page-outils`, `.panel`, `.view`…) est chargé APRÈS ce
+   fichier (cf. `main.tsx`) : à spécificité égale il l'emporte, d'où les
+   sélecteurs doublés. */
 
 .view.semaine {
+  container: semaine / inline-size;
   max-width: 100%;
   gap: 12px;
 }
 
-/* ── Barre d'outils : ligne « quoi », ligne « quand » ── */
-.panel.semaine-barre {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
+/* Grand écran (grille + colonne de droite côte à côte) : la vue tient dans
+   la fenêtre sous la barre supérieure (64 px) et les marges de `.app-main`
+   (20 + 40 px) ; la grille défile seule. En dessous, hauteur naturelle. */
+@media (min-width: 1360px) {
+  .view.semaine {
+    height: calc(100dvh - 124px);
+    min-height: 560px;
+  }
 }
 
-.semaine-barre-ligne {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
-  min-width: 0;
+/* ── Barre d'outils à plat ── */
+.page-outils.semaine-outils {
+  flex: none;
+  gap: 8px 16px;
 }
 
-.semaine-champ {
-  display: inline-flex;
+.semaine-modes-bloc {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex: none;
+}
+
+.semaine-modes-titre {
   font-size: 0.8rem;
   color: var(--ink-soft);
-  min-width: 0;
+  white-space: nowrap;
 }
 
-.semaine-champ select {
-  max-width: 260px;
-}
-
-.semaine-couleurs {
-  margin-left: auto;
-}
-
-/* « Afficher par » : contrôle segmenté. */
+/* « Afficher par » : contrôle segmenté (piste grise, actif blanc cerclé). */
 .semaine-modes {
   display: inline-flex;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--surface-3);
   flex: none;
 }
 
 .semaine-modes button {
   font: inherit;
-  font-size: 0.85rem;
-  min-height: var(--control-h);
+  font-size: 0.8125rem;
+  min-height: 28px;
   padding: 4px 12px;
   border: 0;
-  border-left: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--ink);
+  border-radius: calc(var(--radius) - 2px);
+  background: none;
+  color: var(--ink-soft);
   cursor: pointer;
 }
 
-.semaine-modes button:first-child {
-  border-left: 0;
-}
-
 .semaine-modes button:hover {
-  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .semaine-modes button.active {
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--border-strong);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .semaine-modes button.active {
-    color: #0f1216;
+    background: color-mix(in srgb, var(--ink) 10%, var(--surface));
+    box-shadow: inset 0 0 0 1px var(--border-strong);
   }
 }
 
 :root[data-theme="dark"] .semaine-modes button.active {
-  color: #0f1216;
+  background: color-mix(in srgb, var(--ink) 10%, var(--surface));
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
-.semaine-weekbar {
-  flex: 1 1 240px;
+/* Cible (année, parcours, groupe / enseignant / salle) : menus compacts, à
+   la largeur de l'option choisie. */
+.semaine-cible {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  flex: 0 1 auto;
+}
+
+.semaine-outils select {
+  field-sizing: content;
+  flex: 0 1 auto;
+  min-width: 80px;
+  max-width: 280px;
+  min-height: 30px;
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+}
+
+.semaine-cible select.semaine-cible-principale {
+  font-weight: 500;
+}
+
+.semaine-outils select.semaine-couleurs {
+  border-radius: 999px;
+  color: var(--ink-soft);
+  min-height: 28px;
+  height: 28px;
+  padding: 0 26px 0 11px;
+  font-size: 0.78rem;
+}
+
+@container semaine (min-width: 900px) {
+  .page-outils.semaine-outils {
+    flex-wrap: nowrap;
+  }
+
+  .semaine-outils .page-outils-actions {
+    flex: none;
+  }
+}
+
+/* ── Ruban des semaines ── */
+.semaine-ruban {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.semaine-ruban-titre {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.semaine-ruban .weekbar-wrap {
+  flex: 1 1 auto;
 }
 
 /* ── Grille + colonne de droite ── */
 .semaine-layout {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  gap: 16px;
+  align-items: stretch;
 }
 
 .panel.semaine-grille {
-  padding: 0;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  padding: 0;
   overflow: hidden;
 }
 
-.semaine-grille-entete {
+.semaine-grille-corps {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+@media (min-width: 1360px) {
+  /* La grille remplit la carte et défile seule (en-têtes collants). */
+  .semaine-grille-corps > .td-grid-wrap,
+  .semaine-grille-corps > .calendar-wrap,
+  .semaine-grille-corps > .semaine-annuaire {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+  }
+}
+
+.semaine-grille-pied {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 6px 16px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
 }
 
 .semaine-compte {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: var(--ink-soft);
 }
 
@@ -140,15 +223,16 @@
 
 .semaine-legende li::before {
   content: "";
-  width: 10px;
-  height: 10px;
-  border-left: 3px solid var(--type-td);
-  background: color-mix(in srgb, var(--type-td) 14%, var(--surface));
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--td-bd);
+  background: var(--td-bg);
 }
 
-.semaine-legende .cm::before { border-color: var(--type-cm); background: color-mix(in srgb, var(--type-cm) 14%, var(--surface)); }
-.semaine-legende .tp::before { border-color: var(--type-tp); background: color-mix(in srgb, var(--type-tp) 14%, var(--surface)); }
-.semaine-legende .eval::before { border-color: var(--type-eval); background: color-mix(in srgb, var(--type-eval) 16%, var(--surface)); }
+.semaine-legende .cm::before { border-color: var(--cm-bd); background: var(--cm-bg); }
+.semaine-legende .tp::before { border-color: var(--tp-bd); background: var(--tp-bg); }
+.semaine-legende .eval::before { border-color: var(--ev-bd); background: var(--ev-bg); }
 
 .semaine-grille .empty-state {
   margin: 12px;
@@ -163,29 +247,29 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
 }
 
-@media (min-width: 1024px) {
-  /* Le détail reste visible pendant qu'on parcourt la grille. */
+@media (min-width: 1360px) {
   .semaine-cote {
-    position: sticky;
-    top: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
   }
 }
 
 /* Écran moyen : la grille prend toute la largeur ; le détail d'une séance
-   flotte en bas à droite (sinon il tomberait sous la grille, hors de vue). */
-@media (max-width: 1365px) {
+   flotte en bas à droite (sinon il tomberait sous la grille, hors de vue),
+   la semaine en bref et les modifications passent dessous, côte à côte. */
+@media (max-width: 1359.98px) {
   .semaine-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .semaine-cote {
-    position: static;
-  }
-
-  .semaine-cote .session-panel--vide {
-    display: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
   }
 
   .semaine-cote .session-panel:not(.session-panel--vide) {
@@ -198,21 +282,19 @@
     overflow-y: auto;
     box-shadow: var(--shadow-pop);
   }
+
+  .semaine-grille-corps > .calendar-wrap {
+    height: 640px;
+  }
 }
 
-@media (max-width: 720px) {
-  .panel.semaine-barre {
-    padding: 8px;
+@container semaine (max-width: 720px) {
+  .semaine-modes-bloc {
+    width: 100%;
   }
 
-  .semaine-champ {
-    flex: 1 1 100%;
-    justify-content: space-between;
-  }
-
-  .semaine-champ select {
-    flex: 1 1 auto;
-    max-width: none;
+  .semaine-modes-titre {
+    display: none;
   }
 
   .semaine-modes {
@@ -225,7 +307,22 @@
     min-height: 40px;
   }
 
-  .semaine-couleurs {
+  .semaine-cible {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .semaine-outils select {
+    flex: 1 1 140px;
+    max-width: none;
+    min-height: 40px;
+  }
+
+  .semaine-outils .page-outils-actions {
     margin-left: 0;
+  }
+
+  .semaine-ruban-titre {
+    display: none;
   }
 }
