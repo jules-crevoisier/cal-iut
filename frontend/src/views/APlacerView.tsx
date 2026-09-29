@@ -30,6 +30,7 @@ import type { AppPayload, WeekRow } from "../types/app";
 import { ParkedCard } from "../features/park-week-move/ParkedCard";
 import { hasParked, type ParkUiState } from "../features/park-week-move/parkWeekMove";
 import { placerAvecConfirmation } from "../utils/placement";
+import "./APlacerView.css";
 
 const JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HORAIRES = ["08h00", "09h30", "11h00", "14h00", "15h30", "17h00"];
@@ -161,6 +162,9 @@ export function APlacerView({
   }
 
   const manquantes = inventaire?.manquantes ?? [];
+  const pourcentage = Math.round(
+    ((inventaire?.total_placees ?? 0) / Math.max(1, inventaire?.total_a_placer ?? 1)) * 100,
+  );
 
   return (
     <Tag className={classe}>
@@ -168,8 +172,8 @@ export function APlacerView({
         {annonce}
       </p>
 
-      <div className="panel">
-        <div className="section-header">
+      <div className="panel aplacer-tete">
+        <div className="aplacer-tete-ligne">
           <h3>À placer & déplacer</h3>
           {onFermer && (
             <button type="button" className="btn btn--ghost btn--sm" onClick={onFermer}>
@@ -177,24 +181,18 @@ export function APlacerView({
             </button>
           )}
         </div>
-        <p className="muted">{inventaire?.resume}</p>
+        {inventaire?.resume && <p className="aplacer-resume">{inventaire.resume}</p>}
 
         {manquantes.length > 0 && (
           <>
-            <div className="aplacer-jauge" aria-hidden="true">
-              <div
-                className="aplacer-jauge-remplie"
-                style={{
-                  width: `${Math.round(
-                    ((inventaire?.total_placees ?? 0) / Math.max(1, inventaire?.total_a_placer ?? 1)) * 100,
-                  )}%`,
-                }}
-              />
+            <div className="aplacer-progression">
+              <div className="aplacer-jauge" aria-hidden="true">
+                <div className="aplacer-jauge-remplie" style={{ width: `${pourcentage}%` }} />
+              </div>
+              <span>
+                {inventaire?.total_placees} / {inventaire?.total_a_placer} séances placées ({pourcentage} %)
+              </span>
             </div>
-            <p className="muted small">
-              {inventaire?.total_placees} séances placées sur {inventaire?.total_a_placer} —{" "}
-              {Math.round(((inventaire?.total_placees ?? 0) / Math.max(1, inventaire?.total_a_placer ?? 1)) * 100)} %
-            </p>
 
             <div className="aplacer-auto">
               <button
@@ -218,10 +216,9 @@ export function APlacerView({
               >
                 {completionEnCours ? "Placement en cours…" : "Tout placer automatiquement"}
               </button>
-              <p className="muted small">
-                L'outil pose lui-même toutes les séances pour lesquelles il trouve un créneau valable, les plus
-                difficiles d'abord. Il ne déplace jamais un cours déjà placé, et vous dit ce qu'il n'a pas su faire.
-                Cela prend quelques minutes.
+              <p>
+                Pose chaque séance qui a un créneau valable, les plus difficiles d'abord, sans jamais déplacer
+                un cours déjà placé. Quelques minutes.
               </p>
             </div>
           </>
@@ -256,9 +253,10 @@ export function APlacerView({
 
       {hasParked(park ?? { items: [], selectedSessionId: null }) && onSelectPark && onAnnulerPark && (
         <div className="aplacer-liste aplacer-liste--park">
-          <p className="muted small">
-            En déplacement vers une autre semaine ({park!.items.length}) — cliquez une carte, puis une case
-          </p>
+          <h4 className="aplacer-section">
+            En cours de déplacement ({park!.items.length})
+            <span> — cliquez une carte, puis une case de la grille</span>
+          </h4>
           {park!.items.map((item) => (
             <ParkedCard
               key={item.sessionId}
@@ -273,12 +271,10 @@ export function APlacerView({
       )}
 
       {manquantes.length === 0 && !hasParked(park ?? { items: [], selectedSessionId: null }) ? (
-        <div className="panel">
-          <p className="muted">Rien à faire ici : toutes les séances sont au planning.</p>
-        </div>
+        <p className="aplacer-vide">Rien à faire ici : toutes les séances sont au planning.</p>
       ) : manquantes.length === 0 ? null : (
         <div className="aplacer-liste">
-          <p className="muted small">Pas encore au planning</p>
+          <h4 className="aplacer-section">Pas encore au planning ({manquantes.length})</h4>
           {manquantes.map((s) => (
             <CarteSeance
               key={s.session_id}
@@ -445,16 +441,16 @@ function CarteSeance({
     <article className="aplacer-carte" aria-label={titre}>
       <button type="button" className="aplacer-entete" onClick={ouvrir} aria-expanded={ouverte} aria-controls={panneauId}>
         <span className="aplacer-titre">
-          <strong>{titre}</strong>
-          {seance.placee_provisoirement && <span className="badge warn">Forcée, à valider</span>}
+          <strong>
+            <span className="aplacer-code">{seance.course_code}</span> {seance.course_name}
+          </strong>
+          {seance.placee_provisoirement && <span className="aplacer-etat">Forcée, à valider</span>}
           <span className="sub">
             {seance.session_type} · {seance.duree_libelle} · {seance.groupes_libelles.join(", ")} ·{" "}
             {seance.enseignants_libelles.join(", ")}
           </span>
         </span>
-        <span className="aplacer-chevron" aria-hidden="true">
-          {ouverte ? "▾" : "▸"}
-        </span>
+        <span className={`aplacer-chevron${ouverte ? " ouvert" : ""}`} aria-hidden="true" />
       </button>
 
       {ouverte && seance.placee_provisoirement && (
@@ -482,7 +478,7 @@ function CarteSeance({
           {seance.semaines_possibles.length > 0 && (
             <p className="muted small">
               Semaine(s) idéale(s) selon l'ordre pédagogique et le calendrier :{" "}
-              {seance.semaines_possibles.map((w) => `S${w + 1}`).join(", ")}.
+              {seance.semaines_possibles.map((w) => libelleSemaine(weekRows, w)).join(", ")}.
             </p>
           )}
 
@@ -493,8 +489,8 @@ function CarteSeance({
           {creneaux && creneaux.length > 0 && (
             <>
               <p className="muted small">
-                Chacun de ces créneaux a été vérifié : aucune indisponibilité enseignante, aucun conflit de groupe ou
-                de salle, aucune règle de l'établissement enfreinte.
+                Créneaux vérifiés : enseignants disponibles, groupe et salle libres, règles de l'établissement
+                respectées.
               </p>
               <ul className="aplacer-creneaux">
                 {creneaux.map((c) => {

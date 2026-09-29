@@ -1,0 +1,374 @@
+/* ══════════════ « À placer » ══════════════
+   Panneau dans la Vue Promo (et écran de secours si le planning n'est pas
+   encore chargé). Pensé en 320 px d'abord : on rattrape parfois des séances
+   debout devant un planning affiché, téléphone à la main — cibles de 44 px
+   au toucher, rien ne déborde, chaque créneau proposé se lit d'un coup
+   d'œil (date en clair, horaire, salle). */
+
+.aplacer-panneau {
+  flex: 0 0 min(360px, 32vw);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 1024px) {
+  /* Le panneau reste à portée pendant qu'on fait défiler la grille. */
+  .aplacer-panneau {
+    position: sticky;
+    top: 12px;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .aplacer-panneau {
+    flex: none;
+    width: 100%;
+  }
+}
+
+.aplacer-tete {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aplacer-tete-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.aplacer-tete-ligne h3 {
+  margin: 0;
+}
+
+.aplacer-resume {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.aplacer-progression {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.aplacer-jauge {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.aplacer-jauge-remplie {
+  height: 100%;
+  background: var(--good);
+  transition: width 0.3s ease;
+}
+
+.aplacer-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.aplacer-auto .btn {
+  align-self: flex-start;
+}
+
+.aplacer-auto p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.aplacer-rapport {
+  padding: 8px 10px;
+  background: var(--good-soft);
+  border-left: 3px solid var(--good);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.aplacer-rapport p {
+  margin: 0;
+}
+
+.aplacer-rapport summary {
+  cursor: pointer;
+  margin-top: 4px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.aplacer-rapport ul {
+  margin: 4px 0 0;
+  padding-left: 1.1rem;
+}
+
+.aplacer-section {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.aplacer-section span {
+  font-weight: 400;
+}
+
+.aplacer-vide {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.aplacer-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aplacer-liste--park {
+  padding-bottom: 4px;
+}
+
+/* ── Carte d'une séance à placer ── */
+.aplacer-carte {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.aplacer-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+}
+
+.aplacer-entete:hover {
+  background: var(--surface-2);
+}
+
+.aplacer-titre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.aplacer-titre strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.aplacer-code {
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.aplacer-titre .sub {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.aplacer-etat {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--warn-text);
+  background: var(--warn-soft);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+/* Chevron dessiné par la bordure : pas de glyphe en guise d'icône. */
+.aplacer-chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink-soft);
+  transform: rotate(-45deg);
+  margin-right: 4px;
+  transition: transform 0.12s;
+}
+
+.aplacer-chevron.ouvert {
+  transform: rotate(45deg);
+}
+
+.aplacer-corps {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px 10px;
+}
+
+.aplacer-corps > p {
+  margin: 0 0 6px;
+}
+
+.aplacer-creneaux {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aplacer-creneau {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.aplacer-creneau:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.aplacer-creneau:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.aplacer-quand {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.aplacer-quand strong {
+  font-weight: 600;
+  font-size: 0.85rem;
+  /* Les dates longues (« mercredi 14 octobre ») doivent tenir à 320 px sans
+     pousser « Placer ici » hors de l'écran. */
+  overflow-wrap: anywhere;
+}
+
+.aplacer-quand .sub {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.aplacer-action {
+  flex: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.aplacer-manuel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.aplacer-manuel-form {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+  margin-top: 4px;
+}
+
+.aplacer-manuel-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  min-width: 0;
+}
+
+.aplacer-manuel-form label:first-child {
+  flex: 1 1 100%;
+}
+
+.aplacer-manuel-form p.muted {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+}
+
+/* ── Séance déplacée vers une autre semaine (en attente d'une case) ── */
+.aplacer-carte--park {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  cursor: pointer;
+}
+
+.aplacer-carte--park-selected {
+  border-style: solid;
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--accent-soft);
+}
+
+.aplacer-carte--park-compact {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.aplacer-carte--park-compact .aplacer-entete {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+.aplacer-carte--park-compact .aplacer-corps {
+  border-top: 0;
+  padding: 4px 10px 4px 0;
+  flex: 0 0 auto;
+}
+
+@media (pointer: coarse) {
+  .aplacer-manuel .btn,
+  .aplacer-manuel-form select {
+    min-height: 44px;
+  }
+}

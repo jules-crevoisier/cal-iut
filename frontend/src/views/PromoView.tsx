@@ -1,29 +1,33 @@
 /**
- * Toutes les promos (BUT1→BUT3) sur une seule grille — portage fidèle de
- * `renderPromoTab`/`promoColumnGroups` (`export/templates/timetable.html`),
- * jamais aligné avec le HTML jusqu'ici. Trois écarts corrigés (retour
- * utilisateur 11/08/2026) :
+ * Toutes les promos (BUT1→BUT3) sur une seule grille, un jour à la fois —
+ * c'est ici qu'on déplace les séances. Portage de `renderPromoTab` /
+ * `promoColumnGroups` (`export/templates/timetable.html`), avec trois règles
+ * issues du retour utilisateur du 11/08/2026 :
  *
- * 1. Colonnes = groupes TP quand le parcours en a (ex. BUT1 : 8 colonnes
- *    TP A→H), PAS les 4 groupes TD — la version précédente s'arrêtait au
- *    niveau TD, jamais au niveau TP le plus fin ("on veut tous les tp, pas
- *    de BUT1" [en TD seulement]). Fallback TD uniquement pour les parcours
- *    SANS TP (FC, cohortes plus petites).
- * 2. Un cours "promo" (CM à toute la promo) n'est PAS une colonne à part —
- *    il apparaît DANS chaque colonne TP/TD de son parcours, comme un
- *    étudiant le vivrait ("Promo BUT1 si il y a un cours promo alors il
- *    est sur tous les tp/td"). Utilise `payload.groupCohort[gid]`
- *    (calculé côté serveur : TP + son TD + le CM promo), jamais une
- *    correspondance directe `group_ids.includes(colonne)`.
- * 3. Ordre des colonnes : année, puis FI avant FC de la même année, pas
- *    l'alphabétique brut ("les groupe [FC] sont mis après les fi").
+ * 1. Colonnes = groupes TP quand le parcours en a (BUT1 : TP A→H), TD
+ *    seulement pour les parcours SANS TP (FC).
+ * 2. Un cours « promo » (CM) n'a pas de colonne à part : il apparaît dans
+ *    chaque colonne de son parcours, comme un étudiant le vit
+ *    (`payload.groupCohort[gid]` : TP + son TD + le CM promo).
+ * 3. Ordre des colonnes : année, puis FI avant FC (cf. tri plus bas).
+ *
+ * Refonte du 29/09/2026 : une seule barre d'outils (semaine, jour, filtres,
+ * actions), cartes de séance compactes (`PromoCarte`), raccourcis clavier,
+ * filtres mémorisés, retour visible après chaque action avec « Annuler »,
+ * zones de dépôt lisibles pendant le glisser-déposer.
  */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
-import { changerSalle, deposerPlacement, supprimerSeancePersonnalisee, type SeanceAPlacer } from "../api/client";
+import {
+  changerSalle,
+  deposerPlacement,
+  echangerPlacements,
+  supprimerSeancePersonnalisee,
+  type SeanceAPlacer,
+} from "../api/client";
 import type { Placement } from "../types";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload, AppRow } from "../types/app";
@@ -31,7 +35,6 @@ import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { confirmAsync } from "../utils/confirmDialog";
 import { detailConflit, placerAvecConfirmation } from "../utils/placement";
 import { ParcoursWeekModal } from "../components/ParcoursWeekModal";
-import { couleursMatiere } from "../utils/couleursMatiere";
 import { cleSeances, fusionnerColonnes } from "../utils/fusionColonnes";
 import { performMove, performSwap } from "../utils/moveSession";
 import {
@@ -42,13 +45,15 @@ import {
 } from "../utils/teacherBusy";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
-import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { lettresGroupe } from "../utils/years";
+import { nomComplet } from "../utils/nomEnseignant";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
 import { CreerEvenementModal } from "../components/CreerEvenementModal";
 import { WeekBar } from "../components/WeekBar";
+import { WeekStepper } from "../components/WeekStepper";
 import { APlacerView } from "./APlacerView";
+import { PromoCarte } from "./PromoCarte";
 import {
   addPark,
   clearPark,
@@ -61,47 +66,82 @@ import {
   type ParkUiState,
 } from "../features/park-week-move/parkWeekMove";
 import { anneeDepuisParcours, filtrerParcours, listerAnnees, parcoursPourSelect } from "../utils/promoFilters";
+import "./PromoView.css";
 
 interface PromoViewProps {
-  /** Position demandée par un lien ou par « À traiter » (semaine + jour).
-   *  Sans elle, une ligne « WR106 — aucune salle, mardi 11h » ouvrait bien
-   *  la Vue Promo mais laissait chercher le bon jour à la main. */
+  /** Position demandée par un lien ou par « À traiter » (semaine + jour). */
   route?: Route;
   payload: AppPayload;
-  /** Séance choisie dans « À placer », à poser directement sur cette
-   * grille — `undefined`/absent = comportement normal (lecture seule),
-   * inchangé (App.tsx ne les passe que depuis cette vue-là, la Vue Promo
-   * reste utilisable seule ailleurs si jamais réutilisée). */
+  /** Séance choisie dans « À placer », à poser directement sur cette grille. */
   placementActif?: SeanceAPlacer | null;
   onAnnulerPlacement?: () => void;
   onPlaced?: () => void;
-  /** Glisser-déposer d'une séance DÉJÀ placée — retour utilisateur
-   * 28/08/2026 : « on enlève la possibilité de drag and drop dans vue
-   * semaine [...] on veut que cela soit possible dans vue promo ». Les
-   * trois props vont ensemble ; absentes (ex. Vue Promo intégrée dans
-   * « À placer », qui n'a que `payload`), la grille reste lecture seule
-   * pour ce qui est déjà au planning — le placement d'une séance MANQUANTE
-   * (`placementActif` ci-dessus) reste, lui, toujours possible. */
+  /** Glisser-déposer d'une séance DÉJÀ placée (retour utilisateur
+   * 28/08/2026 : possible ici, plus en Vue Semaine). Les trois props vont
+   * ensemble ; absentes, la grille reste en lecture seule pour ce qui est
+   * déjà au planning. */
   placements?: Placement[];
   onPlacementUpdated?: (p: Placement) => void;
   onError?: (msg: string) => void;
   /** Une séance personnalisée a été créée, modifiée ou supprimée — recharge
-   * `payload` (compteurs de la matière, contenu des cases) et la liste des
-   * placements. Même garde que `placements`/`onPlacementUpdated` : absent
-   * en lecture seule. */
+   * `payload` et la liste des placements. */
   onSeanceChangee?: () => void;
   setRoute?: (patch: Partial<Route>) => void;
   onAPlacerRefresh?: () => void;
-  /** Lien public « Vue Promo » (retour utilisateur 31/08/2026 : « un lien
-   * en plus ouvert à tout le monde [...] accès à la vue promo ») — maître
-   * absolu, à la différence des props ci-dessus qui ne coupaient QUE
-   * glisser-déposer/salle/création. Sans lui, le panneau « Séances à
-   * placer » et le clic-pour-placer restaient actifs même sans ces props
-   * (ils ne dépendent que de `placementActif`, jamais vérifiés) : un lien
-   * public aurait donc pu écrire au planning malgré son intention "lecture
-   * seule". `readOnly` coupe tout, sans exception, même si l'appelant
-   * passe les callbacks d'édition par erreur. */
+  /** Lien public « Vue Promo » (retour utilisateur 31/08/2026) — coupe
+   * TOUTE écriture, même si l'appelant passe les callbacks d'édition. */
   readOnly?: boolean;
+}
+
+const JOURS_COURTS = ["lun.", "mar.", "mer.", "jeu.", "ven."];
+
+// Filtres mémorisés sur l'appareil (refonte du 29/09/2026) : qui ne
+// travaille que sur les BUT2 n'a plus à les re-choisir à chaque visite. Le
+// jour et la semaine, eux, NE sont PAS mémorisés : on arrive toujours sur
+// aujourd'hui (retour utilisateur 08/09/2026).
+const CLE_FILTRES = "cal-iut:promo:filtres:v1";
+
+interface FiltresMemorises {
+  annee: string;
+  parcours: string;
+  enseignant: string;
+}
+
+function lireFiltres(): FiltresMemorises {
+  const defaut = { annee: "Tout", parcours: "Tout", enseignant: "" };
+  try {
+    const brut = window.localStorage.getItem(CLE_FILTRES);
+    if (!brut) return defaut;
+    const lu = JSON.parse(brut) as Partial<FiltresMemorises>;
+    return {
+      annee: typeof lu.annee === "string" ? lu.annee : "Tout",
+      parcours: typeof lu.parcours === "string" ? lu.parcours : "Tout",
+      enseignant: typeof lu.enseignant === "string" ? lu.enseignant : "",
+    };
+  } catch {
+    return defaut;
+  }
+}
+
+function ecrireFiltres(f: FiltresMemorises): void {
+  try {
+    window.localStorage.setItem(CLE_FILTRES, JSON.stringify(f));
+  } catch {
+    // Stockage indisponible (navigation privée) : les filtres restent
+    // simplement ceux de la session.
+  }
+}
+
+/** Retour visible après une action, avec son « Annuler » quand il existe. */
+interface Retour {
+  texte: string;
+  annuler?: () => Promise<void>;
+}
+
+/** Cible du clavier : on n'intercepte rien pendant une saisie. */
+function saisieEnCours(cible: EventTarget | null): boolean {
+  if (!(cible instanceof HTMLElement)) return false;
+  return Boolean(cible.closest("input, select, textarea, [contenteditable='true'], [role='dialog'], [role='alertdialog']"));
 }
 
 export function PromoView({
@@ -118,29 +158,28 @@ export function PromoView({
   onAPlacerRefresh,
   readOnly = false,
 }: PromoViewProps) {
+  const filtresInitiaux = useMemo(lireFiltres, []);
   const [choixAPlacer, setChoixAPlacer] = useState<SeanceAPlacer | null>(null);
   const [listeMasquee, setListeMasquee] = useState(() => route?.panel !== "aplacer");
   const [park, setPark] = useState<ParkUiState>(() => clearPark());
-  const [filtreAnnee, setFiltreAnnee] = useState<string>("Tout");
-  const [filtreParcoursSel, setFiltreParcoursSel] = useState<string>("Tout");
+  const [filtreAnnee, setFiltreAnnee] = useState<string>(filtresInitiaux.annee);
+  const [filtreParcoursSel, setFiltreParcoursSel] = useState<string>(filtresInitiaux.parcours);
   const placementActif = readOnly ? null : (placementActifProp ?? choixAPlacer);
   const [displayWeek, setDisplayWeek] = useState(0);
   // Le jour EN COURS plutôt que lundi (retour utilisateur 08/09/2026 : « on
-  // veut arriver à la bonne semaine et au bon jour »). Valeur initiale
-  // seulement : la route (`route.jour`) et les clics la remplacent ensuite,
-  // et un rechargement ne ramène donc pas l'utilisateur à aujourd'hui.
+  // veut arriver à la bonne semaine et au bon jour »).
   const [day, setDay] = useState(() => jourOuvreAujourdhui());
-  const [teacherFilter, setTeacherFilter] = useState("");
+  const [teacherFilter, setTeacherFilter] = useState(filtresInitiaux.enseignant);
   const [enCoursPlacement, setEnCoursPlacement] = useState<string | null>(null);
   const [erreurPlacement, setErreurPlacement] = useState<string | null>(null);
-  const [annonce, setAnnonce] = useState("");
+  const [retour, setRetour] = useState<Retour | null>(null);
+  const [annulationEnCours, setAnnulationEnCours] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   // Séance SURVOLÉE par le glisser en cours : déposer dessus propose un
   // échange plutôt qu'un déplacement (retour utilisateur 29/08/2026).
   const [cibleEchange, setCibleEchange] = useState<string | null>(null);
-  // Parcours dont la semaine complète est ouverte en modale — c'est le seul
-  // endroit de l'application où l'on peut déplacer une séance d'un JOUR à un
-  // autre (la Vue Promo, elle, n'affiche qu'un jour à la fois).
+  // Parcours dont la semaine complète est ouverte en modale — seul endroit
+  // où l'on déplace une séance d'un JOUR à un autre.
   const [parcoursOuvert, setParcoursOuvert] = useState<string | null>(null);
   const couleursParMatiere = usePreferences().couleursParMatiere;
   const [dropTarget, setDropTarget] = useState<{ day: number; slot: number } | null>(null);
@@ -150,65 +189,69 @@ export function PromoView({
     if (!readOnly && route?.panel === "aplacer") setListeMasquee(false);
   }, [route?.panel, readOnly]);
 
-  // Édition de la SALLE seule (retour utilisateur 28/08/2026 : « on va
-  // vouloir sur la vue promo modifier uniquement les salles ») — même
-  // condition d'activation que le glisser-déposer : réservé au contexte
-  // d'édition (onglet Vue Promo), jamais dans la Vue Promo intégrée à
-  // « À placer », qui ne reçoit pas ces props.
+  useEffect(() => {
+    ecrireFiltres({ annee: filtreAnnee, parcours: filtreParcoursSel, enseignant: teacherFilter });
+  }, [filtreAnnee, filtreParcoursSel, teacherFilter]);
+
+  const signaler = (texte: string, annuler?: () => Promise<void>) => setRetour({ texte, annuler });
+
+  // Édition de la SALLE seule (retour utilisateur 28/08/2026) — réservée au
+  // contexte d'édition, jamais au lien public.
   const [salleEnEdition, setSalleEnEdition] = useState<string | null>(null);
   const [salleEnCours, setSalleEnCours] = useState(false);
   const roomEditEnabled = !readOnly && Boolean(onPlacementUpdated && onError);
-  // Séance pour laquelle on est en train de créer une salle — la salle
-  // créée lui est appliquée directement, sans re-sélection manuelle.
+  // Séance pour laquelle on crée une salle : la salle créée lui est
+  // appliquée directement.
   const [creationSallePour, setCreationSallePour] = useState<string | null>(null);
   const sallesTriees = useMemo(
     () => [...payload.rooms].sort((a, b) => a.label.localeCompare(b.label, "fr")),
     [payload.rooms],
   );
 
-  // Créer / modifier une séance personnalisée (retour utilisateur
-  // 31/08/2026) — même garde d'activation que le reste de l'édition.
-  // `"creer"` = formulaire vide ; un `Placement` = édition de cette séance.
+  // Créer / modifier une séance (retour utilisateur 31/08/2026). `"creer"` =
+  // formulaire vide ; un `Placement` = édition de cette séance.
   const [modaleSeance, setModaleSeance] = useState<"creer" | Placement | null>(null);
   const seanceModaleEnabled = roomEditEnabled;
   // Évènement hors maquette (réunion, conférence...) — retour utilisateur
-  // 07/09/2026, étendu le 23/09/2026 (Kyllian Bresson, présentation PAC
-  // 13h15-14h) d'un horaire réel optionnel. Modale distincte de
-  // `CreerSeanceModal` : un évènement n'a pas de matière (`libelle` invente
-  // son propre code) ; même garde d'activation.
+  // 07/09/2026, avec horaire réel optionnel depuis le 23/09/2026.
   const [modaleEvenement, setModaleEvenement] = useState(false);
 
-  const appliquerSalle = async (sessionId: string, roomId: string) => {
+  const appliquerSalle = async (sessionId: string, roomId: string, ancienne?: string | null) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
     setSalleEnCours(true);
     try {
-      let maj = await changerSalle(sessionId, { room_id: roomId }).catch(async (e) => {
+      const maj = await changerSalle(sessionId, { room_id: roomId }).catch(async (e) => {
         const detail = detailConflit(e);
         if (!detail) throw e;
-        // Salle occupée ET/OU capacité insuffisante : les deux sont montrés,
-        // en forçage explicite (modale interne, pas `window.confirm`). Le
-        // titre suit ce qui est RÉELLEMENT en cause — annoncer « Salle déjà
-        // occupée » pour un simple souci de capacité enverrait chercher un
-        // conflit d'occupation qui n'existe pas.
-        // Le verrou de semaine arrive par le même canal depuis le 31/08/2026 :
-        // il se dit lui-même, il ne s'annonce pas « Salle déjà occupée ».
+        // Salle occupée et/ou capacité insuffisante, montrés en forçage
+        // explicite. Le titre suit ce qui est RÉELLEMENT en cause ; le verrou
+        // de semaine (31/08/2026) se dit lui-même.
         const verrou = detail.hard_conflicts.some((m) => m.includes("non modifiable"));
         const titre = verrou
           ? "Semaine déjà en cours"
           : detail.hard_conflicts.length
             ? "Salle déjà occupée"
             : "Attention à la capacité";
-        const forcer = await confirmAsync(
-          [...detail.hard_conflicts, ...detail.soft_warnings].join("\n"),
-          { title: titre, confirmLabel: "Mettre quand même cette salle" },
-        );
+        const forcer = await confirmAsync([...detail.hard_conflicts, ...detail.soft_warnings].join("\n"), {
+          title: titre,
+          confirmLabel: "Mettre quand même cette salle",
+        });
         if (!forcer) return null;
         return changerSalle(sessionId, { room_id: roomId, force: true });
       });
       if (maj) {
         onPlacementUpdated(maj);
-        setAnnonce(`Salle changée : ${maj.room_label ?? roomId}.`);
         setSalleEnEdition(null);
+        signaler(
+          `${maj.course_code} : salle ${maj.room_label ?? roomId}.`,
+          ancienne
+            ? async () => {
+                const remis = await changerSalle(sessionId, { room_id: ancienne, force: true });
+                onPlacementUpdated(remis);
+                signaler(`${remis.course_code} : salle ${remis.room_label ?? ancienne} rétablie.`);
+              }
+            : undefined,
+        );
       }
     } catch (e) {
       onError(e instanceof Error ? e.message : "Changement de salle impossible");
@@ -217,9 +260,8 @@ export function PromoView({
     }
   };
 
-  // Supprimer une séance personnalisée — jamais une séance de la maquette,
-  // le bouton n'apparaît d'ailleurs que sur `r.custom` (retour utilisateur
-  // 31/08/2026 : « création + suppression + modification complète »).
+  // Supprimer une séance personnalisée — jamais une séance de la maquette
+  // (bouton présent seulement sur `r.custom`).
   const supprimerSeance = async (sessionId: string, libelle: string) => {
     const confirme = await confirmAsync(`Supprimer définitivement « ${libelle} » ?`, {
       title: "Supprimer la séance",
@@ -228,25 +270,16 @@ export function PromoView({
     if (!confirme) return;
     try {
       await supprimerSeancePersonnalisee(sessionId);
-      setAnnonce(`${libelle} supprimée.`);
+      signaler(`${libelle} supprimée.`);
       onSeanceChangee?.();
     } catch (e) {
       onError?.(e instanceof Error ? e.message : "Suppression impossible");
     }
   };
 
-  // Ouvrir sur la semaine EN COURS (retour utilisateur 08/09/2026 : « on
-  // arrive semaine 2 alors que l'on est semaine 3 »).
-  //
-  // ICI et pas seulement dans `App.tsx` : la vue Promo tient son PROPRE
-  // `displayWeek`. Corriger celui de l'application ne l'atteignait pas —
-  // d'où un jour juste et une semaine fausse, le jour étant lui déjà géré
-  // dans ce fichier.
-  //
-  // Une seule fois, et jamais quand la route fixe déjà une semaine (arrivée
-  // depuis « À traiter » ou depuis la recherche) : recentrer par-dessus
-  // ramènerait l'utilisateur à aujourd'hui alors qu'il vient précisément de
-  // demander une autre semaine.
+  // Ouvrir sur la semaine EN COURS (retour utilisateur 08/09/2026). Ici et
+  // pas seulement dans `App.tsx` : cette vue tient son propre `displayWeek`.
+  // Une seule fois, et jamais quand la route fixe déjà une semaine.
   const semaineRecentree = useRef(false);
   useEffect(() => {
     if (semaineRecentree.current) return;
@@ -267,25 +300,24 @@ export function PromoView({
     const idx = payload.weekRows.findIndex((w) => w.weekIndex === route.sem);
     if (idx >= 0) setDisplayWeek(idx);
     if (route.jour !== null && route.jour !== undefined) setDay(route.jour);
-    // Volontairement déclenché par la ROUTE seule.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route?.sem, route?.jour]);
 
-  // Retour utilisateur 05/09/2026 : chercher un groupe CM et cliquer dessus
-  // n'affichait QUE les CM (GroupeView), sans pouvoir choisir les TD de la
-  // même promo. La recherche pose désormais un résultat « Promo » qui
-  // arrive ici avec `route.parcours` — on filtre la grille sur ce parcours
-  // précis à l'arrivée, CM/TD/TP restent tous choisissables dans la page.
+  // Résultat « Promo » de la recherche (retour utilisateur 05/09/2026) :
+  // filtre la grille sur ce parcours à l'arrivée.
   useEffect(() => {
     if (!route?.parcours) return;
     setFiltreAnnee(anneeDepuisParcours(route.parcours) ?? "Tout");
     setFiltreParcoursSel(route.parcours);
-    // Volontairement déclenché par la ROUTE seule.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route?.parcours]);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
-  const semaineCalendaireAffichee = semaineCalendaireDepuisLundi(payload.weekRows[displayWeek]?.monday);
+  const indexAujourdhui = indexSemaineCourante(payload.weekRows);
+  const jourAujourdhui = jourOuvreAujourdhui();
+  // Jour réellement en cours (samedi/dimanche : aucun).
+  const jourReel = new Date().getDay();
+  const jourReelOuvre = jourReel >= 1 && jourReel <= 5 ? jourReel - 1 : null;
 
   const teacherBusyMap = useMemo(() => {
     if (solverWeek === null) return new Map<string, TeacherBusyHit>();
@@ -307,10 +339,10 @@ export function PromoView({
     return teacherBusyByDaySlot(payload.rows, teachers, solverWeek, excludeId);
   }, [draggingId, placementActif, park, payload.rows, solverWeek]);
 
-  // À l'activation d'un placement (arrivée depuis « À placer »), saute
-  // directement sur sa première semaine idéale plutôt que de laisser la
-  // personne chercher — la Vue Promo reste sur cette semaine/jour tant
-  // qu'elle navigue elle-même ensuite (pas de re-saut à chaque re-rendu).
+  // À l'activation d'un placement (arrivée depuis « À placer »), saute sur
+  // sa première semaine idéale et remet les filtres sur « Tout » : sinon la
+  // colonne de la séance pouvait être filtrée et aucune case n'était
+  // cliquable, sans aucun message.
   useEffect(() => {
     if (!placementActif) return;
     const semaineIdeale = placementActif.semaines_possibles[0];
@@ -318,18 +350,8 @@ export function PromoView({
     const idx = payload.weekRows.findIndex((w) => w.weekIndex === semaineIdeale);
     if (idx >= 0) setDisplayWeek(idx);
     setErreurPlacement(null);
-    // Bug « clic Placer sur la grille → clic sur une case → rien ne se
-    // passe » : si le filtre année/parcours affiché ne colle pas au
-    // parcours de LA séance qu'on vient de choisir dans « À placer », sa
-    // colonne n'existe simplement plus dans `cols` (filtrée), donc aucune
-    // case n'est cliquable nulle part — silencieusement, sans erreur. On
-    // revient sur « Tout »/« Tout » pour garantir que sa colonne reste
-    // affichée, quel que soit le filtre laissé par la navigation précédente.
     setFiltreAnnee("Tout");
     setFiltreParcoursSel("Tout");
-    // Volontairement déclenché seulement par un CHANGEMENT de séance
-    // active (nouvelle sélection depuis « À placer »), pas par la
-    // navigation ultérieure dans `payload.weekRows`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placementActif?.session_id]);
 
@@ -355,13 +377,9 @@ export function PromoView({
         const leaf = tpIds.length
           ? tpIds
           : allGroupIds.filter((gid) => payload.groupParcours[gid] === pc && payload.groupKind[gid] !== "promo");
-        // Fallback : si un parcours n'a ni TP ni TD (ou seulement promo),
-        // garder quand même une colonne pour pouvoir y poser une manquante
-        // (bug « clic À placer ne place rien » — colonnes filtrées à vide).
-        const cols =
-          leaf.length > 0
-            ? leaf
-            : allGroupIds.filter((gid) => payload.groupParcours[gid] === pc);
+        // Parcours sans TP ni TD : garder une colonne pour pouvoir y poser
+        // une séance manquante.
+        const cols = leaf.length > 0 ? leaf : allGroupIds.filter((gid) => payload.groupParcours[gid] === pc);
         return {
           parcours: pc,
           cols: cols.sort((a, b) =>
@@ -371,12 +389,9 @@ export function PromoView({
       })
       .filter((g) => g.cols.length);
 
-    // Année d'abord, puis LETTRES du premier groupe — et non le nom du
-    // parcours. Retour utilisateur 30/08/2026 : en BUT3 les colonnes
-    // sortaient « A, B, GH, EF », parce que « CREACOM » précède « DEV »
-    // alphabétiquement. Trier sur les lettres donne « A, B, EF, GH », qui
-    // se lit sans surprise — et garde au passage les FI avant les FC,
-    // puisque leurs groupes commencent aux premières lettres.
+    // Année d'abord, puis LETTRES du premier groupe (retour utilisateur
+    // 30/08/2026 : « A, B, EF, GH » et non « A, B, GH, EF ») — garde au
+    // passage les FI avant les FC.
     groups.sort((a, b) => {
       const annee = (pc: string) => /^BUT(\d)/.exec(pc)?.[1] ?? "9";
       if (annee(a.parcours) !== annee(b.parcours)) {
@@ -422,8 +437,8 @@ export function PromoView({
     return m;
   }, [payload.rows, cols, colCohorts]);
 
-  // Barre de jours (SAE/férié/événement d'AU MOINS un parcours ce jour-là —
-  // même repère visuel que `renderPromoDayBar`).
+  // Repères de la barre des jours : férié / SAE / évènement d'au moins un
+  // parcours ce jour-là — dits en toutes lettres, pas par une pastille.
   const dayBadges = useMemo(() => {
     if (solverWeek === null) return DAY_LABELS.map(() => undefined as "sae" | "holiday" | "event" | undefined);
     return DAY_LABELS.map((_, d) => {
@@ -435,11 +450,9 @@ export function PromoView({
   }, [payload.holidayRows, payload.saeRows, payload.eventRows, solverWeek]);
 
   const byColSlot = new Map<string, AppRow[]>();
-  // Évènements à horaire libre tombés dans la pause méridienne (`r.midi`,
-  // retour Jules 23/09/2026) : rendus à part, dans la ligne "pause" existante
-  // entre les créneaux 2 et 3 — JAMAIS dans la cellule normale du créneau 3,
-  // même si c'est là qu'ils sont STOCKÉS en mémoire (position de stockage
-  // uniquement, cf. `api/main.py::creer_evenement`).
+  // Évènements à horaire libre dans la pause méridienne (`r.midi`, retour
+  // Jules 23/09/2026) : rendus dans la ligne « pause », jamais dans la case
+  // du créneau 3 où ils sont STOCKÉS (cf. `api/main.py::creer_evenement`).
   const byColPause = new Map<string, AppRow[]>();
   if (solverWeek !== null) {
     for (const r of payload.rows) {
@@ -467,8 +480,7 @@ export function PromoView({
   }
 
   // Un TD = une case pour ses deux TP, un CM = une case pour la promo
-  // (demande du 22/09/2026, cf. `utils/fusionColonnes.ts`). Largeur de chaque
-  // colonne, créneau par créneau : 0 = absorbée par la case de gauche.
+  // (demande du 22/09/2026, cf. `utils/fusionColonnes.ts`).
   const largeursParCreneau = SLOT_TIMES.map((_, s) =>
     fusionnerColonnes(
       cols.length,
@@ -482,19 +494,51 @@ export function PromoView({
     (i) => colParcours[i],
   );
 
+  // Pendant un glisser : colonnes de la séance tirée. C'est là qu'elle
+  // atterrira (un dépôt change l'HEURE, jamais le groupe) — on y montre la
+  // cible et, d'avance, ce qui coincera (groupe déjà pris, enseignant ailleurs).
+  const ligneTiree = draggingId ? payload.rows.find((r) => r.id === draggingId) : undefined;
+  const colonnesTirees = new Set<number>();
+  if (ligneTiree) {
+    cols.forEach((_, i) => {
+      if (ligneTiree.g.some((id) => colCohorts[i].has(id))) colonnesTirees.add(i);
+    });
+  }
+
   const holiday = solverWeek === null ? undefined : payload.holidayRows.find((h) => h.w === solverWeek && h.d === day);
   const dayEvents =
     solverWeek === null ? undefined : payload.eventRows.find((e) => e.w === solverWeek && e.d === day)?.labels;
 
+  /** « mar. 29 sept. 9h30 » */
+  const quand = (week: number, d: number, slot: number) => {
+    const date = formatShortDate(dateForWeekDay(payload, week, d));
+    const debut = SLOT_TIMES[slot]?.label.split("–")[0] ?? "";
+    return [JOURS_COURTS[d], date, debut].filter(Boolean).join(" ");
+  };
+
+  const idxAffichage = (week: number) => payload.weekRows.findIndex((w) => w.weekIndex === week);
+
+  const allerA = (week: number, d: number) => {
+    const idx = idxAffichage(week);
+    if (idx >= 0) setDisplayWeek(idx);
+    setDay(d);
+  };
+
   const placerIci = async (slot: number) => {
     if (!placementActif || solverWeek === null) return;
+    const seance = placementActif;
     const cle = `${solverWeek}-${day}-${slot}`;
     setEnCoursPlacement(cle);
     setErreurPlacement(null);
-    const resultat = await placerAvecConfirmation(placementActif.session_id, { week: solverWeek, day, slot });
+    const resultat = await placerAvecConfirmation(seance.session_id, { week: solverWeek, day, slot });
     setEnCoursPlacement(null);
     if (resultat.ok) {
-      setAnnonce(`${placementActif.course_code} placé ${DAY_LABELS[day]} ${SLOT_TIMES[slot].label}.`);
+      signaler(`${seance.course_code} placée ${quand(solverWeek, day, slot)}.`, async () => {
+        await deposerPlacement(seance.session_id);
+        signaler(`${seance.course_code} remise dans « À placer ».`);
+        onSeanceChangee?.();
+        onAPlacerRefresh?.();
+      });
       setChoixAPlacer(null);
       onPlaced?.();
       onAPlacerRefresh?.();
@@ -507,7 +551,7 @@ export function PromoView({
     const originWeek = park.items[0]?.origin.week;
     setPark(clearPark());
     if (originWeek === undefined) return;
-    const idx = payload.weekRows.findIndex((w) => w.weekIndex === originWeek);
+    const idx = idxAffichage(originWeek);
     if (idx >= 0) setDisplayWeek(idx);
   };
 
@@ -515,8 +559,27 @@ export function PromoView({
     const originWeek = park.items.find((p) => p.sessionId === sessionId)?.origin.week;
     setPark((actuel) => removePark(actuel, sessionId));
     if (originWeek === undefined) return;
-    const idx = payload.weekRows.findIndex((w) => w.weekIndex === originWeek);
+    const idx = idxAffichage(originWeek);
     if (idx >= 0) setDisplayWeek(idx);
+  };
+
+  /** Déplacement réussi : message + « Annuler » qui remet la séance où elle
+   *  était (mêmes contrôles qu'un déplacement normal). */
+  const signalerDeplacement = (origine: Placement, cible: { week: number; day: number; slot: number }) => {
+    if (!onPlacementUpdated || !onError) return;
+    signaler(
+      `${origine.course_code} déplacée : ${quand(origine.week, origine.day, origine.slot)} → ${quand(cible.week, cible.day, cible.slot)}.`,
+      async () => {
+        const ok = await performMove(
+          origine.session_id,
+          { week: origine.week, day: origine.day, slot: origine.slot },
+          origine,
+          onPlacementUpdated,
+          onError,
+        );
+        if (ok) signaler(`${origine.course_code} remise ${quand(origine.week, origine.day, origine.slot)}.`);
+      },
+    );
   };
 
   const poserParked = async (slot: number) => {
@@ -525,29 +588,44 @@ export function PromoView({
     const origin = sel.origin;
     const cle = `${solverWeek}-${day}-${slot}`;
     setEnCoursPlacement(cle);
-    const ok = await performMove(
-      origin.session_id,
-      { week: solverWeek, day, slot },
-      origin,
-      onPlacementUpdated,
-      onError,
-    );
+    const cible = { week: solverWeek, day, slot };
+    const ok = await performMove(origin.session_id, cible, origin, onPlacementUpdated, onError);
     setEnCoursPlacement(null);
     if (ok) {
-      setAnnonce(`${origin.course_code} déplacé ${DAY_LABELS[day]} ${SLOT_TIMES[slot].label}.`);
+      signalerDeplacement(origin, cible);
       setPark((actuel) => removePark(actuel, sel.sessionId));
     }
   };
 
   const retirerDuPlanning = async (sessionId: string, courseCode: string) => {
-    const ok = await confirmAsync(
-      `Retirer ${courseCode} du planning et le remettre dans « À placer » ?`,
-      { title: "Retirer du planning", confirmLabel: "Retirer", cancelLabel: "Annuler" },
-    );
+    const ok = await confirmAsync(`Retirer ${courseCode} du planning et le remettre dans « À placer » ?`, {
+      title: "Retirer du planning",
+      confirmLabel: "Retirer",
+      cancelLabel: "Annuler",
+    });
     if (!ok) return;
+    const avant = placements?.find((p) => p.session_id === sessionId);
     try {
       await deposerPlacement(sessionId);
-      setAnnonce(`${courseCode} retirée du planning — repose-la depuis « À placer ».`);
+      signaler(
+        `${courseCode} retirée du planning, elle attend dans « À placer ».`,
+        avant
+          ? async () => {
+              const resultat = await placerAvecConfirmation(sessionId, {
+                week: avant.week,
+                day: avant.day,
+                slot: avant.slot,
+              });
+              if (resultat.ok) {
+                signaler(`${courseCode} remise ${quand(avant.week, avant.day, avant.slot)}.`);
+                onSeanceChangee?.();
+                onAPlacerRefresh?.();
+              } else {
+                onError?.(resultat.message);
+              }
+            }
+          : undefined,
+      );
       onSeanceChangee?.();
       onAPlacerRefresh?.();
     } catch (e) {
@@ -555,11 +633,8 @@ export function PromoView({
     }
   };
 
-  // Glisser-déposer d'une séance déjà placée — même logique que l'ancien
-  // TdWeekGrid (validation -> confirmation si conflit -> forçage ou non,
-  // `utils/moveSession.ts::performMove`), déplacée ici (retour utilisateur
-  // 28/08/2026). `dragEnabled` seul détermine si c'est actif — voir
-  // `PromoViewProps.placements`.
+  // Glisser-déposer d'une séance déjà placée (validation -> confirmation si
+  // conflit -> forçage ou non, cf. `utils/moveSession.ts::performMove`).
   const handleDrop = async (targetDay: number, slot: number) => {
     setDropTarget(null);
     const sessionId = draggingId;
@@ -568,7 +643,9 @@ export function PromoView({
     const placement = placements.find((p) => p.session_id === sessionId);
     if (!placement || placement.locked) return;
     if (placement.day === targetDay && placement.slot === slot && placement.week === solverWeek) return;
-    await performMove(sessionId, { week: solverWeek, day: targetDay, slot }, placement, onPlacementUpdated, onError);
+    const cible = { week: solverWeek, day: targetDay, slot };
+    const ok = await performMove(sessionId, cible, placement, onPlacementUpdated, onError);
+    if (ok) signalerDeplacement(placement, cible);
   };
 
   const handleDropOnWeek = (displayIndex: number) => {
@@ -591,9 +668,8 @@ export function PromoView({
     setDisplayWeek(displayIndex);
   };
 
-  /** Dépôt SUR une séance : les deux échangent leurs places. Un seul appel
-   *  serveur, qui juge les deux positions finales ensemble — cf.
-   *  `utils/moveSession.ts::performSwap`. */
+  /** Dépôt SUR une séance : les deux échangent leurs places (un seul appel
+   *  serveur, cf. `utils/moveSession.ts::performSwap`). */
   const handleSwap = async (cibleId: string) => {
     setCibleEchange(null);
     const sourceId = draggingId;
@@ -606,7 +682,30 @@ export function PromoView({
       onError("Séance verrouillée : la déverrouiller avant d'échanger.");
       return;
     }
-    await performSwap(sourceId, cibleId, source.course_code, cible.course_code, onPlacementUpdated, onError);
+    const ok = await performSwap(sourceId, cibleId, source.course_code, cible.course_code, onPlacementUpdated, onError);
+    if (ok) {
+      signaler(`${source.course_code} et ${cible.course_code} ont échangé leurs places.`, async () => {
+        try {
+          const { placements: remis } = await echangerPlacements(sourceId, cibleId, true);
+          remis.forEach(onPlacementUpdated);
+          signaler(`${source.course_code} et ${cible.course_code} remises à leur place.`);
+        } catch (e) {
+          onError(e instanceof Error ? e.message : "Annulation impossible");
+        }
+      });
+    }
+  };
+
+  const lancerAnnulation = async () => {
+    if (!retour?.annuler || annulationEnCours) return;
+    setAnnulationEnCours(true);
+    try {
+      await retour.annuler();
+    } catch (e) {
+      onError?.(e instanceof Error ? e.message : "Annulation impossible");
+    } finally {
+      setAnnulationEnCours(false);
+    }
   };
 
   /** Handlers posés sur la SÉANCE (pas la case) : `stopPropagation` pour que
@@ -636,8 +735,7 @@ export function PromoView({
             e.preventDefault();
             if (dropTarget?.day !== targetDay || dropTarget?.slot !== slot) setDropTarget({ day: targetDay, slot });
           },
-          onDragLeave: () =>
-            setDropTarget((cur) => (cur?.day === targetDay && cur?.slot === slot ? null : cur)),
+          onDragLeave: () => setDropTarget((cur) => (cur?.day === targetDay && cur?.slot === slot ? null : cur)),
           onDrop: (e: ReactDragEvent) => {
             e.preventDefault();
             void handleDrop(targetDay, slot);
@@ -645,12 +743,81 @@ export function PromoView({
         }
       : {};
 
+  // ── Navigation ──
+  const allerJour = (delta: number) => {
+    let d = day + delta;
+    let w = displayWeek;
+    if (d < 0) {
+      if (w > 0) {
+        w -= 1;
+        d = DAY_LABELS.length - 1;
+      } else d = 0;
+    } else if (d >= DAY_LABELS.length) {
+      if (w < payload.weekRows.length - 1) {
+        w += 1;
+        d = 0;
+      } else d = DAY_LABELS.length - 1;
+    }
+    setDisplayWeek(w);
+    setDay(d);
+  };
+  const allerAujourdhui = () => {
+    setDisplayWeek(indexAujourdhui);
+    setDay(jourAujourdhui);
+  };
+  const allerSemaine = (i: number) => setDisplayWeek(Math.max(0, Math.min(payload.weekRows.length - 1, i)));
+  const modaleOuverte = Boolean(modaleSeance || modaleEvenement || parcoursOuvert || creationSallePour);
+
+  // Raccourcis clavier (refonte du 29/09/2026). Lus via une référence pour
+  // ne s'abonner qu'une fois ; ignorés pendant une saisie ou une modale.
+  const clavier = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  clavier.current = (e: KeyboardEvent) => {
+    if (modaleOuverte || saisieEnCours(e.target) || document.querySelector("[role='dialog'], [role='alertdialog']")) return;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z") {
+      if (retour?.annuler) {
+        e.preventDefault();
+        void lancerAnnulation();
+      }
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const sens = e.key === "ArrowLeft" ? -1 : 1;
+      if (e.shiftKey) allerSemaine(displayWeek + sens);
+      else allerJour(sens);
+    } else if (e.key === "t" || e.key === "T") {
+      allerAujourdhui();
+    } else if (e.key === "Escape") {
+      if (placementActif) {
+        setChoixAPlacer(null);
+        onAnnulerPlacement?.();
+      } else if (park.selectedSessionId) {
+        setPark((actuel) => ({ ...actuel, selectedSessionId: null }));
+      }
+    }
+  };
+  useEffect(() => {
+    const ecoute = (e: KeyboardEvent) => clavier.current(e);
+    document.addEventListener("keydown", ecoute);
+    return () => document.removeEventListener("keydown", ecoute);
+  }, []);
+
+  const filtresActifs = filtreAnnee !== "Tout" || filtreParcoursSel !== "Tout" || teacherFilter !== "";
+  const portee =
+    filtreAnnee === "Tout" && filtreParcoursSel === "Tout"
+      ? "Toutes promos"
+      : filtreParcoursSel !== "Tout"
+        ? filtreParcoursSel
+        : filtreAnnee;
+  const dateJour = dateForWeekDay(payload, solverWeek ?? -1, day);
+  const selPark = selectedParked(park);
+  const parkParcours = selPark
+    ? selPark.origin.group_ids.map((g) => payload.groupParcours[g]).find((pc): pc is string => Boolean(pc))
+    : undefined;
+
   return (
     <section className="view promo">
-      <p role="status" aria-live="polite" className="sr-only">
-        {annonce}
-      </p>
-
       <div className="promo-avec-aplacer">
         {!readOnly && !listeMasquee && (
           <APlacerView
@@ -659,9 +826,7 @@ export function PromoView({
             onPlacement={() => onAPlacerRefresh?.()}
             onChoisirSurPromo={(seance) => {
               setChoixAPlacer(seance);
-              setPark((actuel) =>
-                actuel.selectedSessionId ? { ...actuel, selectedSessionId: null } : actuel,
-              );
+              setPark((actuel) => (actuel.selectedSessionId ? { ...actuel, selectedSessionId: null } : actuel));
             }}
             onFermer={() => {
               if (hasParked(park)) restaurerTousParks();
@@ -678,666 +843,641 @@ export function PromoView({
           />
         )}
         <div className="promo-principal">
-      {!readOnly && listeMasquee && (
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm promo-aplacer-ouvrir"
-          onClick={() => {
-            setListeMasquee(false);
-            setRoute?.({ panel: "aplacer" });
-          }}
-        >
-          Séances à placer
-        </button>
-      )}
-
-      {placementActif && (
-        <div className="panel promo-placement-actif">
-          <div>
-            <strong>Placement en cours : {placementActif.course_code}</strong>
-            <span className="muted">
-              {" "}
-              — {placementActif.session_type} · {placementActif.groupes_libelles.join(", ")} · cliquez une case
-              libre de la colonne {placementActif.parcours} ci-dessous.
-            </span>
+          <div className="panel promo-barre">
+            <div className="promo-barre-ligne">
+              <WeekStepper
+                weekRows={payload.weekRows}
+                selected={displayWeek}
+                onSelect={allerSemaine}
+                onToday={allerAujourdhui}
+                estAujourdhui={displayWeek === indexAujourdhui && day === jourAujourdhui}
+                raccourcis
+              />
+              <div className="promo-weekbar">
+                <WeekBar
+                  weekRows={payload.weekRows}
+                  countByWeekIndex={countByWeek}
+                  selected={displayWeek}
+                  onSelect={setDisplayWeek}
+                  dropEnabled={dragEnabled && Boolean(draggingId)}
+                  onDropWeek={dragEnabled ? handleDropOnWeek : undefined}
+                />
+              </div>
+            </div>
+            <div className="promo-barre-ligne">
+              <div className="promo-jours" role="group" aria-label="Jour affiché">
+                {DAY_LABELS.map((label, d) => {
+                  const badge = dayBadges[d];
+                  const date = formatShortDate(dateForWeekDay(payload, solverWeek ?? -1, d));
+                  const estAujourdhui = displayWeek === indexAujourdhui && d === jourReelOuvre;
+                  const repere =
+                    badge === "holiday" ? "férié" : badge === "sae" ? "SAE" : badge === "event" ? "évènement" : "";
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      className={`promo-jour${d === day ? " active" : ""}${estAujourdhui ? " aujourdhui" : ""}`}
+                      aria-pressed={d === day}
+                      aria-current={estAujourdhui ? "date" : undefined}
+                      title={estAujourdhui ? "Aujourd'hui" : undefined}
+                      onClick={() => setDay(d)}
+                    >
+                      <span className="promo-jour-nom">
+                        <span className="long">{label}</span>
+                        <span className="court">{label.slice(0, 3)}</span>
+                      </span>
+                      {date && <span className="promo-jour-date">{date}</span>}
+                      {repere && <span className={`promo-jour-repere ${badge}`}>{repere}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="promo-filtres" role="group" aria-label="Filtrer la grille">
+                <label className="promo-filtre">
+                  <span>Année</span>
+                  <select
+                    value={filtreAnnee}
+                    className={filtreAnnee !== "Tout" ? "is-filtre" : undefined}
+                    onChange={(e) => {
+                      setFiltreAnnee(e.target.value);
+                      setFiltreParcoursSel("Tout");
+                    }}
+                  >
+                    <option value="Tout">Tout</option>
+                    {anneesDispo.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="promo-filtre">
+                  <span>Parcours</span>
+                  <select
+                    value={filtreParcoursSel}
+                    className={filtreParcoursSel !== "Tout" ? "is-filtre" : undefined}
+                    onChange={(e) => setFiltreParcoursSel(e.target.value)}
+                  >
+                    <option value="Tout">Tout</option>
+                    {parcoursDispo.map((pc) => (
+                      <option key={pc} value={pc}>
+                        {pc}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="promo-filtre">
+                  <span>Enseignant</span>
+                  <select
+                    value={teacherFilter}
+                    className={teacherFilter ? "is-filtre" : undefined}
+                    onChange={(e) => setTeacherFilter(e.target.value)}
+                  >
+                    <option value="">Tous</option>
+                    {teacherCodes.map((c) => (
+                      <option key={c} value={c}>
+                        {nomComplet(payload.teacherLabels[c] ?? c)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {filtresActifs && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => {
+                      setFiltreAnnee("Tout");
+                      setFiltreParcoursSel("Tout");
+                      setTeacherFilter("");
+                    }}
+                  >
+                    Tout afficher
+                  </button>
+                )}
+              </div>
+              {!readOnly && (
+                <div className="promo-actions">
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    aria-pressed={!listeMasquee}
+                    onClick={() => {
+                      if (listeMasquee) {
+                        setListeMasquee(false);
+                        setRoute?.({ panel: "aplacer" });
+                      } else {
+                        if (hasParked(park)) restaurerTousParks();
+                        setListeMasquee(true);
+                        setChoixAPlacer(null);
+                        setRoute?.({ panel: "" });
+                      }
+                    }}
+                  >
+                    Séances à placer
+                  </button>
+                  {seanceModaleEnabled && (
+                    <button type="button" className="btn btn--sm" onClick={() => setModaleEvenement(true)}>
+                      Nouvel évènement
+                    </button>
+                  )}
+                  {seanceModaleEnabled && (
+                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setModaleSeance("creer")}>
+                      Nouvelle séance
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={() => {
-              setChoixAPlacer(null);
-              onAnnulerPlacement?.();
-            }}
-          >
-            Annuler
-          </button>
-        </div>
-      )}
-      {erreurPlacement && (
-        <div className="panel promo-placement-erreur">
-          <p className="alerte">{erreurPlacement}</p>
-        </div>
-      )}
 
-      <div className="panel controls">
-        <div className="field weekfield">
-          <WeekBar
-            weekRows={payload.weekRows}
-            countByWeekIndex={countByWeek}
-            selected={displayWeek}
-            onSelect={setDisplayWeek}
-            dropEnabled={dragEnabled && Boolean(draggingId)}
-            onDropWeek={dragEnabled ? handleDropOnWeek : undefined}
-          />
-        </div>
-        <label>
-          Enseignant
-          <select value={teacherFilter} onChange={(e) => setTeacherFilter(e.target.value)}>
-            <option value="">Tous</option>
-            {teacherCodes.map((c) => (
-              <option key={c} value={c}>
-                {payload.teacherLabels[c]}
-              </option>
-            ))}
-          </select>
-        </label>
-        {seanceModaleEnabled && (
-          <button type="button" className="btn btn--accent btn--sm" onClick={() => setModaleSeance("creer")}>
-            + Nouvelle séance
-          </button>
-        )}
-        {seanceModaleEnabled && (
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setModaleEvenement(true)}>
-            + Évènement
-          </button>
-        )}
-      </div>
-
-      {modaleEvenement && (
-        <CreerEvenementModal
-          payload={payload}
-          suggestion={{ week: solverWeek ?? undefined, day }}
-          onCancel={() => setModaleEvenement(false)}
-          onCree={(placement) => {
-            setModaleEvenement(false);
-            setAnnonce(`${placement.course_code} créé ${DAY_LABELS[placement.day]} ${SLOT_TIMES[placement.slot].label}.`);
-            onPlacementUpdated?.(placement);
-            onSeanceChangee?.();
-          }}
-        />
-      )}
-
-      {modaleSeance && (
-        <CreerSeanceModal
-          payload={payload}
-          mode={
-            modaleSeance && modaleSeance !== "creer" && !payload.rows.some((row) => row.id === modaleSeance.session_id && row.custom)
-              ? "maquette"
-              : undefined
-          }
-          seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
-          // Pré-remplit semaine/jour depuis ce qui est AFFICHÉ dans Vue Promo
-          // (retour utilisateur, todo département, Kyllian Bresson : « rester
-          // sur la semaine à saisir, sur le jour à saisir ») — uniquement à
-          // la CRÉATION, une édition porte déjà ses propres semaine/jour.
-          // `solverWeek` peut être `null` (semaine bloquée affichée) : dans
-          // ce cas la modale garde son propre repli (dernière valeur connue
-          // ou première semaine), rien à forcer.
-          suggestion={
-            modaleSeance === "creer" ? { week: solverWeek ?? undefined, day } : null
-          }
-          onCancel={() => setModaleSeance(null)}
-          onCree={(placement, options) => {
-            // « Créer et en ajouter une autre » (garderOuverte) : la modale
-            // gère elle-même son repli/focus, on se contente de faire vivre
-            // les données affichées SANS fermer ni ré-annoncer par-dessus le
-            // message de confirmation déjà montré dans la modale.
-            if (options?.garderOuverte) {
-              onPlacementUpdated?.(placement);
-              onSeanceChangee?.();
-              return;
-            }
-            setModaleSeance(null);
-            setAnnonce(
-              modaleSeance === "creer"
-                ? `${placement.course_code} créée ${DAY_LABELS[placement.day]} ${SLOT_TIMES[placement.slot].label}.`
-                : `${placement.course_code} modifiée.`,
-            );
-            onPlacementUpdated?.(placement);
-            onSeanceChangee?.();
-          }}
-          onRetiree={(sessionId) => {
-            const courseCode = modaleSeance !== "creer" ? modaleSeance?.course_code : undefined;
-            setModaleSeance(null);
-            setAnnonce(`${courseCode ?? sessionId} retirée du planning — repose-la depuis « À placer ».`);
-            onSeanceChangee?.();
-          }}
-        />
-      )}
-
-      <div className="daybar">
-        {DAY_LABELS.map((label, d) => {
-          const badge = dayBadges[d];
-          const dateLabel = formatShortDate(dateForWeekDay(payload, solverWeek ?? -1, d));
-          return (
-            <button
-              key={label}
-              type="button"
-              className={`daybtn ${d === day ? "active" : ""} ${badge ?? ""}`}
-              onClick={() => setDay(d)}
-            >
-              {label}
-              {dateLabel ? ` ${dateLabel}` : ""}
-              {badge ? " •" : ""}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="panel">
-        <div className="section-header promo-grille-entete">
-          <h3>
-            {filtreAnnee === "Tout" && filtreParcoursSel === "Tout"
-              ? "Toutes promos"
-              : filtreParcoursSel !== "Tout"
-                ? filtreParcoursSel
-                : filtreAnnee}{" "}
-            — {DAY_LABELS[day]} — {payload.weekRows[displayWeek]?.label ?? ""}
-            {/* Semaine calendaire ISO en complément (todo département,
-                Kyllian Bresson : « indiquer la semaine calendaire en même
-                temps que la semaine universitaire ») — calculée depuis le
-                LUNDI réel (`weekRows[].monday`), jamais en reparsant le
-                libellé ci-dessus. */}
-            {semaineCalendaireAffichee !== null ? ` · semaine calendaire ${semaineCalendaireAffichee}` : ""}
-          </h3>
-          <div className="promo-filtres" role="group" aria-label="Filtrer la grille">
-            <label className="promo-filtre">
-              Année
-              <select
-                value={filtreAnnee}
-                onChange={(e) => {
-                  setFiltreAnnee(e.target.value);
-                  setFiltreParcoursSel("Tout");
+          {placementActif && (
+            <div className="promo-bandeau promo-bandeau--placement" role="status">
+              <p>
+                <strong>Placement de {placementActif.course_code}</strong>{" "}
+                <span className="muted">
+                  {placementActif.session_type} · {placementActif.groupes_libelles.join(", ")} — cliquez une case
+                  encadrée dans les colonnes {placementActif.parcours}.
+                </span>
+              </p>
+              <button
+                type="button"
+                className="btn btn--sm"
+                title="Échap"
+                onClick={() => {
+                  setChoixAPlacer(null);
+                  onAnnulerPlacement?.();
                 }}
               >
-                <option value="Tout">Tout</option>
-                {anneesDispo.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="promo-filtre">
-              Parcours
-              <select value={filtreParcoursSel} onChange={(e) => setFiltreParcoursSel(e.target.value)}>
-                <option value="Tout">Tout</option>
-                {parcoursDispo.map((pc) => (
-                  <option key={pc} value={pc}>
-                    {pc}
-                  </option>
-                ))}
-              </select>
-            </label>
+                Annuler
+              </button>
+            </div>
+          )}
+          {selPark && !placementActif && (
+            <div className="promo-bandeau promo-bandeau--placement">
+              <p>
+                <strong>Déplacement de {selPark.origin.course_code}</strong>{" "}
+                <span className="muted">— choisissez le jour, puis cliquez une case encadrée.</span>
+              </p>
+            </div>
+          )}
+          {erreurPlacement && (
+            <div className="promo-bandeau promo-bandeau--erreur" role="alert">
+              <p>{erreurPlacement}</p>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setErreurPlacement(null)}>
+                Fermer
+              </button>
+            </div>
+          )}
+          {/* Retour après chaque action, avec « Annuler » quand c'est possible
+              — toujours dans le DOM : une région `aria-live` doit exister
+              avant que son texte change pour être annoncée. */}
+          <div className={`promo-retour${retour ? " visible" : ""}`} role="status" aria-live="polite">
+            {retour && (
+              <>
+                <span>{retour.texte}</span>
+                {retour.annuler && (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={annulationEnCours}
+                    title="Ctrl + Z"
+                    onClick={() => void lancerAnnulation()}
+                  >
+                    {annulationEnCours ? "Annulation…" : "Annuler"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--icon btn--sm promo-retour-fermer"
+                  aria-label="Masquer ce message"
+                  onClick={() => setRetour(null)}
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </>
+            )}
           </div>
-        </div>
-        {solverWeek === null ? (
-          <p className="muted">Semaine bloquée (vacances/fermeture).</p>
-        ) : colGroups.length === 0 ? (
-          <p className="muted">Aucun parcours pour ce filtre.</p>
-        ) : (
-          <div className="ref-table-wrap">
-            <table className={`promo-grid ${teacherFilter ? "teacher-filter" : ""}${couleursParMatiere ? " couleurs-matiere" : ""}`}>
-              <thead>
-                <tr>
-                  <th className="timecol" rowSpan={2} />
-                  {colGroups.map((g, gi) => (
-                    <th key={g.parcours} colSpan={g.cols.length} className={`grp-band pc${gi % 6}`}>
-                      {/* Cliquable seulement quand l'édition est possible :
-                          en lecture seule (lien public), la modale n'aurait
-                          rien à proposer. */}
-                      {dragEnabled ? (
-                        <button
-                          type="button"
-                          className="grp-band-btn"
-                          onClick={() => setParcoursOuvert(g.parcours)}
-                          title={`Ouvrir la semaine complète de ${g.parcours} (déplacement entre jours)`}
-                        >
-                          {g.parcours}
-                        </button>
-                      ) : (
-                        g.parcours
-                      )}
-                    </th>
-                  ))}
-                </tr>
-                <tr>
-                  {cols.map((c, i) => (
-                    <th key={c} className={colClass(i)}>
-                      {payload.groupLabels[c] ?? c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {SLOT_TIMES.map((slot, s) => (
-                  <Fragment key={s}>
-                    {s === 3 && (
-                      <tr className="pause">
-                        <td className="timecell" />
-                        {cols.map((c, i) => {
-                          const largeur = largeursPause[i];
-                          if (largeur === 0) return null;
-                          const entries = byColPause.get(`${i}`) ?? [];
-                          if (!entries.length) {
-                            return <td key={c} className={colClass(i)} />;
-                          }
-                          return (
-                            <td
-                              key={c}
-                              colSpan={largeur > 1 ? largeur : undefined}
-                              className={`promocell pause-cell ${colClass(i)}${largeur > 1 ? " promocell--fusion" : ""}`}
-                            >
-                              {entries.map((r) => (
-                                <div
-                                  key={r.id}
-                                  style={couleursMatiere(r.c) as React.CSSProperties}
-                                  className="promo-chip promo-chip--midi"
-                                  title={`${r.n || r.c} — pause méridienne, hors des six créneaux fixes`}
-                                >
-                                  <span className="code">{r.n || r.c}</span>
-                                  <span className="ty">
-                                    {r.hor ?? ""}
-                                    {r.r ? ` · ${r.r}` : ""}
-                                  </span>
-                                </div>
-                              ))}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    )}
+
+          {modaleEvenement && (
+            <CreerEvenementModal
+              payload={payload}
+              suggestion={{ week: solverWeek ?? undefined, day }}
+              onCancel={() => setModaleEvenement(false)}
+              onCree={(placement) => {
+                setModaleEvenement(false);
+                signaler(`${placement.course_code} créé ${quand(placement.week, placement.day, placement.slot)}.`);
+                allerA(placement.week, placement.day);
+                onPlacementUpdated?.(placement);
+                onSeanceChangee?.();
+              }}
+            />
+          )}
+
+          {modaleSeance && (
+            <CreerSeanceModal
+              payload={payload}
+              mode={
+                modaleSeance !== "creer" &&
+                !payload.rows.some((row) => row.id === modaleSeance.session_id && row.custom)
+                  ? "maquette"
+                  : undefined
+              }
+              seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
+              // Pré-remplit semaine/jour depuis ce qui est AFFICHÉ (retour
+              // Kyllian Bresson : « rester sur la semaine à saisir, sur le
+              // jour à saisir ») — à la création seulement.
+              suggestion={modaleSeance === "creer" ? { week: solverWeek ?? undefined, day } : null}
+              onCancel={() => setModaleSeance(null)}
+              onCree={(placement, options) => {
+                // « Créer et en ajouter une autre » : la modale reste ouverte
+                // et affiche sa propre confirmation.
+                if (options?.garderOuverte) {
+                  onPlacementUpdated?.(placement);
+                  onSeanceChangee?.();
+                  return;
+                }
+                setModaleSeance(null);
+                signaler(
+                  modaleSeance === "creer"
+                    ? `${placement.course_code} créée ${quand(placement.week, placement.day, placement.slot)}.`
+                    : `${placement.course_code} modifiée.`,
+                );
+                // On suit la séance là où elle a été posée, pour la voir.
+                allerA(placement.week, placement.day);
+                onPlacementUpdated?.(placement);
+                onSeanceChangee?.();
+              }}
+              onRetiree={(sessionId) => {
+                const courseCode = modaleSeance !== "creer" ? modaleSeance?.course_code : undefined;
+                setModaleSeance(null);
+                signaler(`${courseCode ?? sessionId} retirée du planning, elle attend dans « À placer ».`);
+                onSeanceChangee?.();
+              }}
+            />
+          )}
+
+          <div className="panel promo-grille">
+            <div className="promo-grille-entete">
+              <h3>
+                {portee} — {DAY_LABELS[day]}
+                {dateJour ? ` ${formatShortDate(dateJour)}` : ""}
+              </h3>
+              {!couleursParMatiere && (
+                <ul className="promo-legende" aria-label="Types de séance">
+                  <li className="cm">CM</li>
+                  <li className="td">TD</li>
+                  <li className="tp">TP</li>
+                  <li className="eval">Évaluation</li>
+                </ul>
+              )}
+            </div>
+            {solverWeek === null ? (
+              <p className="promo-vide">Semaine fermée (vacances). Choisissez une autre semaine.</p>
+            ) : colGroups.length === 0 ? (
+              <p className="promo-vide">Aucun parcours pour ce filtre.</p>
+            ) : (
+              <div className="promo-grille-defil">
+                <table
+                  className={`promo-grid${teacherFilter ? " teacher-filter" : ""}${couleursParMatiere ? " couleurs-matiere" : ""}${draggingId ? " promo-grid--glisser" : ""}`}
+                >
+                  <thead>
                     <tr>
-                      <td className="timecell mono">{slot.label}</td>
-                      {cols.map((c, i) => {
-                        const largeur = largeursParCreneau[s][i];
-                        if (largeur === 0) return null;
-                        const entries = byColSlot.get(`${i}-${s}`) ?? [];
-                        const cellClass = `promocell ${colClass(i)}${largeur > 1 ? " promocell--fusion" : ""}`;
-                        const busyHit = teacherBusyOnCell(teacherBusyMap, day, s, entries);
-                        const busyClass = busyHit ? " promocell--teacher-busy" : "";
-                        const busyHint = busyHit ? (
-                          <span className="promocell__teacher-busy">{teacherBusyLabel(busyHit)}</span>
-                        ) : null;
-                        const sae = payload.saeRows.find(
-                          (x) => x.w === solverWeek && x.d === day && x.p === colParcours[i],
-                        );
-                        const eventsAtSlot = payload.eventSlotRows
-                          .filter(
-                            (e) =>
-                              e.w === solverWeek &&
-                              e.d === day &&
-                              e.s === s &&
-                              (!e.parcours.length || e.parcours.includes(colParcours[i])),
-                          )
-                          .map((e) => e.label);
-
-                        // Cellule cible pour un placement en cours — manquante
-                        // (parcours de la séance) ou séance parquée (même règle).
-                        const selPark = selectedParked(park);
-                        const parkParcours = selPark
-                          ? selPark.origin.group_ids
-                              .map((g) => payload.groupParcours[g])
-                              .find((pc): pc is string => Boolean(pc))
-                          : undefined;
-                        const eligiblePark =
-                          Boolean(selPark && solverWeek !== null) &&
-                          (parkParcours === undefined || colParcours[i] === parkParcours);
-                        const eligibleManquante =
-                          Boolean(placementActif) && colParcours[i] === placementActif?.parcours;
-                        const eligible = eligiblePark || eligibleManquante;
-                        const cleCellule = `${solverWeek}-${day}-${s}`;
-                        const placementProps = eligible
-                          ? {
-                              role: "button" as const,
-                              tabIndex: 0,
-                              onClick: () => {
-                                if (selPark) void poserParked(s);
-                                else void placerIci(s);
-                              },
-                              onKeyDown: (e: ReactKeyboardEvent) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  if (selPark) void poserParked(s);
-                                  else void placerIci(s);
-                                }
-                              },
-                            }
-                          : {};
-                        const eligibleClass = eligible ? " promocell--placeable" : "";
-                        const isDropHover = dragEnabled && dropTarget?.day === day && dropTarget?.slot === s;
-                        const dropCls = isDropHover ? " dropzone-hover" : "";
-                        const libellePoser =
-                          enCoursPlacement === cleCellule
-                            ? "Placement…"
-                            : eligiblePark || entries.length
-                              ? "+ poser ici (conflit possible)"
-                              : "+ poser ici";
-
-                        if (entries.length) {
-                          return (
-                            <td
-                              key={c}
-                              colSpan={largeur > 1 ? largeur : undefined}
-                              className={cellClass + eligibleClass + dropCls + busyClass}
-                              {...placementProps}
-                              {...dropHandlers(day, s)}
+                      <th className="timecol" rowSpan={2}>
+                        <span className="sr-only">Créneau</span>
+                      </th>
+                      {colGroups.map((g, gi) => (
+                        <th key={g.parcours} colSpan={g.cols.length} className={`grp-band pc${gi % 6}`}>
+                          {/* Cliquable seulement en édition : en lecture seule,
+                              la modale n'aurait rien à proposer. */}
+                          {dragEnabled ? (
+                            <button
+                              type="button"
+                              className="grp-band-btn"
+                              onClick={() => setParcoursOuvert(g.parcours)}
+                              title={`Ouvrir la semaine complète de ${g.parcours} (pour changer une séance de jour)`}
                             >
-                              {eligible && (
-                                <div className="promocell-poser">
-                                  {libellePoser}
-                                </div>
-                              )}
-                              {busyHint}
-                              {entries.map((r) => {
-                                const highlighted = teacherFilter && r.te.includes(teacherFilter);
-                                const teacherNames = r.te.map((tc) => payload.teacherLabels[tc] ?? tc).join(", ");
-                                const durLabel = (r.dur || 1) > 1 ? ` · ${((r.dur || 1) * 1.5).toFixed(1).replace(".0", "")}h` : "";
-                                // Clé d'édition de salle UNIQUE PAR CELLULE, pas par
-                                // séance : un CM de promo est rendu dans TOUTES les
-                                // colonnes de sa promo (et sur chaque créneau de sa
-                                // durée). Avec la seule `r.id`, cliquer « changer la
-                                // salle » ouvrait un <select autoFocus> dans chacune
-                                // — chacun volant le focus au précédent, dont le
-                                // `onBlur` refermait aussitôt l'édition. Symptôme
-                                // observé : seuls les TP (présents dans une seule
-                                // colonne) étaient modifiables.
-                                const cleEditionSalle = `${i}-${s}-${r.id}`;
-                                // Verrouillée = jamais glissable, même quand le
-                                // drag est actif (même règle que l'ancien
-                                // TdWeekGrid) — `placements` sert UNIQUEMENT à
-                                // ça ici, le contenu affiché reste `payload.rows`.
-                                const source = placements?.find((p) => p.session_id === r.id);
-                                const draggableHere = dragEnabled && !!source && !source.locked;
-                                // Salle : l'état VIVANT des placements prime sur
-                                // `payload.rows`. Changer une salle mettait bien à jour
-                                // `placements` sur-le-champ, mais le libellé affiché,
-                                // lui, venait du payload — rechargé seulement par
-                                // l'appel asynchrone de 550 Ko qui suit. L'ancienne
-                                // salle restait donc à l'écran (retour utilisateur
-                                // 31/08/2026 : « le changement de salle n'est pas pris
-                                // en compte, l'ancienne est toujours là »).
-                                //
-                                // `payload.rows` reste la source quand les deux
-                                // s'accordent : lui seul porte le suffixe
-                                // « (Évaluation) » des CM d'examen, que
-                                // `room_label` n'a pas.
-                                const salleDuPayload = sallesTriees.find(
-                                  (s2) => s2.label === (r.r ?? "").replace(/\s*\([^)]*\)\s*$/, ""),
-                                );
-                                const salleAffichee =
-                                  !source || source.room_id === (salleDuPayload?.id ?? null)
-                                    ? r.r
-                                    : source.room_label ?? "";
-                                return (
-                                  <div
-                                    key={r.id}
-                                    draggable={draggableHere}
-                                    onDragStart={
-                                      draggableHere
-                                        ? (e) => {
-                                            e.dataTransfer.effectAllowed = "move";
-                                            setDraggingId(r.id);
-                                          }
-                                        : undefined
+                              {g.parcours}
+                              <span className="grp-band-hint" aria-hidden="true">
+                                semaine
+                              </span>
+                            </button>
+                          ) : (
+                            g.parcours
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr>
+                      {cols.map((c, i) => (
+                        <th key={c} className={`grp-col ${colClass(i)}`}>
+                          {payload.groupLabels[c] ?? c}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {SLOT_TIMES.map((slot, s) => (
+                      <Fragment key={s}>
+                        {s === 3 && (
+                          <tr className="pause">
+                            <td className="timecell" />
+                            {cols.map((c, i) => {
+                              const largeur = largeursPause[i];
+                              if (largeur === 0) return null;
+                              const entries = byColPause.get(`${i}`) ?? [];
+                              if (!entries.length) {
+                                return <td key={c} className={colClass(i)} />;
+                              }
+                              return (
+                                <td
+                                  key={c}
+                                  colSpan={largeur > 1 ? largeur : undefined}
+                                  className={`promocell pause-cell ${colClass(i)}${largeur > 1 ? " promocell--fusion" : ""}`}
+                                >
+                                  {entries.map((r) => (
+                                    <div
+                                      key={r.id}
+                                      className="promo-chip promo-chip--midi"
+                                      title={`${r.n || r.c} — pause méridienne, hors des six créneaux fixes`}
+                                    >
+                                      <div className="promo-chip__l1">
+                                        <span className="code">{r.n || r.c}</span>
+                                      </div>
+                                      <div className="promo-chip__l2">
+                                        <span className="ty">
+                                          {r.hor ?? ""}
+                                          {r.r ? ` · ${r.r}` : ""}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        )}
+                        <tr>
+                          <th scope="row" className="timecell">
+                            {slot.label}
+                          </th>
+                          {cols.map((c, i) => {
+                            const largeur = largeursParCreneau[s][i];
+                            if (largeur === 0) return null;
+                            const entries = byColSlot.get(`${i}-${s}`) ?? [];
+                            const busyHit = teacherBusyOnCell(teacherBusyMap, day, s, entries);
+                            const busyHint = busyHit ? (
+                              <span className="promocell__teacher-busy">{teacherBusyLabel(busyHit)}</span>
+                            ) : null;
+                            const sae = payload.saeRows.find(
+                              (x) => x.w === solverWeek && x.d === day && x.p === colParcours[i],
+                            );
+                            const eventsAtSlot = payload.eventSlotRows
+                              .filter(
+                                (e) =>
+                                  e.w === solverWeek &&
+                                  e.d === day &&
+                                  e.s === s &&
+                                  (!e.parcours.length || e.parcours.includes(colParcours[i])),
+                              )
+                              .map((e) => e.label);
+
+                            // Case cible d'un placement en cours — séance
+                            // manquante (son parcours) ou parquée (même règle).
+                            const eligiblePark =
+                              Boolean(selPark && solverWeek !== null) &&
+                              (parkParcours === undefined || colParcours[i] === parkParcours);
+                            const eligibleManquante =
+                              Boolean(placementActif) && colParcours[i] === placementActif?.parcours;
+                            const eligible = eligiblePark || eligibleManquante;
+                            const cleCellule = `${solverWeek}-${day}-${s}`;
+                            const placementProps = eligible
+                              ? {
+                                  role: "button" as const,
+                                  tabIndex: 0,
+                                  onClick: () => {
+                                    if (selPark) void poserParked(s);
+                                    else void placerIci(s);
+                                  },
+                                  onKeyDown: (e: ReactKeyboardEvent) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      if (selPark) void poserParked(s);
+                                      else void placerIci(s);
                                     }
-                                    onDragEnd={
-                                      draggableHere
-                                        ? () => {
-                                            setDraggingId(null);
-                                            setCibleEchange(null);
-                                          }
-                                        : undefined
-                                    }
-                                    {...echangeHandlers(r.id)}
-                                    style={couleursMatiere(r.c) as React.CSSProperties}
-                                    className={`promo-chip type-${r.t.toLowerCase()} ${r.ev ? "eval" : ""} ${highlighted ? "chip-highlight" : ""} ${draggableHere ? "promo-chip--draggable" : ""} ${draggingId === r.id ? "dragging" : ""} ${cibleEchange === r.id ? "swap-target" : ""}`}
-                                  >
-                                    <span className="code">{r.c}</span>
-                                    <span className="ty">
-                                      {r.t}
-                                      {r.ev ? " · éval" : ""}
-                                      {durLabel}
-                                    </span>
-                                    {seanceModaleEnabled && source && (
-                                      <span className="promo-chip-custom">
-                                        <button
-                                          type="button"
-                                          className="promo-chip-custom-btn"
-                                          title="Modifier cette séance"
-                                          aria-label="Modifier cette séance"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setModaleSeance(source);
-                                          }}
-                                          onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                          ✎
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="promo-chip-custom-btn"
-                                          title="Retirer du planning (vers À placer)"
-                                          aria-label={`Retirer ${r.c} du planning`}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            void retirerDuPlanning(r.id, r.c);
-                                          }}
-                                          onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                          ↩
-                                        </button>
-                                        {r.custom && (
-                                        <button
-                                          type="button"
-                                          className="promo-chip-custom-btn"
-                                          title="Supprimer cette séance"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            void supprimerSeance(r.id, `${r.c} (${r.t})`);
-                                          }}
-                                          onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                          🗑
-                                        </button>
-                                        )}
-                                      </span>
-                                    )}
-                                    {/* Salle modifiable sur place (retour utilisateur
-                                        28/08/2026) — un <select> apparaît à la place du
-                                        libellé au clic. `stopPropagation` sur le clic :
-                                        sans lui, ouvrir le sélecteur déclencherait aussi
-                                        le clic de la CELLULE (poser une séance en cours
-                                        de placement). */}
-                                    {salleEnEdition === cleEditionSalle ? (
-                                      <select
-                                        className="rm promo-chip-salle"
-                                        autoFocus
-                                        disabled={salleEnCours}
-                                        defaultValue={source?.room_id ?? salleDuPayload?.id ?? ""}
-                                        onClick={(e) => e.stopPropagation()}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onChange={(e) => {
-                                          if (e.target.value === "__new__") {
+                                  },
+                                }
+                              : {};
+
+                            // État de dépôt : colonnes de la séance tirée
+                            // seulement ; « conflit » si le groupe est déjà
+                            // pris à cette heure ou l'enseignant ailleurs.
+                            const colonneTiree = colonnesTirees.has(i);
+                            const autresIci = entries.some((r) => r.id !== draggingId);
+                            const conflitDepot = colonneTiree && (autresIci || Boolean(busyHit));
+                            const survolDepot =
+                              dragEnabled &&
+                              dropTarget?.day === day &&
+                              dropTarget?.slot === s &&
+                              (colonneTiree || colonnesTirees.size === 0);
+                            const cellClass = [
+                              "promocell",
+                              colClass(i),
+                              largeur > 1 ? "promocell--fusion" : "",
+                              eligible ? "promocell--placeable" : "",
+                              busyHit ? "promocell--teacher-busy" : "",
+                              colonneTiree ? (conflitDepot ? "promocell--cible-conflit" : "promocell--cible") : "",
+                              survolDepot ? "dropzone-hover" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
+                            const libellePoser =
+                              enCoursPlacement === cleCellule
+                                ? "Placement…"
+                                : eligiblePark || entries.length
+                                  ? "+ poser ici (conflit possible)"
+                                  : "+ poser ici";
+                            const poser = eligible ? <div className="promocell-poser">{libellePoser}</div> : null;
+                            const tdProps = {
+                              colSpan: largeur > 1 ? largeur : undefined,
+                              className: cellClass,
+                              ...placementProps,
+                              ...dropHandlers(day, s),
+                            };
+
+                            if (entries.length) {
+                              return (
+                                <td key={c} {...tdProps}>
+                                  {poser}
+                                  {busyHint}
+                                  {entries.map((r) => {
+                                    // Clé d'édition de salle UNIQUE PAR CASE : un
+                                    // CM est rendu dans toutes les colonnes de sa
+                                    // promo, et un `<select autoFocus>` par copie
+                                    // se volaient le focus (seuls les TP restaient
+                                    // modifiables).
+                                    const cleEditionSalle = `${i}-${s}-${r.id}`;
+                                    const source = placements?.find((p) => p.session_id === r.id);
+                                    const draggableHere = dragEnabled && !!source && !source.locked;
+                                    // Salle : l'état VIVANT des placements prime sur
+                                    // `payload.rows`, rechargé plus tard (retour
+                                    // utilisateur 31/08/2026 : « l'ancienne est
+                                    // toujours là »). `payload.rows` reste la
+                                    // source quand les deux s'accordent : lui seul
+                                    // porte le suffixe « (Évaluation) ».
+                                    const salleDuPayload = sallesTriees.find(
+                                      (s2) => s2.label === (r.r ?? "").replace(/\s*\([^)]*\)\s*$/, ""),
+                                    );
+                                    const salleAffichee =
+                                      !source || source.room_id === (salleDuPayload?.id ?? null)
+                                        ? r.r
+                                        : (source.room_label ?? "");
+                                    return (
+                                      <PromoCarte
+                                        key={r.id}
+                                        row={r}
+                                        source={source}
+                                        teacherLabels={payload.teacherLabels}
+                                        salles={sallesTriees}
+                                        salleAffichee={salleAffichee}
+                                        highlighted={Boolean(teacherFilter) && r.te.includes(teacherFilter)}
+                                        draggable={draggableHere}
+                                        dragging={draggingId === r.id}
+                                        swapTarget={cibleEchange === r.id}
+                                        actions={seanceModaleEnabled && Boolean(source)}
+                                        salleModifiable={roomEditEnabled}
+                                        salleEnEdition={salleEnEdition === cleEditionSalle}
+                                        salleEnCours={salleEnCours}
+                                        salleSelectionnee={source?.room_id ?? salleDuPayload?.id ?? ""}
+                                        onDragStart={
+                                          draggableHere
+                                            ? (e) => {
+                                                e.dataTransfer.effectAllowed = "move";
+                                                setDraggingId(r.id);
+                                                setSalleEnEdition(null);
+                                              }
+                                            : undefined
+                                        }
+                                        onDragEnd={
+                                          draggableHere
+                                            ? () => {
+                                                setDraggingId(null);
+                                                setCibleEchange(null);
+                                                setDropTarget(null);
+                                              }
+                                            : undefined
+                                        }
+                                        echangeHandlers={echangeHandlers(r.id)}
+                                        onModifier={() => source && setModaleSeance(source)}
+                                        onRetirer={() => void retirerDuPlanning(r.id, r.c)}
+                                        onSupprimer={() => void supprimerSeance(r.id, `${r.c} (${r.t})`)}
+                                        onOuvrirSalle={() => setSalleEnEdition(cleEditionSalle)}
+                                        onChoisirSalle={(roomId) => {
+                                          if (roomId === "__new__") {
                                             setCreationSallePour(r.id);
                                             setSalleEnEdition(null);
                                             return;
                                           }
-                                          void appliquerSalle(r.id, e.target.value);
+                                          void appliquerSalle(r.id, roomId, source?.room_id);
                                         }}
-                                        onBlur={() => setSalleEnEdition(null)}
-                                      >
-                                        <option value="">— choisir une salle —</option>
-                                        <option value="__new__">+ Créer une salle…</option>
-                                        {sallesTriees.map((s2) => (
-                                          <option key={s2.id} value={s2.id}>
-                                            {s2.label} ({s2.capacity} pl.)
-                                          </option>
-                                        ))}
-                                      </select>
-                                    ) : roomEditEnabled ? (
-                                      <button
-                                        type="button"
-                                        className={`rm promo-chip-salle-btn${salleAffichee ? "" : " rm--absente"}`}
-                                        title="Changer la salle"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSalleEnEdition(cleEditionSalle);
-                                        }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                      >
-                                        {salleAffichee || "salle à définir"}
-                                      </button>
-                                    ) : (
-                                      <span className={`rm${salleAffichee ? "" : " rm--absente"}`}>
-                                        {salleAffichee || "salle à définir"}
-                                      </span>
-                                    )}
-                                    <span className="te">{teacherNames || "—"}</span>
+                                        onFermerSalle={() => setSalleEnEdition(null)}
+                                      />
+                                    );
+                                  })}
+                                </td>
+                              );
+                            }
+                            if (holiday) {
+                              return (
+                                <td key={c} {...tdProps}>
+                                  {poser}
+                                  {busyHint}
+                                  <div className="sessiongrid-holiday">
+                                    <span className="title">{holiday.kind === "vacances" ? "Vacances" : "Férié"}</span>
+                                    <span className="label">{holiday.label}</span>
                                   </div>
-                                );
-                              })}
-                            </td>
-                          );
-                        }
-                        if (holiday) {
-                          return (
-                            <td
-                              key={c}
-                              className={cellClass + eligibleClass + dropCls + busyClass}
-                              {...placementProps}
-                              {...dropHandlers(day, s)}
-                            >
-                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
-                              {busyHint}
-                              <div className="sessiongrid-holiday">
-                                <span className="title">{holiday.kind === "vacances" ? "Vacances" : "Férié"}</span>
-                                <span className="label">{holiday.label}</span>
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (sae) {
-                          return (
-                            <td
-                              key={c}
-                              className={cellClass + eligibleClass + dropCls + busyClass}
-                              {...placementProps}
-                              {...dropHandlers(day, s)}
-                            >
-                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
-                              {busyHint}
-                              <div className="sessiongrid-sae">
-                                <span className="title">SAE</span>
-                                <span className="codes">{sae.codes.join(", ")}</span>
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (eventsAtSlot.length) {
-                          return (
-                            <td
-                              key={c}
-                              className={cellClass + eligibleClass + dropCls + busyClass}
-                              {...placementProps}
-                              {...dropHandlers(day, s)}
-                            >
-                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
-                              {busyHint}
-                              <div className="sessiongrid-event">
-                                {eventsAtSlot.map((e) => (
-                                  <span key={e} className="label">
-                                    {e}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (dayEvents) {
-                          return (
-                            <td
-                              key={c}
-                              className={cellClass + eligibleClass + dropCls + busyClass}
-                              {...placementProps}
-                              {...dropHandlers(day, s)}
-                            >
-                              {eligible && <div className="promocell-poser">{libellePoser}</div>}
-                              {busyHint}
-                              <div className="sessiongrid-event">
-                                {dayEvents.map((e) => (
-                                  <span key={e} className="label">
-                                    {e}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          );
-                        }
-                        return (
-                          <td
-                            key={c}
-                            className={cellClass + eligibleClass + dropCls + busyClass}
-                            {...placementProps}
-                            {...dropHandlers(day, s)}
-                          >
-                            {eligible && (
-                              <div className="promocell-poser">
-                                {libellePoser}
-                              </div>
-                            )}
-                            {busyHint}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+                                </td>
+                              );
+                            }
+                            if (sae) {
+                              return (
+                                <td key={c} {...tdProps}>
+                                  {poser}
+                                  {busyHint}
+                                  <div className="sessiongrid-sae">
+                                    <span className="title">SAE</span>
+                                    <span className="codes">{sae.codes.join(", ")}</span>
+                                  </div>
+                                </td>
+                              );
+                            }
+                            const libellesEvenement = eventsAtSlot.length ? eventsAtSlot : dayEvents;
+                            if (libellesEvenement) {
+                              return (
+                                <td key={c} {...tdProps}>
+                                  {poser}
+                                  {busyHint}
+                                  <div className="sessiongrid-event">
+                                    {libellesEvenement.map((e) => (
+                                      <span key={e} className="label">
+                                        {e}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                              );
+                            }
+                            return (
+                              <td key={c} {...tdProps}>
+                                {poser}
+                                {busyHint}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!readOnly && (
+              <p className="promo-raccourcis">
+                <kbd>←</kbd> <kbd>→</kbd> jour · <kbd>Maj</kbd>+<kbd>←</kbd> <kbd>→</kbd> semaine · <kbd>T</kbd>{" "}
+                aujourd'hui · <kbd>Échap</kbd> annuler un placement · <kbd>Ctrl</kbd>+<kbd>Z</kbd> annuler la dernière
+                action
+                {dragEnabled ? " · glisser une séance sur une autre pour les échanger, sur une barre de semaine pour la changer de semaine" : ""}
+              </p>
+            )}
           </div>
-        )}
-      </div>
 
-      {parcoursOuvert && placements && onPlacementUpdated && onError && (
-        <ParcoursWeekModal
-          payload={payload}
-          parcours={parcoursOuvert}
-          weekIndex={displayWeek}
-          placements={placements}
-          onClose={() => {
-            if (hasParked(park)) restaurerTousParks();
-            setParcoursOuvert(null);
-          }}
-          onPlacementUpdated={onPlacementUpdated}
-          onError={onError}
-          park={park}
-          onParkChange={setPark}
-        />
-      )}
+          {parcoursOuvert && placements && onPlacementUpdated && onError && (
+            <ParcoursWeekModal
+              payload={payload}
+              parcours={parcoursOuvert}
+              weekIndex={displayWeek}
+              placements={placements}
+              onClose={() => {
+                if (hasParked(park)) restaurerTousParks();
+                setParcoursOuvert(null);
+              }}
+              onPlacementUpdated={onPlacementUpdated}
+              onError={onError}
+              park={park}
+              onParkChange={setPark}
+            />
+          )}
 
-      {creationSallePour && (
-        <NewRoomModal
-          onCancel={() => setCreationSallePour(null)}
-          onCreated={(salle) => {
-            const sessionId = creationSallePour;
-            setCreationSallePour(null);
-            // La salle vient d'être créée côté serveur : elle est libre par
-            // construction, l'appliquer ne peut pas buter sur un conflit.
-            void appliquerSalle(sessionId, salle.id);
-          }}
-        />
-      )}
+          {creationSallePour && (
+            <NewRoomModal
+              onCancel={() => setCreationSallePour(null)}
+              onCreated={(salle) => {
+                const sessionId = creationSallePour;
+                setCreationSallePour(null);
+                // Salle neuve : libre par construction, aucun conflit possible.
+                void appliquerSalle(sessionId, salle.id);
+              }}
+            />
+          )}
         </div>
       </div>
     </section>

@@ -1,0 +1,829 @@
+/* ══════════════ Vue Promo (refonte du 29/09/2026) ══════════════
+   Une barre d'outils (semaine, jour, filtres, actions), puis la grille.
+   Les règles de COULEUR des cartes utilisent `:where()` pour rester moins
+   spécifiques que `.couleurs-matiere .promo-chip` (app.css, option « une
+   couleur par matière »), chargé avant ce fichier. */
+
+/* Pleine largeur : la grille a son propre défilement horizontal. */
+.view.promo {
+  max-width: 100%;
+  width: 100%;
+  gap: 12px;
+}
+
+.promo-avec-aplacer {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.promo-principal {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 1024px) {
+  /* Dans un flex ROW, `width: 0` + `flex: 1` force le rétrécissement
+     (sinon la largeur minimale du tableau l'emporte). */
+  .promo-principal {
+    width: 0;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .promo-avec-aplacer {
+    flex-direction: column;
+  }
+}
+
+/* ── Barre d'outils ── */
+.panel.promo-barre {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.promo-barre-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+}
+
+.promo-weekbar {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+/* Barre des jours : un contrôle segmenté, pas des pastilles. */
+.promo-jours {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex: none;
+}
+
+.promo-jour {
+  font: inherit;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-height: var(--control-h);
+  padding: 5px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 0;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+}
+
+.promo-jour:first-child {
+  border-left: 0;
+}
+
+.promo-jour:hover {
+  background: var(--surface-2);
+}
+
+.promo-jour-nom {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.promo-jour-nom .court {
+  display: none;
+}
+
+.promo-jour-date {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.promo-jour-repere {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.promo-jour-repere.sae { color: var(--accent2); }
+.promo-jour-repere.holiday { color: var(--ink-soft); }
+.promo-jour-repere.event { color: var(--teal); }
+
+/* Aujourd'hui : trait sous le jour, visible qu'il soit sélectionné ou non. */
+.promo-jour.aujourdhui::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 3px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+.promo-jour.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.promo-jour.active .promo-jour-date,
+.promo-jour.active .promo-jour-repere {
+  color: inherit;
+  opacity: 0.85;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .promo-jour.active {
+    color: #0f1216;
+  }
+}
+
+:root[data-theme="dark"] .promo-jour.active {
+  color: #0f1216;
+}
+
+.promo-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.promo-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.promo-filtre select {
+  max-width: 190px;
+}
+
+/* Filtre actif : on doit voir d'un coup d'œil que la grille est réduite
+   (les filtres sont mémorisés d'une visite à l'autre). */
+.promo-filtre select.is-filtre {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+  font-weight: 600;
+}
+
+.promo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.promo-actions .btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Bandeaux : placement en cours, erreur, retour d'action ── */
+.promo-bandeau {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.875rem;
+}
+
+.promo-bandeau p {
+  margin: 0;
+}
+
+.promo-bandeau--placement {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.promo-bandeau--erreur {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--ink);
+}
+
+.promo-retour {
+  display: none;
+}
+
+.promo-retour.visible {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--good) 45%, var(--border));
+  border-left: 3px solid var(--good);
+  border-radius: var(--radius);
+  background: var(--good-soft);
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.promo-retour.visible > span:first-child {
+  flex: 1 1 240px;
+}
+
+.promo-retour .promo-retour-fermer {
+  width: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  font-size: 1.1rem;
+  color: var(--ink-soft);
+}
+
+/* ── Grille ── */
+.panel.promo-grille {
+  padding: 0;
+  overflow: hidden;
+}
+
+.promo-grille-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.promo-grille-entete h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.promo-legende {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.promo-legende li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.promo-legende li::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-left: 3px solid var(--type-td);
+  background: color-mix(in srgb, var(--type-td) 14%, var(--surface));
+}
+
+.promo-legende .cm::before { border-color: var(--type-cm); background: color-mix(in srgb, var(--type-cm) 14%, var(--surface)); }
+.promo-legende .tp::before { border-color: var(--type-tp); background: color-mix(in srgb, var(--type-tp) 14%, var(--surface)); }
+.promo-legende .eval::before { border-color: var(--type-eval); background: color-mix(in srgb, var(--type-eval) 16%, var(--surface)); }
+
+.promo-vide {
+  margin: 0;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.promo-grille-defil {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}
+
+table.promo-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+table.promo-grid th {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+  padding: 5px 6px;
+  text-align: center;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* Colonne des horaires collée à gauche : la grille défile sous elle. */
+table.promo-grid th.timecol,
+table.promo-grid .timecell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 76px;
+  min-width: 76px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+table.promo-grid th.timecell {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: left;
+  padding: 6px 8px;
+  white-space: nowrap;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+table.promo-grid td.promocell {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 3px;
+  vertical-align: top;
+  min-width: 104px;
+  height: 46px;
+  background: color-mix(in srgb, var(--pc, var(--surface-2)) 4%, var(--surface));
+}
+
+table.promo-grid tr.pause td {
+  height: 6px;
+  padding: 0;
+  border: none;
+  background: var(--surface-3);
+}
+
+/* Évènement à horaire libre dans la pause méridienne (retour Jules
+   23/09/2026) : la ligne reste un filet tant qu'elle est vide. */
+table.promo-grid tr.pause td.pause-cell {
+  height: auto;
+  padding: 3px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+/* Une teinte par parcours (bande d'en-tête + trait de séparation) : 15 à 20
+   colonnes toutes années confondues sont dures à suivre sans repère. */
+table.promo-grid .pc0 { --pc: var(--accent); }
+table.promo-grid .pc1 { --pc: var(--teal); }
+table.promo-grid .pc2 { --pc: var(--accent2); }
+table.promo-grid .pc3 { --pc: var(--good); }
+table.promo-grid .pc4 { --pc: var(--warn); }
+table.promo-grid .pc5 { --pc: var(--type-td); }
+
+table.promo-grid th.grp-band {
+  background: color-mix(in srgb, var(--pc) 12%, var(--surface));
+  color: color-mix(in srgb, var(--pc) 80%, var(--ink));
+  font-weight: 700;
+  font-size: 0.8rem;
+  border-bottom: 0;
+}
+
+table.promo-grid th.grp-col {
+  font-weight: 600;
+}
+
+table.promo-grid .grp-first {
+  border-left: 2px solid var(--pc);
+}
+
+/* TD / CM sur une seule case (22/09/2026). */
+table.promo-grid td.promocell--fusion {
+  text-align: left;
+}
+
+/* Intitulé de parcours : ouvre sa semaine complète (seul endroit où l'on
+   change une séance de jour). */
+.grp-band-btn {
+  background: none;
+  border: 0;
+  padding: 2px 6px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.grp-band-hint {
+  margin-left: 6px;
+  font-weight: 500;
+  font-size: 0.7rem;
+  opacity: 0;
+}
+
+.grp-band-btn:hover,
+.grp-band-btn:focus-visible {
+  background: color-mix(in srgb, var(--pc) 18%, var(--surface));
+}
+
+.grp-band-btn:hover .grp-band-hint,
+.grp-band-btn:focus-visible .grp-band-hint {
+  opacity: 0.8;
+}
+
+/* ── Carte de séance : deux lignes, lisible d'un coup d'œil ── */
+.promo-chip {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  padding: 3px 6px 3px 7px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--type-td);
+  background: color-mix(in srgb, var(--type-td) 10%, var(--surface));
+  font-size: 0.75rem;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.promo-chip + .promo-chip {
+  margin-top: 2px;
+}
+
+.promo-chip:where(.type-cm) { border-left-color: var(--type-cm); background: color-mix(in srgb, var(--type-cm) 11%, var(--surface)); }
+.promo-chip:where(.type-tp) { border-left-color: var(--type-tp); background: color-mix(in srgb, var(--type-tp) 11%, var(--surface)); }
+.promo-chip:where(.eval) { border-left-color: var(--type-eval); background: color-mix(in srgb, var(--type-eval) 13%, var(--surface)); }
+
+.promo-chip__l1,
+.promo-chip__l2 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.promo-chip__l2 {
+  flex: 1 1 auto;
+  color: var(--ink-soft);
+}
+
+.promo-chip .code {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.promo-chip .ty {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.promo-chip .rm,
+.promo-chip .te {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.promo-chip .rm {
+  flex: none;
+  color: var(--ink);
+}
+
+.promo-chip .te {
+  flex: 0 1 auto;
+}
+
+.promo-chip .rm--absente {
+  color: var(--bad-text);
+  font-weight: 600;
+}
+
+.promo-chip__echange {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent2);
+}
+
+/* Salle modifiable sur place (retour utilisateur 28/08/2026) : même
+   apparence que le texte qu'elle remplace, soulignée au survol. */
+.promo-chip-salle-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+}
+
+.promo-chip-salle-btn:hover,
+.promo-chip-salle-btn:focus-visible {
+  border-bottom-color: currentColor;
+}
+
+select.promo-chip-salle {
+  min-height: 24px;
+  width: 100%;
+  font-size: 0.72rem;
+  padding: 1px 22px 1px 4px;
+  background-position: right 6px center;
+}
+
+/* Actions de la carte : au survol / au focus (souris), toujours au toucher. */
+.promo-chip__actions {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: flex;
+  gap: 1px;
+  padding: 1px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.promo-chip:hover .promo-chip__actions,
+.promo-chip:focus-within .promo-chip__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.promo-chip__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.promo-chip__action:hover,
+.promo-chip__action:focus-visible {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.promo-chip__action--danger:hover,
+.promo-chip__action--danger:focus-visible {
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
+
+@media (hover: none) {
+  .promo-chip--actions {
+    padding-right: 76px;
+  }
+
+  .promo-chip__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .promo-chip__action {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/* Évènement à horaire libre (pause méridienne). */
+.promo-chip--midi {
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+}
+
+.promo-chip--verrouillee {
+  border-left-style: dashed;
+}
+
+/* Surbrillance enseignant : atténue les autres cartes (le contexte reste
+   visible) et fait ressortir celles de l'enseignant choisi. */
+table.promo-grid.teacher-filter .promo-chip {
+  opacity: 0.35;
+}
+
+table.promo-grid.teacher-filter .promo-chip.chip-highlight {
+  opacity: 1;
+  outline: 2px solid var(--accent2);
+  outline-offset: -1px;
+}
+
+/* ── Glisser-déposer (retour utilisateur 28/08/2026) ── */
+.promo-chip--draggable {
+  cursor: grab;
+}
+
+.promo-chip--draggable:active {
+  cursor: grabbing;
+}
+
+.promo-chip.dragging {
+  opacity: 0.35;
+}
+
+/* Pendant un glisser : les colonnes de la séance (là où elle atterrira)
+   sont encadrées ; vert = libre, orange = conflit prévisible (groupe déjà
+   pris, enseignant ailleurs — signalé en toutes lettres dans la case). Le
+   reste de la grille s'efface un peu. */
+table.promo-grid--glisser td.promocell:not(.promocell--cible):not(.promocell--cible-conflit) {
+  opacity: 0.55;
+}
+
+table.promo-grid td.promocell--cible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--good) 55%, transparent);
+}
+
+table.promo-grid td.promocell--cible-conflit {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 65%, transparent);
+}
+
+table.promo-grid td.promocell.dropzone-hover {
+  box-shadow: inset 0 0 0 2px var(--good);
+  background: var(--good-soft);
+}
+
+table.promo-grid td.promocell--cible-conflit.dropzone-hover {
+  box-shadow: inset 0 0 0 2px var(--warn);
+  background: var(--warn-soft);
+}
+
+/* Séance survolée : déposer ici ÉCHANGE les deux places (retour
+   utilisateur 29/08/2026) — trait plein, pas le même geste qu'une case. */
+.promo-chip.swap-target {
+  outline: 2px solid var(--accent2);
+  outline-offset: 1px;
+}
+
+/* Enseignant de la séance déjà pris ailleurs à cette heure. */
+table.promo-grid td.promocell--teacher-busy {
+  background: var(--warn-soft);
+}
+
+.promocell__teacher-busy {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--warn-text);
+  padding: 1px 2px;
+}
+
+/* ── Placement direct (séance « À placer » ou déplacée d'une semaine) ── */
+table.promo-grid td.promocell--placeable {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+table.promo-grid td.promocell--placeable:hover,
+table.promo-grid td.promocell--placeable:focus-visible {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.promocell-poser {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: center;
+  padding: 1px 0 2px;
+}
+
+/* Bandes jour (férié, SAE, évènement) — même contenu que `SessionGrid`,
+   ramené à la hauteur compacte de la grille. */
+table.promo-grid .sessiongrid-holiday,
+table.promo-grid .sessiongrid-sae,
+table.promo-grid .sessiongrid-event {
+  min-height: 38px;
+}
+
+.promo-raccourcis {
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.promo-raccourcis kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--surface);
+  font-size: 0.7rem;
+  line-height: 16px;
+  text-align: center;
+  color: var(--ink);
+}
+
+/* ── Téléphone / tablette ── */
+@media (max-width: 1023.98px) {
+  .promo-raccourcis {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .promo-barre {
+    padding: 8px;
+  }
+
+  .promo-jours {
+    display: flex;
+    width: 100%;
+  }
+
+  .promo-jour {
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 4px 2px 6px;
+    min-height: 44px;
+  }
+
+  .promo-jour-nom .long {
+    display: none;
+  }
+
+  .promo-jour-nom .court {
+    display: inline;
+  }
+
+  .promo-jour-date {
+    font-size: 0.72rem;
+  }
+
+  .promo-jour-repere {
+    font-size: 0.62rem;
+  }
+
+  .promo-filtres {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .promo-filtre {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+
+  .promo-filtre select {
+    max-width: none;
+    width: 100%;
+  }
+
+  .promo-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .promo-actions .btn {
+    flex: 1 1 auto;
+    min-height: 40px;
+  }
+
+  .promo-grille-entete {
+    padding: 8px;
+  }
+
+  table.promo-grid th.timecol,
+  table.promo-grid .timecell {
+    width: 58px;
+    min-width: 58px;
+  }
+
+  table.promo-grid th.timecell {
+    white-space: normal;
+    padding: 6px 4px;
+  }
+
+  table.promo-grid td.promocell {
+    min-width: 96px;
+  }
+}

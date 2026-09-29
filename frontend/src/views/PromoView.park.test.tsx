@@ -165,7 +165,7 @@ describe("PromoView park-week-move", () => {
   it("should switch WeekBar to the target display index and keep park unselected when a session is parked", async () => {
     await rendrePromo();
     await parquerVersSemaine8();
-    expect(screen.getByRole("heading", { name: /toutes promos.*semaine 8/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^semaine 8 \(/i })).toBeInTheDocument();
     expect(screen.queryByText(/placement en cours/i)).not.toBeInTheDocument();
   });
 
@@ -226,7 +226,7 @@ describe("PromoView park-week-move", () => {
     await waitFor(() => {
       expect(chipDansGrille("WR101")).toBeInTheDocument();
     });
-    expect(screen.getByRole("heading", { name: /toutes promos.*semaine 2/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^semaine 2 \(/i })).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: /WR101/ })).not.toBeInTheDocument();
     expect(performMove).not.toHaveBeenCalled();
     expect(aEcritVers("/deposer")).toBe(false);

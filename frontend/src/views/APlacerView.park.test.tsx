@@ -34,14 +34,12 @@ const inventaireVide = {
   resume: "Tout est placé.",
 };
 
+// Forme actuelle de `ParkUiState` (file multi depuis le 03/09/2026) : ce test
+// utilisait encore l'ancienne forme `{ parked, selected }` et plantait.
 function parkState(selected = false) {
   return {
-    parked: {
-      sessionId: origin.session_id,
-      origin,
-      viaDisplayWeek: 1,
-    },
-    selected,
+    items: [{ sessionId: origin.session_id, origin, viaDisplayWeek: 1 }],
+    selectedSessionId: selected ? origin.session_id : null,
   };
 }
 
