@@ -230,8 +230,7 @@ vite.
   c'est ici qu'on déplace. Cartes compactes, cibles vertes/orange pendant le
   glisser-déposer, **Annuler (Ctrl+Z)** après chaque action, filtres mémorisés,
   raccourcis ← → (jour), Maj+← → (semaine), T (aujourd'hui). Boutons
-  « Séances à placer », **« Lisser une promo… »** (cf. plus bas), « Nouvel
-  évènement », « Nouvelle séance ».
+  « Séances à placer », « Nouvel évènement », « Nouvelle séance ».
 - **Vue Enseignant / Vue TD-TP / Vue Cours / Vue Salle** — grille de la semaine
   avec « En cours / Prochain cours », navigation ← → et T, fiche rangée à droite
   (contrainte déclarée, matières, heures), agenda du semestre filtrable.
@@ -254,15 +253,16 @@ seulement).
 
 #### Lisser le planning d'une promo (FC)
 
-« Lisser une promo… » (Vue Promo) ou `cal-iut lisser` réorganise les séances
+`cal-iut lisser` réorganise les séances
 **à venir** d'une promo à groupe unique (alternance FC) : pas de cours à 8h (les
 journées commencent à 9h30), pas de trou, journées de charge égale, peu de 17h,
 le moins de déplacements possible. Seule cette promo bouge ; chaque créneau
 candidat passe les mêmes contrôles qu'un glisser-déposer (enseignants et salles
 des autres promos, PAC, SAE, présence alternance, indisponibilités, ordre
 pédagogique), puis la proposition entière est rejouée par une
-contre-vérification indépendante. On relit, on décoche, on applique : rien
-n'est écrit avant.
+contre-vérification indépendante. On relit, on applique : rien n'est écrit
+avant. **Pas de bouton dans l'interface** (retiré le 29/09/2026, jugé trop
+dangereux) : ligne de commande ou API, administrateurs seulement.
 
 ```powershell
 cal-iut lisser                       # simulation sur la base locale
@@ -326,9 +326,9 @@ cal-iut export --format html --per-teacher data/generated/par-enseignant
 | `GET /export/csv` | Export CSV |
 | `GET /export/json` | Export JSON |
 | `GET /legacy` | Page HTML/JS historique (même données, autre présentation) — administrateurs seulement |
-| `POST /placements/lissage` | Lance le calcul d'un lissage de promo (tâche de fond) — rien n'est écrit |
-| `GET /placements/lissage/{job}` | Statut et proposition (avant/après, déplacements, contre-vérification) |
-| `POST /placements/lissage/{job}/appliquer` | Applique la proposition (sauf `exclure`), par le chemin d'un déplacement manuel |
+| `POST /placements/lissage` | Lance le calcul d'un lissage de promo (tâche de fond) — rien n'est écrit — **admin** |
+| `GET /placements/lissage/{job}` | Statut et proposition (avant/après, déplacements, contre-vérification) — **admin** |
+| `POST /placements/lissage/{job}/appliquer` | Applique la proposition (sauf `exclure`), par le chemin d'un déplacement manuel — **admin** |
 | `GET /ics/prof/{code}.ics`, `GET /ics/groupe/{id}.ics` | Flux agenda abonnables (cf. [`docs/ICS.md`](docs/ICS.md)) |
 | `GET /api/v1/version` | Révision de l'état — à sonder pour savoir si quelque chose a changé |
 | `GET /api/v1/seances` | Séances filtrables (semaine, enseignant, groupe, salle, cours, parcours, dates), paginables |

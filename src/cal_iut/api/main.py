@@ -6153,7 +6153,7 @@ def _lissage_job(job_id: str) -> LissageJob:
     return _current_lissage_job
 
 
-@app.post("/placements/lissage", dependencies=[Depends(accounts.require_role("edit"))])
+@app.post("/placements/lissage", dependencies=[Depends(accounts.require_role("admin"))])
 def lancer_lissage(body: LissageRequest) -> dict[str, str]:
     """Calcule, en tâche de fond, une proposition de lissage pour un parcours
     (demande du 29/09/2026 sur la 3e année DEV FC). N'ÉCRIT RIEN : la
@@ -6190,7 +6190,7 @@ def lancer_lissage(body: LissageRequest) -> dict[str, str]:
     return {"job_id": job.job_id, "status": "running"}
 
 
-@app.get("/placements/lissage/{job_id}", dependencies=[Depends(accounts.require_role("edit"))])
+@app.get("/placements/lissage/{job_id}", dependencies=[Depends(accounts.require_role("admin"))])
 def statut_lissage(job_id: str) -> dict[str, object]:
     job = _lissage_job(job_id)
     reponse: dict[str, object] = {"job_id": job.job_id, "status": job.status, "parcours": job.parcours}
@@ -6203,7 +6203,7 @@ def statut_lissage(job_id: str) -> dict[str, object]:
     return reponse
 
 
-@app.post("/placements/lissage/{job_id}/appliquer", dependencies=[Depends(accounts.require_role("edit"))])
+@app.post("/placements/lissage/{job_id}/appliquer", dependencies=[Depends(accounts.require_role("admin"))])
 @ecriture_planning
 def appliquer_lissage(job_id: str, body: LissageApplicationRequest) -> dict[str, object]:
     """Applique la proposition, déplacement par déplacement, par le chemin
