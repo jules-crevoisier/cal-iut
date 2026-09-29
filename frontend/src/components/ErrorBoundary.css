@@ -1,0 +1,39 @@
+/* Écran en erreur (cf. `ErrorBoundary.tsx`). */
+.erreur-ecran {
+  max-width: 720px;
+  margin: 24px auto;
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
+}
+
+.erreur-ecran h2 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  color: var(--bad-text);
+}
+
+.erreur-ecran p {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+}
+
+.erreur-ecran-actions {
+  margin-bottom: 12px;
+}
+
+.erreur-ecran summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.erreur-ecran pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-height: 260px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
