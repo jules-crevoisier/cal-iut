@@ -56,6 +56,11 @@ class AppState:
     last_status: str | None = None
     last_objective_value: int | None = None
     last_gap_penalty: int = 0
+    # Erreur de la dernière restauration du planning au démarrage
+    # (`main._try_restore_latest`) — `None` si elle a réussi. Lue par
+    # `/health` (audit du 29/09/2026, P1-6) : un serveur qui démarre avec un
+    # planning vide parce que la config ne se relit plus doit se voir.
+    restauration_erreur: str | None = None
 
 
 _state = AppState()

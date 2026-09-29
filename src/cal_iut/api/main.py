@@ -1007,9 +1007,14 @@ def _try_restore_latest(state: object) -> None:
                 s = state.sessions_by_id.get(c.session_id)
                 if s:
                     s.locked = c.locked
-    except Exception:
-        pass
-
+    except Exception as exc:  # noqa: BLE001 — le serveur démarre quand même, mais le dit
+        # Avant (audit du 29/09/2026, P1-6) : `pass` — une config cassée
+        # après un déploiement démarrait le serveur sur un planning vide,
+        # `/health` répondait `ok` et rien n'apparaissait dans les logs.
+        logger.exception("Restauration du planning (run %s) impossible", run.id)
+        state.restauration_erreur = f"{type(exc).__name__}: {exc}"
+    else:
+        state.restauration_erreur = None
 
 
 @dataclass
@@ -1228,8 +1233,21 @@ def timetable_view() -> HTMLResponse:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "version": "1.0.0"}
+def health() -> Response:
+    """503 quand un planning existe en base mais n'a pas pu être chargé
+    (audit du 29/09/2026, P1-6) : le `HEALTHCHECK` Docker marque alors le
+    conteneur en échec au lieu de servir un planning vide en silence."""
+    state = get_state()
+    if state.current_run_id is not None and (state.restauration_erreur or not state.timetable):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "version": "1.0.0",
+                "detail": state.restauration_erreur or "Planning enregistré mais non chargé.",
+            },
+        )
+    return JSONResponse({"status": "ok", "version": "1.0.0"})
 
 
 @app.get("/calendrier/sae", response_model=CalendrierSaeResponse)
@@ -3420,8 +3438,8 @@ def _apres_ecriture_planning(session_id: str, action: str) -> None:
         from cal_iut.celcat.ops import apres_ecriture_planning
 
         apres_ecriture_planning(session_id, action)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — jamais d'échec du placement déjà réussi, mais tracé (P1-6)
+        logger.exception("File Celcat : hook après écriture en échec (%s %s)", action, session_id)
     sauvegardes.snapshot_si_necessaire(get_state())
     controle_doublons_hebdo.verifier_si_necessaire(get_state())
 

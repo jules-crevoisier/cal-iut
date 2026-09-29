@@ -739,6 +739,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # `override=False` (défaut) : une variable déjà présente dans
     # l'environnement réel garde la priorité, `.env` ne fait que COMPLÉTER.
     load_dotenv()
+    # Journal applicatif (audit du 29/09/2026, P1-6) : les `logger.exception`
+    # de `cal_iut.*` (restauration du planning, file Celcat...) doivent
+    # sortir sur la sortie d'erreur, lue par `docker logs`.
+    import logging
+
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s"
+    )
 
     uvicorn.run(
         "cal_iut.api.main:app",
