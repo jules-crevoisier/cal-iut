@@ -312,6 +312,12 @@ def test_le_schema_de_toute_l_appli_n_est_plus_public(etat, db_isole) -> None:  
 
 
 def test_v1_est_couverte_par_le_limiteur(client, monkeypatch) -> None:  # noqa: F811
+    # Compteurs neufs : le limiteur est un singleton en mémoire, et la clé
+    # (`compte:<id>`) se répète d'une base isolée à l'autre — les requêtes des
+    # tests précédents de la même minute faisaient échouer celui-ci au hasard.
+    from cal_iut.api import limiteur
+
+    monkeypatch.setattr(limiteur, "limiteur", limiteur.Limiteur())
     monkeypatch.setattr(v1, "LIMITE_V1", (3, 60.0))
     for _ in range(3):
         assert client.get("/api/v1/version").status_code == 200
