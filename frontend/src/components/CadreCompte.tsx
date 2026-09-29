@@ -7,8 +7,17 @@
  * partagent maintenant ce cadre : la marque en tête, un titre, un texte
  * aligné à gauche — plus facile à lire qu'un paragraphe centré — puis le
  * contenu et, en pied, les liens secondaires.
+ *
+ * Refonte v2 (même jour, direction « Lumière / Nuit ») : c'est la première
+ * impression de l'outil, elle en prend l'identité. À gauche, la colonne de
+ * la navigation (même fond, même marque) dit ce qu'est cal-iut et rappelle
+ * aux enseignants et étudiants que leur lien personnel s'ouvre SANS compte
+ * (retour utilisateur 28/08/2026) ; à droite, le formulaire à plat, sans
+ * carte, bouton principal noir. Sur téléphone, la colonne se réduit à la
+ * marque.
  */
 import { useId, useState, type ReactNode } from "react";
+import { CalendarRange, Link2, UserRound } from "lucide-react";
 
 import "./CadreCompte.css";
 
@@ -29,15 +38,6 @@ export function CadreCompte({
 }) {
   const contenu = (
     <>
-      <div className="compte-marque">
-        <span className="brand-mark" aria-hidden="true">
-          CI
-        </span>
-        <span>
-          <strong>cal-iut</strong>
-          <span className="compte-marque-sous">Emplois du temps — IUT MMI Troyes</span>
-        </span>
-      </div>
       <h1 className="compte-titre">{titre}</h1>
       {intro ? <div className="compte-intro">{intro}</div> : null}
       {children ? <div className="compte-corps">{children}</div> : null}
@@ -46,13 +46,47 @@ export function CadreCompte({
   );
   return (
     <main className="loginwrap">
-      {onSubmit ? (
-        <form className="loginpanel" onSubmit={onSubmit} noValidate={false}>
-          {contenu}
-        </form>
-      ) : (
-        <div className="loginpanel">{contenu}</div>
-      )}
+      <aside className="compte-cote" aria-label="cal-iut">
+        <div className="compte-marque">
+          <span className="brand-mark" aria-hidden="true">
+            ci
+          </span>
+          <span>
+            <strong>cal-iut</strong>
+            <span className="compte-marque-sous">MMI Troyes</span>
+          </span>
+        </div>
+        <div className="compte-cote-corps">
+          <p className="compte-cote-titre">Les emplois du temps du département MMI.</p>
+          <ul className="compte-cote-faits">
+            <li>
+              <CalendarRange size={16} aria-hidden="true" />
+              <span>La semaine de chaque promo, enseignant, groupe et salle.</span>
+            </li>
+            <li>
+              <Link2 size={16} aria-hidden="true" />
+              <span>
+                Enseignants et étudiants : votre <strong>lien personnel</strong> ouvre votre planning sans compte ni mot
+                de passe.
+              </span>
+            </li>
+            <li>
+              <UserRound size={16} aria-hidden="true" />
+              <span>Un compte sert à ceux qui préparent et corrigent le planning.</span>
+            </li>
+          </ul>
+        </div>
+        <p className="compte-cote-pied">IUT de Troyes — Métiers du multimédia et de l'internet</p>
+      </aside>
+      <div className="compte-principal">
+        {onSubmit ? (
+          <form className="loginpanel" onSubmit={onSubmit} noValidate={false}>
+            {contenu}
+          </form>
+        ) : (
+          <div className="loginpanel">{contenu}</div>
+        )}
+      </div>
     </main>
   );
 }
