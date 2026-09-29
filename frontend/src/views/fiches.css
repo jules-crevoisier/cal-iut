@@ -1,0 +1,347 @@
+/* ══════════════ Fiches de consultation ══════════════
+   Mise en page commune aux vues Enseignant, TD / TP, Cours et Salle (et aux
+   liens publics Enseignant / Groupe) :
+
+     [sélecteur] identité · totaux                      [action secondaire]
+     [barre de partage]
+     [prochain cours]
+     [‹ semaine ›  Aujourd'hui  12 h]  ……  [actions du lien public]
+     [▁▂▅ barre des semaines]
+     [grille ……………………………………………] [colonne : contrainte, fiche]
+     [toutes les séances du semestre]                                     */
+
+.view.fiche {
+  gap: 14px;
+}
+
+/* Lien public : la page entière est pour la grille (retour utilisateur
+   28/08/2026 : « pourquoi l'emploi du temps ne prend pas toute la page »). */
+.read-only-mode .view.fiche {
+  max-width: none;
+}
+
+.fiche-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.fiche-choix {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.fiche-choix select {
+  width: auto;
+  min-width: 240px;
+  max-width: min(420px, 70vw);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fiche-identite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  min-width: 0;
+}
+
+.fiche-identite strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.fiche-manque {
+  color: var(--warn-text);
+}
+
+.fiche-bascule {
+  margin-left: auto;
+}
+
+/* ── Grille + colonne latérale ── */
+.fiche-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.fiche-corps.avec-cote {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.fiche-grille {
+  min-width: 0;
+  scroll-margin-top: 12px;
+}
+
+.fiche-cote {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cote-bloc {
+  font-size: 0.85rem;
+}
+
+.cote-bloc h3 {
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+
+.cote-bloc h4 {
+  margin: 12px 0 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.cote-bloc p {
+  margin: 0;
+}
+
+.contrainte-etat {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border-left: 3px solid var(--border-strong);
+}
+
+.contrainte-etat--good {
+  background: var(--good-soft);
+  border-left-color: var(--good);
+  color: var(--good-text);
+}
+
+.contrainte-etat--warn {
+  background: var(--warn-soft);
+  border-left-color: var(--warn);
+  color: var(--warn-text);
+}
+
+.contrainte-etat--bad {
+  background: var(--bad-soft);
+  border-left-color: var(--bad);
+  color: var(--bad-text);
+}
+
+.raw {
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.cote-details {
+  margin-top: 10px;
+}
+
+.cote-details summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.cote-details[open] summary {
+  margin-bottom: 4px;
+}
+
+.cote-liste {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.cote-liste li {
+  margin: 1px 0;
+}
+
+.ecart {
+  color: var(--bad-text);
+}
+
+.ecart--sae {
+  color: var(--warn-text);
+}
+
+.cote-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cote-table td {
+  padding: 5px 0;
+  border-top: 1px solid var(--surface-3);
+  vertical-align: top;
+}
+
+.cote-table tr:first-child td {
+  border-top: 0;
+}
+
+.cote-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 600;
+  padding-left: 8px;
+}
+
+.cote-sous {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.cote-liens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+/* ── Vue Cours : maquette + intervenants ── */
+.fiche-infos {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 16px 24px;
+  align-items: start;
+}
+
+.fiche-dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.fiche-dl dt {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.fiche-dl dd {
+  margin: 0;
+}
+
+.fiche-semestre h3 {
+  margin-bottom: 12px;
+}
+
+/* ── « Tous les liens » ── */
+.teacherlinks-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.teacherlinks-entete h3 {
+  margin: 0;
+}
+
+.teacherlinks-entete input {
+  width: min(280px, 100%);
+}
+
+.teacherlinks {
+  display: flex;
+  flex-direction: column;
+}
+
+.teacherlinks-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--surface-3);
+}
+
+.teacherlinks-row:first-child {
+  border-top: 0;
+}
+
+.teacherlinks-name {
+  flex: 0 0 220px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.teacherlinks-input {
+  flex: 1 1 260px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 1100px) {
+  .fiche-corps.avec-cote,
+  .fiche-infos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .fiche-choix {
+    width: 100%;
+  }
+
+  .fiche-choix select {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .fiche-bascule {
+    margin-left: 0;
+  }
+}
+
+@media print {
+  .fiche-entete,
+  .fiche-cote,
+  .fiche-semestre,
+  .fiche-infos {
+    display: none !important;
+  }
+
+  .fiche-corps.avec-cote {
+    grid-template-columns: 1fr;
+  }
+
+  /* Six créneaux + en-tête + pause sur la hauteur utile d'une page A4
+     paysage (≈ 194 mm) : la semaine tient sur une seule page. */
+  .fiche .sessiongrid-cell,
+  .read-only-mode .fiche .sessiongrid-cell {
+    height: 26mm;
+  }
+
+  .fiche .sessiongrid {
+    font-size: 8.5pt;
+  }
+
+  .fiche .sessiongrid-block {
+    font-size: 8pt;
+    break-inside: avoid;
+  }
+
+  .fiche .sessiongrid-wrap {
+    overflow: visible;
+  }
+}

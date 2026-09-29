@@ -1,23 +1,39 @@
-import { useEffect, useMemo, useState } from "react";
+/**
+ * Vue Enseignant — et, en lecture seule, le lien personnel envoyé à chaque
+ * enseignant (`#vue=prof&prof=KBR&mode=prof&t=…`), très souvent ouvert sur
+ * téléphone.
+ *
+ * Refonte du 29/09/2026. La page répond d'abord à « quand est-ce que j'ai
+ * cours ? » : prochain cours en une ligne, semaine en cours avec aujourd'hui
+ * repéré, flèches semaine précédente / suivante (← → au clavier, T pour
+ * revenir à aujourd'hui), lecture jour par jour sur téléphone. Côté
+ * planification, la contrainte déclarée et ses violations restent, rangées
+ * dans une colonne à droite de la grille au lieu d'un empilement de
+ * panneaux (profil, callout, contrainte, agenda) qui répétait le nom.
+ */
 
-import { DayStrip, todayIndex } from "../components/DayStrip";
-import { SemesterAgenda } from "../components/SemesterAgenda";
-import { SessionGrid } from "../components/SessionGrid";
+import { useMemo, useState } from "react";
+
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
-import { CopyButton } from "../components/CopyButton";
-import { ShareBar } from "../components/ShareBar";
-import { usePreferences } from "../utils/preferences";
-import { TeacherLinksList } from "../components/TeacherLinksList";
-import { WeekBar } from "../components/WeekBar";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
-import { useNarrowScreen } from "../hooks/useNarrowScreen";
+import { MenuAgenda } from "../components/MenuAgenda";
+import { NavSemaine } from "../components/NavSemaine";
+import { PlanningSemaine } from "../components/PlanningSemaine";
+import { ProchainCours } from "../components/ProchainCours";
+import { SemesterAgenda } from "../components/SemesterAgenda";
+import { ShareBar } from "../components/ShareBar";
+import { TeacherLinksList } from "../components/TeacherLinksList";
+import { useConsultation } from "../hooks/useConsultation";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
-import type { AppPayload } from "../types/app";
+import type { AppPayload, TeacherInfo } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
+import { formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
+import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { displayIndexForSolverWeek } from "../utils/weekDisplay";
+
+import "./fiches.css";
 
 interface EnseignantViewProps {
   payload: AppPayload;
@@ -35,35 +51,26 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
       ),
     [payload.teacherLabels],
   );
-  const [code, setCode] = useState(route.prof || teacherCodes[0] || "");
-  const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, route.sem));
-  const [mobileDay, setMobileDay] = useState(todayIndex());
-  const narrow = useNarrowScreen();
-  // Bascule "un enseignant" / "tous les liens" — retour utilisateur
-  // 27/08/2026 : « ajoute moi une vue simple avec tous les lien de tous
-  // les prof ». N'a de sens que côté planification (readOnly = déjà le
-  // lien d'UN seul enseignant, rien à lister).
+  const code = route.prof || teacherCodes[0] || "";
+  const c = useConsultation(payload, route.sem);
+  // « Tous les liens » — retour utilisateur 27/08/2026 : « ajoute moi une
+  // vue simple avec tous les lien de tous les prof ». Planification seule.
   const [showAllLinks, setShowAllLinks] = useState(false);
-
-  useEffect(() => {
-    if (route.prof && route.prof !== code) setCode(route.prof);
-    if (route.sem !== null) setDisplayWeek(displayIndexForSolverWeek(payload, route.sem));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route.prof, route.sem]);
+  const couleursParMatiere = usePreferences().couleursParMatiere;
 
   const allItems = useMemo(
     () => sessionsWithDates(payload, payload.rows.filter((r) => r.te.includes(code))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [payload, code],
   );
-  const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
-  const rowsThisWeek = solverWeek === null ? [] : allItems.filter((r) => r.w === solverWeek);
-  // Les parcours où cet enseignant a RÉELLEMENT cours cette semaine. Sans
-  // eux, `SessionGrid` ne filtrait pas les évènements de planning et chacun
-  // voyait les rentrées de tous les parcours — signalé par Romain Delon le
-  // 09/09/2026 (« sur les lundis, d'un parcours en particulier, les créneaux
-  // de rentrée »). Un enseignant n'a pas UN parcours : on passe donc la
-  // liste, pas une chaîne.
+
+  if (!readOnly && route.prof && !(route.prof in payload.teacherLabels)) {
+    return <FicheIntrouvable libelle="Enseignant" id={route.prof} onOpenSearch={onOpenSearch} />;
+  }
+
+  const rowsThisWeek = c.solverWeek === null ? [] : allItems.filter((r) => r.w === c.solverWeek);
+  // Parcours où cet enseignant a RÉELLEMENT cours cette semaine : filtre les
+  // évènements de planning (rentrées…) de la grille. Sans eux, chacun voyait
+  // les rentrées de tous les parcours (Romain Delon, 09/09/2026).
   const parcoursDeLaSemaine = Array.from(
     new Set(
       rowsThisWeek.flatMap((r) =>
@@ -71,346 +78,343 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
       ),
     ),
   );
-  const couleursParMatiere = usePreferences().couleursParMatiere;
-
-  // Heures, pas un compte de séances — retour utilisateur 28/08/2026 (relayé
-  // depuis Discord, idée de Jordan) : « le nombre d'heure total de la
-  // semaine ça serait cool si il pouvait être montré ».
+  // Heures, pas un compte de séances — retour utilisateur 28/08/2026 (idée
+  // de Jordan) : « le nombre d'heure total de la semaine ».
   const hoursByWeek = new Map<number, number>();
-  for (const it of allItems) hoursByWeek.set(it.w, (hoursByWeek.get(it.w) ?? 0) + (it.dur || 1) * 1.5);
+  for (const it of allItems) hoursByWeek.set(it.w, (hoursByWeek.get(it.w) ?? 0) + heuresDe([it]));
 
+  const nom = payload.teacherLabels[code] ?? code;
+  const email = payload.teacherEmails[code] ?? "";
   const info = payload.teachers.find((t) => t.code === code);
-
-  if (!readOnly && route.prof && !(route.prof in payload.teacherLabels)) {
-    return <FicheIntrouvable libelle="Enseignant" id={route.prof} onOpenSearch={onOpenSearch} />;
-  }
-
-  const coursParCode = new Map<string, { nom: string; types: Set<string>; heures: number }>();
-  for (const it of allItems) {
-    const cur = coursParCode.get(it.c) ?? { nom: it.n, types: new Set<string>(), heures: 0 };
-    cur.types.add(it.t);
-    cur.heures += (it.dur || 1) * 1.5;
-    coursParCode.set(it.c, cur);
-  }
-  const manquantesProf = (payload.seancesNonPlacees ?? []).filter((s) => s.profs.includes(code));
+  const manquantes = (payload.seancesNonPlacees ?? []).filter((s) => s.profs.includes(code));
   const absences = payload.exceptions.filter(
     (e) => e.kind === "teacher_absence" && e.active && e.teacher_code === code,
   );
+  const token = payload.teacherTokens[code] ?? "";
+  // `t` rend le lien public (cf. api/auth.py) — retour utilisateur
+  // 28/08/2026 : « on s'en fiche on veut qu'il soit public ».
+  const personalLink = buildLink({ vue: "prof", prof: code, mode: "prof", t: token });
+  const semaineLabel = payload.weekRows[c.displayWeek]?.label ?? `Semaine ${c.displayWeek + 1}`;
+  const imageEdt = () => ({
+    titre: nom,
+    sousTitre: semaineLabel,
+    rows: rowsThisWeek,
+    payload,
+    couleursParMatiere,
+  });
 
-  const handleChangeTeacher = (next: string) => {
-    setCode(next);
-    setRoute({ vue: "prof", prof: next });
-  };
-
-  // `t` : rend ce lien public (cf. api/auth.py) — sans lui, il exigerait le
-  // mot de passe partagé comme n'importe quelle autre page (retour
-  // utilisateur 28/08/2026 : « uniquement les prof ai accès a leur lien
-  // sans mot de passe », puis « on s'en fiche on veut qu'il soit public »).
-  const personalLink = buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" });
+  if (showAllLinks) {
+    return (
+      <section className="view fiche">
+        <div className="fiche-entete">
+          <button type="button" className="btn btn--sm" onClick={() => setShowAllLinks(false)}>
+            ← Revenir au planning
+          </button>
+        </div>
+        <TeacherLinksList payload={payload} />
+      </section>
+    );
+  }
 
   return (
-    <section className="view">
-      <div className="panel controls">
-        {/* Sélecteur d'enseignant caché en lecture seule (le lien personnel
-            désigne déjà UN seul enseignant, pas de raison d'en changer) —
-            mais la barre de semaines reste, elle : sans elle, un enseignant
-            ouvrant son lien perso était bloqué sur une seule semaine dans la
-            grille, sans aucun moyen de parcourir le reste du semestre
-            (retour utilisateur 27/08/2026 : « on ne peut pas consulter
-            toutes les semaine[s] »). C'était un oubli, pas une intention —
-            rien dans `.weekfield` ci-dessous n'est propre au mode édition. */}
-        {!readOnly && !showAllLinks && (
-          <label>
-            Enseignant
-            <select value={code} onChange={(e) => handleChangeTeacher(e.target.value)}>
-              {teacherCodes.map((c) => (
-                <option key={c} value={c}>
-                  {payload.teacherLabels[c]}
-                  {payload.teachers.find((t) => t.code === c)?.hasConstraint ? " •" : ""}
+    <section className="view fiche">
+      {!readOnly && (
+        <div className="fiche-entete">
+          <label className="fiche-choix">
+            <span>Enseignant</span>
+            <select
+              value={code}
+              onChange={(e) => setRoute({ vue: "prof", prof: e.target.value })}
+            >
+              {teacherCodes.map((tc) => (
+                <option key={tc} value={tc}>
+                  {payload.teacherLabels[tc]}
+                  {payload.teachers.find((t) => t.code === tc)?.hasConstraint ? " •" : ""}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        {!showAllLinks && (
-          <div className="field weekfield">
-            <WeekBar
-              weekRows={payload.weekRows}
-              countByWeekIndex={hoursByWeek}
-              selected={displayWeek}
-              onSelect={setDisplayWeek}
-              unit="heures"
-            />
-          </div>
-        )}
-        {!readOnly && (
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={() => setShowAllLinks((v) => !v)}
-          >
-            {showAllLinks ? "← Revenir au planning" : "Tous les liens"}
+          <p className="fiche-identite">
+            <span className="mono">{code}</span>
+            {email ? (
+              <a href={`mailto:${email}`}>{email}</a>
+            ) : (
+              <span className="fiche-manque" title="À compléter dans data/config/teacher_contacts.yaml">
+                adresse mail inconnue
+              </span>
+            )}
+            <span>
+              {pluriel(allItems.length, "séance")} · {formatHeures(heuresDe(allItems))} au semestre
+            </span>
+            {manquantes.length > 0 && (
+              <span className="fiche-manque">{pluriel(manquantes.length, "séance non placée", "séances non placées")}</span>
+            )}
+          </p>
+          <button type="button" className="btn btn--ghost btn--sm fiche-bascule" onClick={() => setShowAllLinks(true)}>
+            Tous les liens
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {showAllLinks ? (
-        <TeacherLinksList payload={payload} />
-      ) : (
-        <>{/* le reste de la vue continue ci-dessous */}
-
-      {/* Partage/mail/callout de conformité : utiles côté planification
-          (on y prépare l'envoi du lien à CE prof), hors de propos une fois
-          que c'est LUI qui regarde sa propre page via ce même lien — retiré
-          en lecture seule pour ne garder que l'essentiel demandé (barre des
-          semaines + planning), cf. commentaire plus bas sur `.layout`. */}
       {!readOnly && (
         <ShareBar
           onCopyLink={() => personalLink}
-          onCopySubscribeLink={() => subscribeUrl("prof", code, payload.teacherTokens[code] ?? "")}
-          imageEdt={() => ({
-            titre: payload.teacherLabels[code] ?? code,
-            sousTitre: payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`,
-            rows: rowsThisWeek,
-            payload,
-            couleursParMatiere,
-          })}
+          onCopySubscribeLink={() => subscribeUrl("prof", code, token)}
+          imageEdt={imageEdt}
           extra={
             <a
               className="btn btn--ghost btn--sm"
               href={mailtoForTeacher(payload, code, allItems, personalLink)}
-              title={payload.teacherEmails[code] || "Adresse inconnue — à compléter dans data/config/teacher_contacts.yaml"}
+              title={email || "Adresse inconnue : le brouillon s'ouvrira sans destinataire."}
             >
-              Écrire{payload.teacherEmails[code] ? "" : " ⚠"}
+              Écrire un mail
             </a>
           }
         />
       )}
 
-      {!readOnly && info && (() => {
-        // Compromis MOU (encadrement SAE ce jour-là, `--no-sae-supervisor-hard`)
-        // distingué d'une vraie indisponibilité déclarée non respectée —
-        // sinon un enseignant référent SAE ressort à tort comme "en échec"
-        // au même titre qu'un enseignant dont on a réellement ignoré les
-        // disponibilités (retour utilisateur 11/08/2026, cf. docs/DATA.md §59).
-        const saeCount = info.violations.filter((v) => v.reason === "sae_supervision").length;
-        const declaredCount = info.violations.length - saeCount;
-        const anyReal = declaredCount > 0;
-        return (
-          <div className={`callout ${!info.hasConstraint ? "" : anyReal ? "fail" : info.violations.length ? "warn" : "pass"}`}>
-            {!info.hasConstraint ? (
-              <span>Aucune contrainte déclarée dans le fichier CONTRAINTES ENSEIGNANTS pour {info.name}.</span>
-            ) : info.violations.length === 0 ? (
-              <span>
-                <span className="icon">✓</span> Contrainte respectée sur les {info.nPlaced} séance(s) placée(s) pour{" "}
-                {info.name}.
-              </span>
-            ) : (
-              <span>
-                <span className="icon">{anyReal ? "!" : "i"}</span>{" "}
-                {declaredCount > 0 && <>{declaredCount} vraie(s) violation(s) de disponibilité déclarée</>}
-                {declaredCount > 0 && saeCount > 0 && " + "}
-                {saeCount > 0 && <>{saeCount} compromis accepté(s) (encadrement SAE ce jour-là)</>}
-                {" "}sur les {info.nPlaced} séance(s) placée(s) pour {info.name}.
-              </span>
-            )}
-          </div>
-        );
-      })()}
+      <ProchainCours payload={payload} items={allItems} showPromo onVoir={(it) => c.allerA(it.w, it.d)} />
 
-      {!readOnly && !showAllLinks && (
-        <div className="panel">
-          <h3>Profil</h3>
-          <p>
-            <strong>{payload.teacherLabels[code] ?? code}</strong>{" "}
-            <span className="mono muted">{code}</span>
-            {payload.teacherEmails[code] ? ` · ${payload.teacherEmails[code]}` : ""}
-          </p>
-          <p className="muted">
-            {info?.nPlaced ?? allItems.length} séance(s) placée(s)
-            {manquantesProf.length > 0 ? ` · ${manquantesProf.length} non placée(s)` : ""}
-          </p>
-          {coursParCode.size > 0 && (
-            <div className="ref-table-wrap">
-              <table className="ref">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Matière</th>
-                    <th>Types</th>
-                    <th>Heures</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...coursParCode.entries()].map(([c, v]) => (
-                    <tr key={c}>
-                      <td className="mono">
-                        <button
-                          type="button"
-                          className="linklike"
-                          onClick={() => setRoute({ vue: "cours", cours: c })}
-                        >
-                          {c}
-                        </button>
-                      </td>
-                      <td>{v.nom}</td>
-                      <td>{[...v.types].join(", ")}</td>
-                      <td>{v.heures.toLocaleString("fr-FR")} h</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {manquantesProf.length > 0 && (
-            <>
-              <div className="raw-label">Non placées</div>
-              <ul>
-                {manquantesProf.map((s) => (
-                  <li key={s.id}>
-                    {s.code} {s.type} · {s.groupes.join(", ")}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {info && info.forbiddenSlots.length > 0 && (
-            <>
-              <div className="raw-label">Créneaux interdits</div>
-              <p className="muted">
-                {info.forbiddenSlots
-                  .map(([d, s]) => `${DAY_LABELS[d] ?? d} ${SLOT_TIMES[s]?.label ?? s}`)
-                  .join(" · ")}
-              </p>
-            </>
-          )}
-          {info && info.forbiddenDates.length > 0 && (
-            <>
-              <div className="raw-label">Dates interdites</div>
-              <p className="muted">{info.forbiddenDates.join(" · ")}</p>
-            </>
-          )}
-          {absences.length > 0 && (
-            <>
-              <div className="raw-label">Absences</div>
-              <ul>
-                {absences.map((e) => (
-                  <li key={e.id}>
-                    {e.exception_date}
-                    {e.reason ? ` — ${e.reason}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+      <NavSemaine
+        weekRows={payload.weekRows}
+        selected={c.displayWeek}
+        onSelect={c.setDisplayWeek}
+        countByWeekIndex={hoursByWeek}
+        onAujourdhui={c.narrow ? c.jourAujourdhui : undefined}
+        resume={
+          c.solverWeek !== null && (
+            <strong>{formatHeures(hoursByWeek.get(c.solverWeek) ?? 0)} cette semaine</strong>
+          )
+        }
+      >
+        {readOnly && (
+          <>
+            <MenuAgenda url={subscribeUrl("prof", code, token)} />
+            <BoutonsImageEdt options={imageEdt} />
+            <button type="button" className="btn btn--ghost btn--sm fiche-imprimer" onClick={() => window.print()}>
+              Imprimer
+            </button>
+          </>
+        )}
+      </NavSemaine>
+
+      <div className={`fiche-corps${!readOnly && info ? " avec-cote" : ""}`}>
+        <div className="fiche-grille" id="planning">
+          <PlanningSemaine
+            payload={payload}
+            rows={rowsThisWeek}
+            displayIndex={c.displayWeek}
+            onSelectWeek={c.setDisplayWeek}
+            parcours={parcoursDeLaSemaine}
+            showPromo
+            narrow={c.narrow}
+            jour={c.jour}
+            onJour={c.setJour}
+            titreImpression={nom}
+            exclureProf={code}
+          />
         </div>
+        {!readOnly && info && (
+          <aside className="fiche-cote" aria-label="Contrainte et matières">
+            <ContrainteEnseignant info={info} absences={absences.map((e) => ({ id: e.id, date: e.exception_date, motif: e.reason }))} />
+            <SesMatieres
+              items={allItems}
+              manquantes={manquantes.map((s) => `${s.code} ${s.type} · ${s.groupes.join(", ")}`)}
+              onCours={(cc) => setRoute({ vue: "cours", cours: cc })}
+            />
+          </aside>
+        )}
+      </div>
+
+      {/* Lecture seule : ni agenda du semestre ni contrainte (retour
+          utilisateur 27/08/2026 : « juste l'essentiel c'est à dire la barre
+          des semaine et le planing qui fit bien l'écran »). */}
+      {!readOnly && (
+        <section className="panel fiche-semestre">
+          <h3>Toutes ses interventions du semestre</h3>
+          <SemesterAgenda
+            payload={payload}
+            items={allItems}
+            showPromo
+            semaineAffichee={c.solverWeek}
+            onChoisirSemaine={(w) => c.allerA(w)}
+          />
+        </section>
       )}
+    </section>
+  );
+}
 
-      {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
+function dateLisible(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : jourCourt(d);
+}
 
-      {/* Lecture seule : l'essentiel demandé (retour utilisateur
-          27/08/2026, verbatim : « juste l'essentiel c'est à dire la barre
-          des semaine et le planing qui fit bien l'écran ») — la grille
-          seule, en pleine largeur, sans le partage `.layout` à 2 colonnes
-          (qui réserverait une colonne de 300px vide à droite dès qu'il n'y
-          a plus de second panneau à côté) ni les panneaux annexes
-          (contraintes brutes, agenda du semestre en liste à part) : parcourir
-          les semaines dans CETTE grille couvre déjà « voir tous ses cours du
-          semestre », ce que demandait le message précédent. Ces panneaux
-          restent tels quels côté planification (non readOnly). */}
-      {readOnly ? (
-        <div className="panel">
-          <div className="section-header">
-            <h3>{payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}</h3>
-            <div className="section-header-actions no-print">
-              <CopyButton
-                text={() => subscribeUrl("prof", code, payload.teacherTokens[code] ?? "")}
-                idleLabel="Lien agenda"
-                title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
-              />
-              {/* À CÔTÉ du lien d'abonnement, comme demandé — et surtout
-                  visible ici : c'est la page que reçoit la personne, donc
-                  celle depuis laquelle elle voudra partager. */}
-              <BoutonsImageEdt
-                options={() => ({
-                  titre: payload.teacherLabels[code] ?? code,
-                  sousTitre: payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`,
-                  rows: rowsThisWeek,
-                  payload,
-                  couleursParMatiere,
-                })}
-              />
-            </div>
-          </div>
-          {solverWeek === null ? (
-            <p className="muted">Semaine bloquée (vacances/fermeture).</p>
-          ) : (
-            <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} parcours={parcoursDeLaSemaine} onlyDay={narrow ? mobileDay : null} showPromo />
-          )}
-        </div>
-      ) : (
+/** La contrainte déclarée de l'enseignant et ce que le planning en fait. */
+function ContrainteEnseignant({
+  info,
+  absences,
+}: {
+  info: TeacherInfo;
+  absences: { id: number; date: string; motif: string | null }[];
+}) {
+  // Compromis MOU (encadrement SAE ce jour-là) distingué d'une vraie
+  // indisponibilité déclarée non respectée — sinon un référent SAE ressort à
+  // tort « en échec » (retour utilisateur 11/08/2026, cf. docs/DATA.md §59).
+  const sae = info.violations.filter((v) => v.reason === "sae_supervision");
+  const vraies = info.violations.filter((v) => v.reason !== "sae_supervision");
+  const etat = !info.hasConstraint ? "neutre" : vraies.length ? "bad" : sae.length ? "warn" : "good";
+  const libelleViolation = (v: TeacherInfo["violations"][number]) =>
+    v.date
+      ? dateLisible(v.date)
+      : `sem. ${(v.week ?? 0) + 1} ${DAY_LABELS[v.day ?? 0]?.toLowerCase() ?? ""} ${SLOT_TIMES[v.slot ?? 0]?.label ?? ""}`;
+  const aTexte = info.rawIndisponibilites || info.rawDisponibilites || info.rawContraintes;
+
+  return (
+    <section className="panel cote-bloc">
+      <h3>Contrainte déclarée</h3>
+      <p className={`contrainte-etat contrainte-etat--${etat}`}>
+        {!info.hasConstraint ? (
+          "Aucune contrainte déclarée dans le fichier CONTRAINTES ENSEIGNANTS."
+        ) : info.violations.length === 0 ? (
+          <>
+            <span aria-hidden="true">✓ </span>Respectée sur {pluriel(info.nPlaced, "séance placée", "séances placées")}.
+          </>
+        ) : (
+          <>
+            <span aria-hidden="true">{vraies.length ? "! " : "i "}</span>
+            {vraies.length > 0 && pluriel(vraies.length, "violation", "violations")}
+            {vraies.length > 0 && sae.length > 0 && " et "}
+            {sae.length > 0 && pluriel(sae.length, "compromis accepté (SAE)", "compromis acceptés (SAE)")}
+            {" "}sur {pluriel(info.nPlaced, "séance", "séances")}.
+          </>
+        )}
+      </p>
+
+      {info.rawIndisponibilites && (
         <>
-          <div className="layout">
-            <div className="panel">
-              <h3>
-                {payload.teacherLabels[code] ?? code} —{" "}
-                {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
-              </h3>
-              {solverWeek === null ? (
-                <p className="muted">Semaine bloquée (vacances/fermeture).</p>
-              ) : (
-                <SessionGrid payload={payload} rows={rowsThisWeek} week={solverWeek} parcours={parcoursDeLaSemaine} onlyDay={narrow ? mobileDay : null} showPromo />
-              )}
-            </div>
-
-            {info && (info.rawIndisponibilites || info.rawDisponibilites || info.rawContraintes || info.violations.length > 0) && (
-              <div className="panel">
-                <h3>Sa contrainte, telle que déclarée</h3>
-                {info.rawIndisponibilites && (
-                  <>
-                    <div className="raw-label">Indisponibilités déclarées</div>
-                    <div className="raw">{info.rawIndisponibilites}</div>
-                  </>
-                )}
-                {info.rawDisponibilites && (
-                  <>
-                    <div className="raw-label">Disponibilités déclarées</div>
-                    <div className="raw">{info.rawDisponibilites}</div>
-                  </>
-                )}
-                {info.rawContraintes && (
-                  <>
-                    <div className="raw-label">Contraintes / progression</div>
-                    <div className="raw">{info.rawContraintes}</div>
-                  </>
-                )}
-                {info.violations.length > 0 && (
-                  <>
-                    <div className="raw-label">Violations détectées</div>
-                    <div className="slotlist">
-                      {info.violations.map((v, i) => (
-                        <span
-                          key={i}
-                          className={`slotchip${v.reason === "sae_supervision" ? " sae" : ""}`}
-                          title={v.reason === "sae_supervision" ? "Compromis accepté : encadrement SAE ce jour-là (objectif mou)" : "Indisponibilité déclarée non respectée"}
-                        >
-                          {v.course_code} —{" "}
-                          {v.date ?? `sem.${(v.week ?? 0) + 1} ${DAY_LABELS[v.day ?? 0]} ${SLOT_TIMES[v.slot ?? 0]?.label ?? ""}`}
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="panel">
-            <h3>Toutes ses interventions du semestre</h3>
-            <SemesterAgenda payload={payload} items={allItems} showPromo />
-          </div>
+          <h4>Indisponibilités</h4>
+          <p className="raw">{info.rawIndisponibilites}</p>
         </>
       )}
+      {info.rawDisponibilites && (
+        <>
+          <h4>Disponibilités</h4>
+          <p className="raw">{info.rawDisponibilites}</p>
+        </>
+      )}
+      {info.rawContraintes && (
+        <>
+          <h4>Contraintes / progression</h4>
+          <p className="raw">{info.rawContraintes}</p>
+        </>
+      )}
+      {!aTexte && info.hasConstraint && <p className="muted">Pas de texte libre.</p>}
+
+      {info.forbiddenSlots.length > 0 && (
+        <>
+          <h4>Créneaux interdits</h4>
+          <p>
+            {info.forbiddenSlots
+              .map(([d, s]) => `${DAY_LABELS[d] ?? d} ${SLOT_TIMES[s]?.label ?? s}`)
+              .join(" · ")}
+          </p>
+        </>
+      )}
+      {info.forbiddenDates.length > 0 && (
+        <details className="cote-details">
+          <summary>{pluriel(info.forbiddenDates.length, "date interdite", "dates interdites")}</summary>
+          <p>{info.forbiddenDates.map(dateLisible).join(" · ")}</p>
+        </details>
+      )}
+      {absences.length > 0 && (
+        <>
+          <h4>Absences</h4>
+          <ul className="cote-liste">
+            {absences.map((a) => (
+              <li key={a.id}>
+                {dateLisible(a.date)}
+                {a.motif ? ` — ${a.motif}` : ""}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {info.violations.length > 0 && (
+        <details className="cote-details" open={vraies.length > 0 && info.violations.length <= 8}>
+          <summary>Détail des {pluriel(info.violations.length, "écart", "écarts")}</summary>
+          <ul className="cote-liste">
+            {[...vraies, ...sae].map((v, i) => (
+              <li
+                key={i}
+                className={v.reason === "sae_supervision" ? "ecart ecart--sae" : "ecart"}
+                title={
+                  v.reason === "sae_supervision"
+                    ? "Compromis accepté : encadrement SAE ce jour-là (préférence, pas un interdit)"
+                    : "Indisponibilité déclarée non respectée"
+                }
+              >
+                <span className="mono">{v.course_code}</span> — {libelleViolation(v)}
+                {v.reason === "sae_supervision" ? " (SAE)" : ""}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** Ses matières, avec les heures du semestre — un clic ouvre la Vue Cours. */
+function SesMatieres({
+  items,
+  manquantes,
+  onCours,
+}: {
+  items: ReturnType<typeof sessionsWithDates>;
+  manquantes: string[];
+  onCours: (code: string) => void;
+}) {
+  const parCode = new Map<string, { nom: string; types: Set<string>; heures: number }>();
+  for (const it of items) {
+    const cur = parCode.get(it.c) ?? { nom: it.n, types: new Set<string>(), heures: 0 };
+    cur.types.add(it.t);
+    cur.heures += heuresDe([it]);
+    parCode.set(it.c, cur);
+  }
+  if (!parCode.size && !manquantes.length) return null;
+  return (
+    <section className="panel cote-bloc">
+      <h3>Ses matières</h3>
+      {parCode.size > 0 && (
+        <table className="cote-table">
+          <tbody>
+            {[...parCode.entries()]
+              .sort((a, b) => b[1].heures - a[1].heures)
+              .map(([cc, v]) => (
+                <tr key={cc}>
+                  <td>
+                    <button type="button" className="linklike mono" onClick={() => onCours(cc)}>
+                      {cc}
+                    </button>
+                    <span className="cote-sous">
+                      {v.nom} · {[...v.types].join(", ")}
+                    </span>
+                  </td>
+                  <td className="num">{formatHeures(v.heures)}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+      {manquantes.length > 0 && (
+        <>
+          <h4 className="fiche-manque">Non placées</h4>
+          <ul className="cote-liste">
+            {manquantes.map((m, i) => (
+              <li key={i}>{m}</li>
+            ))}
+          </ul>
         </>
       )}
     </section>

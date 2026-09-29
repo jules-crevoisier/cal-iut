@@ -800,9 +800,8 @@ export function App() {
  *
  *  Un `<select>` et non une bascule maison — retour utilisateur 30/08/2026 :
  *  « le sélecteur n'est pas du tout dans la DA du reste, fais juste un select
- *  au pire ». Il reprend exactement le patron `label > select` de la barre
- *  d'outils, donc son style suit celui de l'application sans rien de
- *  spécifique à maintenir. */
+ *  au pire ». Le `select` garde le style commun des champs ; seule sa place
+ *  dans le bandeau est réglée (`.prefs-reglage`, app.css). */
 function ReglageCouleurs({
   prefs,
   setPrefs,
@@ -811,9 +810,9 @@ function ReglageCouleurs({
   setPrefs: (p: Preferences) => void;
 }) {
   return (
-    <div className="prefs-reglage toolbar-controls">
+    <div className="prefs-reglage">
       <label>
-        Couleurs
+        <span>Couleurs</span>
         <select
           value={prefs.couleursParMatiere ? "matiere" : "type"}
           onChange={(e) =>
@@ -822,8 +821,8 @@ function ReglageCouleurs({
             )
           }
         >
-          <option value="type">Par type de séance</option>
-          <option value="matiere">Par matière</option>
+          <option value="type">Couleurs par type</option>
+          <option value="matiere">Couleurs par matière</option>
         </select>
       </label>
     </div>

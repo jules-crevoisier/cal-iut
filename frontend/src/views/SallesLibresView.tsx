@@ -1,47 +1,52 @@
 /**
  * Vue « Salles libres » (todo département 22/09/2026, Kyllian Bresson :
- * « donner accès aux enseignants de consulter le planning d'une ressource en
- * particulier [...] » — ici sa question inverse : « quelles salles sont
- * libres sur ce créneau ? »).
+ * « quelles salles sont libres sur ce créneau ? ») — et son lien public
+ * `#mode=salles`.
  *
- * Recentrée sur le seul tableau d'occupation (retour utilisateur 25/09/2026,
- * Jules, dicté : « on peut garder uniquement dans "Salles libres" le tableau
- * occupation qui est très bien [...] on enlève les deux onglets [...] et on
- * met ça en lien public [...] on met uniquement le tableau que tu as fait qui
- * est très bien avec les salles ») — le sélecteur de créneau et la liste des
- * salles libres, qui doublonnaient le tableau, sont retirés ; le tableau
- * salles × créneaux reste seul, à toutes les largeurs (plus de coupure à
- * 768px, cf. `useNarrowScreen` retiré). `readOnly` (lien public `mode=salles`,
- * cf. App.tsx `readOnlyTarget`) coupe le seul lien de navigation du tableau
- * (fiche salle) — aucune autre écriture n'a jamais existé sur cette vue.
+ * Recentrée sur le seul tableau d'occupation salles × créneaux (retour
+ * utilisateur 25/09/2026, Jules, dicté : « on peut garder uniquement dans
+ * "Salles libres" le tableau occupation qui est très bien [...] et on met ça
+ * en lien public »). `readOnly` coupe le seul lien de navigation (fiche
+ * salle), qui sortirait sinon du lien public vers le reste de l'appli.
  *
- * Mobile d'abord (320px) : semaine/jour/filtres en boutons qui s'enroulent
- * (jamais de défilement horizontal de PAGE) ; le tableau, lui, défile
- * horizontalement DANS son propre conteneur (`.salleslibres-grille-wrap`),
- * colonne « Salle » fixée au bord grâce à `position: sticky` (cf.
- * SallesLibresView.css).
+ * Refonte du 29/09/2026 : navigation de semaine commune aux autres vues
+ * (flèches, « Aujourd'hui », ← → T au clavier), jours en une rangée datée
+ * avec aujourd'hui repéré, filtres sur une ligne, nombre de salles libres
+ * par créneau dans l'en-tête, créneau en cours surligné et « libres
+ * maintenant » en tête quand on regarde aujourd'hui. Sur téléphone, le
+ * tableau défile dans son conteneur, colonne « Salle » fixée.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import "./SallesLibresView.css";
 
+import { NavSemaine } from "../components/NavSemaine";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
+import { jourAujourdhuiDansSemaine, pluriel } from "../utils/planning";
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
 import { occupationSalles } from "../utils/sallesLibres";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { dateForWeekDay } from "../utils/weekDates";
 import { displayIndexForSolverWeek } from "../utils/weekDisplay";
-import { WeekBar } from "../components/WeekBar";
 
 interface SallesLibresViewProps {
   payload: AppPayload;
   route: Route;
   setRoute: (patch: Partial<Route>) => void;
-  /** Lien public `mode=salles` (cf. App.tsx `readOnlyTarget`) — coupe le
-   * seul lien de navigation du tableau (ouvrir la fiche salle), qui sortirait
-   * sinon du planning public vers le reste de l'appli. */
   readOnly?: boolean;
+}
+
+/** Créneau (0-5) contenant l'heure `now`, ou null (pause, soir, nuit). */
+function creneauEnCours(now: Date): number | null {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const idx = SLOT_TIMES.findIndex((s) => {
+    const [sh, sm] = s.start.split(":").map(Number);
+    const [eh, em] = s.end.split(":").map(Number);
+    return minutes >= sh * 60 + sm && minutes < eh * 60 + em;
+  });
+  return idx >= 0 ? idx : null;
 }
 
 export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesLibresViewProps) {
@@ -51,12 +56,17 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
       : indexSemaineCourante(payload.weekRows),
   );
   const [day, setDay] = useState(() => (route.jour !== null && route.jour !== undefined ? route.jour : jourOuvreAujourdhui()));
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const [capaciteMinSaisie, setCapaciteMinSaisie] = useState("");
   const [typeSalle, setTypeSalle] = useState("");
   // Décoché par défaut (retour utilisateur 22/09/2026) : une salle hors
   // placement automatique reste choisissable à la main, mais ne doit pas
-  // polluer la liste par défaut — cf. `RoomCatalogEntry.placementAuto`.
+  // encombrer la liste par défaut.
   const [inclureHorsAuto, setInclureHorsAuto] = useState(false);
 
   const capaciteMin = capaciteMinSaisie === "" ? 0 : Math.max(0, Number(capaciteMinSaisie) || 0);
@@ -66,9 +76,7 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
     [payload.rooms],
   );
 
-  // Histogramme de la WeekBar : occupation TOTALE (toutes salles confondues,
-  // pondérée par la durée) — même principe que `SalleView` (`hoursByWeek`),
-  // élargi à l'ensemble du parc plutôt qu'à une seule salle.
+  // Histogramme : occupation TOTALE du parc (créneaux, durée comprise).
   const countByWeekIndex = useMemo(() => {
     const m = new Map<number, number>();
     for (const row of payload.rows) {
@@ -81,6 +89,8 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
   const weekRow = payload.weekRows[displayWeek];
   const solverWeek = weekRow?.weekIndex ?? null;
   const holiday = solverWeek === null ? undefined : payload.holidayRows.find((h) => h.w === solverWeek && h.d === day);
+  const jourAuj = jourAujourdhuiDansSemaine(payload, solverWeek, now);
+  const slotMaintenant = jourAuj !== null && jourAuj === day ? creneauEnCours(now) : null;
 
   const sallesFiltrees = useMemo(
     () =>
@@ -96,64 +106,78 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
     () => (solverWeek === null ? null : occupationSalles(payload, solverWeek, day)),
     [payload, solverWeek, day],
   );
+  const libresParCreneau = SLOT_TIMES.map(
+    (_, s) => sallesFiltrees.filter((room) => !occupation?.get(room.id)?.[s]).length,
+  );
+  const libresMaintenant =
+    slotMaintenant === null ? [] : sallesFiltrees.filter((room) => !occupation?.get(room.id)?.[slotMaintenant]);
 
   return (
     <section className="view salleslibres-view">
-      <div className="panel controls">
-        <div className="field weekfield">
-          <WeekBar weekRows={payload.weekRows} countByWeekIndex={countByWeekIndex} selected={displayWeek} onSelect={setDisplayWeek} />
-        </div>
-      </div>
+      <NavSemaine
+        weekRows={payload.weekRows}
+        selected={displayWeek}
+        onSelect={setDisplayWeek}
+        countByWeekIndex={countByWeekIndex}
+        unit="creneaux"
+        onAujourdhui={() => setDay(jourOuvreAujourdhui())}
+      />
 
-      <div className="panel">
+      <div className="salleslibres-barre">
         <div className="salleslibres-jours" role="group" aria-label="Jour">
-          {DAY_LABELS.map((label, d) => (
-            <button
-              key={label}
-              type="button"
-              className={`btn btn--ghost${d === day ? " active" : ""}`}
-              aria-pressed={d === day}
-              onClick={() => setDay(d)}
-            >
-              {label}
-            </button>
-          ))}
+          {DAY_LABELS.map((label, d) => {
+            const date = solverWeek === null ? null : dateForWeekDay(payload, solverWeek, d);
+            return (
+              <button
+                key={label}
+                type="button"
+                className={`salleslibres-jour${d === day ? " is-active" : ""}${d === jourAuj ? " is-today" : ""}`}
+                aria-pressed={d === day}
+                aria-current={d === jourAuj ? "date" : undefined}
+                onClick={() => setDay(d)}
+              >
+                <span className="jl">{label}</span>
+                <span className="jc">{label.slice(0, 3)}</span>
+                {date && <span className="jd">{date.getDate()}</span>}
+              </button>
+            );
+          })}
         </div>
-      </div>
 
-      <div className="panel controls salleslibres-filtres">
-        <label>
-          Capacité minimum
-          <input
-            type="number"
-            min={0}
-            inputMode="numeric"
-            value={capaciteMinSaisie}
-            onChange={(e) => setCapaciteMinSaisie(e.target.value)}
-            placeholder="0"
-          />
-        </label>
-        <label>
-          Type de salle
-          <select value={typeSalle} onChange={(e) => setTypeSalle(e.target.value)}>
-            <option value="">Tous types</option>
-            {typesDisponibles.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="salleslibres-checkbox">
-          <input type="checkbox" checked={inclureHorsAuto} onChange={(e) => setInclureHorsAuto(e.target.checked)} />
-          Inclure les salles hors placement automatique
-        </label>
+        <div className="salleslibres-filtres">
+          <label>
+            <span>Capacité minimum</span>
+            <input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={capaciteMinSaisie}
+              onChange={(e) => setCapaciteMinSaisie(e.target.value)}
+              placeholder="0"
+            />
+          </label>
+          <label>
+            <span>Type de salle</span>
+            <select value={typeSalle} onChange={(e) => setTypeSalle(e.target.value)}>
+              <option value="">Tous types</option>
+              {typesDisponibles.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="salleslibres-checkbox">
+            <input type="checkbox" checked={inclureHorsAuto} onChange={(e) => setInclureHorsAuto(e.target.checked)} />
+            Inclure les salles hors placement automatique
+          </label>
+        </div>
       </div>
 
       {solverWeek === null ? (
         <div className="panel">
           <p className="muted" role="status">
-            Semaine bloquée (vacances/fermeture).
+            Semaine bloquée (vacances ou fermeture) : aucune salle n'est réservée.
           </p>
         </div>
       ) : holiday ? (
@@ -165,55 +189,78 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
       ) : (
         <div className="panel salleslibres-grille-wrap">
           <div className="salleslibres-grille-header">
-            <h3>Occupation — {DAY_LABELS[day]}</h3>
+            <h3>
+              {DAY_LABELS[day]}
+              {jourAuj === day && <span className="salleslibres-auj"> · aujourd'hui</span>}
+            </h3>
             <p className="muted" role="status">
               {sallesFiltrees.length === 0
                 ? "Aucune salle ne correspond aux filtres."
-                : `${sallesFiltrees.length} salle(s)`}
+                : pluriel(sallesFiltrees.length, "salle")}
             </p>
           </div>
+          {slotMaintenant !== null && sallesFiltrees.length > 0 && (
+            <p className="salleslibres-maintenant">
+              <strong>Libres maintenant ({SLOT_TIMES[slotMaintenant].label}) :</strong>{" "}
+              {libresMaintenant.length ? libresMaintenant.map((r) => r.label).join(", ") : "aucune"}
+            </p>
+          )}
           {sallesFiltrees.length > 0 && (
-            <table className="salleslibres-grille">
-              <thead>
-                <tr>
-                  <th>Salle</th>
-                  {SLOT_TIMES.map((s) => (
-                    <th key={s.label}>{s.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sallesFiltrees.map((room) => (
-                  <tr key={room.id}>
-                    <td>
-                      {readOnly ? (
-                        room.label
-                      ) : (
-                        <button
-                          type="button"
-                          className="linklike"
-                          onClick={() => setRoute({ vue: "salle", salle: room.id, sem: solverWeek })}
-                        >
-                          {room.label}
-                        </button>
-                      )}
-                    </td>
-                    {SLOT_TIMES.map((_, slotIdx) => {
-                      const occ = occupation?.get(room.id)?.[slotIdx];
-                      return (
-                        <td key={slotIdx} className={`salleslibres-cell${occ ? " occupee" : " libre"}`}>
-                          {occ
-                            ? occ
-                                .map((e) => (e.groupes.length ? `${e.code} · ${e.groupes.join(", ")}` : e.code))
-                                .join(" ; ")
-                            : "Libre"}
-                        </td>
-                      );
-                    })}
+            <div className="salleslibres-defile">
+              <table className="salleslibres-grille">
+                <thead>
+                  <tr>
+                    <th scope="col">Salle</th>
+                    {SLOT_TIMES.map((s, i) => (
+                      <th key={s.label} scope="col" className={i === slotMaintenant ? "is-now" : undefined}>
+                        {s.label}
+                        <span className="salleslibres-nlibres">{pluriel(libresParCreneau[i], "libre")}</span>
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sallesFiltrees.map((room) => (
+                    <tr key={room.id}>
+                      <th scope="row">
+                        {readOnly ? (
+                          <span className="salleslibres-nom">{room.label}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="linklike salleslibres-nom"
+                            onClick={() => setRoute({ vue: "salle", salle: room.id, sem: solverWeek })}
+                          >
+                            {room.label}
+                          </button>
+                        )}
+                        <span className="salleslibres-cap">{room.capacity} pl.</span>
+                      </th>
+                      {SLOT_TIMES.map((_, slotIdx) => {
+                        const occ = occupation?.get(room.id)?.[slotIdx];
+                        return (
+                          <td
+                            key={slotIdx}
+                            className={`salleslibres-cell${occ ? " occupee" : " libre"}${slotIdx === slotMaintenant ? " is-now" : ""}`}
+                          >
+                            {occ ? (
+                              occ.map((e, i) => (
+                                <span key={i} className="salleslibres-occ">
+                                  <span className="salleslibres-code">{e.code}</span>
+                                  {e.groupes.length > 0 && <span className="salleslibres-grp">{e.groupes.join(", ")}</span>}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="salleslibres-libre">libre</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
