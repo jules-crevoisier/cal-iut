@@ -195,13 +195,26 @@ sans toucher aux fichiers ni redéployer :
   famille (enseignants, salles, matières, groupes Celcat), chaque ligne avec
   son champ. La tuile *À compléter* en donne le nombre.
 
-La correspondance Celcat d'une salle ou d'un enseignant reste réservée aux
+**Corriger une valeur fausse** (adresse, nom, intitulé de matière) : passer
+la souris sur la valeur, ou y arriver au clavier, fait paraître un petit
+crayon **Modifier** — même champ en ligne. La valeur corrigée passe devant
+celle du fichier et porte la marque **modifiée** ; au survol (ou au clic),
+la valeur du fichier et **Revenir à la valeur du fichier**.
+
+La correspondance Celcat d'une salle, d'un enseignant ou le **code module**
+d'une matière (`TSB…`, parmi ceux déjà relevés) reste réservée aux
 administrateurs (aussi depuis l'écran *Celcat*). Les identifiants internes
-Celcat des groupes et des matières ne se saisissent pas : la ligne dit dans
-quel fichier les ajouter. En lecture seule, le manque reste affiché, sans
-bouton. Ce qui est saisi est conservé dans `data/state/` (le volume) et
-survit aux déploiements ; si le fichier de configuration reçoit plus tard la
-même information, c'est lui qui s'affiche.
+Celcat des groupes (`celcat_groupes.yaml`) et des matières
+(`celcat_matieres.yaml`) ne se saisissent pas : la ligne dit dans quel
+fichier ils se règlent. En lecture seule, le manque et la marque restent
+affichés, sans bouton. Ce qui est saisi est conservé dans `data/state/` (le
+volume), survit aux déploiements et garde la trace de qui l'a saisi, quand,
+et de la valeur qu'il remplaçait.
+
+**À traiter** signale aussi les **cours de SAE hors journée SAE** : un cours
+de SAE n'a lieu que sur une journée SAE de son parcours. Les SAE que la
+génération place elle-même (exception déclarée, ex. WSA501D) n'y figurent
+pas. La ligne ouvre la Vue Promo au bon jour.
 
 ---
 

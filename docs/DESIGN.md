@@ -177,3 +177,14 @@ lignes de 36 px, nombres à droite en chiffres tabulaires.
   tableau pleine largeur, lignes de 36 px ; `--haute` pour qu'une longue
   liste défile dans sa carte, en-tête collant), `.page-retour` (message qui
   suit une action), `.page-note` (explication à plat).
+- **Compléter / corriger en ligne** (`components/ChampEnLigne.tsx`,
+  `ValeursReference.tsx`) : une donnée absente = pastille « Ajouter » (point
+  orange, même dessin que « manquant ») ; une donnée présente = la valeur
+  puis un crayon discret (révélé au survol de la ligne, toujours visible au
+  focus clavier, 44 px au doigt). Même champ en ligne dans les deux cas :
+  Entrée enregistre, Échap annule et rend le focus, erreur sous le champ,
+  « Enregistré » annoncé (`aria-live`) — jamais d'alerte bloquante. Une
+  valeur modifiée dans l'appli porte la marque « modifiée » (pastille
+  pointillée) ; sa bulle (seul élément qui flotte, `--shadow-pop`) donne la
+  valeur du fichier et « Revenir à la valeur du fichier ». Lecture seule :
+  la valeur et la marque, sans bouton.

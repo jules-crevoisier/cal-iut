@@ -694,6 +694,7 @@ Même contenu, mêmes catégories et même ordre que l'écran **« À traiter »
 | `doublon` | Doublons salle / enseignant | `a_corriger` |
 | `regle` | Règles globales en échec | `a_corriger` |
 | `contrainte` | Indisponibilités enseignant non respectées | `a_corriger` |
+| `sae-hors-journee` | Cours de SAE placés hors journée SAE — exactement les `anomalies` de `/api/v1/sae` (même fonction) ; les exceptions déclarées (`solver_scheduled_sae`, ex. WSA501D) n'y figurent pas | `a_corriger` |
 | `compromis-sae` | Encadrement SAE le même jour (compromis accepté) | `a_revoir` |
 | `trouee` | Journées trouées (≥ 2 créneaux vides entre deux cours d'un groupe) | `a_revoir` |
 
@@ -784,8 +785,9 @@ référence — la même liste que la section « Données à compléter » de l'
 | `salle` | `code_celcat` | correspondance Celcat | `bloque_celcat` | `admin` |
 | `salle` | `type` | type d'une salle ajoutée à la main (posé d'office à « standard ») | `cosmetique` | `edit` |
 | `cours` | `intitule` | intitulé (vide ou égal au code) | `cosmetique` | `edit` |
-| `cours` | `code_celcat` | code Celcat de la matière, ou son identifiant interne | `bloque_celcat` | `null` |
-| `groupe` | `id_celcat` | identifiant interne Celcat du groupe | `bloque_celcat` | `null` |
+| `cours` | `code_celcat` | code module Celcat de la matière (`TSB…`) | `bloque_celcat` | `admin` |
+| `cours` | `id_celcat` | identifiant interne du module (`celcat_matieres.yaml`) | `bloque_celcat` | `null` |
+| `groupe` | `id_celcat` | identifiant interne Celcat du groupe (`celcat_groupes.yaml`) | `bloque_celcat` | `null` |
 | `seance` | `salle` | séance placée sans salle (« salle à définir ») | `bloque_celcat` | `edit` |
 
 - `role_requis: null` : ne se complète pas depuis l'appli — identifiant
@@ -1155,13 +1157,18 @@ d'avant, `data/state/references.json`) ; la révision avance.
 | Route | Corps | Droits | Persistance |
 |---|---|---|---|
 | `GET /reference/manques` | — | compte actif | — |
-| `PUT /reference/enseignants/{code}/contact` | `{"email"}` — format validé, minuscules, refus d'une adresse déjà attribuée ou déjà dans `teacher_contacts.yaml` | `edit` | `references.json` |
+| `PUT /reference/enseignants/{code}/contact` | `{"email"}` — format validé, minuscules, refus d'une adresse déjà attribuée à un autre enseignant | `edit` | `references.json` |
 | `PUT /reference/enseignants/{code}` | `{"nom"}` (`edit`), `{"code_celcat"}` (`admin`) | voir corps | `references.json`, `celcat_mappings.json` |
 | `PUT /reference/salles/{id}` | `{"capacite", "type"}` (salle ajoutée à la main, `edit`), `{"code_celcat"}` (`admin`) | voir corps | `custom_rooms.json`, `celcat_mappings.json` |
-| `PUT /reference/cours/{code}` | `{"intitule"}` | `edit` | `references.json` |
+| `PUT /reference/cours/{code}` | `{"intitule"}` (`edit`), `{"code_celcat"}` — code module `TSB…` relevé dans `celcat_matieres.yaml` (`admin`) | voir corps | `references.json`, `celcat_mappings.json` (famille `matieres`) |
+| `DELETE /reference/enseignants/{code}/contact` · `…/{code}/nom` · `DELETE /reference/cours/{code}/intitule` | — « Revenir à la valeur du fichier » | `edit` | `references.json` |
 
-La configuration garde le dernier mot : une saisie ne sert que tant que le
-fichier (ou la maquette, la feuille des contraintes) ne fournit pas la
-valeur ; une donnée déjà fournie par eux est refusée (409) et se corrige
-dans le fichier. Seules les correspondances Celcat, comme sur l'écran
-Celcat, passent par-dessus `celcat.yaml`.
+La saisie a le dernier mot (29/09/2026) : elle complète une valeur absente
+ou CORRIGE celle du fichier (`teacher_contacts.yaml`, feuille des
+contraintes, maquette). Chaque ligne du journal garde `avant`, `apres` et
+`valeur_fichier` ; re-saisir la valeur du fichier retire la surcharge. Le
+payload de l'écran (`/app-state`, comptes seulement) porte
+`surchargesReference` — valeur, valeur d'origine, qui, quand — pour la
+marque « modifiée dans l'appli ». Le code module d'une matière s'ajoute aussi
+depuis l'écran Celcat (`PUT /celcat/mappings`, `famille: "matieres"`, même
+validation).
