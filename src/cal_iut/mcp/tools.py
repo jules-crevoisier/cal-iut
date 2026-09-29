@@ -99,13 +99,18 @@ def apply(
     from fastapi import HTTPException
 
     from cal_iut.api import revision
+    from cal_iut.api.verrou import verrou_planning
 
     force_utilise = False
     try:
-        for item in items:
-            if _veut_force(item):
-                force_utilise = True
-            _executer_item(item)
+        # Tout le lot sous le verrou d'écriture du planning (P1-4) : aucune
+        # écriture d'un autre utilisateur ne s'intercale entre deux items.
+        # Chaque route appelée le reprend (verrou réentrant).
+        with verrou_planning:
+            for item in items:
+                if _veut_force(item):
+                    force_utilise = True
+                _executer_item(item)
     except HTTPException as exc:
         return {"ok": False, "forced": False, "error": _fmt_http(exc)}
     finally:

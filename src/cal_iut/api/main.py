@@ -130,6 +130,7 @@ from cal_iut.api.schemas import (
 )
 from cal_iut.api.state import get_repo, get_state
 from cal_iut.api.validation import suggest_alternative_slots, validate_move
+from cal_iut.api.verrou import ecriture_planning, verrou_planning
 from cal_iut.calendar.academic import semester_week_offset, week_status
 from cal_iut.celcat.fichiers import FichierEtatIllisible
 from cal_iut.db.accounts_repository import AccountRepository
@@ -278,6 +279,22 @@ class RegenJob:
 
 
 _current_regen_job: RegenJob | None = None
+
+
+def _calcul_long_en_cours() -> str | None:
+    """Motif de refus si un solve, une régénération ou un calcul de lissage
+    tourne déjà, sinon `None`. À appeler sous `_job_lock`.
+
+    Ces trois calculs lisent un instantané du planning puis l'écrivent
+    (ou le proposent) des minutes plus tard : deux en parallèle, et le
+    second écrase le premier (audit 29/09/2026, P1-4)."""
+    if _current_job is not None and _current_job.status == "running":
+        return f"Un solve est déjà en cours (job {_current_job.job_id})"
+    if _current_regen_job is not None and _current_regen_job.status == "running":
+        return f"Une régénération est déjà en cours (job {_current_regen_job.job_id})"
+    if _current_lissage_job is not None and _current_lissage_job.status == "running":
+        return f"Un lissage est déjà en cours de calcul (job {_current_lissage_job.job_id})"
+    return None
 
 class _GZipSaufMcp:
     """Compression gzip de toutes les réponses d'au moins 1 Ko, SAUF `/mcp`.
@@ -1585,6 +1602,7 @@ def get_weights() -> WeightsResponse:
 
 
 @app.post("/ingest", dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def ingest(body: IngestRequest) -> dict[str, object]:
     state = get_state()
     result = run_ingestion(
@@ -1699,32 +1717,52 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
     )
 
     quality = compute_quality(placements, sessions_by_id)
-    state.timetable = with_rooms
-    state.sessions_by_id = sessions_by_id
-    state.last_status = result.status
-    state.last_objective_value = result.objective_value
-    state.last_gap_penalty = result.gap_penalty
+    # Résolution faite SANS le verrou (jusqu'à 15 min) ; seul le
+    # remplacement du planning le prend (P1-4). Un solve remplace TOUT le
+    # planning : c'est son contrat (route admin, cf. P1-5).
+    with verrou_planning:
+        state.timetable = with_rooms
+        state.sessions_by_id = sessions_by_id
+        state.last_status = result.status
+        state.last_objective_value = result.objective_value
+        state.last_gap_penalty = result.gap_penalty
 
-    repo = get_repo()
-    run = repo.save_run(
-        parcours=body.parcours or state.filter_parcours or "BUT1",
-        semestre=body.semestre or state.filter_semestre or "S1",
-        status=result.status,
-        objective_value=result.objective_value,
-        gap_penalty=result.gap_penalty,
-        weeks=solver.config.weeks,  # résolu (calendrier) par solver.solve(), plus jamais None ici
-        solver_placements=[_placement_dict(p) for p in with_rooms],
-        current_placements=[_placement_dict(p, sessions_by_id) for p in with_rooms],
-    )
-    state.current_run_id = run.id
-    revision.incrementer("solve")
+        repo = get_repo()
+        run = repo.save_run(
+            parcours=body.parcours or state.filter_parcours or "BUT1",
+            semestre=body.semestre or state.filter_semestre or "S1",
+            status=result.status,
+            objective_value=result.objective_value,
+            gap_penalty=result.gap_penalty,
+            weeks=solver.config.weeks,  # résolu (calendrier) par solver.solve(), plus jamais None ici
+            solver_placements=[_placement_dict(p) for p in with_rooms],
+            current_placements=[_placement_dict(p, sessions_by_id) for p in with_rooms],
+        )
+        state.current_run_id = run.id
+        revision.incrementer("solve")
 
     return _build_response(result.status, result.objective_value, result.gap_penalty, with_rooms, sessions_by_id, quality, run.id)
 
 
 @app.post("/solve", response_model=TimetableResponse, dependencies=[Depends(accounts.require_role("edit"))])
 def solve(body: SolveRequest) -> TimetableResponse:
-    return _solve_and_persist(body)
+    global _current_job
+    with _job_lock:
+        motif = _calcul_long_en_cours()
+        if motif:
+            raise HTTPException(409, motif)
+        # Enregistré comme un job : la régénération et le lissage refusent
+        # ainsi de démarrer pendant un solve synchrone aussi.
+        job = SolveJob(job_id=str(uuid.uuid4()), status="running")
+        _current_job = job
+    try:
+        response = _solve_and_persist(body)
+    except BaseException:
+        job.status = "error"
+        raise
+    job.result = response
+    job.status = "done"
+    return response
 
 
 @app.post("/solve/async", dependencies=[Depends(accounts.require_role("edit"))])
@@ -1742,8 +1780,9 @@ def solve_async(body: SolveRequest) -> dict[str, str]:
         raise HTTPException(400, "Run POST /ingest first")
 
     with _job_lock:
-        if _current_job is not None and _current_job.status == "running":
-            raise HTTPException(409, f"Un solve est déjà en cours (job {_current_job.job_id})")
+        motif = _calcul_long_en_cours()
+        if motif:
+            raise HTTPException(409, motif)
         job = SolveJob(job_id=str(uuid.uuid4()), status="running")
         _current_job = job
 
@@ -1795,10 +1834,9 @@ def regen_week(body: RegenRequest) -> dict[str, str]:
     weeks = [body.week, body.week + 1] if body.extend_next else [body.week]
 
     with _job_lock:
-        if _current_job is not None and _current_job.status == "running":
-            raise HTTPException(409, f"Un solve est déjà en cours (job {_current_job.job_id})")
-        if _current_regen_job is not None and _current_regen_job.status == "running":
-            raise HTTPException(409, f"Une régénération est déjà en cours (job {_current_regen_job.job_id})")
+        motif = _calcul_long_en_cours()
+        if motif:
+            raise HTTPException(409, motif)
         job = RegenJob(job_id=str(uuid.uuid4()), status="running")
         _current_regen_job = job
 
@@ -3138,6 +3176,7 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
 
 
 @app.patch("/placements/{session_id}", dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse:
     state = get_state()
     match = _find_placement(state, session_id)
@@ -3304,6 +3343,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
     response_model=PlacementResponse,
     dependencies=[Depends(accounts.require_role("edit"))],
 )
+@ecriture_planning
 def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> PlacementResponse:
     """Overlay enseignant / type / durée sur une séance de maquette.
 
@@ -3335,6 +3375,7 @@ def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> Placemen
 
 
 @app.post("/placements/{session_id}/deposer", dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def deposer_placement(session_id: str) -> dict[str, object]:
     """Retire la séance du planning, la laisse dans le catalogue (À placer)."""
     from cal_iut.api.deposer import deposer_seance
@@ -3350,6 +3391,7 @@ def deposer_placement(session_id: str) -> dict[str, object]:
 
 
 @app.post("/placements/echanger", response_model=EchangeResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def echanger_placements(body: EchangeRequest) -> EchangeResponse:
     """Échange la place de deux séances, en une seule décision.
 
@@ -3502,6 +3544,7 @@ def _controler_echange(
 
 
 @app.patch("/placements/{session_id}/salle", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse:
     """Change UNIQUEMENT la salle, à créneau inchangé — retour utilisateur
     28/08/2026 : « on va vouloir sur la vue promo modifier uniquement les
@@ -5357,6 +5400,7 @@ def creneaux_libres(session_id: str, depuis_semaine: int = 0, maximum: int = 12)
 
 
 @app.post("/placements/{session_id}/placer", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementResponse:
     """Pose au planning une séance qui n'y était pas.
 
@@ -5548,6 +5592,7 @@ def _id_seance_personnalisee(course_code: str, semestre: str, session_type: str,
 
 
 @app.post("/placements/personnalisees", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def creer_seance_personnalisee(body: CreerSeanceRequest) -> PlacementResponse:
     """Ajoute une séance à une matière existante et la place — retour
     utilisateur 31/08/2026 (cf. `CreerSeanceRequest`). Délègue entièrement
@@ -5707,6 +5752,7 @@ def _conflit_salle_pause_midi(
 
 
 @app.post("/placements/evenements", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
     """Événement hors maquette affiché en clair sur l'EDT (réunion,
     conférence...) — cf. `CreerEvenementRequest`. Même mécanique que
@@ -5785,6 +5831,7 @@ def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
 
 
 @app.patch("/placements/personnalisees/{session_id}", response_model=PlacementResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnaliseeRequest) -> PlacementResponse:
     """Modifie une séance créée par ce système — jamais une séance de la
     maquette (rejeté avec un message explicite : `seances_annulees.yaml` +
@@ -5960,6 +6007,7 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
 
 
 @app.delete("/placements/personnalisees/{session_id}", dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def supprimer_seance_personnalisee(session_id: str) -> dict[str, bool]:
     """Retire entièrement une séance créée par ce système — métadonnée,
     placement courant et ligne en base. Jamais une séance de la maquette :
@@ -5992,6 +6040,7 @@ def supprimer_seance_personnalisee(session_id: str) -> dict[str, bool]:
 
 
 @app.post("/placements/{session_id}/valider", response_model=ForcagePedagogiqueResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def valider_forcage_pedagogique(session_id: str) -> ForcagePedagogiqueResponse:
     """Confirme un placement qui avait dû forcer l'ordre pédagogique — le
     retire du suivi (`api/forced_pending.py`), il n'apparaît plus dans « À
@@ -6006,6 +6055,7 @@ def valider_forcage_pedagogique(session_id: str) -> ForcagePedagogiqueResponse:
 
 
 @app.delete("/placements/{session_id}", response_model=ForcagePedagogiqueResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def retirer_placement_force(session_id: str) -> ForcagePedagogiqueResponse:
     """Retire du planning un placement qui avait forcé l'ordre pédagogique —
     la séance redevient une séance « à placer » normale (retour utilisateur
@@ -6059,8 +6109,9 @@ def lancer_lissage(body: LissageRequest) -> dict[str, str]:
     if not state.timetable:
         raise HTTPException(400, "Aucun planning chargé.")
     with _job_lock:
-        if _current_lissage_job is not None and _current_lissage_job.status == "running":
-            raise HTTPException(409, "Un lissage est déjà en cours de calcul.")
+        motif = _calcul_long_en_cours()
+        if motif:
+            raise HTTPException(409, motif)
         job = LissageJob(job_id=str(uuid.uuid4()), status="running", parcours=body.parcours)
         _current_lissage_job = job
 
@@ -6098,6 +6149,7 @@ def statut_lissage(job_id: str) -> dict[str, object]:
 
 
 @app.post("/placements/lissage/{job_id}/appliquer", dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def appliquer_lissage(job_id: str, body: LissageApplicationRequest) -> dict[str, object]:
     """Applique la proposition, déplacement par déplacement, par le chemin
     d'un déplacement manuel (mêmes contrôles, file Celcat, sauvegarde).
@@ -6111,6 +6163,12 @@ def appliquer_lissage(job_id: str, body: LissageApplicationRequest) -> dict[str,
         raise HTTPException(409, f"Proposition non applicable (statut : {job.status}).")
     if job.proposition.verification:
         raise HTTPException(409, "La contre-vérification a trouvé des conflits : proposition non applicable.")
+    with _job_lock:
+        motif = _calcul_long_en_cours()
+    if motif:
+        # Un solve en cours écraserait ces déplacements ; une régénération
+        # en cours abandonnerait (sa portée aurait bougé).
+        raise HTTPException(409, motif)
     exclus = set(body.exclure)
     retenue = dataclasses.replace(
         job.proposition,
@@ -6123,6 +6181,7 @@ def appliquer_lissage(job_id: str, body: LissageApplicationRequest) -> dict[str,
 
 
 @app.post("/placements/completer", response_model=CompletionResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@ecriture_planning
 def completer() -> CompletionResponse:
     """Place d'un coup toutes les séances que le solveur a laissées de côté.
 
