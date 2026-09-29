@@ -52,3 +52,4 @@ data/releves/celcat-rpc-en-tetes.json
 # Destinataires des notifications : donnee personnelle, et propre a
 # chaque deploiement (cf. api/notifications.py).
 data/state/notifications.json
+captures/
