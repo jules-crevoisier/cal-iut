@@ -159,7 +159,7 @@ export function BlocagesCelcat({
     <section className="panel celcat-blocages" aria-labelledby="celcat-blocages-titre">
       <h2 id="celcat-blocages-titre" className="celcat-panneau-titre">
         {blocages.length === 0
-          ? horsSemaine.length > 0
+          ? horsSemaine.length > 0 || (mappings.bloques_autres_semaines ?? 0) > 0
             ? "Rien ne bloque cette semaine"
             : "Correspondances ajoutées"
           : `${pluriel(seances, "séance bloquée", "séances bloquées")} cette semaine`}

@@ -2,7 +2,7 @@
    bouton passe sous le texte ; à partir de 768 px, ils se placent côte à
    côte. */
 
-.sauvegardes-view {
+.view.sauvegardes-view {
   gap: 14px;
   max-width: 960px;
 }

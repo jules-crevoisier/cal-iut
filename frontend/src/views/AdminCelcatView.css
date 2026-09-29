@@ -140,12 +140,13 @@
 }
 
 .celcat-statut {
+  flex: 1 1 36rem;
   min-width: 0;
 }
 
 .celcat-signaux {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, auto));
   margin: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -155,8 +156,9 @@
 
 .celcat-signal {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
+  gap: 2px 6px;
   padding: 6px 12px;
   min-width: 0;
 }
@@ -171,13 +173,10 @@
   white-space: nowrap;
 }
 
+/* La pastille suit le libellé, la phrase passe à la ligne si elle est
+   longue : le `dd` s'efface de la mise en page. */
 .celcat-signal dd {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 6px;
-  margin: 0;
-  min-width: 0;
+  display: contents;
 }
 
 /* Un signal sain dit son mot, pas sa phrase : elle n'apprend rien et
@@ -227,7 +226,7 @@
   }
 
   .celcat-signaux {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .celcat-signal + .celcat-signal {
