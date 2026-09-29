@@ -855,6 +855,7 @@ export function App() {
             setRoute={setRoute}
             readOnly={readOnlyTarget === "prof"}
             onOpenSearch={() => setSearch(true)}
+            emailCompte={moi?.email}
           />
         )}
         {activeTab === "cours" && appPayload && !readOnlyTarget && (

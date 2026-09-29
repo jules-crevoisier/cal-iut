@@ -41,9 +41,27 @@ interface EnseignantViewProps {
   setRoute: (patch: Partial<Route>) => void;
   readOnly?: boolean;
   onOpenSearch?: () => void;
+  /** Adresse du compte connecté : ouvre la vue sur SA fiche quand elle
+   *  correspond à un enseignant. */
+  emailCompte?: string;
 }
 
-export function EnseignantView({ payload, route, setRoute, readOnly = false, onOpenSearch }: EnseignantViewProps) {
+/** Code de l'enseignant dont l'adresse est celle du compte connecté. */
+export function enseignantDuCompte(payload: AppPayload, email: string | undefined): string {
+  const cherche = (email ?? "").trim().toLowerCase();
+  if (!cherche) return "";
+  const trouve = Object.entries(payload.teacherEmails).find(([, e]) => e.trim().toLowerCase() === cherche);
+  return trouve && trouve[0] in payload.teacherLabels ? trouve[0] : "";
+}
+
+export function EnseignantView({
+  payload,
+  route,
+  setRoute,
+  readOnly = false,
+  onOpenSearch,
+  emailCompte,
+}: EnseignantViewProps) {
   const teacherCodes = useMemo(
     () =>
       Object.keys(payload.teacherLabels).sort((a, b) =>
@@ -51,7 +69,10 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
       ),
     [payload.teacherLabels],
   );
-  const code = route.prof || teacherCodes[0] || "";
+  // Onglet ouvert sans enseignant : la fiche du compte connecté s'il en est
+  // un, sinon une invitation à choisir. Avant, le premier par ordre
+  // alphabétique, souvent quelqu'un sans aucune séance (« 0 séance »).
+  const code = route.prof || enseignantDuCompte(payload, emailCompte);
   const c = useConsultation(payload, route.sem);
   // « Tous les liens » — retour utilisateur 27/08/2026 : « ajoute moi une
   // vue simple avec tous les lien de tous les prof ». Planification seule.
@@ -65,6 +86,35 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
 
   if (!readOnly && route.prof && !(route.prof in payload.teacherLabels)) {
     return <FicheIntrouvable libelle="Enseignant" id={route.prof} onOpenSearch={onOpenSearch} />;
+  }
+
+  const choix = (
+    <label className="fiche-choix">
+      <span>Enseignant</span>
+      <select value={code} onChange={(e) => setRoute({ vue: "prof", prof: e.target.value })}>
+        {!code && <option value="">Choisir un enseignant…</option>}
+        {teacherCodes.map((tc) => (
+          <option key={tc} value={tc}>
+            {payload.teacherLabels[tc]}
+            {payload.teachers.find((t) => t.code === tc)?.hasConstraint ? " •" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  if (!readOnly && !code && !showAllLinks) {
+    return (
+      <section className="view fiche">
+        <div className="fiche-entete">
+          {choix}
+          <button type="button" className="btn btn--ghost btn--sm fiche-bascule" onClick={() => setShowAllLinks(true)}>
+            Tous les liens
+          </button>
+        </div>
+        <p className="empty-state">Choisissez un enseignant, ou cherchez-le avec Ctrl+K.</p>
+      </section>
+    );
   }
 
   const rowsThisWeek = c.solverWeek === null ? [] : allItems.filter((r) => r.w === c.solverWeek);
@@ -120,20 +170,7 @@ export function EnseignantView({ payload, route, setRoute, readOnly = false, onO
     <section className="view fiche">
       {!readOnly && (
         <div className="fiche-entete">
-          <label className="fiche-choix">
-            <span>Enseignant</span>
-            <select
-              value={code}
-              onChange={(e) => setRoute({ vue: "prof", prof: e.target.value })}
-            >
-              {teacherCodes.map((tc) => (
-                <option key={tc} value={tc}>
-                  {payload.teacherLabels[tc]}
-                  {payload.teachers.find((t) => t.code === tc)?.hasConstraint ? " •" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          {choix}
           <p className="fiche-identite">
             <span className="mono">{code}</span>
             {email ? (
