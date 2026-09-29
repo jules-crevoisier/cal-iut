@@ -1,12 +1,12 @@
 /**
  * Barre supérieure : la semaine y est partagée par toutes les vues ; la
- * liste des semaines permet de sauter loin ; le compte y vit (Clé API,
- * déconnexion).
+ * liste des semaines permet de sauter loin ; les actions de la page s'y
+ * affichent (`ActionsDePage`).
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { TopBar } from "./TopBar";
+import { ActionsDePage, TopBar } from "./TopBar";
 import { emptyPayload } from "../test/payloadFixture";
 
 function barre(extra: Partial<Parameters<typeof TopBar>[0]> = {}) {
@@ -24,10 +24,6 @@ function barre(extra: Partial<Parameters<typeof TopBar>[0]> = {}) {
     onSemaine: vi.fn(),
     onOuvrirRecherche: vi.fn(),
     onOuvrirNavigation: vi.fn(),
-    email: "jules.crevoisier@univ-reims.fr",
-    onCle: vi.fn(),
-    onDeconnexion: vi.fn(),
-    panne: false,
     ...extra,
   };
   render(<TopBar {...props} />);
@@ -57,15 +53,23 @@ describe("TopBar", () => {
     expect(screen.queryByRole("button", { name: "Semaine suivante" })).not.toBeInTheDocument();
   });
 
-  it("should offer the API key and logout in the account menu", () => {
-    const p = barre();
-    fireEvent.click(screen.getByRole("button", { name: /compte/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /clé api/i }));
-    expect(p.onCle).toHaveBeenCalled();
+  it("should show the page actions in the bar", () => {
+    barre();
+    render(
+      <ActionsDePage>
+        <button type="button">Nouvelle séance</button>
+      </ActionsDePage>,
+    );
+    const bouton = screen.getByRole("button", { name: "Nouvelle séance" });
+    expect(bouton.closest(".topbar")).not.toBeNull();
   });
 
-  it("should say when the server cannot be reached", () => {
-    barre({ panne: true });
-    expect(screen.getByRole("status")).toHaveTextContent("Hors ligne");
+  it("should keep the page actions in the view without the bar", () => {
+    render(
+      <ActionsDePage>
+        <button type="button">Nouvelle séance</button>
+      </ActionsDePage>,
+    );
+    expect(screen.getByRole("button", { name: "Nouvelle séance" }).closest(".page-outils-actions")).not.toBeNull();
   });
 });

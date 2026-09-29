@@ -4,8 +4,9 @@
  * Mêmes vues, mêmes libellés, même ordre qu'avant (les utilisateurs les
  * connaissent) ; « Accueil » (tableau de bord) s'ajoute en tête. Le rail se
  * replie en icônes seules (choix gardé sur l'appareil) pour rendre la
- * largeur aux grilles. Recherche et compte vivent désormais dans la barre
- * supérieure (`TopBar`), présente sur chaque écran.
+ * largeur aux grilles. La recherche (Ctrl K) est en tête, le compte (clé
+ * API, thème, déconnexion, état de la synchro) en pied — comme sur la
+ * maquette « Lumière » validée le 29/09/2026.
  *
  * Historique des regroupements (toujours valable) : « Vue Groupe » revenue
  * sous le nom « Vue TD / TP » (22/09/2026) ; « Vue Salle » et « Salles
@@ -26,6 +27,7 @@ import {
   Library,
   ListChecks,
   RefreshCcw,
+  Search,
   ShieldCheck,
   Users,
   UsersRound,
@@ -34,6 +36,7 @@ import {
 
 import type { RouteView } from "../hooks/useHashRoute";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
+import { MenuCompte } from "./MenuCompte";
 import "./SideNav.css";
 
 interface NavItem {
@@ -108,10 +111,12 @@ interface SideNavProps {
   open: boolean;
   onClose: () => void;
   estAdmin?: boolean;
-  // Conservés pour compatibilité d'appel : la recherche et le compte sont
-  // désormais dans la barre supérieure.
   onOpenSearch?: () => void;
   email?: string;
+  role?: string;
+  /** `true` = serveur injoignable (pastille sur l'avatar). */
+  panne?: boolean;
+  onCle?: () => void;
   onLogout?: () => void;
 }
 
@@ -145,7 +150,14 @@ export function SideNav({
   open,
   onClose,
   estAdmin,
+  onOpenSearch,
+  email,
+  role,
+  panne = false,
+  onCle,
+  onLogout,
 }: SideNavProps) {
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   const groupes = estAdmin ? [...NAV_GROUPS, GROUPE_ADMIN] : NAV_GROUPS;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const [repliee, setRepliee] = useState(() => lireLocal<boolean>(CLE_REPLIEE, false, (v): v is boolean => typeof v === "boolean"));
@@ -190,6 +202,23 @@ export function SideNav({
           </button>
         </div>
 
+        {onOpenSearch && (
+          <button
+            type="button"
+            className="sidenav-recherche"
+            onClick={() => {
+              onClose();
+              onOpenSearch();
+            }}
+            aria-keyshortcuts="Control+K"
+            title={repliee ? "Rechercher (Ctrl K)" : undefined}
+          >
+            <Search size={15} aria-hidden="true" />
+            <span className="navbtn-libelle">Rechercher…</span>
+            <kbd>{mac ? "⌘K" : "Ctrl K"}</kbd>
+          </button>
+        )}
+
         {/* Boutons de navigation (et non `role="tab"`) : `aria-current="page"`
             est le bon vocabulaire (audit a11y du 27/08/2026). */}
         <div className="sidenav-tabs">
@@ -229,16 +258,31 @@ export function SideNav({
           ))}
         </div>
 
-        <button
-          type="button"
-          className="sidenav-replier"
-          onClick={basculer}
-          aria-pressed={repliee}
-          title={repliee ? "Déplier la navigation" : "Replier la navigation"}
-        >
-          {repliee ? <ChevronsRight size={18} aria-hidden="true" /> : <ChevronsLeft size={18} aria-hidden="true" />}
-          <span className="navbtn-libelle">{repliee ? "Déplier" : "Replier"}</span>
-        </button>
+        <div className="sidenav-pied">
+          {email && (
+            <MenuCompte
+              email={email}
+              role={role}
+              panne={panne}
+              onCle={() => {
+                onClose();
+                onCle?.();
+              }}
+              onDeconnexion={() => onLogout?.()}
+            />
+          )}
+
+          <button
+            type="button"
+            className="sidenav-replier"
+            onClick={basculer}
+            aria-pressed={repliee}
+            title={repliee ? "Déplier la navigation" : "Replier la navigation"}
+          >
+            {repliee ? <ChevronsRight size={18} aria-hidden="true" /> : <ChevronsLeft size={18} aria-hidden="true" />}
+            <span className="sr-only">{repliee ? "Déplier la navigation" : "Replier la navigation"}</span>
+          </button>
+        </div>
       </nav>
     </>
   );

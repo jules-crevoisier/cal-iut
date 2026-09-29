@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CalendarRange, Link2, ListChecks, Sparkles, SquarePlus } from "lucide-react";
+import { ArrowRight, CalendarRange, Link2, Sparkles, SquarePlus } from "lucide-react";
 
 import { fetchDoublons, fetchTaches, type Doublon, type Tache } from "../api/client";
 import { useSemaineGlobale } from "../contexts/SemaineGlobale";
@@ -378,7 +378,7 @@ function Priorites({
       </header>
       {doublons.length > 0 && (
         <button type="button" className="accueil-ligne is-bad" onClick={() => setRoute({ vue: "apf" })}>
-          <ListChecks size={16} aria-hidden="true" />
+          <span className="accueil-ligne-quand">cette semaine</span>
           <span>
             <strong>
               {doublons.length} doublon{doublons.length > 1 ? "s" : ""} cette semaine

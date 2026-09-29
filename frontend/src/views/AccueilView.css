@@ -31,26 +31,6 @@
   transition: border-color 0.12s, background-color 0.12s;
 }
 
-.accueil-tuile::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-  background: transparent;
-}
-
-.accueil-tuile.is-bad::before {
-  background: var(--bad);
-}
-
-.accueil-tuile.is-warn::before {
-  background: var(--warn);
-}
-
-.accueil-tuile.is-good::before {
-  background: var(--good);
-}
 
 .accueil-tuile:hover {
   border-color: var(--border-strong);
@@ -64,14 +44,18 @@
 }
 
 .accueil-tuile-valeur {
-  font-size: 2rem;
+  font-size: 1.85rem;
   font-weight: 600;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .accueil-tuile.is-bad .accueil-tuile-valeur {
-  color: var(--bad-text);
+  color: var(--bad);
+}
+
+.accueil-tuile.is-warn .accueil-tuile-valeur {
+  color: var(--warn);
 }
 
 .accueil-tuile-detail {
@@ -87,7 +71,7 @@
   margin-top: 6px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--ink);
 }
 
 /* ── Grille ── */
@@ -327,15 +311,15 @@
 }
 
 .accueil-ligne {
+  position: relative;
   display: grid;
   grid-template-columns: 7.5em 1fr;
   align-items: baseline;
   gap: 10px;
   width: 100%;
-  padding: 7px 8px 7px 10px;
+  padding: 7px 8px 7px 20px;
   border: none;
-  border-left: 2px solid transparent;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius);
   background: none;
   color: var(--ink);
   font: inherit;
@@ -348,12 +332,20 @@
   background: var(--surface-2);
 }
 
-.accueil-ligne.is-bad {
-  border-left-color: var(--bad);
+.accueil-ligne.is-bad::before,
+.accueil-ligne.is-warn::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bad);
 }
 
-.accueil-ligne.is-warn {
-  border-left-color: var(--warn);
+.accueil-ligne.is-warn::before {
+  background: var(--warn);
 }
 
 .accueil-ligne > svg {
