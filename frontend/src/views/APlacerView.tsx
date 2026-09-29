@@ -198,7 +198,9 @@ export function APlacerView({
             <div className="aplacer-auto">
               <button
                 type="button"
-                className="btn btn--primary"
+                // Une seule action principale par écran : dans la Vue Promo, c'est
+                // « Nouvelle séance » ; ici, en page autonome, celle-ci.
+                className={variante === "panneau" ? "btn" : "btn btn--primary"}
                 disabled={completionEnCours}
                 onClick={() => {
                   setCompletionEnCours(true);

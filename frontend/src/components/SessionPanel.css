@@ -1,23 +1,121 @@
-/* Détail de la séance choisie (Vue Semaine, colonne de droite). */
+/* Détail de la séance choisie (Vue Semaine, colonne de droite) ; sans
+   séance choisie, la semaine en bref. Carte blanche bordée, sans ombre. */
 
 .session-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 12px 14px;
+  padding: 14px 16px;
 }
 
-.session-panel--vide {
-  border-style: dashed;
-  background: transparent;
+.session-panel h3 {
+  margin: 4px 0 12px;
+  font-size: 0.98rem;
+  font-weight: 600;
 }
 
-.session-panel--vide p {
+/* ── La semaine en bref ── */
+.session-panel--vide h3 {
   margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.85rem;
 }
 
+.session-resume-portee {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.session-resume-tuiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 10px;
+}
+
+.session-resume-tuile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.session-resume-tuile span {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.session-resume-tuile strong {
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-resume-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.session-resume-types li {
+  --c-bg: var(--surface-3);
+  --c-fg: var(--ink);
+  --c-bd: var(--border);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--c-bd);
+  border-radius: 999px;
+  background: var(--c-bg);
+  color: var(--c-fg);
+  font-size: 0.8rem;
+}
+
+.session-resume-types li.type-cm { --c-bg: var(--cm-bg); --c-fg: var(--cm-fg); --c-bd: var(--cm-bd); }
+.session-resume-types li.type-td { --c-bg: var(--td-bg); --c-fg: var(--td-fg); --c-bd: var(--td-bd); }
+.session-resume-types li.type-tp { --c-bg: var(--tp-bg); --c-fg: var(--tp-fg); --c-bd: var(--tp-bd); }
+
+.session-resume-types li span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+.session-resume-faits {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.session-resume-faits li + li {
+  margin-top: 2px;
+}
+
+.session-resume-faits .manque {
+  color: var(--bad-text);
+  font-weight: 500;
+}
+
+.session-resume-aide {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+
+/* ── Détail d'une séance ── */
 .session-panel-tete {
   display: flex;
   align-items: flex-start;
@@ -36,34 +134,29 @@
 }
 
 .session-panel-code .mono {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink);
 }
 
 .session-panel-etat {
   font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
+  font-weight: 500;
+  padding: 0 8px;
+  border-radius: 999px;
   background: var(--surface-3);
   color: var(--ink-soft);
 }
 
 .session-panel-etat.eval {
-  background: var(--accent2-soft);
-  color: var(--accent2);
-}
-
-.session-panel h3 {
-  margin: 4px 0 10px;
-  font-size: 0.95rem;
+  background: var(--ev-bg);
+  color: var(--ev-fg);
 }
 
 .session-details {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 6px 12px;
-  margin: 0 0 12px;
+  gap: 8px 14px;
+  margin: 0 0 14px;
   font-size: 0.85rem;
 }
 

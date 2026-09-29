@@ -1,17 +1,19 @@
 /**
- * Carte d'une séance dans la grille de la Vue Promo (refonte du 29/09/2026).
+ * Carte d'une séance dans la grille de la Vue Promo (refonte du 29/09/2026,
+ * habillage « Lumière / Nuit » : aplat pastel du type, sans barre latérale).
  *
- * Deux lignes au plus : « code · type » puis « salle · enseignant ». Avant,
- * chaque carte empilait code, type, deux icônes sans nom, salle et nom de
- * l'enseignant en capitales italiques sur deux ou trois lignes : une journée
- * faisait 1 200 px de haut. Le nom complet du cours et de l'enseignant reste
- * au survol (`title`).
+ * Trois lignes courtes : « code · type », le nom de la matière (coupé au
+ * besoin), puis « salle · enseignant abrégé ». Avant, chaque carte empilait
+ * code, type, deux icônes sans nom, salle et nom de l'enseignant en
+ * capitales italiques : une journée faisait 1 200 px de haut. Le nom complet
+ * du cours et de l'enseignant reste au survol (`title`).
  *
  * Les actions (modifier, retirer du planning, supprimer une séance ajoutée à
  * la main) sont de vrais boutons nommés, visibles au survol ou au focus, et
  * toujours visibles au toucher. Double-clic sur la carte = modifier.
  */
 import type { CSSProperties, DragEvent as ReactDragEvent } from "react";
+import { Pencil, Trash2, Undo2 } from "lucide-react";
 
 import type { Placement } from "../types";
 import type { AppRow, RoomCatalogEntry } from "../types/app";
@@ -21,19 +23,6 @@ import { nomComplet, nomCourt } from "../utils/nomEnseignant";
 /** « H.103 (Anglais) » -> « H.103 » : la précision reste dans l'infobulle. */
 export function salleCourte(libelle: string): string {
   return libelle.replace(/\s*\([^)]*\)\s*$/, "");
-}
-
-function Icone({ nom }: { nom: "modifier" | "retirer" | "supprimer" }) {
-  const d = {
-    modifier: "M3 13h2.5L13 5.5 10.5 3 3 10.5V13Zm6.5-9L12 6.5",
-    retirer: "M6 4 3 7l3 3M3 7h6.5a3.5 3.5 0 0 1 0 7H7",
-    supprimer: "M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5",
-  }[nom];
-  return (
-    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }
 
 interface PromoCarteProps {
@@ -146,6 +135,11 @@ export function PromoCarte({
         </span>
         {swapTarget && <span className="promo-chip__echange">échanger</span>}
       </div>
+      {r.n && (
+        <div className="promo-chip__nom" title={infobulle}>
+          {r.n}
+        </div>
+      )}
       <div className="promo-chip__l2">
         {salleEnEdition ? (
           <select
@@ -208,7 +202,7 @@ export function PromoCarte({
             }}
             onMouseDown={stop}
           >
-            <Icone nom="modifier" />
+            <Pencil size={13} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -221,7 +215,7 @@ export function PromoCarte({
             }}
             onMouseDown={stop}
           >
-            <Icone nom="retirer" />
+            <Undo2 size={13} aria-hidden="true" />
           </button>
           {r.custom && (
             <button
@@ -235,7 +229,7 @@ export function PromoCarte({
               }}
               onMouseDown={stop}
             >
-              <Icone nom="supprimer" />
+              <Trash2 size={13} aria-hidden="true" />
             </button>
           )}
         </span>

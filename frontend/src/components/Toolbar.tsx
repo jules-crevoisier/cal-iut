@@ -1,11 +1,12 @@
 /**
- * Barre d'outils de la Vue Semaine (refonte du 29/09/2026).
+ * Barre d'outils de la Vue Semaine (refonte du 29/09/2026, gabarit v2).
  *
- * Deux lignes au lieu de sept champs en capitales sur deux lignes :
- * 1. QUOI : année, parcours, « afficher par » (groupe / enseignant / salle)
- *    et la cible correspondante ; le réglage des couleurs à droite.
- * 2. QUAND : semaine précédente / suivante / aujourd'hui, et l'histogramme
- *    des semaines (`WeekBar`), qui a enfin la largeur pour ses libellés.
+ * Une ligne à plat : « Afficher par » (groupe / enseignant / salle), la cible
+ * correspondante (année, parcours et groupe ; enseignant ; salle), et le
+ * réglage des couleurs à droite. Dessous, le ruban fin des semaines
+ * (`WeekBar`). La semaine elle-même se choisit dans la barre supérieure,
+ * partagée par toutes les vues ; les raccourcis Maj + ← / → et T agissent
+ * sur cette semaine partagée.
  *
  * Le sélecteur « Semestre » a disparu : il ne filtrait rien (seule l'année
  * compte pour la liste des parcours, et elle a déjà son sélecteur).
@@ -19,7 +20,6 @@ import { nomComplet } from "../utils/nomEnseignant";
 import { indexSemaineCourante } from "../utils/semaineCourante";
 import { DEFAULT_YEARS } from "../utils/years";
 import { WeekBar } from "./WeekBar";
-import { WeekStepper } from "./WeekStepper";
 import "./Toolbar.css";
 
 interface ToolbarProps {
@@ -28,7 +28,8 @@ interface ToolbarProps {
   years: YearMeta[];
   parcoursList: string[];
   displayWeek: number;
-  maxWeeks: number;
+  /** Plus utilisé : la barre supérieure porte la semaine (et son repli). */
+  maxWeeks?: number;
   weekRows: WeekRow[];
   weekCounts: Map<number, number>;
   viewMode: ViewMode;
@@ -65,6 +66,31 @@ function groupOptionLabel(g: GroupMeta, all: GroupMeta[]): string {
     return `${g.label} (CM seulement)`;
   }
   return `${g.label} (${g.kind.toUpperCase()})`;
+}
+
+/** Ce que montre la grille, en clair (« BUT1 · TD AB », « Joan Lefevre »,
+ *  « H.101 ») — pour le résumé de la semaine dans la colonne de droite. */
+export function libelleCible(o: {
+  viewMode: ViewMode;
+  parcours: string;
+  groupId: string;
+  groups: GroupMeta[];
+  teacherCode: string;
+  teacherLabels?: Record<string, string>;
+  roomId: string;
+  rooms: RoomMeta[];
+}): string {
+  if (o.viewMode === "teacher") {
+    if (!o.teacherCode) return "Tous les enseignants";
+    const nom = o.teacherLabels?.[o.teacherCode];
+    return nom ? nomComplet(nom) : o.teacherCode;
+  }
+  if (o.viewMode === "room") {
+    if (!o.roomId) return "Toutes les salles";
+    return o.rooms.find((r) => r.id === o.roomId)?.label ?? o.roomId;
+  }
+  if (!o.groupId) return `${o.parcours} · tous les groupes`;
+  return `${o.parcours} · ${o.groups.find((g) => g.id === o.groupId)?.label ?? o.groupId}`;
 }
 
 const MODES: { id: ViewMode; label: string }[] = [
@@ -118,27 +144,36 @@ export function Toolbar(props: ToolbarProps) {
   const parGroupe = props.viewMode === "group";
 
   return (
-    <div className="panel semaine-barre">
-      <div className="semaine-barre-ligne">
-        <div className="semaine-modes" role="group" aria-label="Afficher le planning par">
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={props.viewMode === m.id ? "active" : undefined}
-              aria-pressed={props.viewMode === m.id}
-              onClick={() => props.onViewModeChange(m.id)}
-            >
-              {m.label}
-            </button>
-          ))}
+    <>
+      {/* Barre d'outils À PLAT (gabarit v2) : QUOI à gauche (afficher par,
+          cible), le réglage des couleurs à droite. Plus de carte autour, plus
+          de navigation de semaine : la barre supérieure la porte. */}
+      <div className="page-outils semaine-outils">
+        <div className="semaine-modes-bloc">
+          <span className="semaine-modes-titre" aria-hidden="true">
+            Afficher par
+          </span>
+          <div className="semaine-modes" role="group" aria-label="Afficher le planning par">
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className={props.viewMode === m.id ? "active" : undefined}
+                aria-pressed={props.viewMode === m.id}
+                onClick={() => props.onViewModeChange(m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {parGroupe && (
-          <>
-            <label className="semaine-champ">
-              <span>Année</span>
+        <div className="semaine-cible" role="group" aria-label="Planning affiché">
+          {parGroupe && (
+            <>
               <select
+                aria-label="Année"
+                title="Année"
                 value={props.year}
                 onChange={(e) => props.onYearChange(Number(e.target.value))}
                 disabled={props.loading}
@@ -149,10 +184,9 @@ export function Toolbar(props: ToolbarProps) {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="semaine-champ">
-              <span>Parcours</span>
               <select
+                aria-label="Parcours"
+                title="Parcours"
                 value={props.parcours}
                 onChange={(e) => props.onParcoursChange(e.target.value)}
                 disabled={props.loading}
@@ -163,26 +197,33 @@ export function Toolbar(props: ToolbarProps) {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="semaine-champ">
-              <span>Groupe</span>
-              <select value={props.groupId} onChange={(e) => props.onGroupChange(e.target.value)}>
-                <option value="">Tous</option>
+              <select
+                aria-label="Groupe"
+                title="Groupe"
+                className="semaine-cible-principale"
+                value={props.groupId}
+                onChange={(e) => props.onGroupChange(e.target.value)}
+              >
+                <option value="">Tous les groupes</option>
                 {filteredGroups.map((g) => (
                   <option key={g.id} value={g.id}>
                     {groupOptionLabel(g, props.groups)}
                   </option>
                 ))}
               </select>
-            </label>
-          </>
-        )}
+            </>
+          )}
 
-        {props.viewMode === "teacher" && (
-          <label className="semaine-champ">
-            <span>Enseignant</span>
-            <select value={props.teacherCode} onChange={(e) => props.onTeacherChange(e.target.value)}>
-              {/* « Tous » empilait 180 séances illisibles : on demande un choix. */}
+          {props.viewMode === "teacher" && (
+            <select
+              aria-label="Enseignant"
+              title="Enseignant"
+              className="semaine-cible-principale"
+              value={props.teacherCode}
+              onChange={(e) => props.onTeacherChange(e.target.value)}
+            >
+              {/* « Tous » empilait 180 séances illisibles : sans choix, la
+                  grille laisse place à l'annuaire des enseignants. */}
               <option value="">Choisir un enseignant…</option>
               {teachersTries.map((t) => (
                 <option key={t} value={t}>
@@ -190,13 +231,16 @@ export function Toolbar(props: ToolbarProps) {
                 </option>
               ))}
             </select>
-          </label>
-        )}
+          )}
 
-        {props.viewMode === "room" && (
-          <label className="semaine-champ">
-            <span>Salle</span>
-            <select value={props.roomId} onChange={(e) => props.onRoomChange(e.target.value)}>
+          {props.viewMode === "room" && (
+            <select
+              aria-label="Salle"
+              title="Salle"
+              className="semaine-cible-principale"
+              value={props.roomId}
+              onChange={(e) => props.onRoomChange(e.target.value)}
+            >
               <option value="">Choisir une salle…</option>
               {props.rooms.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -204,45 +248,13 @@ export function Toolbar(props: ToolbarProps) {
                 </option>
               ))}
             </select>
-          </label>
-        )}
-      </div>
+          )}
+        </div>
 
-      <div className="semaine-barre-ligne">
-        {props.weekRows.length > 0 ? (
-          <>
-            <WeekStepper
-              weekRows={props.weekRows}
-              selected={props.displayWeek}
-              onSelect={props.onWeekChange}
-              raccourcis
-            />
-            <div className="semaine-weekbar">
-              <WeekBar
-                weekRows={props.weekRows}
-                countByWeekIndex={props.weekCounts}
-                selected={props.displayWeek}
-                onSelect={props.onWeekChange}
-              />
-            </div>
-          </>
-        ) : (
-          // Repli avant le premier chargement de `/app-state` (pas encore de
-          // `weekRows` : la `WeekBar` n'aurait rien à afficher).
-          <label className="semaine-champ">
-            <span>Semaine</span>
-            <select value={props.displayWeek} onChange={(e) => props.onWeekChange(Number(e.target.value))}>
-              {Array.from({ length: props.maxWeeks }, (_, i) => (
-                <option key={i} value={i}>
-                  Semaine {i + 1}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className="semaine-champ semaine-couleurs">
-          <span>Couleurs</span>
+        <div className="page-outils-actions">
           <select
+            aria-label="Couleurs"
+            className="semaine-couleurs"
             value={props.couleursParMatiere ? "matiere" : "type"}
             onChange={(e) => props.onCouleursChange(e.target.value === "matiere")}
           >
@@ -251,10 +263,28 @@ export function Toolbar(props: ToolbarProps) {
             <option value="type">Couleurs par type</option>
             <option value="matiere">Couleurs par matière</option>
           </select>
-        </label>
+        </div>
       </div>
+
+      {/* Ruban des semaines (retour utilisateur 11/08/2026 : « il faut mettre
+          les semaines dans la vue semaine aussi ») : fin, sans légende — la
+          barre supérieure dit déjà quelle semaine est affichée. */}
+      {props.weekRows.length > 0 && (
+        <div className="semaine-ruban">
+          <span className="semaine-ruban-titre" aria-hidden="true">
+            Semaines
+          </span>
+          <WeekBar
+            weekRows={props.weekRows}
+            countByWeekIndex={props.weekCounts}
+            selected={props.displayWeek}
+            onSelect={props.onWeekChange}
+            fine
+          />
+        </div>
+      )}
       {/* « Charger données » / « Générer » / « Recalculer tout » retirés
           (retour utilisateur 27/08/2026 : génération toujours faite en CLI). */}
-    </div>
+    </>
   );
 }

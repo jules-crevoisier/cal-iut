@@ -215,7 +215,7 @@ describe("PromoView park-week-move", () => {
       expect(performMove).toHaveBeenCalled();
     });
     expect(screen.getByRole("article", { name: /WR101/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /semaine 2 \(/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Semaine précédente" }));
     expect(chipDansGrille("WR101")).not.toBeInTheDocument();
   });
 
@@ -241,7 +241,8 @@ describe("PromoView park-week-move", () => {
       placements: [placementPour("maquette-1", { locked: true })],
     });
     fireEvent.dragStart(cibleGlisser("WR101"), { dataTransfer });
-    fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }), { dataTransfer });
+    // Rien ne se glisse : les semaines ne s'offrent pas comme cible de dépôt.
+    expect(screen.queryByRole("button", { name: /semaine 8/i })).not.toBeInTheDocument();
     expect(chipDansGrille("WR101")).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: /WR101/ })).not.toBeInTheDocument();
     expect(performMove).not.toHaveBeenCalled();
@@ -273,12 +274,12 @@ describe("PromoView park-week-move", () => {
   it("should keep the first parked session hidden when a second one is parked without POST", async () => {
     await rendrePromo();
     await parquerVersSemaine8("WR101");
-    fireEvent.click(screen.getByRole("button", { name: /semaine 2 \(/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Semaine précédente" }));
     await waitFor(() => {
       expect(chipDansGrille("WR102")).toBeInTheDocument();
     });
     await parquerVersSemaine8("WR102");
-    fireEvent.click(screen.getByRole("button", { name: /semaine 2 \(/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Semaine précédente" }));
     await waitFor(() => {
       expect(chipDansGrille("WR101")).not.toBeInTheDocument();
       expect(chipDansGrille("WR102")).not.toBeInTheDocument();
@@ -304,7 +305,8 @@ describe("PromoView park-week-move", () => {
     expect(screen.queryByRole("button", { name: /séances à placer/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/à placer & déplacer/i)).not.toBeInTheDocument();
     fireEvent.dragStart(cibleGlisser("WR101"), { dataTransfer });
-    fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }), { dataTransfer });
+    // Rien ne se glisse : les semaines ne s'offrent pas comme cible de dépôt.
+    expect(screen.queryByRole("button", { name: /semaine 8/i })).not.toBeInTheDocument();
     expect(chipDansGrille("WR101")).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: /WR101/ })).not.toBeInTheDocument();
     expect(performMove).not.toHaveBeenCalled();
@@ -313,7 +315,7 @@ describe("PromoView park-week-move", () => {
   it("should keep both parked cards when a second session is dropped on another week", async () => {
     await rendrePromo();
     await parquerVersSemaine8("WR101");
-    fireEvent.click(screen.getByRole("button", { name: /semaine 2 \(/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Semaine précédente" }));
     fireEvent.dragStart(cibleGlisser("WR102"), { dataTransfer });
     fireEvent.drop(screen.getByRole("button", { name: /semaine 8/i }), { dataTransfer });
     await waitFor(() => {

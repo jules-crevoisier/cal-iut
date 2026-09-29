@@ -1,17 +1,22 @@
 /* ══════════════ Grille « groupe TD » de la Vue Semaine ══════════════
    5 jours × 2 colonnes TP. CM / TD sur les deux colonnes, TP sur une.
-   Lecture seule : un clic ouvre le détail de la séance. */
+   Lecture seule : un clic ouvre le détail de la séance.
+   Habillage « Lumière / Nuit » : pas de quadrillage (un filet entre les
+   jours), cartes en aplats pastel sans barre latérale, en-têtes collants,
+   créneaux étirés sur la hauteur disponible. */
 
 .td-grid-wrap {
   position: relative;
   overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .td-grid {
   width: 100%;
+  height: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  min-width: 860px;
+  min-width: 760px;
   background: var(--surface);
 }
 
@@ -20,35 +25,53 @@
   min-width: 0;
 }
 
+.td-grid col.td-col-heures {
+  width: 76px;
+}
+
+.td-grid col.td-col-jour {
+  border-left: 1px solid var(--border);
+}
+
 .td-grid th,
 .td-grid td {
-  border: 1px solid var(--border);
+  border: 0;
   vertical-align: top;
+}
+
+.td-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 
 .td-grid-corner,
 .td-grid-slotlabel {
-  width: 84px;
-  background: var(--surface-2);
-  color: var(--ink-soft);
+  color: var(--ink-faint);
   font-size: 0.75rem;
   font-weight: 500;
   text-align: left;
-  padding: 6px 8px;
+  padding: 8px 8px 0 12px;
   white-space: nowrap;
+}
+
+.td-grid thead .td-grid-corner {
+  vertical-align: bottom;
+  padding-bottom: 8px;
 }
 
 .td-grid-dayhead {
   text-align: center;
-  padding: 6px 4px 4px;
-  background: var(--surface-2);
-  font-size: 0.85rem;
+  padding: 8px 4px 6px;
+  font-size: 0.8125rem;
   font-weight: 600;
+  color: var(--ink);
 }
 
-.td-grid-dayhead--auj {
-  box-shadow: inset 0 -2px 0 var(--accent);
-  color: var(--accent);
+.td-grid thead th.td-grid-dayhead--auj {
+  box-shadow: inset 0 -2px 0 var(--ink);
 }
 
 .td-grid-daydate {
@@ -61,21 +84,27 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin-top: 2px;
-  font-size: 0.72rem;
-  font-weight: 500;
+  margin-top: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--ink-soft);
 }
 
 .td-grid-cell {
-  height: 60px;
+  height: 64px;
   padding: 3px;
   background: var(--surface);
+}
+
+.td-grid tbody tr:first-child > * {
+  padding-top: 8px;
 }
 
 .td-grid-cell--conflict {
   outline: 2px solid var(--bad);
   outline-offset: -2px;
+  border-radius: calc(var(--radius) + 3px);
 }
 
 .td-conflict-flag {
@@ -86,90 +115,124 @@
   color: var(--bad-text);
 }
 
-/* Pause déjeuner : fine bande grise (ligne `.sessiongrid-pause`). */
+/* Pause déjeuner : séparateur en tirets. */
 .td-grid .sessiongrid-pause td {
-  height: 18px;
-  padding: 0 8px;
-  font-size: 0.7rem;
-  background: var(--surface-3);
+  height: 20px;
+  padding: 0 8px 0 12px;
+  font-size: 0.6875rem;
+  color: var(--ink-faint);
+  vertical-align: middle;
+  background: none;
+  border-top: 1px dashed var(--border-strong);
+  border-bottom: 1px dashed var(--border-strong);
 }
 
-/* ── Séance ── */
+/* ── Séance : aplat pastel du type ── */
 .td-block {
+  --c-bg: var(--td-bg);
+  --c-fg: var(--td-fg);
+  --c-bd: var(--td-bd);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
+  align-items: stretch;
+  gap: 1px;
   width: 100%;
   height: 100%;
   min-height: 52px;
-  padding: 3px 6px 3px 7px;
-  border: 0;
-  border-left: 3px solid var(--type-td);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--type-td) 10%, var(--surface));
+  padding: 5px 8px;
+  border: 1px solid var(--c-bd);
+  border-radius: var(--radius);
+  background: var(--c-bg);
+  color: var(--c-fg);
   cursor: pointer;
   text-align: left;
   font: inherit;
   font-size: 0.75rem;
   line-height: 1.3;
-  color: var(--ink);
   overflow: hidden;
 }
 
 .td-block:hover {
-  filter: brightness(0.97);
+  border-color: color-mix(in srgb, var(--c-fg) 35%, var(--c-bd));
 }
 
-.td-block.type-cm {
-  background: color-mix(in srgb, var(--type-cm) 11%, var(--surface));
-  border-left-color: var(--type-cm);
-}
+.td-block:where(.type-cm) { --c-bg: var(--cm-bg); --c-fg: var(--cm-fg); --c-bd: var(--cm-bd); }
+.td-block:where(.type-tp) { --c-bg: var(--tp-bg); --c-fg: var(--tp-fg); --c-bd: var(--tp-bd); }
+.td-block:where(.eval) { --c-bg: var(--ev-bg); --c-fg: var(--ev-fg); --c-bd: var(--ev-bd); }
 
-.td-block.type-tp {
-  background: color-mix(in srgb, var(--type-tp) 11%, var(--surface));
-  border-left-color: var(--type-tp);
-}
-
-/* PTUT : catégorie propre à cette vue, teinte dédiée. */
-.td-block.type-ptut {
-  background: color-mix(in srgb, #8e44ad 11%, var(--surface));
-  border-left-color: #8e44ad;
-}
-
-.td-block.eval {
-  border-left-color: var(--type-eval);
-  background: color-mix(in srgb, var(--type-eval) 13%, var(--surface));
-}
+/* PTUT : catégorie propre à cette vue, en gris neutre. */
+.td-block:where(.type-ptut) { --c-bg: var(--cm-bg); --c-fg: var(--cm-fg); --c-bd: var(--cm-bd); }
 
 .td-block.locked {
-  border-left-style: dashed;
+  border-style: dashed;
 }
 
 /* Séance dont le détail est ouvert à droite. */
 .td-block.selected {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.td-block:not(.td-block--span) {
+  padding: 5px 6px;
+}
+
+.td-block:not(.td-block--span) .td-block-l1 {
+  gap: 4px;
+}
+
+.td-block-l1,
+.td-block-l3 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
 
 .td-block-code {
   font-family: var(--mono);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.78rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
-.td-block-meta,
-.td-block-room {
+.td-block-meta {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.td-block-nom {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.td-block-l3 {
+  gap: 0;
   font-size: 0.72rem;
-  color: var(--ink-soft);
-  max-width: 100%;
+  opacity: 0.8;
+}
+
+.td-block-room,
+.td-block-prof {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .td-block-room {
-  color: var(--ink);
+  flex: none;
+}
+
+.td-block-prof::before {
+  content: " · ";
+  white-space: pre;
 }
 
 .td-block-room--absente {
@@ -184,7 +247,6 @@
   max-width: 300px;
   padding: 10px 12px;
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-pop);
   font-size: 0.8rem;
@@ -196,6 +258,35 @@
   display: block;
   margin-bottom: 4px;
   font-size: 0.88rem;
+}
+
+/* Couleurs par matière : même aplat, bord de la teinte de la matière (pas
+   de barre à gauche). `.td-grid` en plus : app.css est chargé après. */
+.td-grid.couleurs-matiere .td-block {
+  border: 1px solid color-mix(in srgb, var(--matiere-barre) 35%, transparent);
+  color: var(--ink);
+}
+
+.td-grid.couleurs-matiere .td-block.eval {
+  border: 1px dashed var(--matiere-barre);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .td-grid.couleurs-matiere .td-block {
+    border: 1px solid color-mix(in srgb, var(--matiere-barre-sombre) 40%, transparent);
+  }
+
+  :root:not([data-theme="light"]) .td-grid.couleurs-matiere .td-block.eval {
+    border: 1px dashed var(--matiere-barre-sombre);
+  }
+}
+
+:root[data-theme="dark"] .td-grid.couleurs-matiere .td-block {
+  border: 1px solid color-mix(in srgb, var(--matiere-barre-sombre) 40%, transparent);
+}
+
+:root[data-theme="dark"] .td-grid.couleurs-matiere .td-block.eval {
+  border: 1px dashed var(--matiere-barre-sombre);
 }
 
 /* Bandes jour (férié, PAC, SAE, évènement) réutilisées de `SessionGrid`. */

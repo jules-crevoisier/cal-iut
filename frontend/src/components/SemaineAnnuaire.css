@@ -1,0 +1,117 @@
+/* Annuaire de la Vue Semaine (enseignants ou salles, chiffres de la
+   semaine). Dans la carte de la grille : pas de carte en plus. */
+
+.semaine-annuaire {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.semaine-annuaire-outils {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.semaine-annuaire-outils input[type="search"] {
+  flex: 0 1 280px;
+  min-width: 160px;
+  border-radius: 999px;
+  padding-left: 12px;
+}
+
+.semaine-annuaire-compte {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.semaine-annuaire-tri {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-left: auto;
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.semaine-annuaire-tri button {
+  font: inherit;
+  font-size: 0.8rem;
+  min-height: 26px;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.semaine-annuaire-tri button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--border-strong);
+}
+
+.semaine-annuaire-defil {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+table.ref.semaine-annuaire-table th,
+table.ref.semaine-annuaire-table td {
+  padding: 0 12px;
+  height: 36px;
+  vertical-align: middle;
+}
+
+table.ref.semaine-annuaire-table thead th {
+  background: var(--surface);
+}
+
+table.ref.semaine-annuaire-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.semaine-annuaire-nom {
+  font: inherit;
+  font-weight: 500;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.semaine-annuaire-nom:hover,
+.semaine-annuaire-nom:focus-visible {
+  text-decoration: underline;
+}
+
+.semaine-annuaire-detail {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.semaine-annuaire-libre td:not(:first-child) {
+  color: var(--ink-faint);
+}
+
+.semaine-annuaire-vide {
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.semaine-annuaire-table--salle .semaine-annuaire-detail {
+  font-family: inherit;
+}

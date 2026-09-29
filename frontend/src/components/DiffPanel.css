@@ -1,15 +1,16 @@
 /* Modifications depuis la génération + exports (Vue Semaine, à droite). */
 
-.diff-panel {
+/* `.panel.` en tête : app.css (`.panel`, `.panel h3`) est chargé après. */
+.panel.diff-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 14px 16px;
 }
 
-.diff-panel h3 {
+.panel.diff-panel h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
 }
 
 .diff-summary {
@@ -26,8 +27,9 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 260px;
+  max-height: 280px;
   overflow-y: auto;
+  scrollbar-width: thin;
   border-top: 1px solid var(--border);
 }
 
@@ -63,7 +65,7 @@
 
 .diff-item-code {
   font-family: var(--mono);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .diff-item-trajet {

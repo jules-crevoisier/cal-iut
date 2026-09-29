@@ -25,7 +25,7 @@ import { couleursMatiere } from "../utils/couleursMatiere";
 import { positionInfobulle } from "../utils/infobulle";
 import { usePreferences } from "../utils/preferences";
 import { shortGroupLabel } from "../utils/years";
-import { nomComplet } from "../utils/nomEnseignant";
+import { nomComplet, nomCourt } from "../utils/nomEnseignant";
 import "./TdWeekGrid.css";
 
 interface TdWeekGridProps {
@@ -195,6 +195,16 @@ export function TdWeekGrid({
       <table
         className={`td-grid${couleursParMatiere ? " couleurs-matiere" : ""}${onlyDay !== null ? " td-grid--un-jour" : ""}`}
       >
+        {/* Un filet entre les jours, pas de quadrillage (maquette « Lumière »). */}
+        <colgroup>
+          <col className="td-col-heures" />
+          {days.map((day) => (
+            <Fragment key={day}>
+              <col className="td-col-jour" />
+              <col />
+            </Fragment>
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th className="td-grid-corner" scope="col">
@@ -423,9 +433,10 @@ function SessionBlock({
   onHover: (v: { placement: Placement; x: number; y: number } | null) => void;
 }) {
   const p = event.placement;
-  const short = shortGroupLabel(p.group_ids, groupLabels);
   const typeClass = p.session_type.toLowerCase();
   const enseignants = p.teacher_codes.map((c) => (teacherLabels[c] ? nomComplet(teacherLabels[c]!) : c)).join(", ");
+  const short = shortGroupLabel(p.group_ids, groupLabels);
+  const courts = p.teacher_codes.map((c) => (teacherLabels[c] ? nomCourt(teacherLabels[c]!) : c)).join(", ");
 
   return (
     <button
@@ -433,22 +444,29 @@ function SessionBlock({
       style={couleursMatiere(p.course_code) as React.CSSProperties}
       className={`td-block type-${typeClass} ${event.span ? "td-block--span" : ""} ${p.is_eval ? "eval" : ""} ${p.locked ? "locked" : ""}${selected ? " selected" : ""}`}
       aria-pressed={selected}
-      aria-label={`${p.course_code} ${p.session_type}, ${dayName(p.day)} ${p.hor ?? slotLabel(p.slot)}, salle ${p.room_label ?? "à définir"}${enseignants ? `, ${enseignants}` : ""}`}
+      aria-label={`${p.course_code} ${p.session_type}${short ? ` (${short})` : ""}, ${dayName(p.day)} ${p.hor ?? slotLabel(p.slot)}, salle ${p.room_label ?? "à définir"}${enseignants ? `, ${enseignants}` : ""}`}
       onClick={() => onSelect(p)}
       onMouseEnter={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}
       onMouseLeave={() => onHover(null)}
     >
-      <span className="td-block-code">{p.course_code}</span>
-      <span className="td-block-meta">
-        {p.session_type}
-        {/* Idem : additif, jamais affiché à la place du créneau de
-            stockage (cf. l'infobulle plus haut). */}
-        {p.hor ? ` · ${p.hor}` : ""}
-        {short ? ` · ${short}` : ""}
+      {/* Carte « Lumière » : code + type, nom de la matière, salle ·
+          enseignant abrégé (même lecture que la Vue Promo). */}
+      <span className="td-block-l1">
+        <span className="td-block-code">{p.course_code}</span>
+        <span className="td-block-meta">
+          {p.session_type}
+          {/* Idem : additif, jamais affiché à la place du créneau de
+              stockage (cf. l'infobulle plus haut). */}
+          {p.hor ? ` · ${p.hor}` : ""}
+        </span>
       </span>
-      <span className={`td-block-room${p.room_label ? "" : " td-block-room--absente"}`}>
-        {p.room_label ? p.room_label.replace(/\s*\([^)]*\)\s*$/, "") : "sans salle"}
+      {p.course_name && <span className="td-block-nom">{p.course_name}</span>}
+      <span className="td-block-l3">
+        <span className={`td-block-room${p.room_label ? "" : " td-block-room--absente"}`}>
+          {p.room_label ? p.room_label.replace(/\s*\([^)]*\)\s*$/, "") : "sans salle"}
+        </span>
+        {courts && <span className="td-block-prof">{courts}</span>}
       </span>
     </button>
   );

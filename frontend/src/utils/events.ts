@@ -3,19 +3,15 @@ import type { Placement } from "../types";
 import { shortGroupLabel } from "../utils/years";
 import { placementToDate, slotLabel } from "../utils/slots";
 
-// Même mapping type -> couleur que l'export HTML (`.session.type-CM/TP`,
-// `export/templates/timetable.html`) : TD (par défaut) = accent, CM =
-// ink-soft (gris neutre), TP = teal. `var(--xxx)` résolu par le navigateur
-// contre les tokens du thème (clair/sombre) — pas de couleur figée ici,
-// contrairement à l'ancienne palette or/vert/bleu propre au React.
-// PTUT n'existe pas côté HTML (catégorie propre à cette vue éditable) :
-// teinte dédiée, cohérente avec la palette mais sans réutiliser un token
-// déjà porteur d'un autre sens.
+// Aplats pastel de la direction « Lumière / Nuit » (mêmes jetons que les
+// cartes de la Vue Promo : `--cm-*`, `--td-*`, `--tp-*`, `--ev-*`), résolus
+// par le navigateur selon le thème. Le texte prend `--*-fg` via la classe
+// `type-*` (cf. `TimetableCalendar.css`). PTUT (propre à cette vue) : gris.
 const TYPE_COLORS: Record<string, { bg: string; border: string }> = {
-  CM: { bg: "color-mix(in srgb, var(--ink-soft) 10%, var(--surface))", border: "var(--ink-soft)" },
-  TD: { bg: "color-mix(in srgb, var(--accent) 10%, var(--surface))", border: "var(--accent)" },
-  TP: { bg: "color-mix(in srgb, var(--teal) 12%, var(--surface))", border: "var(--teal)" },
-  PTUT: { bg: "color-mix(in srgb, #8e44ad 12%, var(--surface))", border: "#8e44ad" },
+  CM: { bg: "var(--cm-bg)", border: "var(--cm-bd)" },
+  TD: { bg: "var(--td-bg)", border: "var(--td-bd)" },
+  TP: { bg: "var(--tp-bg)", border: "var(--tp-bd)" },
+  PTUT: { bg: "var(--cm-bg)", border: "var(--cm-bd)" },
 };
 
 export function placementsToEvents(
@@ -29,9 +25,8 @@ export function placementsToEvents(
     .map((p) => {
       const { start, end } = placementToDate(weekDates, p.week, p.day, p.slot);
       const colors = TYPE_COLORS[p.session_type] ?? { bg: "var(--surface-2)", border: "var(--border)" };
-      // Éval : même override que `.session.eval` côté HTML (accent2/copper
-      // sur la bordure ET le fond, pas seulement un liseré rouge).
-      const evalColors = { bg: "color-mix(in srgb, var(--accent2) 14%, var(--surface))", border: "var(--accent2)" };
+      // Éval / SAE : aplat ambre (`--ev-*`), fond ET bord.
+      const evalColors = { bg: "var(--ev-bg)", border: "var(--ev-bd)" };
       const resolved = p.is_eval ? evalColors : colors;
       const groupShort = shortGroupLabel(p.group_ids, groupLabels);
       const groupPart = groupShort ? ` · ${groupShort}` : "";

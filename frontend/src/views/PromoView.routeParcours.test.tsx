@@ -65,6 +65,7 @@ describe("PromoView filtre via route.parcours (arrivée depuis la recherche)", (
     const table = screen.getByRole("table");
     expect(within(table).getByText("WR311D")).toBeInTheDocument();
     expect(within(table).queryByText("WR101")).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/^année$/i)).toHaveValue("BUT2");
+    expect(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "BUT2" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Parcours")).toHaveValue("BUT2-DEV-FI");
   });
 });

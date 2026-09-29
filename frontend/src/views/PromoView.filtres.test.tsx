@@ -64,7 +64,7 @@ describe("PromoView filters", () => {
     expect(within(table).getByText("WR101")).toBeInTheDocument();
     expect(within(table).getByText("WR311D")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/^année$/i), { target: { value: "BUT1" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "BUT1" }));
     expect(within(table).getByText("WR101")).toBeInTheDocument();
     expect(within(table).queryByText("WR311D")).not.toBeInTheDocument();
   });
