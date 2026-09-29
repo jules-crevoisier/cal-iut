@@ -13,6 +13,8 @@
  * utilisateur : le glisser-déposer vit dans la Vue Promo) : d'où le lien
  * « Modifier dans la Vue Promo », qui ouvre la bonne semaine au bon jour.
  */
+import { X } from "lucide-react";
+
 import type { Placement } from "../types";
 import type { WeekRow } from "../types/app";
 import { movePlacement } from "../api/client";
@@ -155,7 +157,7 @@ export function SessionPanel({
           {placement.locked && <span className="session-panel-etat">Verrouillée</span>}
         </p>
         <button type="button" className="btn btn--ghost btn--icon btn--sm" onClick={onClose} aria-label="Fermer le détail">
-          <span aria-hidden="true">×</span>
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
       <h3 id="session-panel-titre">{placement.course_name || placement.course_code}</h3>

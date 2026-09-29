@@ -172,6 +172,14 @@
   box-shadow: 0 0 0 2px var(--ink);
 }
 
+.td-block:not(.td-block--span) {
+  padding: 5px 6px;
+}
+
+.td-block:not(.td-block--span) .td-block-l1 {
+  gap: 4px;
+}
+
 .td-block-l1,
 .td-block-l3 {
   display: flex;
