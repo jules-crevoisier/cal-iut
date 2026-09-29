@@ -1,0 +1,115 @@
+/* Modifications depuis la génération + exports (Vue Semaine, à droite). */
+
+.diff-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.diff-panel h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.diff-summary {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.diff-summary strong {
+  color: var(--ink);
+}
+
+.diff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.diff-item {
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+
+.diff-item-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.diff-item-btn:hover,
+.diff-item-btn:focus-visible {
+  background: var(--surface-2);
+}
+
+.diff-item > .diff-item-code,
+.diff-item > .diff-item-trajet {
+  display: block;
+  padding: 0 4px;
+}
+
+.diff-item-code {
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.diff-item-trajet {
+  color: var(--ink-soft);
+}
+
+.diff-item-etat {
+  margin-left: 6px;
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.diff-plus {
+  padding: 6px 4px;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.diff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.feedback-block {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  font-size: 0.82rem;
+}
+
+.feedback-block summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.feedback-block .pattern {
+  margin: 4px 0;
+  color: var(--ink-soft);
+}
+
+.feedback-block .suggestions {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}

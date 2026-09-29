@@ -35,6 +35,8 @@ import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import { performMove, performSwap } from "../utils/moveSession";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { DayStrip, todayIndex } from "./DayStrip";
+import { WeekStepper } from "./WeekStepper";
+import "./ParcoursWeekModal.css";
 import { SessionGrid, type EditionGrille } from "./SessionGrid";
 import { ParkedCard } from "../features/park-week-move/ParkedCard";
 import {
@@ -97,7 +99,9 @@ export function ParcoursWeekModal({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") fermer();
+      // Une confirmation ouverte par-dessus (forçage d'un déplacement) se
+      // ferme seule : Échap ne doit pas fermer aussi la semaine en dessous.
+      if (e.key === "Escape" && document.querySelectorAll("[role='dialog'], [role='alertdialog']").length <= 1) fermer();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -220,8 +224,7 @@ export function ParcoursWeekModal({
     onChoisirCase: selectedParked(park) ? (d, s) => void poserParked(d, s) : undefined,
   };
 
-  const semaine = payload.weekRows[semaineAffichee];
-  const derniere = payload.weekRows.length - 1;
+    const derniere = payload.weekRows.length - 1;
 
   return (
     <div className="parcoursmodal-overlay" role="presentation" onClick={fermer}>
@@ -232,35 +235,22 @@ export function ParcoursWeekModal({
         aria-labelledby="parcoursmodal-titre"
         onClick={(e) => e.stopPropagation()}
       >
-        <p role="status" aria-live="polite" className="sr-only">
+        <div className="parcoursmodal-entete">
+          <h3 id="parcoursmodal-titre">{parcours} — semaine complète</h3>
+          <WeekStepper
+            weekRows={payload.weekRows}
+            selected={semaineAffichee}
+            onSelect={(i) => setSemaineAffichee(Math.max(0, Math.min(derniere, i)))}
+          />
+          <button type="button" className="btn btn--sm parcoursmodal-fermer" title="Échap" onClick={fermer}>
+            Fermer
+          </button>
+        </div>
+        {/* Retour visible (et annoncé) après chaque déplacement : avant, il
+            n'existait que pour les lecteurs d'écran. */}
+        <p role="status" aria-live="polite" className={`parcoursmodal-retour${annonce ? " visible" : ""}`}>
           {annonce}
         </p>
-        <div className="parcoursmodal-entete">
-          <h3 id="parcoursmodal-titre">
-            {parcours} — {semaine?.label ?? `Semaine ${semaineAffichee + 1}`}
-          </h3>
-          <div className="parcoursmodal-nav">
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={() => setSemaineAffichee((w) => Math.max(0, w - 1))}
-              disabled={semaineAffichee === 0}
-            >
-              ← Semaine précédente
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              onClick={() => setSemaineAffichee((w) => Math.min(derniere, w + 1))}
-              disabled={semaineAffichee >= derniere}
-            >
-              Semaine suivante →
-            </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={fermer}>
-              Fermer
-            </button>
-          </div>
-        </div>
 
         {optionsGroupe.length > 0 && (
           <div className="parcoursmodal-filtres" role="group" aria-label="Filtrer par groupe">

@@ -118,4 +118,15 @@ describe("APlacerView — semaines nommées comme la grille", () => {
     expect(screen.queryByRole("option", { name: /Semaine 18 \(21–25 déc/ })).toBeNull();
     expect(screen.queryByRole("option", { name: /Semaine 19 \(28 déc/ })).toBeNull();
   });
+
+  it("should name the ideal weeks with the grid label, not « S18 » (solver index + 1)", async () => {
+    monter(seance());
+
+    fireEvent.click(await screen.findByRole("button", { name: /WR306D/ }));
+
+    expect(
+      await screen.findByText(/Semaine\(s\) idéale\(s\).*Semaine 22 \(18–22 janv\. 2027\)/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/idéale\(s\).*S18/)).toBeNull();
+  });
 });

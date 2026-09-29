@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { semaineCalendaireDepuisLundi } from "./utils/weekDisplay";
 import {
   applyFeedback,
   exportCsvUrl,
@@ -602,7 +601,10 @@ export function App() {
 
           <main className="app-main" id="contenu" tabIndex={-1}>
         {activeTab === "semaine" && !readOnlyTarget && (
-          <>
+          // Vue Semaine, refonte du 29/09/2026 : barre d'outils en deux lignes
+          // (quoi / quand), grille pleine largeur, détail de la séance choisie
+          // en tête de la colonne de droite. Styles : `components/Toolbar.css`.
+          <div className="view semaine">
             <Toolbar
               year={year}
               parcours={parcours}
@@ -621,6 +623,7 @@ export function App() {
               teachers={teachers}
               rooms={rooms}
               loading={loading}
+              teacherLabels={appPayload?.teacherLabels}
               onYearChange={handleYearChange}
               onParcoursChange={handleParcoursChange}
               onSemestreChange={handleSemestreChange}
@@ -635,24 +638,21 @@ export function App() {
               onRoomChange={setRoomId}
             />
 
-            <div className="layout">
-              <section className="calendar-section">
-                <div className="section-header">
-                  <h2>
-                    {weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
-                    {/* Semaine calendaire ISO (todo département, 22/09/2026),
-                        calculée depuis le lundi réel — cf. PromoView. */}
-                    {semaineCalendaireDepuisLundi(weekRows[displayWeek]?.monday) !== null
-                      ? ` · semaine calendaire ${semaineCalendaireDepuisLundi(weekRows[displayWeek]?.monday)}`
-                      : ""}
-                    <span className="count">{visiblePlacements.length} séances</span>
-                  </h2>
-                  <div className="legend">
-                    <span className="legend-item cm">CM (promo, 2 col.)</span>
-                    <span className="legend-item td">TD (2 TP, 2 col.)</span>
-                    <span className="legend-item tp">TP (1 col.)</span>
-                    <span className="legend-item eval">Éval / SAE</span>
-                  </div>
+            <div className="semaine-layout">
+              <section className="panel semaine-grille" aria-label="Planning de la semaine">
+                <div className="semaine-grille-entete">
+                  <p className="semaine-compte">
+                    {visiblePlacements.length} séance{visiblePlacements.length > 1 ? "s" : ""} cette semaine
+                    {selected ? "" : " · cliquez une séance pour son détail"}
+                  </p>
+                  {!prefs.couleursParMatiere && (
+                    <ul className="semaine-legende" aria-label="Types de séance">
+                      <li className="cm" title="Cours magistral : toute la promo, sur les deux colonnes">CM</li>
+                      <li className="td" title="Travaux dirigés : les deux groupes TP, sur les deux colonnes">TD</li>
+                      <li className="tp" title="Travaux pratiques : une colonne par groupe TP">TP</li>
+                      <li className="eval">Évaluation / SAE</li>
+                    </ul>
+                  )}
                 </div>
 
                 {narrow && viewMode === "group" && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
@@ -664,7 +664,14 @@ export function App() {
                   </div>
                 ) : solverWeek === null ? (
                   <div className="empty-state">
-                    <p>Semaine bloquée (vacances/fermeture).</p>
+                    <p>Semaine fermée (vacances). Choisissez une autre semaine.</p>
+                  </div>
+                ) : (viewMode === "teacher" && !teacherCode) || (viewMode === "room" && !roomId) ? (
+                  <div className="empty-state">
+                    <p>
+                      Choisissez {viewMode === "teacher" ? "un enseignant" : "une salle"} dans la barre ci-dessus pour
+                      afficher sa semaine.
+                    </p>
                   </div>
                 ) : viewMode === "group" && groupId && groups.find((g) => g.id === groupId)?.kind === "td" ? (
                   <TdWeekGrid
@@ -677,6 +684,7 @@ export function App() {
                     payload={appPayload}
                     parcours={parcours}
                     onlyDay={narrow ? mobileDay : null}
+                    selectedId={selected?.session_id ?? null}
                   />
                 ) : (
                   <TimetableCalendar
@@ -689,12 +697,21 @@ export function App() {
                 )}
               </section>
 
-              <aside className="sidebar">
-                {/* QualityPanel (indicateurs trous/isolés/déséquilibre) et
-                    RegenPanel (régénération ciblée) retirés de Vue Semaine
-                    (retour utilisateur 28/08/2026 : « on enlève la
-                    régénération ciblée [...] tu peux aussi enlever les
-                    indicateurs »). */}
+              <aside className="semaine-cote">
+                {/* QualityPanel (indicateurs) et RegenPanel (régénération
+                    ciblée) retirés (retour utilisateur 28/08/2026), puis
+                    supprimés du code le 29/09/2026. */}
+                <SessionPanel
+                  placement={selected}
+                  onClose={() => setSelected(null)}
+                  onUpdated={handlePlacementUpdated}
+                  onError={setError}
+                  weekRows={weekRows}
+                  weekDates={weekDates}
+                  groupLabels={groupLabels}
+                  teacherLabels={appPayload?.teacherLabels}
+                  onOuvrirPromo={(p) => setRoute({ vue: "promo", sem: p.week, jour: p.day })}
+                />
                 <DiffPanel
                   diff={diff}
                   analysis={analysis}
@@ -702,18 +719,13 @@ export function App() {
                   onExportCsv={handleExportCsv}
                   onExportJson={handleExportJson}
                   loading={loading}
-                />
-                <SessionPanel
-                  placement={selected}
-                  onClose={() => setSelected(null)}
-                  onUpdated={handlePlacementUpdated}
-                  onError={setError}
+                  weekRows={weekRows}
+                  onAllerSemaine={setDisplayWeek}
                 />
               </aside>
             </div>
-          </>
+          </div>
         )}
-
         {activeTab !== "semaine" && activeTab !== "promo" && activeTab !== "comptes" && activeTab !== "celcat" && activeTab !== "mcp" && !appPayload && (
           <div className="empty-state">
             <p>Aucun planning résolu.</p>

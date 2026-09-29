@@ -13,6 +13,7 @@ import { useRef, useState } from "react";
 
 import type { WeekRow } from "../types/app";
 import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
+import "./WeekBar.css";
 
 interface WeekBarProps {
   weekRows: WeekRow[];
@@ -145,7 +146,9 @@ export function WeekBar({
       {captions.length > 0 && (
         <div className="weekbar-caption">
           {captions.map((c) => (
-            <span key={c.key}>{c.label}</span>
+            <span key={c.key} className={`weekbar-caption-${c.key}`} title={c.label}>
+              {c.label}
+            </span>
           ))}
         </div>
       )}

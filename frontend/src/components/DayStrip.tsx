@@ -1,4 +1,5 @@
 import { DAY_LABELS } from "../utils/slots";
+import "./DayStrip.css";
 
 interface DayStripProps {
   selected: number;
@@ -8,12 +9,13 @@ interface DayStripProps {
 /** Barre de sélection de jour — affichée uniquement en lecture mobile (écran étroit). */
 export function DayStrip({ selected, onSelect }: DayStripProps) {
   return (
-    <div className="daystrip">
+    <div className="daystrip" role="group" aria-label="Jour affiché">
       {DAY_LABELS.map((label, d) => (
         <button
           key={label}
           type="button"
           className={d === selected ? "active" : ""}
+          aria-pressed={d === selected}
           onClick={() => onSelect(d)}
         >
           <span className="dfull">{label}</span>

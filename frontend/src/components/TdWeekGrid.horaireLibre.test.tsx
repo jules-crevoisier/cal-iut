@@ -53,6 +53,8 @@ describe("TdWeekGrid — horaire réel d'un évènement à horaire libre", () =>
       />,
     );
     const bloc = screen.getByText("WR101").closest("button");
-    expect(bloc?.textContent).toBe("WR101TD · but1-promo");
+    // Pas d'horaire en plus ; la salle manquante, elle, est dite (« sans
+    // salle ») depuis la refonte du 29/09/2026 — un vide ne se voit pas.
+    expect(bloc?.textContent).toBe("WR101TD · but1-promosans salle");
   });
 });

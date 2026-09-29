@@ -1,0 +1,51 @@
+/* Semaine affichée + précédente / suivante / aujourd'hui (cf. WeekStepper.tsx). */
+
+.weekstepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.weekstepper .btn--icon {
+  color: var(--ink-soft);
+}
+
+.weekstepper-titre {
+  margin: 0 8px 0 6px;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-wrap: pretty;
+  min-width: 0;
+}
+
+.weekstepper-nom {
+  font-weight: 600;
+}
+
+.weekstepper-dates {
+  color: var(--ink);
+}
+
+.weekstepper-cal {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.weekstepper-auj {
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .weekstepper {
+    flex-wrap: wrap;
+  }
+
+  .weekstepper-titre {
+    order: -1;
+    flex: 1 1 100%;
+    margin: 0 0 4px;
+  }
+}

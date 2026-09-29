@@ -11,6 +11,7 @@ import frLocale from "@fullcalendar/core/locales/fr";
 import type { Placement } from "../types";
 import { weekStartDate } from "../utils/slots";
 import { placementsToEvents } from "../utils/events";
+import "./TimetableCalendar.css";
 
 interface TimetableCalendarProps {
   placements: Placement[];
@@ -74,11 +75,10 @@ export function TimetableCalendar({
             {arg.event.extendedProps.roomLabel && (
               <span className="fc-event-room">{arg.event.extendedProps.roomLabel}</span>
             )}
-            {arg.event.extendedProps.locked && <span className="fc-event-lock">🔒</span>}
+            {arg.event.extendedProps.locked && <span className="fc-event-lock">verrouillée</span>}
           </div>
         )}
       />
-      <div className="lunch-marker">Pause déjeuner 12h30 – 14h00</div>
     </div>
   );
 }

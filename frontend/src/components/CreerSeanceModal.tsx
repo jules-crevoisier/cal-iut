@@ -12,6 +12,7 @@ import {
 } from "../utils/placement";
 import { ecrireDernierWeekDay, lireDernierWeekDay } from "../utils/creerSeancePrefs";
 import { TeacherPicker } from "./TeacherPicker";
+import "./CreerSeanceModal.css";
 
 const TYPES = ["CM", "TD", "TP", "PTUT"] as const;
 const DUREES = [
@@ -332,130 +333,133 @@ export function CreerSeanceModal({
               : "Ajoute une heure à une matière existante et la place directement, comme un déplacement manuel."}
         </p>
 
-        <div className="seancemodal-grille">
-          {!modeMaquette && (
-          <label className="newroom-field newroom-field--large">
-            Matière
-            <select
-              ref={premierChampRef}
-              value={courseCode}
-              disabled={!!seanceExistante}
-              onChange={(e) => setCourseCode(e.target.value)}
-            >
-              {coursTries.map((c) => (
-                <option key={`${c.code}-${c.parcours}`} value={c.code}>
-                  {c.code} — {c.name} ({c.parcours})
-                </option>
-              ))}
-            </select>
-          </label>
-          )}
-
-          <label className="newroom-field">
-            Type
-            <select value={sessionType} onChange={(e) => changerType(e.target.value)}>
-              {TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="newroom-field">
-            Durée
-            <select value={dureeSlots} onChange={(e) => setDureeSlots(Number(e.target.value))}>
-              {DUREES.map((d) => (
-                <option key={d.slots} value={d.slots}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {!modeMaquette && (
-          <div className="newroom-field newroom-field--large">
-            Groupe(s)
-            <div className="newroom-field-groupes">
-              {groupesDuParcours.length === 0 && <span className="muted small">Aucun groupe pour ce parcours.</span>}
-              {groupesDuParcours.map((gid) => (
-                <label key={gid}>
-                  <input type="checkbox" checked={groupIds.includes(gid)} onChange={() => basculerGroupe(gid)} />
-                  {payload.groupLabels[gid] ?? gid}
-                </label>
-              ))}
+        {/* Deux blocs (refonte du 29/09/2026) : ce qu'est la séance, puis
+            quand et où — le « quand », qui était tout en bas sous la note,
+            est maintenant visible sans faire défiler. */}
+        <div className="seancemodal-corps">
+          <fieldset className="seancemodal-bloc">
+            <legend>Séance</legend>
+            <div className="seancemodal-grille">
+              {!modeMaquette && (
+              <label className="newroom-field newroom-field--large">
+                Matière
+                <select
+                  ref={premierChampRef}
+                  value={courseCode}
+                  disabled={!!seanceExistante}
+                  onChange={(e) => setCourseCode(e.target.value)}
+                >
+                  {coursTries.map((c) => (
+                    <option key={`${c.code}-${c.parcours}`} value={c.code}>
+                      {c.code} — {c.name} ({c.parcours})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              )}
+              <label className="newroom-field">
+                Type
+                <select value={sessionType} onChange={(e) => changerType(e.target.value)}>
+                  {TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="newroom-field">
+                Durée
+                <select value={dureeSlots} onChange={(e) => setDureeSlots(Number(e.target.value))}>
+                  {DUREES.map((d) => (
+                    <option key={d.slots} value={d.slots}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {!modeMaquette && (
+              <div className="newroom-field newroom-field--large">
+                Groupe(s)
+                <div className="newroom-field-groupes">
+                  {groupesDuParcours.length === 0 && <span className="muted small">Aucun groupe pour ce parcours.</span>}
+                  {groupesDuParcours.map((gid) => (
+                    <label key={gid}>
+                      <input type="checkbox" checked={groupIds.includes(gid)} onChange={() => basculerGroupe(gid)} />
+                      {payload.groupLabels[gid] ?? gid}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              )}
+              <div className="newroom-field newroom-field--large">
+                Enseignant(s)
+                <TeacherPicker selected={teacherCodes} labels={payload.teacherLabels} onChange={setTeacherCodes} />
+              </div>
+              {montrerEval && (
+              <label className="newroom-field newroom-field--checkbox">
+                <input type="checkbox" checked={isEval} onChange={(e) => setIsEval(e.target.checked)} />
+                Évaluation
+              </label>
+              )}
             </div>
-          </div>
-          )}
-
-          <div className="newroom-field newroom-field--large">
-            Enseignant(s)
-            <TeacherPicker selected={teacherCodes} labels={payload.teacherLabels} onChange={setTeacherCodes} />
-          </div>
-
-          {montrerEval && (
-          <label className="newroom-field newroom-field--checkbox">
-            <input type="checkbox" checked={isEval} onChange={(e) => setIsEval(e.target.checked)} />
-            Évaluation
-          </label>
-          )}
-
-          {!modeMaquette && (
-          <label className="newroom-field newroom-field--large">
-            Note (optionnel)
-            <textarea
-              value={note}
-              maxLength={300}
-              placeholder="ex. Rattrapage suite à l'absence du 12/09"
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </label>
-          )}
-
-          <label className="newroom-field">
-            Semaine
-            <select value={week} onChange={(e) => changerSemaine(Number(e.target.value))}>
-              {semainesDisponibles.map((w) => (
-                <option key={w.weekIndex} value={w.weekIndex}>
-                  {w.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="newroom-field">
-            Jour
-            <select value={day} onChange={(e) => changerJour(Number(e.target.value))}>
-              {DAY_LABELS.map((label, i) => (
-                <option key={label} value={i}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="newroom-field">
-            Créneau
-            <select value={slot} onChange={(e) => setSlot(Number(e.target.value))}>
-              {SLOT_TIMES.map((s, i) => (
-                <option key={s.label} value={i}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="newroom-field">
-            Salle
-            <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-              <option value="">Automatique</option>
-              {payload.rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          </fieldset>
+          <fieldset className="seancemodal-bloc">
+            <legend>Quand et où</legend>
+            <div className="seancemodal-grille">
+              <label className="newroom-field">
+                Semaine
+                <select value={week} onChange={(e) => changerSemaine(Number(e.target.value))}>
+                  {semainesDisponibles.map((w) => (
+                    <option key={w.weekIndex} value={w.weekIndex}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="newroom-field">
+                Jour
+                <select value={day} onChange={(e) => changerJour(Number(e.target.value))}>
+                  {DAY_LABELS.map((label, i) => (
+                    <option key={label} value={i}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="newroom-field">
+                Créneau
+                <select value={slot} onChange={(e) => setSlot(Number(e.target.value))}>
+                  {SLOT_TIMES.map((s, i) => (
+                    <option key={s.label} value={i}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="newroom-field">
+                Salle
+                <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+                  <option value="">Automatique</option>
+                  {payload.rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {!modeMaquette && (
+              <label className="newroom-field newroom-field--large">
+                Note (optionnel)
+                <textarea
+                  value={note}
+                  maxLength={300}
+                  placeholder="ex. Rattrapage suite à l'absence du 12/09"
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </label>
+              )}
+            </div>
+          </fieldset>
         </div>
 
         {erreur && <p className="alerte">{erreur}</p>}

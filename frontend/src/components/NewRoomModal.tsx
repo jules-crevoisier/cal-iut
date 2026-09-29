@@ -58,7 +58,7 @@ export function NewRoomModal({ onCreated, onCancel }: NewRoomModalProps) {
   return (
     <div className="confirmmodal-overlay" role="presentation" onClick={onCancel}>
       <form
-        className="panel confirmmodal"
+        className="panel confirmmodal newroommodal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="newroom-titre"

@@ -1,0 +1,69 @@
+/* ══════════════ Calendrier FullCalendar (Vue Semaine : enseignant, salle,
+   groupe promo) ══════════════ */
+
+.calendar-wrap {
+  position: relative;
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: var(--surface);
+  --fc-neutral-bg-color: var(--surface-2);
+  --fc-list-event-hover-bg-color: var(--surface-2);
+  --fc-today-bg-color: var(--accent-soft);
+  /* Fonds de séance clairs (types CM/TD/TP) : texte à l'encre, jamais blanc. */
+  --fc-event-text-color: var(--ink);
+}
+
+.calendar-wrap .fc {
+  font-family: var(--font);
+}
+
+.calendar-wrap .fc .fc-timegrid-slot {
+  height: 1.6rem;
+}
+
+.calendar-wrap .fc .fc-col-header-cell {
+  background: var(--surface-2);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.calendar-wrap .fc .fc-col-header-cell-cushion {
+  color: var(--ink);
+  text-decoration: none;
+  padding: 6px 4px;
+}
+
+.calendar-wrap .fc .fc-timegrid-axis,
+.calendar-wrap .fc .fc-timegrid-slot-label {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.calendar-wrap .fc-event {
+  border-width: 0 0 0 3px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.fc-custom-event {
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.fc-custom-event strong {
+  display: block;
+  font-weight: 600;
+}
+
+.fc-event-room,
+.fc-event-lock {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+
+.session-event.locked {
+  border-left-style: dashed !important;
+}

@@ -1,0 +1,207 @@
+/* ══════════════ Grille « groupe TD » de la Vue Semaine ══════════════
+   5 jours × 2 colonnes TP. CM / TD sur les deux colonnes, TP sur une.
+   Lecture seule : un clic ouvre le détail de la séance. */
+
+.td-grid-wrap {
+  position: relative;
+  overflow-x: auto;
+}
+
+.td-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 860px;
+  background: var(--surface);
+}
+
+/* Un seul jour (téléphone) : la grille tient dans l'écran. */
+.td-grid.td-grid--un-jour {
+  min-width: 0;
+}
+
+.td-grid th,
+.td-grid td {
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.td-grid-corner,
+.td-grid-slotlabel {
+  width: 84px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: left;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.td-grid-dayhead {
+  text-align: center;
+  padding: 6px 4px 4px;
+  background: var(--surface-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.td-grid-dayhead--auj {
+  box-shadow: inset 0 -2px 0 var(--accent);
+  color: var(--accent);
+}
+
+.td-grid-daydate {
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.td-grid-tp-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.td-grid-cell {
+  height: 60px;
+  padding: 3px;
+  background: var(--surface);
+}
+
+.td-grid-cell--conflict {
+  outline: 2px solid var(--bad);
+  outline-offset: -2px;
+}
+
+.td-conflict-flag {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--bad-text);
+}
+
+/* Pause déjeuner : fine bande grise (ligne `.sessiongrid-pause`). */
+.td-grid .sessiongrid-pause td {
+  height: 18px;
+  padding: 0 8px;
+  font-size: 0.7rem;
+  background: var(--surface-3);
+}
+
+/* ── Séance ── */
+.td-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 52px;
+  padding: 3px 6px 3px 7px;
+  border: 0;
+  border-left: 3px solid var(--type-td);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--type-td) 10%, var(--surface));
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.td-block:hover {
+  filter: brightness(0.97);
+}
+
+.td-block.type-cm {
+  background: color-mix(in srgb, var(--type-cm) 11%, var(--surface));
+  border-left-color: var(--type-cm);
+}
+
+.td-block.type-tp {
+  background: color-mix(in srgb, var(--type-tp) 11%, var(--surface));
+  border-left-color: var(--type-tp);
+}
+
+/* PTUT : catégorie propre à cette vue, teinte dédiée. */
+.td-block.type-ptut {
+  background: color-mix(in srgb, #8e44ad 11%, var(--surface));
+  border-left-color: #8e44ad;
+}
+
+.td-block.eval {
+  border-left-color: var(--type-eval);
+  background: color-mix(in srgb, var(--type-eval) 13%, var(--surface));
+}
+
+.td-block.locked {
+  border-left-style: dashed;
+}
+
+/* Séance dont le détail est ouvert à droite. */
+.td-block.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.td-block-code {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.td-block-meta,
+.td-block-room {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.td-block-room {
+  color: var(--ink);
+}
+
+.td-block-room--absente {
+  color: var(--bad-text);
+  font-weight: 600;
+}
+
+.td-hover {
+  position: fixed;
+  z-index: 40;
+  min-width: 220px;
+  max-width: 300px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.td-hover strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.88rem;
+}
+
+/* Bandes jour (férié, PAC, SAE, évènement) réutilisées de `SessionGrid`. */
+.td-grid .sessiongrid-holiday,
+.td-grid .sessiongrid-pac,
+.td-grid .sessiongrid-sae,
+.td-grid .sessiongrid-event {
+  min-height: 52px;
+}

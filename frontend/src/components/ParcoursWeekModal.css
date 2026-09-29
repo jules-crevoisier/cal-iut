@@ -1,0 +1,142 @@
+/* Modale « semaine complète d'un parcours » (clic sur l'intitulé en Vue
+   Promo) — seul endroit où l'on change une séance de jour. */
+
+.parcoursmodal-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  z-index: 60;
+}
+
+.parcoursmodal {
+  width: min(1400px, 100%);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow-pop);
+}
+
+.parcoursmodal-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  flex: 0 0 auto;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.parcoursmodal-entete h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.parcoursmodal-fermer {
+  margin-left: auto;
+}
+
+.parcoursmodal-retour {
+  display: none;
+  margin: 0;
+}
+
+.parcoursmodal-retour.visible {
+  display: block;
+  padding: 6px 10px;
+  border-left: 3px solid var(--good);
+  border-radius: var(--radius-sm);
+  background: var(--good-soft);
+  font-size: 0.85rem;
+}
+
+.parcoursmodal-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.parcoursmodal-filtres .btn.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.parcoursmodal-corps {
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Cases plus hautes qu'en vue admin : c'est sur ces cartes qu'on lit les
+   infos du cours avant de le déplacer. */
+.parcoursmodal-corps .sessiongrid-cell {
+  height: 76px;
+}
+
+.parcoursmodal-aide {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+/* Zone « À placer » de la modale : on y dépose une séance pour la poser sur
+   une autre semaine. */
+.parcoursmodal-aplacer {
+  flex: 0 1 auto;
+  min-height: 44px;
+  max-height: min(28vh, 200px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.parcoursmodal-aplacer > p.muted {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.parcoursmodal-aplacer .aplacer-liste {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.parcoursmodal-aplacer .aplacer-liste > .muted {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.parcoursmodal-aplacer .aplacer-carte {
+  margin: 0;
+  flex: 1 1 240px;
+  max-width: 100%;
+}
+
+@media (max-width: 900px) {
+  .parcoursmodal-overlay {
+    padding: 8px;
+  }
+
+  .parcoursmodal {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .parcoursmodal-corps .sessiongrid-cell {
+    height: 64px;
+  }
+}

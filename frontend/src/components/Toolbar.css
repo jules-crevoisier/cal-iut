@@ -1,0 +1,231 @@
+/* ══════════════ Vue Semaine (refonte du 29/09/2026) ══════════════
+   Barre d'outils (`Toolbar`) + mise en page du bloc Vue Semaine d'`App.tsx`
+   (grille à gauche, détail et modifications à droite). */
+
+.view.semaine {
+  max-width: 100%;
+  gap: 12px;
+}
+
+/* ── Barre d'outils : ligne « quoi », ligne « quand » ── */
+.panel.semaine-barre {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.semaine-barre-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+}
+
+.semaine-champ {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  min-width: 0;
+}
+
+.semaine-champ select {
+  max-width: 260px;
+}
+
+.semaine-couleurs {
+  margin-left: auto;
+}
+
+/* « Afficher par » : contrôle segmenté. */
+.semaine-modes {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex: none;
+}
+
+.semaine-modes button {
+  font: inherit;
+  font-size: 0.85rem;
+  min-height: var(--control-h);
+  padding: 4px 12px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.semaine-modes button:first-child {
+  border-left: 0;
+}
+
+.semaine-modes button:hover {
+  background: var(--surface-2);
+}
+
+.semaine-modes button.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .semaine-modes button.active {
+    color: #0f1216;
+  }
+}
+
+:root[data-theme="dark"] .semaine-modes button.active {
+  color: #0f1216;
+}
+
+.semaine-weekbar {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* ── Grille + colonne de droite ── */
+.semaine-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 12px;
+  align-items: start;
+}
+
+.panel.semaine-grille {
+  padding: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.semaine-grille-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.semaine-compte {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.semaine-legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.semaine-legende li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.semaine-legende li::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-left: 3px solid var(--type-td);
+  background: color-mix(in srgb, var(--type-td) 14%, var(--surface));
+}
+
+.semaine-legende .cm::before { border-color: var(--type-cm); background: color-mix(in srgb, var(--type-cm) 14%, var(--surface)); }
+.semaine-legende .tp::before { border-color: var(--type-tp); background: color-mix(in srgb, var(--type-tp) 14%, var(--surface)); }
+.semaine-legende .eval::before { border-color: var(--type-eval); background: color-mix(in srgb, var(--type-eval) 16%, var(--surface)); }
+
+.semaine-grille .empty-state {
+  margin: 12px;
+}
+
+.semaine-grille .daystrip {
+  margin: 8px 8px 0;
+}
+
+.semaine-cote {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  /* Le détail reste visible pendant qu'on parcourt la grille. */
+  .semaine-cote {
+    position: sticky;
+    top: 12px;
+  }
+}
+
+/* Écran moyen : la grille prend toute la largeur ; le détail d'une séance
+   flotte en bas à droite (sinon il tomberait sous la grille, hors de vue). */
+@media (max-width: 1365px) {
+  .semaine-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .semaine-cote {
+    position: static;
+  }
+
+  .semaine-cote .session-panel--vide {
+    display: none;
+  }
+
+  .semaine-cote .session-panel:not(.session-panel--vide) {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 30;
+    width: min(340px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    box-shadow: var(--shadow-pop);
+  }
+}
+
+@media (max-width: 720px) {
+  .panel.semaine-barre {
+    padding: 8px;
+  }
+
+  .semaine-champ {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .semaine-champ select {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  .semaine-modes {
+    display: flex;
+    width: 100%;
+  }
+
+  .semaine-modes button {
+    flex: 1 1 0;
+    min-height: 40px;
+  }
+
+  .semaine-couleurs {
+    margin-left: 0;
+  }
+}

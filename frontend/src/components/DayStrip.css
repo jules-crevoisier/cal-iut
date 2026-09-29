@@ -1,0 +1,62 @@
+/* ══════════════ DayStrip (lecture sur téléphone) ══════════════
+   Un jour à la fois sur écran étroit : contrôle segmenté, même allure que
+   la barre des jours de la Vue Promo. */
+
+.daystrip {
+  display: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.daystrip button {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 6px 2px;
+  cursor: pointer;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.daystrip button:first-child {
+  border-left: 0;
+}
+
+.daystrip button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .daystrip button.active {
+    color: #0f1216;
+  }
+}
+
+:root[data-theme="dark"] .daystrip button.active {
+  color: #0f1216;
+}
+
+.daystrip .dshort {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .daystrip {
+    display: flex;
+  }
+
+  .daystrip .dfull {
+    display: none;
+  }
+
+  .daystrip .dshort {
+    display: inline;
+  }
+}
