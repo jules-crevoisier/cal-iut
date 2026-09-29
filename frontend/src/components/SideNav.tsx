@@ -18,6 +18,7 @@
 import { useEffect, useRef } from "react";
 
 import type { RouteView } from "../hooks/useHashRoute";
+import "./SideNav.css";
 
 interface NavItem {
   id: RouteView;
@@ -98,13 +99,44 @@ interface SideNavProps {
   onSelect: (id: RouteView) => void;
   onOpenSearch: () => void;
   hasPayload: boolean;
+  /** Nombre total de points « À traiter ». */
   todoCount: number;
   todoHasBad: boolean;
+  /** Dont « à corriger » (le reste est « à revoir ») — quand il est fourni,
+   * c'est lui que montre le badge : 300 points dont 200 compromis acceptés
+   * ne disent pas combien de choses sont réellement cassées. */
+  todoACorriger?: number;
   open: boolean;
   onClose: () => void;
   estAdmin?: boolean;
   email?: string;
   onLogout?: () => void;
+}
+
+/** Raccourci affiché selon la plateforme (le raccourci lui-même accepte
+ * Ctrl comme ⌘, cf. App.tsx). */
+function estMac(): boolean {
+  return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+}
+
+/**
+ * Badge « À traiter » : le nombre de points À CORRIGER en rouge ; s'il n'y en
+ * a aucun, le nombre de points à revoir en neutre ; rien du tout quand tout
+ * est propre (un « 0 » vert permanent n'apprend rien et attire l'œil).
+ */
+function BadgeATraiter({ total, aCorriger }: { total: number; aCorriger: number }) {
+  const aRevoir = Math.max(0, total - aCorriger);
+  if (total === 0) return null;
+  const detail = `${aCorriger} à corriger, ${aRevoir} à revoir`;
+  return aCorriger > 0 ? (
+    <span className="pill mini bad" aria-label={detail} title={detail}>
+      {aCorriger}
+    </span>
+  ) : (
+    <span className="pill mini" aria-label={detail} title={detail}>
+      {aRevoir}
+    </span>
+  );
 }
 
 export function SideNav({
@@ -114,6 +146,7 @@ export function SideNav({
   hasPayload,
   todoCount,
   todoHasBad,
+  todoACorriger,
   open,
   onClose,
   estAdmin,
@@ -191,14 +224,7 @@ export function SideNav({
                   }}
                 >
                   {t.label}
-                  {t.id === "apf" && hasPayload && (
-                    <span
-                      className={`pill mini ${todoHasBad ? "bad" : todoCount ? "warn" : "good"}`}
-                      aria-label={`${todoCount} point(s) à traiter`}
-                    >
-                      {todoCount}
-                    </span>
-                  )}
+                  {t.id === "apf" && hasPayload && <BadgeATraiter total={todoCount} aCorriger={todoACorriger ?? (todoHasBad ? todoCount : 0)} />}
                 </button>
               ))}
             </div>
@@ -210,8 +236,12 @@ export function SideNav({
           className="searchopenbtn sidenav-search"
           onClick={onOpenSearch}
           aria-keyshortcuts="Control+K"
+          title="Enseignant, promo, groupe, cours, salle ou écran"
         >
-          Rechercher <span className="mono kbd" aria-hidden="true">Ctrl+K</span>
+          <span>Rechercher…</span>
+          <kbd className="sidenav-kbd" aria-hidden="true">
+            {estMac() ? "⌘ K" : "Ctrl K"}
+          </kbd>
         </button>
 
         {email && (

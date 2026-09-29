@@ -1,0 +1,177 @@
+/* Envoi du lien personnel par mail (Référence → Liens & partage). */
+
+.confirmmodal.mailmodal {
+  width: min(720px, 100%);
+  max-height: min(86vh, 760px);
+  display: flex;
+  flex-direction: column;
+}
+
+.mailmodal-err {
+  margin: 0;
+  color: var(--bad-text);
+  font-size: 0.85rem;
+}
+
+.mailmodal-barre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.mailmodal-barre input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.mailmodal-selection {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.mailmodal-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.mailmodal-vide {
+  margin: 0;
+  padding: 12px;
+  color: var(--ink-soft);
+}
+
+.mailmodal-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 230px) auto;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 10px;
+  padding: 6px 10px;
+  min-height: 36px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.mailmodal-row:last-child {
+  border-bottom: none;
+}
+
+.mailmodal-row:hover {
+  background: var(--surface-2);
+}
+
+.mailmodal-row--disabled {
+  cursor: default;
+  color: var(--ink-faint);
+}
+
+.mailmodal-name {
+  font-size: 0.875rem;
+}
+
+.mailmodal-email {
+  font-size: 0.78rem;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.mailmodal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.mailmodal-ok {
+  color: var(--good-text);
+}
+
+/* Aperçu par ligne : discret, la case à cocher reste l'action principale. */
+.mailmodal-apercu {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.mailmodal-apercu:hover {
+  text-decoration: underline;
+}
+
+.mailmodal-apercu:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Aperçu du mail réel avant envoi. */
+.mailapercu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.mailapercu-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mailapercu-sujet {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.mailapercu-corps {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .mailmodal-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "check name" ". email" ". status";
+    min-height: 44px;
+  }
+
+  .mailmodal-row input[type="checkbox"] {
+    grid-area: check;
+  }
+
+  .mailmodal-name {
+    grid-area: name;
+  }
+
+  .mailmodal-email {
+    grid-area: email;
+    text-align: left;
+  }
+
+  .mailmodal-status {
+    grid-area: status;
+  }
+}

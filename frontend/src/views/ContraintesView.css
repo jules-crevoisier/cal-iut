@@ -1,0 +1,177 @@
+/* Contraintes (refonte du 29/09/2026). L'échec est en ambre, jamais en
+   rouge (retour utilisateur 27/08/2026). */
+
+.view.contraintes {
+  gap: 12px;
+}
+
+.ctr-resume {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.ctr-resume-warn {
+  color: var(--warn-text);
+  font-weight: 600;
+}
+
+.ctr-resume-ok {
+  color: var(--good-text);
+  font-weight: 600;
+}
+
+.ctr-sep {
+  color: var(--ink-faint);
+}
+
+.panel.ctr-panneau h3 {
+  margin: 0;
+}
+
+.ctr-regles {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.ctr-regle {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.ctr-statut {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding-top: 1px;
+}
+
+.ctr-regle.echec .ctr-statut {
+  color: var(--warn-text);
+}
+
+.ctr-regle.ok .ctr-statut {
+  color: var(--good-text);
+}
+
+.ctr-regle-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ctr-detail {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.ctr-bascule {
+  margin-top: 6px;
+}
+
+.ctr-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.panel .ctr-tete h3 {
+  margin-right: auto;
+}
+
+.ctr-tete input[type="search"] {
+  flex: 0 1 260px;
+  min-width: 0;
+}
+
+.ctr-case {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ctr-aide {
+  margin: 6px 0 10px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.ctr-table td {
+  vertical-align: top;
+}
+
+.ctr-nom {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ctr-nom:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ctr-code {
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+
+.ctr-declare {
+  max-width: 520px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.ctr-verdict {
+  white-space: nowrap;
+}
+
+.ctr-compromis {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.ctr-faible {
+  color: var(--ink-faint);
+}
+
+.ctr-vide {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .ctr-regle {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .ctr-tete input[type="search"] {
+    flex: 1 1 100%;
+  }
+
+  .ctr-verdict {
+    white-space: normal;
+  }
+}

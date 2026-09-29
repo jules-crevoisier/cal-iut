@@ -53,6 +53,7 @@ describe("TodoView — doublons salle / enseignant", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   it("shows a loading state before the response arrives", () => {
@@ -75,7 +76,8 @@ describe("TodoView — doublons salle / enseignant", () => {
     expect(screen.getByText("Semaine 1")).toBeInTheDocument();
     expect(screen.getByText("salle")).toBeInTheDocument();
     // Date française : lundi 28/09/2026 + jour 3 (jeudi) = 1er octobre.
-    expect(screen.getByText(/jeudi 1er oct\., 14h–15h30 — WR101 \/ WR205/)).toBeInTheDocument();
+    expect(screen.getByText("jeu. 1er oct. · 14h–15h30")).toBeInTheDocument();
+    expect(screen.getByText("WR101 / WR205")).toBeInTheDocument();
     expect(screen.getByLabelText("1 doublon")).toBeInTheDocument();
   });
 
@@ -141,7 +143,7 @@ describe("TodoView — doublons salle / enseignant", () => {
 
     render(<TodoView payload={emptyPayload()} setRoute={vi.fn()} />);
 
-    expect(screen.getByText("Doublons salle / enseignant")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Doublons salle / enseignant" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/Réponse inattendue du serveur/)).toBeInTheDocument());
   });
 });

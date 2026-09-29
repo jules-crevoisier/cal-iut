@@ -69,10 +69,7 @@ export function NewRoomModal({ onCreated, onCancel }: NewRoomModalProps) {
         }}
       >
         <h3 id="newroom-titre">Nouvelle salle</h3>
-        <p className="muted small">
-          Pour une salle hors bâtiment (autre site, salle empruntée…). Elle sera toujours proposée au choix
-          manuel de salle ; la case ci-dessous décide si la génération automatique peut aussi la choisir seule.
-        </p>
+        <p className="muted small">Pour une salle hors bâtiment : autre site, salle empruntée…</p>
 
         <label className="newroom-field">
           Nom de la salle

@@ -79,6 +79,7 @@ describe("TodoView — contrôle hebdomadaire des doublons", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   it("says plainly the control has never run, and still offers to run it now", async () => {

@@ -1,0 +1,40 @@
+/* En-tête de colonne triable (`TriColonne`). */
+
+.tri-colonne {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tri-colonne:hover,
+.tri-colonne.actif {
+  color: var(--ink);
+}
+
+.tri-fleche {
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+
+.tri-colonne.actif .tri-fleche {
+  color: var(--accent);
+}
+
+table.ref th.num,
+table.ref td.num,
+table th.num,
+table td.num {
+  text-align: right;
+}
+
+th.num .tri-colonne {
+  flex-direction: row-reverse;
+}

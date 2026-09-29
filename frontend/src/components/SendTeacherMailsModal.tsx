@@ -7,6 +7,7 @@ import {
   type TeacherMailPreview,
   type TeacherMailSendResult,
 } from "../api/client";
+import "./SendTeacherMailsModal.css";
 
 interface SendTeacherMailsModalProps {
   onClose: () => void;
@@ -31,6 +32,7 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
       }
   >({ status: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [filtre, setFiltre] = useState("");
   const [sending, setSending] = useState(false);
   const [results, setResults] = useState<TeacherMailSendResult[] | null>(null);
   // Aperçu du mail RÉEL avant envoi (retour utilisateur 28/08/2026) — on
@@ -71,6 +73,25 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
   }, []);
 
   const teachers = state.status === "ready" ? state.teachers : [];
+  const q = filtre
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const visibles = q
+    ? teachers.filter((t) =>
+        `${t.name} ${t.code} ${t.email ?? ""}`
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .includes(q),
+      )
+    : teachers;
+  const avecAdresse = teachers.filter((t) => t.email);
+  const jamaisContactes = avecAdresse.filter((t) => !t.sent_at);
+  // Raccourcis de sélection — la sélection reste explicite (rien n'est
+  // envoyé sans cliquer « Envoyer »), mais on n'a plus à cocher 30 cases.
+  const selectionner = (codes: string[]) => setSelected(new Set(codes));
   const resultByCode = useMemo(() => new Map((results ?? []).map((r) => [r.code, r])), [results]);
 
   const toggle = (code: string) => {
@@ -139,8 +160,32 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
         )}
 
         {state.status === "ready" && (
+          <div className="mailmodal-barre">
+            <input
+              type="search"
+              placeholder="Filtrer…"
+              aria-label="Filtrer les enseignants"
+              value={filtre}
+              onChange={(e) => setFiltre(e.target.value)}
+            />
+            <span className="mailmodal-selection">
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => selectionner(jamaisContactes.map((t) => t.code))}>
+                Jamais contactés ({jamaisContactes.length})
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => selectionner(avecAdresse.map((t) => t.code))}>
+                Tous ({avecAdresse.length})
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => selectionner([])}>
+                Aucun
+              </button>
+            </span>
+          </div>
+        )}
+
+        {state.status === "ready" && (
           <div className="mailmodal-list">
-            {teachers.map((t) => {
+            {visibles.length === 0 && <p className="mailmodal-vide">Aucun enseignant ne correspond.</p>}
+            {visibles.map((t) => {
               const resultat = resultByCode.get(t.code);
               return (
                 <label key={t.code} className={`mailmodal-row ${!t.email ? "mailmodal-row--disabled" : ""}`}>
@@ -161,10 +206,10 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
                         session prime, sinon on retombe sur le journal, qui
                         lui survit aux rechargements et redémarrages. */}
                     {resultat && !resultat.ok ? (
-                      <span className="mailmodal-err" title={resultat.error ?? ""}>Échec ✗</span>
+                      <span className="mailmodal-err" title={resultat.error ?? ""}>Échec</span>
                     ) : t.opened_at ? (
                       <span className="mailmodal-ok" title={`Ouverture détectée le ${dateCourte(t.opened_at)}`}>
-                        Lu ✓✓
+                        Lu
                       </span>
                     ) : t.sent_at ? (
                       <span className="mailmodal-ok">Envoyé le {dateCourte(t.sent_at)}</span>
@@ -210,7 +255,7 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
           </button>
           {state.status === "ready" && (
             <button type="button" className="btn btn--accent" disabled={sending || selected.size === 0} onClick={handleSend}>
-              {sending ? "Envoi…" : `Envoyer (${selected.size})`}
+              {sending ? "Envoi…" : `Envoyer à ${selected.size} enseignant${selected.size > 1 ? "s" : ""}`}
             </button>
           )}
         </div>
