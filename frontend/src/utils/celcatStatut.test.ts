@@ -86,7 +86,7 @@ describe("signaux du système", () => {
   it("dit qu'aucun relevé n'existe, sans faire croire que Celcat est vide", () => {
     const releve = signauxSysteme(ETAT, { ...RELEVE, releve_le: null }, FILE)[2];
     expect(releve.etat).toBe("aucun");
-    expect(releve.detail).toMatch(/pas encore été relu/);
+    expect(releve.detail).toMatch(/pas encore été lu/);
   });
 
   it("remonte la raison d'un relevé en échec", () => {
@@ -123,7 +123,7 @@ describe("verdict d'une semaine", () => {
 
   it("refuse de conclure sans relevé", () => {
     const v = verdictSemaine(comparaison([ligne("ecart")], { releve_le: null }));
-    expect(v.titre).toMatch(/pas encore de relevé/i);
+    expect(v.titre).toMatch(/pas encore été lu/i);
     expect(v.corrigeable).toBe(false);
   });
 
@@ -138,7 +138,9 @@ describe("verdict d'une semaine", () => {
 
 describe("formats lisibles", () => {
   it("rend une date ISO lisible, et la garde telle quelle si elle est illisible", () => {
-    expect(dateLisible("2026-09-16T08:42:00")).toBe("16/09 à 08:42");
+    expect(dateLisible("2026-09-16T08:42:00", new Date("2026-09-29T10:00:00"))).toBe("mer. 16/09 à 08:42");
+    expect(dateLisible("2026-09-29T08:42:00", new Date("2026-09-29T10:00:00"))).toBe("aujourd’hui à 08:42");
+    expect(dateLisible("2026-09-28T16:40:00", new Date("2026-09-29T10:00:00"))).toBe("hier à 16:40");
     expect(dateLisible("pas une date")).toBe("pas une date");
     expect(dateLisible(null)).toBe("");
   });

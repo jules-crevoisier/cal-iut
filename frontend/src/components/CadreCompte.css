@@ -1,0 +1,176 @@
+/* Pages de compte (CadreCompte) : connexion, inscription, mot de passe,
+   confirmation, attente d'activation. Un cadre net, aligné à gauche, sans
+   décor. */
+
+.loginwrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--bg);
+}
+
+.loginpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 380px;
+  padding: 28px 28px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 479.98px) {
+  .loginwrap {
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+
+  .loginpanel {
+    padding: 22px 18px 18px;
+  }
+}
+
+.compte-marque {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.compte-marque > span:last-child {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.compte-marque-sous {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.compte-titre {
+  margin: 4px 0 0;
+  font-size: 1.2rem;
+}
+
+.compte-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: -6px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.compte-intro p {
+  margin: 0;
+}
+
+.compte-intro strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.compte-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.compte-corps .alerte {
+  margin: 0;
+}
+
+.compte-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.compte-champ label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* 16 px dans les champs : en dessous, iOS zoome la page à la mise au point. */
+.compte-champ input {
+  width: 100%;
+  min-height: 40px;
+  font-size: 1rem;
+}
+
+.compte-mdp {
+  position: relative;
+  display: flex;
+}
+
+.compte-mdp input {
+  padding-right: 84px;
+}
+
+.compte-mdp-voir.btn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.compte-aide {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.compte-aide--attention {
+  color: var(--warn-text);
+}
+
+.compte-aide--ok {
+  color: var(--good-text);
+}
+
+.loginpanel .compte-corps > .btn,
+.loginpanel .compte-action {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 2px;
+}
+
+.compte-pied {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.loginpanel-lien {
+  padding: 6px 0;
+  min-height: 32px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.loginpanel-lien:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.loginpanel-lien:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

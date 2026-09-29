@@ -40,6 +40,8 @@ function weekRows() {
     return iso(d);
   };
   return [
+    { monday: decale(-70), label: "Semaine 1", blocked: false, weekIndex: 0 },
+    { monday: decale(-42), label: "Semaine 5", blocked: false, weekIndex: 4 },
     { monday: decale(-14), label: "Semaine 9 (passée)", blocked: false, weekIndex: 6 },
     { monday: decale(-7), label: "Semaine 10 (vacances)", blocked: true, weekIndex: null },
     { monday: decale(0), label: "Semaine 11 (en cours)", blocked: false, weekIndex: 7 },
@@ -238,7 +240,10 @@ const urls = (mock: ReturnType<typeof vi.fn>) => mock.mock.calls.map((c) => Stri
 async function ouvrir(scenario?: Scenario) {
   const mock = serveur(scenario);
   render(<AdminCelcatView cadence={CADENCE} />);
-  await screen.findByRole("heading", { level: 2, name: /écart|concorde|relevé/i });
+  // Le verdict est arrivé quand son titre n'est plus celui d'attente.
+  await waitFor(() =>
+    expect(document.getElementById("celcat-verdict-titre")?.textContent ?? "").toMatch(/écart|concorde|été lu|lecture/i),
+  );
   return mock;
 }
 
@@ -309,7 +314,7 @@ describe("Corriger va jusqu'à la vérification", () => {
     const corriger = u.findIndex((x) => x.includes("/comparaison/corriger"));
     const demande = u.findIndex((x) => x.includes("/instantane/rafraichir"));
     expect(demande).toBeGreaterThan(corriger);
-    expect(screen.getByTestId("suivi-boucle").textContent).toMatch(/vérifié sur un relevé tout frais/i);
+    expect(screen.getByTestId("suivi-boucle").textContent).toMatch(/vérifié sur une lecture fraîche de celcat/i);
   });
 
   it("dit où l'attente s'est arrêtée quand le worker ne repasse pas, sans rien perdre", async () => {
@@ -392,7 +397,7 @@ describe("Les suppressions restent humaines", () => {
     const panneau = screen.getByRole("region", { name: /1 évènement en trop/i });
     expect(panneau.textContent).toContain("WR402 Anglais");
     expect(panneau.textContent).toContain("mercredi 16/09");
-    expect(panneau.textContent).toContain("#1953820");
+    expect(panneau.textContent).toContain("n° 1953820");
   });
 
   it("ne supprime rien si la confirmation est refusée", async () => {
@@ -419,8 +424,8 @@ describe("Les suppressions restent humaines", () => {
 describe("Détail séance par séance", () => {
   it("montre les deux côtés d'un écart avec son verdict en mot", async () => {
     await ouvrir({ lignes: [ECART, IDENTIQUE] });
+    // Plus un repli : les écarts sont la colonne principale de l'écran.
     const detail = screen.getByTestId("comparaison-celcat");
-    expect(detail.hasAttribute("open")).toBe(true);
     const tableau = within(detail).getByRole("table");
     expect(tableau.textContent).toContain("mardi 15/09 15:30");
     expect(tableau.textContent).toContain("mardi 15/09 13:50");
@@ -454,7 +459,7 @@ describe("Réglages", () => {
 
   it("met le worker en pause sans jamais toucher à l'écriture, et le dit", async () => {
     const mock = await ouvrir();
-    const interrupteur = screen.getByRole("switch", { name: /worker/i });
+    const interrupteur = screen.getByRole("switch", { name: /robot d’envoi/i });
     expect(interrupteur.getAttribute("aria-describedby")).toBeTruthy();
     fireEvent.click(interrupteur);
     await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/worker"))).toBe(true));
@@ -576,6 +581,58 @@ describe("Mapper une correspondance Celcat", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("salle invalide"));
     expect(screen.getByTestId("blocage-salles")).toBeTruthy();
     expect(screen.queryByText(/correspondance enregistrée/i)).toBeNull();
+  });
+});
+
+describe("Refonte du 29/09/2026", () => {
+  it("compte les écarts par nature dans le verdict", async () => {
+    await ouvrir({ lignes: [ECART, EN_TROP, IDENTIQUE] });
+    const compteurs = screen.getByTestId("verdict-compteurs");
+    expect(compteurs.textContent).toBe("à modifier1à créer0en trop1identique1");
+  });
+
+  it("souligne la valeur qui diffère, des deux côtés", async () => {
+    await ouvrir({ lignes: [ECART, IDENTIQUE] });
+    const diffs = [...screen.getByTestId("comparaison-celcat").querySelectorAll(".celcat-diff")].map((e) => e.textContent);
+    // L'écart porte sur l'heure : 15:30 dans cal-iut, 13:50 dans Celcat — la
+    // salle, identique, n'est pas soulignée.
+    expect(diffs).toEqual(["15:30", "13:50"]);
+  });
+
+  it("ramène à la semaine en cours d'un clic", async () => {
+    const mock = await ouvrir();
+    expect(screen.queryByRole("button", { name: /^semaine en cours$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /semaine suivante/i }));
+    await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/comparaison?semaine=8"))).toBe(true));
+    fireEvent.click(await screen.findByRole("button", { name: /^semaine en cours$/i }));
+    await waitFor(() =>
+      expect((screen.getByRole("combobox", { name: /semaine comparée/i }) as HTMLSelectElement).value).toBe("7"),
+    );
+  });
+
+  it("n'affiche que les semaines du calendrier, avec une légende des états", async () => {
+    await ouvrir();
+    const groupe = screen.getByRole("group", { name: /semaines envoyées chaque nuit/i });
+    // Le calendrier simulé compte cinq semaines ouvertes : plus de « Semaine 30 » sans date.
+    expect(within(groupe).getAllByRole("button")).toHaveLength(5);
+    expect(within(screen.getByLabelText(/légende des semaines/i)).getByText("retirée")).toBeTruthy();
+  });
+
+  it("n'active « Enregistrer la sélection » qu'après un changement", async () => {
+    await ouvrir();
+    const enregistrer = screen.getByRole("button", { name: /enregistrer la sélection/i });
+    expect(enregistrer).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /^semaine 12 \(suivante\)$/i }));
+    expect(enregistrer).toBeEnabled();
+    expect(screen.getByText(/pas encore enregistrée/i)).toBeTruthy();
+  });
+
+  it("présente les suppressions comme destructrices dans la confirmation", async () => {
+    vi.mocked(confirmAsync).mockResolvedValue(false);
+    await ouvrir({ lignes: [ECART, EN_TROP] });
+    fireEvent.click(screen.getByRole("button", { name: /supprimer cet évènement/i }));
+    await waitFor(() => expect(confirmAsync).toHaveBeenCalled());
+    expect(vi.mocked(confirmAsync).mock.calls[0][1]?.variant).toBe("danger");
   });
 });
 

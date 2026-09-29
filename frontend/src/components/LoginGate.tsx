@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { login } from "../api/client";
+import { CadreCompte, ChampCompte, ChampMotDePasse } from "./CadreCompte";
 
 interface LoginGateProps {
   onSuccess: () => void;
@@ -36,49 +37,43 @@ export function LoginGate({ onSuccess, onOuvrirInscription, onOuvrirMotDePasseOu
   };
 
   return (
-    <div className="loginwrap">
-      <form className="panel loginpanel" onSubmit={(e) => void soumettre(e)}>
-        <span className="brand-mark">CI</span>
-        <h1>cal-iut</h1>
-        <p className="muted">Connectez-vous pour accéder au planning.</p>
-        <label>
-          Email
-          <input
-            type="email"
-            autoFocus
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={enCours}
-          />
-        </label>
-        <label>
-          Mot de passe
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={motDePasse}
-            onChange={(e) => setMotDePasse(e.target.value)}
-            disabled={enCours}
-          />
-        </label>
-        {erreur && (
-          <p className="alerte" role="alert">
-            {erreur}
-          </p>
-        )}
-        <button type="submit" className="btn btn--primary" disabled={enCours || !email || !motDePasse}>
-          {enCours ? "Connexion…" : "Se connecter"}
-        </button>
-        <div className="loginpanel-liens">
+    <CadreCompte
+      titre="Connexion"
+      onSubmit={(e) => void soumettre(e)}
+      pied={
+        <>
           <button type="button" className="loginpanel-lien" onClick={onOuvrirMotDePasseOublie} disabled={enCours}>
             Mot de passe oublié ?
           </button>
           <button type="button" className="loginpanel-lien" onClick={onOuvrirInscription} disabled={enCours}>
             Créer un compte
           </button>
-        </div>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <ChampCompte
+        libelle="Email"
+        type="email"
+        autoFocus
+        autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={enCours}
+      />
+      <ChampMotDePasse
+        autoComplete="current-password"
+        value={motDePasse}
+        onChange={(e) => setMotDePasse(e.target.value)}
+        disabled={enCours}
+      />
+      {erreur && (
+        <p className="alerte" role="alert">
+          {erreur}
+        </p>
+      )}
+      <button type="submit" className="btn btn--primary" disabled={enCours || !email || !motDePasse}>
+        {enCours ? "Connexion…" : "Se connecter"}
+      </button>
+    </CadreCompte>
   );
 }

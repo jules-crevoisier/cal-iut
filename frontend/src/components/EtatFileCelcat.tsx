@@ -1,6 +1,6 @@
 /**
- * Ce qui attend d'être poussé vers Celcat, et ce que le worker a fait en
- * dernier.
+ * Ce qui attend d'être poussé vers Celcat, et ce que le robot d'envoi (le
+ * « worker » du sidecar) a fait en dernier.
  *
  * Retour utilisateur 08/09/2026, juste après le premier envoi réel : « là on
  * n'a pas vraiment de vue où l'on voit ce qu'il se passe si on appuie sur
@@ -82,10 +82,10 @@ export function EtatFileCelcat({
           : `${pluriel(file.en_attente, "correction", "corrections")} en attente${detail ? ` : ${detail}` : ""}.`}
       </p>
 
-      <p>
+      <p className="celcat-file-passage">
         {file.passe_le ? (
           <>
-            Dernier passage du worker {ageLisible(file.age_secondes)} :{" "}
+            Dernier passage du robot d’envoi {ageLisible(file.age_secondes)} :{" "}
             <strong>{pluriel(file.reussis, "réussie", "réussies")}</strong>
             {file.echecs > 0 ? (
               <>
@@ -97,24 +97,24 @@ export function EtatFileCelcat({
             .
           </>
         ) : (
-          "Le worker n’est pas encore passé."
+          "Le robot d’envoi n’est pas encore passé."
         )}
       </p>
 
       {differes > 0 ? (
-        <div className="celcat-sous-texte" data-testid="file-differes">
+        <div className="celcat-file-differes" data-testid="file-differes">
           {/* Le texte disait « normal, rien à faire tant que l’équipe ne l’a
               pas saisie » : c’est ce qui a laissé 492 corrections attendre
               indéfiniment une saisie manuelle que personne n’allait faire
-              (signalement du 28/09/2026). On dit maintenant ce que ça bloque,
-              ET comment le lever. */}
+              (signalement du 28/09/2026). On dit ce que ça bloque, ET comment
+              le lever. */}
           <p>
-            Dont <strong>{differes}</strong> en attente d’une semaine que Celcat n’a pas encore ouverte. Le worker
-            n’y crée rien tant que l’équipe ne l’a pas saisie — ou tant que vous ne l’autorisez pas ici.
+            Dont <strong>{differes}</strong> en attente d’une semaine que Celcat n’a pas encore ouverte. Le robot
+            d’envoi n’y crée rien tant que l’équipe ne l’a pas saisie — ou tant que vous ne l’autorisez pas ici.
           </p>
           {semaineCelcat !== null && semaineCelcat !== undefined && onAutoriserCreation ? (
             creationAutorisee ? (
-              <p>
+              <p className="celcat-file-autorisation">
                 <strong>Création autorisée</strong> sur la semaine affichée.{" "}
                 <button type="button" className="btn btn--sm" onClick={() => onAutoriserCreation(false)}>
                   Retirer l’autorisation

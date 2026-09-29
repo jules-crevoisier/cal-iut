@@ -5,6 +5,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { McpKeysView } from "./McpKeysView";
+import { confirmAsync } from "../utils/confirmDialog";
+
+// Révoquer est irréversible : confirmé (refonte du 29/09/2026).
+vi.mock("../utils/confirmDialog", () => ({ confirmAsync: vi.fn() }));
 
 const CLES = [
   {
@@ -44,6 +48,7 @@ describe("McpKeysView", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    vi.mocked(confirmAsync).mockReset();
   });
 
   it("should list prefixes without the raw token on load", async () => {
@@ -66,6 +71,7 @@ describe("McpKeysView", () => {
 
   it("should DELETE the key when revoking", async () => {
     stubFetch();
+    vi.mocked(confirmAsync).mockResolvedValue(true);
     render(<McpKeysView />);
 
     await waitFor(() => expect(screen.getByText("caliut_abc12")).toBeInTheDocument());
@@ -77,5 +83,33 @@ describe("McpKeysView", () => {
         .mock.calls.find((c) => String(c[0]).includes("/auth/mcp-keys/1") && c[1]?.method === "DELETE");
       expect(del).toBeDefined();
     });
+  });
+
+  it("ne révoque rien si la confirmation est refusée", async () => {
+    stubFetch();
+    vi.mocked(confirmAsync).mockResolvedValue(false);
+    render(<McpKeysView />);
+
+    await waitFor(() => expect(screen.getByText("caliut_abc12")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /révoquer/i }));
+    await waitFor(() => expect(confirmAsync).toHaveBeenCalled());
+    expect(vi.mocked(confirmAsync).mock.calls[0][1]?.variant).toBe("danger");
+    expect(vi.mocked(fetch).mock.calls.some((c) => c[1]?.method === "DELETE")).toBe(false);
+  });
+
+  it("donne de quoi coller la clé neuve là où elle sert, puis la masque", async () => {
+    stubFetch();
+    render(<McpKeysView />);
+
+    await waitFor(() => expect(screen.getByText("caliut_abc12")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /générer/i }));
+    await screen.findByText("caliut_token-brut-une-fois");
+    expect(screen.getByRole("button", { name: "Copier la clé" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copier la valeur" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copier l’adresse" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copier le bloc" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "J’ai copié la clé" }));
+    expect(screen.queryByText("caliut_token-brut-une-fois")).not.toBeInTheDocument();
   });
 });

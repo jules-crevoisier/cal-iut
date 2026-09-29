@@ -1,5 +1,5 @@
 /**
- * Ce que le worker a réellement écrit dans Celcat, rangé par issue.
+ * Ce que le robot d’envoi a réellement écrit dans Celcat, rangé par issue.
  *
  * Des colonnes plutôt qu'une liste chronologique : « 12 échecs sur le même
  * motif » et « 12 incidents distincts » n'appellent pas le même geste, et
@@ -49,7 +49,7 @@ export function JournalCelcat({ logs }: { logs: CelcatLog[] }) {
   const ecrits = parKind("created").length + parKind("modified").length + parKind("deleted").length;
 
   return (
-    <details className="panel celcat-journal" data-testid="journal-celcat">
+    <details className="panel celcat-journal celcat-repliable" data-testid="journal-celcat">
       <summary>
         <h2>Activité récente</h2>
         <span className="celcat-sous-texte">
@@ -86,7 +86,7 @@ export function JournalCelcat({ logs }: { logs: CelcatLog[] }) {
                     <CopyButton
                       text={() => texteColonne(colonne.titre, lignes)}
                       idleLabel="Copier"
-                      title={`Copier les ${lignes.length} ligne(s) de « ${colonne.titre} »`}
+                      title={`Copier ${pluriel(lignes.length, "ligne")} de « ${colonne.titre} »`}
                     />
                   ) : null}
                 </div>

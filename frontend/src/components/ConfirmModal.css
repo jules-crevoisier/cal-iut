@@ -1,0 +1,90 @@
+/* Modale de confirmation (ConfirmModal). Le gabarit commun des modales
+   (`.confirmmodal-overlay`, `.confirmmodal`, `.confirmmodal-actions`) reste
+   dans app.css : d'autres fenêtres s'en servent. Ici, ce qui est propre à
+   la confirmation. */
+
+.confirmdlg {
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 18px 20px 16px;
+  box-shadow: var(--shadow-pop);
+}
+
+.confirmdlg-titre {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.confirmdlg--danger {
+  border-top: 3px solid var(--bad);
+}
+
+.confirmdlg--danger .confirmdlg-titre {
+  color: var(--bad-text);
+}
+
+.confirmdlg-message {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.confirmdlg-message p {
+  margin: 0;
+}
+
+.confirmdlg-liste {
+  margin: 0;
+  padding: 6px 10px 6px 26px;
+  max-height: 40vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 0.85rem;
+}
+
+.confirmdlg-liste li + li {
+  margin-top: 4px;
+}
+
+.confirmdlg .confirmmodal-actions {
+  margin-top: 4px;
+}
+
+/* Le bouton destructeur d'une confirmation est PLEIN : on est au dernier
+   pas, il doit se lire comme tel (ailleurs `.btn--danger` reste discret). */
+.confirmdlg-danger.btn--danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
+.confirmdlg-danger.btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bad) 85%, black);
+  border-color: color-mix(in srgb, var(--bad) 85%, black);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .confirmdlg-danger.btn--danger {
+    color: #0f1216;
+  }
+}
+
+:root[data-theme="dark"] .confirmdlg-danger.btn--danger {
+  color: #0f1216;
+}
+
+@media (max-width: 479.98px) {
+  .confirmdlg .confirmmodal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .confirmdlg .confirmmodal-actions .btn {
+    width: 100%;
+  }
+}

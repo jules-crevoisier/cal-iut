@@ -1,0 +1,1235 @@
+/* ══════════════ Celcat (AdminCelcatView) ══════════════
+
+   Refonte du 29/09/2026 (après celle du 16/09, critique notée 16/40).
+   Mêmes primitives que le reste de l'application (`.panel`, `.btn`, `.pill`,
+   `table.ref`, jetons) ; ce fichier ne fait que la mise en page de l'écran.
+
+   - CALME QUAND ÇA VA : vert discret = rien à faire, ambre = à regarder,
+     rouge = panne ou irréversible. Un état sain peint en rouge apprend à
+     ignorer le rouge.
+   - Aucune couleur en dur : tout suit le mode sombre.
+   - Une barre (semaine + état), le verdict, puis deux colonnes à partir de
+     1200 px : ce qu'on regarde à gauche, ce qui part vers Celcat à droite. */
+
+.view.celcat {
+  gap: 14px;
+  max-width: 1400px;
+}
+
+.view.celcat h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.view.celcat h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.view.celcat .alerte {
+  margin: 0;
+}
+
+/* Cibles tactiles : 44 px au doigt, la hauteur du socle à la souris. */
+@media (pointer: coarse) {
+  .view.celcat .btn,
+  .view.celcat select,
+  .view.celcat input {
+    min-height: 44px;
+  }
+}
+
+/* ── Textes ── */
+
+.celcat-sous-texte {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.celcat-aide {
+  margin: 0;
+  max-width: 75ch;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.celcat-texte-ok {
+  margin: 0;
+  color: var(--good-text);
+}
+
+.celcat-texte-attention {
+  margin: 0;
+  color: var(--warn-text);
+  font-size: 0.85rem;
+}
+
+.celcat-texte-panne {
+  margin: 0;
+  color: var(--bad-text);
+}
+
+.celcat-message-ok {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--good);
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-size: 0.85rem;
+}
+
+.celcat-seance-id {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.celcat-compte {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--ink);
+  font-size: 0.8rem;
+  text-align: center;
+  vertical-align: 1px;
+}
+
+/* ── Barre : semaine comparée + état du système ── */
+
+.celcat-barre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+}
+
+.celcat-semaine-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.celcat-semaine-choix {
+  min-width: 0;
+}
+
+.celcat-semaine-choix select {
+  width: 19rem;
+  max-width: 100%;
+  font-weight: 600;
+}
+
+.view.celcat .celcat-nav-fleche {
+  width: var(--control-h);
+  padding: 0;
+  flex: none;
+}
+
+@media (pointer: coarse) {
+  .view.celcat .celcat-nav-fleche {
+    width: 44px;
+  }
+}
+
+.celcat-statut {
+  flex: 1 1 36rem;
+  min-width: 0;
+}
+
+.celcat-signaux {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, auto));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.celcat-signal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 6px 12px;
+  min-width: 0;
+}
+
+.celcat-signal + .celcat-signal {
+  border-left: 1px solid var(--border);
+}
+
+.celcat-signal dt {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* La pastille suit le libellé, la phrase passe à la ligne si elle est
+   longue : le `dd` s'efface de la mise en page. */
+.celcat-signal dd {
+  display: contents;
+}
+
+/* Un signal sain dit son mot, pas sa phrase : elle n'apprend rien et
+   rallongeait la barre. Elle reste au survol (title natif inutile : on la
+   garde lisible au clavier via le texte, masqué seulement visuellement). */
+.celcat-signal--ok .celcat-signal-detail {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.celcat-signal--attention {
+  background: var(--warn-soft);
+}
+
+.celcat-signal--attention .celcat-signal-detail {
+  color: var(--warn-text);
+  font-size: 0.82rem;
+}
+
+.celcat-signal--panne {
+  background: var(--bad-soft);
+}
+
+.celcat-signal--panne .celcat-signal-detail {
+  color: var(--bad-text);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+@media (max-width: 767.98px) {
+  .celcat-barre,
+  .celcat-statut {
+    width: 100%;
+  }
+
+  .celcat-semaine-nav {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .celcat-semaine-choix {
+    flex: 1 1 0;
+  }
+
+  .celcat-semaine-choix select {
+    width: 100%;
+  }
+
+  .celcat-signaux {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .celcat-signal + .celcat-signal {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .celcat-signal {
+    justify-content: space-between;
+  }
+
+  .celcat-signal--ok .celcat-signal-detail {
+    display: none;
+  }
+}
+
+/* ── Verdict ── */
+
+.celcat-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border-left-width: 4px;
+}
+
+.celcat-verdict--ok {
+  border-left-color: var(--good);
+}
+
+.celcat-verdict--attention {
+  border-left-color: var(--warn);
+}
+
+.celcat-verdict--panne {
+  border-left-color: var(--bad);
+}
+
+.celcat-verdict--chargement {
+  border-left-color: var(--border-strong);
+}
+
+.celcat-verdict-corps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px 32px;
+}
+
+.celcat-verdict-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: min(100%, 22rem);
+  flex: 1 1 22rem;
+}
+
+.celcat-verdict-mot {
+  margin: 0;
+}
+
+.view.celcat .celcat-verdict-titre {
+  font-size: 1.2rem;
+  line-height: 1.25;
+}
+
+.view.celcat .celcat-verdict-titre--attente {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.celcat-verdict-detail {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.celcat-compteurs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(4.8rem, auto));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.celcat-compteur {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 8px 14px;
+  background: var(--surface);
+}
+
+.celcat-compteur + .celcat-compteur {
+  border-left: 1px solid var(--border);
+}
+
+.celcat-compteur dt {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.celcat-compteur dd {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.celcat-compteur--nul dd {
+  color: var(--ink-faint);
+}
+
+.celcat-compteur--attention dd {
+  color: var(--warn-text);
+}
+
+.celcat-compteur--panne dd {
+  color: var(--bad-text);
+}
+
+.celcat-compteur--ok dd {
+  color: var(--good-text);
+}
+
+@media (max-width: 479.98px) {
+  .celcat-compteurs {
+    width: 100%;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .celcat-compteur:nth-child(3) {
+    border-left: 0;
+  }
+
+  .celcat-compteur:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+.celcat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.celcat-actions-note {
+  flex: 1 1 18rem;
+  margin: 0 0 0 6px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 767.98px) {
+  .celcat-verdict {
+    padding: 14px 16px;
+  }
+
+  .celcat-verdict .celcat-actions > .btn {
+    flex: 1 1 100%;
+  }
+
+  .celcat-actions-note {
+    margin: 0;
+  }
+}
+
+/* Suivi de la correction : vide tant que rien n'est en cours, mais TOUJOURS
+   dans le DOM — une région live ajoutée après coup n'est pas annoncée. */
+.celcat-suivi {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.celcat-suivi:empty {
+  display: none;
+}
+
+.celcat-suivi p {
+  margin: 0;
+  max-width: 75ch;
+}
+
+.celcat-etapes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: etape;
+}
+
+.celcat-etape-suivi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  counter-increment: etape;
+}
+
+.celcat-etape-suivi::before {
+  content: counter(etape);
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.celcat-etape-suivi--fait::before {
+  background: var(--good);
+  color: var(--surface);
+}
+
+.celcat-etape-suivi--en-cours {
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--border));
+  background: var(--warn-soft);
+}
+
+.celcat-etape-suivi--en-cours::before {
+  background: var(--warn);
+  color: var(--surface);
+}
+
+.celcat-etape-suivi--a-venir {
+  color: var(--ink-soft);
+}
+
+.celcat-compte-rendu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.celcat-compte-rendu p {
+  margin: 0;
+}
+
+/* ── Colonnes ── */
+
+.celcat-colonnes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.celcat-principal,
+.celcat-lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .celcat-colonnes {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  /* Rien à gauche (semaine sans relevé) : la colonne de droite reprend la
+     largeur. */
+  .celcat-principal:empty {
+    display: none;
+  }
+
+  .celcat-colonnes:has(> .celcat-principal:empty) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.celcat-panneau-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+}
+
+.celcat-panneau-entete > :last-child.btn,
+.celcat-panneau-entete > .btn:last-child {
+  margin-left: auto;
+}
+
+.view.celcat .celcat-panneau-titre {
+  margin-bottom: 8px;
+}
+
+/* ── Écarts de la semaine ── */
+
+.celcat-table-conteneur {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.celcat-table-conteneur:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.view.celcat table.celcat-table {
+  font-size: 0.85rem;
+}
+
+.view.celcat table.celcat-table td,
+.view.celcat table.celcat-table th {
+  padding: 8px 12px;
+}
+
+.view.celcat table.celcat-table tbody th {
+  font-weight: 400;
+  min-width: 12rem;
+}
+
+.view.celcat table.celcat-table td:first-child {
+  white-space: nowrap;
+}
+
+.view.celcat table.celcat-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+/* Téléphone : quatre colonnes ne tiennent pas, et un tableau qui défile de
+   côté se lit mal. Chaque écart devient une fiche : verdict et séance en
+   tête, puis les deux côtés l'un sous l'autre, nommés. */
+@media (max-width: 767.98px) {
+  .celcat-table-conteneur {
+    overflow: visible;
+    border: 0;
+  }
+
+  .view.celcat table.celcat-table,
+  .view.celcat table.celcat-table tbody,
+  .view.celcat table.celcat-table tr,
+  .view.celcat table.celcat-table td,
+  .view.celcat table.celcat-table th {
+    display: block;
+  }
+
+  .view.celcat table.celcat-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .view.celcat table.celcat-table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .view.celcat table.celcat-table tr + tr {
+    margin-top: 8px;
+  }
+
+  .view.celcat table.celcat-table td,
+  .view.celcat table.celcat-table th,
+  .view.celcat table.celcat-table tbody tr:last-child > * {
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .view.celcat table.celcat-table td[data-label^="Dans"] {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+
+  .view.celcat table.celcat-table td[data-label^="Dans"]::before {
+    content: attr(data-label);
+    grid-row: span 3;
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+  }
+
+  .view.celcat table.celcat-table tbody tr:hover {
+    background: none;
+  }
+}
+
+.celcat-seance-code {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+/* La valeur qui diffère entre les deux côtés. Soulignée ET en couleur :
+   la couleur seule ne se voit pas partout. */
+.celcat-diff {
+  color: var(--warn-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--warn);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.celcat-absent {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.celcat-detail-pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-top: 10px;
+}
+
+.celcat-detail-pied:empty {
+  display: none;
+}
+
+.celcat-identiques {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 2px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.celcat-identiques li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Évènements en trop ── */
+
+.celcat-suppressions {
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
+}
+
+.celcat-suppressions .celcat-panneau-entete h2 {
+  color: var(--bad-text);
+}
+
+.celcat-trop-liste {
+  margin: 10px 0 12px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.celcat-trop-liste li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  align-items: baseline;
+  padding: 8px 12px;
+}
+
+.celcat-trop-liste li + li {
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 767.98px) {
+  .celcat-trop-liste li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── En route vers Celcat (file) ── */
+
+.celcat-file {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.celcat-file p {
+  margin: 0;
+}
+
+.celcat-file-compte {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.celcat-file-passage {
+  font-size: 0.85rem;
+}
+
+.celcat-file-differes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.celcat-file-differes .btn {
+  white-space: normal;
+  text-align: left;
+}
+
+/* ── Blocages ── */
+
+.celcat-blocages .celcat-aide {
+  margin-bottom: 8px;
+}
+
+.celcat-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.celcat-liste-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.celcat-blocage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.celcat-blocage-entete {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+}
+
+/* Aide sur toute la largeur, puis champ + bouton sur une ligne. Le libellé
+   passe en `display: contents` : le champ porte son propre aria-label. */
+.celcat-mapping-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+
+.celcat-mapping-form label {
+  display: contents;
+}
+
+.celcat-mapping-form label > span {
+  grid-column: 1 / -1;
+}
+
+.celcat-mapping-form input {
+  width: 100%;
+}
+
+.celcat-mapping-confirmation {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--good);
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-size: 0.85rem;
+}
+
+/* ── Replis (activité, réglages) ── */
+
+.celcat-repliable > summary {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  min-height: 32px;
+  padding: 4px 32px 4px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.celcat-repliable > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron dessiné par la bordure : pas de glyphe en guise d'icône. */
+.celcat-repliable > summary::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--ink-soft);
+  border-bottom: 2px solid var(--ink-soft);
+  transform: translateY(-70%) rotate(45deg);
+  transition: transform 0.15s ease-out;
+}
+
+.celcat-repliable[open] > summary::after {
+  transform: translateY(-30%) rotate(-135deg);
+}
+
+.celcat-repliable[open] > summary {
+  margin-bottom: 12px;
+}
+
+.celcat-repliable > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.celcat-repli summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.celcat-repli summary::-webkit-details-marker {
+  display: none;
+}
+
+.celcat-repli summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--ink-soft);
+  border-bottom: 2px solid var(--ink-soft);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease-out;
+}
+
+.celcat-repli[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.celcat-repli ul {
+  max-height: 40vh;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  overflow-y: auto;
+}
+
+.celcat-repli li {
+  margin-bottom: 6px;
+  /* Les identifiants de séance n'ont pas d'espace : sans césure, ils débordent. */
+  overflow-wrap: anywhere;
+}
+
+/* ── Activité récente ── */
+
+.celcat-kanban {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 900px) {
+  .celcat-kanban {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.celcat-kanban-col {
+  min-width: 0;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.celcat-kanban-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.celcat-kanban-entete h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.celcat-journal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.celcat-journal-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.celcat-journal-item > div {
+  flex-basis: 100%;
+}
+
+.celcat-horodatage {
+  margin-left: auto;
+}
+
+/* ── Réglages ── */
+
+.celcat-reglage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0 6px;
+  border-top: 1px solid var(--border);
+}
+
+.celcat-reglages .alerte {
+  margin: 0 0 10px;
+}
+
+.celcat-interrupteurs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 10px;
+}
+
+.celcat-interrupteur {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.celcat-interrupteur p {
+  margin: 0;
+}
+
+.celcat-interrupteur-tete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.celcat-interrupteur-nom {
+  font-weight: 600;
+}
+
+/* Interrupteur : piste 36×20 dans une cible de 32 px (44 au doigt). Allumé
+   en VERT (l'état voulu), éteint en gris — jamais de rouge sur un réglage. */
+.celcat-switch {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.celcat-switch::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 4px;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--border-strong);
+  transition: background-color 0.15s;
+}
+
+.celcat-switch[aria-checked="true"]::before {
+  background: var(--good);
+}
+
+.celcat-switch-knob {
+  position: absolute;
+  top: 9px;
+  left: 7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: left 0.15s ease-out;
+}
+
+.celcat-switch[aria-checked="true"] .celcat-switch-knob {
+  left: 23px;
+}
+
+.celcat-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.celcat-switch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+  border-radius: var(--radius);
+}
+
+@media (pointer: coarse) {
+  .celcat-switch {
+    height: 44px;
+  }
+
+  .celcat-switch::before {
+    top: 12px;
+  }
+
+  .celcat-switch-knob {
+    top: 15px;
+  }
+}
+
+.celcat-legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.celcat-legende > div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.celcat-legende dd {
+  margin: 0;
+}
+
+.celcat-semaines {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 6px;
+}
+
+.celcat-semaine {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "case nom" ". etat";
+  align-items: center;
+  justify-items: start;
+  gap: 2px 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.celcat-semaine:hover:not([aria-disabled="true"]) {
+  border-color: var(--ink-faint);
+}
+
+.celcat-semaine:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.celcat-semaine-case {
+  grid-area: case;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--surface);
+}
+
+.celcat-semaine-nom {
+  grid-area: nom;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.celcat-semaine-nom span {
+  color: var(--ink-soft);
+}
+
+.celcat-semaine .pill {
+  grid-area: etat;
+}
+
+.celcat-semaine--cochee {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.celcat-semaine--cochee .celcat-semaine-case {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--surface);
+}
+
+.celcat-semaine--retiree {
+  border-style: dashed;
+  border-color: var(--warn);
+}
+
+.celcat-semaine--bloquee,
+.celcat-semaine[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.celcat-semaine--bloquee {
+  background: var(--surface-2);
+  color: var(--ink-soft);
+}
+
+.celcat-semaine--bloquee .celcat-semaine-case {
+  visibility: hidden;
+}
+
+.celcat-extras {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.celcat-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 12px;
+}
+
+.celcat-extra + .celcat-extra {
+  border-top: 1px solid var(--border);
+}
+
+.celcat-extra-actions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celcat-switch::before,
+  .celcat-switch-knob,
+  .celcat-repli summary::before,
+  .celcat-repliable > summary::after {
+    transition: none;
+  }
+}

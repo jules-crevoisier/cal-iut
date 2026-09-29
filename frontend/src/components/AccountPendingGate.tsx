@@ -1,4 +1,5 @@
 import { logout } from "../api/client";
+import { CadreCompte } from "./CadreCompte";
 
 interface AccountPendingGateProps {
   email: string;
@@ -16,18 +17,24 @@ export function AccountPendingGate({ email, onDeconnecte }: AccountPendingGatePr
   };
 
   return (
-    <div className="loginwrap">
-      <div className="panel loginpanel">
-        <span className="brand-mark">CI</span>
-        <h1>En attente d'activation</h1>
-        <p className="muted">
-          Votre compte <strong>{email}</strong> est confirmé, mais un administrateur ne vous a pas encore donné
-          accès au planning.
-        </p>
-        <button type="button" className="btn btn--primary" onClick={deconnecter}>
-          Se déconnecter
-        </button>
-      </div>
-    </div>
+    <CadreCompte
+      titre="En attente d'activation"
+      intro={
+        <>
+          <p>
+            Votre compte <strong>{email}</strong> est confirmé. Il reste à un administrateur à vous donner accès au
+            planning.
+          </p>
+          <p>Une fois prévenu, cliquez « Vérifier à nouveau » : aucune autre démarche n'est nécessaire.</p>
+        </>
+      }
+    >
+      <button type="button" className="btn" onClick={() => window.location.reload()}>
+        Vérifier à nouveau
+      </button>
+      <button type="button" className="btn btn--ghost" onClick={deconnecter}>
+        Se déconnecter
+      </button>
+    </CadreCompte>
   );
 }

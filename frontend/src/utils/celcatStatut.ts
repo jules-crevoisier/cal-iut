@@ -28,15 +28,24 @@ export function pluriel(n: number, singulier: string, pluriel?: string): string 
   return `${n} ${n > 1 ? (pluriel ?? `${singulier}s`) : singulier}`;
 }
 
-/** « 16/09 à 08:42 » — l'ISO brut (« 2026-09-16T08:42:10+02:00 ») se lisait
- * en comptant les tirets. Rend la chaîne d'origine si elle est illisible
- * plutôt qu'un « Invalid Date » qui ferait croire à une panne. */
-export function dateLisible(iso: string | null | undefined): string {
+/** « aujourd’hui à 08:42 », « hier à 16:40 », « mer. 16/09 à 08:42 ».
+ *
+ * L'ISO brut (« 2026-09-16T08:42:10+02:00 ») se lisait en comptant les
+ * tirets ; le jour de la semaine et « aujourd’hui / hier » évitent d'avoir à
+ * situer la date dans le calendrier. Rend la chaîne d'origine si elle est
+ * illisible plutôt qu'un « Invalid Date » qui ferait croire à une panne. */
+export function dateLisible(iso: string | null | undefined, maintenant: Date = new Date()): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   const deux = (n: number) => String(n).padStart(2, "0");
-  return `${deux(d.getDate())}/${deux(d.getMonth() + 1)} à ${deux(d.getHours())}:${deux(d.getMinutes())}`;
+  const heure = `${deux(d.getHours())}:${deux(d.getMinutes())}`;
+  const minuit = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const ecart = Math.round((minuit(maintenant) - minuit(d)) / 86_400_000);
+  if (ecart === 0) return `aujourd’hui à ${heure}`;
+  if (ecart === 1) return `hier à ${heure}`;
+  const JOURS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
+  return `${JOURS[d.getDay()]} ${deux(d.getDate())}/${deux(d.getMonth() + 1)} à ${heure}`;
 }
 
 /** « il y a 3 min », à partir d'un âge en secondes. Une seule version pour
@@ -91,7 +100,7 @@ export function signauxSysteme(
   if (etat.worker_actif === false) {
     worker = {
       cle: "worker",
-      libelle: "Worker",
+      libelle: "Robot d’envoi",
       etat: "en pause",
       ton: "attention",
       detail: "Le VPN est libre ; les corrections attendent sa reprise.",
@@ -99,22 +108,22 @@ export function signauxSysteme(
   } else if (!etat.worker_ok) {
     worker = {
       cle: "worker",
-      libelle: "Worker",
+      libelle: "Robot d’envoi",
       etat: "muet",
       ton: "panne",
       detail: file?.passe_le
-        ? `Aucun passage depuis le ${dateLisible(file.passe_le)}.`
+        ? `Plus aucun passage depuis ${dateLisible(file.passe_le)}.`
         : "Aucun passage récent.",
     };
   } else {
     worker = {
       cle: "worker",
-      libelle: "Worker",
+      libelle: "Robot d’envoi",
       etat: "actif",
       ton: "ok",
       detail: file?.passe_le
-        ? `Dernier passage ${ageLisible(file.age_secondes)}.`
-        : "Pas encore passé depuis le démarrage.",
+        ? `passé ${ageLisible(file.age_secondes)}`
+        : "pas encore passé depuis le démarrage",
     };
   }
 
@@ -122,15 +131,15 @@ export function signauxSysteme(
   if (!instantane || !instantane.releve_le) {
     releve = {
       cle: "releve",
-      libelle: "Relevé de Celcat",
+      libelle: "Lecture de Celcat",
       etat: "aucun",
       ton: "attention",
-      detail: "Celcat n’a pas encore été relu : rien à comparer.",
+      detail: "Celcat n’a pas encore été lu : rien à comparer.",
     };
   } else if (instantane.erreur) {
     releve = {
       cle: "releve",
-      libelle: "Relevé de Celcat",
+      libelle: "Lecture de Celcat",
       etat: "en échec",
       ton: "panne",
       detail: instantane.erreur,
@@ -138,18 +147,18 @@ export function signauxSysteme(
   } else if (instantane.perime) {
     releve = {
       cle: "releve",
-      libelle: "Relevé de Celcat",
+      libelle: "Lecture de Celcat",
       etat: "périmé",
       ton: "attention",
-      detail: `Pris ${ageLisible(instantane.age_secondes)} : trop ancien pour corriger.`,
+      detail: `Lu ${ageLisible(instantane.age_secondes)} : trop ancien pour corriger.`,
     };
   } else {
     releve = {
       cle: "releve",
-      libelle: "Relevé de Celcat",
+      libelle: "Lecture de Celcat",
       etat: "à jour",
       ton: "ok",
-      detail: `Pris ${ageLisible(instantane.age_secondes)}.`,
+      detail: `lue ${ageLisible(instantane.age_secondes)}`,
     };
   }
 
@@ -198,8 +207,8 @@ export function verdictSemaine(donnees: CelcatComparaison): Verdict {
     return {
       ...base,
       ton: "attention",
-      titre: "Pas encore de relevé de Celcat",
-      detail: "Impossible de comparer : Celcat n’a pas encore été relu.",
+      titre: "Celcat n’a pas encore été lu",
+      detail: "Impossible de comparer tant que Celcat n’a pas été lu une première fois.",
       corrigeable: false,
     };
   }
@@ -207,8 +216,8 @@ export function verdictSemaine(donnees: CelcatComparaison): Verdict {
     return {
       ...base,
       ton: "attention",
-      titre: "Relevé trop ancien pour conclure",
-      detail: `Le relevé date ${ageLisible(donnees.age_secondes)}. Vérifiez à nouveau avant de corriger.`,
+      titre: "Lecture de Celcat trop ancienne pour conclure",
+      detail: `Celcat a été lu ${ageLisible(donnees.age_secondes)}. Relisez-le avant de corriger.`,
       corrigeable: false,
     };
   }
@@ -219,7 +228,7 @@ export function verdictSemaine(donnees: CelcatComparaison): Verdict {
       ...base,
       ton: "ok",
       titre: "Tout concorde avec Celcat",
-      detail: `${pluriel(base.identiques, "séance identique", "séances identiques")}, vérifié ${ageLisible(donnees.age_secondes)}.`,
+      detail: `${pluriel(base.identiques, "séance identique", "séances identiques")} — Celcat lu ${ageLisible(donnees.age_secondes)}.`,
       corrigeable: false,
     };
   }
@@ -233,7 +242,7 @@ export function verdictSemaine(donnees: CelcatComparaison): Verdict {
     ...base,
     ton: "attention",
     titre: `${pluriel(total, "écart")} avec Celcat`,
-    detail: `${morceaux.join(" · ")} — relevé pris ${ageLisible(donnees.age_secondes)}.`,
+    detail: `${morceaux.join(" · ")} — Celcat lu ${ageLisible(donnees.age_secondes)}.`,
     corrigeable: true,
   };
 }

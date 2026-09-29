@@ -1,0 +1,234 @@
+/* Comptes (AdminUsersView) : demandes d'accès en tête, puis tableau. */
+
+.view.comptes {
+  gap: 14px;
+  max-width: 1100px;
+}
+
+.view.comptes h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.comptes-roles {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.comptes-roles strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.comptes-message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 12px;
+  border-left: 3px solid var(--good);
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-size: 0.88rem;
+}
+
+.comptes-message:empty {
+  display: none;
+}
+
+.comptes-aide {
+  margin: 2px 0 10px;
+  font-size: 0.85rem;
+}
+
+/* ── Demandes d'accès ── */
+
+.comptes-attente {
+  border-left: 4px solid var(--warn);
+}
+
+.comptes-demandes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.comptes-demandes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 12px;
+}
+
+.comptes-demandes li + li {
+  border-top: 1px solid var(--border);
+}
+
+.comptes-identite {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.comptes-identite strong,
+.comptes-email {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.comptes-identite .muted,
+.comptes-depuis {
+  font-size: 0.8rem;
+}
+
+.comptes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Supprimer / désactiver : discrets tant qu'on ne les vise pas, rouges au
+   survol — jamais l'action la plus visible d'une ligne. */
+.btn.comptes-supprimer {
+  color: var(--bad-text);
+}
+
+.btn.comptes-supprimer:hover:not(:disabled) {
+  background: var(--bad-soft);
+}
+
+/* ── Tableau ── */
+
+.comptes-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+}
+
+.comptes-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.comptes-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.comptes-filtre:hover {
+  border-color: var(--ink-faint);
+}
+
+.comptes-filtre--actif {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.comptes-filtre-nb {
+  color: inherit;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.comptes-recherche {
+  margin-left: auto;
+  width: 16rem;
+}
+
+.comptes-vide {
+  margin: 8px 0;
+}
+
+.view.comptes table.ref {
+  font-size: 0.875rem;
+}
+
+.view.comptes table.ref td {
+  vertical-align: middle;
+}
+
+.comptes-col-actions {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.view.comptes table.ref th.comptes-col-actions,
+.view.comptes table.ref td.comptes-col-actions {
+  text-align: right;
+}
+
+.comptes-ligne--inactive .comptes-email {
+  color: var(--ink-soft);
+}
+
+@media (max-width: 767.98px) {
+  .comptes-recherche {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .comptes-demandes .comptes-actions,
+  .comptes-demandes .comptes-actions .btn {
+    width: 100%;
+  }
+
+  /* Une fiche par compte : quatre colonnes ne tiennent pas sur un téléphone. */
+  .view.comptes table.comptes-table,
+  .view.comptes table.comptes-table tbody,
+  .view.comptes table.comptes-table tr,
+  .view.comptes table.comptes-table td {
+    display: block;
+  }
+
+  .view.comptes table.comptes-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .view.comptes table.comptes-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .view.comptes table.comptes-table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .view.comptes table.comptes-table td[data-label="Compte"] {
+    grid-column: 1 / -1;
+  }
+
+  .view.comptes table.comptes-table td.comptes-col-actions {
+    grid-column: 1 / -1;
+    width: auto;
+    text-align: left;
+  }
+}

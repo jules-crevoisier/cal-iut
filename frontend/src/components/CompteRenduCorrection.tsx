@@ -36,7 +36,7 @@ export function CompteRenduCorrection({ correction }: { correction: CelcatCorrec
       {deja > 0 ? (
         <p data-testid="correction-deja-en-file">
           {pluriel(deja, "correction attendait", "corrections attendaient")} déjà d’être poussée
-          {deja > 1 ? "s" : ""} — recliquer n’y change rien, elles partent au prochain passage du worker.
+          {deja > 1 ? "s" : ""} — recliquer n’y change rien, elles partent au prochain passage du robot d’envoi.
         </p>
       ) : null}
       {parExplication.size > 0 ? (

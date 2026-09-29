@@ -2,11 +2,14 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { resetPassword } from "../api/client";
+import { CadreCompte, ChampMotDePasse } from "./CadreCompte";
 
 interface ResetPasswordPageProps {
   token: string;
   onRetourConnexion: () => void;
 }
+
+const LONGUEUR_MIN = 10;
 
 /** Réinitialisation (31/08/2026) — atteinte via le lien du mail (jeton dans
  * `#compte=reinitialiser&token=...`, jamais envoyé au serveur autrement que
@@ -34,61 +37,56 @@ export function ResetPasswordPage({ token, onRetourConnexion }: ResetPasswordPag
 
   if (!token) {
     return (
-      <div className="loginwrap">
-        <div className="panel loginpanel">
-          <span className="brand-mark">CI</span>
-          <h1>Lien invalide</h1>
-          <p className="muted">Ce lien de réinitialisation est incomplet.</p>
-          <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
-            Retour à la connexion
-          </button>
-        </div>
-      </div>
+      <CadreCompte
+        titre="Lien invalide"
+        intro={<p>Ce lien de réinitialisation est incomplet. Demandez-en un nouveau depuis « Mot de passe oublié ? ».</p>}
+      >
+        <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
+          Retour à la connexion
+        </button>
+      </CadreCompte>
     );
   }
 
   if (reussi) {
     return (
-      <div className="loginwrap">
-        <div className="panel loginpanel">
-          <span className="brand-mark">CI</span>
-          <h1>Mot de passe changé</h1>
-          <p className="muted">Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p>
-          <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
-            Se connecter
-          </button>
-        </div>
-      </div>
+      <CadreCompte
+        titre="Mot de passe changé"
+        intro={<p>Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p>}
+      >
+        <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
+          Se connecter
+        </button>
+      </CadreCompte>
     );
   }
 
+  const manque = Math.max(0, LONGUEUR_MIN - motDePasse.length);
+
   return (
-    <div className="loginwrap">
-      <form className="panel loginpanel" onSubmit={(e) => void soumettre(e)}>
-        <span className="brand-mark">CI</span>
-        <h1>Nouveau mot de passe</h1>
-        <label>
-          Nouveau mot de passe
-          <input
-            type="password"
-            autoFocus
-            autoComplete="new-password"
-            minLength={10}
-            value={motDePasse}
-            onChange={(e) => setMotDePasse(e.target.value)}
-            disabled={enCours}
-          />
-        </label>
-        <p className="loginpanel-aide">10 caractères minimum.</p>
-        {erreur && (
-          <p className="alerte" role="alert">
-            {erreur}
-          </p>
-        )}
-        <button type="submit" className="btn btn--primary" disabled={enCours || motDePasse.length < 10}>
-          {enCours ? "Enregistrement…" : "Changer le mot de passe"}
-        </button>
-      </form>
-    </div>
+    <CadreCompte titre="Nouveau mot de passe" onSubmit={(e) => void soumettre(e)}>
+      <ChampMotDePasse
+        libelle="Nouveau mot de passe"
+        autoFocus
+        autoComplete="new-password"
+        minLength={LONGUEUR_MIN}
+        value={motDePasse}
+        onChange={(e) => setMotDePasse(e.target.value)}
+        disabled={enCours}
+        aide={
+          manque === 0
+            ? `${LONGUEUR_MIN} caractères minimum — c'est bon.`
+            : `${LONGUEUR_MIN} caractères minimum${motDePasse ? ` (encore ${manque})` : ""}.`
+        }
+      />
+      {erreur && (
+        <p className="alerte" role="alert">
+          {erreur}
+        </p>
+      )}
+      <button type="submit" className="btn btn--primary" disabled={enCours || motDePasse.length < LONGUEUR_MIN}>
+        {enCours ? "Enregistrement…" : "Changer le mot de passe"}
+      </button>
+    </CadreCompte>
   );
 }

@@ -1,5 +1,6 @@
 /**
- * Ce que le worker écarte à chaque passage, et comment le débloquer.
+ * Ce que le robot d'envoi (le « worker ») écarte à chaque passage, et comment
+ * le débloquer.
  *
  * Le 20/09/2026, la production tournait avec trente corrections bloquées
  * depuis des jours — deux salles sans équivalent Celcat, trois séances dont
@@ -38,14 +39,14 @@ function conseil(motif: string): string {
     return (
       "Rien à mapper ici : cette séance n’a plus de place au planning. Replacez-la depuis " +
       "« À placer » si elle doit aller dans Celcat ; sinon, reconstruisez la file depuis les " +
-      "réglages — cela ne retire que les jobs des semaines enregistrées."
+      "réglages — cela ne retire que les corrections des semaines enregistrées."
     );
   }
   if (motif.includes("suppression refusée")) {
     return "Un garde-fou a refusé cette suppression : l’évènement est protégé, férié ou fantôme.";
   }
   if (motif.includes("event_id")) {
-    return "Ce job vise un évènement Celcat sans identifiant : reconstruisez la file pour le recalculer.";
+    return "Cette correction vise un évènement Celcat sans identifiant : reconstruisez la file pour la recalculer.";
   }
   return "Rien à mapper ici.";
 }
@@ -156,17 +157,17 @@ export function BlocagesCelcat({
 
   return (
     <section className="panel celcat-blocages" aria-labelledby="celcat-blocages-titre">
-      <h2 id="celcat-blocages-titre">
+      <h2 id="celcat-blocages-titre" className="celcat-panneau-titre">
         {blocages.length === 0
-          ? horsSemaine.length > 0
+          ? horsSemaine.length > 0 || (mappings.bloques_autres_semaines ?? 0) > 0
             ? "Rien ne bloque cette semaine"
             : "Correspondances ajoutées"
           : `${pluriel(seances, "séance bloquée", "séances bloquées")} cette semaine`}
       </h2>
       {blocages.length > 0 ? (
         <p className="celcat-aide">
-          Le worker les écarte à chaque passage : il leur manque une correspondance. Une fois
-          réglée, elles repartent d’elles-mêmes — elles n’ont jamais quitté la file.
+          Le robot d’envoi les écarte à chaque passage : il leur manque une correspondance. Une
+          fois réglée, elles repartent d’elles-mêmes — elles n’ont jamais quitté la file.
         </p>
       ) : null}
 
@@ -200,7 +201,7 @@ export function BlocagesCelcat({
               </span>
             </div>
             <div className="celcat-sous-texte">{b.seances.slice(0, 6).join(", ")}
-              {b.seances.length > 6 ? ` et ${b.seances.length - 6} autre(s)` : ""}
+              {b.seances.length > 6 ? ` et ${pluriel(b.seances.length - 6, "autre")}` : ""}
             </div>
             {b.famille && b.cle ? (
               <FormulaireMapping
@@ -221,13 +222,13 @@ export function BlocagesCelcat({
           <summary>
             {pluriel(
               horsSemaine.reduce((n, b) => n + b.seances.length, 0),
-              "job sans séance placée",
-              "jobs sans séance placée",
+              "correction sans séance placée",
+              "corrections sans séance placée",
             )}
           </summary>
           <p className="celcat-aide">
-            Ces jobs ne relèvent d’aucune semaine : la séance qu’ils nomment n’est plus placée au
-            planning, et la comparaison ne peut donc rien en dire.
+            Ces corrections ne relèvent d’aucune semaine : la séance qu’elles nomment n’est plus
+            placée au planning, et la comparaison ne peut donc rien en dire.
           </p>
           <ul className="celcat-liste">
             {horsSemaine.map((b) => (
@@ -240,7 +241,7 @@ export function BlocagesCelcat({
                 </div>
                 <div className="celcat-sous-texte">
                   {b.seances.slice(0, 6).join(", ")}
-                  {b.seances.length > 6 ? ` et ${b.seances.length - 6} autre(s)` : ""}
+                  {b.seances.length > 6 ? ` et ${pluriel(b.seances.length - 6, "autre")}` : ""}
                 </div>
                 <p className="celcat-sous-texte">{conseil(b.motif)}</p>
               </li>

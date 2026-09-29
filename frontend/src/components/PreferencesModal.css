@@ -1,0 +1,136 @@
+/* Question « couleurs par matière ou par type » (PreferencesModal). */
+
+.prefsmodal {
+  width: min(600px, 100%);
+  max-width: 600px;
+  padding: 20px;
+  box-shadow: var(--shadow-pop);
+}
+
+.prefsmodal h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.prefs-texte {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.prefs-choix {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (min-width: 560px) {
+  .prefs-choix {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.prefs-option {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+
+.prefs-option:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.prefs-option:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.prefs-option-titre {
+  font-weight: 600;
+}
+
+.prefs-option-sens {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.prefs-apercu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.prefs-puce {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-left: 3px solid var(--puce-barre, var(--border-strong));
+  border-radius: var(--radius-sm);
+  background: var(--puce-fond, var(--surface-2));
+  font-size: 0.78rem;
+}
+
+.prefs-puce-code {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.prefs-puce-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+.prefs-puce-type {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.prefs-puce--cm {
+  --puce-barre: var(--type-cm);
+  --puce-fond: color-mix(in srgb, var(--type-cm) 10%, var(--surface));
+}
+
+.prefs-puce--td {
+  --puce-barre: var(--type-td);
+  --puce-fond: color-mix(in srgb, var(--type-td) 12%, var(--surface));
+}
+
+.prefs-puce--tp {
+  --puce-barre: var(--type-tp);
+  --puce-fond: color-mix(in srgb, var(--type-tp) 12%, var(--surface));
+}
+
+.prefs-puce--matiere {
+  --puce-barre: var(--matiere-barre);
+  --puce-fond: var(--matiere-fond);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prefs-puce--matiere {
+    --puce-barre: var(--matiere-barre-sombre);
+    --puce-fond: var(--matiere-fond-sombre);
+  }
+}
+
+:root[data-theme="dark"] .prefs-puce--matiere {
+  --puce-barre: var(--matiere-barre-sombre);
+  --puce-fond: var(--matiere-fond-sombre);
+}

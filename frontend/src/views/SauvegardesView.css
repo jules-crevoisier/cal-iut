@@ -1,13 +1,15 @@
-/* Sauvegardes JSON datées (item B, 22/09/2026) — mêmes tokens et la même
-   échelle d'espacement que `.admin-users-*` (styles/app.css) : aucune valeur
-   ad-hoc introduite ici, juste le layout propre à cette vue. Mobile-first :
-   une colonne à 320px, le bouton passe sur sa propre ligne sous le titre ;
-   à partir de 768px, le titre et le bouton se placent côte à côte. */
+/* Sauvegardes JSON datées (SauvegardesView). Mobile d'abord : à 320 px le
+   bouton passe sous le texte ; à partir de 768 px, ils se placent côte à
+   côte. */
 
-.sauvegardes-view {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.view.sauvegardes-view {
+  gap: 14px;
+  max-width: 960px;
+}
+
+.sauvegardes-view h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
 }
 
 .sauvegardes-actions {
@@ -17,17 +19,18 @@
   gap: 12px;
 }
 
-.sauvegardes-actions h3 {
-  margin: 0 0 4px;
-}
-
 .sauvegardes-actions p {
   margin: 0;
+  max-width: 70ch;
+}
+
+.sauvegardes-actions p.sauvegardes-derniere {
+  margin-bottom: 4px;
+  font-size: 0.95rem;
 }
 
 .sauvegardes-actions .btn {
   align-self: stretch;
-  min-height: 44px;
 }
 
 @media (min-width: 768px) {
@@ -43,39 +46,52 @@
   }
 }
 
-.sauvegardes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.sauvegardes-message {
+  padding: 6px 12px;
+  border-left: 3px solid var(--good);
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-size: 0.88rem;
 }
 
-.sauvegardes-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+.sauvegardes-message:empty {
+  display: none;
 }
 
-.sauvegardes-identite {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+.sauvegardes-table {
+  font-size: 0.875rem;
 }
 
-.sauvegardes-identite strong {
-  text-transform: capitalize;
+.view table.sauvegardes-table td,
+.view table.sauvegardes-table th {
+  vertical-align: middle;
 }
 
-.sauvegardes-row .btn {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
+.sauvegardes-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sauvegardes-table tbody th {
+  font-weight: 500;
+}
+
+.sauvegardes-jour {
+  margin-right: 8px;
+}
+
+.sauvegardes-baisse {
+  color: var(--bad-text);
+  font-weight: 600;
+}
+
+.sauvegardes-col-fichier {
+  width: 1%;
+  text-align: right;
+}
+
+@media (pointer: coarse) {
+  .sauvegardes-view .btn {
+    min-height: 44px;
+  }
 }
