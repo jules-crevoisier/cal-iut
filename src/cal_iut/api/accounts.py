@@ -111,28 +111,75 @@ def _sign(payload: str) -> str:
     return hmac.new(auth.get_secret().encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def make_account_session_token(user_id: int) -> str:
+def make_account_session_token(user_id: int, version: int = 0) -> str:
+    """`user_id.version.expiration.signature` — `version` est
+    `User.session_version` au moment de la connexion (P1-2, audit du
+    29/09/2026)."""
     expiry = str(int(time.time()) + ACCOUNT_SESSION_MAX_AGE_S)
-    payload = f"{user_id}.{expiry}"
+    payload = f"{user_id}.{int(version)}.{expiry}"
     return f"{payload}.{_sign(payload)}"
 
 
-def verify_account_session_token(token: str | None) -> int | None:
-    """Rend le `user_id` si signature + expiration sont valides — ne
-    consulte JAMAIS la base ici (cf. `get_current_user` pour ça) : cette
-    fonction ne fait que prouver que le cookie n'a pas été falsifié."""
-    if not token or token.count(".") != 2:
+def lire_jeton_session(token: str | None) -> tuple[int, int] | None:
+    """Rend `(user_id, version)` si signature + expiration sont valides — ne
+    consulte JAMAIS la base ici (cf. `utilisateur_depuis_jeton` pour ça) :
+    cette fonction ne fait que prouver que le cookie n'a pas été falsifié.
+
+    Accepte encore l'ancien format sans version (`user_id.expiration.sig`,
+    avant le 29/09/2026) comme version 0 : pas de déconnexion générale au
+    déploiement, et ces anciens cookies deviennent invalides dès que la
+    version du compte avance (réinitialisation du mot de passe)."""
+    if not token:
         return None
-    user_id_str, expiry, sig = token.split(".")
-    payload = f"{user_id_str}.{expiry}"
+    morceaux = token.split(".")
+    if len(morceaux) == 4:
+        user_id_str, version_str, expiry, sig = morceaux
+        payload = f"{user_id_str}.{version_str}.{expiry}"
+    elif len(morceaux) == 3:
+        user_id_str, expiry, sig = morceaux
+        version_str = "0"
+        payload = f"{user_id_str}.{expiry}"
+    else:
+        return None
     if not hmac.compare_digest(_sign(payload), sig):
         return None
     try:
         if int(expiry) <= time.time():
             return None
-        return int(user_id_str)
+        return int(user_id_str), int(version_str)
     except ValueError:
         return None
+
+
+def verify_account_session_token(token: str | None) -> int | None:
+    """`user_id` d'un cookie authentique, SANS vérifier sa version — pour
+    tout ce qui doit résoudre un compte, passer par `utilisateur_depuis_jeton`."""
+    lu = lire_jeton_session(token)
+    return lu[0] if lu is not None else None
+
+
+def version_session(user: User) -> int:
+    return int(user.session_version or 0)
+
+
+def revoquer_sessions(user: User) -> None:
+    """Invalide tous les cookies déjà émis pour ce compte (l'appelant
+    commit). Appelé à la réinitialisation du mot de passe et à la
+    confirmation d'email."""
+    user.session_version = version_session(user) + 1
+
+
+def utilisateur_depuis_jeton(repo: AccountRepository, token: str | None) -> User | None:
+    """Compte désigné par un cookie authentique ET à jour : un cookie émis
+    avant la dernière `revoquer_sessions` du compte est refusé."""
+    lu = lire_jeton_session(token)
+    if lu is None:
+        return None
+    user_id, version = lu
+    user = repo.get_by_id(user_id)
+    if user is None or version_session(user) != version:
+        return None
+    return user
 
 
 def _account_repo() -> AccountRepository:
@@ -149,12 +196,7 @@ def get_current_user(request: Request, *, optional: bool = False) -> User | None
     `require_role`) rend `None` au lieu de lever 401 quand personne n'est
     connecté — un lien personnel public n'a pas de compte à résoudre, ce
     n'est pas une erreur."""
-    user_id = verify_account_session_token(request.cookies.get(ACCOUNT_SESSION_COOKIE))
-    if user_id is None:
-        if optional:
-            return None
-        raise HTTPException(401, "Authentification requise.")
-    user = _account_repo().get_by_id(user_id)
+    user = utilisateur_depuis_jeton(_account_repo(), request.cookies.get(ACCOUNT_SESSION_COOKIE))
     if user is None:
         if optional:
             return None

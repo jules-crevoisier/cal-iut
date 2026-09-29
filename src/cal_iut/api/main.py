@@ -399,8 +399,11 @@ async def require_auth(request: Request, call_next):
     if _lien_perso_autorise(request) and auth.verify_personal_link_param(request.query_params.get("t")):
         return await call_next(request)
 
-    user_id = accounts.verify_account_session_token(request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE))
-    user = _account_repo().get_by_id(user_id) if user_id is not None else None
+    # Version de session comprise (P1-2) : un cookie émis avant une
+    # réinitialisation de mot de passe est refusé.
+    user = accounts.utilisateur_depuis_jeton(
+        _account_repo(), request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE)
+    )
     if user is None:
         # Pas de cookie (ou cookie invalide) : une clé « caliut_… » créée
         # via /auth/mcp-keys authentifie aussi les routes générales,
@@ -526,6 +529,9 @@ def auth_confirm_email(token: str) -> RedirectResponse:
         # `auth_signup`) — `None` pour un jeton émis avant ce correctif.
         if mot_de_passe_du_jeton:
             user.password_hash = mot_de_passe_du_jeton
+        # Aucun cookie émis avant la preuve de possession de l'adresse ne
+        # doit survivre (P1-2).
+        accounts.revoquer_sessions(user)
         repo.mark_email_confirmed(user)
     return RedirectResponse(f"{base}/#compte=confirme&statut=ok", status_code=302)
 
@@ -544,7 +550,8 @@ def auth_login(body: LoginRequest, response: Response) -> dict:
     if user.status == "disabled":
         raise HTTPException(403, "Compte désactivé.")
     response.set_cookie(
-        accounts.ACCOUNT_SESSION_COOKIE, accounts.make_account_session_token(user.id),
+        accounts.ACCOUNT_SESSION_COOKIE,
+        accounts.make_account_session_token(user.id, accounts.version_session(user)),
         max_age=accounts.ACCOUNT_SESSION_MAX_AGE_S, httponly=True, samesite="lax",
         secure=accounts.cookie_secure(),
     )
@@ -606,6 +613,11 @@ def auth_reset_password(body: ResetPasswordRequest) -> dict:
         raise HTTPException(403, "Compte désactivé.")
 
     user.password_hash = accounts.hash_password(body.new_password)
+    # Audit du 29/09/2026 (P1-2) : un cookie volé restait valable 30 jours
+    # après le changement de mot de passe. Tous les cookies de ce compte, y
+    # compris celui de la personne qui réinitialise, sont invalidés : elle
+    # se reconnecte avec le nouveau mot de passe.
+    accounts.revoquer_sessions(user)
     repo.db.commit()
     repo.consume_token(entry)
     # Invalide TOUT le reste (y compris un autre jeton reset encore valide,
