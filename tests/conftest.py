@@ -101,6 +101,18 @@ def creer_compte_actif_et_connecter(client, role: str = "edit") -> None:
 
 
 @pytest.fixture(autouse=True)
+def _limiteur_auth_vide():
+    """Compteurs de débit des routes `/auth/*` (audit 29/09/2026, P1-3)
+    remis à zéro entre deux tests : ils sont globaux au processus, et la
+    suite entière se connecte depuis la même « IP » de `TestClient`."""
+    from cal_iut.api.limiteur import limiteur
+
+    limiteur.vider()
+    yield
+    limiteur.vider()
+
+
+@pytest.fixture(autouse=True)
 def _catalogues_celcat_vides():
     """Vide les caches de catalogue Celcat entre deux tests.
 

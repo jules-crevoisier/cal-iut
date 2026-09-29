@@ -67,6 +67,12 @@ COPY contraintes/ contraintes/
 COPY contraintes_update/ contraintes_update/
 
 ENV PYTHONUNBUFFERED=1
+# uvicorn fait confiance à `X-Forwarded-For` posé par nginx (conteneur
+# frontend, réseau Docker interne) : sans ça, toutes les requêtes semblent
+# venir de l'IP de nginx et la limitation de débit par IP des routes
+# `/auth/*` (api/limiteur.py) frapperait tout le monde à la fois. Le port
+# 8000 n'est qu'`expose` (jamais publié) : seul nginx peut poser l'en-tête.
+ENV FORWARDED_ALLOW_IPS=*
 EXPOSE 8000
 VOLUME ["/app/data/state"]
 

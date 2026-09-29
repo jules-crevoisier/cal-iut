@@ -26,6 +26,7 @@ from cal_iut.api import (
     custom_sessions,
     doublons,
     forced_pending,
+    limiteur,
     mailer,
     sauvegardes,
     session_overrides,
@@ -439,8 +440,22 @@ app.middleware("http")(mcp_bearer_middleware)
 # référence plus `require_admin_session` après fusion (vérifié par grep).
 
 
+# Plafonds des routes publiques d'authentification (audit du 29/09/2026,
+# P1-3, cf. `api/limiteur.py`) : (essais, fenêtre en secondes). Par IP
+# larges (derrière un proxy mal configuré, tout le monde partage une IP),
+# par email serrés.
+_HEURE = 3600
+_LIMITE_LOGIN_IP, _LIMITE_LOGIN_EMAIL = (30, 300), (10, 900)
+_LIMITE_MAIL_IP, _LIMITE_MAIL_EMAIL = (10, _HEURE), (3, _HEURE)
+_LIMITE_RESET_IP = (10, 900)
+
+
 @app.post("/auth/signup", response_model=SignupResponse, status_code=201)
-def auth_signup(body: SignupRequest) -> SignupResponse | JSONResponse:
+def auth_signup(body: SignupRequest, request: Request) -> SignupResponse | JSONResponse:
+    limiteur.limiter(
+        request, "signup", email=accounts.normalize_email(body.email),
+        par_ip=_LIMITE_MAIL_IP, par_email=_LIMITE_MAIL_EMAIL,
+    )
     # Vérifié EN PREMIER, avant toute écriture en base : un compte qu'aucun
     # mail de confirmation ne pourra jamais atteindre resterait bloqué en
     # `pending_email` pour toujours — même philosophie que l'ancien
@@ -537,8 +552,9 @@ def auth_confirm_email(token: str) -> RedirectResponse:
 
 
 @app.post("/auth/login")
-def auth_login(body: LoginRequest, response: Response) -> dict:
+def auth_login(body: LoginRequest, request: Request, response: Response) -> dict:
     email = accounts.normalize_email(body.email)
+    limiteur.limiter(request, "login", email=email, par_ip=_LIMITE_LOGIN_IP, par_email=_LIMITE_LOGIN_EMAIL)
     repo = _account_repo()
     user = repo.get_by_email(email)
     # Message et code IDENTIQUES pour un email inconnu et un mauvais mot de
@@ -555,6 +571,8 @@ def auth_login(body: LoginRequest, response: Response) -> dict:
         max_age=accounts.ACCOUNT_SESSION_MAX_AGE_S, httponly=True, samesite="lax",
         secure=accounts.cookie_secure(),
     )
+    # Connexion réussie : les essais précédents sur cet email ne comptent plus.
+    limiteur.limiteur.oublier(f"login:email:{email}")
     return {"role": user.role, "status": user.status}
 
 
@@ -572,10 +590,12 @@ def auth_status(request: Request) -> dict:
 
 
 @app.post("/auth/forgot-password")
-def auth_forgot_password(body: ForgotPasswordRequest) -> dict:
+def auth_forgot_password(body: ForgotPasswordRequest, request: Request) -> dict:
     # TOUJOURS 200 — un email inconnu ne doit jamais être distinguable d'un
-    # email connu (même principe anti-énumération que `/auth/login`).
+    # email connu (même principe anti-énumération que `/auth/login`). Seule
+    # exception : 429 au-delà des plafonds, pour tout email, connu ou non.
     email = accounts.normalize_email(body.email)
+    limiteur.limiter(request, "forgot", email=email, par_ip=_LIMITE_MAIL_IP, par_email=_LIMITE_MAIL_EMAIL)
     repo = _account_repo()
     user = repo.get_by_email(email)
     if user is not None and user.status == "active":
@@ -600,7 +620,8 @@ def auth_forgot_password(body: ForgotPasswordRequest) -> dict:
 
 
 @app.post("/auth/reset-password")
-def auth_reset_password(body: ResetPasswordRequest) -> dict:
+def auth_reset_password(body: ResetPasswordRequest, request: Request) -> dict:
+    limiteur.limiter(request, "reset", email=None, par_ip=_LIMITE_RESET_IP)
     repo = _account_repo()
     token_hash = hashlib.sha256(body.token.encode()).hexdigest()
     entry = repo.get_valid_token(token_hash, "reset_password")
