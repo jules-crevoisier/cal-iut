@@ -121,12 +121,15 @@ def test_flux_annonce_un_rafraichissement_d_une_heure(etat_avec_seances) -> None
     assert "PT6H" not in corps
 
 
-def test_flux_n_est_jamais_mis_en_cache_intermediaire(etat_avec_seances) -> None:
-    """Le contenu est recalculé en direct sur `state.timetable` à chaque
-    requête (rien n'est mis en cache côté serveur) — `no-store` empêche un
-    proxy/CDN intermédiaire d'en garder une vieille copie."""
+def test_flux_n_est_jamais_resservi_sans_revalidation(etat_avec_seances) -> None:
+    """Un proxy/CDN ou un agenda peut garder le flux, mais DOIT le
+    revalider avant de s'en resservir (`no-cache`) — jamais de vieille copie
+    servie sans demander. Depuis le 29/09/2026 la revalidation répond 304
+    quand rien n'a bougé (ETag, cf. `api/revision.py`), au lieu de tout
+    renvoyer à chaque sondage — d'où `no-cache` plutôt que `no-store`."""
     reponse = client.get("/ics/prof/KBR.ics?t=KBR")
-    assert "no-store" in reponse.headers.get("cache-control", "")
+    assert "no-cache" in reponse.headers.get("cache-control", "")
+    assert reponse.headers.get("etag")
 
 
 def test_flux_respecte_duration_slots_pour_un_bloc_de_3h(etat_avec_seances) -> None:
@@ -209,9 +212,10 @@ def test_version_liste_groupes_et_enseignants_avec_leur_lien(etat_avec_seances) 
     assert prof["label"]  # un libellé est fourni, quel qu'il soit
 
 
-def test_version_est_jamais_mise_en_cache(etat_avec_seances) -> None:
+def test_version_est_toujours_revalidee(etat_avec_seances) -> None:
     reponse = client.get("/ics/version?t=x")
-    assert "no-store" in reponse.headers.get("cache-control", "")
+    assert "no-cache" in reponse.headers.get("cache-control", "")
+    assert reponse.headers.get("etag")
 
 
 def test_version_sans_run_id_rend_derniere_modification_nulle(etat_avec_seances) -> None:

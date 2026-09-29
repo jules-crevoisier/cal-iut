@@ -97,6 +97,24 @@ def creer_compte_actif_et_connecter(client, role: str = "edit") -> None:
 
 
 @pytest.fixture(autouse=True)
+def _revision_neuve():
+    """Avance la révision de l'état (`api/revision.py`) avant chaque test.
+
+    Les fixtures remplacent l'état applicatif À LA MAIN (`etat.timetable =
+    [...]`), sans passer par l'API — donc sans avancer la révision qui sert
+    de clé aux caches de lecture (`/app-state`, `/timetable`, `.ics`...). La
+    sonde d'identité (`api/main.py::_empreinte_etat`) le repère presque
+    toujours, mais CPython peut réattribuer l'`id()` d'une liste libérée à
+    la suivante : un test aurait alors pu relire la réponse cachée du test
+    précédent. Un test dont le verdict dépend de ses voisins ne protège rien.
+    """
+    from cal_iut.api import revision
+
+    revision.incrementer("test")
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _catalogues_celcat_vides():
     """Vide les caches de catalogue Celcat entre deux tests.
 

@@ -18,8 +18,9 @@ GET /ics/groupe/{group_id}.ics?t=<n'importe quoi>
   CM de promo + son TP jumelé (ou son TD parent si c'est un lien TP) — les
   mêmes séances qu'un étudiant de ce groupe verrait sur son planning perso.
 - Réponse : `text/calendar; charset=utf-8`, standard iCalendar (RFC 5545).
-  `Cache-Control: no-store` — le contenu est recalculé en direct à chaque
-  requête, jamais mis en cache côté serveur.
+  `Cache-Control: no-cache` + `ETag` (depuis le 29/09/2026) : toujours à
+  jour, mais un agenda qui renvoie `If-None-Match` reçoit un `304` vide tant
+  que rien n'a changé, au lieu du calendrier complet. Cf. `docs/API.md`.
 
 ## 2. Fuseau horaire
 

@@ -32,6 +32,8 @@ export default defineConfig({
       "/weights": "http://127.0.0.1:8000",
       "/legacy": "http://127.0.0.1:8000",
       "/celcat": "http://127.0.0.1:8000",
+      // API v1 (`api/v1.py`) — `useRevision` sonde `/api/v1/version`.
+      "/api": "http://127.0.0.1:8000",
     },
   },
 });

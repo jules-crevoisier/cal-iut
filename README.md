@@ -293,6 +293,19 @@ cal-iut export --format html --per-teacher data/generated/par-enseignant
 | `GET /export/csv` | Export CSV |
 | `GET /export/json` | Export JSON |
 | `GET /legacy` | Page HTML/JS historique (même données, autre présentation) |
+| `GET /ics/prof/{code}.ics`, `GET /ics/groupe/{id}.ics` | Flux agenda abonnables (cf. [`docs/ICS.md`](docs/ICS.md)) |
+| `GET /api/v1/version` | Révision de l'état — à sonder pour savoir si quelque chose a changé |
+| `GET /api/v1/seances` | Séances filtrables (semaine, enseignant, groupe, salle, cours, parcours, dates), paginables |
+| `GET /api/v1/{semaines,creneaux,enseignants,groupes,salles,cours,parcours}` | Référentiels (+ `/{id}` et `/{id}/seances`) |
+| `GET /api/v1/salles/libres` | Salles libres à un créneau (séances, réservations, salles liées) |
+| `GET /api/v1/export` | Tout en un appel, pour synchroniser un client |
+
+API v1 en lecture seule, documentée dans [`docs/API.md`](docs/API.md). Toutes
+les lectures lourdes (`/app-state`, `/meta`, `/timetable`, `/diff`, `/ics/*`,
+`/api/v1/*`) portent un `ETag` dérivé de la révision de l'état : `If-None-Match`
+→ `304` sans corps tant que rien n'a changé. Réponses ≥ 1 Ko compressées en
+gzip. Authentification : cookie de compte, clé `Authorization: Bearer caliut_…`
+ou lien personnel `?t=`.
 
 ## Architecture
 
