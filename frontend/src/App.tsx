@@ -817,7 +817,8 @@ export function App() {
                   <p className="semaine-compte">
                     {visiblePlacements.length} séance{visiblePlacements.length > 1 ? "s" : ""} cette semaine
                   </p>
-                  {!prefs.couleursParMatiere && (
+                  {/* Pas de légende devant l'annuaire : il n'y a pas de carte. */}
+                  {!prefs.couleursParMatiere && !(viewMode === "teacher" && !teacherCode) && !(viewMode === "room" && !roomId) && (
                     <ul className="semaine-legende" aria-label="Types de séance">
                       <li className="cm" title="Cours magistral : toute la promo, sur les deux colonnes">CM</li>
                       <li className="td" title="Travaux dirigés : les deux groupes TP, sur les deux colonnes">TD</li>
