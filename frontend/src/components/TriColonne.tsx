@@ -43,13 +43,16 @@ interface TriColonneProps<K extends string> {
   onTrier: (cle: K) => void;
   children: ReactNode;
   num?: boolean;
+  /** Classe en plus sur le `<th>` (ex. colonne masquée au téléphone). */
+  className?: string;
 }
 
-export function TriColonne<K extends string>({ cle, tri, onTrier, children, num }: TriColonneProps<K>) {
+export function TriColonne<K extends string>({ cle, tri, onTrier, children, num, className }: TriColonneProps<K>) {
   const actif = tri.cle === cle;
+  const classes = [num ? "num" : "", className ?? ""].filter(Boolean).join(" ");
   return (
     <th
-      className={num ? "num" : undefined}
+      className={classes || undefined}
       aria-sort={actif ? (tri.sens === 1 ? "ascending" : "descending") : "none"}
     >
       <button type="button" className={`tri-colonne${actif ? " actif" : ""}`} onClick={() => onTrier(cle)}>

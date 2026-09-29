@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { adminDeleteUser, adminListUsers, adminUpdateUser } from "../api/client";
 import type { AdminUser } from "../api/client";
 import { confirmAsync } from "../utils/confirmDialog";
+import { ChampRecherche } from "../components/ChampRecherche";
 import { Tuile, Tuiles } from "../components/Tuile";
 import "../styles/outils.css";
 import "./AdminUsersView.css";
@@ -297,13 +298,12 @@ export function AdminUsersView() {
           ))}
         </div>
         <div className="page-outils-actions">
-          <input
-            type="search"
+          <ChampRecherche
             className="comptes-recherche"
             placeholder="Rechercher une adresse"
-            aria-label="Rechercher une adresse"
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
+            libelle="Rechercher une adresse"
+            valeur={recherche}
+            onChange={(v) => setRecherche(v)}
           />
         </div>
       </div>
@@ -334,7 +334,7 @@ export function AdminUsersView() {
                       <div className="muted comptes-depuis">{depuis(u)}</div>
                     </td>
                     <td data-label="Statut">
-                      <span className={`pill ${TON_STATUT[u.status]}`}>{LIBELLE_STATUT[u.status]}</span>
+                      <span className={`pill dot ${TON_STATUT[u.status]}`}>{LIBELLE_STATUT[u.status]}</span>
                     </td>
                     <td data-label="Rôle">
                       {u.status === "active" ? (

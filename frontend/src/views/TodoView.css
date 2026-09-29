@@ -340,12 +340,15 @@
     font-size: 20px;
   }
 
+  /* Libellé sur deux lignes plutôt que coupé (« Encadrement S… ») ; le
+     chiffre descend en bas de la tuile, aligné sur ses voisines. */
   .todo-sommaire .tuile-libelle {
     font-size: 11.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     max-width: 100%;
+  }
+
+  .todo-sommaire .tuile-valeur {
+    margin-top: auto;
   }
 
   .todo-sommaire .tuile-detail {

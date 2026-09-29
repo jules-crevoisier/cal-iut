@@ -42,6 +42,24 @@ p.sauvegardes-derniere {
   text-align: right;
 }
 
+/* Petit téléphone : le jour, les séances placées et « Télécharger » restent
+   à l'écran ; écart et taille cèdent la place, les libellés passent à la
+   ligne. */
+@media (max-width: 600px) {
+  .sauvegardes-optionnel {
+    display: none;
+  }
+
+  .carte-tableau table.sauvegardes-table thead th,
+  .sauvegardes-table tbody th {
+    white-space: normal;
+  }
+
+  .sauvegardes-table tbody th .pill {
+    margin-top: 2px;
+  }
+}
+
 @media (max-width: 700px) {
   .sauvegardes-view .page-outils-actions,
   .sauvegardes-view .page-outils-actions .btn {

@@ -36,6 +36,7 @@ import { ecrireOngletTaches, lireOngletTaches } from "../utils/kanbanTabPrefs";
 import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
+import { ChampRecherche } from "../components/ChampRecherche";
 import { Onglets } from "../components/Onglets";
 import { ActionsDePage } from "../components/TopBar";
 import "./KanbanView.css";
@@ -411,14 +412,14 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
           controle="kanban-board"
         />
 
-        <input
+        <ChampRecherche
           ref={refFiltre}
-          type="search"
           className="kanban-recherche"
-          placeholder="Filtrer…  ( / )"
-          aria-label="Filtrer les tâches"
-          value={filtreTexte}
-          onChange={(e) => setFiltreTexte(e.target.value)}
+          placeholder="Filtrer…"
+          libelle="Filtrer les tâches"
+          raccourci="/"
+          valeur={filtreTexte}
+          onChange={(v) => setFiltreTexte(v)}
         />
         <label className="kanban-filtre">
           <span>Pour qui</span>
@@ -552,22 +553,32 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
                     void ajouterRapide(colonne.id);
                   }}
                 >
-                  <input
-                    ref={idxCol === 0 ? refAjout : undefined}
-                    type="text"
-                    maxLength={200}
-                    aria-label={`Ajouter une tâche dans ${colonne.label}`}
-                    placeholder={idxCol === 0 ? "Ajouter une tâche…  ( N )" : "Ajouter une tâche…"}
-                    value={saisieRapide[colonne.id]}
-                    disabled={ajoutEnCours === colonne.id}
-                    onChange={(e) => setSaisieRapide((s) => ({ ...s, [colonne.id]: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setSaisieRapide((s) => ({ ...s, [colonne.id]: "" }));
-                        e.currentTarget.blur();
-                      }
-                    }}
-                  />
+                  {/* Raccourci « N » (première colonne) : dans un `<kbd>` à
+                      droite, pas dans le texte d'exemple. */}
+                  <span className="champ-raccourci">
+                    <input
+                      ref={idxCol === 0 ? refAjout : undefined}
+                      type="text"
+                      maxLength={200}
+                      aria-label={`Ajouter une tâche dans ${colonne.label}`}
+                      placeholder="Ajouter une tâche…"
+                      aria-keyshortcuts={idxCol === 0 ? "N" : undefined}
+                      value={saisieRapide[colonne.id]}
+                      disabled={ajoutEnCours === colonne.id}
+                      onChange={(e) => setSaisieRapide((s) => ({ ...s, [colonne.id]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setSaisieRapide((s) => ({ ...s, [colonne.id]: "" }));
+                          e.currentTarget.blur();
+                        }
+                      }}
+                    />
+                    {idxCol === 0 && (
+                      <kbd className="champ-recherche-kbd" aria-hidden="true">
+                        N
+                      </kbd>
+                    )}
+                  </span>
                 </form>
               )}
             </section>
@@ -670,7 +681,7 @@ function CarteTache({
           <p className="kanban-card-titre">{t.titre}</p>
         )}
         {/* Marqueur TEXTE, pas seulement une couleur. */}
-        {t.priorite === "urgente" && <span className="pill bad">Urgent</span>}
+        {t.priorite === "urgente" && <span className="pill dot bad">Urgent</span>}
       </div>
 
       {(t.concerne || nomProf || datesLabel) && (

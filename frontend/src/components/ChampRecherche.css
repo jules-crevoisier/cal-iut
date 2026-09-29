@@ -1,0 +1,63 @@
+/* Champ de recherche partagé (`ChampRecherche`) : loupe à gauche, raccourci
+   clavier à droite dans un `<kbd>` (même dessin que « Ctrl K » de la
+   navigation), masqué dès que l'on tape ou que le champ a le focus. */
+
+.champ-recherche {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.champ-recherche-loupe {
+  position: absolute;
+  left: 10px;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.champ-recherche input {
+  width: 100%;
+  /* Le style global des champs fixe le padding (sélecteur très précis) : le
+     retrait du texte laisse la place à la loupe sans le surcharger. */
+  text-indent: 22px;
+}
+
+.champ-recherche.avec-raccourci input {
+  padding-right: 34px;
+}
+
+.champ-recherche-kbd {
+  position: absolute;
+  right: 8px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.champ-recherche input:focus ~ .champ-recherche-kbd,
+.champ-recherche input:not(:placeholder-shown) ~ .champ-recherche-kbd {
+  display: none;
+}
+
+/* Variante « ajout » (Tâches) : même `<kbd>`, sans loupe. */
+.champ-raccourci {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.champ-raccourci input {
+  width: 100%;
+  padding-right: 34px;
+}
+
+.champ-raccourci input:focus ~ .champ-recherche-kbd,
+.champ-raccourci input:not(:placeholder-shown) ~ .champ-recherche-kbd {
+  display: none;
+}

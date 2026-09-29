@@ -43,6 +43,7 @@ import {
   type StatutSemaine,
   type TodoItem,
 } from "../utils/todo";
+import { ChampRecherche } from "../components/ChampRecherche";
 import { Tuile, Tuiles } from "../components/Tuile";
 import "../styles/outils.css";
 import "./TodoView.css";
@@ -245,14 +246,14 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
       </Tuiles>
 
       <div className="page-outils todo-filtres" role="search">
-        <input
+        <ChampRecherche
           ref={rechercheRef}
-          type="search"
           className="todo-recherche"
-          placeholder="Filtrer : cours, salle, groupe…  ( / )"
-          aria-label="Filtrer les points"
-          value={filtres.texte}
-          onChange={(e) => majFiltre({ texte: e.target.value })}
+          placeholder="Filtrer : cours, salle, groupe…"
+          libelle="Filtrer les points"
+          raccourci="/"
+          valeur={filtres.texte}
+          onChange={(v) => majFiltre({ texte: v })}
         />
         <select aria-label="Parcours" value={filtres.parcours} onChange={(e) => majFiltre({ parcours: e.target.value })}>
           <option value="">Tous les parcours</option>

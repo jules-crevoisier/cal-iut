@@ -16,6 +16,7 @@ import { X } from "lucide-react";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload, TeacherInfo } from "../types/app";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
+import { ChampRecherche } from "../components/ChampRecherche";
 import { Tuile, Tuiles } from "../components/Tuile";
 import "../styles/outils.css";
 import "./ContraintesView.css";
@@ -203,13 +204,12 @@ export function ContraintesView({ payload, setRoute }: ContraintesViewProps) {
             </button>
           )}
           <div className="carte-tete-actions">
-            <input
-              type="search"
+            <ChampRecherche
               className="ctr-recherche"
               placeholder="Filtrer : nom, jour, texte déclaré…"
-              aria-label="Filtrer les enseignants"
-              value={texte}
-              onChange={(e) => setTexte(e.target.value)}
+              libelle="Filtrer les enseignants"
+              valeur={texte}
+              onChange={(v) => setTexte(v)}
             />
             <label className="ctr-case">
               <input type="checkbox" checked={tous} onChange={(e) => setTous(e.target.checked)} />
@@ -248,9 +248,9 @@ export function ContraintesView({ payload, setRoute }: ContraintesViewProps) {
                     {!t.hasConstraint ? (
                       <span className="ctr-faible">Aucune contrainte</span>
                     ) : v.declarees > 0 ? (
-                      <span className="pill warn">{pluriel(v.declarees, "séance")} en conflit</span>
+                      <span className="pill dot warn">{pluriel(v.declarees, "séance")} en conflit</span>
                     ) : (
-                      <span className="pill good">Respectée</span>
+                      <span className="pill dot good">Respectée</span>
                     )}
                     {v.compromis > 0 && <span className="ctr-compromis">{v.compromis} compromis SAE</span>}
                   </td>

@@ -38,7 +38,7 @@
   text-align: left;
   border: none;
   background: none;
-  color: var(--accent);
+  color: var(--ink);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -47,6 +47,11 @@
 .ref-lien:hover {
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.ref-parcours,
+.ref-heures {
+  white-space: nowrap;
 }
 
 .ref-marque {
@@ -78,27 +83,35 @@
 }
 
 /* ── Calendrier ── */
+/* Type de période : un point de couleur devant le mot (pas de barre). */
 .ref-type {
-  display: inline-block;
-  padding-left: 8px;
-  border-left: 3px solid var(--border-strong);
+  --ref-type-point: var(--ink-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
-.ref-type--vacances {
-  border-left-color: var(--ink-faint);
+.ref-type::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ref-type-point);
 }
 
 .ref-type--ferie {
-  border-left-color: var(--bad);
+  --ref-type-point: var(--bad);
 }
 
 .ref-type--rentree {
-  border-left-color: var(--accent);
+  --ref-type-point: var(--ink);
 }
 
 .ref-type--special {
-  border-left-color: var(--accent2);
+  --ref-type-point: var(--warn);
 }
 
 .ref-cal-passe td {
@@ -161,6 +174,17 @@
   .ref-secondaire {
     display: none;
   }
+}
+
+/* Petit téléphone : seules les colonnes clés restent (nom, chiffres qui
+   comptent) ; le reste est dans la fiche ou sur un écran plus large. */
+@media (max-width: 600px) {
+  .ref-optionnel {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
 
   .ref-recherche {
     flex: 1 1 100%;

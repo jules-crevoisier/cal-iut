@@ -12,6 +12,7 @@
 import { useMemo, useState } from "react";
 
 import { sendTeacherMails } from "../api/client";
+import { ChampRecherche } from "../components/ChampRecherche";
 import { CopyButton } from "../components/CopyButton";
 import { NotificationsPanel } from "../components/NotificationsPanel";
 import { OpenLinkButton } from "../components/OpenLinkButton";
@@ -158,13 +159,12 @@ function RoomsTable({ payload, setRoute }: { payload: AppPayload; setRoute: (pat
   return (
     <>
       <div className="page-outils ref-barre">
-        <input
-          type="search"
+        <ChampRecherche
           className="ref-recherche"
           placeholder="Filtrer : nom, équipement…"
-          aria-label="Filtrer les salles"
-          value={texte}
-          onChange={(e) => setTexte(e.target.value)}
+          libelle="Filtrer les salles"
+          valeur={texte}
+          onChange={(v) => setTexte(v)}
         />
         <select aria-label="Type de salle" value={type} onChange={(e) => setType(e.target.value)}>
           <option value="">Tous les types</option>
@@ -189,7 +189,7 @@ function RoomsTable({ payload, setRoute }: { payload: AppPayload; setRoute: (pat
               <TriColonne cle="capacity" tri={tri} onTrier={trierPar} num>
                 Places
               </TriColonne>
-              <TriColonne cle="type" tri={tri} onTrier={trierPar}>
+              <TriColonne cle="type" tri={tri} onTrier={trierPar} className="ref-optionnel">
                 Type
               </TriColonne>
               <th className="ref-secondaire">Équipement</th>
@@ -216,7 +216,7 @@ function RoomsTable({ payload, setRoute }: { payload: AppPayload; setRoute: (pat
                   {!r.placementAuto && <span className="pill ref-marque">hors auto</span>}
                 </td>
                 <td className="num">{r.capacity}</td>
-                <td>{humaniser(r.type)}</td>
+                <td className="ref-optionnel">{humaniser(r.type)}</td>
                 <td className="ref-doux ref-secondaire">{r.equipment.map(humaniser).join(", ") || "—"}</td>
                 <td className="num">{r.nSessions}</td>
               </tr>
@@ -267,8 +267,8 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
     });
   }, [payload.courses, payload.teacherLabels, texte, parcours, semestre]);
   const { triees, tri, trierPar } = useTri<CourseCatalogEntry, CleCours>(filtres, VALEURS_COURS, { cle: "code", sens: 1 });
-  const col = (cle: CleCours, libelle: string, num = false) => (
-    <TriColonne cle={cle} tri={tri} onTrier={trierPar} num={num}>
+  const col = (cle: CleCours, libelle: string, num = false, className?: string) => (
+    <TriColonne cle={cle} tri={tri} onTrier={trierPar} num={num} className={className}>
       {libelle}
     </TriColonne>
   );
@@ -276,13 +276,12 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
   return (
     <>
       <div className="page-outils ref-barre">
-        <input
-          type="search"
+        <ChampRecherche
           className="ref-recherche"
           placeholder="Filtrer : code, nom, enseignant…"
-          aria-label="Filtrer les cours"
-          value={texte}
-          onChange={(e) => setTexte(e.target.value)}
+          libelle="Filtrer les cours"
+          valeur={texte}
+          onChange={(v) => setTexte(v)}
         />
         <select aria-label="Parcours" value={parcours} onChange={(e) => setParcours(e.target.value)}>
           <option value="">Tous les parcours</option>
@@ -309,13 +308,13 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
           <thead>
             <tr>
               {col("code", "Code")}
-              {col("name", "Nom")}
-              {col("semestre", "Sem.")}
+              {col("name", "Nom", false, "ref-optionnel")}
+              {col("semestre", "Sem.", false, "ref-optionnel")}
               {col("parcours", "Parcours")}
-              {col("nCM", "CM", true)}
-              {col("nTD", "TD", true)}
-              {col("nTP", "TP", true)}
-              {col("nEval", "Éval", true)}
+              {col("nCM", "CM", true, "ref-optionnel")}
+              {col("nTD", "TD", true, "ref-optionnel")}
+              {col("nTP", "TP", true, "ref-optionnel")}
+              {col("nEval", "Éval", true, "ref-optionnel")}
               {col("nPlaced", "Placées", true)}
               <th className="ref-secondaire">Enseignants</th>
             </tr>
@@ -333,13 +332,13 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
                     {c.code}
                   </button>
                 </td>
-                <td>{c.name}</td>
-                <td>{c.semestre}</td>
-                <td className="ref-doux">{c.parcours}</td>
-                <td className="num">{c.nCM || <span className="ref-zero">0</span>}</td>
-                <td className="num">{c.nTD || <span className="ref-zero">0</span>}</td>
-                <td className="num">{c.nTP || <span className="ref-zero">0</span>}</td>
-                <td className="num">{c.nEval || <span className="ref-zero">0</span>}</td>
+                <td className="ref-optionnel">{c.name}</td>
+                <td className="ref-optionnel">{c.semestre}</td>
+                <td className="ref-doux ref-parcours">{c.parcours}</td>
+                <td className="num ref-optionnel">{c.nCM || <span className="ref-zero">0</span>}</td>
+                <td className="num ref-optionnel">{c.nTD || <span className="ref-zero">0</span>}</td>
+                <td className="num ref-optionnel">{c.nTP || <span className="ref-zero">0</span>}</td>
+                <td className="num ref-optionnel">{c.nEval || <span className="ref-zero">0</span>}</td>
                 <td className="num">{c.nPlaced}</td>
                 <td className="ref-doux ref-secondaire">{c.teachers.map((t) => payload.teacherLabels[t] ?? t).join(", ")}</td>
               </tr>
@@ -569,13 +568,12 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
       </section>
 
       <div className="page-outils ref-barre">
-        <input
-          type="search"
+        <ChampRecherche
           className="ref-recherche"
           placeholder="Filtrer : nom, code, groupe…"
-          aria-label="Filtrer l'annuaire"
-          value={texte}
-          onChange={(e) => setTexte(e.target.value)}
+          libelle="Filtrer l'annuaire"
+          valeur={texte}
+          onChange={(v) => setTexte(v)}
         />
         <span className="page-outils-actions">
           <CopyButton
@@ -609,7 +607,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           <thead>
             <tr>
               <th>Enseignant</th>
-              <th className="num">Séances</th>
+              <th className="num ref-optionnel">Séances</th>
               <th className="num">Heures</th>
               <th>Lien personnel</th>
               <th>Agenda</th>
@@ -635,7 +633,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           <thead>
             <tr>
               <th>Groupe</th>
-              <th className="num">Séances</th>
+              <th className="num ref-optionnel">Séances</th>
               <th className="num">Heures</th>
               <th>Lien personnel</th>
               <th>Agenda</th>
@@ -693,8 +691,8 @@ function DirectoryRow({ row, showMail = false }: { row: LigneAnnuaire; showMail?
       <td>
         <strong className="ref-nom">{row.label}</strong> <span className="mono ref-code">{row.code}</span>
       </td>
-      <td className="num">{row.items.length}</td>
-      <td className="num">{hours} h</td>
+      <td className="num ref-optionnel">{row.items.length}</td>
+      <td className="num ref-heures">{hours} h</td>
       <td>
         <span className="lien-boutons">
           <CopyButton text={row.link} idleLabel="Copier" />

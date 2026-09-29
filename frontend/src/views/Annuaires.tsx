@@ -9,9 +9,9 @@
  * Les calculs sont dans `utils/annuaires.ts` (purs, testés à part).
  */
 
-import { Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
+import { ChampRecherche as ChampRechercheCommun } from "../components/ChampRecherche";
 import { ActionsDePage } from "../components/TopBar";
 import { TriColonne, useTri } from "../components/TriColonne";
 import type { AppPayload } from "../types/app";
@@ -56,36 +56,8 @@ function correspond(q: string, ...champs: string[]): boolean {
   return q.split(/\s+/).every((mot) => texte.includes(mot));
 }
 
-function ChampRecherche({
-  valeur,
-  onChange,
-  libelle,
-  placeholder,
-}: {
-  valeur: string;
-  onChange: (v: string) => void;
-  libelle: string;
-  placeholder: string;
-}) {
-  return (
-    <span className="annuaire-recherche">
-      <Search size={16} aria-hidden="true" />
-      <input
-        type="search"
-        value={valeur}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={libelle}
-        placeholder={placeholder}
-        // Échap vide le champ : on revient à la liste complète sans souris.
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && valeur) {
-            e.preventDefault();
-            onChange("");
-          }
-        }}
-      />
-    </span>
-  );
+function ChampRecherche(props: { valeur: string; onChange: (v: string) => void; libelle: string; placeholder: string }) {
+  return <ChampRechercheCommun {...props} className="annuaire-recherche" />;
 }
 
 /** Valeur + barre proportionnelle : la charge relative se lit d'un coup
@@ -238,7 +210,7 @@ export function AnnuaireEnseignants({
                       {l.nom}
                     </button>
                     {l.nNonPlacees > 0 && (
-                      <span className="pill warn annuaire-pastille">
+                      <span className="pill dot warn annuaire-pastille">
                         {pluriel(l.nNonPlacees, "non placée", "non placées")}
                       </span>
                     )}
@@ -258,7 +230,7 @@ export function AnnuaireEnseignants({
                         {l.email}
                       </span>
                     ) : (
-                      <span className="pill warn">manquant</span>
+                      <span className="pill dot warn">manquant</span>
                     )}
                   </td>
                 </tr>
@@ -277,11 +249,11 @@ function EtatContrainte({ ligne }: { ligne: LigneEnseignant }) {
     case "aucune":
       return <span className="muted">—</span>;
     case "respectee":
-      return <span className="pill good">respectée</span>;
+      return <span className="pill dot good">respectée</span>;
     case "sae":
-      return <span className="pill">compromis SAE</span>;
+      return <span className="pill dot">compromis SAE</span>;
     case "ecarts":
-      return <span className="pill bad">{pluriel(ligne.nEcarts, "écart")}</span>;
+      return <span className="pill dot bad">{pluriel(ligne.nEcarts, "écart")}</span>;
   }
 }
 
@@ -464,13 +436,13 @@ export function AnnuaireCours({
                   Matière
                 </TriColonne>
                 <th className="col-profs">Enseignants</th>
-                <TriColonne cle="semaine" tri={tri} onTrier={trierPar} num>
+                <TriColonne cle="semaine" tri={tri} onTrier={trierPar} num className="col-optionnelle">
                   {titre}
                 </TriColonne>
                 <TriColonne cle="placees" tri={tri} onTrier={trierPar} num>
                   Séances placées
                 </TriColonne>
-                <TriColonne cle="heures" tri={tri} onTrier={trierPar} num>
+                <TriColonne cle="heures" tri={tri} onTrier={trierPar} num className="col-optionnelle">
                   Volume placé
                 </TriColonne>
               </tr>
@@ -502,7 +474,7 @@ export function AnnuaireCours({
                             {l.enseignants.map((t) => payload.teacherLabels[t] ?? t).join(", ") || "—"}
                           </span>
                         </td>
-                        <td className="num col-jauge">
+                        <td className="num col-jauge col-optionnelle">
                           <Jauge
                             valeur={l.heuresSemaine}
                             max={maxSemaine}
@@ -510,19 +482,24 @@ export function AnnuaireCours({
                           />
                         </td>
                         <td className="num col-jauge">
-                          <Jauge
-                            valeur={l.placees}
-                            max={l.prevues}
-                            texte={`${l.placees} / ${l.prevues}`}
-                            etat={complet ? undefined : "warn"}
-                          />
-                          {l.nonPlacees > 0 && (
-                            <span className="pill warn annuaire-pastille">
-                              {pluriel(l.nonPlacees, "non placée", "non placées")}
+                          {/* La mention « N non placées » va dans une case de
+                              largeur fixe APRÈS la jauge : les nombres restent
+                              alignés d'une ligne à l'autre. */}
+                          <span className="jauge-ligne">
+                            <Jauge
+                              valeur={l.placees}
+                              max={l.prevues}
+                              texte={`${l.placees} / ${l.prevues}`}
+                              etat={complet ? undefined : "warn"}
+                            />
+                            <span className="jauge-mention">
+                              {l.nonPlacees > 0 && (
+                                <span className="pill dot warn">{pluriel(l.nonPlacees, "non placée", "non placées")}</span>
+                              )}
                             </span>
-                          )}
+                          </span>
                         </td>
-                        <td className="num">{l.heuresPlacees ? formatHeures(l.heuresPlacees) : "—"}</td>
+                        <td className="num col-optionnelle">{l.heuresPlacees ? formatHeures(l.heuresPlacees) : "—"}</td>
                       </tr>
                     );
                   })}
@@ -612,7 +589,7 @@ export function AnnuaireSalles({
                 <TriColonne cle="libelle" tri={tri} onTrier={trierPar}>
                   Salle
                 </TriColonne>
-                <TriColonne cle="type" tri={tri} onTrier={trierPar}>
+                <TriColonne cle="type" tri={tri} onTrier={trierPar} className="col-optionnelle">
                   Type
                 </TriColonne>
                 <TriColonne cle="capacite" tri={tri} onTrier={trierPar} num>
@@ -621,7 +598,7 @@ export function AnnuaireSalles({
                 <TriColonne cle="occupation" tri={tri} onTrier={trierPar} num>
                   Occupation {titre.toLowerCase()}
                 </TriColonne>
-                <TriColonne cle="semestre" tri={tri} onTrier={trierPar} num>
+                <TriColonne cle="semestre" tri={tri} onTrier={trierPar} num className="col-optionnelle">
                   Séances au semestre
                 </TriColonne>
               </tr>
@@ -641,18 +618,22 @@ export function AnnuaireSalles({
                         </span>
                       )}
                     </td>
-                    <td className="muted">{libelleTypeSalle(l.type)}</td>
+                    <td className="muted col-optionnelle">{libelleTypeSalle(l.type)}</td>
                     <td className="num">{l.capacite}</td>
                     <td className="num col-jauge col-jauge--large">
-                      {saturee && <span className="pill warn annuaire-pastille">saturée</span>}
-                      <Jauge
-                        valeur={l.creneauxOccupes}
-                        max={CRENEAUX_SEMAINE}
-                        texte={solver === null ? "—" : `${l.creneauxOccupes} / ${CRENEAUX_SEMAINE} · ${Math.round(l.taux * 100)} %`}
-                        etat={saturee ? "warn" : undefined}
-                      />
+                      <span className="jauge-ligne">
+                        <Jauge
+                          valeur={l.creneauxOccupes}
+                          max={CRENEAUX_SEMAINE}
+                          texte={solver === null ? "—" : `${l.creneauxOccupes} / ${CRENEAUX_SEMAINE} · ${Math.round(l.taux * 100)} %`}
+                          etat={saturee ? "warn" : undefined}
+                        />
+                        <span className="jauge-mention jauge-mention--court">
+                          {saturee && <span className="pill dot warn">saturée</span>}
+                        </span>
+                      </span>
                     </td>
-                    <td className="num">{l.seancesSemestre || "—"}</td>
+                    <td className="num col-optionnelle">{l.seancesSemestre || "—"}</td>
                   </tr>
                 );
               })}

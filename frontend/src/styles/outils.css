@@ -44,7 +44,10 @@
   scrollbar-width: none;
 }
 
-/* Seul sur sa ligne (Référence) : la largeur de ses onglets, pas plus. */
+/* Seul sur sa ligne (Référence) : la largeur de ses onglets, pas plus.
+   Trop long pour l'écran (téléphone), il reste sur une ligne et défile, barre
+   masquée ; le fondu au bord signale les choix suivants (cf. « Indice de
+   défilement horizontal », app.css). */
 .view > .segmente {
   align-self: flex-start;
 }
@@ -305,9 +308,10 @@
     margin-left: 0;
   }
 
-  /* Au téléphone, un contrôle segmenté trop long passe à la ligne plutôt
-     que de cacher ses derniers choix. */
-  .segmente {
-    flex-wrap: wrap;
+  /* Passées sous le titre, les actions commencent la ligne : un bouton
+     fantôme aligne son TEXTE sur celui de la carte (retrait de son padding
+     et de son bord). */
+  .carte-tete-actions > .btn--ghost:first-child {
+    margin-left: -9px;
   }
 }

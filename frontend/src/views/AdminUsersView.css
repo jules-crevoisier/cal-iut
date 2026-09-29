@@ -150,4 +150,9 @@
     width: auto;
     text-align: left;
   }
+
+  /* « Désactiver » (fantôme) : texte aligné sur celui de la fiche. */
+  .view.comptes table.comptes-table td.comptes-col-actions > .btn--ghost:first-child {
+    margin-left: -9px;
+  }
 }

@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { DatabaseBackup } from "lucide-react";
+import { DatabaseBackup, Download } from "lucide-react";
 
 import { creerSauvegardeMaintenant, listSauvegardes, sauvegardeUrl, type SauvegardeMeta } from "../api/client";
 import { ActionsDePage } from "../components/TopBar";
@@ -172,10 +172,10 @@ export function SauvegardesView() {
                   <th scope="col" className="num">
                     Séances placées
                   </th>
-                  <th scope="col" className="num">
+                  <th scope="col" className="num sauvegardes-optionnel">
                     Écart
                   </th>
-                  <th scope="col" className="num">
+                  <th scope="col" className="num sauvegardes-optionnel">
                     Taille
                   </th>
                   <th scope="col">
@@ -193,20 +193,17 @@ export function SauvegardesView() {
                         {s.date === aujourdhui ? <span className="pill">aujourd’hui</span> : null}
                       </th>
                       <td className="num">{NOMBRE.format(s.nb_placements)}</td>
-                      <td className="num">
+                      <td className="num sauvegardes-optionnel">
                         {e ? (
                           <span className={e.classe} title="Par rapport à la sauvegarde précédente">
                             {e.texte}
                           </span>
                         ) : null}
                       </td>
-                      <td className="num">{formatTaille(s.taille_octets)}</td>
+                      <td className="num sauvegardes-optionnel">{formatTaille(s.taille_octets)}</td>
                       <td className="sauvegardes-col-fichier">
-                        <a
-                          className="btn btn--ghost btn--sm"
-                          href={sauvegardeUrl(s.date)}
-                          download={`cal-iut-${s.date}.json`}
-                        >
+                        <a className="btn btn--sm" href={sauvegardeUrl(s.date)} download={`cal-iut-${s.date}.json`}>
+                          <Download size={14} aria-hidden="true" />
                           Télécharger
                         </a>
                       </td>

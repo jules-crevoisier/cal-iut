@@ -25,7 +25,7 @@
 }
 
 .tri-colonne.actif .tri-fleche {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 table.ref th.num,

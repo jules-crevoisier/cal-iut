@@ -4,26 +4,10 @@
    lignes de 36 px, chiffres à droite. La seule couleur est celle des
    jauges (encre) et des états (mot + teinte). */
 
+/* Champ de recherche : composant partagé `ChampRecherche` (loupe, Échap). */
 .annuaire-recherche {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
   flex: 0 1 320px;
   min-width: 200px;
-}
-
-.annuaire-recherche svg {
-  position: absolute;
-  left: 10px;
-  color: var(--ink-faint);
-  pointer-events: none;
-}
-
-.annuaire-recherche input {
-  width: 100%;
-  /* Le style global des champs fixe le padding (sélecteur très précis) : le
-     retrait du texte laisse la place à la loupe sans le surcharger. */
-  text-indent: 22px;
 }
 
 .annuaire-compte {
@@ -267,16 +251,32 @@ tr.annuaire-section th span {
   background: var(--ink);
 }
 
-.jauge--warn .jauge-barre > span {
-  background: var(--warn);
-}
-
+/* État : seul le nombre prend la couleur, la barre reste neutre. */
 .jauge--warn .jauge-texte {
   color: var(--warn-text);
 }
 
 .jauge--nulle .jauge-texte {
   color: var(--ink-faint);
+}
+
+/* Jauge suivie d'une mention d'état dans une case de largeur fixe : la
+   mention n'écarte pas les nombres de leur colonne. */
+.jauge-ligne {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.jauge-mention {
+  display: inline-flex;
+  min-width: 7.4rem;
+  justify-content: flex-start;
+}
+
+.jauge-mention--court {
+  min-width: 4.8rem;
 }
 
 .col-etat {
@@ -397,6 +397,31 @@ tr.annuaire-section th span {
     display: none;
   }
 
+  /* La mention passe sous le nombre, alignée à droite comme lui. */
+  .jauge-ligne {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .jauge-mention {
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  .jauge-mention:empty {
+    display: none;
+  }
+
+  .col-matiere {
+    min-width: 0;
+  }
+
+  table.annuaire-table td.col-jauge,
+  table.annuaire-table td.num {
+    white-space: nowrap;
+  }
+
   /* Enseignants : le code et le nombre de matières passent dans la fiche ;
      le nom et les heures tiennent sans défilement. */
   .annuaire-table--enseignants th:nth-child(2),
@@ -418,5 +443,14 @@ tr.annuaire-section th span {
 
   .annuaire-cartes {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Petit téléphone : les colonnes secondaires (type, volume, semestre) cèdent
+   la place ; la colonne clé (heures, occupation, séances placées) reste à
+   l'écran. */
+@media (max-width: 600px) {
+  .col-optionnelle {
+    display: none;
   }
 }

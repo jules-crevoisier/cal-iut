@@ -48,7 +48,9 @@
   min-width: 0;
   min-height: 160px;
   padding: 4px;
-  margin: -4px;
+  /* Padding + bord de la cible de dépôt repris par la marge : le contenu
+     des colonnes s'aligne sur le bord des autres blocs de la page. */
+  margin: -5px;
   border: 1px dashed transparent;
   border-radius: var(--radius-lg);
 }
@@ -349,9 +351,5 @@ button.kanban-card-titre:hover {
 
   .kanban-recherche {
     flex: 1 1 160px;
-  }
-
-  .kanban-column {
-    margin: 0;
   }
 }
