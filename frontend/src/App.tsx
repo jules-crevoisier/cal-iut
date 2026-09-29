@@ -233,7 +233,16 @@ export function App() {
   // Pourquoi `appPayload` est vide : pas encore reçu, aucun planning côté
   // serveur (404), ou chargement impossible (panne). Avant, une panne
   // s'affichait « Aucun planning résolu » (audit du 29/09/2026, P1-13).
-  const [etatPlanning, setEtatPlanning] = useState<"chargement" | "charge" | "absent" | "echec">("chargement");
+  //
+  // `refuse` (29/09/2026, anti-aspiration) : 401/403 sur `/app-state`. Avant,
+  // un refus tombait dans `echec`, que l'effet plus bas RETENTE toutes les
+  // 15 s — y compris derrière l'écran de connexion (App reste monté). Une
+  // session expirée pile entre `/auth/me` et `/app-state` produisait donc
+  // un 401 toutes les 15 s sans fin : de quoi faire bannir l'IP d'un vrai
+  // utilisateur par le bannissement sur refus répétés (api/
+  // anti_aspiration.py). Un refus ne se retente pas : la reconnexion (qui
+  // change `moi`) relance le chargement.
+  const [etatPlanning, setEtatPlanning] = useState<EtatPlanning>("chargement");
   const refreshAppState = useCallback(async () => {
     try {
       const recu = await fetchAppState();
@@ -247,9 +256,12 @@ export function App() {
       // Un état DÉJÀ affiché est gardé tel quel (jamais `setAppPayload(null)`) :
       // ce rechargement part aussi tout seul (`useRevision`), et une coupure
       // réseau ne doit pas vider l'écran de quelqu'un en train de travailler.
-      setEtatPlanning((avant) =>
-        avant === "charge" ? avant : e instanceof ErreurApi && e.status === 404 ? "absent" : "echec",
-      );
+      setEtatPlanning((avant) => {
+        if (avant === "charge") return avant;
+        if (e instanceof ErreurApi && e.status === 404) return "absent";
+        if (e instanceof ErreurApi && e.genre !== "panne") return "refuse";
+        return "echec";
+      });
     }
   }, []);
 
@@ -1011,7 +1023,17 @@ export function App() {
 /** Pas (encore) de planning à montrer — en disant pourquoi : chargement en
  *  cours, aucun planning côté serveur, ou serveur injoignable. Avant, une
  *  panne s'affichait « Aucun planning résolu » (audit du 29/09/2026, P1-13). */
-function EtatPlanningVide({ etat }: { etat: "chargement" | "charge" | "absent" | "echec" }) {
+type EtatPlanning = "chargement" | "charge" | "absent" | "echec" | "refuse";
+
+function EtatPlanningVide({ etat }: { etat: EtatPlanning }) {
+  if (etat === "refuse") {
+    return (
+      <div className="empty-state">
+        <p>Accès au planning refusé.</p>
+        <p className="muted">Reconnectez-vous, ou demandez un nouveau lien à l'équipe pédagogique.</p>
+      </div>
+    );
+  }
   if (etat === "echec") {
     return (
       <div className="empty-state">
