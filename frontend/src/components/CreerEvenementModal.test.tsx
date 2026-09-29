@@ -3,7 +3,7 @@
  * 23/09/2026 (Kyllian Bresson : « m'ajouter une séance évènement [...] à
  * 13h15 jusqu'à 14h [...] sans mettre d'enseignant »).
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreerEvenementModal } from "./CreerEvenementModal";
@@ -52,6 +52,23 @@ describe("CreerEvenementModal", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("should sort the groups by parcours so that two « TD AB » can be told apart", () => {
+    const deuxPromos = emptyPayload({
+      ...payload,
+      groupLabels: { "but1-promo": "Promo BUT1", "but1-td-ab": "TD AB", "but2-td-ab": "TD AB" },
+      groupParcours: { "but1-promo": "BUT1", "but1-td-ab": "BUT1", "but2-td-ab": "BUT2-DEV-FI" },
+      groupKind: { "but1-promo": "promo", "but1-td-ab": "td", "but2-td-ab": "td" },
+    });
+    render(<CreerEvenementModal payload={deuxPromos} onCree={vi.fn()} onCancel={vi.fn()} />);
+    const but2 = screen.getByRole("group", { name: "BUT2-DEV-FI" });
+    expect(within(but2).getByLabelText("TD AB")).not.toBeChecked();
+    const but1 = screen.getByRole("group", { name: "BUT1" });
+    expect(within(but1).getAllByRole("checkbox").map((c) => c.parentElement?.textContent)).toEqual([
+      "Promo BUT1",
+      "TD AB",
+    ]);
   });
 
   it("should show the hint about the midday break and the optional time fields", () => {

@@ -54,6 +54,19 @@ export function CreerEvenementModal({ payload, suggestion = null, onCree, onCanc
     () => Object.keys(payload.groupLabels).sort((a, b) => (payload.groupLabels[a] ?? a).localeCompare(payload.groupLabels[b] ?? b, "fr")),
     [payload.groupLabels],
   );
+  // Rangés par parcours : « TD AB » existe dans plusieurs promos, une liste
+  // à plat en alignait trois identiques sans dire lesquels.
+  const groupesParParcours = useMemo(() => {
+    const rang = (gid: string) => ({ promo: 0, td: 1, tp: 2 })[payload.groupKind[gid] ?? ""] ?? 3;
+    const parParcours = new Map<string, string[]>();
+    for (const gid of groupesTries) {
+      const pc = payload.groupParcours[gid] ?? "Autres";
+      parParcours.set(pc, [...(parParcours.get(pc) ?? []), gid]);
+    }
+    return [...parParcours.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "fr"))
+      .map(([pc, gids]) => [pc, [...gids].sort((a, b) => rang(a) - rang(b))] as const);
+  }, [groupesTries, payload.groupParcours, payload.groupKind]);
   const semainesDisponibles = useMemo(
     () => payload.weekRows.filter((w): w is typeof w & { weekIndex: number } => w.weekIndex !== null),
     [payload.weekRows],
@@ -174,12 +187,19 @@ export function CreerEvenementModal({ payload, suggestion = null, onCree, onCanc
 
           <div className="newroom-field newroom-field--large">
             Groupe(s)
-            <div className="newroom-field-groupes">
-              {groupesTries.map((gid) => (
-                <label key={gid}>
-                  <input type="checkbox" checked={groupIds.includes(gid)} onChange={() => basculerGroupe(gid)} />
-                  {payload.groupLabels[gid] ?? gid}
-                </label>
+            <div className="newroom-field-groupes evenement-groupes">
+              {groupesParParcours.map(([pc, gids]) => (
+                <div key={pc} className="evenement-groupes-parcours" role="group" aria-label={pc}>
+                  <span className="evenement-groupes-titre" aria-hidden="true">
+                    {pc}
+                  </span>
+                  {gids.map((gid) => (
+                    <label key={gid}>
+                      <input type="checkbox" checked={groupIds.includes(gid)} onChange={() => basculerGroupe(gid)} />
+                      {payload.groupLabels[gid] ?? gid}
+                    </label>
+                  ))}
+                </div>
               ))}
             </div>
           </div>

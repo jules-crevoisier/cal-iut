@@ -120,6 +120,33 @@
   height: 16px;
 }
 
+/* Nouvel évènement : groupes rangés par parcours, une ligne chacun. */
+.seancemodal .newroom-field-groupes.evenement-groupes {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.evenement-groupes-parcours {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 2px 0;
+}
+
+.evenement-groupes-parcours + .evenement-groupes-parcours {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+
+.evenement-groupes-titre {
+  flex: 0 0 132px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
 /* ── Choix des enseignants (TeacherPicker) ── */
 .teacher-picker {
   display: flex;
