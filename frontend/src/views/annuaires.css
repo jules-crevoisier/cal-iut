@@ -1,0 +1,422 @@
+/* ══════════════ Annuaires (Vue Enseignant, TD / TP, Cours, Salle) ══════════════
+   Refonte v2 (29/09/2026), direction « Lumière / Nuit » : barre d'outils à
+   plat, une carte blanche bordée par annuaire, tableau à en-tête collant,
+   lignes de 36 px, chiffres à droite. La seule couleur est celle des
+   jauges (encre) et des états (mot + teinte). */
+
+.annuaire-recherche {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 320px;
+  min-width: 200px;
+}
+
+.annuaire-recherche svg {
+  position: absolute;
+  left: 10px;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.annuaire-recherche input {
+  width: 100%;
+  /* Le style global des champs fixe le padding (sélecteur très précis) : le
+     retrait du texte laisse la place à la loupe sans le surcharger. */
+  text-indent: 22px;
+}
+
+.annuaire-compte {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+/* ── Carte d'annuaire ── */
+.panel.annuaire {
+  padding: 0;
+  overflow: hidden;
+}
+
+.annuaire-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.annuaire-tete h2 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.annuaire-faits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.annuaire-faits strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.annuaire-alerte {
+  color: var(--warn-text);
+  font-weight: 500;
+}
+
+.annuaire-faits button.annuaire-alerte {
+  color: var(--warn-text);
+  text-decoration: none;
+  font-size: inherit;
+}
+
+button.annuaire-alerte:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.annuaire-note {
+  margin: 0;
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.annuaire-defile {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* ── Tableau ── */
+table.annuaire-table {
+  font-size: 0.86rem;
+}
+
+table.annuaire-table th,
+table.annuaire-table td {
+  padding: 0 12px;
+  height: 38px;
+  vertical-align: middle;
+  border-bottom-color: var(--border);
+}
+
+table.annuaire-table th:first-child,
+table.annuaire-table td:first-child {
+  padding-left: 16px;
+}
+
+table.annuaire-table th:last-child,
+table.annuaire-table td:last-child {
+  padding-right: 16px;
+}
+
+table.annuaire-table thead th {
+  height: 34px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-weight: 500;
+  font-size: 0.78rem;
+  border-bottom: 1px solid var(--border);
+}
+
+table.annuaire-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.annuaire-ligne {
+  cursor: pointer;
+}
+
+table.annuaire-table tbody tr.annuaire-ligne:hover {
+  background: var(--surface-2);
+}
+
+.annuaire-nom {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.annuaire-nom.mono {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.annuaire-ligne:hover .annuaire-nom {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--ink-faint);
+}
+
+.annuaire-code {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.annuaire-pastille {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+
+td.num .annuaire-pastille {
+  margin: 0 8px 0 0;
+}
+
+.annuaire-mail {
+  display: inline-block;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.annuaire-profs {
+  display: block;
+  max-width: 15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.col-matiere {
+  min-width: 16rem;
+}
+
+/* Rangée de section (parcours · semestre) dans l'annuaire des matières. */
+tr.annuaire-section th {
+  height: 34px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+tr.annuaire-section th span {
+  margin-left: 10px;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.annuaire-vide {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+/* ── Jauge : valeur + barre fine ── */
+.col-jauge {
+  width: 11rem;
+  white-space: nowrap;
+}
+
+.col-jauge--large {
+  width: 16rem;
+}
+
+.jauge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.jauge-texte {
+  min-width: 3.2rem;
+  text-align: right;
+}
+
+.jauge-barre {
+  position: relative;
+  width: 64px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+  flex: none;
+}
+
+.jauge-barre > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--ink);
+}
+
+.jauge--warn .jauge-barre > span {
+  background: var(--warn);
+}
+
+.jauge--warn .jauge-texte {
+  color: var(--warn-text);
+}
+
+.jauge--nulle .jauge-texte {
+  color: var(--ink-faint);
+}
+
+.col-etat {
+  white-space: nowrap;
+}
+
+/* ── Groupes : une carte par parcours ── */
+.annuaire-cartes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.panel.annuaire-carte {
+  padding: 0;
+  overflow: hidden;
+}
+
+.annuaire-carte-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.annuaire-carte-tete h2 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.annuaire-carte-sous {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.annuaire-liste {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.annuaire-item {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.annuaire-item:hover {
+  background: var(--surface-3);
+}
+
+.annuaire-item-nom {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Type de groupe : pastille aux couleurs de séance (donnée, pas décor). */
+.annuaire-type {
+  justify-self: start;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 18px;
+  background: var(--cm-bg);
+  color: var(--cm-fg);
+  border: 1px solid var(--cm-bd);
+}
+
+.annuaire-type--td {
+  background: var(--td-bg);
+  color: var(--td-fg);
+  border-color: var(--td-bd);
+}
+
+.annuaire-type--tp {
+  background: var(--tp-bg);
+  color: var(--tp-fg);
+  border-color: var(--tp-bd);
+}
+
+.annuaire-item .jauge-barre {
+  width: 48px;
+}
+
+/* ── Téléphone ── */
+@media (max-width: 760px) {
+  .annuaire-recherche {
+    flex: 1 1 100%;
+  }
+
+  .col-mail,
+  .col-profs,
+  .col-etat {
+    display: none;
+  }
+
+  .jauge-barre {
+    display: none;
+  }
+
+  /* Enseignants : le code et le nombre de matières passent dans la fiche ;
+     le nom et les heures tiennent sans défilement. */
+  .annuaire-table--enseignants th:nth-child(2),
+  .annuaire-table--enseignants td:nth-child(2),
+  .annuaire-table--enseignants th:nth-child(5),
+  .annuaire-table--enseignants td:nth-child(5) {
+    display: none;
+  }
+
+  .col-jauge,
+  .col-jauge--large {
+    width: auto;
+  }
+
+  table.annuaire-table th,
+  table.annuaire-table td {
+    padding: 0 8px;
+  }
+
+  .annuaire-cartes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
