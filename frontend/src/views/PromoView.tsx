@@ -59,6 +59,7 @@ import { CreerSeanceModal } from "../components/CreerSeanceModal";
 import { CreerEvenementModal } from "../components/CreerEvenementModal";
 import { LissageModal } from "../components/LissageModal";
 import { useSemaineGlobale } from "../contexts/SemaineGlobale";
+import { ActionsDePage } from "../components/TopBar";
 import { WeekBar } from "../components/WeekBar";
 import { WeekStepper } from "../components/WeekStepper";
 import { APlacerView } from "./APlacerView";
@@ -1035,49 +1036,47 @@ export function PromoView({
           )}
         </div>
         {!readOnly && (
-          <div className="page-outils-actions promo-actions">
+          <button
+            type="button"
+            className="btn promo-aplacer"
+            aria-pressed={listeOuverte}
+            aria-label="Séances à placer"
+            title={listeOuverte ? "Fermer la colonne des séances à placer" : "Ouvrir la colonne des séances à placer"}
+            onClick={basculerListe}
+          >
+            <ListTodo size={16} aria-hidden="true" />
+            <span className="promo-action-libelle">Séances à placer</span>
+          </button>
+        )}
+        {/* Créer / réorganiser : dans la barre supérieure, à droite, le
+            bouton principal en dernier (maquette « Lumière »). Sans barre
+            (tests), elles restent ici. */}
+        {seanceModaleEnabled && (
+          <ActionsDePage>
             <button
               type="button"
-              className="btn promo-action-secondaire"
-              aria-pressed={listeOuverte}
-              aria-label="Séances à placer"
-              title={listeOuverte ? "Fermer la colonne des séances à placer" : "Ouvrir la colonne des séances à placer"}
-              onClick={basculerListe}
+              className="btn btn--icon"
+              onClick={() => setModaleEvenement(true)}
+              aria-label="Nouvel évènement"
+              title="Nouvel évènement (réunion, conférence…) hors maquette"
             >
-              <ListTodo size={16} aria-hidden="true" />
-              <span className="promo-action-libelle">Séances à placer</span>
+              <CalendarPlus size={16} aria-hidden="true" />
             </button>
-            {seanceModaleEnabled && (
-              <button
-                type="button"
-                className="btn promo-action-secondaire"
-                onClick={() => setModaleEvenement(true)}
-                aria-label="Nouvel évènement"
-                title="Nouvel évènement (réunion, conférence…) hors maquette"
-              >
-                <CalendarPlus size={16} aria-hidden="true" />
-                <span className="promo-action-libelle">Nouvel évènement</span>
-              </button>
-            )}
-            {seanceModaleEnabled && (
-              <button
-                type="button"
-                className="btn promo-action-lisser"
-                onClick={() => setModaleLissage(true)}
-                aria-label="Lisser une promo…"
-                title="Lisser une promo : réorganiser ses semaines à venir (pas de 8h, pas de trou, journées équilibrées)"
-              >
-                <Sparkles size={16} aria-hidden="true" />
-                <span className="promo-action-libelle">Lisser une promo</span>
-              </button>
-            )}
-            {seanceModaleEnabled && (
-              <button type="button" className="btn btn--primary" onClick={() => setModaleSeance("creer")}>
-                <Plus size={16} aria-hidden="true" className="promo-action-icone" />
-                <span>Nouvelle séance</span>
-              </button>
-            )}
-          </div>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setModaleLissage(true)}
+              aria-label="Lisser une promo…"
+              title="Lisser une promo : réorganiser ses semaines à venir (pas de 8h, pas de trou, journées équilibrées)"
+            >
+              <Sparkles size={16} aria-hidden="true" />
+              <span>Lisser une promo</span>
+            </button>
+            <button type="button" className="btn btn--primary" onClick={() => setModaleSeance("creer")}>
+              <Plus size={16} aria-hidden="true" />
+              <span>Nouvelle séance</span>
+            </button>
+          </ActionsDePage>
         )}
       </div>
 

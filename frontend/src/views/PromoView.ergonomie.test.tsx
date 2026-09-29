@@ -105,7 +105,7 @@ describe("PromoView raccourcis clavier", () => {
 
   it("should ignore arrows typed inside a field", () => {
     rendre();
-    fireEvent.keyDown(screen.getByLabelText("Année"), { key: "ArrowRight" });
+    fireEvent.keyDown(screen.getByLabelText("Enseignant"), { key: "ArrowRight" });
     expect(titreGrille()).toHaveAccessibleName(/^Lundi/);
   });
 });
@@ -113,18 +113,21 @@ describe("PromoView raccourcis clavier", () => {
 describe("PromoView filtres mémorisés", () => {
   it("should restore the chosen year after a reload of the view", () => {
     const { unmount } = rendre();
-    fireEvent.change(screen.getByLabelText("Année"), { target: { value: "BUT2" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "BUT2" }));
     unmount();
     rendre();
-    expect(screen.getByLabelText("Année")).toHaveValue("BUT2");
-    expect(screen.getByRole("button", { name: /tout afficher/i })).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "BUT2" })).toHaveAttribute("aria-pressed", "true");
+    // Un seul filtre : il se défait d'un clic sur « Toutes », pas de « Tout afficher ».
+    expect(screen.queryByRole("button", { name: /tout afficher/i })).not.toBeInTheDocument();
   });
 
   it("should reset every filter with « Tout afficher »", () => {
     rendre();
-    fireEvent.change(screen.getByLabelText("Année"), { target: { value: "BUT2" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "BUT2" }));
+    fireEvent.change(screen.getByLabelText("Enseignant"), { target: { value: "TPA" } });
     fireEvent.click(screen.getByRole("button", { name: /tout afficher/i }));
-    expect(screen.getByLabelText("Année")).toHaveValue("Tout");
+    expect(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "Toutes" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Enseignant")).toHaveValue("");
   });
 });
 
@@ -238,13 +241,15 @@ describe("PromoView semaine partagée (barre supérieure)", () => {
 });
 
 describe("PromoView barre d'outils", () => {
-  it("should keep the four actions, the primary one last", () => {
+  it("should keep the four actions: « Séances à placer » in the toolbar, creation ones with the primary last", () => {
     rendre({ onSeanceChangee: vi.fn() });
-    const actions = screen.getByRole("button", { name: "Séances à placer" }).parentElement as HTMLElement;
+    expect(screen.getByRole("button", { name: "Séances à placer" })).toHaveAttribute("aria-pressed", "false");
+    // Sans barre supérieure (test), `ActionsDePage` les garde sur place.
+    const actions = screen.getByRole("button", { name: "Nouvelle séance" }).parentElement as HTMLElement;
     const noms = within(actions)
       .getAllByRole("button")
       .map((b) => b.getAttribute("aria-label") ?? b.textContent);
-    expect(noms).toEqual(["Séances à placer", "Lisser une promo…", "Nouvel évènement", "Nouvelle séance"]);
+    expect(noms).toEqual(["Nouvel évènement", "Lisser une promo…", "Nouvelle séance"]);
     expect(within(actions).getByRole("button", { name: "Nouvelle séance" })).toHaveClass("btn--primary");
   });
 

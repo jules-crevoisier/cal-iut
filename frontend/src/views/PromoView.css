@@ -15,11 +15,11 @@
 }
 
 /* Poste de travail : la vue occupe la hauteur de la fenêtre sous la barre
-   supérieure (56 px) et les marges de `.app-main` (20 + 40 px) ; seule la
+   supérieure (64 px) et les marges de `.app-main` (20 + 40 px) ; seule la
    grille défile. Pas sur le lien public, qui a son propre bandeau. */
 @media (min-width: 1024px) {
   .view.promo {
-    height: calc(100dvh - 116px);
+    height: calc(100dvh - 124px);
     min-height: 560px;
   }
 
@@ -216,31 +216,21 @@
   font-size: 0.78rem;
 }
 
-/* Actions : après les filtres, séparées d'un filet. */
-.page-outils-actions.promo-actions {
-  margin-left: 2px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
+/* « Séances à placer » : bascule de la colonne de droite, après les filtres.
+   Les actions de création sont dans la barre supérieure (`ActionsDePage`). */
+.promo-outils .btn.promo-aplacer {
+  flex: none;
+  min-height: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 0 11px;
 }
 
-.promo-actions .btn[aria-pressed="true"] {
-  background: var(--surface-3);
-  border-color: var(--border-strong);
-  box-shadow: inset 0 0 0 1px var(--ink-faint);
-}
-
-/* Largeur réduite : « Séances à placer » et « Nouvel évènement » gardent
-   leur icône (nom en infobulle et pour les lecteurs d'écran), « Lisser une
-   promo » et « Nouvelle séance » leur libellé, comme sur la maquette. */
-@container promo (max-width: 1480px) {
-  .promo-action-secondaire .promo-action-libelle {
-    display: none;
-  }
-
-  .promo-actions .promo-action-secondaire {
-    width: var(--control-h);
-    padding: 0;
-  }
+.promo-outils .btn.promo-aplacer[aria-pressed="true"] {
+  background: var(--pri-bg);
+  border-color: var(--pri-bg);
+  color: var(--pri-fg);
 }
 
 @container promo (max-width: 1080px) {
@@ -248,13 +238,12 @@
     padding: 4px 7px;
   }
 
-  .promo-action-icone,
-  .promo-action-lisser .promo-action-libelle {
+  .promo-aplacer .promo-action-libelle {
     display: none;
   }
 
-  .promo-actions .promo-action-lisser {
-    width: var(--control-h);
+  .promo-outils .btn.promo-aplacer {
+    width: 28px;
     padding: 0;
   }
 
@@ -1233,23 +1222,8 @@ table.promo-grid .sessiongrid-event {
     max-width: none;
   }
 
-  .page-outils-actions.promo-actions {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: 0;
-    width: 100%;
-  }
-
-  .promo-actions .btn {
-    flex: 1 1 auto;
-    min-height: 40px;
-  }
-
-  .promo-actions .promo-action-secondaire,
-  .promo-actions .promo-action-lisser {
-    flex: 0 0 44px;
-    width: 44px;
-    padding: 0;
+  .promo-outils .btn.promo-aplacer {
+    height: 36px;
   }
 
   table.promo-grid th.timecol,

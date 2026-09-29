@@ -100,8 +100,8 @@ describe("PromoView à-placer sous filtre différent", () => {
     // L'utilisateur navigue sur BUT1 (autre chose que le parcours de la
     // manquante qu'il va choisir juste après, BUT2-DEV-FI) AVANT d'ouvrir
     // « À placer ».
-    fireEvent.change(screen.getByLabelText(/^année$/i), { target: { value: "BUT1" } });
-    expect(screen.getByLabelText(/^année$/i)).toHaveValue("BUT1");
+    fireEvent.click(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "BUT1" }));
+    expect(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "BUT1" })).toHaveAttribute("aria-pressed", "true");
 
     // Il clique « Placer sur la grille » sur une manquante BUT2-DEV-FI —
     // `placementActif` change de null à cette séance, exactement comme
@@ -120,7 +120,7 @@ describe("PromoView à-placer sous filtre différent", () => {
 
     // Sans le correctif, le filtre restait bloqué sur "BUT1" et la colonne
     // BUT2-DEV-FI (et donc toute case cliquable) n'existait plus du tout.
-    expect(screen.getByLabelText(/^année$/i)).toHaveValue("Tout");
+    expect(within(screen.getByRole("group", { name: "Année" })).getByRole("button", { name: "Toutes" })).toHaveAttribute("aria-pressed", "true");
     // Toutes les cases vides de la colonne BUT2-DEV-FI ce jour-là sont
     // devenues cliquables — on cible la première (8h–9h30 = slot 0) pour
     // que l'appel serveur porte un slot précis et vérifiable.

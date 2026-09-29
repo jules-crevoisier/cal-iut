@@ -34,10 +34,10 @@ export function PromoTuiles({ payload, solverWeek, setRoute, onOuvrirAPlacer }: 
   useEffect(() => {
     let actif = true;
     fetchDoublons()
-      .then((d) => actif && setDoublons(d.length))
+      .then((d) => actif && setDoublons(Array.isArray(d) ? d.length : 0))
       .catch(() => actif && setDoublons(0));
     fetchTaches()
-      .then((t) => actif && setTaches(t))
+      .then((t) => actif && setTaches(Array.isArray(t) ? t : []))
       .catch(() => actif && setTaches([]));
     return () => {
       actif = false;

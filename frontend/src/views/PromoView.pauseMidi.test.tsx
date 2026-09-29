@@ -81,6 +81,8 @@ describe("PromoView — évènement à horaire libre (pause méridienne)", () =>
     );
     const pauseRow = document.querySelector("tr.pause");
     expect(pauseRow).not.toBeNull();
-    expect(within(pauseRow as HTMLElement).queryByText(/./)).not.toBeInTheDocument();
+    // Rien que le séparateur nommé (maquette « Lumière ») : aucune carte.
+    expect(pauseRow?.querySelector(".promo-chip")).toBeNull();
+    expect(pauseRow).toHaveTextContent(/^Pause déjeuner$/);
   });
 });
