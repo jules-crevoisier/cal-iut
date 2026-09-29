@@ -1131,7 +1131,7 @@ export interface CelcatBlocage {
   motif: string;
   seances: string[];
   tentatives: number;
-  famille: "salles" | "enseignants" | "";
+  famille: FamilleMappingCelcat | "";
   cle: string;
   /** Aucune des séances concernées n'est placée au planning : ce blocage
    *  n'appartient donc à AUCUNE semaine. Le ranger sous celle qu'on regarde
@@ -1139,9 +1139,16 @@ export interface CelcatBlocage {
   sans_semaine?: boolean;
 }
 
+/** `matieres` (29/09/2026) : code de cours -> code module Celcat (`TSB…`). */
+export type FamilleMappingCelcat = "salles" | "enseignants" | "matieres";
+
 export interface CelcatMappings {
   salles: CelcatMapping[];
   enseignants: CelcatMapping[];
+  /** Absent d'un serveur plus ancien. */
+  matieres?: CelcatMapping[];
+  /** Codes modules relevés (`celcat_matieres.yaml`) : les seuls acceptés. */
+  matieres_celcat?: string[];
   /** Les salles que Celcat contient réellement, relevées sur l'instantané :
    *  choisir dans une liste vraie évite d'inventer un nom que l'écriture
    *  refusera ensuite en silence. */
@@ -1161,7 +1168,7 @@ export function fetchCelcatMappings(semaine?: number | null): Promise<CelcatMapp
 /** Ajoute ou corrige une correspondance. Prend effet au passage suivant du
  *  worker, sans redéploiement : les séances bloquées repartent seules. */
 export function definirMappingCelcat(
-  famille: "salles" | "enseignants",
+  famille: FamilleMappingCelcat,
   cle: string,
   valeur: string,
   semaine?: number | null,
@@ -1174,7 +1181,7 @@ export function definirMappingCelcat(
 }
 
 export function oublierMappingCelcat(
-  famille: "salles" | "enseignants",
+  famille: FamilleMappingCelcat,
   cle: string,
   semaine?: number | null,
 ): Promise<CelcatMappings> {
@@ -1415,78 +1422,111 @@ export function executerControleDoublonsHebdo(): Promise<DoublonHebdoRun> {
   return request<DoublonHebdoRun>("/controles/doublons/hebdo", { method: "POST" });
 }
 
-// ── Lissage d'un parcours (cf. `src/cal_iut/api/lissage.py`) ──────────────
-// Calcul en tâche de fond (~1 min 30) : on le lance, on sonde son statut,
-// puis on applique — éventuellement sans certains déplacements décochés.
+// ── Compléter une information de référence manquante (29/09/2026) ──
+// « quand on a un email manquant, peut-être un numéro de salle Celcat
+// manquant, etc., il faut pouvoir ajouter l'info et l'enregistrer » — cf.
+// `api/reference.py`. Une seule liste des manques (`GET /reference/manques`),
+// relue par chaque écran qui en signale un, et une route par famille.
 
-export interface MesureLissage {
-  semaine: number;
+export type FamilleManque = "enseignant" | "salle" | "cours" | "groupe" | "seance";
+export type ChampManque = "email" | "nom" | "code_celcat" | "capacite" | "type" | "intitule" | "id_celcat" | "salle";
+export type GraviteManque = "bloque_celcat" | "bloque_envoi_liens" | "cosmetique";
+
+export interface Manque {
+  id: string;
+  famille: FamilleManque;
+  cle: string;
   libelle: string;
-  seances: number;
-  cours_8h: number;
-  cours_9h30: number;
-  cours_17h: number;
-  trous: number;
-  journees_isolees: number;
-  trous_enseignants: number;
-  charge_max: number;
-  charges: number[];
+  champ: ChampManque;
+  champ_libelle: string;
+  gravite: GraviteManque;
+  usage: string;
+  nb_seances: number;
+  /** Rôle qui peut compléter depuis l'appli ; `null` = fichier de configuration. */
+  role_requis: "edit" | "admin" | null;
+  ou_completer: string;
+  /** Écran où compléter (champs de `Route`). */
+  ecran: Record<string, string | number>;
 }
 
-export interface DeplacementLissage {
-  session_id: string;
-  course_code: string;
-  enseignants: string[];
-  de: [number, number, number];
-  vers: [number, number, number];
-  libelle_de: string;
-  libelle_vers: string;
-  salle: string | null;
+export interface ListeManques {
+  revision: number;
+  modifie_le: string;
+  total: number;
+  par_gravite: Record<string, number>;
+  par_famille: Record<string, number>;
+  manques: Manque[];
 }
 
-export interface PropositionLissage {
-  parcours: string;
-  statut: string;
+export interface ReferenceEnregistree {
+  famille: FamilleManque;
+  cle: string;
+  valeurs: Record<string, string | number>;
   message: string;
-  semaines: number[];
-  deplacements: DeplacementLissage[];
-  avant: MesureLissage[];
-  apres: MesureLissage[];
-  duree_s: number;
-  verification: string[];
+  revision: number;
 }
 
-export interface StatutLissage {
-  job_id: string;
-  status: "running" | "done" | "error" | "applied";
+export function fetchManques(): Promise<ListeManques> {
+  return request<ListeManques>("/reference/manques");
+}
+
+export function completerContactEnseignant(code: string, email: string): Promise<ReferenceEnregistree> {
+  return request(`/reference/enseignants/${encodeURIComponent(code)}/contact`, {
+    method: "PUT",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function completerEnseignant(
+  code: string,
+  body: { nom?: string; code_celcat?: string },
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/enseignants/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function completerSalle(
+  roomId: string,
+  body: { capacite?: number; type?: string; code_celcat?: string },
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/salles/${encodeURIComponent(roomId)}`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function completerCours(
+  code: string,
+  body: { intitule?: string; code_celcat?: string },
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/cours/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** « Revenir à la valeur du fichier » : retire une saisie faite dans l'appli
+ *  (29/09/2026). `champ` : `contact` (mail) ou `nom` d'un enseignant,
+ *  `intitule` d'une matière. */
+export function retablirValeurFichier(
+  famille: "enseignants" | "cours",
+  cle: string,
+  champ: "contact" | "nom" | "intitule",
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/${famille}/${encodeURIComponent(cle)}/${champ}`, { method: "DELETE" });
+}
+
+/** Un cours de SAE placé hors journée SAE sans exception déclarée — la liste
+ *  `anomalies` de `GET /api/v1/sae` (le serveur est seul juge de la règle). */
+export interface AnomalieSae {
+  id: string;
+  cours_code: string;
+  cours_nom: string;
+  type: string;
   parcours: string;
-  error?: string;
-  proposition?: PropositionLissage;
-  application?: ResultatLissage;
+  groupes: string[];
+  groupes_libelles: string[];
+  enseignants: string[];
+  semaine: number;
+  jour: number;
+  creneau: number;
 }
 
-export interface ResultatLissage {
-  appliques: string[];
-  echec: { session_id: string; vers: number[]; detail: unknown } | null;
-  restants: string[];
-}
-
-export function lancerLissage(parcours: string, entreSemaines: boolean): Promise<{ job_id: string }> {
-  return request<{ job_id: string }>("/placements/lissage", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ parcours, entre_semaines: entreSemaines }),
-  });
-}
-
-export function statutLissage(jobId: string): Promise<StatutLissage> {
-  return request<StatutLissage>(`/placements/lissage/${encodeURIComponent(jobId)}`);
-}
-
-export function appliquerLissage(jobId: string, exclure: string[]): Promise<ResultatLissage> {
-  return request<ResultatLissage>(`/placements/lissage/${encodeURIComponent(jobId)}/appliquer`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ exclure }),
-  });
+export function fetchAnomaliesSae(): Promise<AnomalieSae[]> {
+  return request<{ anomalies?: AnomalieSae[] }>("/api/v1/sae").then((r) =>
+    Array.isArray(r?.anomalies) ? r.anomalies : [],
+  );
 }

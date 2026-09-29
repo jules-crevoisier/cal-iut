@@ -68,6 +68,14 @@
   letter-spacing: -0.02em;
 }
 
+.fiche-identite-titre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
 .fiche-identite .page-identite-faits {
   margin: 0;
   gap: 4px 0;
@@ -409,6 +417,12 @@
   .fiche-identite h2 {
     flex: 1 1 100%;
     font-size: 1.2rem;
+  }
+
+  /* Avec son crayon « Modifier », le titre reste sur la même ligne. */
+  .fiche-identite-titre h2 {
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   /* Faits sur plusieurs lignes : sans point médian en début de ligne. */

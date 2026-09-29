@@ -198,3 +198,12 @@
     margin-left: 0;
   }
 }
+
+/* Crayon « Modifier » et marque « modifiée dans l'appli » après « Envoyer »
+   (29/09/2026). */
+.ref-mail-actions {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  vertical-align: middle;
+}

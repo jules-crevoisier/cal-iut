@@ -141,6 +141,7 @@ from cal_iut.db.session import get_db, portee_sessions
 from cal_iut.export.formatter import build_export_rows, to_csv, to_json
 from cal_iut.export.html_view import build_and_render
 from cal_iut.feedback.weights import analyze_corrections, apply_learned_weights
+from cal_iut.ingestion import surcharges_reference
 from cal_iut.ingestion.config_loader import (
     load_groups,
     load_objective_weights,
@@ -204,7 +205,14 @@ async def _lifespan(_app: FastAPI):
         yield
 
 
-app = FastAPI(title="cal-iut API", version="1.0.0", lifespan=_lifespan)
+# Schéma OpenAPI et pages `/docs`, `/redoc` de TOUTE l'appli : désactivés
+# (audit du 29/09/2026, P2-5 — ils étaient publics : la carte complète des
+# routes internes, sans compte). Seul le schéma de l'API v1 publique est
+# servi, sous `/api/v1/openapi.json` et `/api/v1/docs`, avec les mêmes droits
+# que ses données (cf. `api/v1.py`). `app.openapi()` reste appelable en local.
+app = FastAPI(
+    title="cal-iut API", version="1.0.0", lifespan=_lifespan, docs_url=None, redoc_url=None, openapi_url=None,
+)
 
 # Revue qualité du 31/08/2026 (système de comptes) : un mot de passe trop
 # court (`Field(min_length=10)`) déclenche une 422 dont le corps par défaut
@@ -344,7 +352,7 @@ _PROTECTED_PREFIXES = (
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
-    "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
+    "/reference", "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
 )
 
 
@@ -1166,6 +1174,9 @@ def _try_restore_latest(state: object) -> None:
             state.sessions, state.sessions_by_id
         )
         session_overrides.apply_to(state.sessions_by_id)
+        # Intitulés saisis dans l'appli pour les matières qui n'en ont pas
+        # (`ingestion/surcharges_reference.py`, `api/reference.py`).
+        surcharges_reference.appliquer_intitules(state.sessions, state.courses)
 
         current = repo.db.query(CurrentPlacement).filter_by(run_id=run.id).all()
         # Un placement dont la séance n'existe PLUS après ré-ingestion est un
@@ -1311,7 +1322,9 @@ def _build_app_context(state: object) -> _AppContext:
 #     seule, aucune raison d'être envoyées.
 # Le nom des enseignants (`teacherLabels`) reste, lui : il s'affiche sur les
 # séances de n'importe quel emploi du temps, c'est l'objet même de l'outil.
-_CLES_PRIVEES_PAYLOAD = ("teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions")
+_CLES_PRIVEES_PAYLOAD = (
+    "teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions", "surchargesReference",
+)
 
 
 def variante_lecture(request: Request) -> str:
@@ -1333,7 +1346,7 @@ def variante_lecture(request: Request) -> str:
 
 def expurger_payload(payload: dict[str, object]) -> dict[str, object]:
     """Version publique du payload (cf. `_CLES_PRIVEES_PAYLOAD`)."""
-    vide: dict[str, object] = {"teacherEmails": {}}
+    vide: dict[str, object] = {"teacherEmails": {}, "surchargesReference": {}}
     return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
 
 
@@ -1408,7 +1421,17 @@ def _calculer_payload_app_state() -> dict[str, object]:
         # son raccourci APH » — dès sa première séance.
         if libelles.get(code, code) == code:
             libelles[code] = nom
+    # Nom corrigé dans l'appli (29/09/2026) : il a le dernier mot, y compris
+    # sur le nom que donnent les séances de la maquette.
+    for code, nom in surcharges_reference.valeurs("enseignants", "nom").items():
+        if code in libelles:
+            libelles[code] = nom
     payload["teacherLabels"] = dict(sorted(libelles.items()))
+    # Ce qui a été modifié dans l'appli, avec la valeur d'origine : l'écran
+    # le marque (« modifiée dans l'appli ») et propose d'y revenir.
+    from cal_iut.api.reference import surcharges_pour_payload
+
+    payload["surchargesReference"] = surcharges_pour_payload(state)
 
     # Réservations de salles par des tiers (vue « Salles libres », 22/09/2026).
     from cal_iut.ingestion.config_loader import load_room_reservation_entries
@@ -1635,6 +1658,7 @@ def ingest(body: IngestRequest) -> dict[str, object]:
         state.sessions, state.sessions_by_id
     )
     session_overrides.apply_to(state.sessions_by_id)
+    surcharges_reference.appliquer_intitules(state.sessions, state.courses)
     state.filter_parcours = body.parcours
     state.filter_semestre = body.semestre
     state.semestre_group = body.semestre_group
@@ -2243,6 +2267,20 @@ def _ics_all_day_sae_items(state: object, parcours: str | None) -> list:
     sur des données minimales plutôt que sur toute la production.
     """
     from cal_iut.api.ics_feed import fenetres_sae_pour_ics
+
+    fenetres, parcours_par_code = sources_fenetres_sae(state)
+    return fenetres_sae_pour_ics(
+        fenetres,
+        parcours,
+        parcours_par_code,
+        updated_at=_ics_sae_modifie_le(state),
+    )
+
+
+def sources_fenetres_sae(state: object) -> tuple[list, dict[str, str]]:
+    """Fenêtres SAE (tous semestres, corrections locales comprises) et repli
+    de parcours par code — l'entrée de `ics_feed.periodes_sae`, partagée par
+    les flux .ics et l'API v1 (`api/v1.py`) pour qu'ils ne divergent pas."""
     from cal_iut.ingestion.planning_loader import load_mmi_planning_for_semestres
 
     planning = load_mmi_planning_for_semestres(state.config_dir.parents[1], [])
@@ -2253,12 +2291,7 @@ def _ics_all_day_sae_items(state: object, parcours: str | None) -> list:
         for s_ in getattr(state, "sessions", []) or []
         if getattr(s_, "course_code", None) and getattr(s_, "parcours", None)
     }
-    return fenetres_sae_pour_ics(
-        planning.sae_windows,
-        parcours,
-        parcours_par_code,
-        updated_at=_ics_sae_modifie_le(state),
-    )
+    return list(planning.sae_windows), parcours_par_code
 
 
 def _ics_sae_modifie_le(state: object) -> object:
@@ -4855,9 +4888,13 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
         if place is not None:
             entree["sans_semaine"] = False
 
+    from cal_iut.api.reference import codes_modules_releves
+
     return CelcatMappingsResponse(
         salles=_entrees("salles"),
         enseignants=_entrees("enseignants"),
+        matieres=_entrees("matieres"),
+        matieres_celcat=sorted(codes_modules_releves(Path(get_state().config_dir))),
         salles_celcat=salles_celcat,
         manquants=sorted(manquants.values(), key=lambda m: -m["tentatives"]),
         bloques_autres_semaines=ailleurs,
@@ -4870,6 +4907,8 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
 # déployés ensemble pour que l'écran fonctionne.
 _MOTIF_SALLE = re.compile(r"salle\s+«\s*([^»]+?)\s*»")
 _MOTIF_ENSEIGNANT = re.compile(r"enseignant\s+([A-Z]{2,4})\s+sans code")
+# « module WR100BU sans code Celcat » (`mapping.py`) — 29/09/2026.
+_MOTIF_MATIERE = re.compile(r"module\s+(\S+)\s+sans code Celcat")
 
 
 def _famille_du_motif(motif: str) -> str:
@@ -4877,11 +4916,13 @@ def _famille_du_motif(motif: str) -> str:
         return "salles"
     if _MOTIF_ENSEIGNANT.search(motif):
         return "enseignants"
+    if _MOTIF_MATIERE.search(motif):
+        return "matieres"
     return ""
 
 
 def _cle_du_motif(motif: str) -> str:
-    for regle in (_MOTIF_SALLE, _MOTIF_ENSEIGNANT):
+    for regle in (_MOTIF_SALLE, _MOTIF_ENSEIGNANT, _MOTIF_MATIERE):
         trouve = regle.search(motif)
         if trouve:
             return trouve.group(1).strip()
@@ -4902,11 +4943,17 @@ def celcat_mappings_definir(
     appel, et le worker la relit à son passage suivant. Les séances bloquées
     sur cette clé repartent d'elles-mêmes — elles n'ont jamais quitté la file.
     """
+    from cal_iut.api.reference import valider_code_module
     from cal_iut.celcat import mappings
 
     utilisateur = getattr(getattr(request.state, "user", None), "email", "") or ""
+    valeur = body.valeur
+    if body.famille == "matieres":
+        # Même contrôle que « Données à compléter » (`api/reference.py`) :
+        # un code module que l'écriture ne saura pas retrouver est refusé ici.
+        valeur = valider_code_module(Path(get_state().config_dir), valeur)
     try:
-        mappings.definir(body.famille, body.cle, body.valeur, par=utilisateur)
+        mappings.definir(body.famille, body.cle, valeur, par=utilisateur)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
     return celcat_mappings(semaine)
@@ -6155,7 +6202,7 @@ def _lissage_job(job_id: str) -> LissageJob:
     return _current_lissage_job
 
 
-@app.post("/placements/lissage", dependencies=[Depends(accounts.require_role("edit"))])
+@app.post("/placements/lissage", dependencies=[Depends(accounts.require_role("admin"))])
 def lancer_lissage(body: LissageRequest) -> dict[str, str]:
     """Calcule, en tâche de fond, une proposition de lissage pour un parcours
     (demande du 29/09/2026 sur la 3e année DEV FC). N'ÉCRIT RIEN : la
@@ -6192,7 +6239,7 @@ def lancer_lissage(body: LissageRequest) -> dict[str, str]:
     return {"job_id": job.job_id, "status": "running"}
 
 
-@app.get("/placements/lissage/{job_id}", dependencies=[Depends(accounts.require_role("edit"))])
+@app.get("/placements/lissage/{job_id}", dependencies=[Depends(accounts.require_role("admin"))])
 def statut_lissage(job_id: str) -> dict[str, object]:
     job = _lissage_job(job_id)
     reponse: dict[str, object] = {"job_id": job.job_id, "status": job.status, "parcours": job.parcours}
@@ -6205,7 +6252,7 @@ def statut_lissage(job_id: str) -> dict[str, object]:
     return reponse
 
 
-@app.post("/placements/lissage/{job_id}/appliquer", dependencies=[Depends(accounts.require_role("edit"))])
+@app.post("/placements/lissage/{job_id}/appliquer", dependencies=[Depends(accounts.require_role("admin"))])
 @ecriture_planning
 def appliquer_lissage(job_id: str, body: LissageApplicationRequest) -> dict[str, object]:
     """Applique la proposition, déplacement par déplacement, par le chemin
@@ -6838,6 +6885,12 @@ app.include_router(_router_v1)
 from cal_iut.api.admin_trafic import router as _router_admin_trafic
 
 app.include_router(_router_admin_trafic)
+
+# Compléter une information de référence manquante (29/09/2026, cf.
+# `api/reference.py`) — protégé par le préfixe `/reference`.
+from cal_iut.api.reference import router as _router_reference
+
+app.include_router(_router_reference)
 
 from cal_iut.mcp.http_rpc import handle_mcp_post
 from cal_iut.mcp.server import MCP_ASGI

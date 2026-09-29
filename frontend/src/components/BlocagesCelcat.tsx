@@ -25,7 +25,7 @@
  */
 import { useState } from "react";
 
-import type { CelcatBlocage, CelcatMappings } from "../api/client";
+import type { CelcatBlocage, CelcatMappings, FamilleMappingCelcat } from "../api/client";
 import { dateLisible, pluriel } from "../utils/celcatStatut";
 
 /** Que faire d'un blocage qu'aucune correspondance ne règle.
@@ -45,6 +45,14 @@ function conseil(motif: string): string {
   if (motif.includes("suppression refusée")) {
     return "Un garde-fou a refusé cette suppression : l’évènement est protégé, férié ou fantôme.";
   }
+  // Identifiants INTERNES Celcat : relevés par balayage, illisibles dans
+  // Celcat — ils ne se saisissent pas dans l'appli (29/09/2026).
+  if (motif.includes("celcat_groupes.yaml") || motif.includes("le groupe «")) {
+    return "Identifiant interne du groupe : il ne se saisit pas ici, il se règle dans celcat_groupes.yaml (relevé dans Celcat, puis déploiement).";
+  }
+  if (motif.includes("celcat_matieres.yaml")) {
+    return "Identifiant interne de la matière : il ne se saisit pas ici, il se règle dans celcat_matieres.yaml (relevé dans Celcat, puis déploiement).";
+  }
   if (motif.includes("event_id")) {
     return "Cette correction vise un évènement Celcat sans identifiant : reconstruisez la file pour la recalculer.";
   }
@@ -54,22 +62,28 @@ function conseil(motif: string): string {
 const AIDE_FAMILLE: Record<string, string> = {
   salles: "Sous quel nom Celcat connaît-il cette salle ?",
   enseignants: "Identifiant Celcat de cet enseignant (un nombre, visible dans Celcat).",
+  matieres: "Code module Celcat de cette matière (ex. TSBZ1M01), parmi ceux déjà relevés.",
 };
+
+const EXEMPLE_FAMILLE: Record<string, string> = { salles: "H.104", enseignants: "38999", matieres: "TSBZ1M01" };
 
 function FormulaireMapping({
   blocage,
   sallesCelcat,
+  matieresCelcat,
   occupe,
   onMapper,
 }: {
   blocage: CelcatBlocage;
   sallesCelcat: string[];
+  matieresCelcat: string[];
   occupe: boolean;
-  onMapper: (famille: "salles" | "enseignants", cle: string, valeur: string) => void;
+  onMapper: (famille: FamilleMappingCelcat, cle: string, valeur: string) => void;
 }) {
   const [valeur, setValeur] = useState("");
-  const famille = blocage.famille as "salles" | "enseignants";
-  const listeId = `celcat-salles-connues`;
+  const famille = blocage.famille as FamilleMappingCelcat;
+  const listeId = famille === "matieres" ? "celcat-matieres-connues" : "celcat-salles-connues";
+  const suggestions = famille === "salles" ? sallesCelcat : famille === "matieres" ? matieresCelcat : null;
 
   return (
     <form
@@ -84,8 +98,8 @@ function FormulaireMapping({
         <input
           type="text"
           value={valeur}
-          list={famille === "salles" ? listeId : undefined}
-          placeholder={famille === "salles" ? "H.104" : "38999"}
+          list={suggestions ? listeId : undefined}
+          placeholder={EXEMPLE_FAMILLE[famille] ?? ""}
           aria-label={`Équivalent Celcat de ${blocage.cle}`}
           disabled={occupe}
           onChange={(e) => setValeur(e.target.value)}
@@ -102,9 +116,9 @@ function FormulaireMapping({
       >
         {occupe ? "Mapper…" : "Mapper"}
       </button>
-      {famille === "salles" ? (
+      {suggestions ? (
         <datalist id={listeId}>
-          {sallesCelcat.map((s) => (
+          {suggestions.map((s) => (
             <option key={s} value={s} />
           ))}
         </datalist>
@@ -129,8 +143,8 @@ export function BlocagesCelcat({
    *  correspondance était bien enregistrée (25/09/2026, Kyllian Bresson),
    *  mais rien ne le disait. */
   confirmation?: string | null;
-  onMapper: (famille: "salles" | "enseignants", cle: string, valeur: string) => void;
-  onOublier: (famille: "salles" | "enseignants", cle: string) => void;
+  onMapper: (famille: FamilleMappingCelcat, cle: string, valeur: string) => void;
+  onOublier: (famille: FamilleMappingCelcat, cle: string) => void;
 }) {
   if (!mappings) return null;
   const tous = mappings.manquants ?? [];
@@ -143,6 +157,7 @@ export function BlocagesCelcat({
   const correspondances = [
     ...mappings.salles.map((m) => ({ ...m, famille: "salles" as const })),
     ...mappings.enseignants.map((m) => ({ ...m, famille: "enseignants" as const })),
+    ...(mappings.matieres ?? []).map((m) => ({ ...m, famille: "matieres" as const })),
   ];
   if (
     tous.length === 0 &&
@@ -207,6 +222,7 @@ export function BlocagesCelcat({
               <FormulaireMapping
                 blocage={b}
                 sallesCelcat={mappings.salles_celcat ?? []}
+                matieresCelcat={mappings.matieres_celcat ?? []}
                 occupe={occupe}
                 onMapper={onMapper}
               />

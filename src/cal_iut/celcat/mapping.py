@@ -87,12 +87,16 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
         if (code := _code_renseigne(valeur))
     })
     salles.update(mappings.table("salles"))
+    modules = {str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v}
+    # Code module saisi à l'écran (29/09/2026) : lu par le plan, le worker
+    # et la file comme ceux du YAML — c'est ici qu'ils passent tous.
+    modules.update({cle.upper(): valeur for cle, valeur in mappings.table("matieres").items()})
 
     return CelcatConfig(
         enseignants=enseignants,
         salles=salles,
         types_seance=dict(data.get("types_seance") or {}),
-        modules={str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v},
+        modules=modules,
     )
 
 

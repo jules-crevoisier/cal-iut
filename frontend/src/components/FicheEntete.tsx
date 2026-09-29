@@ -52,12 +52,22 @@ interface FicheIdentiteProps {
   titre: ReactNode;
   /** Faits de la fiche, chacun un élément de la ligne. */
   faits: ReactNode[];
+  /** À côté du titre, hors du `h2` : « Modifier » le nom, marque
+   *  « modifiée dans l'appli » (29/09/2026). */
+  titreAction?: ReactNode;
 }
 
-export function FicheIdentite({ titre, faits }: FicheIdentiteProps) {
+export function FicheIdentite({ titre, faits, titreAction }: FicheIdentiteProps) {
   return (
     <div className="page-identite fiche-identite">
-      <h2>{titre}</h2>
+      {titreAction ? (
+        <div className="fiche-identite-titre">
+          <h2>{titre}</h2>
+          {titreAction}
+        </div>
+      ) : (
+        <h2>{titre}</h2>
+      )}
       <p className="page-identite-faits">
         {faits.filter(Boolean).map((f, i) => (
           <span key={i} className="fiche-fait">

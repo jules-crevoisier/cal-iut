@@ -178,6 +178,44 @@ Pour un fichier autonome à envoyer par mail :
 cal-iut export --format html --output planning.html
 ```
 
+### Compléter une information manquante
+
+Un enseignant sans adresse mail ne reçoit pas son lien personnel ; une salle
+ou un enseignant sans correspondance Celcat bloque la recopie de ses séances.
+Ces informations se **complètent depuis l'appli**, là où le manque se voit,
+sans toucher aux fichiers ni redéployer :
+
+- **Annuaire des enseignants** (et fiche de l'enseignant, et *Référence >
+  Liens & partage*) : la pastille « manquant » de la colonne *Mail* devient
+  **Ajouter** — saisir l'adresse, **Entrée** pour enregistrer, **Échap** pour
+  annuler. Une adresse déjà attribuée à un autre enseignant est refusée.
+- **Fiche d'une salle** : le bloc *À compléter* sous son nom (type d'une
+  salle ajoutée à la main ; correspondance Celcat pour un administrateur).
+- **À traiter > Données à compléter** : tout ce qui manque, groupé par
+  famille (enseignants, salles, matières, groupes Celcat), chaque ligne avec
+  son champ. La tuile *À compléter* en donne le nombre.
+
+**Corriger une valeur fausse** (adresse, nom, intitulé de matière) : passer
+la souris sur la valeur, ou y arriver au clavier, fait paraître un petit
+crayon **Modifier** — même champ en ligne. La valeur corrigée passe devant
+celle du fichier et porte la marque **modifiée** ; au survol (ou au clic),
+la valeur du fichier et **Revenir à la valeur du fichier**.
+
+La correspondance Celcat d'une salle, d'un enseignant ou le **code module**
+d'une matière (`TSB…`, parmi ceux déjà relevés) reste réservée aux
+administrateurs (aussi depuis l'écran *Celcat*). Les identifiants internes
+Celcat des groupes (`celcat_groupes.yaml`) et des matières
+(`celcat_matieres.yaml`) ne se saisissent pas : la ligne dit dans quel
+fichier ils se règlent. En lecture seule, le manque et la marque restent
+affichés, sans bouton. Ce qui est saisi est conservé dans `data/state/` (le
+volume), survit aux déploiements et garde la trace de qui l'a saisi, quand,
+et de la valeur qu'il remplaçait.
+
+**À traiter** signale aussi les **cours de SAE hors journée SAE** : un cours
+de SAE n'a lieu que sur une journée SAE de son parcours. Les SAE que la
+génération place elle-même (exception déclarée, ex. WSA501D) n'y figurent
+pas. La ligne ouvre la Vue Promo au bon jour.
+
 ---
 
 ## 5 bis. Placer à la main ce que l'ordinateur n'a pas su placer

@@ -14,6 +14,7 @@
 import { useMemo } from "react";
 
 import { FicheIdentite, FicheOutils } from "../components/FicheEntete";
+import { ModifierIntituleCours } from "../components/ValeursReference";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { NavSemaine } from "../components/NavSemaine";
 import { PlanningSemaine } from "../components/PlanningSemaine";
@@ -92,6 +93,10 @@ export function CoursView({ payload, route, setRoute, onOpenSearch }: CoursViewP
 
       <FicheIdentite
         titre={nom}
+        // Intitulé corrigeable dans l'appli (29/09/2026) — marqué s'il l'est.
+        titreAction={
+          <ModifierIntituleCours code={code} intitule={nom} surcharge={payload.surchargesReference?.cours?.[code]?.intitule} />
+        }
         faits={[
           <span className="mono">{code}</span>,
           [...new Set(entrees.map((e) => [e.parcours, e.semestre].filter(Boolean).join(" · ")))].join(", "),

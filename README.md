@@ -230,8 +230,7 @@ vite.
   c'est ici qu'on déplace. Cartes compactes, cibles vertes/orange pendant le
   glisser-déposer, **Annuler (Ctrl+Z)** après chaque action, filtres mémorisés,
   raccourcis ← → (jour), Maj+← → (semaine), T (aujourd'hui). Boutons
-  « Séances à placer », **« Lisser une promo… »** (cf. plus bas), « Nouvel
-  évènement », « Nouvelle séance ».
+  « Séances à placer », « Nouvel évènement », « Nouvelle séance ».
 - **Vue Enseignant / Vue TD-TP / Vue Cours / Vue Salle** — grille de la semaine
   avec « En cours / Prochain cours », navigation ← → et T, fiche rangée à droite
   (contrainte déclarée, matières, heures), agenda du semestre filtrable.
@@ -254,15 +253,16 @@ seulement).
 
 #### Lisser le planning d'une promo (FC)
 
-« Lisser une promo… » (Vue Promo) ou `cal-iut lisser` réorganise les séances
+`cal-iut lisser` réorganise les séances
 **à venir** d'une promo à groupe unique (alternance FC) : pas de cours à 8h (les
 journées commencent à 9h30), pas de trou, journées de charge égale, peu de 17h,
 le moins de déplacements possible. Seule cette promo bouge ; chaque créneau
 candidat passe les mêmes contrôles qu'un glisser-déposer (enseignants et salles
 des autres promos, PAC, SAE, présence alternance, indisponibilités, ordre
 pédagogique), puis la proposition entière est rejouée par une
-contre-vérification indépendante. On relit, on décoche, on applique : rien
-n'est écrit avant.
+contre-vérification indépendante. On relit, on applique : rien n'est écrit
+avant. **Pas de bouton dans l'interface** (retiré le 29/09/2026, jugé trop
+dangereux) : ligne de commande ou API, administrateurs seulement.
 
 ```powershell
 cal-iut lisser                       # simulation sur la base locale
@@ -326,17 +326,28 @@ cal-iut export --format html --per-teacher data/generated/par-enseignant
 | `GET /export/csv` | Export CSV |
 | `GET /export/json` | Export JSON |
 | `GET /legacy` | Page HTML/JS historique (même données, autre présentation) — administrateurs seulement |
-| `POST /placements/lissage` | Lance le calcul d'un lissage de promo (tâche de fond) — rien n'est écrit |
-| `GET /placements/lissage/{job}` | Statut et proposition (avant/après, déplacements, contre-vérification) |
-| `POST /placements/lissage/{job}/appliquer` | Applique la proposition (sauf `exclure`), par le chemin d'un déplacement manuel |
+| `POST /placements/lissage` | Lance le calcul d'un lissage de promo (tâche de fond) — rien n'est écrit — **admin** |
+| `GET /placements/lissage/{job}` | Statut et proposition (avant/après, déplacements, contre-vérification) — **admin** |
+| `POST /placements/lissage/{job}/appliquer` | Applique la proposition (sauf `exclure`), par le chemin d'un déplacement manuel — **admin** |
 | `GET /ics/prof/{code}.ics`, `GET /ics/groupe/{id}.ics` | Flux agenda abonnables (cf. [`docs/ICS.md`](docs/ICS.md)) |
 | `GET /api/v1/version` | Révision de l'état — à sonder pour savoir si quelque chose a changé |
 | `GET /api/v1/seances` | Séances filtrables (semaine, enseignant, groupe, salle, cours, parcours, dates), paginables |
 | `GET /api/v1/{semaines,creneaux,enseignants,groupes,salles,cours,parcours}` | Référentiels (+ `/{id}` et `/{id}/seances`) |
 | `GET /api/v1/salles/libres` | Salles libres à un créneau (séances, réservations, salles liées) |
+| `GET /api/v1/seances/non-placees` | Séances restant à placer (panneau « À placer ») |
+| `GET /api/v1/a-traiter` | Écran « À traiter » (gravité à corriger / à revoir, filtres semaine, parcours, enseignant) |
+| `GET /api/v1/controles/doublons` | Salle ou enseignant pris deux fois (rôle edit) |
+| `GET /api/v1/contraintes`, `GET /api/v1/enseignants/{code}/contraintes` | Règles globales, contraintes déclarées, verdict, écarts, absences |
+| `GET /api/v1/charges` | Heures par enseignant, groupe, cours, parcours ; occupation des salles (par semaine) |
+| `GET /api/v1/{modifications,taches,calendrier}` | Déplacements manuels, tâches de suivi, fériés / évènements / SAE / réservations |
+| `GET /api/v1/sae/periodes`, `GET /api/v1/sae/journees` | Semaines de projet SAÉ (comme les évènements journée entière des `.ics`) et journées SAE jour par jour |
+| `GET /api/v1/sae[/{code}]` | Cours de SAE : maquette, encadrants, placés (dans / hors journée SAE), non placés |
+| `GET /api/v1/celcat/etat` | Synchronisation Celcat et file d'attente (admin) |
 | `GET /api/v1/export` | Tout en un appel, pour synchroniser un client |
 
-API v1 en lecture seule, documentée dans [`docs/API.md`](docs/API.md). Toutes
+API v1 en lecture seule, documentée dans [`docs/API.md`](docs/API.md) (tableau
+récapitulatif, clé API, exemples) et, en interactif, sur `/api/v1/docs` (compte
+connecté ; schéma `/api/v1/openapi.json`). Toutes
 les lectures lourdes (`/app-state`, `/meta`, `/timetable`, `/diff`, `/ics/*`,
 `/api/v1/*`) portent un `ETag` dérivé de la révision de l'état : `If-None-Match`
 → `304` sans corps tant que rien n'a changé. Réponses ≥ 1 Ko compressées en
@@ -345,7 +356,8 @@ un lien personnel `?t=` ne lit que ce qu'affiche sa page (cf. `docs/API.md`).
 
 Sécurité (audit du 29/09/2026, `docs/AUDIT-2026-09.md`) : cookie `Secure`
 (`CAL_IUT_COOKIE_SECURE=0` pour du HTTP local), sessions révocables,
-limitation de débit sur `/auth/*`, écriture atomique des fichiers d'état.
+limitation de débit sur `/auth/*` et `/api/v1/*`, écriture atomique des fichiers
+d'état, schéma OpenAPI de l'appli non public (seul celui de v1, derrière un compte).
 
 Aspiration du serveur (liens publics lus en boucle) : limitation et blocage par IP,
 **désactivés par défaut** — plan d'activation dans [`docs/ANTI-ASPIRATION.md`](docs/ANTI-ASPIRATION.md).

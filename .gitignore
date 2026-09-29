@@ -34,6 +34,9 @@ data/state/forced_pending.json
 data/state/custom_rooms.json
 data/state/custom_sessions.json
 data/state/session_overrides.json
+# Informations de référence complétées depuis l'appli (mail, nom, intitulé),
+# propres à chaque déploiement et personnelles (adresses).
+data/state/references.json
 data/state/mcp_journal.json
 data/state/celcat_sync.json
 # La file d'attente Celcat : un fichier par job depuis le 16/09/2026,

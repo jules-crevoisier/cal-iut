@@ -249,7 +249,7 @@ describe("PromoView barre d'outils", () => {
     const noms = within(actions)
       .getAllByRole("button")
       .map((b) => b.getAttribute("aria-label") ?? b.textContent);
-    expect(noms).toEqual(["Nouvel évènement", "Lisser une promo…", "Nouvelle séance"]);
+    expect(noms).toEqual(["Nouvel évènement", "Nouvelle séance"]);
     expect(within(actions).getByRole("button", { name: "Nouvelle séance" })).toHaveClass("btn--primary");
   });
 

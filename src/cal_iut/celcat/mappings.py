@@ -35,9 +35,17 @@ from typing import Any
 
 from cal_iut.celcat.fichiers import ecrire_json
 
-# Les deux familles que l'écran peut compléter. Les modules et les types de
-# séance n'y sont pas : ils se corrigent dans la maquette, pas au cas par cas.
-FAMILLES = ("salles", "enseignants")
+# Les familles que l'écran peut compléter. `matieres` (29/09/2026, « go » de
+# l'utilisateur) : code de cours -> code module Celcat (`TSB…`), la même
+# table que `celcat.yaml::modules`. Le code module est lisible dans Celcat ;
+# son identifiant INTERNE (`celcat_matieres.yaml`), lui, ne l'est pas — il
+# reste relevé et figé dans la config, comme celui des groupes. Les types de
+# séance n'y sont pas : ils se corrigent dans la maquette.
+FAMILLES = ("salles", "enseignants", "matieres")
+
+# Familles dont la clé est un code comparé en majuscules par
+# `load_celcat_config` : trigramme d'enseignant, code de cours.
+_CLES_MAJUSCULES = ("enseignants", "matieres")
 
 
 def _path() -> Path:
@@ -90,10 +98,12 @@ def definir(famille: str, cle: str, valeur: str, *, par: str = "") -> dict[str, 
     valeur_propre = str(valeur).strip()
     if not cle_propre or not valeur_propre:
         raise ValueError("la clé et la valeur sont toutes deux requises")
-    # Les trigrammes d'enseignant sont comparés en majuscules par
+    # Trigrammes et codes de cours sont comparés en majuscules par
     # `load_celcat_config` : les enregistrer autrement les rendrait invisibles.
-    if famille == "enseignants":
+    if famille in _CLES_MAJUSCULES:
         cle_propre = cle_propre.upper()
+    if famille == "matieres":
+        valeur_propre = valeur_propre.upper()
 
     doc = charger()
     entree = {
@@ -111,7 +121,7 @@ def oublier(famille: str, cle: str) -> bool:
     if famille not in FAMILLES:
         raise ValueError(f"famille inconnue : « {famille} »")
     cle_propre = str(cle).strip()
-    if famille == "enseignants":
+    if famille in _CLES_MAJUSCULES:
         cle_propre = cle_propre.upper()
     doc = charger()
     if cle_propre not in doc.get(famille, {}):

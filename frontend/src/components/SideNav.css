@@ -4,6 +4,8 @@
 .sidenav {
   position: sticky;
   top: 0;
+  /* Au-dessus du contenu : le menu du compte s'ouvre par-dessus la page. */
+  z-index: 50;
   align-self: flex-start;
   display: flex;
   flex-direction: column;
@@ -278,14 +280,14 @@
 }
 
 .compte-menu {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 6px);
+  /* Coordonnées posées par MenuCompte (hors du défilement de la nav). */
+  position: fixed;
   z-index: 80;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 240px;
+  width: 272px;
+  max-width: calc(100vw - 16px);
   padding: 6px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -334,6 +336,8 @@
 
 .compte-menu .compte-theme button {
   justify-content: center;
+  min-width: 0;
+  white-space: nowrap;
   gap: 5px;
   padding: 5px 6px;
   font-size: 0.78rem;

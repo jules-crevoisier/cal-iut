@@ -14,6 +14,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ChampRecherche as ChampRechercheCommun } from "../components/ChampRecherche";
 import { ActionsDePage } from "../components/TopBar";
 import { TriColonne, useTri } from "../components/TriColonne";
+import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { AppPayload } from "../types/app";
 import {
   annuaireCours,
@@ -31,7 +32,13 @@ import {
 import { decouperLibelleSemaine, formatHeures, pluriel } from "../utils/planning";
 import { normalize } from "../utils/search";
 
+import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
+
 import "./annuaires.css";
+
+// Déplacé dans `components/ValeursReference.tsx` (29/09/2026) ; réexporté
+// pour les écrans qui l'importaient d'ici.
+export { MailManquant };
 
 interface AnnuaireProps {
   payload: AppPayload;
@@ -88,7 +95,9 @@ function useOuvrirLigne(onOuvrir: (id: string) => void) {
   return (id: string) => ({
     className: "annuaire-ligne",
     onClick: (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).closest("button, a")) return;
+      // Un champ de saisie en ligne (« Ajouter » un mail) vit DANS la ligne :
+      // cliquer dedans ne doit pas ouvrir la fiche.
+      if ((e.target as HTMLElement).closest("button, a, input, select, textarea, form, [data-pas-ouvrir]")) return;
       onOuvrir(id);
     },
   });
@@ -134,6 +143,14 @@ export function AnnuaireEnseignants({
   // enseigne beaucoup. Un clic sur « Nom » revient à l'ordre alphabétique.
   const { triees, tri, trierPar } = useTri<LigneEnseignant, CleEnseignant>(visibles, VALEURS_ENSEIGNANT, { cle: "semaine", sens: -1 });
   const ouvrir = useOuvrirLigne(onOuvrir);
+  // Au téléphone, la colonne « Mail » est masquée : le mail manquant (et son
+  // « Ajouter ») passe sous le nom, plutôt que de disparaître.
+  const etroit = useNarrowScreen();
+  // Retour d'enregistrement tenu au niveau de l'annuaire : filtré sur
+  // « Adresse mail manquante », la ligne complétée disparaît aussitôt —
+  // avec elle, le « Enregistré » du champ.
+  const [retour, setRetour] = useState("");
+  const enregistre = (nom: string) => (email: string) => setRetour(`Adresse de ${nom} enregistrée : ${email}`);
 
   const maxSemaine = Math.max(0, ...lignes.map((l) => l.heuresSemaine));
   const actifs = lignes.filter((l) => l.heuresSemaine > 0);
@@ -176,6 +193,9 @@ export function AnnuaireEnseignants({
                 {pluriel(sansMail, "adresse mail manquante", "adresses mail manquantes")}
               </button>
             )}
+            <span className="annuaire-retour" role="status" aria-live="polite">
+              {retour && <span className="pill dot good">{retour}</span>}
+            </span>
           </p>
         </header>
         {solver === null && <SemaineSansCours />}
@@ -214,6 +234,17 @@ export function AnnuaireEnseignants({
                         {pluriel(l.nNonPlacees, "non placée", "non placées")}
                       </span>
                     )}
+                    {etroit && !l.email && (
+                      <span className="annuaire-mail-telephone">
+                        <MailManquant
+                          code={l.code}
+                          nom={l.nom}
+                          libelleBouton="Ajouter le mail"
+                          libelleLectureSeule="mail manquant"
+                          onEnregistre={enregistre(l.nom)}
+                        />
+                      </span>
+                    )}
                   </td>
                   <td className="mono annuaire-code">{l.code}</td>
                   <td className="num col-jauge">
@@ -226,11 +257,20 @@ export function AnnuaireEnseignants({
                   </td>
                   <td className="col-mail">
                     {l.email ? (
-                      <span className="annuaire-mail" title={l.email}>
-                        {l.email}
-                      </span>
+                      <EmailEnseignant
+                        code={l.code}
+                        nom={l.nom}
+                        email={l.email}
+                        surcharge={payload.surchargesReference?.enseignants?.[l.code]?.email}
+                        affichage={
+                          <span className="annuaire-mail" title={l.email}>
+                            {l.email}
+                          </span>
+                        }
+                        onEnregistre={enregistre(l.nom)}
+                      />
                     ) : (
-                      <span className="pill dot warn">manquant</span>
+                      !etroit && <MailManquant code={l.code} nom={l.nom} onEnregistre={enregistre(l.nom)} />
                     )}
                   </td>
                 </tr>

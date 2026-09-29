@@ -24,7 +24,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Plus, Sparkles, X } from "lucide-react";
+import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Plus, X } from "lucide-react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
@@ -57,7 +57,6 @@ import { nomComplet } from "../utils/nomEnseignant";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
 import { CreerEvenementModal } from "../components/CreerEvenementModal";
-import { LissageModal } from "../components/LissageModal";
 import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 import { ActionsDePage } from "../components/TopBar";
 import { WeekBar } from "../components/WeekBar";
@@ -253,7 +252,6 @@ export function PromoView({
   // Évènement hors maquette (réunion, conférence...) — retour utilisateur
   // 07/09/2026, avec horaire réel optionnel depuis le 23/09/2026.
   const [modaleEvenement, setModaleEvenement] = useState(false);
-  const [modaleLissage, setModaleLissage] = useState(false);
 
   const appliquerSalle = async (sessionId: string, roomId: string, ancienne?: string | null) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
@@ -1065,16 +1063,6 @@ export function PromoView({
             >
               <CalendarPlus size={16} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setModaleLissage(true)}
-              aria-label="Lisser une promo…"
-              title="Lisser une promo : réorganiser ses semaines à venir (pas de 8h, pas de trou, journées équilibrées)"
-            >
-              <Sparkles size={16} aria-hidden="true" />
-              <span>Lisser une promo</span>
-            </button>
             <button type="button" className="btn btn--primary" onClick={() => setModaleSeance("creer")}>
               <Plus size={16} aria-hidden="true" />
               <span>Nouvelle séance</span>
@@ -1151,13 +1139,6 @@ export function PromoView({
         )}
       </div>
 
-      {modaleLissage && (
-        <LissageModal
-          parcoursInitial={filtreParcoursSel}
-          onFermer={() => setModaleLissage(false)}
-          onApplique={() => onSeanceChangee?.()}
-        />
-      )}
       {modaleEvenement && (
         <CreerEvenementModal
           payload={payload}

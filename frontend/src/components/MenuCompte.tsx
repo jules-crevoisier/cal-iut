@@ -5,7 +5,7 @@
  * déconnexion.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { KeyRound, LogOut, Monitor, Moon, Sun } from "lucide-react";
 
 import { choisirTheme, lireTheme, type Theme } from "../utils/theme";
@@ -38,7 +38,12 @@ interface MenuCompteProps {
 export function MenuCompte({ email, role, panne, onCle, onDeconnexion }: MenuCompteProps) {
   const [ouvert, setOuvert] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => lireTheme());
+  // Position du menu, en `fixed` : la navigation défile (`overflow-y: auto`),
+  // ce qui coupait le menu à sa largeur — « Sombre » disparaissait, et le
+  // rail replié (60 px) n'en montrait presque rien (retour du 29/09/2026).
+  const [position, setPosition] = useState<CSSProperties>({});
   const racine = useRef<HTMLDivElement>(null);
+  const bouton = useRef<HTMLButtonElement>(null);
   const nom = nomDepuisEmail(email) || email;
   const initiales = nom
     .split(" ")
@@ -58,18 +63,27 @@ export function MenuCompte({ email, role, panne, onCle, onDeconnexion }: MenuCom
       }
       if (!racine.current?.contains(e.target as Node)) setOuvert(false);
     };
+    const fermerAuRedimensionnement = () => setOuvert(false);
     document.addEventListener("mousedown", fermer);
     document.addEventListener("keydown", fermer);
+    window.addEventListener("resize", fermerAuRedimensionnement);
     return () => {
       document.removeEventListener("mousedown", fermer);
       document.removeEventListener("keydown", fermer);
+      window.removeEventListener("resize", fermerAuRedimensionnement);
     };
   }, [ouvert]);
+
+  const basculer = () => {
+    const r = bouton.current?.getBoundingClientRect();
+    if (r) setPosition({ left: Math.max(8, r.left), bottom: Math.max(8, window.innerHeight - r.top + 6) });
+    setOuvert((o) => !o);
+  };
 
   return (
     <div className="compte" ref={racine}>
       {ouvert && (
-        <div className="compte-menu" role="menu">
+        <div className="compte-menu" role="menu" style={position}>
           <p className="compte-menu-email">{email}</p>
           <button
             type="button"
@@ -110,12 +124,13 @@ export function MenuCompte({ email, role, panne, onCle, onDeconnexion }: MenuCom
       )}
       <button
         type="button"
+        ref={bouton}
         className="compte-bouton"
         aria-haspopup="menu"
         aria-expanded={ouvert}
         aria-label={`Compte ${email}`}
         title={email}
-        onClick={() => setOuvert((o) => !o)}
+        onClick={basculer}
       >
         <span className="compte-avatar" aria-hidden="true">
           {initiales || "?"}

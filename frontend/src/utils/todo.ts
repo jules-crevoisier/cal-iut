@@ -12,7 +12,7 @@
  * `pointsDepuisDoublons`.
  */
 
-import type { Doublon, DoublonHebdoRun } from "../api/client";
+import type { AnomalieSae, Doublon, DoublonHebdoRun } from "../api/client";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { estNouveau } from "./controleDoublonsHebdo";
@@ -25,6 +25,7 @@ export type NatureTodo =
   | "doublon"
   | "regle"
   | "contrainte"
+  | "sae-hors-journee"
   | "compromis-sae"
   | "trouee";
 
@@ -113,6 +114,17 @@ export const NATURES: NatureInfo[] = [
     aide: "Une indisponibilité déclarée par l'enseignant tombe sur une de ses séances.",
     sev: "bad",
     cible: "Vue Enseignant",
+  },
+  {
+    // 29/09/2026 : la liste `anomalies` de `GET /api/v1/sae` — le serveur
+    // est seul juge de la règle (journées SAE, exceptions déclarées), cf.
+    // `pointsDepuisSae` et son miroir `v1_vues.py::points_depuis_sae`.
+    id: "sae-hors-journee",
+    titre: "Cours de SAE hors journée SAE",
+    court: "SAE hors journée",
+    aide: "Un cours de SAE n'a lieu que sur une journée SAE de son parcours. Les SAE que la génération place elle-même (exception déclarée, ex. WSA501D) n'y figurent pas.",
+    sev: "bad",
+    cible: "Vue Promo",
   },
   {
     // Compromis MOU accepté (`--no-sae-supervisor-hard`) : une préférence
@@ -355,6 +367,29 @@ export function pointsDepuisDoublons(
     n: 1,
     nouveau: estNouveau(controle, d),
     typeDoublon: d.type === "salle" ? ("salle" as const) : ("enseignant" as const),
+  }));
+}
+
+/**
+ * Cours de SAE placés hors journée SAE sans exception déclarée — la liste
+ * `anomalies` de `GET /api/v1/sae`, jamais recalculée ici. Même forme que
+ * le miroir serveur (`v1_vues.py::points_depuis_sae`, test de parité).
+ * La ligne ouvre la Vue Promo au bon jour, sur le parcours de la séance.
+ */
+export function pointsDepuisSae(anomalies: AnomalieSae[]): TodoItem[] {
+  return anomalies.map((a) => ({
+    sev: "bad" as const,
+    nature: "sae-hors-journee" as const,
+    cle: `sae-hj|${a.id}`,
+    title: `${a.cours_code} — ${a.cours_nom || a.cours_code}`,
+    sub: `${a.type} · ${(a.groupes_libelles?.length ? a.groupes_libelles : a.groupes).join(", ")} · hors journée SAE`,
+    route: { vue: "promo", sem: a.semaine, jour: a.jour, ...(a.parcours ? { parcours: a.parcours } : {}) },
+    semaine: a.semaine,
+    jour: a.jour,
+    creneau: a.creneau,
+    parcours: a.parcours ? [a.parcours] : [],
+    enseignants: [...a.enseignants],
+    n: 1,
   }));
 }
 

@@ -139,6 +139,63 @@ def _jours_qui_se_suivent(precedent, suivant) -> bool:
     return ecart <= 3 and precedent.weekday() == 4 and suivant.weekday() == 0
 
 
+def periodes_sae(fenetres: list, parcours_par_code: dict[str, str] | None = None) -> list[dict]:
+    """Périodes SAE (une par plage de jours consécutifs, week-end compris),
+    TOUS parcours confondus — la source UNIQUE des évènements journée entière
+    des flux .ics (`fenetres_sae_pour_ics`) ET de l'API v1
+    (`/api/v1/sae/periodes`, `/api/v1/export`) : les deux ne peuvent pas
+    diverger.
+
+    Chaque période : `code`, `label`, `parcours` (`None` = introuvable, la
+    SAE concerne alors tout le monde), `groupes` (libellés TD ou `None`),
+    `debut`, `fin` (dates incluses), `jours` (les dates réellement réservées
+    de la période). Règles de fusion et de parcours : cf.
+    `fenetres_sae_pour_ics`."""
+    connus = parcours_par_code or {}
+    par_code: dict[str, dict] = {}
+    for fenetre in fenetres:
+        code = fenetre.course_codes[0] if fenetre.course_codes else fenetre.label
+        entree = par_code.setdefault(
+            code, {"jours": set(), "parcours": None, "label": code, "groupes": None}
+        )
+        entree["jours"] |= set(fenetre.dates or [])
+        # Le parcours et le libellé viennent de la fenêtre D'ORIGINE : une
+        # correction locale n'en porte pas, et son libellé est technique.
+        if fenetre.parcours:
+            entree["parcours"] = fenetre.parcours
+        if "(correction locale)" not in fenetre.label:
+            entree["label"] = fenetre.label
+            entree["groupes"] = fenetre.group_labels
+
+    periodes: list[dict] = []
+    for code, entree in par_code.items():
+        # Quand aucune fenêtre ne déclare de parcours — le cas d'une
+        # correction locale dont la fenêtre d'origine a disparu —, on le
+        # retrouve dans les SÉANCES du même code. Sans ça, `WS310D`, qui est
+        # du BUT2-DEV-FI de part en part, remontait dans le flux de TOUS les
+        # parcours (constaté le 09/09/2026).
+        vise = entree["parcours"] or connus.get(code)
+        jours = sorted(entree["jours"])
+        for debut, fin in _plages_contigues(jours):
+            periodes.append({
+                "code": code, "label": entree["label"], "parcours": vise,
+                "groupes": list(entree["groupes"]) if entree["groupes"] else None,
+                "debut": debut, "fin": fin, "jours": [j for j in jours if debut <= j <= fin],
+            })
+    periodes.sort(key=lambda p: (p["debut"], f"{p['code']}-{p['debut'].isoformat()}"))
+    return periodes
+
+
+def titre_periode_sae(periode: dict) -> str:
+    """Titre de l'évènement .ics d'une période (« SAE WS502D (AB) »)."""
+    groupes = f" ({', '.join(periode['groupes'])})" if periode["groupes"] else ""
+    return f"SAE {periode['label']}{groupes}"
+
+
+def description_periode_sae(periode: dict) -> str:
+    return f"Semaine de projet/évaluation SAE — {periode['label']}"
+
+
 def fenetres_sae_pour_ics(
     fenetres: list,
     parcours: str | None,
@@ -174,52 +231,25 @@ def fenetres_sae_pour_ics(
     fenêtre quand elle bouge : sans numéro croissant, il garde la première
     version reçue, indéfiniment.
     """
-    connus = parcours_par_code or {}
-    par_code: dict[str, dict] = {}
-    for fenetre in fenetres:
-        code = fenetre.course_codes[0] if fenetre.course_codes else fenetre.label
-        entree = par_code.setdefault(
-            code, {"jours": set(), "parcours": None, "label": code, "groupes": None}
-        )
-        entree["jours"] |= set(fenetre.dates or [])
-        # Le parcours et le libellé viennent de la fenêtre D'ORIGINE : une
-        # correction locale n'en porte pas, et son libellé est technique.
-        if fenetre.parcours:
-            entree["parcours"] = fenetre.parcours
-        if "(correction locale)" not in fenetre.label:
-            entree["label"] = fenetre.label
-            entree["groupes"] = fenetre.group_labels
-
     items: list[IcsAllDayItem] = []
-    for code, entree in par_code.items():
-        # Quand aucune fenêtre ne déclare de parcours — le cas d'une
-        # correction locale dont la fenêtre d'origine a disparu —, on le
-        # retrouve dans les SÉANCES du même code. Sans ça, `WS310D`, qui est
-        # du BUT2-DEV-FI de part en part, remontait dans le flux de TOUS les
-        # parcours (constaté le 09/09/2026).
-        vise = entree["parcours"] or connus.get(code)
+    for periode in periodes_sae(fenetres, parcours_par_code):
         # Une SAE dont le parcours reste introuvable concerne tout le monde :
         # se taire vaudrait moins bien que d'en montrer une de trop.
-        if vise is not None and vise != parcours:
+        if periode["parcours"] is not None and periode["parcours"] != parcours:
             continue
-        jours = sorted(entree["jours"])
-        if not jours:
-            continue
-        groupes = f" ({', '.join(entree['groupes'])})" if entree["groupes"] else ""
-        for debut, fin in _plages_contigues(jours):
-            items.append(
-                IcsAllDayItem(
-                    # UID par PLAGE : deux périodes de la même SAE sont deux
-                    # évènements distincts dans un agenda, et un UID partagé
-                    # les ferait s'écraser l'un l'autre.
-                    key=f"{code}-{debut.isoformat()}",
-                    title=f"SAE {entree['label']}{groupes}",
-                    date_start=debut.isoformat(),
-                    date_end=fin.isoformat(),
-                    description=f"Semaine de projet/évaluation SAE — {entree['label']}",
-                    updated_at=updated_at,
-                )
+        items.append(
+            IcsAllDayItem(
+                # UID par PLAGE : deux périodes de la même SAE sont deux
+                # évènements distincts dans un agenda, et un UID partagé
+                # les ferait s'écraser l'un l'autre.
+                key=f"{periode['code']}-{periode['debut'].isoformat()}",
+                title=titre_periode_sae(periode),
+                date_start=periode["debut"].isoformat(),
+                date_end=periode["fin"].isoformat(),
+                description=description_periode_sae(periode),
+                updated_at=updated_at,
             )
+        )
     items.sort(key=lambda i: (i.date_start, i.key))
     return items
 
