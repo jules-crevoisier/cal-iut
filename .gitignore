@@ -64,3 +64,6 @@ captures/
 # contrôle hebdomadaire des doublons) : propre à chaque déploiement.
 data/state/sauvegardes/
 data/state/controle_doublons_hebdo.json
+# Liste de blocage anti-aspiration (IP de clients) : état de production,
+# jamais dans le dépôt (cf. docs/ANTI-ASPIRATION.md).
+data/state/blocages.json
