@@ -8,8 +8,7 @@
  *    des semaines (`WeekBar`), qui a enfin la largeur pour ses libellés.
  *
  * Le sélecteur « Semestre » a disparu : il ne filtrait rien (seule l'année
- * compte pour la liste des parcours, et elle a déjà son sélecteur). Ses
- * props restent acceptées pour ne pas toucher à la logique d'`App.tsx`.
+ * compte pour la liste des parcours, et elle a déjà son sélecteur).
  */
 import { useEffect, useRef } from "react";
 
@@ -26,8 +25,6 @@ import "./Toolbar.css";
 interface ToolbarProps {
   year: number;
   parcours: string;
-  /** Ignoré à l'affichage (cf. en-tête). */
-  semestre?: string;
   years: YearMeta[];
   parcoursList: string[];
   displayWeek: number;
@@ -50,8 +47,6 @@ interface ToolbarProps {
   couleursParMatiere: boolean;
   onYearChange: (v: number) => void;
   onParcoursChange: (v: string) => void;
-  /** Ignoré (cf. en-tête). */
-  onSemestreChange?: (v: string) => void;
   onWeekChange: (v: number) => void;
   onViewModeChange: (v: ViewMode) => void;
   onCouleursChange: (parMatiere: boolean) => void;

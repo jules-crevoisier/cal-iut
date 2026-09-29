@@ -55,7 +55,7 @@ import type {
   YearMeta,
 } from "./types";
 import type { AppPayload } from "./types/app";
-import { DEFAULT_YEARS, yearFromSemestre } from "./utils/years";
+import { DEFAULT_YEARS } from "./utils/years";
 import { ContraintesView } from "./views/ContraintesView";
 import { CoursView } from "./views/CoursView";
 import { EnseignantView } from "./views/EnseignantView";
@@ -69,7 +69,6 @@ import { SallesLibresView } from "./views/SallesLibresView";
 import { TodoView } from "./views/TodoView";
 
 const DEFAULT_PARCOURS = "BUT1";
-const DEFAULT_SEMESTRE = "S1";
 // Plage d'affichage du sélecteur de semaine dans le Toolbar (UI uniquement) —
 // l'horizon réel du solveur est calculé côté backend depuis le calendrier
 // (cf. cal_iut.calendar.academic.default_horizon_weeks), pas fixé ici.
@@ -120,7 +119,6 @@ export function App() {
 
   const [year, setYear] = useState(1);
   const [parcours, setParcours] = useState(DEFAULT_PARCOURS);
-  const [semestre, setSemestre] = useState(DEFAULT_SEMESTRE);
   const [displayWeek, setDisplayWeek] = useState(0);
   // Une seule fois, au premier planning reçu : ouvrir sur la semaine EN
   // COURS plutôt que sur la première de l'année (retour utilisateur
@@ -408,13 +406,9 @@ export function App() {
   const handleYearChange = (nextYear: number) => {
     setYear(nextYear);
     const yearMeta = years.find((y) => y.id === nextYear);
-    const nextSemestres = yearMeta?.semestres ?? (nextYear === 1 ? ["S1", "S2"] : nextYear === 2 ? ["S3", "S4"] : ["S5", "S6"]);
     const nextParcoursList = yearMeta?.parcours?.length
       ? yearMeta.parcours
       : parcoursList.filter((p) => p === `BUT${nextYear}` || p.startsWith(`BUT${nextYear}-`));
-    if (!nextSemestres.includes(semestre)) {
-      setSemestre(nextSemestres[0] ?? "S1");
-    }
     if (nextParcoursList.length && !nextParcoursList.includes(parcours)) {
       setParcours(nextParcoursList[0]);
     }
@@ -428,11 +422,6 @@ export function App() {
     setParcours(next);
     const defaultTd = groups.find((g) => g.parcours === next && g.kind === "td");
     setGroupId(defaultTd?.id ?? "");
-  };
-
-  const handleSemestreChange = (next: string) => {
-    setSemestre(next);
-    setYear(yearFromSemestre(next));
   };
 
   useEffect(() => {
@@ -617,7 +606,6 @@ export function App() {
             <Toolbar
               year={year}
               parcours={parcours}
-              semestre={semestre}
               years={years}
               parcoursList={parcoursList}
               displayWeek={displayWeek}
@@ -635,7 +623,6 @@ export function App() {
               teacherLabels={appPayload?.teacherLabels}
               onYearChange={handleYearChange}
               onParcoursChange={handleParcoursChange}
-              onSemestreChange={handleSemestreChange}
               onWeekChange={setDisplayWeek}
               onViewModeChange={setViewMode}
               couleursParMatiere={prefs.couleursParMatiere}

@@ -8,12 +8,6 @@ export const DEFAULT_YEARS: YearMeta[] = [
   { id: 3, label: "3e année (S5–S6)", semestres: ["S5", "S6"], parcours: [] },
 ];
 
-export function yearFromSemestre(semestre: string): number {
-  if (semestre === "S1" || semestre === "S2") return 1;
-  if (semestre === "S3" || semestre === "S4") return 2;
-  return 3;
-}
-
 function yearPrefixOf(parcours: string): string {
   const m = /^BUT(\d)/.exec(parcours || "");
   return m ? m[1] : "9";
