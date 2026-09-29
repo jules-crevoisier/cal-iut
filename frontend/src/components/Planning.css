@@ -584,6 +584,12 @@
     page: consultation;
   }
 
+  /* Papier blanc : le fond gris de l'écran ne sert à rien imprimé. */
+  body:has(.fiche),
+  body:has(.fiche) .app-main {
+    background: #fff;
+  }
+
   .navsemaine,
   .prochain,
   .sharebar,

@@ -103,7 +103,10 @@
 
 .agenda-ligne {
   display: grid;
-  grid-template-columns: 7.5rem 6.5rem minmax(0, 2fr) minmax(0, 1.4fr) minmax(5rem, auto);
+  /* Largeurs FIXES pour le jour, l'heure et la salle : chaque ligne est sa
+     propre grille, une colonne « auto » changeait de largeur d'une ligne à
+     l'autre et désalignait tout. */
+  grid-template-columns: 7rem 6rem minmax(0, 2fr) minmax(0, 1.6fr) 9.5rem;
   align-items: baseline;
   gap: 12px;
   padding: 4px 8px;
@@ -172,7 +175,7 @@
 .agenda-salle {
   font-weight: 600;
   text-align: right;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .agenda-salle--absente {

@@ -72,6 +72,7 @@ export function SemesterAgenda({
     return <p className="muted">Aucune séance placée.</p>;
   }
 
+  const unSeulCours = matieres.length === 1;
   const estPassee = (it: IcsSession) => {
     const b = bornesSeance(it);
     return b ? b.fin <= now : false;
@@ -155,11 +156,22 @@ export function SemesterAgenda({
                       <span className="agenda-jour">{it.date ? jourCourt(it.date) : DAY_LABELS[it.d]}</span>
                       <span className="agenda-heure">{horaireSeance(it).libelle}</span>
                       <span className="agenda-cours">
-                        <span className="agenda-nom">{it.n || it.c}</span>{" "}
-                        <span className="agenda-code">
-                          {it.c} · {it.t}
-                          {it.ev ? " · Éval" : ""}
-                        </span>
+                        {/* Une seule matière (Vue Cours) : son nom répété
+                            sur chaque ligne n'apprend rien, le type suffit. */}
+                        {unSeulCours ? (
+                          <span className="agenda-nom">
+                            {it.t}
+                            {it.ev ? " · Éval" : ""}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="agenda-nom">{it.n || it.c}</span>{" "}
+                            <span className="agenda-code">
+                              {it.c} · {it.t}
+                              {it.ev ? " · Éval" : ""}
+                            </span>
+                          </>
+                        )}
                       </span>
                       <span className="agenda-qui">{[groupes, profs].filter(Boolean).join(" · ")}</span>
                       <span className={`agenda-salle${it.r ? "" : " agenda-salle--absente"}`}>{it.r || "salle à définir"}</span>
