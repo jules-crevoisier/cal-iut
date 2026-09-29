@@ -58,6 +58,8 @@ export interface TodoItem {
 export interface NatureInfo {
   id: NatureTodo;
   titre: string;
+  /** Libellé du sommaire (compteurs en tête d'écran). */
+  court: string;
   aide: string;
   sev: "bad" | "warn";
   /** Où la ligne emmène — affiché en bout de ligne. */
@@ -70,6 +72,7 @@ export const NATURES: NatureInfo[] = [
   {
     id: "non-placee",
     titre: "Séances non placées",
+    court: "Non placées",
     aide: "Des heures prévues sans aucun créneau. On les rattrape depuis le panneau « À placer » de la Vue Promo.",
     sev: "bad",
     cible: "À placer",
@@ -81,6 +84,7 @@ export const NATURES: NatureInfo[] = [
     // suite ») — encore faut-il que « par la suite » soit visible ici.
     id: "sans-salle",
     titre: "Séances sans salle",
+    court: "Sans salle",
     aide: "Placées, mais personne ne sait où les suivre. La salle se choisit en Vue Promo.",
     sev: "bad",
     cible: "Vue Promo",
@@ -89,6 +93,7 @@ export const NATURES: NatureInfo[] = [
     // Retour Kyllian Bresson 25/09/2026 (cf. `api/doublons.py`).
     id: "doublon",
     titre: "Doublons salle / enseignant",
+    court: "Doublons",
     aide: "Une salle ou un enseignant pris deux fois sur le même créneau. H.201/H.203 et H.007/H.008 comptent comme une seule salle.",
     sev: "bad",
     cible: "Vue Promo",
@@ -96,6 +101,7 @@ export const NATURES: NatureInfo[] = [
   {
     id: "regle",
     titre: "Règles globales en échec",
+    court: "Règles en échec",
     aide: "Le détail de chaque règle est dans l'onglet Contraintes.",
     sev: "bad",
     cible: "Contraintes",
@@ -103,6 +109,7 @@ export const NATURES: NatureInfo[] = [
   {
     id: "contrainte",
     titre: "Indisponibilités enseignant non respectées",
+    court: "Indisponibilités",
     aide: "Une indisponibilité déclarée par l'enseignant tombe sur une de ses séances.",
     sev: "bad",
     cible: "Vue Enseignant",
@@ -113,6 +120,7 @@ export const NATURES: NatureInfo[] = [
     // cf. docs/DATA.md §59).
     id: "compromis-sae",
     titre: "Encadrement SAE le même jour",
+    court: "Encadrement SAE",
     aide: "Compromis accepté : l'enseignant encadre une SAE le jour d'un de ses cours. À revoir si possible, rien d'interdit.",
     sev: "warn",
     cible: "Vue Enseignant",
@@ -120,6 +128,7 @@ export const NATURES: NatureInfo[] = [
   {
     id: "trouee",
     titre: "Journées trouées",
+    court: "Journées trouées",
     aide: "Au moins deux créneaux vides entre deux cours d'un même groupe dans la journée.",
     sev: "warn",
     cible: "Vue TD / TP",
@@ -178,11 +187,20 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
   const items: TodoItem[] = [];
   const noms = indexNoms(payload);
 
+  // Séances non placées identiques (même cours, type, groupes, enseignants :
+  // les 5 TD d'une même ressource) regroupées sur une ligne « ×5 ».
+  const nonPlacees = new Map<string, TodoItem>();
   for (const s of payload.seancesNonPlacees ?? []) {
-    items.push({
+    const cleNp = `np|${s.code}|${s.type}|${s.groupes.join(",")}|${s.profs.join(",")}`;
+    const dejaNp = nonPlacees.get(cleNp);
+    if (dejaNp) {
+      dejaNp.n += 1;
+      continue;
+    }
+    const item: TodoItem = {
       sev: "bad",
       nature: "non-placee",
-      cle: `np|${s.id}`,
+      cle: cleNp,
       title: `${s.code} — ${s.nom || "séance non placée"}`,
       sub: `${s.type} · ${s.groupes.join(", ")} · ${s.profs.join(", ")}`,
       // Filtrée sur son parcours à l'arrivée : le panneau « À placer »
@@ -194,7 +212,9 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
       parcours: s.parcours ? [s.parcours] : [],
       enseignants: s.profs.map((p) => noms.get(normaliserNom(p)) ?? p),
       n: 1,
-    });
+    };
+    nonPlacees.set(cleNp, item);
+    items.push(item);
   }
 
   for (const r of payload.rows) {
@@ -338,13 +358,17 @@ export function pointsDepuisDoublons(
   }));
 }
 
-/** Nombre total de points et nombre « à corriger » (badge de la nav). Les
- * compromis regroupés comptent pour une ligne : c'est ce que l'écran montre. */
+/** Nombre d'occurrences d'une liste de points (une ligne « ×3 » compte 3). */
+export function occurrences(items: TodoItem[]): number {
+  return items.reduce((n, i) => n + i.n, 0);
+}
+
+/** Nombre total de points et nombre « à corriger » (badge de la nav). */
 export function compterATraiter(payload: AppPayload | null, nbDoublons: number): { total: number; aCorriger: number } {
   const items = payload ? buildTodoList(payload) : [];
   return {
-    total: items.length + nbDoublons,
-    aCorriger: items.filter((i) => i.sev === "bad").length + nbDoublons,
+    total: occurrences(items) + nbDoublons,
+    aCorriger: occurrences(items.filter((i) => i.sev === "bad")) + nbDoublons,
   };
 }
 

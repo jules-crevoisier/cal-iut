@@ -32,6 +32,7 @@ import {
   libelleQuand,
   libelleSemaine,
   NATURES,
+  occurrences,
   pointsDepuisDoublons,
   statutsSemaines,
   trierParUrgence,
@@ -164,7 +165,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
   }, [filtres_]);
   const totalParNature = useMemo(() => {
     const m = new Map<NatureTodo, number>(NATURES.map((n) => [n.id, 0]));
-    for (const it of tous) m.set(it.nature, (m.get(it.nature) ?? 0) + 1);
+    for (const it of tous) m.set(it.nature, (m.get(it.nature) ?? 0) + it.n);
     return m;
   }, [tous]);
 
@@ -214,7 +215,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
     <section className="view todo">
       <nav className="todo-sommaire" aria-label="Sommaire des points à traiter">
         {NATURES.map((n) => {
-          const nb = parNature.get(n.id)!.length;
+          const nb = occurrences(parNature.get(n.id)!);
           const chargement = n.id === "doublon" && doublons === null && !erreurDoublons;
           return (
             <button
@@ -225,7 +226,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
               title={filtresActifs ? `${nb} affiché(s) sur ${totalParNature.get(n.id)}` : undefined}
             >
               <span className="todo-sommaire-nb">{chargement ? "…" : nb}</span>
-              <span className="todo-sommaire-libelle">{n.titre}</span>
+              <span className="todo-sommaire-libelle">{n.court}</span>
             </button>
           );
         })}
@@ -301,7 +302,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
           {filtresActifs && (
             <>
               <span className="muted" aria-live="polite">
-                {filtres_.length} sur {tous.length}
+                {occurrences(filtres_)} sur {occurrences(tous)}
               </span>
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setFiltres(FILTRES_VIDES)}>
                 Réinitialiser
@@ -428,35 +429,49 @@ function SectionNature({
   const actuels = points.filter((p) => p.semaine === null || statuts.get(p.semaine) !== "past");
   const passes = points.filter((p) => p.semaine !== null && statuts.get(p.semaine) === "past");
   const visibles = actuels.slice(0, limite);
+  const nb = occurrences(points);
+  // Section vide et sans état à montrer (chargement, erreur) : une seule
+  // ligne, rien à déplier — « rien de ce type » se lit d'un coup d'œil.
+  const vide = nb === 0 && !etat && !(filtresActifs && total > 0);
   const reste = actuels.length - visibles.length;
 
   return (
-    <section className={`todo-section ${replie ? "replie" : ""}`} ref={refSection} aria-labelledby={`todo-titre-${nature.id}`}>
+    <section
+      className={`todo-section${replie && !vide ? " replie" : ""}${vide ? " vide" : ""}`}
+      ref={refSection}
+      aria-labelledby={`todo-titre-${nature.id}`}
+    >
       <header className="todo-section-tete">
         <button
           type="button"
           className="todo-section-bascule"
-          aria-expanded={!replie}
-          aria-controls={idCorps}
-          onClick={onBasculer}
+          aria-expanded={vide ? undefined : !replie}
+          aria-controls={vide ? undefined : idCorps}
+          onClick={vide ? undefined : onBasculer}
+          disabled={vide}
         >
           <span className="todo-chevron" aria-hidden="true" />
           <h3 id={`todo-titre-${nature.id}`}>{nature.titre}</h3>
-          {points.length > 0 && (
+          {nb > 0 && (
             <span
               className={`pill ${nature.sev}`}
-              aria-label={`${points.length} ${nature.id === "doublon" ? "doublon" : "point"}${points.length > 1 ? "s" : ""}`}
+              aria-label={`${nb} ${nature.id === "doublon" ? "doublon" : "point"}${nb > 1 ? "s" : ""}`}
             >
-              {points.length}
+              {nb}
             </span>
           )}
-          {filtresActifs && total !== points.length && <span className="muted small">sur {total}</span>}
+          {filtresActifs && total !== nb && <span className="muted small">sur {total}</span>}
         </button>
-        {!replie && <p className="todo-section-aide">{nature.aide}</p>}
+        {vide && (
+          <span className="todo-section-rien" role="status">
+            {texteVide}
+          </span>
+        )}
+        {!replie && !vide && <p className="todo-section-aide">{nature.aide}</p>}
         {entete}
       </header>
 
-      {!replie && (
+      {!replie && !vide && (
         <div className="todo-section-corps" id={idCorps}>
           {etat}
           {!etat && points.length === 0 && (
@@ -469,7 +484,7 @@ function SectionNature({
           )}
           {!etat && reste > 0 && (
             <button type="button" className="btn btn--ghost btn--sm todo-plus" onClick={() => setLimite((l) => l + PAS * 2)}>
-              Afficher {Math.min(reste, PAS * 2)} de plus ({reste} restant{reste > 1 ? "s" : ""})
+              Afficher {Math.min(reste, PAS * 2)} lignes de plus ({reste} restante{reste > 1 ? "s" : ""})
             </button>
           )}
           {!etat && passes.length > 0 && (
@@ -480,7 +495,7 @@ function SectionNature({
                 aria-expanded={passeesOuvertes}
                 onClick={() => setPasseesOuvertes((o) => !o)}
               >
-                {passeesOuvertes ? "Masquer" : "Afficher"} les semaines passées ({passes.length})
+                {passeesOuvertes ? "Masquer" : "Afficher"} les semaines passées ({occurrences(passes)})
               </button>
               {passeesOuvertes && (
                 <ListePoints points={passes} payload={payload} statuts={statuts} nature={nature} setRoute={setRoute} />
@@ -508,11 +523,12 @@ function ListePoints({
 }) {
   // Intertitre à chaque changement de semaine (la liste est déjà triée).
   const nbParSemaine = new Map<number, number>();
-  for (const p of points) if (p.semaine !== null) nbParSemaine.set(p.semaine, (nbParSemaine.get(p.semaine) ?? 0) + 1);
+  for (const p of points) if (p.semaine !== null) nbParSemaine.set(p.semaine, (nbParSemaine.get(p.semaine) ?? 0) + p.n);
+  const sansQuand = points.every((p) => p.semaine === null);
   let semainePrecedente: number | null | undefined;
 
   return (
-    <ul className="todo-liste">
+    <ul className={`todo-liste${sansQuand ? " sans-quand" : ""}`}>
       {points.map((it) => {
         const nouvelleSemaine = it.semaine !== null && it.semaine !== semainePrecedente;
         semainePrecedente = it.semaine;

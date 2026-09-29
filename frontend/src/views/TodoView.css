@@ -157,7 +157,12 @@
   cursor: pointer;
 }
 
-.todo-section-bascule:hover {
+.todo-section-bascule:disabled {
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+.todo-section-bascule:hover:not(:disabled) {
   background: var(--surface-2);
 }
 
@@ -181,8 +186,10 @@
 }
 
 .todo-section-aide {
-  flex: 1 1 320px;
-  margin: 0;
+  order: 3;
+  flex: 1 0 100%;
+  margin: 0 0 4px;
+  padding-left: 30px;
   font-size: 0.8rem;
   color: var(--ink-soft);
 }
@@ -199,6 +206,15 @@
 .todo-section-corps {
   border-top: 1px solid var(--border);
   padding: 0 0 6px;
+}
+
+.todo-section-rien {
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+
+.todo-section.vide .todo-chevron {
+  visibility: hidden;
 }
 
 .todo-vide {
@@ -246,14 +262,13 @@
 
 .todo-ligne {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) auto;
+  grid-template-columns: 175px minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 12px;
   width: 100%;
   min-height: 34px;
   padding: 6px 16px;
   border: none;
-  border-left: 3px solid transparent;
   background: none;
   color: var(--ink);
   font: inherit;
@@ -262,12 +277,12 @@
   cursor: pointer;
 }
 
-.todo-ligne.bad {
-  border-left-color: color-mix(in srgb, var(--bad) 55%, transparent);
+.todo-liste.sans-quand .todo-ligne {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.todo-ligne.warn {
-  border-left-color: color-mix(in srgb, var(--warn) 55%, transparent);
+.todo-liste.sans-quand .todo-quand {
+  display: none;
 }
 
 .todo-ligne:hover {
@@ -308,7 +323,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--bad-text);
+  color: var(--ink-soft);
 }
 
 .todo-fois {
@@ -379,6 +394,10 @@
     border-right: none;
   }
 
+  .todo-sommaire-case:last-child {
+    border-bottom: none;
+  }
+
   .todo-filtres {
     position: static;
   }
@@ -398,8 +417,8 @@
     min-height: 44px;
   }
 
-  .todo-cible {
+  .todo-cible,
+  .todo-quand:empty {
     display: none;
   }
 }
-.todo-quand:empty { display: none; }

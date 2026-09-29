@@ -80,8 +80,12 @@ describe("TodoView — liste traitable", () => {
 
     expect(within(section("Séances non placées")).getByLabelText("1 point")).toBeInTheDocument();
     expect(within(section("Indisponibilités enseignant non respectées")).getByLabelText("3 points")).toBeInTheDocument();
-    // Deux entrées SAE identiques (même enseignant, même jour, même cours) = une ligne ×2.
-    expect(within(section("Encadrement SAE le même jour")).getByLabelText("1 point")).toBeInTheDocument();
+    // Deux entrées SAE identiques (même enseignant, même jour, même cours) :
+    // deux occurrences comptées, une seule ligne « ×2 ».
+    const sae = section("Encadrement SAE le même jour");
+    expect(within(sae).getByLabelText("2 points")).toBeInTheDocument();
+    fireEvent.click(within(sae).getByRole("button", { expanded: false }));
+    expect(within(section("Encadrement SAE le même jour")).getByText("×2")).toBeInTheDocument();
   });
 
   it("keeps the 'à revoir' sections collapsed by default and opens them on click", async () => {
