@@ -2145,6 +2145,11 @@ def _resolve_room(state: object, session: object, week: int, day: int, slot: int
         session, week, day, slot, state.timetable, state.sessions_by_id,
         state.rooms, state.groups, state.room_rules, prefer_room_id=prefer_room_id,
         reserved=getattr(state, "room_reservations", None),
+        # Même carte que la validation qui suit (`validate_move`) : H.007 et
+        # H.008 « c'est la même salle » pour un placement manuel (Kyllian
+        # Bresson, 25/09/2026). Avec la carte de l'affectation automatique,
+        # la salle proposée ici était refusée juste après.
+        conflicts=build_manual_conflict_map(state.rooms),
     )
 
 

@@ -541,6 +541,34 @@ def assign_rooms(
     return results
 
 
+def occupation_salles(
+    timetable: list[PlacedSession],
+    sessions_by_id: dict[str, object],
+    rooms: list[Room],
+    reserved: dict[str, set[int]] | None = None,
+    exclure: str | None = None,
+) -> dict[str, set[int]]:
+    """{salle: créneaux absolus occupés} — réservations de tiers comprises,
+    durée des séances comprise, séance `exclure` ignorée."""
+    from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
+
+    slots_per_week = DAYS_PER_WEEK * SLOTS_PER_DAY
+    room_schedule: dict[str, set[int]] = {
+        r.id: set(reserved.get(r.id, ())) if reserved else set() for r in rooms
+    }
+    for p in timetable:
+        if p.session_id == exclure:
+            continue
+        room_id = getattr(p, "room_id", None)
+        if not room_id or room_id not in room_schedule:
+            continue
+        other = sessions_by_id.get(p.session_id)
+        other_duration = max(1, getattr(other, "duration_slots", 1)) if other else 1
+        p_base = p.week * slots_per_week + p.day * SLOTS_PER_DAY + p.slot
+        room_schedule[room_id].update(range(p_base, p_base + other_duration))
+    return room_schedule
+
+
 def find_room_for_slot(
     session: object,
     week: int,
@@ -557,6 +585,17 @@ def find_room_for_slot(
     # manuel remettrait un cours dans une salle que la Direction occupe, alors
     # que la génération complète l'évitait.
     reserved: dict[str, set[int]] | None = None,
+    # Carte de conflits entre salles. Par défaut celle de l'affectation
+    # automatique (H.007 et H.008 indépendantes) ; un déplacement MANUEL doit
+    # passer `build_manual_conflict_map`, la carte de sa propre validation —
+    # sans quoi la salle choisie ici pouvait être refusée juste après par
+    # `validate_move` (« conflit salle ») alors qu'une autre était libre.
+    conflicts: dict[str, set[str]] | None = None,
+    # Occupation des salles déjà calculée (`occupation_salles`) : évite de
+    # reparcourir tout le planning à chaque appel quand on évalue des
+    # centaines de créneaux contre le même planning figé (lissage). Doit
+    # avoir été construite SANS la séance elle-même.
+    occupation: dict[str, set[int]] | None = None,
 ) -> Room | None:
     """
     Trouve une salle libre et adaptée pour CETTE séance à UN (semaine, jour,
@@ -578,20 +617,12 @@ def find_room_for_slot(
     base = week * slots_per_week + day * SLOTS_PER_DAY + slot
     occupied_target = set(range(base, base + duration))
 
-    room_schedule: dict[str, set[int]] = {
-        r.id: set(reserved.get(r.id, ())) if reserved else set() for r in rooms
-    }
-    conflicts = _build_conflict_map(rooms)
-    for p in timetable:
-        if p.session_id == session.id:
-            continue
-        room_id = getattr(p, "room_id", None)
-        if not room_id or room_id not in room_schedule:
-            continue
-        other = sessions_by_id.get(p.session_id)
-        other_duration = max(1, getattr(other, "duration_slots", 1)) if other else 1
-        p_base = p.week * slots_per_week + p.day * SLOTS_PER_DAY + p.slot
-        room_schedule[room_id].update(range(p_base, p_base + other_duration))
+    conflicts = conflicts if conflicts is not None else _build_conflict_map(rooms)
+    room_schedule = (
+        occupation
+        if occupation is not None
+        else occupation_salles(timetable, sessions_by_id, rooms, reserved, exclure=session.id)
+    )
 
     if prefer_room_id and prefer_room_id in room_schedule and _is_free(room_schedule, conflicts, prefer_room_id, occupied_target):
         preferred_room = next((r for r in rooms if r.id == prefer_room_id), None)
