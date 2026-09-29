@@ -109,8 +109,8 @@
   grid-template-columns: 7rem 6rem minmax(0, 2fr) minmax(0, 1.6fr) 9.5rem;
   align-items: baseline;
   gap: 12px;
-  padding: 4px 8px;
-  border-left: 3px solid var(--border-strong);
+  padding: 5px 8px 5px 22px;
+  position: relative;
   font-size: 0.82rem;
 }
 
@@ -127,22 +127,33 @@
   background: var(--surface-2);
 }
 
-.agenda-ligne.type-cm { border-left-color: var(--type-cm); }
-.agenda-ligne.type-td { border-left-color: var(--type-td); }
-.agenda-ligne.type-tp { border-left-color: var(--type-tp); }
-.agenda-ligne.eval { border-left-color: var(--type-eval); }
+.agenda-ligne::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 0.72em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--puce, var(--type-cm));
+}
+
+.agenda-ligne.type-cm { --puce: var(--type-cm); }
+.agenda-ligne.type-td { --puce: var(--type-td); }
+.agenda-ligne.type-tp { --puce: var(--type-tp); }
+.agenda-ligne.eval { --puce: var(--type-eval); }
 
 .couleurs-matiere .agenda-ligne {
-  border-left-color: var(--matiere-barre);
+  --puce: var(--matiere-barre);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .couleurs-matiere .agenda-ligne {
-    border-left-color: var(--matiere-barre-sombre);
+    --puce: var(--matiere-barre-sombre);
   }
 }
 :root[data-theme="dark"] .couleurs-matiere .agenda-ligne {
-  border-left-color: var(--matiere-barre-sombre);
+  --puce: var(--matiere-barre-sombre);
 }
 
 .agenda-ligne.is-past {
@@ -193,7 +204,7 @@
   .agenda-lignes--un-cours .agenda-ligne {
     grid-template-columns: auto 1fr auto;
     gap: 2px 10px;
-    padding: 6px 8px;
+    padding: 6px 8px 6px 22px;
   }
 
   .agenda-jour { grid-column: 1; }

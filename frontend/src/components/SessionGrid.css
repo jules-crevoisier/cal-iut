@@ -1,15 +1,26 @@
 /* ══════════════ SessionGrid — grille de la semaine en lecture ══════════════
    Utilisée par les vues Enseignant, TD/TP, Cours, Salle (et leurs liens
-   publics) et par la modale semaine par parcours de la Vue Promo. */
+   publics) et par la modale semaine par parcours de la Vue Promo.
+
+   Direction « Lumière / Nuit » (29/09/2026) : la grille est une carte
+   blanche à coins de 12 px, filets très légers ; chaque séance est un aplat
+   pastel de son type (`--cm-*`, `--td-*`, `--tp-*`, `--ev-*`) bordé de la
+   même teinte, SANS barre latérale. */
 
 .sessiongrid-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
 .sessiongrid {
   width: 100%;
   border-collapse: collapse;
+  /* Le contour est celui de la carte (`.sessiongrid-wrap`) : les bords
+     extérieurs du tableau disparaissent, les filets intérieurs restent. */
+  border-style: hidden;
   table-layout: fixed;
   font-size: 0.8rem;
   background: var(--surface);
@@ -23,8 +34,8 @@
 }
 
 .sessiongrid thead th {
-  background: var(--surface-2);
-  padding: 7px 6px;
+  background: var(--surface);
+  padding: 9px 8px;
   font-size: 0.8rem;
   font-weight: 600;
   text-align: left;
@@ -44,7 +55,6 @@
 .sessiongrid thead th.is-today {
   color: var(--accent);
   box-shadow: inset 0 -2px 0 var(--accent);
-  background: var(--accent-soft);
 }
 
 .sessiongrid thead th.is-today .sessiongrid-daydate {
@@ -54,26 +64,28 @@
 .sessiongrid-today-tag {
   display: block;
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.1;
 }
 
 .sessiongrid-cell.is-today {
-  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
 }
 
 .sessiongrid-corner {
-  width: 72px;
+  width: 68px;
 }
 
 .sessiongrid-timecell {
-  width: 72px;
-  padding: 6px 4px !important;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  color: var(--ink-soft);
+  width: 68px;
+  padding: 7px 4px !important;
+  font-family: var(--font);
+  font-size: 0.74rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
   text-align: center;
-  background: var(--surface-2);
+  background: var(--surface);
   white-space: nowrap;
 }
 
@@ -94,7 +106,7 @@
 
 .sessiongrid-cell {
   min-width: 120px;
-  height: 60px; /* vue connectée : compacte, la grille partage l'écran */
+  height: 62px; /* vue connectée : compacte, la grille partage l'écran */
 }
 
 /* Lecture seule (lien perso) : chaque LIGNE prend une part de la hauteur de
@@ -111,7 +123,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .read-only-mode .sessiongrid-block {
@@ -131,32 +143,38 @@
 .sessiongrid-subcols {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2px;
+  gap: 3px;
   height: 100%;
 }
 
-/* ── Carte de séance ── */
+/* ── Carte de séance : aplat pastel du type ── */
 .sessiongrid-block {
+  --c-bg: var(--cm-bg);
+  --c-fg: var(--cm-fg);
+  --c-bd: var(--cm-bd);
   display: flex;
   flex-direction: column;
   gap: 1px;
   width: 100%;
   text-align: left;
-  border: none;
-  border-left: 3px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--ink);
-  padding: 4px 6px;
-  margin-bottom: 2px;
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--c-bd);
+  background: var(--c-bg);
+  color: var(--c-fg);
+  padding: 5px 7px;
+  margin-bottom: 3px;
+  border-radius: var(--radius);
   cursor: default;
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   line-height: 1.3;
 }
 
+.sessiongrid-block:last-child {
+  margin-bottom: 0;
+}
+
 .sessiongrid-block:hover {
-  filter: brightness(0.97);
+  border-color: color-mix(in srgb, var(--c-fg) 35%, var(--c-bd));
 }
 
 .sessiongrid-block.small {
@@ -164,16 +182,51 @@
   padding: 2px 4px;
 }
 
-.sessiongrid-block.type-cm { border-left-color: var(--type-cm); background: color-mix(in srgb, var(--type-cm) 10%, var(--surface)); }
-.sessiongrid-block.type-td { border-left-color: var(--type-td); background: color-mix(in srgb, var(--type-td) 10%, var(--surface)); }
-.sessiongrid-block.type-tp { border-left-color: var(--type-tp); background: color-mix(in srgb, var(--type-tp) 12%, var(--surface)); }
-.sessiongrid-block.type-ptut { border-left-color: var(--type-td); background: color-mix(in srgb, var(--type-td) 6%, var(--surface)); border-left-style: dashed; }
-.sessiongrid-block.eval { border-left-color: var(--type-eval); background: color-mix(in srgb, var(--type-eval) 14%, var(--surface)); }
+.sessiongrid-block.type-td { --c-bg: var(--td-bg); --c-fg: var(--td-fg); --c-bd: var(--td-bd); }
+.sessiongrid-block.type-tp { --c-bg: var(--tp-bg); --c-fg: var(--tp-fg); --c-bd: var(--tp-bd); }
+/* PTUT : aplat de TD en pointillé — un temps de projet, pas un cours. */
+.sessiongrid-block.type-ptut { --c-bg: var(--td-bg); --c-fg: var(--td-fg); --c-bd: var(--td-bd); border-style: dashed; }
+.sessiongrid-block.eval { --c-bg: var(--ev-bg); --c-fg: var(--ev-fg); --c-bd: var(--ev-bd); }
 .sessiongrid-block.locked { opacity: 0.75; }
+
+/* Couleur par matière (option) : même aplat, teinte de la matière. Le
+   sélecteur `.sessiongrid.couleurs-matiere` l'emporte sur la règle générale
+   d'`app.css` (liseré gauche de l'ancienne charte). */
+.sessiongrid.couleurs-matiere .sessiongrid-block {
+  --c-bg: var(--matiere-fond);
+  --c-bd: color-mix(in srgb, var(--matiere-barre) 28%, var(--matiere-fond));
+  --c-fg: color-mix(in srgb, var(--matiere-barre) 45%, #18181b);
+  background: var(--c-bg);
+  border: 1px solid var(--c-bd);
+}
+
+.sessiongrid.couleurs-matiere .sessiongrid-block.eval {
+  border-style: double;
+  border-width: 3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sessiongrid.couleurs-matiere .sessiongrid-block {
+    --c-bg: color-mix(in srgb, var(--matiere-fond-sombre) 55%, transparent);
+    --c-bd: color-mix(in srgb, var(--matiere-barre-sombre) 35%, transparent);
+    --c-fg: color-mix(in srgb, var(--matiere-barre-sombre) 55%, #ffffff);
+    background: var(--c-bg);
+    border-color: var(--c-bd);
+  }
+}
+
+:root[data-theme="dark"] .sessiongrid.couleurs-matiere .sessiongrid-block {
+  --c-bg: color-mix(in srgb, var(--matiere-fond-sombre) 55%, transparent);
+  --c-bd: color-mix(in srgb, var(--matiere-barre-sombre) 35%, transparent);
+  --c-fg: color-mix(in srgb, var(--matiere-barre-sombre) 55%, #ffffff);
+  background: var(--c-bg);
+  border-color: var(--c-bd);
+}
 
 /* Nom du cours + salle en tête, à égalité — retour utilisateur 28/08/2026 :
    le nom prime sur le code (« WSA501D ça me parle pas ») et la salle compte
-   autant (« 95% du temps c'est pour savoir dans quelle salle je suis »). */
+   autant (« 95% du temps c'est pour savoir dans quelle salle je suis »).
+   Cette décision l'emporte sur la maquette « Lumière » (code en tête). */
 .sessiongrid-block .head {
   display: flex;
   align-items: baseline;
@@ -183,13 +236,13 @@
 }
 
 .sessiongrid-block .name {
-  font-weight: 600;
+  font-weight: 500;
   overflow-wrap: break-word;
   min-width: 0;
 }
 
 .sessiongrid-block .room {
-  font-weight: 700;
+  font-weight: 600;
   flex: none;
   max-width: 55%;
   text-align: right;
@@ -220,11 +273,10 @@
 .sessiongrid-block .room--absente {
   color: var(--bad-text);
   font-style: italic;
-  font-weight: 600;
 }
 
 .sessiongrid-block .meta {
-  color: var(--ink-soft);
+  opacity: 0.75;
   font-size: 0.68rem;
 }
 
