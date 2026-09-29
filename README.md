@@ -244,6 +244,14 @@ vite.
 - **Tâches** — kanban partagé, ajout rapide (touche N).
 - **Administration** — Comptes, **Celcat** (verdict en tête, « Corriger » ne
   supprime jamais rien), Sauvegardes ; **Clé API** pour tout compte.
+
+Rôles des comptes (choisis par un admin à l'activation, écran Comptes) :
+**Lecture seule** consulte le planning · **Édition** le modifie · **Admin**
+gère aussi les comptes, Celcat et les sauvegardes · **Accès API** ne voit
+aucune donnée dans l'appli : sa seule page crée et révoque ses clés, qui ne
+lisent que `GET /api/v1/*` (droits d'un lecteur, ni MCP ni écriture). Chacun
+ne voit que ses propres clés (5 actives au plus). En local :
+`python scripts/creer_admin_local.py email mdp --role api`.
 - **Recherche globale** (`Ctrl+K`) — résultats groupés, correspondance surlignée,
   historique récent.
 

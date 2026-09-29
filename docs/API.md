@@ -50,25 +50,47 @@ que pour un rôle `edit` ou `admin`. ³ en plus du détail de toutes les
 semaines, toujours présent (`heures_par_semaine`).
 
 « Compte actif » = cookie de compte ou clé API d'un compte activé, quel que
-soit son rôle (`read_only`, `edit`, `admin`).
+soit son rôle (`read_only`, `edit`, `admin`) — ou **clé** d'un compte « Accès
+API » (`api`), qui lit v1 comme un compte `read_only` (cf. « Obtenir une clé
+API »). Le cookie d'un compte « Accès API » n'ouvre que `/api/v1/docs` et
+`/api/v1/openapi.json`, pas les données.
 
 ---
 
 ## Obtenir une clé API
 
+**Vous avez seulement besoin de l'API** (script, écran d'affichage, appli
+d'un collègue) : créez un compte dans l'appli (« Créer un compte »), confirmez
+votre adresse, puis **demandez à un administrateur de l'activer en « Accès
+API »**. Ce compte ne voit **aucune donnée** dans l'appli : sa seule page,
+« Accès API », sert à créer et révoquer **ses** clés (il ne voit jamais celles
+des autres), avec la doc et deux exemples prêts à coller. Ses clés lisent
+`GET /api/v1/*` avec les droits d'un compte `read_only`, et rien d'autre : ni
+les routes internes de l'appli, ni le serveur MCP (`403`), ni aucune écriture.
+
+Avec un compte ordinaire (lecture, édition, admin) :
+
 1. Se connecter à l'appli avec son compte (un administrateur doit l'avoir
    activé).
 2. Ouvrir le **menu du compte** (avatar, en bas de la barre latérale) →
-   **Clé API** → « Générer une clé ».
+   **Clé API** (compte « Accès API » : c'est l'unique page) → donner un nom
+   à la clé (facultatif : « Écran du hall », « Script agenda »…) → « Générer
+   une clé ».
 3. Copier la clé `caliut_…` **tout de suite** : elle n'est affichée qu'une
    fois (seule son empreinte est gardée côté serveur).
 4. L'envoyer dans chaque requête : `Authorization: Bearer caliut_…`.
 
 La clé **hérite du rôle du compte** (un compte `read_only` n'obtient pas les
 doublons, seul un `admin` lit l'état Celcat), et se **révoque** depuis le
-même écran à tout moment. C'est la même clé que pour le serveur MCP et la
-commande `cal-iut prod`. Ne la mettez jamais dans une page web publique ni
-dans un dépôt : quiconque la détient lit tout ce que lit le compte.
+même écran à tout moment. Pour un compte ordinaire, c'est la même clé que
+pour le serveur MCP et la commande `cal-iut prod`. Chacun ne voit et ne
+révoque que ses propres clés ; au plus **5 clés actives** par compte. Les
+clés se gèrent uniquement depuis l'appli connectée : une clé ne peut ni
+lister, ni créer, ni révoquer de clé (`403`). Un changement de rôle
+s'applique aussitôt aux clés existantes (passé en « Accès API », un compte
+voit ses clés restreintes à la lecture de v1 à la requête suivante). Ne
+mettez jamais une clé dans une page web publique ni dans un dépôt :
+quiconque la détient lit tout ce que lit le compte.
 
 ```bash
 export CLE=caliut_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -132,6 +154,9 @@ Chaque endpoint reprend les droits de l'écran correspondant de l'appli :
 
 Un rôle insuffisant reçoit `403 {"detail": "Permissions insuffisantes pour
 cette action."}`.
+
+Une clé d'un compte **« Accès API »** a les droits d'un `read_only` sur v1
+(pas les doublons, pas Celcat) ; hors de `GET /api/v1/*` elle reçoit `403`.
 
 Ce que l'API ne sort **jamais** : comptes et utilisateurs, adresses mail de
 comptes (l'auteur d'une tâche n'est pas exposé pour cette raison), mots de

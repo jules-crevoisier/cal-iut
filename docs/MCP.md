@@ -135,4 +135,5 @@ Ne jamais `apply` sans avoir montré un `plan` et obtenu un confirm explicite.
 |-------------|-----|
 | `read_only` | `inspect` seulement (`plan` / `apply` → erreur) |
 | `edit` / `admin` | `inspect` + `plan` + `apply` |
+| `api` (« Accès API ») | 403 : ses clés ne lisent que `/api/v1` |
 | compte non `active` ou clé révoquée | 401 |
