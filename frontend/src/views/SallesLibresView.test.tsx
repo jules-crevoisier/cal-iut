@@ -12,6 +12,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { ContexteSemaine } from "../contexts/SemaineGlobale";
 import { SallesLibresView } from "./SallesLibresView";
 import { catalogRoom, emptyPayload, placedRow, testRoute } from "../test/payloadFixture";
 
@@ -181,5 +182,28 @@ describe("SallesLibresView — readOnly (lien public mode=salles)", () => {
 
     expect(grille(container).queryByText("H.101")).not.toBeInTheDocument();
     expect(grille(container).getByText("H.201")).toBeInTheDocument();
+  });
+});
+
+describe("SallesLibresView — semaine partagée (barre supérieure)", () => {
+  it("should show the week chosen in the top bar, not its own", () => {
+    const payload = emptyPayload({
+      weekLabels: ["S1", "S2"],
+      weekDates: ["2026-01-05", "2026-01-12"],
+      weekRows: [
+        { monday: "2026-01-05", label: "S1", blocked: false, weekIndex: 0 },
+        { monday: "2026-01-12", label: "S2", blocked: false, weekIndex: 1 },
+      ],
+      rooms: [catalogRoom("h101", { label: "H.101", capacity: 24, type: "standard" })],
+      rows: [placedRow({ id: "s1", w: 1, d: 0, s: 0, r: "H.101", c: "WR999" })],
+    });
+
+    const { container } = render(
+      <ContexteSemaine.Provider value={{ index: 1, setIndex: vi.fn() }}>
+        <SallesLibresView payload={payload} route={testRoute({ vue: "salles-libres", jour: 0 })} setRoute={vi.fn()} />
+      </ContexteSemaine.Provider>,
+    );
+
+    expect(grille(container).getByText("WR999")).toBeInTheDocument();
   });
 });

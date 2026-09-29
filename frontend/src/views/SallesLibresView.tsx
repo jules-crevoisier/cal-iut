@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./SallesLibresView.css";
 
 import { NavSemaine } from "../components/NavSemaine";
+import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { jourAujourdhuiDansSemaine, pluriel } from "../utils/planning";
@@ -50,11 +51,23 @@ function creneauEnCours(now: Date): number | null {
 }
 
 export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesLibresViewProps) {
-  const [displayWeek, setDisplayWeek] = useState(() =>
+  // Application connectée : la semaine de la barre supérieure, partagée par
+  // toutes les vues (refonte v2 du 29/09/2026 — avant, cette vue gardait la
+  // sienne et ne suivait pas). Lien public : sa propre semaine.
+  const globale = useSemaineGlobale();
+  const [locale, setLocale] = useState(() =>
     route.sem !== null && route.sem !== undefined
       ? displayIndexForSolverWeek(payload, route.sem)
       : indexSemaineCourante(payload.weekRows),
   );
+  const displayWeek = globale ? globale.index : locale;
+  const setDisplayWeek = globale ? globale.setIndex : setLocale;
+  useEffect(() => {
+    if (globale && route.sem !== null && route.sem !== undefined) {
+      globale.setIndex(displayIndexForSolverWeek(payload, route.sem));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.sem]);
   const [day, setDay] = useState(() => (route.jour !== null && route.jour !== undefined ? route.jour : jourOuvreAujourdhui()));
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -112,18 +125,26 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
   const libresMaintenant =
     slotMaintenant === null ? [] : sallesFiltrees.filter((room) => !occupation?.get(room.id)?.[slotMaintenant]);
 
+  const navSemaine = (
+    <NavSemaine
+      weekRows={payload.weekRows}
+      selected={displayWeek}
+      onSelect={setDisplayWeek}
+      countByWeekIndex={countByWeekIndex}
+      unit="creneaux"
+      legende="Occupation du parc"
+      onAujourdhui={() => setDay(jourOuvreAujourdhui())}
+    />
+  );
+
   return (
     <section className="view salleslibres-view">
-      <NavSemaine
-        weekRows={payload.weekRows}
-        selected={displayWeek}
-        onSelect={setDisplayWeek}
-        countByWeekIndex={countByWeekIndex}
-        unit="creneaux"
-        onAujourdhui={() => setDay(jourOuvreAujourdhui())}
-      />
+      {/* Lien public : navigation de semaine en tête. Application : la
+          semaine est dans la barre supérieure, l'histogramme vient sous la
+          barre d'outils. */}
+      {!globale && navSemaine}
 
-      <div className="salleslibres-barre">
+      <div className="page-outils salleslibres-barre">
         <div className="salleslibres-jours" role="group" aria-label="Jour">
           {DAY_LABELS.map((label, d) => {
             const date = solverWeek === null ? null : dateForWeekDay(payload, solverWeek, d);
@@ -173,6 +194,8 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
           </label>
         </div>
       </div>
+
+      {globale && navSemaine}
 
       {solverWeek === null ? (
         <div className="panel">

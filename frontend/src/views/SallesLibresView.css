@@ -15,19 +15,17 @@
 }
 
 .salleslibres-barre {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px 24px;
+  gap: 10px 20px;
 }
 
-/* ── Jours : une rangée segmentée, datée, aujourd'hui repéré ── */
+/* ── Jours : contrôle segmenté (direction « Lumière / Nuit ») : fond gris,
+   jour choisi en blanc cerclé, date en gras, aujourd'hui souligné ── */
 .salleslibres-jours {
   display: inline-flex;
-  border: 1px solid var(--border-strong);
+  gap: 2px;
+  padding: 3px;
   border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--surface);
+  background: var(--surface-3);
 }
 
 .salleslibres-jour {
@@ -35,23 +33,19 @@
   align-items: baseline;
   justify-content: center;
   gap: 6px;
-  min-height: var(--control-h);
-  padding: 6px 14px;
+  min-height: 28px;
+  padding: 4px 12px;
   border: 0;
-  border-left: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
   background: none;
-  color: var(--ink);
+  color: var(--ink-soft);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 0.86rem;
   cursor: pointer;
 }
 
-.salleslibres-jour:first-child {
-  border-left: 0;
-}
-
 .salleslibres-jour:hover {
-  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .salleslibres-jour .jc {
@@ -59,7 +53,8 @@
 }
 
 .salleslibres-jour .jd {
-  color: var(--ink-soft);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .salleslibres-jour.is-today .jl,
@@ -70,19 +65,10 @@
 }
 
 .salleslibres-jour.is-active {
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--border-strong);
 }
-
-.salleslibres-jour.is-active .jd {
-  color: inherit;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .salleslibres-jour.is-active { color: #0f1216; }
-}
-:root[data-theme="dark"] .salleslibres-jour.is-active { color: #0f1216; }
 
 /* ── Filtres ── */
 .salleslibres-filtres {
@@ -136,17 +122,34 @@
   font-weight: 600;
 }
 
+/* « Libres maintenant » : une ligne bordée, l'état porté par une petite
+   marque verte et le mot, pas par un aplat. */
 .salleslibres-maintenant {
-  margin: 0 0 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
   padding: 8px 12px;
-  background: var(--good-soft);
-  border-left: 3px solid var(--good);
-  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   font-size: 0.85rem;
+}
+
+.salleslibres-maintenant::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  transform: translateY(-1px);
 }
 
 .salleslibres-maintenant strong {
   color: var(--good-text);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .salleslibres-defile {
@@ -171,7 +174,7 @@
 }
 
 .salleslibres-grille thead th {
-  background: var(--surface-2);
+  background: var(--surface);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -203,7 +206,7 @@
 }
 
 .salleslibres-grille thead th:first-child {
-  background: var(--surface-2);
+  background: var(--surface);
   z-index: 2;
 }
 
@@ -237,7 +240,7 @@
 }
 
 .salleslibres-cell.libre {
-  background: color-mix(in srgb, var(--good) 5%, var(--surface));
+  background: var(--surface);
 }
 
 .salleslibres-libre {
