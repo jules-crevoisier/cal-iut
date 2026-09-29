@@ -340,6 +340,8 @@ cal-iut export --format html --per-teacher data/generated/par-enseignant
 | `GET /api/v1/contraintes`, `GET /api/v1/enseignants/{code}/contraintes` | Règles globales, contraintes déclarées, verdict, écarts, absences |
 | `GET /api/v1/charges` | Heures par enseignant, groupe, cours, parcours ; occupation des salles (par semaine) |
 | `GET /api/v1/{modifications,taches,calendrier}` | Déplacements manuels, tâches de suivi, fériés / évènements / SAE / réservations |
+| `GET /api/v1/sae/periodes`, `GET /api/v1/sae/journees` | Semaines de projet SAÉ (comme les évènements journée entière des `.ics`) et journées SAE jour par jour |
+| `GET /api/v1/sae[/{code}]` | Cours de SAE : maquette, encadrants, placés (dans / hors journée SAE), non placés |
 | `GET /api/v1/celcat/etat` | Synchronisation Celcat et file d'attente (admin) |
 | `GET /api/v1/export` | Tout en un appel, pour synchroniser un client |
 

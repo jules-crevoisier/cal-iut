@@ -4,9 +4,9 @@ Doc à donner telle quelle à qui veut lire l'emploi du temps MMI depuis un
 script, une appli ou un tableau de bord. Base : `https://cal-iut-mmi.srko.fr`.
 
 L'API v1 est en **lecture seule** et expose tout ce que montrent les écrans :
-planning, séances restant à placer, liste « À traiter », doublons,
-contraintes, charges, modifications manuelles, tâches, calendrier, état
-Celcat. Les modifications passent par l'interface web (ou le serveur MCP, cf.
+planning, séances restant à placer, SAE (semaines de projet et cours), liste
+« À traiter », doublons, contraintes, charges, modifications manuelles,
+tâches, calendrier, état Celcat. Les modifications passent par l'interface web (ou le serveur MCP, cf.
 `docs/MCP.md`). Pour un simple agenda, les flux `.ics` suffisent (cf.
 `docs/ICS.md`).
 
@@ -25,12 +25,15 @@ out ») : **`/api/v1/docs`**, schéma OpenAPI brut : **`/api/v1/openapi.json`**
 | `/api/v1/enseignants[/{code}]` | Enseignants (adresse de contact), nombre de séances, cours | compte actif | — |
 | `/api/v1/groupes[/{id}]` | Groupes, groupes liés, cohorte | compte actif | — |
 | `/api/v1/salles[/{id}]` | Catalogue des salles | compte actif | — |
-| `/api/v1/cours[/{code}]` | Maquette par parcours ; la fiche ajoute la **progression** | compte actif | — |
+| `/api/v1/cours[/{code}]` | Maquette par parcours (champ `sae`) ; la fiche ajoute la **progression** | compte actif | — |
 | `/api/v1/parcours[/{id}]` | Parcours, semestres, groupes | compte actif | — |
 | `/api/v1/seances` (+ `/{enseignants,groupes,salles,cours,parcours}/{id}/seances`) | Séances placées, filtrables, paginables | compte actif | oui |
-| `/api/v1/seances/non-placees` | Séances restant à placer (panneau « À placer ») | compte actif | oui ¹ |
+| `/api/v1/seances/non-placees` | Séances restant à placer (panneau « À placer ») ; `inclure_sae=true` pour les cours de SAE | compte actif | oui ¹ |
 | `/api/v1/salles/libres` | Salles libres à un créneau précis | compte actif | obligatoire |
 | `/api/v1/calendrier` | Fériés, vacances, évènements, jours SAE, réservations de salles | compte actif | oui |
+| `/api/v1/sae/periodes` | Semaines de projet SAÉ (les évènements journée entière des `.ics`) | compte actif | oui (+ `du`/`au`) |
+| `/api/v1/sae/journees` | Journées SAE, une par jour et par parcours, avec les cours de SAE placés ce jour-là | compte actif | oui (+ `du`/`au`) |
+| `/api/v1/sae[/{code}]` | Cours de SAE : maquette, encadrants, placés (dans / hors journée SAE), non placés | compte actif | oui |
 | `/api/v1/a-traiter` | Écran « À traiter » : points à corriger / à revoir | compte actif ² | oui |
 | `/api/v1/controles/doublons` | Salle ou enseignant pris deux fois | rôle **edit** | oui |
 | `/api/v1/contraintes` | Règles globales + contrainte et verdict de chaque enseignant | compte actif | — |
@@ -80,6 +83,9 @@ curl -H "Authorization: Bearer $CLE" https://cal-iut-mmi.srko.fr/api/v1/version
 | **Afficher le planning d'un prof** (semaine en cours) | `/api/v1/semaines` (repérer `statut: "en_cours"` → `semaine`), puis `/api/v1/enseignants/KBR/seances?semaine=5`. Pour un agenda : le flux `.ics` (`docs/ICS.md`). |
 | **Planning d'un groupe d'étudiants** | `/api/v1/groupes/but1-tp-a/seances?du=…&au=…` — inclut le CM de la promo et les TD du TD parent. |
 | **Écran d'affichage dans un couloir** (séances du jour, salles libres) | `/api/v1/seances?du=2026-10-05&au=2026-10-05` + `/api/v1/salles/libres?semaine=5&jour=0&creneau=2` ; sonder `/api/v1/version` toutes les 1 à 5 min, ne relire que si la révision change. |
+| **Afficher les semaines de projet SAÉ** (bandeaux dans un agenda) | `/api/v1/sae/periodes?parcours=BUT1` — ou `sae.periodes` dans `/api/v1/export`. |
+| **Savoir ce qui se passe un jour de SAE** (encadrants, cours posés) | `/api/v1/sae/journees?du=…&au=…` |
+| **Suivre une SAE** (volumes, encadrants, cours placés ou non, anomalies) | `/api/v1/sae/WS501D`, ou `/api/v1/sae` (`anomalies` en tête). |
 | **Trouver une salle** | `/api/v1/salles/libres?semaine=…&jour=…&creneau=…&capacite_min=30`. |
 | **Suivre les corrections à faire** | `/api/v1/a-traiter` (filtrable par `semaine`, `parcours`, `enseignant`, `gravite`, `nature`), `/api/v1/seances/non-placees`, `/api/v1/controles/doublons`. |
 | **Vérifier les contraintes d'un enseignant** | `/api/v1/enseignants/MRI/contraintes` (texte déclaré, créneaux interdits, verdict, écarts datés, absences). |
@@ -423,6 +429,7 @@ optionnels et se cumulent :
 | `salle` | id de salle (`h018`) |
 | `cours` | code du cours (`WR101`) |
 | `parcours` | parcours (`BUT2-DEV-FI`) |
+| `sae` | `true` : seulement les cours de SAE ; `false` : sans eux |
 | `du`, `au` | dates ISO incluses |
 | `limite`, `decalage` | pagination (1 à 10 000 ; sans `limite`, tout) |
 
@@ -444,7 +451,8 @@ curl --compressed -H "Authorization: Bearer $CLE" \
     "semaine": 5, "numero_semaine": 7, "date": "2026-10-05",
     "jour": 0, "jour_nom": "lundi", "creneau": 0, "duree_creneaux": 1,
     "debut": "08:00", "fin": "09:30", "horaire_libre": false,
-    "evaluation": false, "verrouillee": false, "personnalisee": false, "evenement": false
+    "evaluation": false, "verrouillee": false, "personnalisee": false, "evenement": false,
+    "sae": false, "dans_journee_sae": null
   }]
 }
 ```
@@ -456,6 +464,9 @@ curl --compressed -H "Authorization: Bearer $CLE" \
 - `personnalisee` : séance ajoutée depuis l'interface, hors maquette.
 - `evenement` : évènement hors maquette (réunion, conférence…) créé depuis
   l'interface — toujours `personnalisee` aussi.
+- `sae` : cours d'une SAE (code `WS…`) ; `dans_journee_sae` : pour un cours
+  de SAE, tombe-t-il sur une journée SAE de son parcours (`null` si ce n'est
+  pas une SAE) — cf. §2 bis.
 
 ### `GET /api/v1/seances/non-placees`
 
@@ -482,14 +493,21 @@ curl --compressed -H "Authorization: Bearer $CLE" \
     "enseignants": ["KBR"], "enseignants_noms": ["KYLLIAN BRESSON"],
     "ordre": 4, "semaines_possibles": [6, 7, 8],
     "raison": "Aucun créneau commun libre pour le groupe et l'enseignant.",
-    "placee_provisoirement": false, "semaine_actuelle": null, "jour_actuel": null, "creneau_actuel": null
+    "placee_provisoirement": false, "semaine_actuelle": null, "jour_actuel": null, "creneau_actuel": null,
+    "sae": false, "statut": "a_placer"
   }]
 }
 ```
 
 `placee_provisoirement: true` : séance posée en forçant l'ordre pédagogique,
 en attente de validation — elle reste listée (avec sa position actuelle),
-comme à l'écran. `total_a_placer` compte toutes les séances de la maquette
+comme à l'écran (`statut: "en_attente_validation"`, sinon `"a_placer"`).
+
+**Cours de SAE** : comme l'écran « À placer », la liste n'inclut PAS par
+défaut les cours de SAE que la génération ne place pas (ils s'organisent sur
+les journées SAE, cf. §2 bis). `inclure_sae=true` les ajoute, avec
+`statut: "hors_solveur"`, `sae: true` et, en `semaines_possibles`, les
+semaines des journées SAE du parcours. `total_a_placer` compte toutes les séances de la maquette
 (SAE comprises), `total_placees` celles du planning.
 
 ### `GET /api/v1/calendrier`
@@ -528,7 +546,134 @@ curl --compressed -H "Authorization: Bearer $CLE" "https://cal-iut-mmi.srko.fr/a
 | `periodes_institutionnelles` | calendrier de l'université (rentrée, vacances, fériés) |
 
 Les absences ponctuelles d'enseignants et les salles indisponibles saisies
-dans l'appli sont dans `/api/v1/contraintes` (`exceptions`).
+dans l'appli sont dans `/api/v1/contraintes` (`exceptions`). `jours_sae` est
+le bandeau de la Vue Promo ; pour les SAE en détail (périodes, journées,
+encadrants, cours), voir §2 bis.
+
+---
+
+## 2 bis. SAE : semaines de projet et cours
+
+Deux choses différentes portent le nom de SAE :
+
+| | Journée / période SAE | Cours de SAE |
+|---|---|---|
+| Quoi | Un **bloc de calendrier** réservé à un parcours (journée entière) : aucun cours classique du parcours n'y est placé | Une **séance** de la maquette d'une SAE (code `WS…`), avec type, groupes, enseignants, durée |
+| D'où | Calendrier officiel des SAE de l'établissement (`contraintes/09_dates_sae.json`), corrigé par `data/config/sae_corrections.yaml` | Maquette (`progression.json`) |
+| Où dans l'API | `/api/v1/sae/periodes`, `/api/v1/sae/journees` | `/api/v1/sae`, `/api/v1/sae/{code}`, `/api/v1/seances?sae=true` |
+| Dans les `.ics` | Évènement journée entière « Semaine de projet/évaluation SAE — WS501D » | Séance ordinaire, si elle est placée |
+
+**Règle** : un cours de SAE n'a lieu **que sur une journée SAE** de son
+parcours. Exception déclarée : les rares SAE que la génération place
+elle-même (`solver_scheduled_sae` dans `course_scheduling_rules.yaml`, ex.
+WSA501D, qui n'a aucune date au calendrier officiel). Un cours de SAE placé
+hors journée SAE sans exception déclarée est une **anomalie**, listée par
+`/api/v1/sae` (`anomalies`, `nb_anomalies`). L'écran « À traiter » n'a pas
+(encore) cette catégorie.
+
+La plupart des cours de SAE ne sont **pas placés** : la génération ne les
+place pas, les enseignants les organisent sur les journées SAE. Ils restent
+visibles dans `/api/v1/sae` (`non_placees`, `statut: "hors_solveur"`).
+
+### `GET /api/v1/sae/periodes` — semaines de projet SAÉ
+
+Équivalent exact des **évènements journée entière des flux `.ics`** : même
+source (`ics_feed.periodes_sae`), même découpage, même `id` (l'UID de
+l'évènement). Une période = une suite de jours SAE consécutifs d'une même SAE
+(le week-end ne coupe pas). Filtres : `parcours` (les SAE au parcours
+introuvable, `parcours: null`, concernent tout le monde et sont toujours
+incluses — comme dans les `.ics`), `semaine`, `du`, `au` (chevauchement).
+
+```bash
+curl --compressed -H "Authorization: Bearer $CLE" \
+  "https://cal-iut-mmi.srko.fr/api/v1/sae/periodes?parcours=BUT3-DEV-FI"
+```
+
+```json
+[{"id": "WS501D-2026-10-19", "code": "WS501D",
+  "intitule": "Développer pour le web ou Concevoir un dispositif interactif",
+  "libelle": "WS501D", "titre": "SAE WS501D", "description": "Semaine de projet/évaluation SAE — WS501D",
+  "parcours": "BUT3-DEV-FI", "groupes": [],
+  "date_debut": "2026-10-19", "date_fin": "2026-10-22",
+  "jours": ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"], "nb_jours": 4,
+  "semaines": [7], "numeros_semaine": [9]}]
+```
+
+`date_debut` et `date_fin` sont **incluses**. `groupes` : TD concernés
+(libellés courts, ex. `["AB"]`) quand la SAE ne réserve le jour qu'à une
+partie de la promo ; vide = tout le parcours.
+
+### `GET /api/v1/sae/journees` — journées SAE
+
+Les mêmes périodes dépliées **jour par jour et par parcours**, avec pour
+chaque journée : la ou les SAE concernées et leur origine
+(`calendrier_officiel` ou `correction_locale` + motif), les groupes
+concernés, les encadrants attendus ce jour-là (d'après
+`sae_teacher_phases.yaml`), et les **cours de SAE effectivement placés** ce
+jour-là. Une journée SAE bloque les 6 créneaux (`journee_entiere: true`).
+Filtres : `parcours`, `semaine`, `du`, `au`.
+
+```bash
+curl --compressed -H "Authorization: Bearer $CLE" \
+  "https://cal-iut-mmi.srko.fr/api/v1/sae/journees?parcours=BUT3-CREACOM-FC&du=2026-09-24&au=2026-09-24"
+```
+
+```json
+{"total": 1, "par_parcours": {"BUT3-CREACOM-FC": 1}, "journees": [{
+  "id": "BUT3-CREACOM-FC|2026-09-24", "date": "2026-09-24", "semaine": 3, "numero_semaine": 5,
+  "jour": 3, "jour_nom": "jeudi", "parcours": "BUT3-CREACOM-FC", "groupes": [],
+  "journee_entiere": true, "creneaux": [0, 1, 2, 3, 4, 5],
+  "sae": [{"code": "WSA501C", "intitule": "Création engagée et communication d'acceptabilité",
+           "origine": "correction_locale",
+           "motif": "Les journées SAE de l'établissement ne coïncidaient pas avec les disponibilités déclarées du vacataire : …"}],
+  "encadrants": [], "seances": []}]}
+```
+
+### `GET /api/v1/sae` · `GET /api/v1/sae/{code}` — cours de SAE
+
+Une entrée par SAE (code, semestre, parcours) : volumes de la maquette,
+enseignants, référents et leurs phases d'encadrement, journées réservées,
+cours **placés** (chacun marqué `dans_journee_sae`, `exception`, `anomalie`)
+et cours **non placés** (avec `statut` et `raison`). En tête, les totaux et la
+liste des anomalies. Filtres : `parcours`, `semaine` (SAE ayant une journée
+ou un cours placé cette semaine ; listes réduites à cette semaine, sauf
+`non_placees`). `/sae/{code}` renvoie `{"code", "intitule", "declinaisons":
+[…]}` (une déclinaison par parcours).
+
+```bash
+curl --compressed -H "Authorization: Bearer $CLE" "https://cal-iut-mmi.srko.fr/api/v1/sae?parcours=BUT3-DEV-FC"
+```
+
+```json
+{
+  "total": 2, "nb_seances_maquette": 26, "nb_placees": 17, "nb_non_placees": 9,
+  "nb_dans_journee_sae": 0, "nb_exceptions": 17, "nb_anomalies": 0, "anomalies": [],
+  "sae": [{
+    "code": "WSA501D", "intitule": "…", "parcours": "BUT3-DEV-FC", "semestre": "S5", "annee": "BUT3",
+    "planifiee_par_solveur": true, "commentaire_edt": null,
+    "nb_cm": 0, "nb_td": 34, "nb_tp": 0, "nb_evaluations": 0,
+    "nb_seances_maquette": 17, "nb_placees": 17, "nb_non_placees": 0,
+    "enseignants": ["BTO", "JSA"], "enseignants_noms": ["…"], "encadrants": [], "jours_reserves": [],
+    "nb_dans_journee_sae": 0, "nb_exceptions": 17, "nb_anomalies": 0,
+    "seances": [{"id": "…", "cours_code": "WSA501D", "date": "2026-08-31", "debut": "15:30", "fin": "18:30",
+                 "…": "… (mêmes champs que /api/v1/seances)",
+                 "sae": true, "dans_journee_sae": false, "journee_sae": null,
+                 "exception": true, "motif_exception": "SAE placée par la génération (`solver_scheduled_sae`) : …",
+                 "anomalie": false}],
+    "non_placees": []
+  }]
+}
+```
+
+- `encadrants[].jours` : jours où l'enseignant est compté comme encadrant
+  (tous les jours de la SAE, ou ceux de ses phases déclarées) — ce qui
+  produit les compromis « Encadrement SAE » de `/api/v1/contraintes`.
+- `non_placees[].statut` : `hors_solveur` (organisé par les enseignants sur
+  les journées SAE), `a_placer` (SAE placée par la génération, cours
+  manquant), `en_attente_validation`.
+- `commentaire_edt` : commentaire de la maquette à l'attention de l'EDT.
+- Chaque cours de SAE de la maquette apparaît **une seule fois**, soit dans
+  `seances`, soit dans `non_placees`.
 
 ---
 
@@ -812,8 +957,20 @@ curl --compressed -H "Authorization: Bearer $CLE" https://cal-iut-mmi.srko.fr/ap
 Tout en un seul appel : `revision`, `modifie_le`, `jours`, `creneaux`,
 `semaines`, `parcours`, `groupes`, `enseignants`, `salles`, `cours`,
 `seances`, `seances_non_placees`, `contraintes` (règles, enseignants,
-absences), `calendrier`, `modifications`, `taches` — mêmes formats qu'aux
-routes dédiées. ≈ 1,5 Mo, ≈ 70 Ko compressé.
+absences), `calendrier`, `modifications`, `taches`, et **`sae`** :
+
+```json
+"sae": {
+  "periodes": ["… comme /api/v1/sae/periodes (tous parcours) …"],
+  "journees": ["… comme /api/v1/sae/journees …"],
+  "cours":    ["… comme la liste `sae` de /api/v1/sae …"]
+}
+```
+
+Mêmes formats qu'aux routes dédiées. ≈ 2,2 Mo, ≈ 95 Ko compressé. Une
+modification des fenêtres SAE (`contraintes/09_dates_sae.json`,
+`sae_corrections.yaml`, `sae_teacher_phases.yaml`) fait avancer la révision,
+donc change l'ETag de l'export.
 
 N'y sont **pas** : les vues **calculées** à partir de ces données
 (`/a-traiter`, `/charges`, `/controles/doublons`) — elles dépendent du rôle
