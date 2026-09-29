@@ -8,8 +8,9 @@
   align-items: center;
   gap: 16px;
   min-height: 56px;
-  padding: 8px 20px;
-  background: var(--surface);
+  padding: 8px 24px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
   border-bottom: 1px solid var(--border);
 }
 
@@ -125,6 +126,8 @@
 .topbar-semaine-statut.is-courante {
   background: var(--accent-soft);
   color: var(--accent);
+  border-radius: 999px;
+  padding-inline: 8px;
 }
 
 .topbar-semaine-statut.is-bloquee {
@@ -316,8 +319,8 @@
   height: 34px;
   border-radius: 50%;
   border: none;
-  background: var(--rail-bg);
-  color: var(--rail-fg-strong);
+  background: var(--surface-3);
+  color: var(--ink);
   font: inherit;
   font-size: 0.76rem;
   font-weight: 600;
@@ -420,4 +423,44 @@
     left: 0;
     width: min(360px, calc(100vw - 24px));
   }
+}
+
+@media (max-width: 560px) {
+  .topbar-semaine-dates,
+  .topbar-semaine-statut,
+  .topbar-synchro-texte {
+    display: none;
+  }
+
+  .topbar-semaine-nom {
+    white-space: nowrap;
+  }
+
+  .topbar-titre h1 {
+    font-size: 1rem;
+  }
+}
+
+.topbar-theme {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin: 4px 4px 2px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.topbar-menu-compte .topbar-theme button {
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.topbar-menu-compte .topbar-theme button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--rail-active-ring);
 }
