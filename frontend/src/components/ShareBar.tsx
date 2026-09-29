@@ -15,13 +15,14 @@ interface ShareBarProps {
   extra?: React.ReactNode;
 }
 
-/** Barre « Copier son lien / Lien agenda / Partager / Imprimer » des vues
- *  Groupe et Enseignant (côté planification : on y prépare l'envoi du lien).
+/** Actions de partage des fiches Groupe et Enseignant (côté planification :
+ *  on y prépare l'envoi du lien), posées à droite de la barre d'outils.
  *
- *  Deux groupes séparés par un filet : ce qu'on ENVOIE à la personne (son
- *  lien, son agenda, un mail) et ce qu'on fait de la semaine affichée
- *  (image, impression). En une rangée de boutons identiques, rien ne disait
- *  lesquels allaient ensemble.
+ *  Deux groupes séparés par un filet : ce qu'on fait de la semaine affichée
+ *  (image, impression) et ce qu'on ENVOIE à la personne (son agenda, un
+ *  mail, son lien). « Copier son lien » est l'action principale de la fiche,
+ *  en dernier, à droite (refonte v2 du 29/09/2026 : plus de boutons encadrés
+ *  en pastilles, une rangée à plat).
  *
  *  Le TÉLÉCHARGEMENT .ics a été retiré le 30/08/2026 : le lien d'abonnement
  *  le remplace puisqu'il se remet à jour tout seul. */
@@ -29,23 +30,25 @@ export function ShareBar({ onCopyLink, onCopySubscribeLink, imageEdt, extra }: S
   const lienPerso = onCopyLink();
   return (
     <div className="sharebar no-print">
+      <span className="sharebar-groupe" role="group" aria-label="Semaine affichée">
+        {imageEdt && <BoutonsImageEdt options={imageEdt} />}
+        <button type="button" className="btn btn--ghost" onClick={() => window.print()}>
+          Imprimer
+        </button>
+      </span>
+      <span className="sharebar-sep" aria-hidden="true" />
       <span className="sharebar-groupe" role="group" aria-label="Envoyer">
-        <CopyButton text={onCopyLink} idleLabel="Copier son lien" />
-        <OpenLinkButton href={lienPerso} label="Ouvrir son lien dans un nouvel onglet" />
         {onCopySubscribeLink && (
           <CopyButton
             text={onCopySubscribeLink}
             idleLabel="Lien agenda"
+            className="btn"
             title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook (« ajouter un agenda par URL ») — se remet à jour tout seul."
           />
         )}
         {extra}
-      </span>
-      <span className="sharebar-groupe" role="group" aria-label="Semaine affichée">
-        {imageEdt && <BoutonsImageEdt options={imageEdt} />}
-        <button type="button" className="btn btn--ghost btn--sm" onClick={() => window.print()}>
-          Imprimer
-        </button>
+        <OpenLinkButton href={lienPerso} label="Ouvrir son lien dans un nouvel onglet" />
+        <CopyButton text={onCopyLink} idleLabel="Copier son lien" className="btn btn--primary" />
       </span>
     </div>
   );

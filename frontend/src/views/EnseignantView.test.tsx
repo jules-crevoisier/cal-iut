@@ -61,7 +61,9 @@ describe("EnseignantView", () => {
       expect(screen.getByText("KBR")).toBeInTheDocument();
     });
 
-    it("otherwise invites to choose, with the selector in the same place, and never picks the first one", () => {
+    // Refonte v2 (29/09/2026) : plus de boîte vide « Choisissez un
+    // enseignant » — l'annuaire, et toujours pas la fiche du premier venu.
+    it("otherwise shows the directory, never the first teacher's sheet, and a click opens a sheet", () => {
       const setRoute = vi.fn();
       render(
         <EnseignantView
@@ -71,11 +73,34 @@ describe("EnseignantView", () => {
           emailCompte="secretariat@iut.test"
         />,
       );
-      expect(screen.getByText("Choisissez un enseignant, ou cherchez-le avec Ctrl+K.")).toBeInTheDocument();
-      expect(screen.getByLabelText("Enseignant")).toHaveValue("");
-      expect(screen.queryByText(/séance/)).not.toBeInTheDocument();
-      fireEvent.change(screen.getByLabelText("Enseignant"), { target: { value: "AAA" } });
+      expect(screen.getByRole("region", { name: "Annuaire des enseignants" })).toBeInTheDocument();
+      expect(screen.queryByText("Choisissez un enseignant, ou cherchez-le avec Ctrl+K.")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Enseignant")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Abel Anne" }));
       expect(setRoute).toHaveBeenCalledWith({ vue: "prof", prof: "AAA" });
+    });
+
+    it("leads back to the directory from the account's own sheet", () => {
+      const setRoute = vi.fn();
+      const { rerender } = render(
+        <EnseignantView
+          payload={deux}
+          route={testRoute({ vue: "prof" })}
+          setRoute={setRoute}
+          emailCompte="kevin.lefevre@iut.test"
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /retour à l'annuaire/i }));
+      expect(setRoute).toHaveBeenCalledWith({ vue: "prof", prof: "" });
+      rerender(
+        <EnseignantView
+          payload={deux}
+          route={testRoute({ vue: "prof" })}
+          setRoute={setRoute}
+          emailCompte="kevin.lefevre@iut.test"
+        />,
+      );
+      expect(screen.getByRole("region", { name: "Annuaire des enseignants" })).toBeInTheDocument();
     });
   });
 });

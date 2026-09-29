@@ -3,18 +3,22 @@
  * enseignant (`#vue=prof&prof=KBR&mode=prof&t=…`), très souvent ouvert sur
  * téléphone.
  *
- * Refonte du 29/09/2026. La page répond d'abord à « quand est-ce que j'ai
- * cours ? » : prochain cours en une ligne, semaine en cours avec aujourd'hui
- * repéré, flèches semaine précédente / suivante (← → au clavier, T pour
- * revenir à aujourd'hui), lecture jour par jour sur téléphone. Côté
- * planification, la contrainte déclarée et ses violations restent, rangées
- * dans une colonne à droite de la grille au lieu d'un empilement de
- * panneaux (profil, callout, contrainte, agenda) qui répétait le nom.
+ * Refonte v2 du 29/09/2026 (cf. docs/DESIGN.md « Gabarit de page ») :
+ * - sans enseignant choisi, l'ANNUAIRE (nom, code, heures de la semaine
+ *   partagée, heures du semestre, matières, contrainte, mail manquant),
+ *   filtrable et trié par charge de la semaine — plus de boîte vide
+ *   « Choisissez un enseignant » ;
+ * - la fiche : barre d'outils à plat (retour à l'annuaire, sélecteur,
+ *   partage à droite), bandeau d'identité à plat, histogramme de charge,
+ *   « En cours / Prochain cours », grille pleine largeur avec la contrainte
+ *   et les matières dans la colonne de droite, puis l'agenda du semestre.
+ * La semaine est celle de la barre supérieure (`useConsultation`).
  */
 
 import { useMemo, useState } from "react";
 
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
+import { FicheIdentite, FicheOutils } from "../components/FicheEntete";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { MenuAgenda } from "../components/MenuAgenda";
 import { NavSemaine } from "../components/NavSemaine";
@@ -29,9 +33,10 @@ import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload, TeacherInfo } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
-import { formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
+import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
 import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { AnnuaireEnseignants } from "./Annuaires";
 
 import "./fiches.css";
 
@@ -70,9 +75,10 @@ export function EnseignantView({
     [payload.teacherLabels],
   );
   // Onglet ouvert sans enseignant : la fiche du compte connecté s'il en est
-  // un, sinon une invitation à choisir. Avant, le premier par ordre
-  // alphabétique, souvent quelqu'un sans aucune séance (« 0 séance »).
-  const code = route.prof || enseignantDuCompte(payload, emailCompte);
+  // un, sinon l'annuaire. « Retour à l'annuaire » depuis sa propre fiche
+  // doit bien y mener : on retient qu'il a été demandé.
+  const [annuaireDemande, setAnnuaireDemande] = useState(false);
+  const code = route.prof || (annuaireDemande ? "" : enseignantDuCompte(payload, emailCompte));
   const c = useConsultation(payload, route.sem);
   // « Tous les liens » — retour utilisateur 27/08/2026 : « ajoute moi une
   // vue simple avec tous les lien de tous les prof ». Planification seule.
@@ -88,31 +94,40 @@ export function EnseignantView({
     return <FicheIntrouvable libelle="Enseignant" id={route.prof} onOpenSearch={onOpenSearch} />;
   }
 
-  const choix = (
-    <label className="fiche-choix">
-      <span>Enseignant</span>
-      <select value={code} onChange={(e) => setRoute({ vue: "prof", prof: e.target.value })}>
-        {!code && <option value="">Choisir un enseignant…</option>}
-        {teacherCodes.map((tc) => (
-          <option key={tc} value={tc}>
-            {payload.teacherLabels[tc]}
-            {payload.teachers.find((t) => t.code === tc)?.hasConstraint ? " •" : ""}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+  const ouvrirAnnuaire = () => {
+    setAnnuaireDemande(true);
+    setShowAllLinks(false);
+    setRoute({ vue: "prof", prof: "" });
+  };
 
-  if (!readOnly && !code && !showAllLinks) {
+  if (!readOnly && showAllLinks) {
     return (
       <section className="view fiche">
-        <div className="fiche-entete">
-          {choix}
-          <button type="button" className="btn btn--ghost btn--sm fiche-bascule" onClick={() => setShowAllLinks(true)}>
-            Tous les liens
+        <div className="page-outils">
+          <button type="button" className="btn" onClick={() => setShowAllLinks(false)}>
+            ← {code ? "Revenir à la fiche" : "Revenir à l'annuaire"}
           </button>
         </div>
-        <p className="empty-state">Choisissez un enseignant, ou cherchez-le avec Ctrl+K.</p>
+        <TeacherLinksList payload={payload} />
+      </section>
+    );
+  }
+
+  const tousLesLiens = (
+    <button type="button" className="btn" onClick={() => setShowAllLinks(true)}>
+      Tous les liens
+    </button>
+  );
+
+  if (!readOnly && !code) {
+    return (
+      <section className="view fiche fiche--annuaire">
+        <AnnuaireEnseignants
+          payload={payload}
+          displayWeek={c.displayWeek}
+          actions={tousLesLiens}
+          onOuvrir={(tc) => setRoute({ vue: "prof", prof: tc })}
+        />
       </section>
     );
   }
@@ -145,6 +160,7 @@ export function EnseignantView({
   // 28/08/2026 : « on s'en fiche on veut qu'il soit public ».
   const personalLink = buildLink({ vue: "prof", prof: code, mode: "prof", t: token });
   const semaineLabel = payload.weekRows[c.displayWeek]?.label ?? `Semaine ${c.displayWeek + 1}`;
+  const titreSemaine = decouperLibelleSemaine(semaineLabel).titre;
   const imageEdt = () => ({
     titre: nom,
     sousTitre: semaineLabel,
@@ -152,65 +168,110 @@ export function EnseignantView({
     payload,
     couleursParMatiere,
   });
+  const nMatieres = new Set(allItems.map((it) => it.c)).size;
 
-  if (showAllLinks) {
+  const grille = (
+    <PlanningSemaine
+      payload={payload}
+      rows={rowsThisWeek}
+      displayIndex={c.displayWeek}
+      onSelectWeek={c.setDisplayWeek}
+      parcours={parcoursDeLaSemaine}
+      showPromo
+      narrow={c.narrow}
+      jour={c.jour}
+      onJour={c.setJour}
+      titreImpression={nom}
+      exclureProf={code}
+    />
+  );
+
+  // Lien public : « juste l'essentiel c'est à dire la barre des semaine et
+  // le planing qui fit bien l'écran » (retour utilisateur 27/08/2026) —
+  // ni agenda du semestre, ni contrainte, et sa propre navigation de
+  // semaine (pas de barre supérieure).
+  if (readOnly) {
     return (
       <section className="view fiche">
-        <div className="fiche-entete">
-          <button type="button" className="btn btn--sm" onClick={() => setShowAllLinks(false)}>
-            ← Revenir au planning
+        <ProchainCours payload={payload} items={allItems} showPromo onVoir={(it) => c.allerA(it.w, it.d)} />
+        <NavSemaine
+          weekRows={payload.weekRows}
+          selected={c.displayWeek}
+          onSelect={c.setDisplayWeek}
+          countByWeekIndex={hoursByWeek}
+          onAujourdhui={c.narrow ? c.jourAujourdhui : undefined}
+          resume={
+            c.solverWeek !== null && (
+              <strong>{formatHeures(hoursByWeek.get(c.solverWeek) ?? 0)} cette semaine</strong>
+            )
+          }
+        >
+          <MenuAgenda url={subscribeUrl("prof", code, token)} />
+          <BoutonsImageEdt options={imageEdt} />
+          <button type="button" className="btn btn--ghost btn--sm fiche-imprimer" onClick={() => window.print()}>
+            Imprimer
           </button>
+        </NavSemaine>
+        <div className="fiche-corps">
+          <div className="fiche-grille" id="planning">
+            {grille}
+          </div>
         </div>
-        <TeacherLinksList payload={payload} />
       </section>
     );
   }
 
   return (
     <section className="view fiche">
-      {!readOnly && (
-        <div className="fiche-entete">
-          {choix}
-          <p className="fiche-identite">
-            <span className="mono">{code}</span>
-            {email ? (
-              <a href={`mailto:${email}`}>{email}</a>
-            ) : (
-              <span className="fiche-manque" title="À compléter dans data/config/teacher_contacts.yaml">
-                adresse mail inconnue
-              </span>
-            )}
-            <span>
-              {pluriel(allItems.length, "séance")} · {formatHeures(heuresDe(allItems))} au semestre
+      <FicheOutils
+        libelle="Enseignant"
+        valeur={code}
+        options={teacherCodes.map((tc) => ({ value: tc, label: payload.teacherLabels[tc] ?? tc }))}
+        onChoisir={(tc) => setRoute({ vue: "prof", prof: tc })}
+        onAnnuaire={ouvrirAnnuaire}
+        actions={
+          <ShareBar
+            onCopyLink={() => personalLink}
+            onCopySubscribeLink={() => subscribeUrl("prof", code, token)}
+            imageEdt={imageEdt}
+            extra={
+              <a
+                className="btn"
+                href={mailtoForTeacher(payload, code, allItems, personalLink)}
+                title={email || "Adresse inconnue : le brouillon s'ouvrira sans destinataire."}
+              >
+                Écrire un mail
+              </a>
+            }
+          />
+        }
+      />
+
+      <FicheIdentite
+        titre={nom}
+        faits={[
+          <span className="mono">{code}</span>,
+          email ? (
+            <a href={`mailto:${email}`}>{email}</a>
+          ) : (
+            <span className="fiche-manque" title="À compléter dans data/config/teacher_contacts.yaml">
+              adresse mail manquante
             </span>
-            {manquantes.length > 0 && (
-              <span className="fiche-manque">{pluriel(manquantes.length, "séance non placée", "séances non placées")}</span>
-            )}
-          </p>
-          <button type="button" className="btn btn--ghost btn--sm fiche-bascule" onClick={() => setShowAllLinks(true)}>
-            Tous les liens
-          </button>
-        </div>
-      )}
-
-      {!readOnly && (
-        <ShareBar
-          onCopyLink={() => personalLink}
-          onCopySubscribeLink={() => subscribeUrl("prof", code, token)}
-          imageEdt={imageEdt}
-          extra={
-            <a
-              className="btn btn--ghost btn--sm"
-              href={mailtoForTeacher(payload, code, allItems, personalLink)}
-              title={email || "Adresse inconnue : le brouillon s'ouvrira sans destinataire."}
-            >
-              Écrire un mail
-            </a>
-          }
-        />
-      )}
-
-      <ProchainCours payload={payload} items={allItems} showPromo onVoir={(it) => c.allerA(it.w, it.d)} />
+          ),
+          c.solverWeek !== null && (
+            <>
+              <strong>{formatHeures(hoursByWeek.get(c.solverWeek) ?? 0)}</strong> en {titreSemaine.toLowerCase()}
+            </>
+          ),
+          <>
+            <strong>{formatHeures(heuresDe(allItems))}</strong> au semestre · {pluriel(allItems.length, "séance")}
+          </>,
+          pluriel(nMatieres, "matière"),
+          manquantes.length > 0 && (
+            <span className="fiche-manque">{pluriel(manquantes.length, "séance non placée", "séances non placées")}</span>
+          ),
+        ]}
+      />
 
       <NavSemaine
         weekRows={payload.weekRows}
@@ -218,40 +279,15 @@ export function EnseignantView({
         onSelect={c.setDisplayWeek}
         countByWeekIndex={hoursByWeek}
         onAujourdhui={c.narrow ? c.jourAujourdhui : undefined}
-        resume={
-          c.solverWeek !== null && (
-            <strong>{formatHeures(hoursByWeek.get(c.solverWeek) ?? 0)} cette semaine</strong>
-          )
-        }
-      >
-        {readOnly && (
-          <>
-            <MenuAgenda url={subscribeUrl("prof", code, token)} />
-            <BoutonsImageEdt options={imageEdt} />
-            <button type="button" className="btn btn--ghost btn--sm fiche-imprimer" onClick={() => window.print()}>
-              Imprimer
-            </button>
-          </>
-        )}
-      </NavSemaine>
+      />
 
-      <div className={`fiche-corps${!readOnly && info ? " avec-cote" : ""}`}>
+      <ProchainCours payload={payload} items={allItems} showPromo onVoir={(it) => c.allerA(it.w, it.d)} />
+
+      <div className={`fiche-corps${info ? " avec-cote" : ""}`}>
         <div className="fiche-grille" id="planning">
-          <PlanningSemaine
-            payload={payload}
-            rows={rowsThisWeek}
-            displayIndex={c.displayWeek}
-            onSelectWeek={c.setDisplayWeek}
-            parcours={parcoursDeLaSemaine}
-            showPromo
-            narrow={c.narrow}
-            jour={c.jour}
-            onJour={c.setJour}
-            titreImpression={nom}
-            exclureProf={code}
-          />
+          {grille}
         </div>
-        {!readOnly && info && (
+        {info && (
           <aside className="fiche-cote" aria-label="Contrainte et matières">
             <ContrainteEnseignant info={info} absences={absences.map((e) => ({ id: e.id, date: e.exception_date, motif: e.reason }))} />
             <SesMatieres
@@ -263,21 +299,16 @@ export function EnseignantView({
         )}
       </div>
 
-      {/* Lecture seule : ni agenda du semestre ni contrainte (retour
-          utilisateur 27/08/2026 : « juste l'essentiel c'est à dire la barre
-          des semaine et le planing qui fit bien l'écran »). */}
-      {!readOnly && (
-        <section className="panel fiche-semestre">
-          <h3>Toutes ses interventions du semestre</h3>
-          <SemesterAgenda
-            payload={payload}
-            items={allItems}
-            showPromo
-            semaineAffichee={c.solverWeek}
-            onChoisirSemaine={(w) => c.allerA(w)}
-          />
-        </section>
-      )}
+      <section className="panel fiche-semestre">
+        <h3>Toutes ses interventions du semestre</h3>
+        <SemesterAgenda
+          payload={payload}
+          items={allItems}
+          showPromo
+          semaineAffichee={c.solverWeek}
+          onChoisirSemaine={(w) => c.allerA(w)}
+        />
+      </section>
     </section>
   );
 }
@@ -315,11 +346,10 @@ function ContrainteEnseignant({
           "Aucune contrainte déclarée dans le fichier CONTRAINTES ENSEIGNANTS."
         ) : info.violations.length === 0 ? (
           <>
-            <span aria-hidden="true">✓ </span>Respectée sur {pluriel(info.nPlaced, "séance placée", "séances placées")}.
+            Respectée sur {pluriel(info.nPlaced, "séance placée", "séances placées")}.
           </>
         ) : (
           <>
-            <span aria-hidden="true">{vraies.length ? "! " : "i "}</span>
             {vraies.length > 0 && pluriel(vraies.length, "violation", "violations")}
             {vraies.length > 0 && sae.length > 0 && " et "}
             {sae.length > 0 && pluriel(sae.length, "compromis accepté (SAE)", "compromis acceptés (SAE)")}

@@ -42,6 +42,9 @@ interface NavSemaineProps {
   children?: ReactNode;
   /** Désactive les raccourcis (écran qui en a déjà d'autres). */
   sansRaccourcis?: boolean;
+  /** Version compacte (sous la barre supérieure) : ce que mesure
+   *  l'histogramme, écrit à sa gauche. */
+  legende?: string;
 }
 
 /** Vrai quand la frappe vise un champ : les flèches y déplacent le curseur,
@@ -63,6 +66,7 @@ export function NavSemaine({
   resume,
   children,
   sansRaccourcis = false,
+  legende,
 }: NavSemaineProps) {
   const barreGlobale = useSemaineGlobale() !== null;
   const courante = indexSemaineCourante(weekRows);
@@ -103,12 +107,29 @@ export function NavSemaine({
 
   // Application connectée : les flèches et « Aujourd'hui » sont dans la
   // barre supérieure (semaine partagée) ; il ne reste ici que ce qui est
-  // propre à la fiche — le total de la semaine et l'histogramme de charge.
-  const compacte = barreGlobale;
+  // propre à la fiche — l'histogramme de charge, sur une ligne fine, avec ce
+  // qu'il mesure écrit à sa gauche (refonte v2 du 29/09/2026).
+  if (barreGlobale) {
+    return (
+      <div className="navsemaine is-compacte">
+        <span className="navsemaine-legende">
+          {legende ?? (unit === "heures" ? "Heures par semaine" : "Occupation par semaine")}
+        </span>
+        <WeekBar
+          weekRows={weekRows}
+          countByWeekIndex={countByWeekIndex}
+          selected={selected}
+          onSelect={onSelect}
+          unit={unit}
+        />
+        {resume && <span className="navsemaine-resume">{resume}</span>}
+        {children && <div className="navsemaine-extra">{children}</div>}
+      </div>
+    );
+  }
   return (
-    <div className={`navsemaine ${compacte ? "is-compacte" : ""}`}>
+    <div className="navsemaine">
       <div className="navsemaine-ligne">
-        {!compacte && (
         <div className="navsemaine-pas" role="group" aria-label="Changer de semaine">
           <button
             type="button"
@@ -140,8 +161,6 @@ export function NavSemaine({
             <Chevron sens="droite" />
           </button>
         </div>
-        )}
-        {!compacte && (
         <button
           type="button"
           className="btn btn--sm navsemaine-auj"
@@ -154,7 +173,6 @@ export function NavSemaine({
         >
           Aujourd'hui
         </button>
-        )}
         {(resume || semaineCal !== null) && (
           <span className="navsemaine-resume">
             {resume}

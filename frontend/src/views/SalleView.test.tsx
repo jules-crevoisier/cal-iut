@@ -2,7 +2,7 @@
  * Contrat fiche salle : id inconnu → introuvable + recherche ;
  * salle connue sans occupation cette semaine → grille vide.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SalleView } from "./SalleView";
@@ -38,19 +38,21 @@ describe("SalleView", () => {
     expect(screen.getAllByText("Vendredi").length).toBeGreaterThan(0);
   });
 
-  it("should open on a room and offer the selector when the route carries none", () => {
+  it("should show the room directory, not « introuvable », when the route carries none", () => {
     // Signalement du 22/09/2026 en production : l'entrée « Vue Salle » du menu
     // n'ayant aucune salle en route, la fiche affichait « Salle « ? »
-    // introuvable » au lieu d'un écran utilisable.
+    // introuvable » au lieu d'un écran utilisable. Refonte v2 (29/09/2026) :
+    // l'écran utilisable est l'annuaire des salles ; un clic ouvre la fiche.
     const deuxSalles = emptyPayload({
       rooms: [catalogRoom("h101", { label: "H.101" }), catalogRoom("h018", { label: "H.018" })],
     });
+    const setRoute = vi.fn();
 
-    render(
-      <SalleView payload={deuxSalles} route={testRoute({ vue: "salle", salle: "" })} setRoute={vi.fn()} />,
-    );
+    render(<SalleView payload={deuxSalles} route={testRoute({ vue: "salle", salle: "" })} setRoute={setRoute} />);
 
     expect(screen.queryByText(/introuvable/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Salle")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Annuaire des salles" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "H.018" }));
+    expect(setRoute).toHaveBeenCalledWith({ vue: "salle", salle: "h018" });
   });
 });
