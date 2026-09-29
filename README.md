@@ -219,24 +219,57 @@ trous). Recommandé pour toute régénération après un ajustement mineur
 
 ### Onglets de l'app React (`http://127.0.0.1:8000/`)
 
-- **Vue Semaine** — édition manuelle (glisser-déposer, exceptions, régénération ciblée),
-  FullCalendar + verrouillage, panneaux Qualité/Diff/Feedback.
-- **Vue Groupe** — calendrier lecture seule par groupe (TD 2 colonnes TP quand les
-  sous-groupes divergent) + agenda chronologique du semestre + lien agenda.
-- **Vue Enseignant** — calendrier + contrainte déclarée + violations recalculées +
-  agenda chronologique + lien agenda + bouton mailto.
-- **Vue Promo** — toutes les promotions sur une seule grille (un jour à la fois).
-- **Référence** — salles, cours, calendrier institutionnel, **Liens & partage**.
-- **Contraintes** — chaque règle (enseignant ou solveur) avec son verdict recalculé
-  depuis la sortie brute du solveur (jamais une affirmation pré-écrite).
-- **À traiter** — séances non placées, violations, journées trouées : liste de
-  travail cliquable.
-- **À placer** — les séances que le solveur n'a pas su placer. Un bouton les pose
-  toutes d'un coup quand un créneau valable existe (l'essentiel du reliquat) ;
-  le reste se place à la main sur des créneaux déjà vérifiés. Sans cet onglet
-  elles disparaissaient sans bruit : le planning avait l'air complet alors qu'il
-  manquait des heures (cf. docs/DATA.md §66).
-- **Recherche globale** (`Ctrl+K`) — enseignant, cours, salle ou groupe, ouvre directement la bonne vue.
+Interface refaite le 29/09/2026 (charte : `docs/DESIGN.md`). Mêmes onglets,
+mêmes fonctions, au même endroit ; chaque écran a été repensé pour aller plus
+vite.
+
+- **Vue Semaine** — le planning d'un groupe, d'un enseignant ou d'une salle
+  (« Afficher par »), semaine par semaine. Clic sur une séance : son détail, et
+  « Modifier dans la Vue Promo ». Panneau « Modifications et export ».
+- **Vue Promo** — toutes les promotions sur une grille, un jour à la fois :
+  c'est ici qu'on déplace. Cartes compactes, cibles vertes/orange pendant le
+  glisser-déposer, **Annuler (Ctrl+Z)** après chaque action, filtres mémorisés,
+  raccourcis ← → (jour), Maj+← → (semaine), T (aujourd'hui). Boutons
+  « Séances à placer », **« Lisser une promo… »** (cf. plus bas), « Nouvel
+  évènement », « Nouvelle séance ».
+- **Vue Enseignant / Vue TD-TP / Vue Cours / Vue Salle** — grille de la semaine
+  avec « En cours / Prochain cours », navigation ← → et T, fiche rangée à droite
+  (contrainte déclarée, matières, heures), agenda du semestre filtrable.
+- **Référence** — onglets Salles, Cours, Calendrier, Liens & partage,
+  Notifications ; tableaux filtrables et triables.
+- **Contraintes** — les règles en échec d'abord, les enseignants dans un tableau
+  filtrable avec le texte qu'ils ont déclaré.
+- **À traiter** — sommaire cliquable par nature, sections repliables, filtres
+  mémorisés (parcours, semaine, enseignant, gravité), tri par urgence, lignes
+  identiques regroupées.
+- **Tâches** — kanban partagé, ajout rapide (touche N).
+- **Administration** — Comptes, **Celcat** (verdict en tête, « Corriger » ne
+  supprime jamais rien), Sauvegardes ; **Clé API** pour tout compte.
+- **Recherche globale** (`Ctrl+K`) — résultats groupés, correspondance surlignée,
+  historique récent.
+
+Les écrans se remettent à jour seuls quand un collègue modifie le planning
+(sondage léger de `GET /api/v1/version` toutes les 30 s, onglet visible
+seulement).
+
+#### Lisser le planning d'une promo (FC)
+
+« Lisser une promo… » (Vue Promo) ou `cal-iut lisser` réorganise les séances
+**à venir** d'une promo à groupe unique (alternance FC) : pas de cours à 8h (les
+journées commencent à 9h30), pas de trou, journées de charge égale, peu de 17h,
+le moins de déplacements possible. Seule cette promo bouge ; chaque créneau
+candidat passe les mêmes contrôles qu'un glisser-déposer (enseignants et salles
+des autres promos, PAC, SAE, présence alternance, indisponibilités, ordre
+pédagogique), puis la proposition entière est rejouée par une
+contre-vérification indépendante. On relit, on décoche, on applique : rien
+n'est écrit avant.
+
+```powershell
+cal-iut lisser                       # simulation sur la base locale
+cal-iut lisser --meme-semaine        # aucune séance ne change de semaine
+cal-iut lisser --prod                # simulation sur la production (clé API du .env)
+cal-iut lisser --prod --appliquer    # applique en production
+```
 
 Les données des vues en lecture seule viennent d'un unique endpoint,
 `GET /app-state` (même fonction Python — `build_payload` — que celle qui
@@ -292,7 +325,10 @@ cal-iut export --format html --per-teacher data/generated/par-enseignant
 | `POST /feedback/apply` | Réinjection poids objectif |
 | `GET /export/csv` | Export CSV |
 | `GET /export/json` | Export JSON |
-| `GET /legacy` | Page HTML/JS historique (même données, autre présentation) |
+| `GET /legacy` | Page HTML/JS historique (même données, autre présentation) — administrateurs seulement |
+| `POST /placements/lissage` | Lance le calcul d'un lissage de promo (tâche de fond) — rien n'est écrit |
+| `GET /placements/lissage/{job}` | Statut et proposition (avant/après, déplacements, contre-vérification) |
+| `POST /placements/lissage/{job}/appliquer` | Applique la proposition (sauf `exclure`), par le chemin d'un déplacement manuel |
 | `GET /ics/prof/{code}.ics`, `GET /ics/groupe/{id}.ics` | Flux agenda abonnables (cf. [`docs/ICS.md`](docs/ICS.md)) |
 | `GET /api/v1/version` | Révision de l'état — à sonder pour savoir si quelque chose a changé |
 | `GET /api/v1/seances` | Séances filtrables (semaine, enseignant, groupe, salle, cours, parcours, dates), paginables |
@@ -304,8 +340,12 @@ API v1 en lecture seule, documentée dans [`docs/API.md`](docs/API.md). Toutes
 les lectures lourdes (`/app-state`, `/meta`, `/timetable`, `/diff`, `/ics/*`,
 `/api/v1/*`) portent un `ETag` dérivé de la révision de l'état : `If-None-Match`
 → `304` sans corps tant que rien n'a changé. Réponses ≥ 1 Ko compressées en
-gzip. Authentification : cookie de compte, clé `Authorization: Bearer caliut_…`
-ou lien personnel `?t=`.
+gzip. Authentification : cookie de compte ou clé `Authorization: Bearer caliut_…` ;
+un lien personnel `?t=` ne lit que ce qu'affiche sa page (cf. `docs/API.md`).
+
+Sécurité (audit du 29/09/2026, `docs/AUDIT-2026-09.md`) : cookie `Secure`
+(`CAL_IUT_COOKIE_SECURE=0` pour du HTTP local), sessions révocables,
+limitation de débit sur `/auth/*`, écriture atomique des fichiers d'état.
 
 ## Architecture
 

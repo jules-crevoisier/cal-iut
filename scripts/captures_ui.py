@@ -23,10 +23,12 @@ VUES = [
     "apf", "taches", "comptes", "celcat", "sauvegardes", "mcp",
 ]
 LIENS_PUBLICS = {
-    "public-prof": "#vue=prof&prof=KBR&mode=prof",
-    "public-groupe": "#vue=groupe&groupe=but3-dev-fc-td-ef&mode=groupe",
-    "public-promo": "#mode=promo",
-    "public-salles": "#mode=salles",
+    # `t` : le lien public ne lit l'état qu'avec ce paramètre (sa valeur
+    # importe peu, cf. `api/auth.py::verify_personal_link_param`).
+    "public-prof": "#vue=prof&prof=KBR&mode=prof&t=capture",
+    "public-groupe": "#vue=groupe&groupe=but3-dev-fc-td-ef&mode=groupe&t=capture",
+    "public-promo": "#mode=promo&t=capture",
+    "public-salles": "#mode=salles&t=capture",
 }
 PREFS = json.dumps({"couleursParMatiere": False, "repondu": True})
 

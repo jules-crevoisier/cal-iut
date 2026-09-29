@@ -227,6 +227,29 @@ cal-iut completer --timetable data\generated\timetable_best.json
 
 ---
 
+## 5 ter. Lisser le planning d'une promo en alternance
+
+Quand l'emploi du temps d'une promo FC est haché (cours à 8h, trous, une
+journée à six cours et la suivante à deux), on peut le lisser sans rien
+regénérer : **Vue Promo → « Lisser une promo… »**.
+
+1. Choisir la promo, puis « Calculer une proposition » (environ 1 min 30).
+2. Relire : le tableau avant/après (cours à 8h, trous, 17h, journées à un
+   seul cours), puis semaine par semaine chaque déplacement proposé
+   (« mar. 13/10 8h → ven. 16/10 15h30 », enseignant, salle).
+3. Décocher ce qu'on ne veut pas bouger (un enseignant déjà prévenu, une
+   séance calée à l'oral…), puis « Appliquer ».
+
+Ce qui est garanti : seules les séances **à venir** de cette promo bougent ;
+tout ce qu'un glisser-déposer refuserait est refusé ici aussi (enseignant ou
+salle déjà pris par une autre promo, PAC, jours SAE, présence en entreprise,
+indisponibilités déclarées, ordre des séances) ; rien n'est « forcé ». Les
+corrections partent ensuite vers Celcat comme pour un déplacement à la main.
+
+Même chose en ligne de commande : `cal-iut lisser` (simulation), puis
+`cal-iut lisser --appliquer`. Ajouter `--prod` pour travailler directement sur
+la production (clé API dans `.env` : `CAL_IUT_PROD_URL`, `CAL_IUT_PROD_API_KEY`).
+
 ## 6. Ajuster une règle
 
 **Commencez par regarder ce qui est déjà en place :**
