@@ -235,6 +235,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Boutons dans un tableau : compacts, pour tenir dans une ligne de 36 px. */
+.carte-tableau table.ref td .btn {
+  min-height: 26px;
+  padding: 3px 8px;
+  font-size: 12.5px;
+}
+
+.carte-tableau table.ref td .btn--icon {
+  width: 26px;
+  min-width: 26px;
+  padding: 0;
+}
+
+.carte-tableau table.ref td select {
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
 .carte-vide {
   margin: 0;
   padding: 16px;
@@ -284,5 +303,11 @@
 @media (max-width: 640px) {
   .carte-tete-actions {
     margin-left: 0;
+  }
+
+  /* Au téléphone, un contrôle segmenté trop long passe à la ligne plutôt
+     que de cacher ses derniers choix. */
+  .segmente {
+    flex-wrap: wrap;
   }
 }

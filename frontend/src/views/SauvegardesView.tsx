@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DatabaseBackup } from "lucide-react";
 
 import { creerSauvegardeMaintenant, listSauvegardes, sauvegardeUrl, type SauvegardeMeta } from "../api/client";
+import { ActionsDePage } from "../components/TopBar";
 import "../styles/outils.css";
 import "./SauvegardesView.css";
 
@@ -136,12 +137,12 @@ export function SauvegardesView() {
             "Aucune sauvegarde pour l’instant."
           )}
         </p>
-        <div className="page-outils-actions">
+        <ActionsDePage>
           <button type="button" className="btn btn--primary" disabled={enCours} onClick={() => void sauvegarderMaintenant()}>
             <DatabaseBackup size={16} aria-hidden="true" />
             {enCours ? "Sauvegarde en cours…" : "Faire une sauvegarde maintenant"}
           </button>
-        </div>
+        </ActionsDePage>
       </div>
 
       {erreur && (

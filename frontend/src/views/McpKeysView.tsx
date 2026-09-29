@@ -23,6 +23,7 @@ import { createMcpKey, listMcpKeys, revokeMcpKey } from "../api/client";
 import type { McpKey } from "../api/client";
 import { CopyButton } from "../components/CopyButton";
 import { confirmAsync } from "../utils/confirmDialog";
+import { ActionsDePage } from "../components/TopBar";
 import "../styles/outils.css";
 import "./McpKeysView.css";
 
@@ -125,12 +126,12 @@ export function McpKeysView() {
           les droits de votre compte, sans votre mot de passe. Prévoyez une clé par usage : on en révoque une sans casser
           les autres.
         </p>
-        <div className="page-outils-actions">
+        <ActionsDePage>
           <button type="button" className="btn btn--primary" disabled={enCours} onClick={() => void generer()}>
             <KeyRound size={16} aria-hidden="true" />
             {enCours ? "Génération…" : "Générer une clé"}
           </button>
-        </div>
+        </ActionsDePage>
       </div>
 
       {erreur && (

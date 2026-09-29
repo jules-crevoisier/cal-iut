@@ -37,6 +37,7 @@ import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { Onglets } from "../components/Onglets";
+import { ActionsDePage } from "../components/TopBar";
 import "./KanbanView.css";
 
 const COLONNES: { id: Tache["colonne"]; label: string }[] = [
@@ -444,7 +445,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
           </button>
         )}
         {peutModifier && (
-          <div className="page-outils-actions">
+          <ActionsDePage>
             <button
               type="button"
               className="btn btn--primary"
@@ -454,7 +455,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
               <Plus size={16} aria-hidden="true" />
               Nouvelle tâche
             </button>
-          </div>
+          </ActionsDePage>
         )}
         <datalist id="kanban-concerne-suggestions">
           {personnes.map((nom) => (

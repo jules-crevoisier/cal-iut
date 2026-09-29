@@ -54,6 +54,16 @@ export function SendTeacherMailsModal({ onClose }: SendTeacherMailsModalProps) {
 
   const dateCourte = (iso: string) => new Date(iso).toLocaleDateString("fr-FR");
 
+  // Échap ferme la fenêtre, comme toutes les modales (charte, principe 6) —
+  // sauf pendant un envoi, qu'on laisse aller au bout sous les yeux.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !sending) onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose, sending]);
+
   useEffect(() => {
     fetchTeacherMailPreview()
       .then((data) => {
