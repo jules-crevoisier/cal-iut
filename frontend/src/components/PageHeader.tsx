@@ -43,6 +43,7 @@ export const TITRES_VUES: Record<RouteView, [string, string, string?]> = {
   comptes: ["Comptes", "Activer, changer le rôle ou désactiver les comptes."],
   celcat: ["Celcat", "Concordance entre ce planning et Celcat, et file des corrections envoyées."],
   sauvegardes: ["Sauvegardes", "Une copie datée des séances placées, chaque jour où le planning change.", "Une copie par jour de changement"],
+  trafic: ["Trafic", "Qui interroge le serveur et à quel rythme ; limiter et bloquer les aspirateurs.", "Clients et blocages"],
   mcp: ["Clé API", "Clés d'accès pour Claude (MCP) et les scripts qui lisent l'API.", "Accès pour Claude (MCP) et les scripts"],
 };
 

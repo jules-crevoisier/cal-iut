@@ -47,6 +47,7 @@ import { AdminCelcatView } from "./views/AdminCelcatView";
 import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
 import { SauvegardesView } from "./views/SauvegardesView";
+import { TraficView } from "./views/TraficView";
 import { indexSemaineCourante } from "./utils/semaineCourante";
 import { compterATraiter } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
@@ -874,6 +875,7 @@ export function App() {
           activeTab !== "comptes" &&
           activeTab !== "celcat" &&
           activeTab !== "sauvegardes" &&
+          activeTab !== "trafic" &&
           activeTab !== "mcp" &&
           !appPayload && <EtatPlanningVide etat={etatPlanning} />}
 
@@ -965,6 +967,7 @@ export function App() {
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
         {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}
+        {activeTab === "trafic" && !readOnlyTarget && moi?.role === "admin" && <TraficView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}
         </ErrorBoundary>
           </main>

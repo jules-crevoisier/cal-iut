@@ -379,6 +379,96 @@ export function sauvegardeUrl(jour: string): string {
   return `${BASE}/sauvegardes/${encodeURIComponent(jour)}`;
 }
 
+// ── Anti-aspiration (29/09/2026, cf. api/anti_aspiration.py et
+// docs/ANTI-ASPIRATION.md) — écran « Trafic », réservé admin côté serveur.
+
+export type ModeAntiAspiration = "off" | "observe" | "enforce";
+export type FenetreTrafic = "15min" | "1h" | "24h";
+export type TypeBlocage = "ip" | "cidr" | "user_agent";
+
+export interface BudgetTrafic {
+  categorie: string;
+  nombre: number;
+  periode_s: number;
+  rafale: number;
+  description: string;
+}
+
+export interface ClientTrafic {
+  ip: string;
+  requetes: number;
+  requetes_15min: number;
+  requetes_1h: number;
+  requetes_24h: number;
+  /** Part des requêtes sans compte (liens publics, flux, sondes), 0 à 1. */
+  part_publique: number;
+  /** Requêtes au-delà du budget (refusées en mode blocage, seulement
+   *  comptées en observation). */
+  depassements: number;
+  refus_403: number;
+  user_agent: string;
+  user_agents_distincts: number;
+  chemins: Array<{ chemin: string; nb: number }>;
+  categorie: string;
+  compte_id: number | null;
+  compte_email: string | null;
+  /** Liens `?t=` différents vus pour cette IP (un humain en ouvre 1 à 3). */
+  liens_distincts: number;
+  dernier_passage: string;
+  blocage_id: string | null;
+}
+
+export interface TraficResponse {
+  mode: ModeAntiAspiration;
+  variable: string;
+  comptage_actif: boolean;
+  fenetre: FenetreTrafic;
+  genere_le: string;
+  budgets: BudgetTrafic[];
+  bannissement: { seuil: number; fenetre_s: number; duree_s: number };
+  exemptes: string[];
+  resume: { requetes: number; clients: number; depassements: number; refus_403: number; ip_bloquees: number };
+  clients: ClientTrafic[];
+}
+
+export interface Blocage {
+  id: string;
+  type: TypeBlocage;
+  valeur: string;
+  motif: string;
+  auteur: string;
+  cree_le: string;
+  expire_le: string | null;
+  automatique: boolean;
+}
+
+export interface NouveauBlocage {
+  type: TypeBlocage;
+  valeur: string;
+  motif: string;
+  /** "1h", "24h", "7j" ; `null` = permanent. */
+  duree: string | null;
+  /** Le blocage viserait l'administrateur lui-même : confirmé. */
+  forcer?: boolean;
+}
+
+export function fetchTrafic(fenetre: FenetreTrafic): Promise<TraficResponse> {
+  return request<TraficResponse>(`/admin/trafic?fenetre=${encodeURIComponent(fenetre)}`);
+}
+
+export async function listBlocages(): Promise<Blocage[]> {
+  const r = await request<{ blocages: Blocage[] }>("/admin/blocages");
+  return r.blocages;
+}
+
+export function creerBlocage(corps: NouveauBlocage): Promise<Blocage> {
+  return request<Blocage>("/admin/blocages", { method: "POST", body: JSON.stringify(corps) });
+}
+
+export async function supprimerBlocage(id: string): Promise<void> {
+  await request(`/admin/blocages/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export function fetchMeta(): Promise<MetaResponse> {
   return request<MetaResponse>("/meta");
 }

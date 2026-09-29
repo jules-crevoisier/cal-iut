@@ -28,6 +28,7 @@ import {
   ListChecks,
   RefreshCcw,
   Search,
+  ShieldBan,
   ShieldCheck,
   Users,
   UsersRound,
@@ -91,6 +92,7 @@ const GROUPE_ADMIN: NavGroup = {
     { id: "comptes", label: "Comptes", icone: Users },
     { id: "celcat", label: "Celcat", icone: RefreshCcw },
     { id: "sauvegardes", label: "Sauvegardes", icone: DatabaseBackup },
+    { id: "trafic", label: "Trafic", icone: ShieldBan },
   ],
 };
 
