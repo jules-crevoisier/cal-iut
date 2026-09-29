@@ -7,7 +7,7 @@
  * les liens perso. Les deux routes/composants restent, seuls les deux
  * boutons de la nav disparaissent.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SideNav } from "./SideNav";
@@ -41,10 +41,19 @@ describe("SideNav groups", () => {
     expect(screen.queryByRole("button", { name: /vue groupe/i })).not.toBeInTheDocument();
   });
 
-  it("should offer Clé API when an account email is provided", () => {
-    render(<SideNav {...baseProps} email="prof@example.test" onLogout={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /clé api/i })).toBeInTheDocument();
-    expect(screen.getByText("prof@example.test")).toBeInTheDocument();
+  it("should open on Accueil first, then the known views in their usual order", () => {
+    const { container } = render(<SideNav {...baseProps} />);
+    const libelles = [...container.querySelectorAll(".navbtn .navbtn-libelle")].map((b) => b.textContent);
+    expect(libelles.slice(0, 5)).toEqual(["Accueil", "Vue Semaine", "Vue Enseignant", "Vue Promo", "Vue TD / TP"]);
+  });
+
+  it("should remember the collapsed rail on the device", () => {
+    const { container, unmount } = render(<SideNav {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /replier/i }));
+    expect(container.querySelector(".sidenav")).toHaveClass("is-repliee");
+    unmount();
+    const second = render(<SideNav {...baseProps} />);
+    expect(second.container.querySelector(".sidenav")).toHaveClass("is-repliee");
   });
 
   it("should not offer Vue Salle or Salles libres in the nav", () => {

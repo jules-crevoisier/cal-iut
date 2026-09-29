@@ -1,0 +1,423 @@
+/* Barre supérieure (refonte du 29/09/2026) — cf. TopBar.tsx. */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.topbar-titre {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.topbar-titre h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.topbar-titre p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 42ch;
+}
+
+/* ── Semaine partagée ── */
+.topbar-semaine {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline: auto;
+  flex: 0 0 auto;
+}
+
+.topbar-fleche {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.topbar-fleche:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.topbar-fleche:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.topbar-semaine-choix {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  align-items: center;
+  min-width: 250px;
+}
+
+.topbar-semaine-choix:hover {
+  background: var(--surface-2);
+}
+
+.topbar-semaine-nom {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.topbar-semaine-dates {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.topbar-semaine-statut {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.topbar-semaine-statut.is-courante {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.topbar-semaine-statut.is-bloquee {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+
+.topbar-semaine-ouvrir {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.topbar-aujourdhui {
+  height: 34px;
+  padding: 0 10px;
+  margin-left: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.topbar-aujourdhui:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.topbar-aujourdhui:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.topbar-calendaire {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.topbar-semaines {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 38px;
+  z-index: 60;
+  width: 360px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+
+.topbar-semaines button {
+  display: grid;
+  grid-template-columns: 6.5em 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.topbar-semaines button:hover {
+  background: var(--surface-2);
+}
+
+.topbar-semaines button[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.topbar-semaines button.is-passee {
+  color: var(--muted);
+}
+
+.topbar-semaines button.is-bloquee .charge {
+  color: var(--warn-text);
+}
+
+.topbar-semaines button.is-courante .charge {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.topbar-semaines .dates {
+  color: var(--muted);
+}
+
+.topbar-semaines .charge {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Droite ── */
+.topbar-droite {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.topbar-semaine + .topbar-droite {
+  margin-left: 0;
+}
+
+.topbar-recherche {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  width: 280px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: text;
+  text-align: left;
+}
+
+.topbar-recherche:hover {
+  border-color: var(--border-strong);
+}
+
+.topbar-recherche-texte {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.topbar-recherche kbd {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.topbar-synchro {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.topbar-synchro-point {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+}
+
+.topbar-synchro.is-panne {
+  color: var(--bad-text);
+}
+
+.topbar-synchro.is-panne .topbar-synchro-point {
+  background: var(--bad);
+}
+
+.topbar-compte {
+  position: relative;
+}
+
+.topbar-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--rail-bg);
+  color: var(--rail-fg-strong);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.topbar-menu-compte {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  min-width: 240px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar-menu-email {
+  margin: 0;
+  padding: 6px 10px 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-menu-compte button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.topbar-menu-compte button:hover {
+  background: var(--surface-2);
+}
+
+@media (max-width: 1400px) {
+  .topbar-titre p,
+  .topbar-calendaire,
+  .topbar-synchro-texte {
+    display: none;
+  }
+
+  .topbar-recherche {
+    width: 200px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .topbar-recherche {
+    width: auto;
+  }
+
+  .topbar-recherche-texte,
+  .topbar-recherche kbd {
+    display: none;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .topbar {
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    gap: 8px;
+  }
+
+  .topbar-menu {
+    display: inline-flex;
+  }
+
+  .topbar-semaine {
+    order: 3;
+    width: 100%;
+    margin: 0;
+  }
+
+  .topbar-semaine-choix {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .topbar-semaines {
+    left: 0;
+    width: min(360px, calc(100vw - 24px));
+  }
+}

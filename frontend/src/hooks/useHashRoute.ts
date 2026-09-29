@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type RouteView =
+  | "accueil"
   | "semaine"
   | "groupe"
   | "prof"

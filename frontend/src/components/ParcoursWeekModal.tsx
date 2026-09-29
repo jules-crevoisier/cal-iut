@@ -238,6 +238,7 @@ export function ParcoursWeekModal({
         <div className="parcoursmodal-entete">
           <h3 id="parcoursmodal-titre">{parcours} — semaine complète</h3>
           <WeekStepper
+            toujours
             weekRows={payload.weekRows}
             selected={semaineAffichee}
             onSelect={(i) => setSemaineAffichee(Math.max(0, Math.min(derniere, i)))}

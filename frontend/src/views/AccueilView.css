@@ -1,0 +1,441 @@
+/* Accueil — tableau de bord de la semaine (refonte du 29/09/2026).
+   Composition : rangée d'indicateurs, puis une grille « principal / côté ». */
+
+.view.accueil {
+  max-width: 1480px;
+  gap: 16px;
+}
+
+/* ── Indicateurs ── */
+.accueil-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.accueil-tuile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+
+.accueil-tuile::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: transparent;
+}
+
+.accueil-tuile.is-bad::before {
+  background: var(--bad);
+}
+
+.accueil-tuile.is-warn::before {
+  background: var(--warn);
+}
+
+.accueil-tuile.is-good::before {
+  background: var(--good);
+}
+
+.accueil-tuile:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.accueil-tuile-libelle {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.accueil-tuile-valeur {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.accueil-tuile.is-bad .accueil-tuile-valeur {
+  color: var(--bad-text);
+}
+
+.accueil-tuile-detail {
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+
+.accueil-tuile-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ── Grille ── */
+.accueil-grille {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 16px;
+  align-items: start;
+}
+
+.accueil-principal,
+.accueil-cote {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.accueil-section-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.accueil-section-tete h2 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+/* ── Carte de chaleur promo × jour ── */
+.accueil-charge-table {
+  overflow-x: auto;
+}
+
+.accueil-charge table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+  font-size: 0.86rem;
+}
+
+.accueil-charge th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 0 4px 2px;
+}
+
+.accueil-charge th[scope="row"] {
+  text-align: left;
+  color: var(--ink);
+  font-size: 0.84rem;
+  white-space: nowrap;
+  padding-right: 10px;
+}
+
+.accueil-charge td {
+  padding: 0;
+}
+
+.accueil-charge td.num,
+.accueil-charge th.num {
+  text-align: right;
+  padding-left: 10px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rampe séquentielle, une seule teinte (accent) : 0 → 6 créneaux. */
+.accueil-case {
+  --n: 0%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  min-width: 72px;
+  height: 52px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) var(--n), var(--surface-2));
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.accueil-case.n0 { --n: 0%; color: var(--ink-faint); }
+.accueil-case.n1 { --n: 10%; }
+.accueil-case.n2 { --n: 18%; }
+.accueil-case.n3 { --n: 28%; }
+.accueil-case.n4 { --n: 40%; }
+.accueil-case.n5 { --n: 55%; color: #fff; }
+.accueil-case.n6 { --n: 72%; color: #fff; }
+
+.accueil-case:hover,
+.accueil-case:focus-visible {
+  border-color: var(--accent);
+}
+
+.accueil-case-barres {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) 4px repeat(3, 1fr);
+  gap: 2px;
+  height: 6px;
+}
+
+.accueil-case-barres i {
+  border-radius: 1px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.accueil-case-barres i:nth-child(4) {
+  grid-column: 5;
+}
+
+.accueil-case-barres i.on {
+  background: currentColor;
+}
+
+.accueil-case-valeur {
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.accueil-legende {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.accueil-legende .accueil-case {
+  display: inline-block;
+  width: 14px;
+  min-width: 0;
+  height: 14px;
+  padding: 0;
+  border-radius: 3px;
+  cursor: default;
+}
+
+.accueil-note {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* ── Séances par semaine ── */
+.accueil-colonnes {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+  align-items: end;
+}
+
+.accueil-colonne {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.accueil-colonne:hover {
+  background: var(--surface-2);
+}
+
+.accueil-colonne-piste {
+  display: flex;
+  align-items: flex-end;
+  width: 60%;
+  max-width: 36px;
+}
+
+.accueil-colonne-barre {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: color-mix(in srgb, var(--ink-faint) 45%, var(--surface-2));
+}
+
+.accueil-colonne.is-choisie .accueil-colonne-barre {
+  background: var(--accent);
+}
+
+.accueil-colonne.is-choisie {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
+.accueil-colonne.is-bloquee .accueil-colonne-piste {
+  background: repeating-linear-gradient(135deg, transparent 0 4px, var(--surface-3) 4px 6px);
+  border-radius: 4px 4px 0 0;
+}
+
+.accueil-colonne-valeur {
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-height: 1.2em;
+}
+
+.accueil-colonne-nom {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.accueil-colonne-date {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.accueil-colonne.is-choisie .accueil-colonne-nom {
+  color: var(--accent);
+}
+
+/* ── Listes de côté ── */
+.accueil-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.accueil-ligne {
+  display: grid;
+  grid-template-columns: 7.5em 1fr;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px 7px 10px;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accueil-ligne:hover {
+  background: var(--surface-2);
+}
+
+.accueil-ligne.is-bad {
+  border-left-color: var(--bad);
+}
+
+.accueil-ligne.is-warn {
+  border-left-color: var(--warn);
+}
+
+.accueil-ligne > svg {
+  color: var(--bad);
+}
+
+.accueil-ligne-quand {
+  font-size: 0.76rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.accueil-ligne-texte .pill {
+  margin-left: 6px;
+}
+
+.accueil-vide {
+  margin: 4px 0;
+  font-size: 0.86rem;
+}
+
+.accueil-raccourcis {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.accueil-raccourcis h2 {
+  margin: 0 0 8px;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.accueil-raccourcis button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accueil-raccourcis button:hover {
+  background: var(--surface-2);
+}
+
+.accueil-raccourcis svg {
+  color: var(--accent);
+  flex: none;
+}
+
+@media (max-width: 1280px) {
+  .accueil-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .accueil-grille {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .accueil-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accueil-colonnes {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .accueil-colonne:nth-child(n + 6) {
+    display: none;
+  }
+
+  .accueil-ligne {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

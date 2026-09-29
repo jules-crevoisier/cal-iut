@@ -8,6 +8,8 @@
  */
 import type { ReactNode } from "react";
 
+import { useSemaineGlobale } from "../contexts/SemaineGlobale";
+
 import type { WeekRow } from "../types/app";
 import { indexSemaineCourante } from "../utils/semaineCourante";
 import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
@@ -27,6 +29,9 @@ interface WeekStepperProps {
   raccourcis?: boolean;
   /** Texte ajouté après le libellé (ex. nombre de séances). */
   complement?: ReactNode;
+  /** Affiché même dans l'application connectée (ex. une modale qui a sa
+   *  propre semaine) ; sinon la barre supérieure en tient lieu. */
+  toujours?: boolean;
 }
 
 /** « Semaine 6 (28 sept.–2 oct. 2026) » -> ["Semaine 6", "28 sept.–2 oct. 2026"]. */
@@ -58,12 +63,17 @@ export function WeekStepper({
   estAujourdhui,
   raccourcis = false,
   complement,
+  toujours = false,
 }: WeekStepperProps) {
+  const barreGlobale = useSemaineGlobale() !== null;
   const ligne = weekRows[selected];
   const indexAujourdhui = indexSemaineCourante(weekRows);
   const surAujourdhui = estAujourdhui ?? selected === indexAujourdhui;
   const [nom, dates] = decouper(ligne?.label ?? `Semaine ${selected + 1}`);
   const semaineCal = semaineCalendaireDepuisLundi(ligne?.monday);
+
+  // La barre supérieure porte déjà la semaine partagée : pas de doublon.
+  if (barreGlobale && !toujours) return null;
 
   return (
     <div className="weekstepper" role="group" aria-label="Semaine affichée">

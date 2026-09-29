@@ -51,6 +51,7 @@ import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
 import { CreerEvenementModal } from "../components/CreerEvenementModal";
 import { LissageModal } from "../components/LissageModal";
+import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 import { WeekBar } from "../components/WeekBar";
 import { WeekStepper } from "../components/WeekStepper";
 import { APlacerView } from "./APlacerView";
@@ -166,7 +167,12 @@ export function PromoView({
   const [filtreAnnee, setFiltreAnnee] = useState<string>(filtresInitiaux.annee);
   const [filtreParcoursSel, setFiltreParcoursSel] = useState<string>(filtresInitiaux.parcours);
   const placementActif = readOnly ? null : (placementActifProp ?? choixAPlacer);
-  const [displayWeek, setDisplayWeek] = useState(0);
+  // Semaine partagée avec les autres vues (barre supérieure) dans
+  // l'application connectée ; propre à la page sur le lien public.
+  const semaineGlobale = useSemaineGlobale();
+  const [semaineLocale, setSemaineLocale] = useState(0);
+  const displayWeek = semaineGlobale ? semaineGlobale.index : semaineLocale;
+  const setDisplayWeek = semaineGlobale ? semaineGlobale.setIndex : setSemaineLocale;
   // Le jour EN COURS plutôt que lundi (retour utilisateur 08/09/2026 : « on
   // veut arriver à la bonne semaine et au bon jour »).
   const [day, setDay] = useState(() => jourOuvreAujourdhui());
@@ -284,6 +290,8 @@ export function PromoView({
   // Une seule fois, et jamais quand la route fixe déjà une semaine.
   const semaineRecentree = useRef(false);
   useEffect(() => {
+    // La barre supérieure s'en charge déjà pour toute l'application.
+    if (semaineGlobale) return;
     if (semaineRecentree.current) return;
     if (route?.sem !== null && route?.sem !== undefined) {
       semaineRecentree.current = true;

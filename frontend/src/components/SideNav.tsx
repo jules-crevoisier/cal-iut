@@ -1,28 +1,45 @@
 /**
- * Navigation principale — barre latérale groupée par intention plutôt qu'une
- * rangée plate de 8 onglets indifférenciés (retour utilisateur 25/08/2026 :
- * « il faut rebosser cela [...] la je suis perdu »). Les 8 vues restent
- * exactement les mêmes, seul le regroupement visuel change :
- *   - Planning     : la vue par défaut, celle qu'on utilise le plus.
- *   - Perspectives : mêmes données, lues depuis un autre angle (groupe/prof/promo).
- *   - Référentiel  : consultation, pas d'action (données sources, contraintes).
- *   - À faire      : ce qui réclame une décision humaine (badges de compte).
+ * Navigation principale — rail sombre à icônes (refonte du 29/09/2026).
  *
- * `role="tablist"`/`aria-selected` conservés à l'identique de l'ancienne
- * `.tabbar` (portage direct) — même sémantique, nouvelle disposition. Les
- * libellés de groupe sont décoratifs (`aria-hidden`) : chaque bouton reste
- * auto-porteur pour un lecteur d'écran (libellé + état sélectionné), le
- * regroupement n'aide que le repérage visuel.
+ * Mêmes vues, mêmes libellés, même ordre qu'avant (les utilisateurs les
+ * connaissent) ; « Accueil » (tableau de bord) s'ajoute en tête. Le rail se
+ * replie en icônes seules (choix gardé sur l'appareil) pour rendre la
+ * largeur aux grilles. Recherche et compte vivent désormais dans la barre
+ * supérieure (`TopBar`), présente sur chaque écran.
+ *
+ * Historique des regroupements (toujours valable) : « Vue Groupe » revenue
+ * sous le nom « Vue TD / TP » (22/09/2026) ; « Vue Salle » et « Salles
+ * libres » sorties de la nav (25/09/2026 — lien public + recherche).
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  CalendarDays,
+  CalendarRange,
+  ChevronsLeft,
+  ChevronsRight,
+  ClipboardList,
+  DatabaseBackup,
+  GraduationCap,
+  LayoutDashboard,
+  Library,
+  ListChecks,
+  RefreshCcw,
+  ShieldCheck,
+  Users,
+  UsersRound,
+  X,
+} from "lucide-react";
 
 import type { RouteView } from "../hooks/useHashRoute";
+import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import "./SideNav.css";
 
 interface NavItem {
   id: RouteView;
   label: string;
+  icone: LucideIcon;
 }
 
 interface NavGroup {
@@ -31,109 +48,88 @@ interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
-  { label: "Planning", items: [{ id: "semaine", label: "Vue Semaine" }] },
   {
-    // "Vue Groupe" retirée de la navigation (retour utilisateur 27/08/2026 :
-    // "vue groupe on peut l'enlever") — le composant et sa route restent
-    // (le lien personnel `mode=groupe` envoyé à un groupe d'étudiants en a
-    // toujours besoin, cf. App.tsx `readOnlyTarget`), seul l'onglet visible
-    // dans la nav disparaît.
-    //
-    // Réintroduites le 22/09/2026 (todo département, Kyllian Bresson :
-    // « donner accès aux enseignants de consulter le planning d'une ressource
-    // en particulier ou d'un parcours ou un TD ou un TP ») — les collègues ont
-    // désormais des comptes en lecture seule, qui voient ces onglets sans
-    // pouvoir rien modifier. « Vue Groupe » revient sous le nom « Vue TD / TP ».
-    //
-    // « Vue Salle » et « Salles libres » retirées à leur tour le 25/09/2026
-    // (retour utilisateur Jules, dicté : « on enlève les deux onglets qu'on a
-    // là [...] et on met ça en lien public [...] uniquement le tableau que tu
-    // as fait qui est très bien avec les salles ») — « Salles libres » devient
-    // un lien public (`mode=salles`, cf. App.tsx `readOnlyTarget`) plutôt
-    // qu'un onglet de la nav ; les deux composants et leurs routes restent
-    // (recherche globale, lien personnel « Vue Salle »).
+    label: "Planning",
+    items: [
+      { id: "accueil", label: "Accueil", icone: LayoutDashboard },
+      { id: "semaine", label: "Vue Semaine", icone: CalendarDays },
+    ],
+  },
+  {
     label: "Perspectives",
     items: [
-      { id: "prof", label: "Vue Enseignant" },
-      { id: "promo", label: "Vue Promo" },
-      { id: "groupe", label: "Vue TD / TP" },
+      { id: "prof", label: "Vue Enseignant", icone: GraduationCap },
+      { id: "promo", label: "Vue Promo", icone: CalendarRange },
+      { id: "groupe", label: "Vue TD / TP", icone: UsersRound },
     ],
   },
   {
     label: "Référentiel",
     items: [
-      { id: "reference", label: "Référence" },
-      { id: "contraintes", label: "Contraintes" },
+      { id: "reference", label: "Référence", icone: Library },
+      { id: "contraintes", label: "Contraintes", icone: ShieldCheck },
     ],
   },
   {
     label: "À faire",
-    // "Tâches" (22/09/2026, retour utilisateur Jules) : kanban partagé pour
-    // le suivi HUMAIN (« ce prof a dit qu'il ne serait pas présent ce jour,
-    // déplacer ») — distinct de « À traiter », qui reste le seul onglet
-    // alimenté automatiquement par le solveur/l'audit.
+    // « Tâches » (22/09/2026) : suivi HUMAIN, distinct de « À traiter »,
+    // seul onglet alimenté automatiquement par le solveur/l'audit.
     items: [
-      { id: "apf", label: "À traiter" },
-      { id: "taches", label: "Tâches" },
+      { id: "apf", label: "À traiter", icone: ListChecks },
+      { id: "taches", label: "Tâches", icone: ClipboardList },
     ],
   },
 ];
 
-// Groupe séparé, ajouté conditionnellement (cf. `SideNav` — `estAdmin`) :
-// gestion des comptes (31/08/2026), réservée au rôle admin. Le backend
-// refuse déjà tout le reste (`Depends(require_role("admin"))`) ; ne pas
-// même proposer l'onglet aux autres rôles évite un aller-retour pour rien.
+// Réservé au rôle admin (le backend refuse déjà le reste).
 const GROUPE_ADMIN: NavGroup = {
   label: "Administration",
   items: [
-    { id: "comptes", label: "Comptes" },
-    { id: "celcat", label: "Celcat" },
-    // Sauvegardes JSON datées (item B, 22/09/2026 : « Avoir un fichier JSON
-    // backup des semaines et séances placées à une date précise »).
-    { id: "sauvegardes", label: "Sauvegardes" },
+    { id: "comptes", label: "Comptes", icone: Users },
+    { id: "celcat", label: "Celcat", icone: RefreshCcw },
+    { id: "sauvegardes", label: "Sauvegardes", icone: DatabaseBackup },
   ],
 };
+
+const CLE_REPLIEE = "cal-iut:nav-repliee";
 
 interface SideNavProps {
   activeTab: RouteView;
   onSelect: (id: RouteView) => void;
-  onOpenSearch: () => void;
   hasPayload: boolean;
   /** Nombre total de points « À traiter ». */
   todoCount: number;
   todoHasBad: boolean;
-  /** Dont « à corriger » (le reste est « à revoir ») — quand il est fourni,
-   * c'est lui que montre le badge : 300 points dont 200 compromis acceptés
-   * ne disent pas combien de choses sont réellement cassées. */
+  /** Dont « à corriger » (le reste est « à revoir ») : c'est lui que montre
+   * le badge — 300 points dont 200 compromis acceptés ne disent pas combien
+   * de choses sont réellement cassées. */
   todoACorriger?: number;
+  /** Tiroir ouvert (écran étroit). */
   open: boolean;
   onClose: () => void;
   estAdmin?: boolean;
+  // Conservés pour compatibilité d'appel : la recherche et le compte sont
+  // désormais dans la barre supérieure.
+  onOpenSearch?: () => void;
   email?: string;
   onLogout?: () => void;
 }
 
-/** Raccourci affiché selon la plateforme (le raccourci lui-même accepte
- * Ctrl comme ⌘, cf. App.tsx). */
-function estMac(): boolean {
-  return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-}
-
 /**
  * Badge « À traiter » : le nombre de points À CORRIGER en rouge ; s'il n'y en
- * a aucun, le nombre de points à revoir en neutre ; rien du tout quand tout
- * est propre (un « 0 » vert permanent n'apprend rien et attire l'œil).
+ * a aucun, le nombre de points à revoir en neutre ; rien quand tout est
+ * propre (un « 0 » vert permanent n'apprend rien et attire l'œil).
  */
 function BadgeATraiter({ total, aCorriger }: { total: number; aCorriger: number }) {
   const aRevoir = Math.max(0, total - aCorriger);
   if (total === 0) return null;
   const detail = `${aCorriger} à corriger, ${aRevoir} à revoir`;
   return aCorriger > 0 ? (
-    <span className="pill mini bad" aria-label={detail} title={detail}>
+    <span className="pill mini bad sidenav-badge" aria-label={detail} title={detail}>
       {aCorriger}
     </span>
   ) : (
-    <span className="pill mini" aria-label={detail} title={detail}>
+    <span className="pill mini sidenav-badge" aria-label={detail} title={detail}>
       {aRevoir}
     </span>
   );
@@ -142,7 +138,6 @@ function BadgeATraiter({ total, aCorriger }: { total: number; aCorriger: number 
 export function SideNav({
   activeTab,
   onSelect,
-  onOpenSearch,
   hasPayload,
   todoCount,
   todoHasBad,
@@ -150,39 +145,40 @@ export function SideNav({
   open,
   onClose,
   estAdmin,
-  email,
-  onLogout,
 }: SideNavProps) {
   const groupes = estAdmin ? [...NAV_GROUPS, GROUPE_ADMIN] : NAV_GROUPS;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const [repliee, setRepliee] = useState(() => lireLocal<boolean>(CLE_REPLIEE, false, (v): v is boolean => typeof v === "boolean"));
 
-  // Tiroir mobile : à l'ouverture, le focus clavier reste sur le bouton ☰
-  // (masqué derrière le tiroir) si on ne le déplace pas explicitement —
-  // l'amener sur le bouton fermer (premier élément utile du panneau) rend
-  // le tiroir immédiatement navigable au clavier (audit a11y du 27/08/2026).
-  // Sans effet à ≥1024px : `open` n'y passe jamais à `true` (le ☰ qui le
-  // déclenche est lui-même masqué par CSS à cette largeur).
+  // Tiroir mobile : le focus va sur « fermer » à l'ouverture (audit a11y du
+  // 27/08/2026). Sans effet ≥1024px, où `open` ne passe jamais à `true`.
   useEffect(() => {
     if (open) closeBtnRef.current?.focus();
   }, [open]);
 
+  const basculer = () => {
+    setRepliee((r) => {
+      ecrireLocal(CLE_REPLIEE, !r);
+      return !r;
+    });
+  };
+
   return (
     <>
-      {/* Fond assombri derrière le tiroir mobile — clic = fermer, ignoré au
-          clavier (Échap le fait déjà, cf. App.tsx) et par les lecteurs
-          d'écran (purement visuel, jamais atteint au clavier). */}
       {open && <div className="sidenav-scrim no-print" onClick={onClose} aria-hidden="true" />}
 
-      <nav className={`sidenav no-print ${open ? "open" : ""}`} aria-label="Vues de l'emploi du temps">
+      <nav
+        className={`sidenav no-print ${open ? "open" : ""} ${repliee ? "is-repliee" : ""}`}
+        aria-label="Vues de l'emploi du temps"
+      >
         <div className="sidenav-brand">
-          <span className="brand-mark">CI</span>
+          <span className="brand-mark" aria-hidden="true">
+            ci
+          </span>
           <div className="sidenav-brand-text">
             <strong>cal-iut</strong>
-            <span className="sidenav-sub">Emplois du temps</span>
+            <span className="sidenav-sub">MMI Troyes</span>
           </div>
-          {/* Uniquement visible en tiroir (<1024px, cf. app.css) : sous
-              1024px le clic hors du panneau ferme aussi, mais un bouton
-              explicite reste nécessaire au clavier/tactile. */}
           <button
             type="button"
             ref={closeBtnRef}
@@ -190,83 +186,59 @@ export function SideNav({
             onClick={onClose}
             aria-label="Fermer la navigation"
           >
-            <span aria-hidden="true">×</span>
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Pas `role="tablist"`/`role="tab"` : ces boutons naviguent vers une
-            page entièrement différente (comme des liens), sans le clavier
-            flèches/roving-tabindex qu'un vrai widget ARIA "tab" impose —
-            `aria-current="page"` est le bon vocabulaire pour ce cas
-            (audit a11y du 27/08/2026 : l'ancien `role="tab"`, porté tel
-            quel depuis la barre d'onglets d'origine, annonçait un widget
-            dont le clavier ne suivait pas le comportement). */}
-        {/* `<div>` et non un second `<nav>` : le `<nav className="sidenav">`
-            englobant est déjà le repère de navigation, un nav imbriqué en
-            ajouterait un second redondant. */}
+        {/* Boutons de navigation (et non `role="tab"`) : `aria-current="page"`
+            est le bon vocabulaire (audit a11y du 27/08/2026). */}
         <div className="sidenav-tabs">
           {groupes.map((group) => (
             <div className="nav-group" key={group.label}>
               <span className="nav-group-label" aria-hidden="true">
                 {group.label}
               </span>
-              {group.items.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  id={`onglet-${t.id}`}
-                  aria-current={activeTab === t.id ? "page" : undefined}
-                  aria-controls="contenu"
-                  className={`navbtn ${activeTab === t.id ? "active" : ""}`}
-                  onClick={() => {
-                    onSelect(t.id);
-                    onClose();
-                  }}
-                >
-                  {t.label}
-                  {t.id === "apf" && hasPayload && <BadgeATraiter total={todoCount} aCorriger={todoACorriger ?? (todoHasBad ? todoCount : 0)} />}
-                </button>
-              ))}
+              {group.items.map((t) => {
+                const Icone = t.icone;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    id={`onglet-${t.id}`}
+                    aria-current={activeTab === t.id ? "page" : undefined}
+                    aria-controls="contenu"
+                    className={`navbtn ${activeTab === t.id ? "active" : ""}`}
+                    title={repliee ? t.label : undefined}
+                    onClick={() => {
+                      onSelect(t.id);
+                      onClose();
+                    }}
+                  >
+                    <Icone size={18} strokeWidth={1.75} aria-hidden="true" className="navbtn-icone" />
+                    <span className="navbtn-libelle">{t.label}</span>
+                    {t.id === "apf" && hasPayload && (
+                      <BadgeATraiter
+                        total={todoCount}
+                        aCorriger={todoACorriger ?? (todoHasBad ? todoCount : 0)}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
 
         <button
           type="button"
-          className="searchopenbtn sidenav-search"
-          onClick={onOpenSearch}
-          aria-keyshortcuts="Control+K"
-          title="Enseignant, promo, groupe, cours, salle ou écran"
+          className="sidenav-replier"
+          onClick={basculer}
+          aria-pressed={repliee}
+          title={repliee ? "Déplier la navigation" : "Replier la navigation"}
         >
-          <span>Rechercher…</span>
-          <kbd className="sidenav-kbd" aria-hidden="true">
-            {estMac() ? "⌘ K" : "Ctrl K"}
-          </kbd>
+          {repliee ? <ChevronsRight size={18} aria-hidden="true" /> : <ChevronsLeft size={18} aria-hidden="true" />}
+          <span className="navbtn-libelle">{repliee ? "Déplier" : "Replier"}</span>
         </button>
-
-        {email && (
-          <div className="sidenav-compte">
-            <span className="sidenav-compte-email" title={email}>
-              {email}
-            </span>
-            <button
-              type="button"
-              className={`navbtn ${activeTab === "mcp" ? "active" : ""}`}
-              aria-current={activeTab === "mcp" ? "page" : undefined}
-              onClick={() => {
-                onSelect("mcp");
-                onClose();
-              }}
-            >
-              Clé API
-            </button>
-            {onLogout && (
-              <button type="button" className="navbtn sidenav-logout" onClick={onLogout}>
-                Déconnexion
-              </button>
-            )}
-          </div>
-        )}
       </nav>
     </>
   );

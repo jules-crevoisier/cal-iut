@@ -21,18 +21,18 @@
      séance (CM/TD/TP/éval) sont des tokens à part (`--type-*`) : ce sont
      des DONNÉES, que les utilisateurs reconnaissent déjà, elles ne suivent
      pas l'accent de l'interface. Pas d'ombre décorative, rayons courts. */
-  --bg: #f3f3f0;
+  --bg: #edf0f3;
   --surface: #ffffff;
-  --surface-2: #f7f7f4;
-  --surface-3: #ecece7;
-  --ink: #1b1e22;
-  --ink-soft: #5c6269;
-  --ink-faint: #8a9097;
-  --border: #d9d9d2;
-  --border-strong: #b9bab2;
-  --accent: #1f4f7a;
-  --accent-hover: #173d60;
-  --accent-soft: #e4ecf4;
+  --surface-2: #f5f7f9;
+  --surface-3: #e6eaee;
+  --ink: #16202a;
+  --ink-soft: #55606b;
+  --ink-faint: #86909a;
+  --border: #d6dce2;
+  --border-strong: #b4bdc6;
+  --accent: #1c5d99;
+  --accent-hover: #154a7b;
+  --accent-soft: #e2ecf6;
   --accent2: #a65f18;
   --accent2-soft: #f6eadc;
   --teal: #1b766e;
@@ -52,6 +52,14 @@
   --type-tp: var(--teal);
   --type-eval: var(--accent2);
   --focus: #2a6db3;
+  /* Rail de navigation : sombre dans les deux thèmes. */
+  --rail-bg: #142230;
+  --rail-hover: #1e3144;
+  --rail-active: #243d55;
+  --rail-fg: #aebccb;
+  --rail-fg-strong: #ffffff;
+  --rail-fg-faint: #6f8295;
+  --rail-accent: #7cb4e8;
   --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 8px;
@@ -66,9 +74,9 @@
   --primary: var(--accent);
   --success: var(--good);
   --danger: var(--bad);
-  --font: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-heading: var(--font);
-  --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -120,6 +128,21 @@ h1, h2, h3 {
   letter-spacing: -0.01em;
   font-weight: 600;
   line-height: 1.25;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--surface);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
 }
 
 a {
@@ -218,21 +241,6 @@ code, kbd, .mono {
   min-width: 0;
   display: flex;
   flex-direction: column;
-}
-
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: var(--ink);
-  color: var(--surface);
-  border-radius: var(--radius-sm);
-  font-weight: 700;
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  flex: none;
 }
 
 .btn {
@@ -362,98 +370,6 @@ a.btn {
   cursor: pointer;
 }
 
-/* 1023.98px et non 1024px : un appareil pile à 1024 de large (iPad
-   paysage) doit tomber du côté "colonne fixe ≥1024px" décrit plus haut, pas
-   du tiroir (audit a11y du 27/08/2026). */
-@media (max-width: 1023.98px) {
-
-  /* Sous 1024px, la colonne fixe devient un tiroir : bande d'accès (bouton
-     ☰) toujours visible, panneau coulissant par-dessus le contenu plutôt
-     que de lui voler de la largeur (poste de travail = colonne fixe,
-     téléphone/tablette = tiroir, cf. retour utilisateur 25/08/2026). */
-  .navtoggle-bar {
-    display: flex;
-    align-items: center;
-    padding: 10px 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-  }
-}
-@media (max-width: 1023.98px) {
-
-  .navtoggle {
-    font: inherit;
-    font-weight: 700;
-    font-size: 0.95rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border: none;
-    background: none;
-    color: var(--text);
-    cursor: pointer;
-    min-height: 44px;
-  }
-}
-@media (max-width: 1023.98px) {
-
-  .sidenav {
-    position: fixed;
-    inset: 0 auto 0 0;
-    width: min(84vw, 300px);
-    flex-basis: auto;
-    transform: translateX(-100%);
-    /* `visibility` retire le tiroir fermé du parcours clavier (`Tab`
-       n'atteindrait sinon jamais le contenu de la page : les boutons
-       restent dans le DOM, seulement déplacés hors écran par le
-       `transform`). Le délai sur la fermeture laisse l'animation de
-       glissement se terminer avant de disparaître ; l'ouverture, elle,
-       redevient visible immédiatement. */
-    visibility: hidden;
-    transition: transform 0.2s ease, visibility 0s linear 0.2s;
-    z-index: 60;
-    box-shadow: var(--shadow);
-  }
-}
-@media (max-width: 1023.98px) {
-
-  .sidenav.open {
-    transform: translateX(0);
-    visibility: visible;
-    transition: transform 0.2s ease, visibility 0s linear 0s;
-  }
-}
-@media (max-width: 1023.98px) {
-
-  .sidenav-scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 18, 26, 0.4);
-    z-index: 50;
-  }
-}
-@media (max-width: 1023.98px) {
-
-  .sidenav-close {
-    display: flex;
-    /* Cible tactile ≥44px indépendante du type de pointeur détecté — un
-       navigateur de bureau redimensionné en dessous de 1024px (poste de
-       QA, portable hybride) doit rester utilisable, pas seulement le vrai
-       tactile (`@media (pointer: coarse)` plus bas, insuffisant seul —
-       audit a11y du 27/08/2026). */
-    width: 44px;
-    height: 44px;
-  }
-}
-@media (max-width: 1023.98px) {
-
-  .navbtn {
-    min-height: 44px;
-  }
-}
-
 .badge {
   display: inline-block;
   font-size: 0.65rem;
@@ -552,257 +468,6 @@ a.btn {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-}
-
-.navtoggle-bar {
-  display: none;
-}
-
-.sidenav {
-  width: 220px;
-  flex: 0 0 220px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 14px 10px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  /* `dvh` et non `vh` : sur mobile, la barre d'adresse qui se rétracte au
-     scroll fait varier `100vh`, laissant un vide sous le panneau sticky
-     (règle maison, cf. CLAUDE.md — audit a11y du 27/08/2026). */
-  height: 100dvh;
-  overflow-y: auto;
-}
-
-.sidenav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 6px;
-}
-
-.sidenav-brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.sidenav-brand-text strong {
-  font-size: 0.98rem;
-}
-
-.sidenav-sub {
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.sidenav-tabs {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-}
-
-.nav-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-group-label {
-  padding: 4px 10px 2px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-faint);
-}
-
-.navbtn {
-  font: inherit;
-  font-weight: 500;
-  font-size: 0.875rem;
-  min-height: 32px;
-  padding: 5px 10px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: inset 2px 0 0 transparent;
-}
-
-.navbtn.active {
-  color: var(--accent);
-  font-weight: 600;
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
-.navbtn:hover:not(.active) {
-  background: var(--surface-3);
-}
-
-.navbtn .pill.mini {
-  margin-left: auto;
-}
-
-.searchopenbtn {
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 500;
-  min-height: var(--control-h);
-  padding: 5px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.sidenav-search {
-  width: 100%;
-  justify-content: space-between;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.searchopenbtn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.sidenav-compte {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.sidenav-compte-email {
-  padding: 6px 10px 4px;
-  font-size: 0.72rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidenav-logout {
-  color: var(--muted);
-}
-
-.sidenav-scrim {
-  display: none;
-}
-
-.sidenav-close {
-  display: none;
-  margin-left: auto;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: var(--muted);
-  font-size: 1.3rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.sidenav-close:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-/* Reprise OBLIGATOIRE après le bloc desktop de `.sidenav` ci-dessus.
-   Le même tiroir était déjà écrit vers la ligne 272, mais `flex: 0 0 240px`,
-   `position: sticky` et `.navtoggle-bar { display: none }` viennent PLUS
-   TARD dans le fichier : à spécificité égale, ils gagnaient. Résultat sous
-   1024px : le menu restait une colonne de 240px dans le flex, le contenu
-   n'avait plus qu'~80px, et le bouton ☰ n'apparaissait pas. */
-@media (max-width: 1023.98px) {
-  .app-shell {
-    flex-direction: column;
-  }
-
-  .navtoggle-bar {
-    display: flex;
-    align-items: center;
-    padding: 10px 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .navtoggle {
-    font: inherit;
-    font-weight: 700;
-    font-size: 0.95rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border: none;
-    background: none;
-    color: var(--text);
-    cursor: pointer;
-    min-height: 44px;
-  }
-
-  .sidenav {
-    position: fixed;
-    inset: 0 auto 0 0;
-    width: min(84vw, 300px);
-    flex: none;
-    transform: translateX(-100%);
-    visibility: hidden;
-    transition: transform 0.2s ease, visibility 0s linear 0.2s;
-    z-index: 60;
-    box-shadow: var(--shadow);
-    align-self: auto;
-    height: 100dvh;
-  }
-
-  .sidenav.open {
-    transform: translateX(0);
-    visibility: visible;
-    transition: transform 0.2s ease, visibility 0s linear 0s;
-  }
-
-  .sidenav-scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 18, 26, 0.4);
-    z-index: 50;
-  }
-
-  .sidenav-close {
-    display: flex;
-    width: 44px;
-    height: 44px;
-  }
-
-  .navbtn {
-    min-height: 44px;
-  }
-
-  .app-main,
-  .view,
-  .panel {
-    min-width: 0;
-  }
 }
 
 .app-main {
@@ -1048,18 +713,6 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 @media (max-width: 760px) {
   header.top { padding: 12px 12px 0; flex-direction: column; align-items: flex-start; }
 }
-
-@media (max-width: 760px) {
-  .sidenav { width: min(88vw, 280px); }
-}
-
-/* ══════════════ Impression ══════════════ */
-
-@media print {
-  .navtoggle-bar, .sidenav, .no-print, .weekbar, .searchoverlay, .sharebar {
-    display: none !important;
-  }
-}
 @media print {
   .app-main { padding: 0; }
 }
@@ -1124,23 +777,6 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
    bordure apparaîtrait autour de toute la page au moment du saut. */
 .app-main:focus {
   outline: none;
-}
-
-/* Cible tactile d'au moins 44px : en dessous, un bouton devient difficile à
-   viser au doigt — la moitié des consultations se fait sur téléphone. */
-@media (pointer: coarse) {
-  .navbtn,
-  .navtoggle,
-  .btn {
-    min-height: 44px;
-  }
-}
-@media (pointer: coarse) {
-
-  .sidenav-close {
-    width: 44px;
-    height: 44px;
-  }
 }
 
 /* Respect de « réduire les animations » : une transition non désirée peut

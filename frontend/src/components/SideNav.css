@@ -1,24 +1,285 @@
-/* Compléments à la navigation (le style de base est dans app.css). */
+/* Navigation principale — rail sombre à icônes (refonte du 29/09/2026). */
 
-.sidenav-kbd {
-  padding: 0 5px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--ink-faint);
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  line-height: 1.5;
+.sidenav {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 232px;
+  flex: 0 0 232px;
+  height: 100dvh;
+  overflow-y: auto;
+  padding: 14px 10px 12px;
+  background: var(--rail-bg);
+  color: var(--rail-fg);
+  transition: width 0.15s ease, flex-basis 0.15s ease;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rail-hover) transparent;
 }
 
-.searchopenbtn:hover .sidenav-kbd {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+.sidenav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px 4px;
+  min-height: 36px;
 }
 
-/* Pas de clavier physique : le raccourci n'apprend rien. */
-@media (max-width: 760px), (pointer: coarse) {
-  .sidenav-kbd {
+.sidenav-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+.sidenav-brand-text strong {
+  color: var(--rail-fg-strong);
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sidenav-sub {
+  font-size: 0.72rem;
+  color: var(--rail-fg);
+}
+
+.sidenav .brand-mark {
+  background: var(--rail-accent);
+  color: var(--rail-bg);
+}
+
+.sidenav-close {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--rail-fg);
+  cursor: pointer;
+}
+
+.sidenav-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-group-label {
+  padding: 0 10px 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rail-fg-faint);
+}
+
+.navbtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--rail-fg);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.navbtn:hover:not(.active) {
+  background: var(--rail-hover);
+  color: var(--rail-fg-strong);
+}
+
+.navbtn.active {
+  background: var(--rail-active);
+  color: var(--rail-fg-strong);
+  font-weight: 600;
+}
+
+.navbtn.active::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--rail-accent);
+}
+
+.navbtn.active .navbtn-icone {
+  color: var(--rail-accent);
+}
+
+.navbtn:focus-visible,
+.sidenav-replier:focus-visible,
+.sidenav-close:focus-visible {
+  outline: 2px solid var(--rail-accent);
+  outline-offset: -2px;
+}
+
+.navbtn-icone {
+  flex: none;
+}
+
+.navbtn-libelle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sidenav-badge.pill {
+  margin-left: auto;
+  border: none;
+  background: var(--rail-hover);
+  color: var(--rail-fg-strong);
+}
+
+.sidenav-badge.pill.bad {
+  background: var(--bad);
+  color: #fff;
+}
+
+.sidenav-replier {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--rail-fg-faint);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.sidenav-replier:hover {
+  background: var(--rail-hover);
+  color: var(--rail-fg-strong);
+}
+
+/* ── Replié : icônes seules ── */
+.sidenav.is-repliee {
+  width: 60px;
+  flex-basis: 60px;
+  padding-inline: 8px;
+}
+
+.sidenav.is-repliee .sidenav-brand-text,
+.sidenav.is-repliee .navbtn-libelle,
+.sidenav.is-repliee .nav-group-label {
+  display: none;
+}
+
+.sidenav.is-repliee .nav-group {
+  border-top: 1px solid var(--rail-hover);
+  padding-top: 8px;
+}
+
+.sidenav.is-repliee .nav-group:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.sidenav.is-repliee .navbtn,
+.sidenav.is-repliee .sidenav-replier {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.sidenav.is-repliee .navbtn.active::before {
+  left: -8px;
+}
+
+.sidenav.is-repliee .sidenav-badge.pill {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 0.62rem;
+}
+
+.sidenav-scrim {
+  display: none;
+}
+
+/* ── Tiroir sous 1024 px ── */
+@media (max-width: 1023.98px) {
+  .sidenav,
+  .sidenav.is-repliee {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(84vw, 300px);
+    flex: none;
+    padding-inline: 10px;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+    z-index: 70;
+  }
+
+  .sidenav.open {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.2s ease, visibility 0s linear 0s;
+  }
+
+  .sidenav.is-repliee .sidenav-brand-text,
+  .sidenav.is-repliee .navbtn-libelle,
+  .sidenav.is-repliee .nav-group-label {
+    display: revert;
+  }
+
+  .sidenav-close {
+    display: inline-flex;
+  }
+
+  .sidenav-replier {
     display: none;
+  }
+
+  .navbtn {
+    min-height: 44px;
+  }
+
+  .sidenav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: rgba(10, 14, 20, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidenav,
+  .sidenav.open {
+    transition: none;
   }
 }

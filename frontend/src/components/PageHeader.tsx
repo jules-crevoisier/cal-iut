@@ -24,6 +24,7 @@ const STATUS_MAP: Record<string, [string, string]> = {
 };
 
 export const TITRES_VUES: Record<RouteView, [string, string]> = {
+  accueil: ["Accueil", "La semaine en un coup d'œil : ce qui demande une décision, la charge par promo."],
   semaine: ["Vue Semaine", "Le planning d'un groupe, d'un enseignant ou d'une salle, semaine par semaine."],
   prof: ["Vue Enseignant", "Planning, contraintes déclarées et interventions du semestre d'un enseignant."],
   promo: ["Vue Promo", "Toutes les promotions sur une même grille, jour par jour — c'est ici qu'on déplace les séances."],

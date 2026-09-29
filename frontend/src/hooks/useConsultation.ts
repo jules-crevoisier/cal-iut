@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 import type { AppPayload } from "../types/app";
 import { jourOuvreAujourdhui } from "../utils/semaineCourante";
 import { displayIndexForSolverWeek } from "../utils/weekDisplay";
@@ -15,7 +16,13 @@ import { useNarrowScreen } from "./useNarrowScreen";
  * jour d'aujourd'hui (retour utilisateur 08/09/2026).
  */
 export function useConsultation(payload: AppPayload, routeSem: number | null) {
-  const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, routeSem));
+  // Dans l'application connectée, la semaine est celle de la barre
+  // supérieure (partagée entre les vues) ; sur un lien public, elle reste
+  // propre à la page.
+  const globale = useSemaineGlobale();
+  const [locale, setLocale] = useState(() => displayIndexForSolverWeek(payload, routeSem));
+  const displayWeek = globale ? globale.index : locale;
+  const setDisplayWeek = globale ? globale.setIndex : setLocale;
   const [jour, setJour] = useState(() => jourOuvreAujourdhui());
   const narrow = useNarrowScreen();
 

@@ -14,6 +14,7 @@
  * ← / → semaine précédente / suivante, T semaine en cours.
  */
 
+import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
@@ -63,6 +64,7 @@ export function NavSemaine({
   children,
   sansRaccourcis = false,
 }: NavSemaineProps) {
+  const barreGlobale = useSemaineGlobale() !== null;
   const courante = indexSemaineCourante(weekRows);
   const semaine = weekRows[selected];
   const { titre, dates } = decouperLibelleSemaine(semaine?.label ?? `Semaine ${selected + 1}`);
@@ -99,9 +101,14 @@ export function NavSemaine({
     return () => document.removeEventListener("keydown", onKey);
   }, [sansRaccourcis]);
 
+  // Application connectée : les flèches et « Aujourd'hui » sont dans la
+  // barre supérieure (semaine partagée) ; il ne reste ici que ce qui est
+  // propre à la fiche — le total de la semaine et l'histogramme de charge.
+  const compacte = barreGlobale;
   return (
-    <div className="navsemaine">
+    <div className={`navsemaine ${compacte ? "is-compacte" : ""}`}>
       <div className="navsemaine-ligne">
+        {!compacte && (
         <div className="navsemaine-pas" role="group" aria-label="Changer de semaine">
           <button
             type="button"
@@ -133,6 +140,8 @@ export function NavSemaine({
             <Chevron sens="droite" />
           </button>
         </div>
+        )}
+        {!compacte && (
         <button
           type="button"
           className="btn btn--sm navsemaine-auj"
@@ -145,6 +154,7 @@ export function NavSemaine({
         >
           Aujourd'hui
         </button>
+        )}
         {(resume || semaineCal !== null) && (
           <span className="navsemaine-resume">
             {resume}

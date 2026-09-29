@@ -32,7 +32,9 @@ import { ConfirmModal } from "./components/ConfirmModal";
 import { ContextePreferences, ecrirePreferences, lirePreferences, type Preferences } from "./utils/preferences";
 import { PreferencesModal } from "./components/PreferencesModal";
 import { LoginGate } from "./components/LoginGate";
-import { PageHeader } from "./components/PageHeader";
+import { TopBar } from "./components/TopBar";
+import { AccueilView } from "./views/AccueilView";
+import { ContexteSemaine } from "./contexts/SemaineGlobale";
 import { ResetPasswordPage } from "./components/ResetPasswordPage";
 import { SideNav } from "./components/SideNav";
 import { SessionPanel } from "./components/SessionPanel";
@@ -161,7 +163,9 @@ export function App() {
             route.mode === "salles"
             ? "salles-libres"
             : null;
-  const activeTab: RouteView = readOnlyTarget ?? (route.vue || "semaine");
+  // « Accueil » (tableau de bord) est l'écran d'arrivée depuis la refonte du
+  // 29/09/2026 ; les liens existants (`#vue=promo`...) ouvrent toujours leur vue.
+  const activeTab: RouteView = readOnlyTarget ?? (route.vue || "accueil");
 
   // Système de comptes (31/08/2026, remplace le mot de passe partagé) —
   // `undefined` = statut pas encore connu (évite un flash du formulaire
@@ -594,6 +598,9 @@ export function App() {
     // grille relisait `localStorage` de son côté et le clic ne repeignait
     // rien (retour utilisateur 30/08/2026).
     <ContextePreferences.Provider value={prefs}>
+    {/* Semaine partagée par toutes les vues (barre supérieure) — absente sur
+        un lien public, où chaque page garde sa propre navigation. */}
+    <ContexteSemaine.Provider value={readOnlyTarget ? null : { index: displayWeek, setIndex: setDisplayWeek }}>
     <div className={`app ${readOnlyTarget ? "read-only-mode" : ""}`}>
       {/* Lien d'évitement : premier élément focusable de la page, il permet à
           qui navigue au clavier de sauter la navigation pour atteindre
@@ -607,19 +614,6 @@ export function App() {
       <div className="app-shell">
         {!readOnlyTarget && (
           <>
-            {/* Bande fine visible <1024px seulement (cf. app.css) — la barre
-                latérale devient un tiroir coulissant sous ce seuil. */}
-            <div className="navtoggle-bar no-print">
-              <button
-                type="button"
-                ref={navToggleRef}
-                className="navtoggle"
-                onClick={() => setNavOpen(true)}
-                aria-label="Ouvrir la navigation"
-              >
-                <span aria-hidden="true">☰</span> cal-iut
-              </button>
-            </div>
             <SideNav
               activeTab={activeTab}
               onSelect={(id) => setRoute({ vue: id })}
@@ -652,7 +646,24 @@ export function App() {
               (cf. `Toolbar`) : un bandeau de plus entre l'en-tete et le
               contenu etait mal place et sans rapport avec le reste
               (retour utilisateur 30/08/2026). */}
-          {!readOnlyTarget && <PageHeader vue={activeTab} payload={appPayload} />}
+          {!readOnlyTarget && (
+            <TopBar
+              vue={activeTab}
+              payload={appPayload}
+              semaine={displayWeek}
+              onSemaine={setDisplayWeek}
+              onOuvrirRecherche={() => setSearch(true)}
+              onOuvrirNavigation={() => setNavOpen(true)}
+              email={moi?.email}
+              onCle={() => setRoute({ vue: "mcp" })}
+              onDeconnexion={() => {
+                void logout().finally(() => {
+                  window.location.assign("/");
+                });
+              }}
+              panne={panne}
+            />
+          )}
 
           {readOnlyTarget && appPayload && (
             <header className="readonly-banner">
@@ -710,6 +721,14 @@ export function App() {
             29/09/2026, P1-13) : la navigation reste utilisable, et changer
             d'écran efface l'erreur. */}
         <ErrorBoundary cle={activeTab}>
+        {activeTab === "accueil" && !readOnlyTarget && (
+          <AccueilView
+            payload={appPayload}
+            setRoute={setRoute}
+            estAdmin={moi?.role === "admin"}
+            peutModifier={moi?.role === "admin" || moi?.role === "edit"}
+          />
+        )}
         {activeTab === "semaine" && !readOnlyTarget && (
           // Vue Semaine, refonte du 29/09/2026 : barre d'outils en deux lignes
           // (quoi / quand), grille pleine largeur, détail de la séance choisie
@@ -949,6 +968,7 @@ export function App() {
         />
       )}
     </div>
+    </ContexteSemaine.Provider>
     </ContextePreferences.Provider>
   );
 }
