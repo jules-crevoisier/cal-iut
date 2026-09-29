@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DiffResponse, Placement } from "../types";
 import { DiffPanel } from "./DiffPanel";
 import { SessionPanel } from "./SessionPanel";
+import { Toolbar } from "./Toolbar";
 import { WeekStepper } from "./WeekStepper";
 
 vi.mock("../utils/confirmDialog", () => ({
@@ -146,5 +147,60 @@ describe("SessionPanel", () => {
     await waitFor(() => expect(confirmAsync).toHaveBeenCalled());
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+});
+
+describe("Toolbar de la Vue Semaine", () => {
+  const props = {
+    year: 1,
+    parcours: "BUT1",
+    years: [{ id: 1, label: "1re année (S1–S2)", semestres: ["S1", "S2"], parcours: ["BUT1"] }],
+    parcoursList: ["BUT1"],
+    displayWeek: 0,
+    maxWeeks: 24,
+    weekRows,
+    weekCounts: new Map<number, number>(),
+    viewMode: "group" as const,
+    groupId: "",
+    teacherCode: "",
+    roomId: "",
+    groups: [],
+    teachers: ["JLE"],
+    rooms: [],
+    loading: false,
+    couleursParMatiere: false,
+    onYearChange: vi.fn(),
+    onParcoursChange: vi.fn(),
+    onViewModeChange: vi.fn(),
+    onCouleursChange: vi.fn(),
+    onGroupChange: vi.fn(),
+    onTeacherChange: vi.fn(),
+    onRoomChange: vi.fn(),
+  };
+
+  it("should change week with Maj + → and ignore the shortcut inside a field", () => {
+    const onWeekChange = vi.fn();
+    render(<Toolbar {...props} onWeekChange={onWeekChange} />);
+    fireEvent.keyDown(document.body, { key: "ArrowRight", shiftKey: true });
+    expect(onWeekChange).toHaveBeenCalledWith(1);
+    onWeekChange.mockClear();
+    fireEvent.keyDown(screen.getByLabelText("Parcours"), { key: "ArrowRight", shiftKey: true });
+    expect(onWeekChange).not.toHaveBeenCalled();
+  });
+
+  it("should offer the display modes as pressed buttons and hide the useless Semestre select", () => {
+    const onViewModeChange = vi.fn();
+    render(<Toolbar {...props} onWeekChange={vi.fn()} onViewModeChange={onViewModeChange} />);
+    expect(screen.getByRole("button", { name: "Groupe" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Enseignant" }));
+    expect(onViewModeChange).toHaveBeenCalledWith("teacher");
+    expect(screen.queryByLabelText("Semestre")).not.toBeInTheDocument();
+  });
+
+  it("should show teacher names, not only codes, in teacher mode", () => {
+    render(
+      <Toolbar {...props} viewMode="teacher" teacherLabels={{ JLE: "JOAN LEFEVRE" }} onWeekChange={vi.fn()} />,
+    );
+    expect(screen.getByRole("option", { name: "Joan Lefevre (JLE)" })).toBeInTheDocument();
   });
 });

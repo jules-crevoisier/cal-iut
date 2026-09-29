@@ -11,10 +11,13 @@
  * compte pour la liste des parcours, et elle a déjà son sélecteur). Ses
  * props restent acceptées pour ne pas toucher à la logique d'`App.tsx`.
  */
+import { useEffect, useRef } from "react";
+
 import type { ViewMode, YearMeta } from "../types";
 import type { GroupMeta, RoomMeta } from "../types";
 import type { WeekRow } from "../types/app";
 import { nomComplet } from "../utils/nomEnseignant";
+import { indexSemaineCourante } from "../utils/semaineCourante";
 import { DEFAULT_YEARS } from "../utils/years";
 import { WeekBar } from "./WeekBar";
 import { WeekStepper } from "./WeekStepper";
@@ -92,6 +95,29 @@ export function Toolbar(props: ToolbarProps) {
   const nomProf = (code: string) =>
     props.teacherLabels?.[code] ? `${nomComplet(props.teacherLabels[code]!)} (${code})` : code;
   const teachersTries = [...props.teachers].sort((a, b) => nomProf(a).localeCompare(nomProf(b), "fr"));
+  // Raccourcis (mêmes touches que la Vue Promo) : Maj + ← / → change de
+  // semaine, T revient à la semaine en cours. Ignorés pendant une saisie ou
+  // quand une fenêtre est ouverte.
+  const clavier = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  clavier.current = (e: KeyboardEvent) => {
+    const cible = e.target instanceof HTMLElement ? e.target : null;
+    if (cible?.closest("input, select, textarea, [contenteditable='true']")) return;
+    if (document.querySelector("[role='dialog'], [role='alertdialog']")) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || !props.weekRows.length) return;
+    if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      const suivante = props.displayWeek + (e.key === "ArrowLeft" ? -1 : 1);
+      if (suivante >= 0 && suivante < props.weekRows.length) props.onWeekChange(suivante);
+    } else if (!e.shiftKey && (e.key === "t" || e.key === "T")) {
+      props.onWeekChange(indexSemaineCourante(props.weekRows));
+    }
+  };
+  useEffect(() => {
+    const ecoute = (e: KeyboardEvent) => clavier.current(e);
+    document.addEventListener("keydown", ecoute);
+    return () => document.removeEventListener("keydown", ecoute);
+  }, []);
+
   // Année et parcours ne servent qu'à la vue par groupe : en vue enseignant
   // ou salle, ils ne changeaient rien à la grille et semaient le doute.
   const parGroupe = props.viewMode === "group";
@@ -190,7 +216,12 @@ export function Toolbar(props: ToolbarProps) {
       <div className="semaine-barre-ligne">
         {props.weekRows.length > 0 ? (
           <>
-            <WeekStepper weekRows={props.weekRows} selected={props.displayWeek} onSelect={props.onWeekChange} />
+            <WeekStepper
+              weekRows={props.weekRows}
+              selected={props.displayWeek}
+              onSelect={props.onWeekChange}
+              raccourcis
+            />
             <div className="semaine-weekbar">
               <WeekBar
                 weekRows={props.weekRows}

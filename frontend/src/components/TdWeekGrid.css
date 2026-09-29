@@ -15,6 +15,11 @@
   background: var(--surface);
 }
 
+/* Un seul jour (téléphone) : la grille tient dans l'écran. */
+.td-grid.td-grid--un-jour {
+  min-width: 0;
+}
+
 .td-grid th,
 .td-grid td {
   border: 1px solid var(--border);

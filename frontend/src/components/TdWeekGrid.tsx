@@ -192,7 +192,9 @@ export function TdWeekGrid({
 
   return (
     <div className="td-grid-wrap">
-      <table className={`td-grid${couleursParMatiere ? " couleurs-matiere" : ""}`}>
+      <table
+        className={`td-grid${couleursParMatiere ? " couleurs-matiere" : ""}${onlyDay !== null ? " td-grid--un-jour" : ""}`}
+      >
         <thead>
           <tr>
             <th className="td-grid-corner" scope="col">
