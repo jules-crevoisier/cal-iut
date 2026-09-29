@@ -571,7 +571,10 @@ a.btn {
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  /* `clip` et non `hidden` : `hidden` fait de ce bloc un conteneur de
+     défilement, et la barre supérieure comme les en-têtes de tableau
+     cessaient de coller en haut de l'écran. */
+  overflow-x: clip;
 }
 
 .app-main {
@@ -579,7 +582,7 @@ a.btn {
   min-width: 0;
   max-width: 100%;
   padding: 20px 24px 40px;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .view {
