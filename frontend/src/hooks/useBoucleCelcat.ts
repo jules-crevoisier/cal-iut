@@ -125,7 +125,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
         etape: "attente_releve",
         verification: true,
         correction,
-        message: "Nouveau relevé de Celcat demandé — il arrive en général en moins d’une minute.",
+        message: "Nouvelle lecture de Celcat demandée — elle arrive en général en moins d’une minute.",
       });
 
       const debut = Date.now();
@@ -139,7 +139,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
               etape: "erreur",
               verification: true,
               correction,
-              message: `Le relevé de Celcat a échoué : ${i.erreur}`,
+              message: `La lecture de Celcat a échoué : ${i.erreur}`,
             });
             return false;
           }
@@ -151,7 +151,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
             verification: true,
             correction,
             message:
-              "Le nouveau relevé n’est pas arrivé à temps : le worker est peut-être occupé. " +
+              "La nouvelle lecture de Celcat n’est pas arrivée à temps : le robot d’envoi est peut-être occupé. " +
               "Rien n’est perdu — relancez la vérification dans quelques minutes.",
           });
           return false;
@@ -165,7 +165,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
     async (moi: number, correction: CelcatCorrection | null) => {
       await onVerifieRef.current();
       if (jeton.current !== moi) return;
-      setEtat({ etape: "verifie", correction, message: "Vérifié sur un relevé tout frais.", verification: true });
+      setEtat({ etape: "verifie", correction, message: "Vérifié sur une lecture fraîche de Celcat.", verification: true });
     },
     [],
   );
@@ -219,7 +219,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
         etape: "attente_worker",
         verification: true,
         correction: null,
-        message: suivi.message || "Corrections envoyées — en attente du passage du worker…",
+        message: suivi.message || "Corrections envoyées — en attente du robot d’envoi…",
       });
       for (;;) {
         if (!(await attendre(intervalle, moi))) return;
@@ -281,7 +281,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
           etape: "attente_worker",
           verification: true,
           correction,
-          message: "En attente du passage du worker, qui pousse les corrections dans Celcat…",
+          message: "En attente du robot d’envoi, qui écrit les corrections dans Celcat…",
         });
         const debut = Date.now();
         for (;;) {
@@ -295,7 +295,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
               verification: true,
               correction,
               message:
-                "Le worker n’est pas repassé depuis plusieurs minutes — il espace ses passages " +
+                "Le robot d’envoi n’est pas repassé depuis plusieurs minutes — il espace ses passages " +
                 "après des échecs répétés. Les corrections restent en file et partiront à son retour.",
             });
             return;
@@ -314,7 +314,7 @@ export function useBoucleCelcat(semaine: number | null, options: OptionsBoucle) 
   /** Relit Celcat sans rien corriger. */
   const verifier = useCallback(async () => {
     const moi = ++jeton.current;
-    setEtat({ etape: "attente_releve", correction: null, message: "Demande d’un nouveau relevé de Celcat…", verification: true });
+    setEtat({ etape: "attente_releve", correction: null, message: "Demande d’une nouvelle lecture de Celcat…", verification: true });
     try {
       if (!(await verifierReleve(moi, null))) return;
       await terminer(moi, null);

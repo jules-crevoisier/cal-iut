@@ -1,13 +1,15 @@
 /**
- * Les trois conditions sans lesquelles rien ne part dans Celcat, d'un coup d'œil.
+ * Les trois conditions sans lesquelles rien ne part dans Celcat : écriture,
+ * robot d'envoi, lecture de Celcat.
  *
- * Elles étaient éparpillées : l'écriture et le worker dans l'onglet
- * « Pilotage », l'âge du relevé dans « Contenu Celcat », loin de la
- * comparaison qu'il conditionne. Pour savoir pourquoi une correction ne
- * partait pas, il fallait recouper trois panneaux.
+ * Refonte du 29/09/2026 : les trois cartes occupaient tout le haut de
+ * l'écran, au-dessus du verdict — la question qu'on vient poser. Elles
+ * tiennent maintenant sur UNE ligne, à côté du choix de la semaine. Un
+ * signal sain reste discret ; un signal qui demande attention prend sa
+ * couleur et garde sa phrase de conséquence.
  *
- * Chaque signal porte un MOT (« active », « en pause », « périmé ») et une
- * phrase de conséquence : la couleur ne dit jamais seule ce qui se passe.
+ * Chaque signal porte un MOT (« active », « en pause », « périmé ») : la
+ * couleur ne dit jamais seule ce qui se passe.
  */
 import type { CelcatEtat, CelcatFile, CelcatInstantane } from "../api/client";
 import { PILULE, signauxSysteme } from "../utils/celcatStatut";
@@ -24,8 +26,8 @@ export function StatutCelcat({
   erreurInstantane?: string | null;
 }) {
   const signaux = signauxSysteme(etat, instantane, file).map((s) =>
-    // « Je n'ai pas pu lire l'état du relevé » et « Celcat n'a jamais été
-    // relu » sont deux choses différentes, et les confondre a fait afficher
+    // « Je n'ai pas pu lire l'état de la lecture » et « Celcat n'a jamais
+    // été lu » sont deux choses différentes : les confondre a fait afficher
     // « aucun relevé » alors qu'il en existait un de trente-six minutes.
     s.cle === "releve" && erreurInstantane
       ? { ...s, etat: "indisponible", ton: "panne" as const, detail: erreurInstantane }
@@ -39,7 +41,12 @@ export function StatutCelcat({
             <dt>{s.libelle}</dt>
             <dd>
               <span className={`pill ${PILULE[s.ton]}`}>{s.etat}</span>
-              <span className="celcat-signal-detail">{s.detail}</span>
+              {/* « Chaque modification part dans Celcat » : l'état normal n'a
+                  pas besoin de sa phrase à l'écran, les lecteurs d'écran la
+                  gardent. */}
+              <span className={s.cle === "ecriture" && s.ton === "ok" ? "sr-only" : "celcat-signal-detail"}>
+                {s.detail}
+              </span>
             </dd>
           </div>
         ))}

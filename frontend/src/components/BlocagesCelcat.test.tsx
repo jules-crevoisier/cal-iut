@@ -110,7 +110,7 @@ describe("Ce qui bloque la recopie Celcat", () => {
     poser();
     expect(screen.getByRole("heading", { level: 2, name: /5 séances bloquées cette semaine/i })).toBeTruthy();
     const hors = screen.getByTestId("blocages-hors-semaine");
-    expect(hors.textContent).toMatch(/1 job sans séance placée/i);
+    expect(hors.textContent).toMatch(/1 correction sans séance placée/i);
     expect(hors.textContent).toMatch(/ne relèvent d’aucune semaine/i);
   });
 

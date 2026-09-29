@@ -11,18 +11,20 @@
  * ne répondait d'un coup d'œil à « est-ce que ça concorde ? ». On arrivait
  * sur des réglages ; le verdict, gris, était deux clics plus loin.
  *
- * L'écran se lit désormais de haut en bas :
+ * Refonte du 29/09/2026 — l'écran se lit de haut en bas, puis en deux
+ * colonnes :
  *
- *   1. l'état du système — écriture, worker, relevé — sans lequel rien ne part ;
- *   2. le VERDICT de la semaine en cours, et le geste qui corrige, suivi
- *      jusqu'à la vérification sur un relevé neuf ;
- *   3. les évènements en trop, seul geste resté humain ;
- *   4. ce qui est en route vers Celcat ;
- *   5. repliés : le détail séance par séance, l'activité, les réglages.
+ *   1. une barre : la semaine comparée, et sur la même ligne l'état du
+ *      système (écriture, robot d'envoi, lecture de Celcat) ;
+ *   2. le VERDICT de la semaine, ses compteurs, et le geste qui corrige,
+ *      suivi jusqu'à la vérification sur une lecture fraîche de Celcat ;
+ *   3. à gauche, ce qu'on regarde : les écarts séance par séance, puis les
+ *      évènements en trop (seul geste resté humain) ; à droite, ce qui est
+ *      en route vers Celcat et ce qui bloque ;
+ *   4. repliés : l'activité et les réglages.
  *
- * Le style reste celui de la maison (`.orchestrator/architect-contract-celcat-ui.md`) :
- * mêmes panneaux, boutons, pastilles et jetons. Seule la clause « un seul
- * module React » est tombée, sa justification ne tenant plus.
+ * Mêmes primitives que le reste de l'application (panneaux, boutons,
+ * pastilles, jetons) ; styles propres dans `AdminCelcatView.css`.
  */
 import { useCallback, useEffect, useState } from "react";
 
@@ -53,9 +55,10 @@ import { JournalCelcat } from "../components/JournalCelcat";
 import { ReglagesCelcat } from "../components/ReglagesCelcat";
 import { StatutCelcat } from "../components/StatutCelcat";
 import { SuppressionsCelcat } from "../components/SuppressionsCelcat";
-import { VerdictCelcat, type SemaineChoisissable } from "../components/VerdictCelcat";
+import { NavigationSemaine, VerdictCelcat, type SemaineChoisissable } from "../components/VerdictCelcat";
 import { useBoucleCelcat } from "../hooks/useBoucleCelcat";
 import { indexSemaineCourante } from "../utils/semaineCourante";
+import "./AdminCelcatView.css";
 
 /** Tant que des corrections attendent, on relit la file à ce rythme. Une
  * fois vide, on arrête : un écran qui interroge le serveur sans raison est
@@ -105,6 +108,8 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
   // pas chargé : mieux vaut ne pas comparer que comparer la mauvaise. Le
   // défaut était `0`, la première semaine de l'année.
   const [semaine, setSemaine] = useState<number | null>(null);
+  // La semaine d'aujourd'hui, pour y revenir d'un clic.
+  const [courante, setCourante] = useState<number | null>(null);
   const [comparaison, setComparaison] = useState<CelcatComparaison | null>(null);
   const [erreurComparaison, setErreurComparaison] = useState<string | null>(null);
   const [mappings, setMappings] = useState<CelcatMappings | null>(null);
@@ -173,12 +178,14 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         const rows = p.weekRows ?? [];
         const liste = semainesDuSolveur(rows);
         setSemaines(liste);
+        // La semaine EN COURS, par le `weekIndex` de sa ligne et jamais par
+        // sa position : les vacances creusent des trous dans `weekRows`.
+        const ligneCourante = rows[indexSemaineCourante(rows)];
+        const indiceCourant = ligneCourante?.weekIndex ?? null;
+        setCourante(indiceCourant);
         setSemaine((actuelle) => {
           if (actuelle !== null) return actuelle;
-          // La semaine EN COURS, par le `weekIndex` de sa ligne et jamais par
-          // sa position : les vacances creusent des trous dans `weekRows`.
-          const courante = rows[indexSemaineCourante(rows)];
-          if (courante?.weekIndex != null) return courante.weekIndex;
+          if (indiceCourant !== null) return indiceCourant;
           return liste[0]?.indice ?? 0;
         });
       })
@@ -271,6 +278,10 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
     );
   }
 
+  const creationAutorisee = comparaison
+    ? (etat.semaines_creation_autorisee ?? []).includes(comparaison.semaine_celcat)
+    : false;
+
   return (
     <section className="view celcat">
       {erreurEtat ? (
@@ -279,22 +290,23 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
         </p>
       ) : null}
 
-      <StatutCelcat
-        etat={etat}
-        instantane={instantane}
-        file={file}
-        erreurInstantane={erreurInstantane}
-      />
-
-      {semaine === null ? (
-        <section className="panel celcat-verdict" aria-busy="true">
+      <div className="celcat-barre">
+        {semaine !== null ? (
+          <NavigationSemaine
+            semaines={semaines}
+            semaine={semaine}
+            courante={courante}
+            onSemaine={setSemaine}
+            occupe={boucle.occupe}
+          />
+        ) : (
           <p className="celcat-sous-texte">Chargement du calendrier…</p>
-        </section>
-      ) : (
+        )}
+        <StatutCelcat etat={etat} instantane={instantane} file={file} erreurInstantane={erreurInstantane} />
+      </div>
+
+      {semaine !== null ? (
         <VerdictCelcat
-          semaines={semaines}
-          semaine={semaine}
-          onSemaine={setSemaine}
           donnees={comparaison}
           erreur={erreurComparaison}
           boucle={boucle.etat}
@@ -303,55 +315,60 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
           onVerifier={() => void boucle.verifier()}
           onArreter={boucle.arreter}
         />
-      )}
-
-      {comparaison ? (
-        <SuppressionsCelcat donnees={comparaison} occupe={boucle.occupe} onSupprimer={() => void boucle.corriger(true)} />
       ) : null}
 
-      <BlocagesCelcat
-        mappings={mappings}
-        occupe={mappingEnCours}
-        erreur={erreurMapping}
-        confirmation={confirmationMapping}
-        onMapper={(famille, cle, valeur) =>
-          void agirSurMapping(
-            () => definirMappingCelcat(famille, cle, valeur, semaine),
-            `Correspondance enregistrée : ${cle} → ${valeur}.`,
-          )
-        }
-        onOublier={(famille, cle) =>
-          void agirSurMapping(
-            () => oublierMappingCelcat(famille, cle, semaine),
-            `Correspondance retirée : ${cle}.`,
-          )
-        }
-      />
+      <div className="celcat-colonnes">
+        <div className="celcat-principal">
+          {comparaison ? <DetailComparaisonCelcat donnees={comparaison} /> : null}
+          {comparaison ? (
+            <SuppressionsCelcat donnees={comparaison} occupe={boucle.occupe} onSupprimer={() => void boucle.corriger(true)} />
+          ) : null}
+        </div>
 
-      <section className="panel celcat-en-route" aria-labelledby="celcat-en-route-titre">
-        <h2 id="celcat-en-route-titre">En route vers Celcat</h2>
-        <EtatFileCelcat
-          file={file}
-          erreur={erreurFile}
-          semaineCelcat={comparaison?.semaine_celcat ?? null}
-          creationAutorisee={
-            comparaison ? (etat?.semaines_creation_autorisee ?? []).includes(comparaison.semaine_celcat) : false
-          }
-          onAutoriserCreation={(autorisee) => {
-            if (!comparaison) return;
-            void (async () => {
-              try {
-                setEtat(await autoriserCreationSemaineCelcat(comparaison.semaine_celcat, autorisee));
-                await chargerFile();
-              } catch (e) {
-                setErreurFile(e instanceof Error ? e.message : "Autorisation impossible.");
-              }
-            })();
-          }}
-        />
-      </section>
+        <aside className="celcat-lateral" aria-label="Envoi vers Celcat">
+          <section className="panel celcat-en-route" aria-labelledby="celcat-en-route-titre">
+            <h2 id="celcat-en-route-titre" className="celcat-panneau-titre">
+              En route vers Celcat
+            </h2>
+            <EtatFileCelcat
+              file={file}
+              erreur={erreurFile}
+              semaineCelcat={comparaison?.semaine_celcat ?? null}
+              creationAutorisee={creationAutorisee}
+              onAutoriserCreation={(autorisee) => {
+                if (!comparaison) return;
+                void (async () => {
+                  try {
+                    setEtat(await autoriserCreationSemaineCelcat(comparaison.semaine_celcat, autorisee));
+                    await chargerFile();
+                  } catch (e) {
+                    setErreurFile(e instanceof Error ? e.message : "Autorisation impossible.");
+                  }
+                })();
+              }}
+            />
+          </section>
 
-      {comparaison ? <DetailComparaisonCelcat donnees={comparaison} /> : null}
+          <BlocagesCelcat
+            mappings={mappings}
+            occupe={mappingEnCours}
+            erreur={erreurMapping}
+            confirmation={confirmationMapping}
+            onMapper={(famille, cle, valeur) =>
+              void agirSurMapping(
+                () => definirMappingCelcat(famille, cle, valeur, semaine),
+                `Correspondance enregistrée : ${cle} → ${valeur}.`,
+              )
+            }
+            onOublier={(famille, cle) =>
+              void agirSurMapping(
+                () => oublierMappingCelcat(famille, cle, semaine),
+                `Correspondance retirée : ${cle}.`,
+              )
+            }
+          />
+        </aside>
+      </div>
 
       <JournalCelcat logs={logs} />
 
