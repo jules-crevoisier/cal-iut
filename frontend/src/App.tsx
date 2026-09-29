@@ -44,6 +44,7 @@ import { buildTodoList } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { useNarrowScreen } from "./hooks/useNarrowScreen";
+import { useRevision } from "./hooks/useRevision";
 import type {
   DiffResponse,
   FeedbackAnalysis,
@@ -195,15 +196,19 @@ export function App() {
       }
     } catch {
       // Pas encore de planning résolu — les vues en lecture seule affichent
-      // un message d'attente plutôt qu'une erreur bruyante.
-      setAppPayload(null);
+      // un message d'attente plutôt qu'une erreur bruyante. Un état DÉJÀ
+      // affiché est gardé tel quel (plus de `setAppPayload(null)`) : depuis
+      // `useRevision`, ce rechargement part aussi tout seul, et une coupure
+      // réseau d'une seconde ne doit pas vider l'écran de quelqu'un en train
+      // de travailler.
     }
   }, []);
 
   const refreshDiff = useCallback(async () => {
     try {
-      setDiff(await fetchDiff());
-      setAnalysis(await fetchFeedbackAnalysis());
+      const [d, a] = await Promise.all([fetchDiff(), fetchFeedbackAnalysis()]);
+      setDiff(d);
+      setAnalysis(a);
     } catch {
       /* no diff yet */
     }
@@ -237,8 +242,13 @@ export function App() {
     if (!readOnlyTarget && moi?.status !== "active") return;
     void refreshMeta();
     void refreshAppState();
+    // Doublons et historique des corrections : réservés aux comptes (rôle
+    // « edit » côté serveur) et affichés nulle part sur un lien perso — les
+    // demander là ne faisait que des 401.
+    if (readOnlyTarget) return;
     void refreshDoublonsCount();
-  }, [refreshMeta, refreshAppState, refreshDoublonsCount, readOnlyTarget, moi]);
+    void refreshDiff();
+  }, [refreshMeta, refreshAppState, refreshDoublonsCount, refreshDiff, readOnlyTarget, moi]);
 
   const loadTimetable = useCallback(async () => {
     try {
@@ -248,15 +258,20 @@ export function App() {
         room_id: viewMode === "room" && roomId ? roomId : undefined,
       });
       setPlacements(data.placements);
-      await refreshDiff();
     } catch {
       /* no timetable */
     }
-  }, [viewMode, groupId, teacherCode, roomId, refreshDiff]);
+  }, [viewMode, groupId, teacherCode, roomId]);
 
+  // Comme `refreshAppState` ci-dessus : attendre un compte ACTIF. Parti au
+  // montage, avant `/auth/me`, cet appel prenait un 401 et n'était jamais
+  // relancé après la connexion — la Vue Semaine restait vide jusqu'à un F5.
+  // Pas sur un lien perso : la Vue Semaine n'y est jamais affichée.
+  const compteActif = moi?.status === "active";
   useEffect(() => {
+    if (!compteActif || readOnlyTarget) return;
     void loadTimetable();
-  }, [loadTimetable]);
+  }, [loadTimetable, compteActif, readOnlyTarget]);
 
   const loadPromoTimetable = useCallback(async () => {
     try {
@@ -277,12 +292,35 @@ export function App() {
   // restent utilisées par les actions encore présentes (verrouillage,
   // panneau de diff/export...).
 
+  // Un collègue modifie le planning depuis un autre poste : sans F5, cet
+  // écran le voit au plus tard au sondage suivant (cf. `hooks/useRevision.ts`).
+  // Rien n'est rechargé tant que la révision ne bouge pas, et ce qui n'a pas
+  // changé revient en 304 (ETag) — le coût d'un rechargement est celui de ce
+  // qui a vraiment changé. Lien public en lecture seule : sondage espacé,
+  // personne n'y attend une mise à jour à la seconde.
+  const { verifierMaintenant } = useRevision({
+    actif: !!readOnlyTarget || compteActif,
+    intervalleMs: readOnlyTarget ? 3 * 60_000 : 30_000,
+    onChange: () => {
+      void refreshAppState();
+      if (readOnlyTarget) return;
+      void refreshMeta();
+      void refreshDoublonsCount();
+      void refreshDiff();
+      void loadTimetable();
+      if (activeTab === "promo") void loadPromoTimetable();
+    },
+  });
+
   const handlePlacementUpdated = (updated: Placement) => {
     setPlacements((prev) => prev.map((p) => (p.session_id === updated.session_id ? updated : p)));
     setPromoPlacements((prev) => prev.map((p) => (p.session_id === updated.session_id ? updated : p)));
     setSelected(updated);
-    void refreshDiff();
-    void refreshAppState();
+    // Plutôt que `refreshDiff()` + `refreshAppState()` ici (et un second
+    // `refreshDiff()` via `loadTimetable`) : une vérification de révision,
+    // regroupée avec les écritures rapprochées, qui recharge tout ce qui
+    // dépend du planning en un seul passage (`onChange` ci-dessus).
+    verifierMaintenant();
   };
 
   const handleApplyFeedback = async () => {

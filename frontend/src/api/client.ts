@@ -60,10 +60,13 @@ export function messageErreur(body: unknown, repli: string): string {
   return repli;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = accessToken
-    ? `${BASE}${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(accessToken)}`
-    : `${BASE}${path}`;
+async function executer<T>(url: string, init?: RequestInit): Promise<T> {
+  // Volontairement AUCUNE option `cache` : le mode par défaut laisse le
+  // navigateur garder les réponses et les revalider lui-même (`If-None-Match`
+  // sur l'ETag que pose le serveur, `Cache-Control: no-cache`). Tant que rien
+  // n'a changé côté serveur, `/app-state` (≈ 590 Ko) revient en 304 vide et
+  // le navigateur ressert sa copie — ce code n'en voit rien, il reçoit un 200
+  // ordinaire. Un `cache: "no-store"` ici annulerait tout ce mécanisme.
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
     ...init,
@@ -73,6 +76,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(messageErreur(body, res.statusText));
   }
   return res.json() as Promise<T>;
+}
+
+// Lectures (GET) en vol, par URL complète — cf. `request`.
+const lecturesEnVol = new Map<string, Promise<unknown>>();
+
+/** Nombre de lectures encore en vol — exposé pour les tests seulement. */
+export function nombreLecturesEnVol(): number {
+  return lecturesEnVol.size;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = accessToken
+    ? `${BASE}${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(accessToken)}`
+    : `${BASE}${path}`;
+  const methode = (init?.method ?? "GET").toUpperCase();
+  if (methode !== "GET" || init?.body !== undefined) return executer<T>(url, init);
+
+  // Deux GET identiques lancés pendant qu'un premier est en vol partagent sa
+  // réponse au lieu de repartir sur le réseau. Cas réel : au démarrage et
+  // après chaque action, plusieurs effets d'`App.tsx` (et le rechargement
+  // déclenché par `useRevision`) redemandaient `/app-state` en même temps.
+  // L'objet rendu est PARTAGÉ entre les appelants : aucun ne doit le modifier
+  // en place (aucun ne le fait aujourd'hui — ils le rangent tel quel dans un
+  // état React). Retiré dès la réponse reçue : ce n'est pas un cache, le
+  // cache reste celui du navigateur (ETag, cf. `executer`).
+  const enVol = lecturesEnVol.get(url);
+  if (enVol) return enVol as Promise<T>;
+  const promesse = executer<T>(url, init).finally(() => lecturesEnVol.delete(url));
+  lecturesEnVol.set(url, promesse);
+  return promesse;
 }
 
 /** Système de comptes (31/08/2026, remplace le mot de passe partagé) —
@@ -221,6 +254,19 @@ export function fetchMeta(): Promise<MetaResponse> {
  */
 export function fetchAppState(): Promise<AppPayload> {
   return request<AppPayload>("/app-state");
+}
+
+/** Révision de l'état côté serveur (`GET /api/v1/version`, cf.
+ * `api/revision.py`) — quelques octets, avance à chaque modification visible
+ * par qui que ce soit. Sondée par `hooks/useRevision.ts` pour ne recharger
+ * l'état complet QUE quand elle a bougé. */
+export interface VersionEtat {
+  revision: number;
+  modifie_le: string;
+}
+
+export function fetchVersion(): Promise<VersionEtat> {
+  return request<VersionEtat>("/api/v1/version");
 }
 
 export function ingest(parcours: string, semestre: string): Promise<Record<string, unknown>> {
