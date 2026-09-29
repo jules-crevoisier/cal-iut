@@ -299,6 +299,23 @@ _PUBLIC_PATHS = frozenset({
 # peut par nature présenter aucune session ni aucun lien perso.
 _PUBLIC_PREFIXES = ("/mcp", "/mail/pixel/")
 
+# Seules routes qu'un lien personnel public (`?t=`, sans compte) peut lire —
+# exactement ce qu'appellent les vues publiques du frontend (`mode=prof|
+# groupe|promo|salles`, cf. `App.tsx`) et les agendas abonnés au flux `.ics`
+# (`utils/ics.ts::subscribeUrl`). Tout le reste (`/legacy`, `/taches`,
+# `/exceptions`, `/diff`, `/export`...) exige un compte. Égalité stricte ou
+# sous-chemin, jamais un simple préfixe de chaîne : `/metadata` ne doit pas
+# hériter de l'ouverture de `/meta`.
+_LIEN_PERSO_CHEMINS = frozenset({"/app-state", "/meta", "/timetable"})
+_LIEN_PERSO_PREFIXES = ("/ics/",)
+
+
+def _lien_perso_autorise(request: Request) -> bool:
+    if request.method not in ("GET", "HEAD"):
+        return False
+    path = request.url.path
+    return path in _LIEN_PERSO_CHEMINS or path.startswith(_LIEN_PERSO_PREFIXES)
+
 
 def _verifier_couverture_auth() -> list[str]:
     """Chemins ni protégés ni explicitement publics — vide = tout est couvert."""
@@ -361,7 +378,11 @@ async def require_auth(request: Request, call_next):
     # Lien personnel (prof ou groupe) — public depuis le 28/08/2026, cf.
     # docstring de `auth.py` pour l'historique (jeton HMAC d'abord, puis
     # "on s'en fiche on veut qu'il soit public" en retour utilisateur final).
-    if auth.verify_personal_link_param(request.query_params.get("t")):
+    # Audit du 29/09/2026 (P0-2) : `?t=` ouvrait TOUTE route protégée sans
+    # `require_role` (`/legacy`, `/taches`, `/exceptions`... mails et
+    # contraintes des enseignants). Il n'ouvre plus que les lectures des
+    # vues publiques, cf. `_LIEN_PERSO_PREFIXES`.
+    if _lien_perso_autorise(request) and auth.verify_personal_link_param(request.query_params.get("t")):
         return await call_next(request)
 
     user_id = accounts.verify_account_session_token(request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE))
@@ -1052,9 +1073,16 @@ def app_state(request: Request) -> dict[str, object]:
     return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
 
 
-@app.get("/legacy", response_class=HTMLResponse)
+@app.get(
+    "/legacy", response_class=HTMLResponse, dependencies=[Depends(accounts.require_role("admin"))]
+)
 def timetable_view() -> HTMLResponse:
     """
+    Réservée aux admins (audit du 29/09/2026, P0-2/P1-8) : la page embarque
+    les adresses mail et les contraintes déclarées des enseignants, et son
+    gabarit interpole des champs saisis par les comptes `edit` sans les
+    échapper (XSS stockée).
+
     Page HTML/JS historique (même rendu que `cal-iut export --format html`),
     générée en direct depuis l'état courant du serveur. Conservée en accès
     direct pour qui préfère cette présentation ou veut vérifier un rendu
