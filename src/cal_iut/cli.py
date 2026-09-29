@@ -894,7 +894,10 @@ def cmd_export(args: argparse.Namespace) -> int:
     from cal_iut.ingestion.constraints_loader import load_all_constraints as _load_cal
 
     _bundle = _load_cal(config_dir.parents[1])
-    _semestre = sessions[0].semestre if sessions else "S1"
+    # `sessions` n'existait pas ici (NameError à chaque `cal-iut export
+    # --format csv|json`, trouvé par `ruff check --select F82` en CI).
+    _sessions = list(sessions_by_id.values())
+    _semestre = _sessions[0].semestre if _sessions else "S1"
     rows = build_export_rows(
         placements, sessions_by_id,
         _bundle.calendar, semester_week_offset(_bundle.calendar, _semestre),
