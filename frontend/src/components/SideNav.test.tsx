@@ -71,3 +71,44 @@ describe("SideNav groups", () => {
     expect(screen.getByRole("button", { name: /celcat/i })).toBeInTheDocument();
   });
 });
+
+describe("SideNav search and account", () => {
+  const compte = {
+    ...baseProps,
+    email: "jules.crevoisier@univ-reims.fr",
+    role: "admin",
+    onCle: vi.fn(),
+    onLogout: vi.fn(),
+  };
+
+  it("should open the search from the nav", () => {
+    const onOpenSearch = vi.fn();
+    render(<SideNav {...compte} onOpenSearch={onOpenSearch} />);
+    fireEvent.click(screen.getByRole("button", { name: /rechercher/i }));
+    expect(onOpenSearch).toHaveBeenCalled();
+  });
+
+  it("should show who is connected with their role", () => {
+    render(<SideNav {...compte} />);
+    const bouton = screen.getByRole("button", { name: /compte/i });
+    expect(bouton).toHaveTextContent("Jules Crevoisier");
+    expect(bouton).toHaveTextContent("Administrateur");
+  });
+
+  it("should offer the API key and logout in the account menu", () => {
+    const onCle = vi.fn();
+    const onLogout = vi.fn();
+    render(<SideNav {...compte} onCle={onCle} onLogout={onLogout} />);
+    fireEvent.click(screen.getByRole("button", { name: /compte/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /clé api/i }));
+    expect(onCle).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /compte/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /déconnexion/i }));
+    expect(onLogout).toHaveBeenCalled();
+  });
+
+  it("should say when the server cannot be reached", () => {
+    render(<SideNav {...compte} panne />);
+    expect(screen.getByRole("status")).toHaveTextContent("Hors ligne");
+  });
+});

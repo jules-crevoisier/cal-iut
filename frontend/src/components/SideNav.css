@@ -67,6 +67,35 @@
   cursor: pointer;
 }
 
+.sidenav-recherche {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.84rem;
+  text-align: left;
+  cursor: text;
+}
+
+.sidenav-recherche:hover {
+  border-color: var(--border-strong);
+}
+
+.sidenav-recherche kbd {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--ink-faint);
+}
+
 .sidenav-tabs {
   display: flex;
   flex-direction: column;
@@ -156,12 +185,175 @@
   color: var(--bad-text);
 }
 
-.sidenav-replier {
+/* ── Pied : compte + repli ── */
+.sidenav-pied {
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 34px;
-  padding: 6px 10px;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rail-border);
+}
+
+.compte {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.compte-bouton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--rail-fg-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.compte-bouton:hover,
+.compte-bouton[aria-expanded="true"] {
+  background: var(--rail-hover);
+}
+
+.compte-avatar {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.compte-synchro {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 2px var(--rail-bg);
+}
+
+.compte-synchro.is-panne {
+  background: var(--bad);
+}
+
+.compte-texte {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.compte-texte strong {
+  font-size: 0.86rem;
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.compte-texte small {
+  font-size: 0.76rem;
+  color: var(--rail-fg);
+}
+
+.compte-etat.is-panne {
+  display: block;
+  padding: 2px 6px 0 46px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--bad-text);
+}
+
+.compte-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 240px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+
+.compte-menu-email {
+  margin: 0 0 4px;
+  padding: 6px 10px 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compte-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.compte-menu button:hover {
+  background: var(--surface-2);
+}
+
+.compte-theme {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin: 4px 4px 2px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.compte-menu .compte-theme button {
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.compte-menu .compte-theme button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--rail-active-ring);
+}
+
+.sidenav-replier {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: none;
   border-radius: var(--radius);
   background: none;
@@ -185,8 +377,24 @@
 
 .sidenav.is-repliee .sidenav-brand-text,
 .sidenav.is-repliee .navbtn-libelle,
-.sidenav.is-repliee .nav-group-label {
+.sidenav.is-repliee .nav-group-label,
+.sidenav.is-repliee .sidenav-recherche kbd,
+.sidenav.is-repliee .compte-texte,
+.sidenav.is-repliee .compte-etat {
   display: none;
+}
+
+.sidenav.is-repliee .sidenav-recherche {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidenav.is-repliee .sidenav-pied {
+  flex-direction: column;
+}
+
+.sidenav.is-repliee .compte-bouton {
+  justify-content: center;
 }
 
 .sidenav.is-repliee .nav-group {
@@ -199,8 +407,7 @@
   padding-top: 0;
 }
 
-.sidenav.is-repliee .navbtn,
-.sidenav.is-repliee .sidenav-replier {
+.sidenav.is-repliee .navbtn {
   justify-content: center;
   padding-inline: 0;
 }
@@ -242,7 +449,8 @@
 
   .sidenav.is-repliee .sidenav-brand-text,
   .sidenav.is-repliee .navbtn-libelle,
-  .sidenav.is-repliee .nav-group-label {
+  .sidenav.is-repliee .nav-group-label,
+  .sidenav.is-repliee .compte-texte {
     display: revert;
   }
 
