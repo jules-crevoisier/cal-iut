@@ -120,14 +120,18 @@
 
 .read-only-mode .sessiongrid-cell-inner,
 .read-only-mode .sessiongrid-subcols > div {
-  height: 100%;
+  /* `min-height`, pas `height` : une hauteur imposée laissait les cartes
+     empilées déborder de la case et recouvrir la rangée suivante (retour
+     utilisateur 29/09/2026). La case grandit avec ses cartes. */
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
 .read-only-mode .sessiongrid-block {
-  flex: 1;
+  /* S'étire pour remplir la case, sans jamais passer sous son contenu. */
+  flex: 1 0 auto;
   margin-bottom: 0;
   font-size: clamp(0.74rem, 1.35vh, 0.92rem);
 }
@@ -142,9 +146,9 @@
 
 .sessiongrid-subcols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 3px;
-  height: 100%;
+  min-height: 100%;
 }
 
 /* ── Carte de séance : aplat pastel du type ── */
@@ -167,6 +171,17 @@
   font: inherit;
   font-size: 0.75rem;
   line-height: 1.3;
+  /* Une carte ne déborde JAMAIS (retour utilisateur 29/09/2026 : textes
+     de deux cartes l'un sur l'autre) : chaque ligne se coupe en « … », le nom
+     tient en deux lignes au plus, la carte rogne ce qui dépasserait. */
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Les lignes gardent leur hauteur : jamais la 3e sur la 2e. */
+.sessiongrid-block > * {
+  flex-shrink: 0;
+  max-width: 100%;
 }
 
 .sessiongrid-block:last-child {
@@ -233,12 +248,22 @@
   justify-content: space-between;
   gap: 6px;
   width: 100%;
+  min-width: 0;
 }
 
+/* Nom : deux lignes au plus, « … » au-delà. */
 .sessiongrid-block .name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  /* Un mot plus long que la carte (« Hébergement » en sous-colonne) finit
+     lui aussi en « … » au lieu d'être rogné net. */
+  text-overflow: ellipsis;
   font-weight: 500;
-  overflow-wrap: break-word;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .sessiongrid-block .room {
@@ -246,7 +271,9 @@
   flex: none;
   max-width: 55%;
   text-align: right;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Case étroite (grille à côté d'une colonne latérale, sous-colonnes TP) :
@@ -260,11 +287,12 @@
 @container (max-width: 190px) {
   .sessiongrid-block .head {
     flex-direction: column;
+    align-items: stretch;
     gap: 0;
   }
 
   .sessiongrid-block .room {
-    max-width: none;
+    max-width: 100%;
     text-align: left;
   }
 }
@@ -278,6 +306,9 @@
 .sessiongrid-block .meta {
   opacity: 0.75;
   font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sessiongrid-block .meta .code {
