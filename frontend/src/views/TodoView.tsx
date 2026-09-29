@@ -18,6 +18,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ArrowRight, ChevronDown, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 
 import type { Doublon, DoublonHebdoRun } from "../api/client";
 import { executerControleDoublonsHebdo, fetchControleDoublonsHebdo, fetchDoublons } from "../api/client";
@@ -42,6 +43,8 @@ import {
   type StatutSemaine,
   type TodoItem,
 } from "../utils/todo";
+import { Tuile, Tuiles } from "../components/Tuile";
+import "../styles/outils.css";
 import "./TodoView.css";
 
 const CLE_FILTRES = "cal-iut:a-traiter:filtres:v1";
@@ -213,26 +216,35 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
 
   return (
     <section className="view todo">
-      <nav className="todo-sommaire" aria-label="Sommaire des points à traiter">
+      <Tuiles label="Sommaire des points à traiter" className="todo-sommaire">
         {NATURES.map((n) => {
           const nb = occurrences(parNature.get(n.id)!);
+          const total = totalParNature.get(n.id) ?? 0;
           const chargement = n.id === "doublon" && doublons === null && !erreurDoublons;
           return (
-            <button
+            <Tuile
               key={n.id}
-              type="button"
-              className={`todo-sommaire-case ${nb > 0 ? n.sev : "vide"}`}
+              libelle={n.court}
+              valeur={chargement ? "…" : nb}
+              detail={
+                filtresActifs && total !== nb
+                  ? `sur ${total}`
+                  : nb === 0
+                    ? "rien à signaler"
+                    : n.sev === "bad"
+                      ? "à corriger"
+                      : "à revoir"
+              }
+              ton={nb > 0 ? n.sev : undefined}
+              nul={!chargement && nb === 0}
               onClick={() => allerA(n.id)}
-              title={filtresActifs ? `${nb} affiché(s) sur ${totalParNature.get(n.id)}` : undefined}
-            >
-              <span className="todo-sommaire-nb">{chargement ? "…" : nb}</span>
-              <span className="todo-sommaire-libelle">{n.court}</span>
-            </button>
+              title={`Aller à « ${n.titre} »`}
+            />
           );
         })}
-      </nav>
+      </Tuiles>
 
-      <div className="todo-filtres" role="search">
+      <div className="page-outils todo-filtres" role="search">
         <input
           ref={rechercheRef}
           type="search"
@@ -278,7 +290,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
             </option>
           ))}
         </select>
-        <div className="todo-gravite" role="radiogroup" aria-label="Gravité">
+        <div className="segmente" role="radiogroup" aria-label="Gravité">
           {(
             [
               ["tout", "Tout"],
@@ -291,17 +303,16 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
               type="button"
               role="radio"
               aria-checked={filtres.gravite === v}
-              className={filtres.gravite === v ? "actif" : ""}
               onClick={() => majFiltre({ gravite: v })}
             >
               {l}
             </button>
           ))}
         </div>
-        <span className="todo-filtres-fin">
+        <div className="page-outils-actions">
           {filtresActifs && (
             <>
-              <span className="muted" aria-live="polite">
+              <span className="todo-compte" aria-live="polite">
                 {occurrences(filtres_)} sur {occurrences(tous)}
               </span>
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setFiltres(FILTRES_VIDES)}>
@@ -311,14 +322,14 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
           )}
           <button
             type="button"
-            className="btn btn--ghost btn--sm"
+            className="btn btn--sm"
             onClick={() => setReplies(toutReplie ? new Set() : new Set(NATURES.map((n) => n.id)))}
           >
+            {toutReplie ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
             {toutReplie ? "Tout déplier" : "Tout replier"}
           </button>
-        </span>
+        </div>
       </div>
-
       {NATURES.map((n) => (
         <SectionNature
           key={n.id}
@@ -450,7 +461,7 @@ function SectionNature({
           onClick={vide ? undefined : onBasculer}
           disabled={vide}
         >
-          <span className="todo-chevron" aria-hidden="true" />
+          <ChevronDown size={16} className="todo-chevron" aria-hidden="true" />
           <h3 id={`todo-titre-${nature.id}`}>{nature.titre}</h3>
           {nb > 0 && (
             <span
@@ -553,7 +564,9 @@ function ListePoints({
                   {it.nouveau && <span className="pill todo-nouveau">nouveau</span>}
                   <span className="todo-detail">{it.sub}</span>
                 </span>
-                <span className="todo-cible">{nature.cible} →</span>
+                <span className="todo-cible">
+                  {nature.cible} <ArrowRight size={13} aria-hidden="true" />
+                </span>
               </button>
             </li>
           </Fragment>

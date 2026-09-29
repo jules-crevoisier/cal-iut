@@ -100,7 +100,7 @@ describe("KanbanView", () => {
     render(<KanbanView payload={payload} role="read_only" setRoute={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText("Carte visible")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "+ Nouvelle tâche" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Nouvelle tâche" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /vers la colonne suivante/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Modifier «/ })).not.toBeInTheDocument();
   });
@@ -110,7 +110,7 @@ describe("KanbanView", () => {
     render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
 
     await waitFor(() => expect(screen.getAllByText("Aucune tâche.").length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole("button", { name: "+ Nouvelle tâche" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nouvelle tâche" }));
     fireEvent.click(screen.getByRole("button", { name: "Créer" }));
 
     expect(await screen.findByText("Le titre est obligatoire.")).toBeInTheDocument();
@@ -190,7 +190,7 @@ describe("KanbanView", () => {
     render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
     await waitFor(() => expect(screen.getAllByText("Aucune tâche.").length).toBeGreaterThan(0));
 
-    fireEvent.click(screen.getByRole("button", { name: "+ Nouvelle tâche" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nouvelle tâche" }));
     fireEvent.change(screen.getByPlaceholderText("ex. Prévenir Kyllian, absent jeudi"), {
       target: { value: "Bug de la vue Salle" },
     });

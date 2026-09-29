@@ -1,138 +1,50 @@
-/* « À traiter » (refonte du 29/09/2026) : sommaire, barre de filtres,
-   sections repliables, lignes denses d'une hauteur. Jetons uniquement. */
+/* « À traiter » (refonte v2 du 29/09/2026, direction « Lumière / Nuit ») :
+   tuiles chiffrées en tête (composant partagé `Tuile`), barre de filtres à
+   plat, puis une carte par nature de point, repliable, aux lignes denses
+   de 36 px. Jetons uniquement. */
 
 .view.todo {
-  gap: 12px;
+  gap: 16px;
 }
 
-/* ── Sommaire : un compteur par nature, cliquable ── */
-.todo-sommaire {
-  display: grid;
+/* Sept natures : sept colonnes sur poste de travail. */
+.todo-sommaire.tuiles {
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
 }
 
-.todo-sommaire-case {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: none;
-  border-right: 1px solid var(--border);
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.todo-sommaire-case:last-child {
-  border-right: none;
-}
-
-.todo-sommaire-case:hover {
-  background: var(--surface-2);
-}
-
-.todo-sommaire-nb {
-  font-size: 1.25rem;
-  font-weight: 600;
-  line-height: 1.1;
-}
-
-.todo-sommaire-case.bad .todo-sommaire-nb {
-  color: var(--bad-text);
-}
-
-.todo-sommaire-case.warn .todo-sommaire-nb {
-  color: var(--warn-text);
-}
-
-.todo-sommaire-case.vide .todo-sommaire-nb {
-  color: var(--ink-faint);
-}
-
-.todo-sommaire-libelle {
-  font-size: 0.75rem;
-  color: var(--ink-soft);
-  line-height: 1.3;
-}
-
-/* ── Filtres ── */
-.todo-filtres {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+/* ── Filtres : barre à plat, collée en haut au défilement ── */
+.page-outils.todo-filtres {
   position: sticky;
   top: 0;
   z-index: 3;
-  padding: 8px 0;
+  margin: -6px 0;
+  padding: 6px 0;
   background: var(--bg);
 }
 
 .todo-recherche {
-  flex: 1 1 220px;
+  flex: 1 1 180px;
+  max-width: 280px;
   min-width: 0;
 }
 
 .todo-filtres select {
-  max-width: 220px;
+  max-width: 190px;
 }
 
-.todo-gravite {
-  display: inline-flex;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--surface);
-}
-
-.todo-gravite button {
-  min-height: calc(var(--control-h) - 2px);
-  padding: 0 10px;
-  border: none;
-  border-right: 1px solid var(--border);
-  background: none;
+.todo-compte {
+  font-size: 12.5px;
   color: var(--ink-soft);
-  font: inherit;
-  font-size: 0.82rem;
-  cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
 
-.todo-gravite button:last-child {
-  border-right: none;
-}
-
-.todo-gravite button:hover {
-  background: var(--surface-2);
-}
-
-.todo-gravite button.actif {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.todo-filtres-fin {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  font-size: 0.82rem;
-}
-
-/* ── Sections ── */
+/* ── Sections : une carte par nature ── */
 .todo-section {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   scroll-margin-top: 56px;
+  overflow: hidden;
 }
 
 .todo-section-tete {
@@ -140,17 +52,18 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  padding: 6px 12px 6px 6px;
+  min-height: 48px;
+  padding: 6px 16px 6px 8px;
 }
 
 .todo-section-bascule {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
-  padding: 2px 8px 2px 6px;
+  min-height: 34px;
+  padding: 2px 10px 2px 6px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: none;
   color: var(--ink);
   font: inherit;
@@ -163,21 +76,19 @@
 }
 
 .todo-section-bascule:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 
 .todo-section-bascule h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.98rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .todo-chevron {
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 6px solid var(--ink-soft);
+  flex: none;
+  color: var(--ink-faint);
   transition: transform 0.12s;
 }
 
@@ -185,12 +96,16 @@
   transform: rotate(-90deg);
 }
 
+.todo-section.vide .todo-chevron {
+  visibility: hidden;
+}
+
 .todo-section-aide {
   order: 3;
   flex: 1 0 100%;
-  margin: 0 0 4px;
-  padding-left: 30px;
-  font-size: 0.8rem;
+  margin: -2px 0 6px;
+  padding-left: 36px;
+  font-size: 12.5px;
   color: var(--ink-soft);
 }
 
@@ -200,7 +115,7 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
-  font-size: 0.8rem;
+  font-size: 12.5px;
 }
 
 .todo-section-corps {
@@ -209,17 +124,13 @@
 }
 
 .todo-section-rien {
-  font-size: 0.82rem;
+  font-size: 12.5px;
   color: var(--ink-faint);
-}
-
-.todo-section.vide .todo-chevron {
-  visibility: hidden;
 }
 
 .todo-vide {
   margin: 0;
-  padding: 10px 16px 4px;
+  padding: 12px 16px 6px;
 }
 
 .todo-erreur {
@@ -241,38 +152,55 @@
   padding: 0;
 }
 
+/* Intertitre de semaine : bande discrète, pleine largeur. */
 .todo-semaine {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 10px 16px 4px;
-  font-size: 0.75rem;
+  padding: 7px 16px 5px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-soft);
 }
 
+.todo-liste li:first-child.todo-semaine {
+  border-top: none;
+}
+
+.todo-liste > li + .todo-semaine {
+  border-top: 1px solid var(--border);
+}
+
 .todo-semaine-marque {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
   color: var(--accent);
+  font-weight: 500;
 }
 
 .todo-semaine-nb {
-  font-weight: 400;
+  margin-left: auto;
+  font-weight: 500;
   color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .todo-ligne {
   display: grid;
   grid-template-columns: 175px minmax(0, 1fr) auto;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 34px;
+  min-height: 36px;
   padding: 6px 16px;
   border: none;
   background: none;
   color: var(--ink);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
@@ -295,8 +223,9 @@
 
 .todo-quand {
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: 12.5px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .todo-quoi {
@@ -313,22 +242,24 @@
 
 .todo-detail {
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: 12.5px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .todo-tag {
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--ink-soft);
 }
 
 .todo-fois {
-  font-size: 0.78rem;
+  font-size: 12px;
   color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
 }
 
 .todo-nouveau {
@@ -338,14 +269,17 @@
 }
 
 .todo-cible {
-  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
   color: var(--ink-faint);
   white-space: nowrap;
 }
 
 .todo-ligne:hover .todo-cible,
 .todo-ligne:focus-visible .todo-cible {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .todo-plus {
@@ -362,44 +296,26 @@
   opacity: 0.8;
 }
 
-/* ── Téléphone / tablette étroite ── */
-@media (max-width: 1100px) {
-  .todo-sommaire {
+/* ── Tablette, téléphone ── */
+@media (max-width: 1280px) {
+  .todo-sommaire.tuiles {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .todo-sommaire-case:nth-child(4n) {
-    border-right: none;
-  }
-
-  .todo-sommaire-case:nth-child(-n + 4) {
-    border-bottom: 1px solid var(--border);
   }
 }
 
-@media (max-width: 640px) {
-  .todo-sommaire {
+@media (max-width: 700px) {
+  .todo-sommaire.tuiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .todo-sommaire-case {
-    border-bottom: 1px solid var(--border);
-  }
-
-  .todo-sommaire-case:nth-child(4n) {
-    border-right: 1px solid var(--border);
-  }
-
-  .todo-sommaire-case:nth-child(2n) {
-    border-right: none;
-  }
-
-  .todo-sommaire-case:last-child {
-    border-bottom: none;
-  }
-
-  .todo-filtres {
+  .page-outils.todo-filtres {
     position: static;
+    margin: 0;
+    padding: 0;
+  }
+
+  .todo-recherche {
+    flex: 1 1 100%;
   }
 
   .todo-filtres select {
@@ -407,8 +323,12 @@
     max-width: none;
   }
 
-  .todo-filtres-fin {
+  .todo-filtres .page-outils-actions {
     margin-left: 0;
+  }
+
+  .todo-section-aide {
+    padding-left: 8px;
   }
 
   .todo-ligne {

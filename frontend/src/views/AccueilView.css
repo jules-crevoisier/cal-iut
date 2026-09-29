@@ -351,7 +351,7 @@
 
   /* Cinq tuiles sur deux colonnes : la dernière prend la ligne entière
      plutôt que de rester seule à gauche. */
-  .accueil-tuile:last-child {
+  .accueil-kpis .tuile:last-child {
     grid-column: 1 / -1;
   }
 
