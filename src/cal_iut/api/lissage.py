@@ -643,7 +643,13 @@ def ordre_application(
     position = dict(occupation_actuelle)
     restants = list(deplacements)
     ordre: list[tuple[Deplacement, tuple[int, int, int] | None]] = []
-    while restants:
+    # Garde-fou : chaque tour pose un déplacement définitif OU sort une
+    # séance d'un cycle vers une case qu'aucun autre déplacement ne vise —
+    # le nombre de tours est donc borné ; au-delà, c'est un défaut de
+    # l'algorithme, jamais une raison de tourner en rond.
+    for _ in range(4 * len(deplacements) + 4):
+        if not restants:
+            return ordre
         occupe = {c: sid for sid, pos in position.items() for c in cases(pos, sid)}
         pret = next(
             (m for m in restants if all(occupe.get(c) in (None, m.session_id) for c in cases(m.vers, m.session_id))),
@@ -654,15 +660,19 @@ def ordre_application(
             position[pret.session_id] = pret.vers
             restants.remove(pret)
             continue
-        # Cycle : on sort le premier vers une case libre de SA semaine d'arrivée.
+        # Cycle : on sort le premier vers une case libre de sa semaine
+        # d'arrivée, qui ne soit la cible d'AUCUN déplacement restant (sinon
+        # on recréerait le blocage qu'on veut briser) ni sa propre position.
         m = restants[0]
+        visees = {c for x in restants for c in cases(x.vers, x.session_id)}
+        actuelles = cases(position[m.session_id], m.session_id)
         w = m.vers[0]
         libre = next(
             (
                 (w, d, sl)
                 for d in range(DAYS_PER_WEEK)
                 for sl in sorted(_departs_valides(durees.get(m.session_id, 1)))
-                if all(occupe.get(c) in (None, m.session_id) for c in cases((w, d, sl), m.session_id))
+                if not (cases((w, d, sl), m.session_id) & (visees | actuelles | set(occupe)))
             ),
             None,
         )
@@ -670,7 +680,7 @@ def ordre_application(
             raise LissageErreur("Impossible d'ordonner les déplacements (aucune case libre pour briser un cycle).")
         ordre.append((Deplacement(**{**asdict(m), "vers": libre}), None))
         position[m.session_id] = libre
-    return ordre
+    raise LissageErreur("Impossible d'ordonner les déplacements (cycle non résolu).")
 
 
 def appliquer(state: Any, proposition: Proposition) -> ResultatApplication:
