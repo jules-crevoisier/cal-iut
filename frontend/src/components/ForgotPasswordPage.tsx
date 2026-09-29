@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { forgotPassword } from "../api/client";
+import { CadreCompte, ChampCompte } from "./CadreCompte";
 
 interface ForgotPasswordPageProps {
   onRetourConnexion: () => void;
@@ -31,47 +32,47 @@ export function ForgotPasswordPage({ onRetourConnexion }: ForgotPasswordPageProp
 
   if (envoye) {
     return (
-      <div className="loginwrap">
-        <div className="panel loginpanel">
-          <span className="brand-mark">CI</span>
-          <h1>Vérifiez vos mails</h1>
-          <p className="muted">
-            Si un compte existe pour <strong>{email}</strong>, un lien de réinitialisation vient d'être envoyé.
-          </p>
-          <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
-            Retour à la connexion
-          </button>
-        </div>
-      </div>
+      <CadreCompte
+        titre="Vérifiez vos mails"
+        intro={
+          <>
+            <p>
+              Si un compte existe pour <strong>{email}</strong>, un lien de réinitialisation vient d'être envoyé.
+            </p>
+            <p>Pensez à regarder dans les indésirables.</p>
+          </>
+        }
+      >
+        <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
+          Retour à la connexion
+        </button>
+      </CadreCompte>
     );
   }
 
   return (
-    <div className="loginwrap">
-      <form className="panel loginpanel" onSubmit={(e) => void soumettre(e)}>
-        <span className="brand-mark">CI</span>
-        <h1>Mot de passe oublié</h1>
-        <p className="muted">Recevez un lien de réinitialisation par email.</p>
-        <label>
-          Email
-          <input
-            type="email"
-            autoFocus
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={enCours}
-          />
-        </label>
-        <button type="submit" className="btn btn--primary" disabled={enCours || !email}>
-          {enCours ? "Envoi…" : "Envoyer le lien"}
+    <CadreCompte
+      titre="Mot de passe oublié"
+      intro={<p>Indiquez votre email : vous recevrez un lien pour choisir un nouveau mot de passe.</p>}
+      onSubmit={(e) => void soumettre(e)}
+      pied={
+        <button type="button" className="loginpanel-lien" onClick={onRetourConnexion} disabled={enCours}>
+          Retour à la connexion
         </button>
-        <div className="loginpanel-liens">
-          <button type="button" className="loginpanel-lien" onClick={onRetourConnexion} disabled={enCours}>
-            Retour à la connexion
-          </button>
-        </div>
-      </form>
-    </div>
+      }
+    >
+      <ChampCompte
+        libelle="Email"
+        type="email"
+        autoFocus
+        autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={enCours}
+      />
+      <button type="submit" className="btn btn--primary" disabled={enCours || !email}>
+        {enCours ? "Envoi…" : "Envoyer le lien"}
+      </button>
+    </CadreCompte>
   );
 }

@@ -149,7 +149,8 @@ describe("AdminUsersView", () => {
     // Une ligne « en attente d'activation » ET une ligne « email non
     // confirmé » ont chacune leur bouton — le compte actif n'en a aucun.
     expect(screen.getAllByRole("button", { name: "Supprimer" })).toHaveLength(2);
-    const ligneActive = screen.getByText("active@example.test").closest("li")!;
+    // Les comptes hors demandes d'accès sont des lignes de tableau.
+    const ligneActive = screen.getByText("active@example.test").closest("tr")!;
     expect(within(ligneActive).queryByRole("button", { name: "Supprimer" })).not.toBeInTheDocument();
   });
 
@@ -176,7 +177,7 @@ describe("AdminUsersView", () => {
     render(<AdminUsersView />);
 
     await waitFor(() => expect(screen.getByText("jamais-confirme@example.test")).toBeInTheDocument());
-    const ligne = screen.getByText("jamais-confirme@example.test").closest("li")!;
+    const ligne = screen.getByText("jamais-confirme@example.test").closest("tr")!;
     fireEvent.click(within(ligne).getByRole("button", { name: "Supprimer" }));
 
     await waitFor(() => {
@@ -202,5 +203,40 @@ describe("AdminUsersView", () => {
       ),
     );
     expect(screen.getByText("attente@example.test")).toBeInTheDocument();
+  });
+
+  it("filtre les comptes par statut et par adresse", async () => {
+    stubFetch();
+    render(<AdminUsersView />);
+    await waitFor(() => expect(screen.getByText("active@example.test")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /^actifs/i }));
+    expect(screen.queryByText("jamais-confirme@example.test")).not.toBeInTheDocument();
+    expect(screen.getByText("active@example.test")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^tous/i }));
+    fireEvent.change(screen.getByRole("searchbox", { name: /rechercher une adresse/i }), { target: { value: "jamais" } });
+    expect(screen.queryByText("active@example.test")).not.toBeInTheDocument();
+    expect(screen.getByText("jamais-confirme@example.test")).toBeInTheDocument();
+    // Les demandes d'accès restent visibles quel que soit le filtre.
+    expect(screen.getByText("attente@example.test")).toBeInTheDocument();
+  });
+
+  it("propose d'annuler une désactivation, sans confirmation préalable", async () => {
+    stubFetch();
+    render(<AdminUsersView />);
+    await waitFor(() => expect(screen.getByText("active@example.test")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Désactiver" }));
+    const message = await screen.findByText(/active@example\.test désactivé/);
+    expect(confirmAsync).not.toHaveBeenCalled();
+    fireEvent.click(within(message.parentElement!).getByRole("button", { name: "Annuler" }));
+    await waitFor(() => {
+      const reactivation = vi
+        .mocked(fetch)
+        .mock.calls.filter((c) => c[1]?.method === "PATCH")
+        .map((c) => JSON.parse(String(c[1]?.body)));
+      expect(reactivation).toContainEqual({ status: "active" });
+    });
   });
 });

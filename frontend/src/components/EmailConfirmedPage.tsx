@@ -1,3 +1,5 @@
+import { CadreCompte } from "./CadreCompte";
+
 interface EmailConfirmedPageProps {
   statut: "" | "ok" | "erreur";
   onOuvrirInscription: () => void;
@@ -13,32 +15,30 @@ interface EmailConfirmedPageProps {
 export function EmailConfirmedPage({ statut, onOuvrirInscription, onRetourConnexion }: EmailConfirmedPageProps) {
   if (statut === "ok") {
     return (
-      <div className="loginwrap">
-        <div className="panel loginpanel">
-          <span className="brand-mark">CI</span>
-          <h1>Email confirmé</h1>
-          <p className="muted">
-            Votre compte est confirmé. Un administrateur doit maintenant vous donner accès au planning — vous
-            pouvez déjà vous connecter pour voir où ça en est.
+      <CadreCompte
+        titre="Email confirmé"
+        intro={
+          <p>
+            Un administrateur doit maintenant vous donner accès au planning. Vous pouvez déjà vous connecter pour voir
+            où en est votre demande.
           </p>
-          <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
-            Se connecter
-          </button>
-        </div>
-      </div>
+        }
+      >
+        <button type="button" className="btn btn--primary" onClick={onRetourConnexion}>
+          Se connecter
+        </button>
+      </CadreCompte>
     );
   }
 
   return (
-    <div className="loginwrap">
-      <div className="panel loginpanel">
-        <span className="brand-mark">CI</span>
-        <h1>Lien expiré</h1>
-        <p className="muted">Ce lien de confirmation n'est plus valide. Inscrivez-vous à nouveau pour en recevoir un autre.</p>
-        <button type="button" className="btn btn--primary" onClick={onOuvrirInscription}>
-          S'inscrire à nouveau
-        </button>
-      </div>
-    </div>
+    <CadreCompte
+      titre="Lien expiré"
+      intro={<p>Ce lien de confirmation n'est plus valide. Inscrivez-vous à nouveau avec la même adresse pour en recevoir un autre.</p>}
+    >
+      <button type="button" className="btn btn--primary" onClick={onOuvrirInscription}>
+        S'inscrire à nouveau
+      </button>
+    </CadreCompte>
   );
 }

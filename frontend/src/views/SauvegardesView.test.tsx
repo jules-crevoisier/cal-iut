@@ -3,7 +3,7 @@
  * sauvegarde maintenant », lien de téléchargement, états vide/chargement/
  * erreur.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SauvegardesView } from "./SauvegardesView";
@@ -39,8 +39,13 @@ describe("SauvegardesView", () => {
     render(<SauvegardesView />);
 
     expect(screen.getByText("Chargement…")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("812 séances placées · 14.9 Ko")).toBeInTheDocument());
-    expect(screen.getByText("1 séance placée · 1.0 Ko")).toBeInTheDocument();
+    // Une ligne par jour : séances placées, écart avec la veille, taille.
+    const ligne22 = await screen.findByRole("row", { name: /22 septembre 2026/ });
+    expect(within(ligne22).getByText("812")).toBeInTheDocument();
+    expect(within(ligne22).getByText("+811")).toBeInTheDocument();
+    expect(within(ligne22).getByText("14,9 Ko")).toBeInTheDocument();
+    const ligne21 = screen.getByRole("row", { name: /21 septembre 2026/ });
+    expect(within(ligne21).getByText("1,0 Ko")).toBeInTheDocument();
   });
 
   it("affiche un état vide explicite sans aucune sauvegarde", async () => {
@@ -67,7 +72,7 @@ describe("SauvegardesView", () => {
     stubFetch();
     render(<SauvegardesView />);
 
-    await waitFor(() => expect(screen.getByText("812 séances placées · 14.9 Ko")).toBeInTheDocument());
+    await screen.findByRole("row", { name: /22 septembre 2026/ });
     fireEvent.click(screen.getByRole("button", { name: "Faire une sauvegarde maintenant" }));
 
     await waitFor(() => {
@@ -90,7 +95,7 @@ describe("SauvegardesView", () => {
   it("affiche l'erreur sans perdre la liste déjà chargée quand la sauvegarde manuelle échoue", async () => {
     stubFetch();
     render(<SauvegardesView />);
-    await waitFor(() => expect(screen.getByText("812 séances placées · 14.9 Ko")).toBeInTheDocument());
+    await screen.findByRole("row", { name: /22 septembre 2026/ });
 
     vi.mocked(fetch).mockImplementationOnce(() =>
       Promise.resolve({ ok: false, json: async () => ({ detail: "Échec écriture disque" }) } as Response),
@@ -99,6 +104,16 @@ describe("SauvegardesView", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Échec écriture disque"));
     // La liste précédente reste affichée — une erreur n'efface pas ce qui marchait.
-    expect(screen.getByText("812 séances placées · 14.9 Ko")).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /22 septembre 2026/ })).toBeInTheDocument();
+  });
+
+  it("signale une forte baisse de séances placées d'une sauvegarde à l'autre", async () => {
+    stubFetch([
+      { date: "2026-09-23", taille_octets: 9000, nb_placements: 500 },
+      { date: "2026-09-22", taille_octets: 15234, nb_placements: 812 },
+    ]);
+    render(<SauvegardesView />);
+    const ligne = await screen.findByRole("row", { name: /23 septembre 2026/ });
+    expect(within(ligne).getByText("−312")).toHaveClass("sauvegardes-baisse");
   });
 });

@@ -1,20 +1,21 @@
 /**
- * Question posée une seule fois : couleurs par matière, ou non ?
+ * Question posée une seule fois : couleurs par matière, ou par type ?
  *
  * Retour utilisateur 30/08/2026 : « pour les liens des groupes je vois cela
  * comme un popup qui s'affiche et qui demande les préférences, et on stocke
  * cela et on garde en mémoire pour ne pas que l'on redemande à chaque fois ».
  *
  * Elle ne réapparaît PAS quand la réponse est « non » : c'est `repondu` qui
- * ferme la question, pas la valeur choisie. Une question reposée à chaque
- * visite parce qu'on a dit non est le défaut le plus agaçant de ce genre de
- * fenêtre.
+ * ferme la question, pas la valeur choisie.
  *
- * Un aperçu réel accompagne chaque choix : « couleurs par matière » ne dit
- * pas grand-chose tant qu'on ne l'a pas vu.
+ * Refonte du 29/09/2026 : chaque choix EST son aperçu. Deux aperçus puis
+ * deux boutons à rapprocher d'eux faisaient lire trois blocs pour un clic ;
+ * on clique désormais directement sur l'aperçu qu'on préfère. L'aperçu est
+ * dessiné ici (`.prefs-puce`), indépendamment des styles de la grille.
  */
 
 import { couleursMatiere } from "../utils/couleursMatiere";
+import "./PreferencesModal.css";
 
 interface PreferencesModalProps {
   onChoix: (couleursParMatiere: boolean) => void;
@@ -34,51 +35,42 @@ export function PreferencesModal({ onChoix }: PreferencesModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="prefsmodal-titre"
+        aria-describedby="prefsmodal-texte"
       >
         <h3 id="prefsmodal-titre">Comment préférez-vous voir vos cours ?</h3>
-        <p className="confirmmodal-message">
-          Une couleur différente par matière aide à repérer un cours d'un coup d'œil. Sinon, la couleur
-          indique le type de séance (CM, TD, TP), comme aujourd'hui.
+        <p id="prefsmodal-texte" className="prefs-texte">
+          Choisissez l’affichage qui vous parle le plus. Ce choix est gardé sur cet appareil et reste modifiable en
+          haut de page.
         </p>
 
-        <div className="prefs-apercus">
-          <div className="prefs-apercu">
-            <span className="prefs-apercu-titre">Une couleur par matière</span>
-            <div className="prefs-apercu-grille couleurs-matiere">
+        <div className="prefs-choix">
+          <button type="button" className="prefs-option" autoFocus onClick={() => onChoix(true)}>
+            <span className="prefs-option-titre">Une couleur par matière</span>
+            <span className="prefs-option-sens">Repérer un cours d’un coup d’œil.</span>
+            <span className="prefs-apercu" aria-hidden="true">
               {APERCU.map((c) => (
-                <span
-                  key={c.code}
-                  className="promo-chip"
-                  style={couleursMatiere(c.code) as React.CSSProperties}
-                >
-                  <span className="code">{c.code}</span>
-                  <span className="ty">{c.type}</span>
+                <span key={c.code} className="prefs-puce prefs-puce--matiere" style={couleursMatiere(c.code) as React.CSSProperties}>
+                  <span className="prefs-puce-code">{c.code}</span>
+                  <span className="prefs-puce-nom">{c.nom}</span>
+                  <span className="prefs-puce-type">{c.type}</span>
                 </span>
               ))}
-            </div>
-          </div>
-          <div className="prefs-apercu">
-            <span className="prefs-apercu-titre">Une couleur par type</span>
-            <div className="prefs-apercu-grille">
+            </span>
+          </button>
+          <button type="button" className="prefs-option" onClick={() => onChoix(false)}>
+            <span className="prefs-option-titre">Une couleur par type de séance</span>
+            <span className="prefs-option-sens">CM, TD, TP — l’affichage habituel.</span>
+            <span className="prefs-apercu" aria-hidden="true">
               {APERCU.map((c) => (
-                <span key={c.code} className={`promo-chip type-${c.type.toLowerCase()}`}>
-                  <span className="code">{c.code}</span>
-                  <span className="ty">{c.type}</span>
+                <span key={c.code} className={`prefs-puce prefs-puce--${c.type.toLowerCase()}`}>
+                  <span className="prefs-puce-code">{c.code}</span>
+                  <span className="prefs-puce-nom">{c.nom}</span>
+                  <span className="prefs-puce-type">{c.type}</span>
                 </span>
               ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="confirmmodal-actions">
-          <button type="button" className="btn btn--ghost" onClick={() => onChoix(false)}>
-            Par type de séance
-          </button>
-          <button type="button" className="btn btn--accent" autoFocus onClick={() => onChoix(true)}>
-            Par matière
+            </span>
           </button>
         </div>
-        <p className="prefs-note">Ce choix est gardé sur cet appareil, et modifiable à tout moment en haut de page.</p>
       </div>
     </div>
   );
