@@ -1,4 +1,5 @@
-/* Recherche globale (Ctrl+K) — palette flottante : seul endroit, avec les
+/* Recherche globale (Ctrl+K) — palette de commande (refonte v2 du
+   29/09/2026, direction « Lumière / Nuit »). Seul endroit, avec les
    modales, où l'ombre `--shadow-pop` est permise. */
 
 .searchoverlay {
@@ -8,17 +9,27 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 12vh 16px 16px;
-  background: color-mix(in srgb, var(--ink) 35%, transparent);
+  padding: 11vh 16px 16px;
+  background: color-mix(in srgb, #09090b 28%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .searchoverlay {
+    background: color-mix(in srgb, #000 60%, transparent);
+  }
+}
+
+:root[data-theme="dark"] .searchoverlay {
+  background: color-mix(in srgb, #000 60%, transparent);
 }
 
 .searchbox {
-  width: min(640px, 100%);
-  max-height: 72vh;
+  width: min(680px, 100%);
+  max-height: min(560px, 76vh);
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
   overflow: hidden;
@@ -27,9 +38,14 @@
 .searchbox-champ {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 4px;
+  gap: 10px;
+  padding: 6px 12px 6px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.searchbox-loupe {
+  flex: none;
+  color: var(--ink-faint);
 }
 
 /* Par identifiant : le style de base des champs (app.css) est très
@@ -37,25 +53,53 @@
 #recherche-globale {
   flex: 1;
   min-width: 0;
-  min-height: 40px;
-  padding: 8px 12px;
+  min-height: 46px;
+  padding: 8px 0;
   border: none;
   background: transparent;
-  font-size: 1rem;
+  font-size: 16px;
+  letter-spacing: -0.01em;
 }
 
 #recherche-globale:focus-visible {
   outline: none;
 }
 
+#recherche-globale::-webkit-search-cancel-button {
+  display: none;
+}
+
 .searchbox-fermer {
-  color: var(--ink-faint);
-  font-size: 0.72rem;
+  flex: none;
+  padding: 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.searchbox-fermer:hover kbd {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.searchbox kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .searchresults {
   overflow-y: auto;
-  padding: 4px 0 6px;
+  padding: 6px;
 }
 
 .searchgroup {
@@ -63,10 +107,14 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 16px 4px;
-  font-size: 0.72rem;
-  font-weight: 600;
+  padding: 10px 10px 4px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--ink-faint);
+}
+
+.searchresults > .searchgroup:first-child {
+  padding-top: 4px;
 }
 
 .searchgroup-plus {
@@ -78,10 +126,10 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 36px;
-  padding: 5px 16px;
+  min-height: 40px;
+  padding: 5px 10px;
   border: none;
-  border-left: 2px solid transparent;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -90,8 +138,24 @@
 }
 
 .searchresults .hit.sel {
-  background: var(--accent-soft);
-  border-left-color: var(--accent);
+  background: var(--surface-3);
+}
+
+.hit-icone {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+.hit.sel .hit-icone {
+  color: var(--ink);
+  border-color: var(--border-strong);
 }
 
 .hit-texte {
@@ -104,12 +168,13 @@
 }
 
 .hit-label {
+  font-size: 14px;
   font-weight: 500;
 }
 
 .hit-sub {
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: 12.5px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -117,13 +182,20 @@
 }
 
 .hit-dest {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--ink-faint);
 }
 
 .hit.sel .hit-dest {
-  color: var(--accent);
+  color: var(--ink-soft);
+}
+
+.hit-entree {
+  color: var(--ink);
 }
 
 .searchresults mark {
@@ -131,36 +203,36 @@
   color: inherit;
   font-weight: 700;
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  text-decoration-color: var(--ink-faint);
   text-underline-offset: 2px;
 }
 
 .searchhint {
   display: flex;
+  align-items: center;
   gap: 16px;
-  padding: 7px 16px;
+  padding: 8px 16px;
   border-top: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--ink-soft);
-  font-size: 0.72rem;
+  font-size: 12px;
 }
 
 .searchhint kbd {
-  display: inline-block;
-  min-width: 18px;
-  margin-right: 3px;
-  padding: 0 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font-size: 0.68rem;
-  text-align: center;
+  margin-right: 4px;
+}
+
+.searchhint-compte {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .searchempty {
-  padding: 18px 16px;
+  padding: 22px 12px;
   color: var(--ink-soft);
-  font-size: 0.85rem;
+  font-size: 13px;
+  text-align: center;
 }
 
 @media (max-width: 640px) {
@@ -178,5 +250,9 @@
 
   .searchresults .hit {
     min-height: 44px;
+  }
+
+  .hit-dest {
+    display: none;
   }
 }

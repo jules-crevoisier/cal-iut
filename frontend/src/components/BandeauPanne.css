@@ -1,0 +1,35 @@
+/* Bandeaux de panne (BandeauPanne) — refonte v2 du 29/09/2026 : icône en
+   tête, texte qui prend la place, action à droite. Les couleurs viennent de
+   `.banner--warn` / `.banner--error` (app.css). */
+
+.banner.bandeau-panne {
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 9px 24px;
+  font-size: 13px;
+}
+
+.bandeau-icone {
+  flex: none;
+}
+
+.bandeau-texte {
+  flex: 1;
+  min-width: 0;
+}
+
+.bandeau-texte strong {
+  margin-right: 4px;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .banner.bandeau-panne {
+    align-items: flex-start;
+    padding: 9px 12px;
+  }
+
+  .bandeau-icone {
+    margin-top: 2px;
+  }
+}

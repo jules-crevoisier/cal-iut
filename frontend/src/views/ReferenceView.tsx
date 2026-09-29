@@ -24,6 +24,8 @@ import { confirmAsync } from "../utils/confirmDialog";
 import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
+import { Onglets } from "../components/Onglets";
+import "../styles/outils.css";
 import "./ReferenceView.css";
 
 type SubTab = "salles" | "cours" | "calendrier" | "liens" | "notifications";
@@ -106,31 +108,14 @@ export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
 
   return (
     <section className="view ref-view">
-      <div className="ref-onglets" role="tablist" aria-label="Rubriques du référentiel">
-        {ONGLETS.map((o, i) => (
-          <button
-            key={o.id}
-            type="button"
-            role="tab"
-            id={`ref-onglet-${o.id}`}
-            aria-selected={sub === o.id}
-            aria-controls="ref-panneau"
-            tabIndex={sub === o.id ? 0 : -1}
-            className={`ref-onglet${sub === o.id ? " actif" : ""}`}
-            onClick={() => setSub(o.id)}
-            onKeyDown={(e) => {
-              const sens = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-              if (!sens) return;
-              const suivant = ONGLETS[(i + sens + ONGLETS.length) % ONGLETS.length];
-              setSub(suivant.id);
-              document.getElementById(`ref-onglet-${suivant.id}`)?.focus();
-            }}
-          >
-            {o.label}
-            {compteurs[o.id] !== undefined && <span className="ref-onglet-nb">{compteurs[o.id]}</span>}
-          </button>
-        ))}
-      </div>
+      <Onglets
+        onglets={ONGLETS.map((o) => ({ id: o.id, label: o.label, nb: compteurs[o.id] }))}
+        actif={sub}
+        onChoisir={setSub}
+        label="Rubriques du référentiel"
+        prefixeId="ref-onglet"
+        controle="ref-panneau"
+      />
 
       <div id="ref-panneau" role="tabpanel" aria-labelledby={`ref-onglet-${sub}`} className="ref-panneau">
         {sub === "salles" && <RoomsTable payload={payload} setRoute={setRoute} />}
@@ -172,7 +157,7 @@ function RoomsTable({ payload, setRoute }: { payload: AppPayload; setRoute: (pat
 
   return (
     <>
-      <div className="ref-barre">
+      <div className="page-outils ref-barre">
         <input
           type="search"
           className="ref-recherche"
@@ -194,7 +179,7 @@ function RoomsTable({ payload, setRoute }: { payload: AppPayload; setRoute: (pat
           {horsAuto > 0 && ` · ${horsAuto} hors placement automatique`}
         </span>
       </div>
-      <div className="panel ref-table-wrap ref-tableau">
+      <div className="panel carte-tableau carte-tableau--haute ref-tableau">
         <table className="ref">
           <thead>
             <tr>
@@ -290,7 +275,7 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
 
   return (
     <>
-      <div className="ref-barre">
+      <div className="page-outils ref-barre">
         <input
           type="search"
           className="ref-recherche"
@@ -319,7 +304,7 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
           {filtres.length === payload.courses.length ? `${filtres.length} lignes` : `${filtres.length} sur ${payload.courses.length} lignes`}
         </span>
       </div>
-      <div className="panel ref-table-wrap ref-tableau">
+      <div className="panel carte-tableau carte-tableau--haute ref-tableau">
         <table className="ref">
           <thead>
             <tr>
@@ -416,7 +401,7 @@ function CalendarTimeline({ payload }: { payload: AppPayload }) {
     return <p className="empty-state">Aucune période déclarée dans le calendrier institutionnel.</p>;
   }
   return (
-    <div className="panel ref-table-wrap ref-tableau">
+    <div className="panel carte-tableau ref-tableau">
       <table className="ref ref-calendrier">
         <thead>
           <tr>
@@ -583,7 +568,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
         </div>
       </section>
 
-      <div className="ref-barre">
+      <div className="page-outils ref-barre">
         <input
           type="search"
           className="ref-recherche"
@@ -592,7 +577,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           value={texte}
           onChange={(e) => setTexte(e.target.value)}
         />
-        <span className="ref-barre-actions">
+        <span className="page-outils-actions">
           <CopyButton
             text={() => [...teacherItems, ...groupItems].map((r) => `${r.label}\t${r.link}`).join("\n")}
             idleLabel="Copier tous les liens"
@@ -613,11 +598,13 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
       </p>
       {showMailModal && <SendTeacherMailsModal onClose={() => setShowMailModal(false)} />}
 
-      <section className="panel ref-table-wrap ref-tableau" aria-labelledby="ref-annuaire-profs">
-        <h3 id="ref-annuaire-profs" className="ref-tableau-titre">
-          Enseignants <span className="ref-doux">{profsVisibles.length}</span>
-          {sansAdresse > 0 && <span className="ref-doux"> · {sansAdresse} sans adresse mail</span>}
-        </h3>
+      <section className="panel carte-tableau carte-tableau--haute ref-tableau" aria-labelledby="ref-annuaire-profs">
+        <div className="carte-tete">
+          <h3 id="ref-annuaire-profs">
+            Enseignants <span className="carte-tete-nb">{profsVisibles.length}</span>
+          </h3>
+          {sansAdresse > 0 && <span className="carte-tete-note">{sansAdresse} sans adresse mail</span>}
+        </div>
         <table className="ref">
           <thead>
             <tr>
@@ -638,10 +625,12 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
         {profsVisibles.length === 0 && <p className="ref-vide">Aucun enseignant ne correspond.</p>}
       </section>
 
-      <section className="panel ref-table-wrap ref-tableau" aria-labelledby="ref-annuaire-groupes">
-        <h3 id="ref-annuaire-groupes" className="ref-tableau-titre">
-          Groupes étudiants <span className="ref-doux">{groupesVisibles.length}</span>
-        </h3>
+      <section className="panel carte-tableau carte-tableau--haute ref-tableau" aria-labelledby="ref-annuaire-groupes">
+        <div className="carte-tete">
+          <h3 id="ref-annuaire-groupes">
+            Groupes étudiants <span className="carte-tete-nb">{groupesVisibles.length}</span>
+          </h3>
+        </div>
         <table className="ref">
           <thead>
             <tr>

@@ -12,8 +12,7 @@
      1200 px : ce qu'on regarde à gauche, ce qui part vers Celcat à droite. */
 
 .view.celcat {
-  gap: 14px;
-  max-width: 1400px;
+  gap: 16px;
 }
 
 .view.celcat h2 {
@@ -144,14 +143,14 @@
   min-width: 0;
 }
 
+/* Trois signaux à plat, séparés d'un filet : un signal sain reste discret
+   (son mot), un signal qui demande attention garde sa phrase en couleur. */
 .celcat-signaux {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, auto));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 28px;
   margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
 }
 
 .celcat-signal {
@@ -159,17 +158,12 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 6px;
-  padding: 6px 12px;
   min-width: 0;
-}
-
-.celcat-signal + .celcat-signal {
-  border-left: 1px solid var(--border);
 }
 
 .celcat-signal dt {
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: 12.5px;
   white-space: nowrap;
 }
 
@@ -179,30 +173,19 @@
   display: contents;
 }
 
-/* Un signal sain dit son mot, pas sa phrase : elle n'apprend rien et
-   rallongeait la barre. Elle reste au survol (title natif inutile : on la
-   garde lisible au clavier via le texte, masqué seulement visuellement). */
 .celcat-signal--ok .celcat-signal-detail {
-  color: var(--ink-soft);
-  font-size: 0.8rem;
-}
-
-.celcat-signal--attention {
-  background: var(--warn-soft);
+  color: var(--ink-faint);
+  font-size: 12.5px;
 }
 
 .celcat-signal--attention .celcat-signal-detail {
   color: var(--warn-text);
-  font-size: 0.82rem;
-}
-
-.celcat-signal--panne {
-  background: var(--bad-soft);
+  font-size: 12.5px;
 }
 
 .celcat-signal--panne .celcat-signal-detail {
   color: var(--bad-text);
-  font-size: 0.82rem;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -226,21 +209,22 @@
   }
 
   .celcat-signaux {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .celcat-signal + .celcat-signal {
-    border-left: 0;
-    border-top: 1px solid var(--border);
-  }
-
-  .celcat-signal {
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .celcat-signal--ok .celcat-signal-detail {
     display: none;
   }
+}
+
+/* Semaine fermée (vacances) sous la barre supérieure. */
+.celcat-fermee h2 {
+  margin: 0 0 4px;
+}
+
+.celcat-fermee p {
+  margin: 0;
 }
 
 /* ── Verdict ── */
@@ -250,23 +234,6 @@
   flex-direction: column;
   gap: 14px;
   padding: 18px 20px;
-  border-left-width: 4px;
-}
-
-.celcat-verdict--ok {
-  border-left-color: var(--good);
-}
-
-.celcat-verdict--attention {
-  border-left-color: var(--warn);
-}
-
-.celcat-verdict--panne {
-  border-left-color: var(--bad);
-}
-
-.celcat-verdict--chargement {
-  border-left-color: var(--border-strong);
 }
 
 .celcat-verdict-corps {
@@ -304,69 +271,20 @@
   color: var(--ink-soft);
 }
 
-.celcat-compteurs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(4.8rem, auto));
-  margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+/* Tuiles des écarts (composant partagé `Tuile`) : cinq sur une ligne. */
+.celcat-tuiles.tuiles {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.celcat-compteur {
-  display: flex;
-  flex-direction: column-reverse;
-  justify-content: flex-end;
-  gap: 0;
-  padding: 8px 14px;
-  background: var(--surface);
-}
-
-.celcat-compteur + .celcat-compteur {
-  border-left: 1px solid var(--border);
-}
-
-.celcat-compteur dt {
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  white-space: nowrap;
-}
-
-.celcat-compteur dd {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.15;
-}
-
-.celcat-compteur--nul dd {
-  color: var(--ink-faint);
-}
-
-.celcat-compteur--attention dd {
-  color: var(--warn-text);
-}
-
-.celcat-compteur--panne dd {
-  color: var(--bad-text);
-}
-
-.celcat-compteur--ok dd {
-  color: var(--good-text);
-}
-
-@media (max-width: 479.98px) {
-  .celcat-compteurs {
-    width: 100%;
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 1100px) {
+  .celcat-tuiles.tuiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
 
-  .celcat-compteur:nth-child(3) {
-    border-left: 0;
-  }
-
-  .celcat-compteur:nth-child(n + 3) {
-    border-top: 1px solid var(--border);
+@media (max-width: 700px) {
+  .celcat-tuiles.tuiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

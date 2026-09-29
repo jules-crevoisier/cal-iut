@@ -1,36 +1,58 @@
 /* Modale de confirmation (ConfirmModal). Le gabarit commun des modales
    (`.confirmmodal-overlay`, `.confirmmodal`, `.confirmmodal-actions`) reste
    dans app.css : d'autres fenêtres s'en servent. Ici, ce qui est propre à
-   la confirmation. */
+   la confirmation — refonte v2 du 29/09/2026 : en-tête, corps, pied gris
+   clair avec les boutons à droite. */
 
-.confirmdlg {
-  width: min(480px, 100%);
+.panel.confirmdlg {
+  gap: 0;
+  width: min(460px, 100%);
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
-  padding: 18px 20px 16px;
+  padding: 0;
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
+}
+
+.confirmdlg-tete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px 6px;
 }
 
 .confirmdlg-titre {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-.confirmdlg--danger {
-  border-top: 3px solid var(--bad);
-}
-
-.confirmdlg--danger .confirmdlg-titre {
-  color: var(--bad-text);
+.confirmdlg-marque {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bad-soft);
+  color: var(--bad);
 }
 
 .confirmdlg-message {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 0.9rem;
+  padding: 4px 20px 18px;
+  color: var(--ink-soft);
+  font-size: 14px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.confirmdlg--danger .confirmdlg-message {
+  padding-left: 58px;
 }
 
 .confirmdlg-message p {
@@ -39,13 +61,14 @@
 
 .confirmdlg-liste {
   margin: 0;
-  padding: 6px 10px 6px 26px;
+  padding: 8px 12px 8px 28px;
   max-height: 40vh;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
-  font-size: 0.85rem;
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .confirmdlg-liste li + li {
@@ -53,7 +76,15 @@
 }
 
 .confirmdlg .confirmmodal-actions {
-  margin-top: 4px;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.confirmdlg .confirmmodal-actions .btn {
+  min-height: 34px;
 }
 
 /* Le bouton destructeur d'une confirmation est PLEIN : on est au dernier
@@ -80,11 +111,16 @@
 }
 
 @media (max-width: 479.98px) {
+  .confirmdlg--danger .confirmdlg-message {
+    padding-left: 20px;
+  }
+
   .confirmdlg .confirmmodal-actions {
     flex-direction: column-reverse;
   }
 
   .confirmdlg .confirmmodal-actions .btn {
     width: 100%;
+    min-height: 44px;
   }
 }

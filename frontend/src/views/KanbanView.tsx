@@ -24,6 +24,7 @@
 
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Plus } from "lucide-react";
 
 import type { Tache, TacheCreateBody, TachePatchBody } from "../api/client";
 import { creerTache, fetchTaches, patchTache, supprimerTache } from "../api/client";
@@ -35,6 +36,8 @@ import { ecrireOngletTaches, lireOngletTaches } from "../utils/kanbanTabPrefs";
 import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
+import { Onglets } from "../components/Onglets";
+import { ActionsDePage } from "../components/TopBar";
 import "./KanbanView.css";
 
 const COLONNES: { id: Tache["colonne"]; label: string }[] = [
@@ -393,34 +396,20 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
 
   return (
     <section className="view kanban-view">
-      <div className="kanban-barre">
-        <div className="kanban-onglets" role="tablist" aria-label="Catégorie de tâches">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              role="tab"
-              id={`kanban-onglet-${cat.id}`}
-              aria-selected={categorieActive === cat.id}
-              aria-controls="kanban-board"
-              tabIndex={categorieActive === cat.id ? 0 : -1}
-              className={`kanban-onglet ${categorieActive === cat.id ? "actif" : ""}`}
-              onClick={() => setCategorieActive(cat.id)}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                  const autre = CATEGORIES.find((c) => c.id !== cat.id)!;
-                  setCategorieActive(autre.id);
-                  document.getElementById(`kanban-onglet-${autre.id}`)?.focus();
-                }
-              }}
-            >
-              {cat.label}
-              <span className="kanban-onglet-nb" title="Tâches non terminées">
-                {parCategorie[cat.id]}
-              </span>
-            </button>
-          ))}
-        </div>
+      <div className="page-outils kanban-barre">
+        <Onglets
+          onglets={CATEGORIES.map((cat) => ({
+            id: cat.id,
+            label: cat.label,
+            nb: parCategorie[cat.id],
+            titreNb: "Tâches non terminées",
+          }))}
+          actif={categorieActive}
+          onChoisir={setCategorieActive}
+          label="Catégorie de tâches"
+          prefixeId="kanban-onglet"
+          controle="kanban-board"
+        />
 
         <input
           ref={refFiltre}
@@ -456,14 +445,17 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
           </button>
         )}
         {peutModifier && (
-          <button
-            type="button"
-            className="btn btn--primary kanban-nouvelle"
-            onClick={ouvrirCreation}
-            title="Formulaire complet (enseignant, dates, urgence…)"
-          >
-            + Nouvelle tâche
-          </button>
+          <ActionsDePage>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={ouvrirCreation}
+              title="Formulaire complet (enseignant, dates, urgence…)"
+            >
+              <Plus size={16} aria-hidden="true" />
+              Nouvelle tâche
+            </button>
+          </ActionsDePage>
         )}
         <datalist id="kanban-concerne-suggestions">
           {personnes.map((nom) => (
@@ -499,6 +491,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
               onDrop={deposerSurColonne(colonne.id)}
             >
               <header className="kanban-column-titre">
+                <span className={`kanban-statut kanban-statut--${colonne.id}`} aria-hidden="true" />
                 <h3>{colonne.label}</h3>
                 <span className="kanban-column-nb">{liste.length}</span>
               </header>
@@ -730,7 +723,7 @@ function CarteTache({
                 disabled={idxColonne === 0}
                 onClick={() => onColonne(-1)}
               >
-                ←
+                <ArrowLeft size={14} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -740,7 +733,7 @@ function CarteTache({
                 disabled={idxColonne === COLONNES.length - 1}
                 onClick={() => onColonne(1)}
               >
-                →
+                <ArrowRight size={14} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -750,7 +743,7 @@ function CarteTache({
                 disabled={index === 0}
                 onClick={() => onOrdre(-1)}
               >
-                ↑
+                <ArrowUp size={14} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -760,7 +753,7 @@ function CarteTache({
                 disabled={index === nbDansColonne - 1}
                 onClick={() => onOrdre(1)}
               >
-                ↓
+                <ArrowDown size={14} aria-hidden="true" />
               </button>
             </>
           )}

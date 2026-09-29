@@ -51,6 +51,16 @@ describe("GlobalSearch", () => {
     expect(screen.getAllByRole("option")[0]).toHaveTextContent("H.201");
   });
 
+  it("shows an icon per result type, and the screen's own navigation icon", () => {
+    const { champ } = ouvrir();
+    fireEvent.change(champ, { target: { value: "riguet" } });
+    expect(screen.getAllByRole("option")[0].querySelector(".hit-icone svg")).toHaveClass("lucide-graduation-cap");
+    fireEvent.change(champ, { target: { value: "H.201" } });
+    expect(screen.getAllByRole("option")[0].querySelector(".hit-icone svg")).toHaveClass("lucide-door-open");
+    fireEvent.change(champ, { target: { value: "contraintes" } });
+    expect(screen.getAllByRole("option")[0].querySelector(".hit-icone svg")).toHaveClass("lucide-shield-check");
+  });
+
   it("finds the application screens too", () => {
     const { champ, onNavigate } = ouvrir();
     fireEvent.change(champ, { target: { value: "salles libres" } });

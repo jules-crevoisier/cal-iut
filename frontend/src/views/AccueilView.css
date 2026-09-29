@@ -13,67 +13,6 @@
   gap: 12px;
 }
 
-.accueil-tuile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  padding: 14px 16px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.12s, background-color 0.12s;
-}
-
-
-.accueil-tuile:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
-}
-
-.accueil-tuile-libelle {
-  font-size: 0.82rem;
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.accueil-tuile-valeur {
-  font-size: 1.85rem;
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-}
-
-.accueil-tuile.is-bad .accueil-tuile-valeur {
-  color: var(--bad);
-}
-
-.accueil-tuile.is-warn .accueil-tuile-valeur {
-  color: var(--warn);
-}
-
-.accueil-tuile-detail {
-  font-size: 0.78rem;
-  color: var(--muted);
-  min-height: 1.2em;
-}
-
-.accueil-tuile-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-
 /* ── Grille ── */
 .accueil-grille {
   display: grid;
@@ -420,7 +359,7 @@
 
   /* Cinq tuiles sur deux colonnes : la dernière prend la ligne entière
      plutôt que de rester seule à gauche. */
-  .accueil-tuile:last-child {
+  .accueil-kpis .tuile:last-child {
     grid-column: 1 / -1;
   }
 

@@ -1,87 +1,28 @@
-/* Référence (refonte du 29/09/2026) : onglets soulignés, barre de filtres,
-   tableaux denses. `table.ref`, `.ref-table-wrap` et `.lien-boutons` restent
-   les composants partagés d'app.css. */
+/* Référence (refonte v2 du 29/09/2026) : onglets segmentés (`Onglets`),
+   barre de filtres à plat, un tableau par carte (`.carte-tableau`, cf.
+   styles/outils.css). `table.ref` et `.lien-boutons` restent les
+   composants partagés d'app.css. */
 
 .view.ref-view {
-  gap: 0;
-}
-
-/* ── Onglets ── */
-.ref-onglets {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
-  min-width: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.ref-onglet {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  min-height: 36px;
-  padding: 0 12px;
-  margin-bottom: -1px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.ref-onglet:hover:not(.actif) {
-  color: var(--ink);
-  border-bottom-color: var(--border-strong);
-}
-
-.ref-onglet.actif {
-  color: var(--accent);
-  font-weight: 600;
-  border-bottom-color: var(--accent);
-}
-
-.ref-onglet-nb {
-  font-size: 0.75rem;
-  color: var(--ink-faint);
-  font-weight: 400;
+  gap: 16px;
 }
 
 .ref-panneau {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 /* ── Barre de filtres ── */
-.ref-barre {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
 .ref-recherche {
   flex: 0 1 280px;
   min-width: 0;
 }
 
 .ref-resume {
-  font-size: 0.82rem;
+  font-size: 12.5px;
   color: var(--ink-soft);
-}
-
-.ref-barre-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: auto;
 }
 
 .ref-aide {
@@ -92,35 +33,6 @@
 }
 
 /* ── Tableaux ── */
-.panel.ref-tableau {
-  padding: 0;
-  overflow: auto;
-}
-
-.ref-tableau table.ref th:first-child,
-.ref-tableau table.ref td:first-child {
-  padding-left: 16px;
-}
-
-.ref-tableau table.ref th:last-child,
-.ref-tableau table.ref td:last-child {
-  padding-right: 16px;
-}
-
-.ref-tableau table.ref td {
-  vertical-align: middle;
-}
-
-.panel .ref-tableau-titre {
-  margin: 0;
-  padding: 12px 16px 8px;
-  font-size: 0.95rem;
-}
-
-.ref-tableau-titre .ref-doux {
-  font-weight: 400;
-}
-
 .ref-lien {
   padding: 0;
   text-align: left;
@@ -211,11 +123,12 @@
 .ref-liens {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.ref-publics h3 {
+.panel.ref-publics h3 {
   margin: 0 0 2px;
+  font-size: 0.98rem;
 }
 
 .ref-publics .ref-aide {
@@ -257,7 +170,7 @@
     flex: 1 1 140px;
   }
 
-  .ref-barre-actions {
+  .ref-barre .page-outils-actions {
     margin-left: 0;
   }
 }

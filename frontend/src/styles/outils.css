@@ -1,0 +1,313 @@
+/* Briques communes des écrans « outils » (À traiter, Tâches, Référence,
+   Contraintes, Celcat, Comptes, Sauvegardes, Clé API) — refonte v2 du
+   29/09/2026, direction « Lumière / Nuit » (cf. docs/DESIGN.md).
+
+   Ce qui est ici complète le gabarit d'app.css (`.page-outils`) :
+   - `.segmente` : contrôle segmenté (onglets, choix exclusifs) — fond gris
+     léger, élément actif blanc avec un anneau fin ;
+   - `.pastilles` : filtres en pastilles arrondies, la pastille active noire ;
+   - `.carte-tableau` : une carte = un tableau pleine largeur, en-tête
+     collant, lignes de 36 px, nombres à droite ;
+   - `.carte-tete` : titre de carte (0,98 rem) et ses actions à droite ;
+   - `.page-retour` : le message qui suit une action (réussite). */
+
+:root {
+  --seg-bg: var(--surface-3);
+  --seg-on: #ffffff;
+  --seg-ring: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px #ececea;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --seg-bg: var(--surface-2);
+    --seg-on: #242428;
+    --seg-ring: inset 0 0 0 1px #2e2e33;
+  }
+}
+
+:root[data-theme="dark"] {
+  --seg-bg: var(--surface-2);
+  --seg-on: #242428;
+  --seg-ring: inset 0 0 0 1px #2e2e33;
+}
+
+/* ── Contrôle segmenté ── */
+.segmente {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 3px;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--seg-bg);
+  border-radius: var(--radius);
+  scrollbar-width: none;
+}
+
+/* Seul sur sa ligne (Référence) : la largeur de ses onglets, pas plus. */
+.view > .segmente {
+  align-self: flex-start;
+}
+
+.segmente::-webkit-scrollbar {
+  display: none;
+}
+
+.segmente > button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+  min-height: 28px;
+  padding: 4px 12px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segmente > button:hover:not([aria-selected="true"]):not([aria-checked="true"]):not([aria-pressed="true"]) {
+  color: var(--ink);
+}
+
+.segmente > button[aria-selected="true"],
+.segmente > button[aria-checked="true"],
+.segmente > button[aria-pressed="true"] {
+  background: var(--seg-on);
+  box-shadow: var(--seg-ring);
+  color: var(--ink);
+}
+
+.segmente > button:focus-visible {
+  outline-offset: -2px;
+}
+
+.segmente-nb {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmente > button[aria-selected="true"] .segmente-nb,
+.segmente > button[aria-pressed="true"] .segmente-nb {
+  color: var(--ink-soft);
+}
+
+/* ── Pastilles de filtre ── */
+.pastilles {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pastille:hover:not([aria-pressed="true"]):not([aria-checked="true"]) {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.pastille[aria-pressed="true"],
+.pastille[aria-checked="true"] {
+  background: var(--pri-bg);
+  border-color: var(--pri-bg);
+  color: var(--pri-fg);
+}
+
+.pastille-nb {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+/* ── Carte-tableau ── */
+.panel.carte-tableau {
+  padding: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* L'en-tête reste visible : la carte défile d'elle-même au-delà d'un écran
+   (la page, elle, ne sert pas de conteneur de défilement à `sticky`). */
+@media (min-width: 701px) {
+  .panel.carte-tableau.carte-tableau--haute {
+    max-height: calc(100dvh - 170px);
+  }
+}
+
+.carte-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel .carte-tete h2,
+.panel .carte-tete h3,
+.carte-tete h2,
+.carte-tete h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.carte-tete-nb {
+  color: var(--ink-faint);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.carte-tete-note {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.carte-tete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.carte-tableau table.ref {
+  font-size: 13px;
+}
+
+.carte-tableau table.ref thead th {
+  height: 34px;
+  padding: 0 12px;
+  vertical-align: middle;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.carte-tableau table.ref tbody th,
+.carte-tableau table.ref tbody td {
+  height: 36px;
+  padding: 6px 12px;
+  vertical-align: middle;
+}
+
+.carte-tableau table.ref th:first-child,
+.carte-tableau table.ref td:first-child {
+  padding-left: 16px;
+}
+
+.carte-tableau table.ref th:last-child,
+.carte-tableau table.ref td:last-child {
+  padding-right: 16px;
+}
+
+.carte-tableau table.ref tbody tr:last-child > * {
+  border-bottom: none;
+}
+
+.carte-tableau table.ref .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Boutons dans un tableau : compacts, pour tenir dans une ligne de 36 px. */
+.carte-tableau table.ref td .btn {
+  min-height: 26px;
+  padding: 3px 8px;
+  font-size: 12.5px;
+}
+
+.carte-tableau table.ref td .btn--icon {
+  width: 26px;
+  min-width: 26px;
+  padding: 0;
+}
+
+.carte-tableau table.ref td select {
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.carte-vide {
+  margin: 0;
+  padding: 16px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.carte-note {
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+/* ── Retour d'action (réussite) ── */
+.page-retour {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--good) 30%, var(--border));
+  border-radius: var(--radius);
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-size: 13px;
+}
+
+.page-retour:empty {
+  display: none;
+}
+
+/* Texte d'explication à plat sous une barre d'outils. */
+.page-note {
+  margin: 0;
+  max-width: 90ch;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.page-note strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .carte-tete-actions {
+    margin-left: 0;
+  }
+
+  /* Au téléphone, un contrôle segmenté trop long passe à la ligne plutôt
+     que de cacher ses derniers choix. */
+  .segmente {
+    flex-wrap: wrap;
+  }
+}

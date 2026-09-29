@@ -33,6 +33,7 @@ export const VUES_A_SEMAINE: ReadonlySet<RouteView> = new Set<RouteView>([
   "cours",
   "salle",
   "salles-libres",
+  "celcat",
 ]);
 
 const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];

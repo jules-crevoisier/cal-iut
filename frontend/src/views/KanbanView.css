@@ -1,64 +1,14 @@
-/* Kanban « Tâches » (refonte du 29/09/2026) : une barre d'outils, trois
-   colonnes denses sur fond discret, cartes blanches à bordure fine. Jetons
-   uniquement. Sous 900 px, les colonnes s'empilent. */
+/* Kanban « Tâches » (refonte v2 du 29/09/2026, direction « Lumière /
+   Nuit ») : barre d'outils à plat (onglets segmentés, filtres, action
+   principale à droite), puis trois colonnes À PLAT — un titre, un compteur
+   et les tâches, qui sont les seules cartes (jamais de carte dans une
+   carte). Sous 900 px, les colonnes s'empilent. */
 
 .view.kanban-view {
-  gap: 12px;
+  gap: 16px;
 }
 
 /* ── Barre d'outils ── */
-.kanban-barre {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-}
-
-.kanban-onglets {
-  display: inline-flex;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.kanban-onglet {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: calc(var(--control-h) - 2px);
-  padding: 0 12px;
-  border: none;
-  border-right: 1px solid var(--border);
-  background: none;
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.kanban-onglet:last-child {
-  border-right: none;
-}
-
-.kanban-onglet:hover:not(.actif) {
-  background: var(--surface-2);
-  color: var(--ink);
-}
-
-.kanban-onglet.actif {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.kanban-onglet-nb {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: inherit;
-  opacity: 0.75;
-}
-
 .kanban-recherche {
   flex: 0 1 220px;
   min-width: 0;
@@ -68,12 +18,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.82rem;
+  font-size: 12.5px;
   color: var(--ink-soft);
-}
-
-.kanban-nouvelle {
-  margin-left: auto;
 }
 
 .kanban-alerte,
@@ -91,57 +37,81 @@
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 20px;
   align-items: start;
 }
 
 .kanban-column {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  min-height: 120px;
-  padding: 8px;
-  background: var(--surface-3);
-  border: 1px solid transparent;
+  min-height: 160px;
+  padding: 4px;
+  margin: -4px;
+  border: 1px dashed transparent;
   border-radius: var(--radius-lg);
 }
 
+/* Cible de dépôt pendant un glisser. */
 .kanban-column.survol {
-  border-color: var(--accent);
-  border-style: dashed;
-  background: var(--accent-soft);
+  border-color: var(--border-strong);
+  background: var(--surface-2);
 }
 
 .kanban-column-titre {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  padding: 2px 4px 4px;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border);
 }
 
 .kanban-column-titre h3 {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
 .kanban-column-nb {
-  font-size: 0.8rem;
+  font-size: 12.5px;
   color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Petite marque d'état de la colonne (le mot est dans le titre). */
+.kanban-statut {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-faint);
+}
+
+.kanban-statut--en_cours {
+  border-color: var(--warn);
+  background: linear-gradient(90deg, var(--warn) 50%, transparent 50%);
+}
+
+.kanban-statut--fait {
+  border-color: var(--good);
+  background: var(--good);
 }
 
 .kanban-column-vide {
   margin: 0;
-  padding: 10px 4px;
-  font-size: 0.8rem;
+  padding: 16px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 12.5px;
   color: var(--ink-faint);
+  text-align: center;
 }
 
 .kanban-cards {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -150,10 +120,16 @@
 .kanban-plus {
   align-self: flex-start;
 }
-
 /* ── Ajout rapide ── */
 .kanban-ajout input {
   width: 100%;
+  border-style: dashed;
+  background: transparent;
+}
+
+.kanban-ajout input:focus-visible {
+  border-style: solid;
+  background: var(--surface);
 }
 
 /* ── Cartes ── */
@@ -161,15 +137,15 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 10px 6px;
+  padding: 10px 12px 8px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  transition: border-color 0.12s;
 }
 
-.kanban-card.urgente {
-  border-left: 3px solid var(--bad);
-  padding-left: 8px;
+.kanban-card:hover {
+  border-color: var(--border-strong);
 }
 
 .kanban-card[draggable="true"] {
@@ -375,7 +351,7 @@ button.kanban-card-titre:hover {
     flex: 1 1 160px;
   }
 
-  .kanban-nouvelle {
-    margin-left: 0;
+  .kanban-column {
+    margin: 0;
   }
 }

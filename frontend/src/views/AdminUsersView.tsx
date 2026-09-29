@@ -19,13 +19,17 @@
  *   - ce que chaque rôle permet, dit une fois en tête plutôt que deviné ;
  *   - désactiver est réversible : pas de confirmation, mais un « Annuler »
  *     dans le message qui suit.
+ * Refonte v2 (même jour) : sommaire chiffré en tuiles (qui filtrent), filtre
+ * de statut segmenté à plat, tableau pleine largeur dans une seule carte.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { adminDeleteUser, adminListUsers, adminUpdateUser } from "../api/client";
 import type { AdminUser } from "../api/client";
 import { confirmAsync } from "../utils/confirmDialog";
+import { Tuile, Tuiles } from "../components/Tuile";
+import "../styles/outils.css";
 import "./AdminUsersView.css";
 
 const LIBELLE_STATUT: Record<AdminUser["status"], string> = {
@@ -86,6 +90,7 @@ export function AdminUsersView() {
   const [enCoursId, setEnCoursId] = useState<number | null>(null);
   const [filtre, setFiltre] = useState<Filtre>("tous");
   const [recherche, setRecherche] = useState("");
+  const refAttente = useRef<HTMLElement>(null);
 
   const recharger = useCallback(async () => {
     try {
@@ -177,13 +182,50 @@ export function AdminUsersView() {
 
   const enAttente = users.filter((u) => u.status === "pending_admin_activation");
   const compte = (s: Filtre) => (s === "tous" ? reste.length : reste.filter((u) => u.status === s).length);
+  const actifs = reste.filter((u) => u.status === "active");
+  const parRole = (r: AdminUser["role"]) => actifs.filter((u) => u.role === r).length;
+  const basculerFiltre = (f: Filtre) => setFiltre((actuel) => (actuel === f ? "tous" : f));
 
   return (
     <section className="view comptes">
-      <p className="comptes-roles">
-        <strong>Lecture seule</strong> consulte le planning · <strong>Édition</strong> le modifie ·{" "}
-        <strong>Admin</strong> gère aussi les comptes, Celcat et les sauvegardes.
-      </p>
+      <Tuiles label="Sommaire des comptes">
+        <Tuile
+          libelle="Comptes actifs"
+          valeur={actifs.length}
+          detail={`${parRole("admin")} admin · ${parRole("edit")} édition · ${parRole("read_only")} lecture`}
+          onClick={() => basculerFiltre("active")}
+          actif={filtre === "active"}
+        />
+        <Tuile
+          libelle="En attente d'activation"
+          valeur={enAttente.length}
+          detail={enAttente.length ? "email confirmé, rôle à donner" : "aucune demande"}
+          ton={enAttente.length ? "warn" : undefined}
+          nul={enAttente.length === 0}
+          onClick={
+            enAttente.length
+              ? () => refAttente.current?.scrollIntoView?.({ behavior: "smooth", block: "start" })
+              : undefined
+          }
+          action={enAttente.length ? "Traiter" : undefined}
+        />
+        <Tuile
+          libelle="Email non confirmé"
+          valeur={compte("pending_email")}
+          detail="lien de confirmation pas encore cliqué"
+          nul={compte("pending_email") === 0}
+          onClick={() => basculerFiltre("pending_email")}
+          actif={filtre === "pending_email"}
+        />
+        <Tuile
+          libelle="Désactivés"
+          valeur={compte("disabled")}
+          detail="ne peuvent plus se connecter"
+          nul={compte("disabled") === 0}
+          onClick={() => basculerFiltre("disabled")}
+          actif={filtre === "disabled"}
+        />
+      </Tuiles>
 
       {erreur && (
         <p className="alerte" role="alert">
@@ -191,7 +233,7 @@ export function AdminUsersView() {
         </p>
       )}
 
-      <div className="comptes-message" role="status" aria-live="polite">
+      <div className="page-retour" role="status" aria-live="polite">
         {message ? (
           <>
             <span>{message.texte}</span>
@@ -205,9 +247,13 @@ export function AdminUsersView() {
       </div>
 
       {enAttente.length > 0 && (
-        <section className="panel comptes-attente" aria-labelledby="comptes-attente-titre">
-          <h2 id="comptes-attente-titre">En attente d'activation ({enAttente.length})</h2>
-          <p className="muted comptes-aide">Email confirmé : ces personnes attendent que vous leur donniez un rôle.</p>
+        <section className="panel carte-tableau comptes-attente" aria-labelledby="comptes-attente-titre" ref={refAttente}>
+          <div className="carte-tete">
+            <h2 id="comptes-attente-titre">
+              En attente d'activation <span className="carte-tete-nb">{enAttente.length}</span>
+            </h2>
+            <span className="carte-tete-note">Email confirmé : ces personnes attendent que vous leur donniez un rôle.</span>
+          </div>
           <ul className="comptes-demandes">
             {enAttente.map((u) => (
               <li key={u.id}>
@@ -218,22 +264,22 @@ export function AdminUsersView() {
                 <div className="comptes-actions">
                   <button
                     type="button"
-                    className="btn btn--primary"
+                    className="btn btn--ghost comptes-supprimer"
                     disabled={enCoursId === u.id}
-                    onClick={() => activer(u, "read_only")}
+                    onClick={() => void supprimer(u)}
                   >
-                    Activer en lecture seule
+                    Supprimer
                   </button>
                   <button type="button" className="btn" disabled={enCoursId === u.id} onClick={() => activer(u, "edit")}>
                     Activer en édition
                   </button>
                   <button
                     type="button"
-                    className="btn btn--ghost comptes-supprimer"
+                    className="btn btn--primary"
                     disabled={enCoursId === u.id}
-                    onClick={() => void supprimer(u)}
+                    onClick={() => activer(u, "read_only")}
                   >
-                    Supprimer
+                    Activer en lecture seule
                   </button>
                 </div>
               </li>
@@ -242,22 +288,15 @@ export function AdminUsersView() {
         </section>
       )}
 
-      <section className="panel comptes-tous" aria-labelledby="comptes-tous-titre">
-        <div className="comptes-entete">
-          <h2 id="comptes-tous-titre">Comptes ({reste.length})</h2>
-          <div className="comptes-filtres" role="group" aria-label="Filtrer par statut">
-            {FILTRES.map((f) => (
-              <button
-                key={f.cle}
-                type="button"
-                className={`comptes-filtre${filtre === f.cle ? " comptes-filtre--actif" : ""}`}
-                aria-pressed={filtre === f.cle}
-                onClick={() => setFiltre(f.cle)}
-              >
-                {f.libelle} <span className="comptes-filtre-nb">{compte(f.cle)}</span>
-              </button>
-            ))}
-          </div>
+      <div className="page-outils comptes-outils">
+        <div className="segmente" role="group" aria-label="Filtrer par statut">
+          {FILTRES.map((f) => (
+            <button key={f.cle} type="button" aria-pressed={filtre === f.cle} onClick={() => setFiltre(f.cle)}>
+              {f.libelle} <span className="segmente-nb">{compte(f.cle)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="page-outils-actions">
           <input
             type="search"
             className="comptes-recherche"
@@ -267,13 +306,15 @@ export function AdminUsersView() {
             onChange={(e) => setRecherche(e.target.value)}
           />
         </div>
+      </div>
 
+      <section className="panel carte-tableau comptes-tous" aria-label="Comptes">
         {visibles.length === 0 ? (
           <p className="muted comptes-vide">
             {reste.length === 0 ? "Aucun compte pour l'instant." : "Aucun compte ne correspond à ce filtre."}
           </p>
         ) : (
-          <div className="ref-table-wrap">
+          <div>
             <table className="ref comptes-table">
               <thead>
                 <tr>
@@ -355,6 +396,10 @@ export function AdminUsersView() {
             </table>
           </div>
         )}
+        <p className="carte-note comptes-roles">
+          <strong>Lecture seule</strong> consulte le planning · <strong>Édition</strong> le modifie ·{" "}
+          <strong>Admin</strong> gère aussi les comptes, Celcat et les sauvegardes.
+        </p>
       </section>
     </section>
   );
