@@ -27,9 +27,11 @@ def _chemin_concret(chemin: str) -> str:
 
 
 def _routes_protegees() -> list[tuple[str, str]]:
+    """TOUTES les routes, y compris celles d'un routeur inclus (`/api/v1`) :
+    `app.routes` ne les aplatit plus (FastAPI 0.14x), et ce test ne voyait
+    donc aucune route v1 jusqu'au 29/09/2026."""
     routes = []
-    for route in app.routes:
-        chemin = getattr(route, "path", None)
+    for chemin, route in main._routes_effectives(app.routes):
         methodes = getattr(route, "methods", None) or set()
         if not chemin or not chemin.startswith(main._PROTECTED_PREFIXES):
             continue

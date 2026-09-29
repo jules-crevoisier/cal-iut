@@ -203,7 +203,14 @@ async def _lifespan(_app: FastAPI):
         yield
 
 
-app = FastAPI(title="cal-iut API", version="1.0.0", lifespan=_lifespan)
+# Schéma OpenAPI et pages `/docs`, `/redoc` de TOUTE l'appli : désactivés
+# (audit du 29/09/2026, P2-5 — ils étaient publics : la carte complète des
+# routes internes, sans compte). Seul le schéma de l'API v1 publique est
+# servi, sous `/api/v1/openapi.json` et `/api/v1/docs`, avec les mêmes droits
+# que ses données (cf. `api/v1.py`). `app.openapi()` reste appelable en local.
+app = FastAPI(
+    title="cal-iut API", version="1.0.0", lifespan=_lifespan, docs_url=None, redoc_url=None, openapi_url=None,
+)
 
 # Revue qualité du 31/08/2026 (système de comptes) : un mot de passe trop
 # court (`Field(min_length=10)`) déclenche une 422 dont le corps par défaut
