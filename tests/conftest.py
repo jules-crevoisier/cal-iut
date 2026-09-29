@@ -19,6 +19,10 @@ import pytest
 
 os.environ.setdefault("CAL_IUT_PASSWORD", "test-password")
 os.environ.setdefault("CAL_IUT_SECRET_KEY", "test-secret-key-not-for-prod")
+# Cookie de session `Secure` par défaut (audit 29/09/2026, P1-1) : le client
+# de test parle en `http://testserver` et ne renverrait jamais un cookie
+# `Secure`. `test_cookie_secure_2026_09_29.py` vérifie le cas par défaut.
+os.environ.setdefault("CAL_IUT_COOKIE_SECURE", "0")
 
 
 @pytest.fixture

@@ -546,13 +546,16 @@ def auth_login(body: LoginRequest, response: Response) -> dict:
     response.set_cookie(
         accounts.ACCOUNT_SESSION_COOKIE, accounts.make_account_session_token(user.id),
         max_age=accounts.ACCOUNT_SESSION_MAX_AGE_S, httponly=True, samesite="lax",
+        secure=accounts.cookie_secure(),
     )
     return {"role": user.role, "status": user.status}
 
 
 @app.post("/auth/logout")
 def auth_logout(response: Response) -> dict:
-    response.delete_cookie(accounts.ACCOUNT_SESSION_COOKIE)
+    response.delete_cookie(
+        accounts.ACCOUNT_SESSION_COOKIE, httponly=True, samesite="lax", secure=accounts.cookie_secure(),
+    )
     return {"ok": True}
 
 

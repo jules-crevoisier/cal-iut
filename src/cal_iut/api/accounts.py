@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import secrets
 import time
 from collections.abc import Callable
@@ -40,6 +41,16 @@ ACCOUNT_SESSION_COOKIE = "cal_iut_account_session"  # jamais "cal_iut_session" (
 # l'ancien cookie mot de passe partagé ne doit jamais pouvoir être relu comme
 # un identifiant de compte.
 ACCOUNT_SESSION_MAX_AGE_S = 30 * 24 * 3600  # 30 jours
+
+
+def cookie_secure() -> bool:
+    """Attribut `Secure` du cookie de session (audit du 29/09/2026, P1-1) :
+    sans lui, une seule requête `http://` (Wi-Fi hostile, lien mal recopié)
+    fait partir le cookie en clair. Actif par défaut ; `CAL_IUT_COOKIE_SECURE=0`
+    pour un serveur de développement servi en http ailleurs que sur
+    `localhost` (les navigateurs acceptent déjà un cookie `Secure` sur
+    `http://localhost`). Relu à chaque appel : les tests le basculent."""
+    return os.environ.get("CAL_IUT_COOKIE_SECURE", "1").strip() != "0"
 
 ROLE_ORDER: dict[str, int] = {"read_only": 0, "edit": 1, "admin": 2}
 
