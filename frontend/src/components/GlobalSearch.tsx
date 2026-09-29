@@ -6,9 +6,32 @@
  * pertinent en tête), correspondance surlignée, ↑/↓ qui bouclent, Début/Fin,
  * la ligne choisie reste visible au défilement, et les derniers résultats
  * ouverts sont proposés dès l'ouverture (on cherche souvent les mêmes).
+ *
+ * Refonte v2 (même jour) : une vraie palette de commande dans la nouvelle
+ * coque — en haut et au centre, champ précédé de la loupe, une icône par
+ * type de résultat (la même que dans la navigation pour les écrans), la
+ * ligne choisie porte « Entrée » et sa destination, pied avec les touches et
+ * le nombre de résultats.
  */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  CalendarRange,
+  ClipboardList,
+  CornerDownLeft,
+  DoorOpen,
+  GraduationCap,
+  LayoutDashboard,
+  Library,
+  ListChecks,
+  Search,
+  ShieldCheck,
+  SquarePlus,
+  UsersRound,
+} from "lucide-react";
 
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
@@ -34,6 +57,37 @@ const DESTINATION: Record<SearchHit["kind"], string> = {
   Salle: "Vue Salle",
   Écran: "Ouvrir",
 };
+
+/** Icône par type — pour un écran, celle de son onglet dans la navigation. */
+const ICONE_TYPE: Record<SearchHit["kind"], LucideIcon> = {
+  Enseignant: GraduationCap,
+  Promo: CalendarRange,
+  Groupe: UsersRound,
+  Cours: BookOpen,
+  Salle: DoorOpen,
+  Écran: LayoutDashboard,
+};
+
+const ICONE_ECRAN: Record<string, LucideIcon> = {
+  accueil: LayoutDashboard,
+  semaine: CalendarDays,
+  prof: GraduationCap,
+  promo: CalendarRange,
+  groupe: UsersRound,
+  "salles-libres": DoorOpen,
+  reference: Library,
+  contraintes: ShieldCheck,
+  apf: ListChecks,
+  taches: ClipboardList,
+};
+
+function iconeDe(hit: SearchHit): LucideIcon {
+  if (hit.kind === "Écran") {
+    if (hit.route.panel === "aplacer") return SquarePlus;
+    return ICONE_ECRAN[hit.route.vue ?? ""] ?? LayoutDashboard;
+  }
+  return ICONE_TYPE[hit.kind] ?? Search;
+}
 
 function estListeHits(v: unknown): v is SearchHit[] {
   return Array.isArray(v) && v.every((h) => typeof h === "object" && h !== null && "label" in h && "route" in h);
@@ -125,6 +179,7 @@ export function GlobalSearch({ payload, open, onClose, onNavigate }: GlobalSearc
           Rechercher un enseignant, un cours, une salle, un groupe, une promo ou un écran
         </label>
         <div className="searchbox-champ">
+          <Search size={18} className="searchbox-loupe" aria-hidden="true" />
           <input
             id="recherche-globale"
             ref={inputRef}
@@ -163,8 +218,8 @@ export function GlobalSearch({ payload, open, onClose, onNavigate }: GlobalSearc
               }
             }}
           />
-          <button type="button" className="btn btn--ghost btn--sm searchbox-fermer" onClick={onClose}>
-            Échap
+          <button type="button" className="searchbox-fermer" onClick={onClose} aria-label="Fermer la recherche (Échap)">
+            <kbd>Échap</kbd>
           </button>
         </div>
         <p className="sr-only" aria-live="polite">
@@ -189,6 +244,7 @@ export function GlobalSearch({ payload, open, onClose, onNavigate }: GlobalSearc
                 {g.hits.map((h) => {
                   rang += 1;
                   const i = rang;
+                  const Icone = iconeDe(h);
                   return (
                     <button
                       key={`${g.kind}-${h.kind}-${h.sub}-${h.label}`}
@@ -201,6 +257,9 @@ export function GlobalSearch({ payload, open, onClose, onNavigate }: GlobalSearc
                       onMouseMove={() => i !== sel && setSel(i)}
                       onClick={() => activate(h)}
                     >
+                      <span className="hit-icone" aria-hidden="true">
+                        <Icone size={16} />
+                      </span>
                       <span className="hit-texte">
                         <span className="hit-label">
                           <Surligne texte={h.label} query={query} />
@@ -211,7 +270,10 @@ export function GlobalSearch({ payload, open, onClose, onNavigate }: GlobalSearc
                           </span>
                         )}
                       </span>
-                      <span className="hit-dest">{g.kind === "Récents" ? h.kind : DESTINATION[h.kind]}</span>
+                      <span className="hit-dest">
+                        {g.kind === "Récents" ? h.kind : DESTINATION[h.kind]}
+                        {i === sel && <CornerDownLeft size={14} aria-hidden="true" className="hit-entree" />}
+                      </span>
                     </button>
                   );
                 })}
@@ -229,6 +291,11 @@ export function GlobalSearch({ payload, open, onClose, onNavigate }: GlobalSearc
           </span>
           <span>
             <kbd>Échap</kbd> fermer
+          </span>
+          <span className="searchhint-compte">
+            {query.trim()
+              ? `${plats.length} résultat${plats.length > 1 ? "s" : ""}`
+              : "Enseignant, cours, salle, groupe, promo ou écran"}
           </span>
         </div>
       </div>

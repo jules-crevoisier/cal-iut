@@ -112,6 +112,7 @@ export function buildSearchIndex(payload: AppPayload): SearchHit[] {
  * sans passer par la navigation (« Salles libres » et « Vue Salle » n'y
  * figurent plus depuis le 25/09/2026 : la recherche est leur accès interne). */
 export const ECRANS: SearchHit[] = [
+  { kind: "Écran", label: "Accueil", sub: "Tableau de bord de la semaine", route: { vue: "accueil" } },
   { kind: "Écran", label: "Vue Semaine", sub: "Planning", route: { vue: "semaine" } },
   { kind: "Écran", label: "Vue Enseignant", sub: "Perspectives", route: { vue: "prof" } },
   { kind: "Écran", label: "Vue Promo", sub: "Perspectives", route: { vue: "promo" } },
