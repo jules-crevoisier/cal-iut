@@ -139,7 +139,9 @@ export function SemesterAgenda({
                 {courante && <span className="agenda-semaine-tag">affichée</span>}
                 <span className="agenda-semaine-h">{formatHeures(heuresDe(list))}</span>
               </h4>
-              <ul className={`agenda-lignes${couleursParMatiere ? " couleurs-matiere" : ""}`}>
+              <ul
+                className={`agenda-lignes${couleursParMatiere ? " couleurs-matiere" : ""}${unSeulCours ? " agenda-lignes--un-cours" : ""}`}
+              >
                 {list.map((it) => {
                   const groupes = sansGroupes
                     ? ""

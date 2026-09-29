@@ -114,6 +114,11 @@
   font-size: 0.82rem;
 }
 
+/* Une seule matière : la colonne « cours » ne porte que le type. */
+.agenda-lignes--un-cours .agenda-ligne {
+  grid-template-columns: 7rem 6rem 4.5rem minmax(0, 1fr) 9.5rem;
+}
+
 .agenda-ligne + .agenda-ligne {
   border-top: 1px solid var(--surface-3);
 }
@@ -184,7 +189,8 @@
 }
 
 @media (max-width: 760px) {
-  .agenda-ligne {
+  .agenda-ligne,
+  .agenda-lignes--un-cours .agenda-ligne {
     grid-template-columns: auto 1fr auto;
     gap: 2px 10px;
     padding: 6px 8px;

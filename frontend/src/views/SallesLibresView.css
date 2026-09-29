@@ -217,6 +217,18 @@
   font-weight: 600;
 }
 
+/* Vingt noms soulignés en colonne font un bloc bleu : le lien vers la
+   fiche salle ne se souligne qu'au survol. */
+.salleslibres-nom.linklike {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.salleslibres-nom.linklike:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .salleslibres-cap {
   display: block;
   font-weight: 400;
