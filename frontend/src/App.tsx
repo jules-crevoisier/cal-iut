@@ -40,7 +40,7 @@ import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
 import { SauvegardesView } from "./views/SauvegardesView";
 import { indexSemaineCourante } from "./utils/semaineCourante";
-import { buildTodoList } from "./utils/todo";
+import { compterATraiter } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { useNarrowScreen } from "./hooks/useNarrowScreen";
@@ -356,8 +356,8 @@ export function App() {
   // écran signale, pas seulement `buildTodoList` — un doublon EST quelque
   // chose « qui demande une décision », même s'il vient d'un calcul séparé
   // (`refreshDoublonsCount` ci-dessus).
-  const todoCount = (appPayload ? buildTodoList(appPayload).length : 0) + doublonsCount;
-  const todoHasBad = (appPayload ? buildTodoList(appPayload).some((i) => i.sev === "bad") : false) || doublonsCount > 0;
+  const { total: todoCount, aCorriger: todoACorriger } = compterATraiter(appPayload, doublonsCount);
+  const todoHasBad = todoACorriger > 0;
 
   const handleYearChange = (nextYear: number) => {
     setYear(nextYear);
@@ -487,6 +487,7 @@ export function App() {
               hasPayload={!!appPayload}
               todoCount={todoCount}
               todoHasBad={todoHasBad}
+              todoACorriger={todoACorriger}
               open={navOpen}
               onClose={() => setNavOpen(false)}
               estAdmin={moi?.role === "admin"}

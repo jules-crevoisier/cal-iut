@@ -1,13 +1,58 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+/**
+ * « À traiter » — tout ce qui demande une décision, rangé pour être TRAITÉ
+ * (refonte du 29/09/2026) : la page faisait 21 000 px de haut, 309 lignes
+ * dépliées à la suite. Désormais :
+ *   - un sommaire par nature (compteurs cliquables) ;
+ *   - des sections repliables, les « à revoir » repliées par défaut ;
+ *   - des filtres (texte, parcours, semaine, enseignant, gravité) mémorisés ;
+ *   - un tri par urgence : semaine en cours d'abord, semaines passées
+ *     regroupées et repliées en fin de section ;
+ *   - chaque ligne ouvre l'écran où l'on corrige.
+ *
+ * Deux sources : `buildTodoList` (dérivé du planning chargé) et les doublons
+ * salle/enseignant (retour Kyllian Bresson 25/09/2026), balayés EN DIRECT par
+ * `GET /controles/doublons` pour attraper ceux qu'une retouche à la main a
+ * introduits depuis le chargement. Le contrôle HEBDOMADAIRE (Jules Crevoisier,
+ * 25/09/2026) tourne côté serveur ; on n'en affiche que le dernier résultat,
+ * dans l'en-tête de la section doublons.
+ */
+
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { Doublon, DoublonHebdoRun } from "../api/client";
 import { executerControleDoublonsHebdo, fetchControleDoublonsHebdo, fetchDoublons } from "../api/client";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { estNouveau, libelleControleHebdo } from "../utils/controleDoublonsHebdo";
-import { coursEnConflit, grouperDoublonsParSemaine, libelleCreneauDoublon, routeVersDoublon } from "../utils/doublons";
-import { buildTodoList } from "../utils/todo";
+import { libelleControleHebdo } from "../utils/controleDoublonsHebdo";
+import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
+import {
+  buildTodoList,
+  FILTRES_VIDES,
+  filtrerPoints,
+  libelleQuand,
+  libelleSemaine,
+  NATURES,
+  pointsDepuisDoublons,
+  statutsSemaines,
+  trierParUrgence,
+  type FiltresTodo,
+  type NatureInfo,
+  type NatureTodo,
+  type StatutSemaine,
+  type TodoItem,
+} from "../utils/todo";
 import "./TodoView.css";
+
+const CLE_FILTRES = "cal-iut:a-traiter:filtres:v1";
+const CLE_REPLIES = "cal-iut:a-traiter:replies:v1";
+/** Les « à revoir » (compromis acceptés, confort) sont repliés tant que
+ * l'utilisateur n'a rien choisi : ils ne doivent pas noyer ce qui casse. */
+const REPLIES_PAR_DEFAUT: NatureTodo[] = ["compromis-sae", "trouee"];
+const PAS = 40;
+
+function estFiltres(v: unknown): v is FiltresTodo {
+  return typeof v === "object" && v !== null && "gravite" in v && "semaine" in v;
+}
 
 interface TodoViewProps {
   payload: AppPayload;
@@ -17,11 +62,6 @@ interface TodoViewProps {
 export function TodoView({ payload, setRoute }: TodoViewProps) {
   const items = useMemo(() => buildTodoList(payload), [payload]);
 
-  // Doublons salle/enseignant (retour Kyllian Bresson 25/09/2026, cf.
-  // `api/doublons.py`) : contrôle À POSTERIORI, distinct de `buildTodoList`
-  // ci-dessus (dérivé de `payload`, calculé une fois côté serveur au chargement
-  // de l'app) — appelé séparément car il balaie `state.timetable` en direct,
-  // pour attraper les doublons introduits par une retouche manuelle depuis.
   const [doublons, setDoublons] = useState<Doublon[] | null>(null);
   const [erreurDoublons, setErreurDoublons] = useState<string | null>(null);
 
@@ -29,11 +69,9 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
     try {
       const liste = await fetchDoublons();
       // Signalement de Jules le 27/09/2026 (« je ne vois pas la section ») :
-      // une réponse d'une forme inattendue rendait `liste` `undefined`, et
-      // `doublons.length` faisait alors tomber TOUT l'écran « À traiter » —
-      // écran blanc, sans le moindre message. Un front et un back décalés
-      // d'un déploiement suffisent à produire ça. On refuse donc ici tout ce
-      // qui n'est pas une liste, et on le DIT.
+      // une réponse d'une forme inattendue (front et back décalés d'un
+      // déploiement) faisait tomber tout l'écran. On refuse tout ce qui
+      // n'est pas une liste, et on le DIT.
       if (!Array.isArray(liste)) {
         setDoublons([]);
         setErreurDoublons("Réponse inattendue du serveur pour les doublons.");
@@ -50,19 +88,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
     void chargerDoublons();
   }, [chargerDoublons]);
 
-  const groupesDoublons = useMemo(
-    () => (doublons ? grouperDoublonsParSemaine(payload, doublons) : []),
-    [payload, doublons],
-  );
-
-  // Contrôle HEBDOMADAIRE automatique (Jules Crevoisier, 25/09/2026, dicté :
-  // « on veut faire quelque chose qui vérifie chaque semaine [...] »). Le
-  // filet tourne côté serveur SANS écran (`api/controle_doublons_hebdo.py`,
-  // hooké dans `_apres_ecriture_planning`/`startup()`) — cette section
-  // n'affiche que son DERNIER résultat, distinct de la liste ci-dessus (qui
-  // recalcule les doublons EN DIRECT à chaque ouverture de l'écran).
-  // `undefined` = pas encore chargé, `null` = jamais exécuté (aucun run en
-  // historique).
+  // `undefined` = pas encore chargé, `null` = jamais exécuté.
   const [controleHebdo, setControleHebdo] = useState<DoublonHebdoRun | null | undefined>(undefined);
   const [executionHebdoEnCours, setExecutionHebdoEnCours] = useState(false);
 
@@ -72,10 +98,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
       .then((dernier) => {
         if (!annule) setControleHebdo(dernier);
       })
-      // Ne bloque jamais l'écran : ce résumé est un complément à la liste
-      // ci-dessus, pas une donnée dont dépend le reste de « À traiter »
-      // (même esprit que `verifier_si_necessaire` côté serveur, qui ne
-      // lève jamais).
+      // Complément, jamais bloquant pour le reste de l'écran.
       .catch(() => {
         if (!annule) setControleHebdo(null);
       });
@@ -87,119 +110,439 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
   const verifierMaintenant = useCallback(async () => {
     setExecutionHebdoEnCours(true);
     try {
-      const resultat = await executerControleDoublonsHebdo();
-      setControleHebdo(resultat);
+      setControleHebdo(await executerControleDoublonsHebdo());
+      // Le contrôle vient de balayer le planning : la liste en direct suit.
+      void chargerDoublons();
     } catch {
-      // Le dernier résultat connu reste affiché — jamais d'écran cassé pour
-      // un contrôle manuel raté.
+      // Le dernier résultat connu reste affiché.
     } finally {
       setExecutionHebdoEnCours(false);
     }
+  }, [chargerDoublons]);
+
+  const pointsDoublons = useMemo(
+    () => (doublons ? pointsDepuisDoublons(payload, doublons, controleHebdo ?? null) : []),
+    [payload, doublons, controleHebdo],
+  );
+  const tous = useMemo(() => [...items, ...pointsDoublons], [items, pointsDoublons]);
+  const statuts = useMemo(() => statutsSemaines(payload), [payload]);
+
+  // ── Filtres et sections repliées, mémorisés d'une visite à l'autre ──
+  const [filtres, setFiltres] = useState<FiltresTodo>(() => ({
+    ...FILTRES_VIDES,
+    ...lireLocal(CLE_FILTRES, FILTRES_VIDES, estFiltres),
+  }));
+  useEffect(() => ecrireLocal(CLE_FILTRES, filtres), [filtres]);
+  const majFiltre = (patch: Partial<FiltresTodo>) => setFiltres((f) => ({ ...f, ...patch }));
+  const filtresActifs =
+    filtres.texte !== "" ||
+    filtres.parcours !== "" ||
+    filtres.enseignant !== "" ||
+    filtres.semaine !== "toutes" ||
+    filtres.gravite !== "tout";
+
+  const [replies, setReplies] = useState<Set<NatureTodo>>(
+    () => new Set(lireLocal<NatureTodo[]>(CLE_REPLIES, REPLIES_PAR_DEFAUT, Array.isArray as (v: unknown) => v is NatureTodo[])),
+  );
+  useEffect(() => ecrireLocal(CLE_REPLIES, [...replies]), [replies]);
+  const basculer = (n: NatureTodo) =>
+    setReplies((r) => {
+      const s = new Set(r);
+      if (s.has(n)) s.delete(n);
+      else s.add(n);
+      return s;
+    });
+
+  const filtres_ = useMemo(
+    () => trierParUrgence(filtrerPoints(tous, filtres, statuts, payload.teacherLabels), statuts),
+    [tous, filtres, statuts, payload.teacherLabels],
+  );
+  const parNature = useMemo(() => {
+    const m = new Map<NatureTodo, TodoItem[]>(NATURES.map((n) => [n.id, []]));
+    for (const it of filtres_) m.get(it.nature)!.push(it);
+    return m;
+  }, [filtres_]);
+  const totalParNature = useMemo(() => {
+    const m = new Map<NatureTodo, number>(NATURES.map((n) => [n.id, 0]));
+    for (const it of tous) m.set(it.nature, (m.get(it.nature) ?? 0) + 1);
+    return m;
+  }, [tous]);
+
+  // Options proposées : seulement ce qui apparaît vraiment dans la liste.
+  const optionsParcours = useMemo(
+    () => [...new Set(tous.flatMap((i) => i.parcours))].sort((a, b) => a.localeCompare(b, "fr")),
+    [tous],
+  );
+  const optionsEnseignants = useMemo(() => {
+    const codes = new Set(tous.flatMap((i) => i.enseignants));
+    return [...codes]
+      .map((c) => [c, payload.teacherLabels[c] ?? c] as const)
+      .sort((a, b) => a[1].localeCompare(b[1], "fr"));
+  }, [tous, payload.teacherLabels]);
+  const optionsSemaines = useMemo(
+    () => payload.weekRows.filter((w) => w.weekIndex !== null && !w.blocked),
+    [payload.weekRows],
+  );
+
+  const refSections = useRef<Partial<Record<NatureTodo, HTMLElement | null>>>({});
+  const allerA = (n: NatureTodo) => {
+    setReplies((r) => {
+      const s = new Set(r);
+      s.delete(n);
+      return s;
+    });
+    requestAnimationFrame(() => refSections.current[n]?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const rechercheRef = useRef<HTMLInputElement>(null);
+  // « / » place le curseur dans la recherche, comme partout ailleurs sur le web.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const cible = e.target as HTMLElement | null;
+      if (cible && (cible.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(cible.tagName))) return;
+      e.preventDefault();
+      rechercheRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  return (
-    <section className="view">
-      <div className="panel">
-        {controleHebdo !== undefined && (
-          <div className="todo-hebdo">
-            {controleHebdo === null ? (
-              <p className="muted">Le contrôle hebdomadaire des doublons n'a jamais encore tourné.</p>
-            ) : (
-              <p className="todo-hebdo-resume">{libelleControleHebdo(controleHebdo)}</p>
-            )}
-            <button type="button" className="btn" onClick={() => void verifierMaintenant()} disabled={executionHebdoEnCours}>
-              {executionHebdoEnCours ? "Vérification…" : "Vérifier maintenant"}
-            </button>
-          </div>
-        )}
+  const toutReplie = NATURES.every((n) => replies.has(n.id));
 
-        <div className="todo-doublons-header">
-          <h3>Doublons salle / enseignant</h3>
-          {doublons !== null && doublons.length > 0 && (
-            <span className="pill bad" aria-label={`${doublons.length} doublon${doublons.length > 1 ? "s" : ""}`}>
-              {doublons.length}
+  return (
+    <section className="view todo">
+      <nav className="todo-sommaire" aria-label="Sommaire des points à traiter">
+        {NATURES.map((n) => {
+          const nb = parNature.get(n.id)!.length;
+          const chargement = n.id === "doublon" && doublons === null && !erreurDoublons;
+          return (
+            <button
+              key={n.id}
+              type="button"
+              className={`todo-sommaire-case ${nb > 0 ? n.sev : "vide"}`}
+              onClick={() => allerA(n.id)}
+              title={filtresActifs ? `${nb} affiché(s) sur ${totalParNature.get(n.id)}` : undefined}
+            >
+              <span className="todo-sommaire-nb">{chargement ? "…" : nb}</span>
+              <span className="todo-sommaire-libelle">{n.titre}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="todo-filtres" role="search">
+        <input
+          ref={rechercheRef}
+          type="search"
+          className="todo-recherche"
+          placeholder="Filtrer : cours, salle, groupe…  ( / )"
+          aria-label="Filtrer les points"
+          value={filtres.texte}
+          onChange={(e) => majFiltre({ texte: e.target.value })}
+        />
+        <select aria-label="Parcours" value={filtres.parcours} onChange={(e) => majFiltre({ parcours: e.target.value })}>
+          <option value="">Tous les parcours</option>
+          {optionsParcours.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Semaine"
+          value={filtres.semaine}
+          onChange={(e) => majFiltre({ semaine: e.target.value as FiltresTodo["semaine"] })}
+        >
+          <option value="toutes">Toutes les semaines</option>
+          <option value="a-venir">Cette semaine et après</option>
+          <option value="courante">Cette semaine</option>
+          <optgroup label="Une semaine">
+            {optionsSemaines.map((w) => (
+              <option key={w.weekIndex} value={`s${w.weekIndex}`}>
+                {w.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        <select
+          aria-label="Enseignant"
+          value={filtres.enseignant}
+          onChange={(e) => majFiltre({ enseignant: e.target.value })}
+        >
+          <option value="">Tous les enseignants</option>
+          {optionsEnseignants.map(([code, nom]) => (
+            <option key={code} value={code}>
+              {nom}
+            </option>
+          ))}
+        </select>
+        <div className="todo-gravite" role="radiogroup" aria-label="Gravité">
+          {(
+            [
+              ["tout", "Tout"],
+              ["bad", "À corriger"],
+              ["warn", "À revoir"],
+            ] as const
+          ).map(([v, l]) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={filtres.gravite === v}
+              className={filtres.gravite === v ? "actif" : ""}
+              onClick={() => majFiltre({ gravite: v })}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+        <span className="todo-filtres-fin">
+          {filtresActifs && (
+            <>
+              <span className="muted" aria-live="polite">
+                {filtres_.length} sur {tous.length}
+              </span>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setFiltres(FILTRES_VIDES)}>
+                Réinitialiser
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => setReplies(toutReplie ? new Set() : new Set(NATURES.map((n) => n.id)))}
+          >
+            {toutReplie ? "Tout déplier" : "Tout replier"}
+          </button>
+        </span>
+      </div>
+
+      {NATURES.map((n) => (
+        <SectionNature
+          key={n.id}
+          nature={n}
+          points={parNature.get(n.id)!}
+          total={totalParNature.get(n.id) ?? 0}
+          replie={replies.has(n.id)}
+          onBasculer={() => basculer(n.id)}
+          refSection={(el) => {
+            refSections.current[n.id] = el;
+          }}
+          payload={payload}
+          statuts={statuts}
+          filtresActifs={filtresActifs}
+          setRoute={setRoute}
+          entete={
+            n.id === "doublon" ? (
+              <ControleHebdo
+                controle={controleHebdo}
+                enCours={executionHebdoEnCours}
+                onVerifier={() => void verifierMaintenant()}
+              />
+            ) : null
+          }
+          etat={
+            n.id !== "doublon" ? null : erreurDoublons ? (
+              <div className="todo-erreur">
+                <p className="alerte" role="alert">
+                  {erreurDoublons}
+                </p>
+                <button type="button" className="btn btn--sm" onClick={() => void chargerDoublons()}>
+                  Réessayer
+                </button>
+              </div>
+            ) : doublons === null ? (
+              <p className="muted todo-vide" role="status">
+                Chargement…
+              </p>
+            ) : null
+          }
+          texteVide={n.id === "doublon" ? "Aucun doublon détecté." : "Rien à signaler."}
+        />
+      ))}
+    </section>
+  );
+}
+
+function ControleHebdo({
+  controle,
+  enCours,
+  onVerifier,
+}: {
+  controle: DoublonHebdoRun | null | undefined;
+  enCours: boolean;
+  onVerifier: () => void;
+}) {
+  if (controle === undefined) return null;
+  return (
+    <div className="todo-hebdo">
+      {controle === null ? (
+        <span className="muted">Le contrôle hebdomadaire des doublons n'a jamais encore tourné.</span>
+      ) : (
+        <span className="muted">{libelleControleHebdo(controle)}</span>
+      )}
+      <button type="button" className="btn btn--sm" onClick={onVerifier} disabled={enCours}>
+        {enCours ? "Vérification…" : "Vérifier maintenant"}
+      </button>
+    </div>
+  );
+}
+
+interface SectionNatureProps {
+  nature: NatureInfo;
+  points: TodoItem[];
+  total: number;
+  replie: boolean;
+  onBasculer: () => void;
+  refSection: (el: HTMLElement | null) => void;
+  payload: AppPayload;
+  statuts: Map<number, StatutSemaine>;
+  filtresActifs: boolean;
+  setRoute: (patch: Partial<Route>) => void;
+  entete: ReactNode;
+  /** Chargement / erreur propres à la section (doublons). */
+  etat: ReactNode;
+  texteVide: string;
+}
+
+function SectionNature({
+  nature,
+  points,
+  total,
+  replie,
+  onBasculer,
+  refSection,
+  payload,
+  statuts,
+  filtresActifs,
+  setRoute,
+  entete,
+  etat,
+  texteVide,
+}: SectionNatureProps) {
+  const [limite, setLimite] = useState(PAS);
+  const [passeesOuvertes, setPasseesOuvertes] = useState(false);
+  const idCorps = `todo-corps-${nature.id}`;
+
+  const actuels = points.filter((p) => p.semaine === null || statuts.get(p.semaine) !== "past");
+  const passes = points.filter((p) => p.semaine !== null && statuts.get(p.semaine) === "past");
+  const visibles = actuels.slice(0, limite);
+  const reste = actuels.length - visibles.length;
+
+  return (
+    <section className={`todo-section ${replie ? "replie" : ""}`} ref={refSection} aria-labelledby={`todo-titre-${nature.id}`}>
+      <header className="todo-section-tete">
+        <button
+          type="button"
+          className="todo-section-bascule"
+          aria-expanded={!replie}
+          aria-controls={idCorps}
+          onClick={onBasculer}
+        >
+          <span className="todo-chevron" aria-hidden="true" />
+          <h3 id={`todo-titre-${nature.id}`}>{nature.titre}</h3>
+          {points.length > 0 && (
+            <span
+              className={`pill ${nature.sev}`}
+              aria-label={`${points.length} ${nature.id === "doublon" ? "doublon" : "point"}${points.length > 1 ? "s" : ""}`}
+            >
+              {points.length}
             </span>
           )}
-        </div>
-        <p className="muted">
-          Une salle ou un enseignant mobilisé deux fois sur le même créneau, souvent après une retouche à la main —
-          H.201/H.203 et H.007/H.008 comptent comme une seule salle. Chaque ligne ouvre la Vue Promo sur le
-          créneau concerné.
-        </p>
+          {filtresActifs && total !== points.length && <span className="muted small">sur {total}</span>}
+        </button>
+        {!replie && <p className="todo-section-aide">{nature.aide}</p>}
+        {entete}
+      </header>
 
-        {doublons === null && !erreurDoublons && (
-          <p className="muted" role="status">
-            Chargement…
-          </p>
-        )}
-
-        {erreurDoublons && (
-          <div className="todo-doublons-actions">
-            <p className="alerte" role="alert">
-              {erreurDoublons}
+      {!replie && (
+        <div className="todo-section-corps" id={idCorps}>
+          {etat}
+          {!etat && points.length === 0 && (
+            <p className="muted todo-vide" role="status">
+              {filtresActifs && total > 0 ? "Aucun point ne correspond aux filtres." : texteVide}
             </p>
-            <button type="button" className="btn" onClick={() => void chargerDoublons()}>
-              Réessayer
+          )}
+          {!etat && visibles.length > 0 && (
+            <ListePoints points={visibles} payload={payload} statuts={statuts} nature={nature} setRoute={setRoute} />
+          )}
+          {!etat && reste > 0 && (
+            <button type="button" className="btn btn--ghost btn--sm todo-plus" onClick={() => setLimite((l) => l + PAS * 2)}>
+              Afficher {Math.min(reste, PAS * 2)} de plus ({reste} restant{reste > 1 ? "s" : ""})
             </button>
-          </div>
-        )}
-
-        {doublons !== null && !erreurDoublons && doublons.length === 0 && (
-          <p className="muted" role="status">
-            Aucun doublon détecté.
-          </p>
-        )}
-
-        {groupesDoublons.map((groupe) => (
-          <div key={groupe.semaine} className="todo-doublons-semaine">
-            <h4>{groupe.libelle}</h4>
-            <div className="todolist">
-              {groupe.doublons.map((d, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className={`todo-item ${d.type === "salle" ? "bad" : "warn"}`}
-                  onClick={() => setRoute(routeVersDoublon(d))}
-                >
-                  <span className="sev">{d.type === "salle" ? "salle" : "enseignant"}</span>
-                  <span>
-                    <strong>{d.ressource}</strong>
-                    {estNouveau(controleHebdo ?? null, d) && <span className="pill new">nouveau</span>}
-                    <div className="sub">
-                      {libelleCreneauDoublon(payload, d.semaine, d.jour, d.creneau)} — {coursEnConflit(d)}
-                    </div>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="panel">
-        <h3>Ce qui demande une décision</h3>
-        <p className="muted">
-          Agrégé depuis la sortie brute du solveur : contraintes enseignantes violées, journées trouées. Chaque
-          ligne ouvre le créneau concerné.
-        </p>
-        {items.length === 0 ? (
-          <p className="muted">Rien à signaler : aucune contrainte violée, aucune journée trouée.</p>
-        ) : (
-          <div className="todolist">
-            {items.map((it, i) => (
-              <button key={i} type="button" className={`todo-item ${it.sev}`} onClick={() => setRoute(it.route)}>
-                <span className="sev">{it.sev === "bad" ? "à corriger" : "à revoir"}</span>
-                <span>
-                  <strong>{it.title}</strong>
-                  <div className="sub">{it.sub}</div>
-                </span>
+          )}
+          {!etat && passes.length > 0 && (
+            <div className="todo-passees">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                aria-expanded={passeesOuvertes}
+                onClick={() => setPasseesOuvertes((o) => !o)}
+              >
+                {passeesOuvertes ? "Masquer" : "Afficher"} les semaines passées ({passes.length})
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-
+              {passeesOuvertes && (
+                <ListePoints points={passes} payload={payload} statuts={statuts} nature={nature} setRoute={setRoute} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </section>
+  );
+}
+
+function ListePoints({
+  points,
+  payload,
+  statuts,
+  nature,
+  setRoute,
+}: {
+  points: TodoItem[];
+  payload: AppPayload;
+  statuts: Map<number, StatutSemaine>;
+  nature: NatureInfo;
+  setRoute: (patch: Partial<Route>) => void;
+}) {
+  // Intertitre à chaque changement de semaine (la liste est déjà triée).
+  const nbParSemaine = new Map<number, number>();
+  for (const p of points) if (p.semaine !== null) nbParSemaine.set(p.semaine, (nbParSemaine.get(p.semaine) ?? 0) + 1);
+  let semainePrecedente: number | null | undefined;
+
+  return (
+    <ul className="todo-liste">
+      {points.map((it) => {
+        const nouvelleSemaine = it.semaine !== null && it.semaine !== semainePrecedente;
+        semainePrecedente = it.semaine;
+        const statut = it.semaine !== null ? statuts.get(it.semaine) : undefined;
+        const quand = libelleQuand(payload, it);
+        return (
+          <Fragment key={it.cle}>
+            {nouvelleSemaine && (
+              <li className="todo-semaine">
+                <span>{libelleSemaine(payload, it.semaine!)}</span>
+                {statut === "current" && <span className="todo-semaine-marque">cette semaine</span>}
+                <span className="todo-semaine-nb">{nbParSemaine.get(it.semaine!)}</span>
+              </li>
+            )}
+            <li>
+              <button type="button" className={`todo-ligne ${it.sev}`} onClick={() => setRoute(it.route)}>
+                <span className="todo-quand">{quand}</span>
+                <span className="todo-quoi">
+                  {it.typeDoublon && <span className="todo-tag">{it.typeDoublon}</span>}
+                  <strong>{it.title}</strong>
+                  {it.n > 1 && <span className="todo-fois">×{it.n}</span>}
+                  {it.nouveau && <span className="pill todo-nouveau">nouveau</span>}
+                  <span className="todo-detail">{it.sub}</span>
+                </span>
+                <span className="todo-cible">{nature.cible} →</span>
+              </button>
+            </li>
+          </Fragment>
+        );
+      })}
+    </ul>
   );
 }

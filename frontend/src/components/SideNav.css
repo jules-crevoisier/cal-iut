@@ -1,0 +1,24 @@
+/* Compléments à la navigation (le style de base est dans app.css). */
+
+.sidenav-kbd {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.searchopenbtn:hover .sidenav-kbd {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+/* Pas de clavier physique : le raccourci n'apprend rien. */
+@media (max-width: 760px), (pointer: coarse) {
+  .sidenav-kbd {
+    display: none;
+  }
+}

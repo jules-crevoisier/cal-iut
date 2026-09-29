@@ -1,73 +1,405 @@
-/* Section « Doublons salle / enseignant » de l'écran « À traiter » (retour
-   Kyllian Bresson 25/09/2026) — mêmes tokens que le reste de l'appli
-   (`--border`, échelle d'espacement 4/8/12/16px), rien d'ad-hoc. Mobile
-   d'abord (320px) : titre + badge sur deux lignes si besoin, une colonne. */
+/* « À traiter » (refonte du 29/09/2026) : sommaire, barre de filtres,
+   sections repliables, lignes denses d'une hauteur. Jetons uniquement. */
 
-.todo-doublons-header {
+.view.todo {
+  gap: 12px;
+}
+
+/* ── Sommaire : un compteur par nature, cliquable ── */
+.todo-sommaire {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.todo-sommaire-case {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.todo-sommaire-case:last-child {
+  border-right: none;
+}
+
+.todo-sommaire-case:hover {
+  background: var(--surface-2);
+}
+
+.todo-sommaire-nb {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.todo-sommaire-case.bad .todo-sommaire-nb {
+  color: var(--bad-text);
+}
+
+.todo-sommaire-case.warn .todo-sommaire-nb {
+  color: var(--warn-text);
+}
+
+.todo-sommaire-case.vide .todo-sommaire-nb {
+  color: var(--ink-faint);
+}
+
+.todo-sommaire-libelle {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  line-height: 1.3;
+}
+
+/* ── Filtres ── */
+.todo-filtres {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  margin-bottom: 4px;
-}
-
-.todo-doublons-header h3 {
-  margin: 0;
-}
-
-.todo-doublons-semaine {
-  margin-top: 16px;
-}
-
-.todo-doublons-semaine:first-of-type {
-  margin-top: 8px;
-}
-
-.todo-doublons-semaine h4 {
-  margin: 0 0 8px;
-}
-
-.todo-doublons-actions {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  align-items: flex-start;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 8px 0;
+  background: var(--bg);
 }
 
-.todo-doublons-actions .btn {
-  min-height: 44px;
+.todo-recherche {
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
-/* Contrôle hebdomadaire (Jules Crevoisier, 25/09/2026) — au-dessus de la
-   liste existante, une colonne d'abord (320px), même tokens. */
+.todo-filtres select {
+  max-width: 220px;
+}
+
+.todo-gravite {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.todo-gravite button {
+  min-height: calc(var(--control-h) - 2px);
+  padding: 0 10px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.todo-gravite button:last-child {
+  border-right: none;
+}
+
+.todo-gravite button:hover {
+  background: var(--surface-2);
+}
+
+.todo-gravite button.actif {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.todo-filtres-fin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 0.82rem;
+}
+
+/* ── Sections ── */
+.todo-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  scroll-margin-top: 56px;
+}
+
+.todo-section-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 6px 12px 6px 6px;
+}
+
+.todo-section-bascule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 8px 2px 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.todo-section-bascule:hover {
+  background: var(--surface-2);
+}
+
+.todo-section-bascule h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.todo-chevron {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--ink-soft);
+  transition: transform 0.12s;
+}
+
+.todo-section.replie .todo-chevron {
+  transform: rotate(-90deg);
+}
+
+.todo-section-aide {
+  flex: 1 1 320px;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
 .todo-hebdo {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  padding-bottom: 16px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+  margin-left: auto;
+  font-size: 0.8rem;
 }
 
-.todo-hebdo-resume {
+.todo-section-corps {
+  border-top: 1px solid var(--border);
+  padding: 0 0 6px;
+}
+
+.todo-vide {
+  margin: 0;
+  padding: 10px 16px 4px;
+}
+
+.todo-erreur {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 4px;
+}
+
+.todo-erreur .alerte {
   margin: 0;
 }
 
-.todo-hebdo .btn {
-  min-height: 44px;
+/* ── Lignes ── */
+.todo-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-/* Marque « nouveau » sur une ligne apparue depuis le contrôle précédent —
-   même échelle de badge que `.pill`, teinte distincte de `.pill.bad`
-   (compte total) pour ne pas se confondre avec un signal de gravité. */
-.pill.new {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
+.todo-semaine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 16px 4px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #fff;
-  background: var(--accent);
+  color: var(--ink-soft);
 }
+
+.todo-semaine-marque {
+  color: var(--accent);
+}
+
+.todo-semaine-nb {
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.todo-ligne {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 16px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.todo-ligne.bad {
+  border-left-color: color-mix(in srgb, var(--bad) 55%, transparent);
+}
+
+.todo-ligne.warn {
+  border-left-color: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+
+.todo-ligne:hover {
+  background: var(--surface-2);
+}
+
+.todo-ligne:focus-visible {
+  outline-offset: -2px;
+}
+
+.todo-quand {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.todo-quoi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.todo-quoi strong {
+  font-weight: 600;
+}
+
+.todo-detail {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.todo-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--bad-text);
+}
+
+.todo-fois {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.todo-nouveau {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.todo-cible {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.todo-ligne:hover .todo-cible,
+.todo-ligne:focus-visible .todo-cible {
+  color: var(--accent);
+}
+
+.todo-plus {
+  margin: 6px 12px 0;
+}
+
+.todo-passees {
+  margin: 6px 0 0;
+  padding: 4px 12px 0;
+  border-top: 1px dashed var(--border);
+}
+
+.todo-passees .todo-liste {
+  opacity: 0.8;
+}
+
+/* ── Téléphone / tablette étroite ── */
+@media (max-width: 1100px) {
+  .todo-sommaire {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .todo-sommaire-case:nth-child(4n) {
+    border-right: none;
+  }
+
+  .todo-sommaire-case:nth-child(-n + 4) {
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 640px) {
+  .todo-sommaire {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .todo-sommaire-case {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .todo-sommaire-case:nth-child(4n) {
+    border-right: 1px solid var(--border);
+  }
+
+  .todo-sommaire-case:nth-child(2n) {
+    border-right: none;
+  }
+
+  .todo-filtres {
+    position: static;
+  }
+
+  .todo-filtres select {
+    flex: 1 1 140px;
+    max-width: none;
+  }
+
+  .todo-filtres-fin {
+    margin-left: 0;
+  }
+
+  .todo-ligne {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    min-height: 44px;
+  }
+
+  .todo-cible {
+    display: none;
+  }
+}
+.todo-quand:empty { display: none; }
