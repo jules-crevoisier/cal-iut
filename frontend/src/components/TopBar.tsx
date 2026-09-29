@@ -10,13 +10,14 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, LogOut, KeyRound, Menu, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut, KeyRound, Menu, Monitor, Moon, Search, Sun } from "lucide-react";
 
 import type { RouteView } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { indexSemaineCourante } from "../utils/semaineCourante";
 import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { TITRES_VUES } from "./PageHeader";
+import { choisirTheme, lireTheme, type Theme } from "../utils/theme";
 import "./TopBar.css";
 
 /** Vues qui affichent UNE semaine : la navigation n'a de sens que là. */
@@ -246,6 +247,7 @@ function NavigationSemaine({
 
 function MenuCompte({ email, onCle, onDeconnexion }: { email: string; onCle: () => void; onDeconnexion: () => void }) {
   const [ouvert, setOuvert] = useState(false);
+  const [theme, setTheme] = useState<Theme>(() => lireTheme());
   const racine = useRef<HTMLDivElement>(null);
   const initiales = email
     .split("@")[0]!
@@ -297,6 +299,28 @@ function MenuCompte({ email, onCle, onDeconnexion }: { email: string; onCle: () 
           >
             <KeyRound size={16} aria-hidden="true" /> Clé API
           </button>
+          <div className="topbar-theme" role="radiogroup" aria-label="Thème">
+            {(
+              [
+                ["systeme", "Système", Monitor],
+                ["clair", "Clair", Sun],
+                ["sombre", "Sombre", Moon],
+              ] as const
+            ).map(([valeur, libelle, Icone]) => (
+              <button
+                key={valeur}
+                type="button"
+                role="radio"
+                aria-checked={theme === valeur}
+                onClick={() => {
+                  choisirTheme(valeur);
+                  setTheme(valeur);
+                }}
+              >
+                <Icone size={14} aria-hidden="true" /> {libelle}
+              </button>
+            ))}
+          </div>
           <button type="button" role="menuitem" onClick={onDeconnexion}>
             <LogOut size={16} aria-hidden="true" /> Déconnexion
           </button>

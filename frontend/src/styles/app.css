@@ -15,57 +15,75 @@
  * bas, pas par alias.
  */
 :root {
-  /* Socle visuel (refonte du 29/09/2026). Outil de travail dense : fond
-     papier neutre, encre presque noire, UN accent sobre (bleu encre) réservé
-     à l'interface — sélection, action principale, focus. Les couleurs de
-     séance (CM/TD/TP/éval) sont des tokens à part (`--type-*`) : ce sont
-     des DONNÉES, que les utilisateurs reconnaissent déjà, elles ne suivent
-     pas l'accent de l'interface. Pas d'ombre décorative, rayons courts. */
-  --bg: #edf0f3;
+  /* Direction « Lumière / Nuit » (choisie le 29/09/2026) : blanc lumineux en
+     clair, sombre intégral en sombre, selon le réglage du poste (ou le choix
+     fait dans le menu du compte, `data-theme`). Interface quasi monochrome ;
+     la couleur est réservée aux DONNÉES (types de séance, états) et au focus.
+     Cartes de cours en aplats pastel (clair) / lumineux (sombre). */
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f5f7f9;
-  --surface-3: #e6eaee;
-  --ink: #16202a;
-  --ink-soft: #55606b;
-  --ink-faint: #86909a;
-  --border: #d6dce2;
-  --border-strong: #b4bdc6;
-  --accent: #1c5d99;
-  --accent-hover: #154a7b;
-  --accent-soft: #e2ecf6;
-  --accent2: #a65f18;
-  --accent2-soft: #f6eadc;
-  --teal: #1b766e;
-  --teal-soft: #dff0ed;
-  --good: #2c7a4b;
-  --good-soft: #e2f1e7;
-  --bad: #b3362b;
-  --bad-soft: #f8e4e1;
-  --warn: #946511;
-  --warn-soft: #f7eed9;
-  --good-text: #1f6a3e;
-  --warn-text: #7d550c;
-  --bad-text: #9c2c22;
-  /* Couleurs de séance (données) — TD garde sa teinte violette historique. */
-  --type-cm: #5c6269;
-  --type-td: #5b4a9e;
-  --type-tp: var(--teal);
-  --type-eval: var(--accent2);
-  --focus: #2a6db3;
-  /* Rail de navigation : sombre dans les deux thèmes. */
-  --rail-bg: #142230;
-  --rail-hover: #1e3144;
-  --rail-active: #243d55;
-  --rail-fg: #aebccb;
-  --rail-fg-strong: #ffffff;
-  --rail-fg-faint: #6f8295;
-  --rail-accent: #7cb4e8;
-  --radius-sm: 4px;
-  --radius: 6px;
-  --radius-lg: 8px;
+  --surface-2: #fafaf9;
+  --surface-3: #f4f4f5;
+  --ink: #18181b;
+  --ink-soft: #6b6b72;
+  --ink-faint: #a1a1aa;
+  --border: #ececea;
+  --border-strong: #dcdcdf;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: #eff4ff;
+  --accent2: #d97706;
+  --accent2-soft: #fffbeb;
+  --teal: #059669;
+  --teal-soft: #ecfdf5;
+  --good: #16a34a;
+  --good-soft: #f0fdf4;
+  --bad: #dc2626;
+  --bad-soft: #fef2f2;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --good-text: #15803d;
+  --warn-text: #b45309;
+  --bad-text: #b91c1c;
+  --pri-bg: #18181b;
+  --pri-bg-hover: #3f3f46;
+  --pri-fg: #ffffff;
+  /* Couleurs de séance — marque pleine (petits repères) et triplets
+     fond / texte / bord des cartes de cours (aplats pastel). */
+  --type-cm: #71717a;
+  --type-td: #6366f1;
+  --type-tp: #10b981;
+  --type-eval: #f59e0b;
+  --cm-bg: #f4f4f5;
+  --cm-fg: #27272a;
+  --cm-bd: #e4e4e7;
+  --td-bg: #eef2ff;
+  --td-fg: #3730a3;
+  --td-bd: #e0e7ff;
+  --tp-bg: #ecfdf5;
+  --tp-fg: #065f46;
+  --tp-bd: #d1fae5;
+  --ev-bg: #fffbeb;
+  --ev-fg: #92400e;
+  --ev-bd: #fde68a;
+  --focus: #2563eb;
+  /* Navigation : même famille que la page (claire en clair, sombre en sombre). */
+  --rail-bg: #fafaf9;
+  --rail-border: #efefed;
+  --rail-hover: #f0f0ee;
+  --rail-active: #ffffff;
+  --rail-active-ring: 0 0 0 1px #ececea, 0 1px 2px rgba(0, 0, 0, 0.05);
+  --rail-fg: #3f3f46;
+  --rail-fg-strong: #18181b;
+  --rail-fg-faint: #a1a1aa;
+  --rail-icone: #8e8e96;
+  --rail-accent: #18181b;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
   --control-h: 32px;
   --shadow: none;
-  --shadow-pop: 0 10px 30px -10px rgba(20, 24, 28, 0.28), 0 2px 6px rgba(20, 24, 28, 0.08);
+  --shadow-pop: 0 16px 40px -12px rgba(24, 24, 27, 0.25), 0 0 0 1px #ececea;
   color-scheme: light;
 
   /* alias (vocabulaire React existant) */
@@ -74,35 +92,129 @@
   --primary: var(--accent);
   --success: var(--good);
   --danger: var(--bad);
-  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font: "Geist Sans", "Geist", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-heading: var(--font);
-  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+  --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #121416; --surface: #1a1d20; --surface-2: #202427; --surface-3: #2a2e32;
-    --ink: #e8e9ea; --ink-soft: #a2a8ae; --ink-faint: #7b8187;
-    --border: #30353a; --border-strong: #454b51;
-    --accent: #7fb0e0; --accent-hover: #a2c7ea; --accent-soft: #1d2b39;
-    --accent2: #e0a15c; --accent2-soft: #36281a; --teal: #5cc0b5; --teal-soft: #15302d;
-    --good: #62c48b; --good-soft: #17301f; --bad: #eb7468; --bad-soft: #3a2220;
-    --warn: #e2b660; --warn-soft: #362c17;
-    --good-text: #62c48b; --warn-text: #e2b660; --bad-text: #eb7468;
-    --type-cm: #a2a8ae; --type-td: #a89ae6; --focus: #7fb0e0;
+    --bg: #0a0a0b;
+    --surface: #121214;
+    --surface-2: #141416;
+    --surface-3: #1b1b1f;
+    --ink: #ededef;
+    --ink-soft: #8f8f98;
+    --ink-faint: #5f5f67;
+    --border: #1f1f23;
+    --border-strong: #2e2e33;
+    --accent: #8ea2ff;
+    --accent-hover: #b4c1ff;
+    --accent-soft: #1e1f3a;
+    --accent2: #fbbf24;
+    --accent2-soft: #33260d;
+    --teal: #34d399;
+    --teal-soft: #0f2a1f;
+    --good: #4ade80;
+    --good-soft: #0f2a1c;
+    --bad: #f87171;
+    --bad-soft: #3b1618;
+    --warn: #fbbf24;
+    --warn-soft: #33260d;
+    --good-text: #4ade80;
+    --warn-text: #fbbf24;
+    --bad-text: #fca5a5;
+    --pri-bg: #ededef;
+    --pri-bg-hover: #ffffff;
+    --pri-fg: #0a0a0b;
+    --type-cm: #a1a1aa;
+    --type-td: #818cf8;
+    --type-tp: #34d399;
+    --type-eval: #fbbf24;
+    --cm-bg: rgba(161, 161, 170, 0.1);
+    --cm-fg: #d4d4d8;
+    --cm-bd: rgba(161, 161, 170, 0.22);
+    --td-bg: rgba(129, 140, 248, 0.13);
+    --td-fg: #c7d2fe;
+    --td-bd: rgba(129, 140, 248, 0.3);
+    --tp-bg: rgba(52, 211, 153, 0.11);
+    --tp-fg: #a7f3d0;
+    --tp-bd: rgba(52, 211, 153, 0.28);
+    --ev-bg: rgba(251, 191, 36, 0.12);
+    --ev-fg: #fde68a;
+    --ev-bd: rgba(251, 191, 36, 0.3);
+    --focus: #8ea2ff;
+    --rail-bg: #0e0e10;
+    --rail-border: #1d1d20;
+    --rail-hover: #17171a;
+    --rail-active: #1b1b1f;
+    --rail-active-ring: inset 0 0 0 1px #26262b;
+    --rail-fg: #b4b4bb;
+    --rail-fg-strong: #ffffff;
+    --rail-fg-faint: #5f5f67;
+    --rail-icone: #6f6f78;
+    --rail-accent: #a5b4fc;
+    --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px #26262b;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #121416; --surface: #1a1d20; --surface-2: #202427; --surface-3: #2a2e32;
-  --ink: #e8e9ea; --ink-soft: #a2a8ae; --ink-faint: #7b8187;
-  --border: #30353a; --border-strong: #454b51;
-  --accent: #7fb0e0; --accent-hover: #a2c7ea; --accent-soft: #1d2b39;
-  --accent2: #e0a15c; --accent2-soft: #36281a; --teal: #5cc0b5; --teal-soft: #15302d;
-  --good: #62c48b; --good-soft: #17301f; --bad: #eb7468; --bad-soft: #3a2220;
-  --warn: #e2b660; --warn-soft: #362c17;
-  --good-text: #62c48b; --warn-text: #e2b660; --bad-text: #eb7468;
-  --type-cm: #a2a8ae; --type-td: #a89ae6; --focus: #7fb0e0;
+  --bg: #0a0a0b;
+  --surface: #121214;
+  --surface-2: #141416;
+  --surface-3: #1b1b1f;
+  --ink: #ededef;
+  --ink-soft: #8f8f98;
+  --ink-faint: #5f5f67;
+  --border: #1f1f23;
+  --border-strong: #2e2e33;
+  --accent: #8ea2ff;
+  --accent-hover: #b4c1ff;
+  --accent-soft: #1e1f3a;
+  --accent2: #fbbf24;
+  --accent2-soft: #33260d;
+  --teal: #34d399;
+  --teal-soft: #0f2a1f;
+  --good: #4ade80;
+  --good-soft: #0f2a1c;
+  --bad: #f87171;
+  --bad-soft: #3b1618;
+  --warn: #fbbf24;
+  --warn-soft: #33260d;
+  --good-text: #4ade80;
+  --warn-text: #fbbf24;
+  --bad-text: #fca5a5;
+  --pri-bg: #ededef;
+  --pri-bg-hover: #ffffff;
+  --pri-fg: #0a0a0b;
+  --type-cm: #a1a1aa;
+  --type-td: #818cf8;
+  --type-tp: #34d399;
+  --type-eval: #fbbf24;
+  --cm-bg: rgba(161, 161, 170, 0.1);
+  --cm-fg: #d4d4d8;
+  --cm-bd: rgba(161, 161, 170, 0.22);
+  --td-bg: rgba(129, 140, 248, 0.13);
+  --td-fg: #c7d2fe;
+  --td-bd: rgba(129, 140, 248, 0.3);
+  --tp-bg: rgba(52, 211, 153, 0.11);
+  --tp-fg: #a7f3d0;
+  --tp-bd: rgba(52, 211, 153, 0.28);
+  --ev-bg: rgba(251, 191, 36, 0.12);
+  --ev-fg: #fde68a;
+  --ev-bd: rgba(251, 191, 36, 0.3);
+  --focus: #8ea2ff;
+  --rail-bg: #0e0e10;
+  --rail-border: #1d1d20;
+  --rail-hover: #17171a;
+  --rail-active: #1b1b1f;
+  --rail-active-ring: inset 0 0 0 1px #26262b;
+  --rail-fg: #b4b4bb;
+  --rail-fg-strong: #ffffff;
+  --rail-fg-faint: #5f5f67;
+  --rail-icone: #6f6f78;
+  --rail-accent: #a5b4fc;
+  --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px #26262b;
   color-scheme: dark;
 }
 
@@ -296,26 +408,18 @@ a.btn {
    principale (une par écran, idéalement). */
 .btn--primary,
 .btn--accent {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  background: var(--pri-bg);
+  border-color: var(--pri-bg);
+  color: var(--pri-fg);
 }
 
 .btn--primary:hover:not(:disabled),
 .btn--accent:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: #fff;
+  background: var(--pri-bg-hover);
+  border-color: var(--pri-bg-hover);
+  color: var(--pri-fg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .btn--primary,
-  :root:not([data-theme="light"]) .btn--accent,
-  :root:not([data-theme="light"]) .btn--primary:hover:not(:disabled),
-  :root:not([data-theme="light"]) .btn--accent:hover:not(:disabled) {
-    color: #0f1216;
-  }
-}
 
 .btn--danger {
   background: var(--surface);
