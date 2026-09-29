@@ -63,8 +63,11 @@ def get_secret() -> str:
         _secret_cache = path.read_text(encoding="utf-8").strip()
         return _secret_cache
     generated = os.urandom(32).hex()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(generated, encoding="utf-8")
+    from cal_iut.celcat.fichiers import ecrire_atomique
+
+    # Atomique (audit du 29/09/2026, P0-4) : un fichier vide relu au
+    # démarrage suivant donnerait un secret vide.
+    ecrire_atomique(path, generated)
     _secret_cache = generated
     return _secret_cache
 

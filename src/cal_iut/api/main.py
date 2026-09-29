@@ -1,6 +1,7 @@
 """API REST FastAPI — générateur d'emplois du temps IUT MMI Troyes."""
 
 import hashlib
+import logging
 import re
 import sys
 import threading
@@ -125,6 +126,7 @@ from cal_iut.api.schemas import (
 from cal_iut.api.state import get_repo, get_state
 from cal_iut.api.validation import suggest_alternative_slots, validate_move
 from cal_iut.calendar.academic import semester_week_offset, week_status
+from cal_iut.celcat.fichiers import FichierEtatIllisible
 from cal_iut.db.accounts_repository import AccountRepository
 from cal_iut.db.models import CurrentPlacement, User
 from cal_iut.db.session import get_db
@@ -173,6 +175,8 @@ YEAR_DEFINITIONS: list[tuple[int, str, list[str]]] = [
 def _parcours_for_year(parcours_list: list[str], year: int) -> list[str]:
     prefix = f"BUT{year}"
     return sorted(p for p in parcours_list if p == prefix or p.startswith(f"{prefix}-"))
+
+logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(__file__).resolve().parents[3] / "data" / "config"
 FRONTEND_DIST = Path(__file__).resolve().parents[3] / "frontend" / "dist"
@@ -224,6 +228,16 @@ async def _erreurs_validation_sans_secret(request: Request, exc: RequestValidati
             erreur["msg"] = "Valeur invalide."
         erreurs.append(erreur)
     return JSONResponse(status_code=422, content={"detail": erreurs})
+
+
+@app.exception_handler(FichierEtatIllisible)
+async def _fichier_etat_illisible(request: Request, exc: FichierEtatIllisible) -> JSONResponse:
+    """Fichier d'état JSON tronqué (audit du 29/09/2026, P0-4) : mis de côté
+    par `lire_json_etat`, l'action est refusée plutôt que de réécrire le
+    fichier à partir de rien. 503 : l'erreur tient au serveur, pas à la
+    requête, et se répare côté serveur (restaurer la copie)."""
+    logger.error("%s", exc)
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 @dataclass
@@ -800,7 +814,13 @@ def charger_etat_applicatif() -> None:
     state.groups = load_groups(CONFIG_DIR)
     # Salles du bâtiment + celles ajoutées depuis l'interface (volume
     # persistant, cf. `api/custom_rooms.py`).
-    state.rooms = custom_rooms.merge_into(load_rooms(CONFIG_DIR))
+    try:
+        state.rooms = custom_rooms.merge_into(load_rooms(CONFIG_DIR))
+    except FichierEtatIllisible:
+        # Fichier mis de côté (`.corrompu-…`) : démarrer avec les seules
+        # salles du bâtiment plutôt que pas du tout, mais le dire.
+        logger.exception("Salles ajoutées illisibles, démarrage avec les seules salles du bâtiment")
+        state.rooms = load_rooms(CONFIG_DIR)
     state.room_rules = parse_room_rules(load_room_assignment_rules(CONFIG_DIR))
     state.room_reservations = load_room_reservations(CONFIG_DIR, state.calendar)
     state.teacher_duos = load_teacher_duos(CONFIG_DIR)
@@ -840,6 +860,44 @@ def charger_etat_applicatif() -> None:
     state.objective_weights = {**yaml_weights, **db_weights}
 
     _try_restore_latest(state)
+
+
+# Au-delà de cette proportion de placements sans séance, la purge des
+# orphelins s'arrête (audit du 29/09/2026, P0-4) : une séance annulée de
+# temps en temps, oui ; des centaines d'un coup, c'est une maquette mal
+# relue ou un fichier d'état perdu, et supprimer leurs placements de la
+# base rendrait la perte définitive.
+_SEUIL_ORPHELINS = 0.05
+
+
+def _orphelins_a_purger(orphelins: list, total: int) -> list:
+    """Placements orphelins qu'il est sûr de retirer de la base.
+
+    - Aucun si leur proportion dépasse `_SEUIL_ORPHELINS` : journalisé, la
+      base est laissée intacte (les placements ne sont simplement pas
+      affichés tant que leurs séances manquent).
+    - Jamais ceux d'une séance personnalisée (`-CUSTOM` dans l'id, cf.
+      `_id_seance_personnalisee`) : leur suppression normale passe par
+      `DELETE /placements/personnalisees/...`, qui retire AUSSI la ligne en
+      base. Un tel orphelin ne peut donc venir que d'un
+      `custom_sessions.json` perdu ou illisible.
+    """
+    if total and len(orphelins) > _SEUIL_ORPHELINS * total:
+        logger.error(
+            "Restauration : %d placements sur %d n'ont plus de séance (> %d %%) — "
+            "aucune purge, vérifiez la maquette et data/state/custom_sessions.json. "
+            "Exemples : %s",
+            len(orphelins), total, int(_SEUIL_ORPHELINS * 100),
+            ", ".join(c.session_id for c in orphelins[:5]),
+        )
+        return []
+    personnalises = [c for c in orphelins if "-CUSTOM" in c.session_id]
+    if personnalises:
+        logger.warning(
+            "Restauration : %d placements de séances personnalisées sans séance, conservés en base : %s",
+            len(personnalises), ", ".join(c.session_id for c in personnalises[:5]),
+        )
+    return [c for c in orphelins if "-CUSTOM" not in c.session_id]
 
 
 def _try_restore_latest(state: object) -> None:
@@ -891,7 +949,7 @@ def _try_restore_latest(state: object) -> None:
         # passage, sinon la ligne morte survit indéfiniment.
         orphelins = [c for c in current if c.session_id not in state.sessions_by_id]
         if orphelins:
-            for c in orphelins:
+            for c in _orphelins_a_purger(orphelins, len(current)):
                 repo.remove_current_placement(c.session_id)
             current = [c for c in current if c.session_id in state.sessions_by_id]
         if current:

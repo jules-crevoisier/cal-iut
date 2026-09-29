@@ -35,10 +35,14 @@ comme les salles créées depuis l'interface.
 
 from __future__ import annotations
 
-import json
+import threading
 from pathlib import Path
 
+from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 from cal_iut.models.entities import Room, RoomType
+
+# Lecture-modification-écriture sous verrou (audit du 29/09/2026, P0-4).
+_verrou = threading.RLock()
 
 
 def _path() -> Path:
@@ -52,15 +56,12 @@ def _read_raw() -> dict[str, object]:
     avant l'ajout des overrides) : une liste brute devient `{"rooms":
     <liste>, "overrides": {}}`.
     """
-    path = _path()
-    if not path.exists():
-        return {"rooms": [], "overrides": {}}
-    try:
-        brut = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        # Fichier absent/corrompu = aucune salle ajoutée, jamais une erreur
-        # qui empêcherait l'application entière de démarrer pour ça.
-        return {"rooms": [], "overrides": {}}
+    # Absent = aucune salle ajoutée. Illisible = mis de côté puis
+    # `FichierEtatIllisible` (audit du 29/09/2026, P0-4) : rendre un
+    # contenu vide faisait réécrire le fichier sans les autres salles au
+    # prochain ajout. Au démarrage, `charger_etat_applicatif` rattrape
+    # l'erreur et continue avec les seules salles du bâtiment.
+    brut = lire_json_etat(_path(), {"rooms": [], "overrides": {}}, types=(list, dict))
     if isinstance(brut, list):
         return {"rooms": brut, "overrides": {}}
     if isinstance(brut, dict):
@@ -72,9 +73,7 @@ def _read_raw() -> dict[str, object]:
 
 
 def _write_raw(data: dict[str, object]) -> None:
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    ecrire_json(_path(), data)
 
 
 def load_custom_rooms() -> list[Room]:
@@ -122,13 +121,14 @@ def _serialize_room(r: Room) -> dict[str, object]:
 
 
 def add_custom_room(room: Room) -> None:
-    brut = _read_raw()
-    existantes = load_custom_rooms()
-    if any(r.id == room.id for r in existantes):
-        return
-    existantes.append(room)
-    brut["rooms"] = [_serialize_room(r) for r in existantes]
-    _write_raw(brut)
+    with _verrou:
+        brut = _read_raw()
+        existantes = load_custom_rooms()
+        if any(r.id == room.id for r in existantes):
+            return
+        existantes.append(room)
+        brut["rooms"] = [_serialize_room(r) for r in existantes]
+        _write_raw(brut)
 
 
 def set_room_override(room_id: str, *, placement_auto: bool) -> None:
@@ -139,21 +139,22 @@ def set_room_override(room_id: str, *, placement_auto: bool) -> None:
     bâtiment, `rooms.yaml`), la modification est posée dans `overrides` —
     `rooms.yaml` lui-même n'est jamais réécrit (cf. docstring du module).
     """
-    brut = _read_raw()
-    salles_brutes = list(brut["rooms"])
-    trouvee = False
-    for item in salles_brutes:
-        if isinstance(item, dict) and str(item.get("id")) == room_id:
-            item["placement_auto"] = placement_auto
-            trouvee = True
-            break
-    if trouvee:
-        brut["rooms"] = salles_brutes
-    else:
-        overrides = dict(brut["overrides"])
-        overrides[room_id] = {**overrides.get(room_id, {}), "placement_auto": placement_auto}
-        brut["overrides"] = overrides
-    _write_raw(brut)
+    with _verrou:
+        brut = _read_raw()
+        salles_brutes = list(brut["rooms"])
+        trouvee = False
+        for item in salles_brutes:
+            if isinstance(item, dict) and str(item.get("id")) == room_id:
+                item["placement_auto"] = placement_auto
+                trouvee = True
+                break
+        if trouvee:
+            brut["rooms"] = salles_brutes
+        else:
+            overrides = dict(brut["overrides"])
+            overrides[room_id] = {**overrides.get(room_id, {}), "placement_auto": placement_auto}
+            brut["overrides"] = overrides
+        _write_raw(brut)
 
 
 def merge_into(rooms_du_batiment: list[Room]) -> list[Room]:

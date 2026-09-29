@@ -19,8 +19,13 @@ planning à part entière.
 
 from __future__ import annotations
 
-import json
+import threading
 from pathlib import Path
+
+from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
+
+# Lecture-modification-écriture sous verrou (audit du 29/09/2026, P0-4).
+_verrou = threading.RLock()
 
 
 def _path() -> Path:
@@ -30,32 +35,28 @@ def _path() -> Path:
 
 
 def _load() -> dict[str, dict[str, int]]:
-    path = _path()
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+    # Illisible = mis de côté puis `FichierEtatIllisible`, jamais `{}`
+    # (audit du 29/09/2026, P0-4).
+    return lire_json_etat(_path(), {}, types=dict)
 
 
 def _save(data: dict[str, dict[str, int]]) -> None:
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    ecrire_json(_path(), data, sort_keys=True)
 
 
 def mark(session_id: str, week: int, day: int, slot: int) -> None:
-    data = _load()
-    data[session_id] = {"week": week, "day": day, "slot": slot}
-    _save(data)
+    with _verrou:
+        data = _load()
+        data[session_id] = {"week": week, "day": day, "slot": slot}
+        _save(data)
 
 
 def clear(session_id: str) -> None:
-    data = _load()
-    if session_id in data:
-        del data[session_id]
-        _save(data)
+    with _verrou:
+        data = _load()
+        if session_id in data:
+            del data[session_id]
+            _save(data)
 
 
 def get(session_id: str) -> dict[str, int] | None:

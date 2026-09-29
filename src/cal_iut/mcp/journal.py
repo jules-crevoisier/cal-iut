@@ -35,6 +35,6 @@ def append(entree: dict[str, Any]) -> None:
     historique = lire()
     historique.append(entree)
     historique = historique[-_MAX:]
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(historique, ensure_ascii=False, indent=2), encoding="utf-8")
+    from cal_iut.celcat.fichiers import ecrire_json
+
+    ecrire_json(_path(), historique)
