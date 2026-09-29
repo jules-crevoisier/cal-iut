@@ -83,6 +83,8 @@ complet passe de 1,3 Mo à ≈ 60 Ko, `/app-state` de 590 Ko à ≈ 48 Ko.
 - Pour tout synchroniser d'un coup : `GET /api/v1/export`.
 - Pour un agenda : les flux `.ics` (cf. `docs/ICS.md`), qui revalident eux
   aussi en 304.
+- Un client trop bavard peut être limité (429 + `Retry-After`, à respecter)
+  ou bloqué (403) : cf. [`docs/ANTI-ASPIRATION.md`](ANTI-ASPIRATION.md).
 
 ### Conventions
 

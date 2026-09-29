@@ -347,6 +347,9 @@ Sécurité (audit du 29/09/2026, `docs/AUDIT-2026-09.md`) : cookie `Secure`
 (`CAL_IUT_COOKIE_SECURE=0` pour du HTTP local), sessions révocables,
 limitation de débit sur `/auth/*`, écriture atomique des fichiers d'état.
 
+Aspiration du serveur (liens publics lus en boucle) : limitation et blocage par IP,
+**désactivés par défaut** — plan d'activation dans [`docs/ANTI-ASPIRATION.md`](docs/ANTI-ASPIRATION.md).
+
 ## Architecture
 
 ```
