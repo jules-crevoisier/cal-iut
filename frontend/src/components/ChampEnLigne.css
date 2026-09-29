@@ -87,8 +87,118 @@
   min-width: 0;
 }
 
+/* Mode « modifier » : la valeur, puis un crayon discret — révélé au survol
+   de la ligne ou de la valeur, toujours visible au focus clavier. */
+.valeur-modifiable {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.btn-modifier {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+tr:hover .btn-modifier,
+li:hover .btn-modifier,
+.valeur-modifiable:hover .btn-modifier,
+.fiche-identite:hover .btn-modifier,
+.btn-modifier:focus-visible {
+  opacity: 1;
+}
+
+.btn-modifier:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.btn-modifier:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* Marque « modifiée dans l'appli » : un mot, et au survol / focus la valeur
+   d'origine et le retour au fichier (bulle, seule chose qui flotte). */
+.marque-modifiee {
+  position: relative;
+  display: inline-flex;
+}
+
+.marque-modifiee-bouton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  min-height: 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: help;
+  white-space: nowrap;
+}
+
+.marque-modifiee-bouton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.marque-modifiee-bulle {
+  /* Portail dans `body`, position fixe (coordonnées posées par le
+     composant) : jamais rognée par un tableau qui défile. */
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: max-content;
+  max-width: min(320px, 80vw);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: left;
+}
+
+.marque-modifiee-bulle strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 /* Au doigt : cibles de 44 px (docs/DESIGN.md, principe 6). */
 @media (pointer: coarse) {
+  .btn-modifier {
+    opacity: 1;
+    width: 44px;
+    height: 44px;
+  }
+
   .pill.champ-ajouter,
   .champ-en-ligne input,
   .champ-en-ligne select,

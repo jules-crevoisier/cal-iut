@@ -11,12 +11,9 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
-import { completerContactEnseignant } from "../api/client";
-import { ChampEnLigne, validerEmail } from "../components/ChampEnLigne";
 import { ChampRecherche as ChampRechercheCommun } from "../components/ChampRecherche";
 import { ActionsDePage } from "../components/TopBar";
 import { TriColonne, useTri } from "../components/TriColonne";
-import { useDroits } from "../contexts/Droits";
 import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { AppPayload } from "../types/app";
 import {
@@ -35,7 +32,13 @@ import {
 import { decouperLibelleSemaine, formatHeures, pluriel } from "../utils/planning";
 import { normalize } from "../utils/search";
 
+import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
+
 import "./annuaires.css";
+
+// Déplacé dans `components/ValeursReference.tsx` (29/09/2026) ; réexporté
+// pour les écrans qui l'importaient d'ici.
+export { MailManquant };
 
 interface AnnuaireProps {
   payload: AppPayload;
@@ -254,9 +257,18 @@ export function AnnuaireEnseignants({
                   </td>
                   <td className="col-mail">
                     {l.email ? (
-                      <span className="annuaire-mail" title={l.email}>
-                        {l.email}
-                      </span>
+                      <EmailEnseignant
+                        code={l.code}
+                        nom={l.nom}
+                        email={l.email}
+                        surcharge={payload.surchargesReference?.enseignants?.[l.code]?.email}
+                        affichage={
+                          <span className="annuaire-mail" title={l.email}>
+                            {l.email}
+                          </span>
+                        }
+                        onEnregistre={enregistre(l.nom)}
+                      />
                     ) : (
                       !etroit && <MailManquant code={l.code} nom={l.nom} onEnregistre={enregistre(l.nom)} />
                     )}
@@ -269,46 +281,6 @@ export function AnnuaireEnseignants({
         </div>
       </section>
     </>
-  );
-}
-
-/**
- * Mail manquant : « Ajouter » ouvre le champ en ligne pour qui peut
- * compléter (rôle `edit` ou `admin`) ; la pastille « manquant » seule en
- * lecture seule. Partagé par l'annuaire, la fiche et « Liens & partage ».
- */
-export function MailManquant({
-  code,
-  nom,
-  libelleBouton = "Ajouter",
-  libelleLectureSeule = "manquant",
-  lectureSeule,
-  onEnregistre,
-}: {
-  code: string;
-  nom: string;
-  libelleBouton?: string;
-  libelleLectureSeule?: string;
-  /** Rendu propre à l'écran en lecture seule (sinon la pastille « manquant »). */
-  lectureSeule?: ReactNode;
-  /** Après un enregistrement réussi (retour affiché par l'écran). */
-  onEnregistre?: (email: string) => void;
-}) {
-  const { peutCompleter, apresEnregistrement } = useDroits();
-  if (!peutCompleter) return <>{lectureSeule ?? <span className="pill dot warn">{libelleLectureSeule}</span>}</>;
-  return (
-    <ChampEnLigne
-      libelleBouton={libelleBouton}
-      libelleChamp={`Adresse mail de ${nom}`}
-      type="email"
-      placeholder="prenom.nom@univ-reims.fr"
-      valider={validerEmail}
-      onEnregistrer={async (email) => {
-        await completerContactEnseignant(code, email);
-        onEnregistre?.(email);
-        apresEnregistrement();
-      }}
-    />
   );
 }
 

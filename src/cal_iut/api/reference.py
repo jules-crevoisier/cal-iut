@@ -21,20 +21,22 @@ Ce module fait deux choses, et une seule fois chacune :
 Où vont les valeurs (jamais dans `data/config/`, réécrit à chaque
 déploiement) :
 - mail, nom d'enseignant, intitulé de matière : `data/state/references.json`
-  (`ingestion/surcharges_reference.py`), fusionné SOUS la config au
-  chargement — la config garde le dernier mot ;
+  (`ingestion/surcharges_reference.py`), fusionné PAR-DESSUS la config au
+  chargement — la saisie a le dernier mot (elle peut aussi CORRIGER une
+  valeur du fichier, 29/09/2026), l'écran la marque « modifiée dans
+  l'appli » et `DELETE` la retire (« Revenir à la valeur du fichier ») ;
 - capacité et type d'une salle créée dans l'appli : `data/state/
   custom_rooms.json` (`api/custom_rooms.py`, déjà sa persistance) ;
-- code Celcat d'une salle ou d'un enseignant : `data/state/
-  celcat_mappings.json` (`celcat/mappings.py`, déjà sa persistance, lue par
-  le worker à son passage suivant).
+- code Celcat d'une salle, d'un enseignant ou code module d'une matière :
+  `data/state/celcat_mappings.json` (`celcat/mappings.py`, déjà sa
+  persistance, lue par le worker à son passage suivant).
 
-Droits : le rôle `edit` complète mail, nom, intitulé, capacité et type ; ce
-qui touche à Celcat reste `admin`, comme l'écran Celcat. Les identifiants
-Celcat des groupes et des matières ne se saisissent pas ici : ce sont des
-numéros internes relevés par balayage (cf. `celcat_groupes.yaml`), qu'aucun
-utilisateur ne peut lire dans Celcat — ils sont listés, avec l'endroit où
-les ajouter, mais `role_requis` vaut `None`.
+Droits : le rôle `edit` complète ou corrige mail, nom, intitulé, capacité et
+type ; ce qui touche à Celcat reste `admin`, comme l'écran Celcat. Les
+identifiants INTERNES Celcat des groupes et des matières ne se saisissent
+pas ici : ce sont des numéros relevés par balayage (`celcat_groupes.yaml`,
+`celcat_matieres.yaml`), qu'aucun utilisateur ne peut lire dans Celcat —
+ils sont listés, avec le fichier où les régler, et `role_requis` vaut `None`.
 """
 
 from __future__ import annotations
@@ -121,7 +123,8 @@ class SalleReferenceRequest(BaseModel):
 
 
 class CoursReferenceRequest(BaseModel):
-    intitule: str = Field(max_length=160)
+    intitule: str | None = Field(default=None, max_length=160)
+    code_celcat: str | None = Field(default=None, max_length=20)
 
 
 class ReferenceEnregistree(BaseModel):
@@ -297,7 +300,7 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
             )
 
     # ── Celcat : matières et groupes (identifiants relevés, pas saisis) ──
-    matieres_connues = {str(k).strip().upper() for k in _lire_table_yaml(config_dir / "celcat_matieres.yaml")}
+    matieres_connues = codes_modules_releves(config_dir)
     groupes_connus = {str(k).strip().upper() for k in _lire_table_yaml(config_dir / "celcat_groupes.yaml")}
     modules_manquants: Counter[str] = Counter()
     groupes_manquants: Counter[str] = Counter()
@@ -311,22 +314,30 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
         if un_seul_groupe and entree.nom_groupe_celcat.strip().upper() not in groupes_connus:
             groupes_manquants[entree.nom_groupe_celcat] += 1
     for code, n in sorted(modules_manquants.items()):
-        sans_code = not cfg.modules.get(code.upper())
-        ajouter(
-            famille="cours", cle=code, libelle=intitules.get(code) or code, champ="code_celcat",
-            gravite="bloque_celcat", nb_seances=n, role_requis=None,
-            ou_completer=(
-                "data/config/celcat.yaml (section modules), puis celcat_matieres.yaml — déploiement."
-                if sans_code
-                else f"data/config/celcat_matieres.yaml : identifiant de « {cfg.modules[code.upper()]} » à relever — déploiement."
-            ),
-            ecran={"vue": "celcat"},
-        )
+        if not cfg.modules.get(code.upper()):
+            # Le code module (« TSB… ») se lit dans Celcat : saisissable ici.
+            ajouter(
+                famille="cours", cle=code, libelle=intitules.get(code) or code, champ="code_celcat",
+                gravite="bloque_celcat", nb_seances=n, role_requis="admin",
+                ou_completer="Écran Celcat ou « À traiter » (administrateurs) : code module TSB… de la matière.",
+                ecran={"vue": "celcat"},
+            )
+        else:
+            # Son identifiant INTERNE, lui, ne se lit pas : relevé et figé.
+            ajouter(
+                famille="cours", cle=code, libelle=intitules.get(code) or code, champ="id_celcat",
+                gravite="bloque_celcat", nb_seances=n, role_requis=None,
+                ou_completer=(
+                    f"Se règle dans data/config/celcat_matieres.yaml : identifiant de « {cfg.modules[code.upper()]} » "
+                    "à relever dans Celcat — déploiement."
+                ),
+                ecran={"vue": "celcat"},
+            )
     for nom, n in sorted(groupes_manquants.items()):
         ajouter(
             famille="groupe", cle=nom, libelle=nom, champ="id_celcat", gravite="bloque_celcat",
             nb_seances=n, role_requis=None,
-            ou_completer="data/config/celcat_groupes.yaml : identifiant à relever dans Celcat — déploiement.",
+            ou_completer="Se règle dans data/config/celcat_groupes.yaml : identifiant à relever dans Celcat — déploiement.",
             ecran={"vue": "celcat"},
         )
 
@@ -378,6 +389,17 @@ def _codes_enseignants(state: object) -> set[str]:
     return {c.strip().upper() for c in codes if c}
 
 
+def _nom_officiel(state: object, code: str) -> str | None:
+    """Le nom que donnent la maquette, la feuille des contraintes ou
+    `enseignants_supplementaires.yaml` — None s'ils ne donnent que le code."""
+    from cal_iut.export.html_view import _teacher_names
+    from cal_iut.ingestion.enseignants import noms_officiels
+
+    noms = {**noms_officiels(Path(state.config_dir)), **_teacher_names(state.sessions)}
+    nom = str(noms.get(code) or "").strip()
+    return nom if nom and nom.upper() != code.upper() else None
+
+
 def completer_enseignant(
     state: object,
     code: str,
@@ -388,20 +410,20 @@ def completer_enseignant(
     par: str = "",
     admin: bool = False,
 ) -> dict[str, str | int]:
-    """Complète mail, nom et/ou code Celcat d'un enseignant CONNU.
+    """Complète OU CORRIGE mail, nom et/ou code Celcat d'un enseignant connu.
 
+    La saisie a le dernier mot sur la configuration (29/09/2026) ; la trace
+    garde la valeur d'avant ET celle du fichier. Saisir exactement la valeur
+    du fichier retire la surcharge au lieu d'en poser une identique.
     - mail : format validé, minuscules, refusé s'il est déjà celui d'un
-      autre enseignant (un lien personnel partirait chez quelqu'un d'autre)
-      ou si `teacher_contacts.yaml` en donne déjà un (il se corrige là) ;
-    - nom : refusé si la maquette ou la feuille officielle en donne un ;
+      autre enseignant (un lien personnel partirait chez quelqu'un d'autre) ;
     - code Celcat : administrateurs, `celcat/mappings.py` (le worker le lit
-      à son passage suivant).
-    Une saisie faite ICI se corrige ici : elle n'est pas « déjà connue »."""
+      à son passage suivant)."""
     from cal_iut.celcat import mappings
     from cal_iut.export.html_view import _teacher_names
     from cal_iut.ingestion import surcharges_reference
     from cal_iut.ingestion.config_loader import load_teacher_contacts, load_teacher_contacts_yaml
-    from cal_iut.ingestion.enseignants import enseignants_declares, noms_officiels
+    from cal_iut.ingestion.enseignants import enseignants_declares
 
     code = str(code or "").strip().upper()
     if code not in _codes_enseignants(state):
@@ -410,7 +432,6 @@ def completer_enseignant(
         raise HTTPException(400, "Rien à enregistrer : indiquez une adresse, un nom ou un code Celcat.")
     config_dir = Path(state.config_dir)
     noms = {**enseignants_declares(config_dir), **{k: v for k, v in _teacher_names(state.sessions).items() if v != k}}
-    libelle = noms.get(code, code)
     ecrit: dict[str, str | int] = {}
 
     # Tout est validé AVANT la première écriture : une requête à deux champs
@@ -421,13 +442,6 @@ def completer_enseignant(
             email_propre = normaliser_email(email)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        du_fichier = load_teacher_contacts_yaml(config_dir).get(code)
-        if du_fichier:
-            raise HTTPException(
-                409,
-                f"L'adresse de {libelle} vient de data/config/teacher_contacts.yaml ({du_fichier}) : "
-                "elle se corrige dans ce fichier.",
-            )
         for autre, adresse in load_teacher_contacts(config_dir).items():
             if autre.upper() != code and adresse.strip().lower() == email_propre:
                 raise HTTPException(
@@ -438,11 +452,6 @@ def completer_enseignant(
         nom_propre = " ".join(str(nom).split())
         if len(nom_propre) < 2 or nom_propre.upper() == code:
             raise HTTPException(400, "Le nom complet est vide (attendu : « Prénom Nom »).")
-        officiel = {**noms_officiels(config_dir), **_teacher_names(state.sessions)}.get(code, code)
-        if officiel.strip().upper() != code:
-            raise HTTPException(
-                409, f"Le nom de {code} est déjà connu de la maquette ou de la feuille des contraintes : « {officiel} »."
-            )
     celcat_propre = None
     if code_celcat is not None:
         if not admin:
@@ -452,10 +461,11 @@ def completer_enseignant(
             raise HTTPException(400, "Le code Celcat est vide.")
 
     if email_propre is not None:
-        surcharges_reference.definir("enseignants", code, "email", email_propre, par=par)
+        du_fichier = load_teacher_contacts_yaml(config_dir).get(code)
+        _poser_ou_retirer("enseignants", code, "email", email_propre, du_fichier, par)
         ecrit["email"] = email_propre
     if nom_propre is not None:
-        surcharges_reference.definir("enseignants", code, "nom", nom_propre, par=par)
+        _poser_ou_retirer("enseignants", code, "nom", nom_propre, _nom_officiel(state, code), par)
         ecrit["nom"] = nom_propre
     if celcat_propre is not None:
         avant = mappings.table("enseignants").get(code)
@@ -463,6 +473,67 @@ def completer_enseignant(
         surcharges_reference.journaliser("enseignants", code, "code_celcat", avant, celcat_propre, par=par)
         ecrit["code_celcat"] = celcat_propre
     return ecrit
+
+
+def _poser_ou_retirer(famille: str, cle: str, champ: str, valeur: str, du_fichier: str | None, par: str) -> None:
+    """Enregistre la saisie — sauf si elle redit la valeur du fichier : on
+    retire alors la surcharge (sinon l'écran marquerait « modifiée dans
+    l'appli » une valeur identique, qui masquerait une future correction du
+    fichier)."""
+    from cal_iut.ingestion import surcharges_reference
+
+    identique = du_fichier is not None and (
+        du_fichier.strip().lower() == valeur.lower() if champ == "email" else du_fichier.strip() == valeur
+    )
+    if identique:
+        surcharges_reference.effacer(famille, cle, champ, par=par, valeur_fichier=du_fichier)
+    else:
+        surcharges_reference.definir(famille, cle, champ, valeur, par=par, valeur_fichier=du_fichier)
+
+
+def effacer_enseignant(state: object, code: str, champ: str, *, par: str = "") -> str:
+    """« Revenir à la valeur du fichier » : retire la saisie (mail ou nom)."""
+    from cal_iut.ingestion import surcharges_reference
+    from cal_iut.ingestion.config_loader import load_teacher_contacts_yaml
+
+    code = str(code or "").strip().upper()
+    du_fichier = (
+        load_teacher_contacts_yaml(Path(state.config_dir)).get(code) if champ == "email" else _nom_officiel(state, code)
+    )
+    retiree = surcharges_reference.effacer("enseignants", code, champ, par=par, valeur_fichier=du_fichier)
+    if retiree is None:
+        raise HTTPException(404, f"Aucune valeur modifiée dans l'appli pour {code} ({LIBELLES_CHAMP[champ].lower()}).")
+    return retiree
+
+
+def surcharges_pour_payload(state: object) -> dict[str, dict[str, dict[str, dict[str, object]]]]:
+    """Ce qui a été modifié dans l'appli, avec la valeur d'origine — pour la
+    marque « modifiée dans l'appli » et « Revenir à la valeur du fichier ».
+    Réservé aux comptes (`_CLES_PRIVEES_PAYLOAD` : adresses)."""
+    from cal_iut.ingestion import surcharges_reference
+    from cal_iut.ingestion.config_loader import load_teacher_contacts_yaml
+
+    doc = surcharges_reference._charger_pour_lecture()
+    fichier = load_teacher_contacts_yaml(Path(state.config_dir))
+    sortie: dict[str, dict[str, dict[str, dict[str, object]]]] = {"enseignants": {}, "cours": {}}
+    for code, champs in doc.get("enseignants", {}).items():
+        for champ, entree in champs.items():
+            if not isinstance(entree, dict):
+                continue
+            origine = fichier.get(code) if champ == "email" else _nom_officiel(state, code)
+            sortie["enseignants"].setdefault(code, {})[champ] = {
+                "valeur": entree.get("valeur"), "origine": origine,
+                "modifie_le": entree.get("modifie_le"), "modifie_par": entree.get("modifie_par") or "",
+            }
+    for code, champs in doc.get("cours", {}).items():
+        entree = champs.get("intitule")
+        if isinstance(entree, dict):
+            sortie["cours"][code] = {"intitule": {
+                "valeur": entree.get("valeur"),
+                "origine": surcharges_reference.intitule_d_origine(state.sessions, code),
+                "modifie_le": entree.get("modifie_le"), "modifie_par": entree.get("modifie_par") or "",
+            }}
+    return sortie
 
 
 def completer_salle(
@@ -535,30 +606,95 @@ def completer_salle(
     return ecrit
 
 
-def completer_cours(state: object, code: str, *, intitule: str, par: str = "") -> dict[str, str | int]:
-    """Complète l'intitulé d'une matière qui n'en a pas (maquette muette,
-    ou qui ne rend que le code). Les séances en mémoire le prennent tout de
-    suite ; au prochain chargement, `surcharges_reference.appliquer_intitules`
-    le repose."""
+_RE_CODE_MODULE = re.compile(r"^TSB[0-9A-Z]{4,6}$")
+
+
+def codes_modules_releves(config_dir: Path) -> set[str]:
+    """Codes modules Celcat dont l'identifiant interne est relevé
+    (`celcat_matieres.yaml`) : les seuls que l'écriture sait retrouver."""
+    return {str(k).strip().upper() for k in _lire_table_yaml(Path(config_dir) / "celcat_matieres.yaml")}
+
+
+def valider_code_module(config_dir: Path, brut: str) -> str:
+    """Code module Celcat (« TSBZ1M01 », « TSB0305C ») nettoyé, ou 400.
+
+    Forme relevée sur `celcat.yaml::modules` et `celcat_matieres.yaml` :
+    « TSB » + 4 à 6 chiffres ou majuscules. Et il doit être RELEVÉ : un code
+    absent de `celcat_matieres.yaml` bloquerait plus loin, à l'écriture
+    (« RessourceIntrouvable »), loin de la saisie."""
+    code = str(brut or "").strip().upper()
+    if not _RE_CODE_MODULE.match(code):
+        raise HTTPException(400, f"« {str(brut).strip()} » n'est pas un code module Celcat (forme attendue : TSBZ1M01).")
+    if code not in codes_modules_releves(config_dir):
+        raise HTTPException(
+            400,
+            f"Le module {code} n'est pas dans le relevé des matières Celcat (data/config/celcat_matieres.yaml) : "
+            "son identifiant interne doit y être ajouté d'abord.",
+        )
+    return code
+
+
+def completer_cours(
+    state: object,
+    code: str,
+    *,
+    intitule: str | None = None,
+    code_celcat: str | None = None,
+    par: str = "",
+    admin: bool = False,
+) -> dict[str, str | int]:
+    """Complète ou corrige l'intitulé d'une matière (rôle `edit`, la saisie
+    a le dernier mot sur la maquette), et/ou son code module Celcat
+    (administrateurs, `celcat/mappings.py` famille `matieres`)."""
+    from cal_iut.celcat import mappings
+    from cal_iut.celcat.mapping import load_celcat_config
     from cal_iut.ingestion import surcharges_reference
 
     code = str(code or "").strip()
     seances = [s for s in getattr(state, "sessions", []) or [] if s.course_code == code]
     if not seances:
         raise HTTPException(404, f"Matière « {code} » inconnue.")
-    propre = " ".join(str(intitule or "").split())
-    if surcharges_reference.intitule_manquant(code, propre):
-        raise HTTPException(400, "L'intitulé est vide (ou n'est que le code).")
-    deja_saisi = (surcharges_reference.origine("cours", code, "intitule") or {}).get("valeur")
-    actuel = seances[0].course_name
-    if not surcharges_reference.intitule_manquant(code, actuel) and actuel != deja_saisi:
-        raise HTTPException(409, f"La matière {code} a déjà un intitulé dans la maquette : « {actuel} ».")
-    surcharges_reference.definir("cours", code, "intitule", propre, par=par)
-    surcharges_reference.appliquer_intitules(
-        state.sessions, getattr(state, "courses", None),
-        remplacables={code: deja_saisi} if deja_saisi else None,
-    )
-    return {"intitule": propre}
+    if intitule is None and code_celcat is None:
+        raise HTTPException(400, "Rien à enregistrer : indiquez un intitulé ou un code module Celcat.")
+    propre = None
+    if intitule is not None:
+        propre = " ".join(str(intitule).split())
+        if surcharges_reference.intitule_manquant(code, propre):
+            raise HTTPException(400, "L'intitulé est vide (ou n'est que le code).")
+    module = None
+    if code_celcat is not None:
+        if not admin:
+            raise HTTPException(403, "La correspondance Celcat est réservée aux administrateurs (écran Celcat).")
+        module = valider_code_module(Path(state.config_dir), code_celcat)
+
+    ecrit: dict[str, str | int] = {}
+    if propre is not None:
+        origine = surcharges_reference.intitule_d_origine(state.sessions, code)
+        _poser_ou_retirer("cours", code, "intitule", propre, origine, par)
+        if origine is not None and origine == propre:
+            surcharges_reference.retablir_intitule(state.sessions, getattr(state, "courses", None), code)
+        else:
+            surcharges_reference.appliquer_intitules(state.sessions, getattr(state, "courses", None))
+        ecrit["intitule"] = propre
+    if module is not None:
+        avant = load_celcat_config(Path(state.config_dir)).modules.get(code.upper())
+        mappings.definir("matieres", code, module, par=par)
+        surcharges_reference.journaliser("cours", code, "code_celcat", avant, module, par=par)
+        ecrit["code_celcat"] = module
+    return ecrit
+
+
+def effacer_intitule(state: object, code: str, *, par: str = "") -> str:
+    """« Revenir à la valeur du fichier » pour l'intitulé d'une matière."""
+    from cal_iut.ingestion import surcharges_reference
+
+    code = str(code or "").strip()
+    origine = surcharges_reference.intitule_d_origine(state.sessions, code)
+    retiree = surcharges_reference.effacer("cours", code, "intitule", par=par, valeur_fichier=origine)
+    if retiree is None:
+        raise HTTPException(404, f"Aucun intitulé modifié dans l'appli pour {code}.")
+    surcharges_reference.retablir_intitule(state.sessions, getattr(state, "courses", None), code)
+    return retiree
 
 
 def _reponse(famille: str, cle: str, ecrit: dict[str, str | int], message: str) -> ReferenceEnregistree:
@@ -626,5 +762,45 @@ def completer_fiche_salle(room_id: str, body: SalleReferenceRequest, request: Re
 @ecriture_planning
 def completer_fiche_cours(code: str, body: CoursReferenceRequest, request: Request) -> ReferenceEnregistree:
     state = _main().get_state()
-    ecrit = completer_cours(state, code, intitule=body.intitule, par=_par(request))
-    return _reponse("cours", code.strip(), ecrit, "Intitulé enregistré.")
+    ecrit = completer_cours(
+        state, code, intitule=body.intitule, code_celcat=body.code_celcat, par=_par(request),
+        admin=_est_admin(request),
+    )
+    return _reponse("cours", code.strip(), ecrit, "Enregistré.")
+
+
+# « Revenir à la valeur du fichier » : retire une saisie faite dans l'appli
+# (mail, nom, intitulé). Tracé au journal comme une saisie.
+
+
+@router.delete(
+    "/enseignants/{code}/contact",
+    response_model=ReferenceEnregistree,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+@ecriture_planning
+def effacer_contact(code: str, request: Request) -> ReferenceEnregistree:
+    retiree = effacer_enseignant(_main().get_state(), code, "email", par=_par(request))
+    return _reponse("enseignant", code.strip().upper(), {"email": retiree}, "Valeur du fichier rétablie.")
+
+
+@router.delete(
+    "/enseignants/{code}/nom",
+    response_model=ReferenceEnregistree,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+@ecriture_planning
+def effacer_nom(code: str, request: Request) -> ReferenceEnregistree:
+    retiree = effacer_enseignant(_main().get_state(), code, "nom", par=_par(request))
+    return _reponse("enseignant", code.strip().upper(), {"nom": retiree}, "Valeur du fichier rétablie.")
+
+
+@router.delete(
+    "/cours/{code}/intitule",
+    response_model=ReferenceEnregistree,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+@ecriture_planning
+def effacer_intitule_cours(code: str, request: Request) -> ReferenceEnregistree:
+    retiree = effacer_intitule(_main().get_state(), code, par=_par(request))
+    return _reponse("cours", code.strip(), {"intitule": retiree}, "Valeur du fichier rétablie.")

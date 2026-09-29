@@ -1041,7 +1041,7 @@ export interface CelcatBlocage {
   motif: string;
   seances: string[];
   tentatives: number;
-  famille: "salles" | "enseignants" | "";
+  famille: FamilleMappingCelcat | "";
   cle: string;
   /** Aucune des séances concernées n'est placée au planning : ce blocage
    *  n'appartient donc à AUCUNE semaine. Le ranger sous celle qu'on regarde
@@ -1049,9 +1049,16 @@ export interface CelcatBlocage {
   sans_semaine?: boolean;
 }
 
+/** `matieres` (29/09/2026) : code de cours -> code module Celcat (`TSB…`). */
+export type FamilleMappingCelcat = "salles" | "enseignants" | "matieres";
+
 export interface CelcatMappings {
   salles: CelcatMapping[];
   enseignants: CelcatMapping[];
+  /** Absent d'un serveur plus ancien. */
+  matieres?: CelcatMapping[];
+  /** Codes modules relevés (`celcat_matieres.yaml`) : les seuls acceptés. */
+  matieres_celcat?: string[];
   /** Les salles que Celcat contient réellement, relevées sur l'instantané :
    *  choisir dans une liste vraie évite d'inventer un nom que l'écriture
    *  refusera ensuite en silence. */
@@ -1071,7 +1078,7 @@ export function fetchCelcatMappings(semaine?: number | null): Promise<CelcatMapp
 /** Ajoute ou corrige une correspondance. Prend effet au passage suivant du
  *  worker, sans redéploiement : les séances bloquées repartent seules. */
 export function definirMappingCelcat(
-  famille: "salles" | "enseignants",
+  famille: FamilleMappingCelcat,
   cle: string,
   valeur: string,
   semaine?: number | null,
@@ -1084,7 +1091,7 @@ export function definirMappingCelcat(
 }
 
 export function oublierMappingCelcat(
-  famille: "salles" | "enseignants",
+  famille: FamilleMappingCelcat,
   cle: string,
   semaine?: number | null,
 ): Promise<CelcatMappings> {
@@ -1394,6 +1401,42 @@ export function completerSalle(
   return request(`/reference/salles/${encodeURIComponent(roomId)}`, { method: "PUT", body: JSON.stringify(body) });
 }
 
-export function completerCours(code: string, intitule: string): Promise<ReferenceEnregistree> {
-  return request(`/reference/cours/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify({ intitule }) });
+export function completerCours(
+  code: string,
+  body: { intitule?: string; code_celcat?: string },
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/cours/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** « Revenir à la valeur du fichier » : retire une saisie faite dans l'appli
+ *  (29/09/2026). `champ` : `contact` (mail) ou `nom` d'un enseignant,
+ *  `intitule` d'une matière. */
+export function retablirValeurFichier(
+  famille: "enseignants" | "cours",
+  cle: string,
+  champ: "contact" | "nom" | "intitule",
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/${famille}/${encodeURIComponent(cle)}/${champ}`, { method: "DELETE" });
+}
+
+/** Un cours de SAE placé hors journée SAE sans exception déclarée — la liste
+ *  `anomalies` de `GET /api/v1/sae` (le serveur est seul juge de la règle). */
+export interface AnomalieSae {
+  id: string;
+  cours_code: string;
+  cours_nom: string;
+  type: string;
+  parcours: string;
+  groupes: string[];
+  groupes_libelles: string[];
+  enseignants: string[];
+  semaine: number;
+  jour: number;
+  creneau: number;
+}
+
+export function fetchAnomaliesSae(): Promise<AnomalieSae[]> {
+  return request<{ anomalies?: AnomalieSae[] }>("/api/v1/sae").then((r) =>
+    Array.isArray(r?.anomalies) ? r.anomalies : [],
+  );
 }

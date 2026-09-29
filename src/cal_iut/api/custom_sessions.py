@@ -92,7 +92,9 @@ def _ecrire(seances: list[SessionToPlace]) -> None:
             {
                 "id": s.id,
                 "course_code": s.course_code,
-                "course_name": s.course_name,
+                # L'intitulé de la matière, pas une saisie « modifiée dans
+                # l'appli » posée par-dessus (cf. `surcharges_reference`).
+                "course_name": s.metadata.get("intitule_maquette") or s.course_name,
                 "semestre": s.semestre,
                 "parcours": s.parcours,
                 "annee": s.annee,

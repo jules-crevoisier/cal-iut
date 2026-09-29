@@ -87,15 +87,14 @@ def enseignants_declares(config_dir: Path) -> dict[str, str]:
     comportement d'avant — plutôt que de faire tomber tout l'état applicatif.
     """
     noms = noms_officiels(config_dir)
-    # Noms saisis depuis l'appli (`surcharges_reference.py`) : ils comblent
-    # un absent, jamais ne renomment quelqu'un qu'une source officielle
-    # connaît — même règle que les suppléments ci-dessus.
+    # Noms saisis depuis l'appli (`surcharges_reference.py`) : ils ont le
+    # dernier mot, y compris sur la feuille officielle (correction d'un nom
+    # mal orthographié, 29/09/2026) — marqués « modifié dans l'appli » à
+    # l'écran, et effaçables.
     from cal_iut.ingestion import surcharges_reference
 
     for code, nom in surcharges_reference.valeurs("enseignants", "nom").items():
-        code_propre = code.strip().upper()
-        if noms.get(code_propre, code_propre) == code_propre:
-            noms[code_propre] = nom
+        noms[code.strip().upper()] = nom
     return noms
 
 

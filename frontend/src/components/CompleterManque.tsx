@@ -69,7 +69,9 @@ async function enregistrer(m: Manque, valeur: string): Promise<unknown> {
     case "salle:capacite":
       return completerSalle(m.cle, { capacite: Number(valeur) });
     case "cours:intitule":
-      return completerCours(m.cle, valeur);
+      return completerCours(m.cle, { intitule: valeur });
+    case "cours:code_celcat":
+      return completerCours(m.cle, { code_celcat: valeur });
     default:
       throw new Error("Cette donnée ne se complète pas depuis l'appli.");
   }
@@ -102,6 +104,12 @@ function reglages(m: Manque): {
       };
     case "cours:intitule":
       return { placeholder: "Intitulé de la matière" };
+    case "cours:code_celcat":
+      return {
+        placeholder: "Code module (ex. TSBZ1M01)",
+        taille: 16,
+        valider: (v) => (/^TSB[0-9A-Z]{4,6}$/i.test(v.trim()) ? null : "Forme attendue : TSBZ1M01."),
+      };
     default:
       return null;
   }

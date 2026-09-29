@@ -12,9 +12,15 @@
  *   saisie — jamais d'alerte bloquante ;
  * - le succès reste visible (« Enregistré », annoncé par `aria-live`) le
  *   temps que l'écran se recharge avec la nouvelle valeur.
+ *
+ * Mode « modifier » (29/09/2026, corriger une valeur déjà présente) : au
+ * repos, la valeur (`valeurAffichee`) suivie d'un petit crayon — discret,
+ * révélé au survol de la ligne, toujours visible au focus clavier —, puis le
+ * même champ en ligne, prérempli.
  */
 
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Pencil } from "lucide-react";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import "./ChampEnLigne.css";
 
@@ -39,6 +45,12 @@ interface ChampEnLigneProps {
   onEnregistrer: (valeur: string) => Promise<unknown>;
   /** Largeur du champ en caractères. */
   taille?: number;
+  /** « ajouter » (pastille, défaut) ou « modifier » (crayon après la valeur). */
+  mode?: "ajouter" | "modifier";
+  /** Mode « modifier » : la valeur actuelle, telle que l'écran l'affiche. */
+  valeurAffichee?: ReactNode;
+  /** Mode « modifier » : ce qui suit le crayon (marque « modifiée »). */
+  apres?: ReactNode;
 }
 
 type Etat = "repos" | "edition" | "envoi" | "fait";
@@ -64,8 +76,15 @@ export function ChampEnLigne({
   valider,
   onEnregistrer,
   taille,
+  mode = "ajouter",
+  valeurAffichee,
+  apres,
 }: ChampEnLigneProps) {
   const [etat, setEtat] = useState<Etat>("repos");
+  // Mode « modifier » : l'écran a rechargé la valeur enregistrée — retour
+  // au repos (crayon de nouveau disponible), le « Enregistré » restant affiché.
+  const [vientDEnregistrer, setVientDEnregistrer] = useState(false);
+  const valeurVue = useRef(valeurInitiale);
   const [valeur, setValeur] = useState(valeurInitiale || options?.[0]?.value || "");
   const [erreur, setErreur] = useState<string | null>(null);
   const [enregistree, setEnregistree] = useState("");
@@ -75,12 +94,27 @@ export function ChampEnLigne({
   const rendreFocus = useRef(false);
 
   useEffect(() => {
+    if (mode === "modifier" && etat === "fait" && valeurInitiale !== valeurVue.current) {
+      setVientDEnregistrer(true);
+      setEtat("repos");
+    }
+    valeurVue.current = valeurInitiale;
+  }, [mode, etat, valeurInitiale]);
+
+  useEffect(() => {
     if (etat === "edition") champ.current?.focus();
     if (etat === "repos" && rendreFocus.current) {
       rendreFocus.current = false;
       bouton.current?.focus();
     }
   }, [etat]);
+
+  const ouvrir = () => {
+    setValeur(valeurInitiale || options?.[0]?.value || "");
+    setErreur(null);
+    setVientDEnregistrer(false);
+    setEtat("edition");
+  };
 
   const annuler = () => {
     setErreur(null);
@@ -122,17 +156,34 @@ export function ChampEnLigne({
 
   return (
     <span className="champ-en-ligne-hote" data-pas-ouvrir="">
-      {etat === "repos" && (
+      {etat === "repos" && mode === "ajouter" && (
         <button
           ref={bouton}
           type="button"
           className="pill dot warn champ-ajouter"
           aria-label={`${libelleBouton} — ${libelleChamp}`}
           title={`${libelleChamp} : à compléter`}
-          onClick={() => setEtat("edition")}
+          onClick={ouvrir}
         >
           {libelleBouton}
         </button>
+      )}
+      {etat === "repos" && mode === "modifier" && (
+        <span className="valeur-modifiable">
+          {valeurAffichee}
+          <button
+            ref={bouton}
+            type="button"
+            className="btn-modifier"
+            aria-label={`Modifier — ${libelleChamp}`}
+            title="Modifier"
+            onClick={ouvrir}
+          >
+            <Pencil size={13} aria-hidden="true" />
+          </button>
+          {apres}
+          {vientDEnregistrer && <span className="pill dot good">Enregistré</span>}
+        </span>
       )}
       {(etat === "edition" || etat === "envoi") && (
         <form className="champ-en-ligne" onSubmit={(e) => void soumettre(e)} onKeyDown={touche} noValidate>
@@ -188,6 +239,22 @@ export function ChampEnLigne({
       {etat === "fait" && (
         <span className="champ-en-ligne-fait">
           <span className="champ-en-ligne-valeur">{enregistree}</span>
+          {/* Mode « modifier » : on peut reprendre tout de suite, et la
+              marque reste visible (même valeur ressaisie : rien ne
+              rechargerait le composant). */}
+          {mode === "modifier" && (
+            <button
+              ref={bouton}
+              type="button"
+              className="btn-modifier"
+              aria-label={`Modifier — ${libelleChamp}`}
+              title="Modifier"
+              onClick={ouvrir}
+            >
+              <Pencil size={13} aria-hidden="true" />
+            </button>
+          )}
+          {mode === "modifier" && apres}
           <span className="pill dot good">Enregistré</span>
         </span>
       )}

@@ -20,13 +20,19 @@ import { SendTeacherMailsModal } from "../components/SendTeacherMailsModal";
 import { TriColonne, useTri } from "../components/TriColonne";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
-import type { AppPayload, CourseCatalogEntry, InstitutionalEvent, RoomCatalogEntry } from "../types/app";
+import type {
+  AppPayload,
+  CourseCatalogEntry,
+  InstitutionalEvent,
+  RoomCatalogEntry,
+  SurchargeReference,
+} from "../types/app";
 import { confirmAsync } from "../utils/confirmDialog";
 import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { Onglets } from "../components/Onglets";
-import { MailManquant } from "./Annuaires";
+import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
 import "../styles/outils.css";
 import "./ReferenceView.css";
 
@@ -617,7 +623,12 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           </thead>
           <tbody>
             {profsVisibles.map((t) => (
-              <DirectoryRow key={t.code} row={t} showMail />
+              <DirectoryRow
+                key={t.code}
+                row={t}
+                showMail
+                surchargeMail={payload.surchargesReference?.enseignants?.[t.code]?.email}
+              />
             ))}
           </tbody>
         </table>
@@ -652,7 +663,15 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
   );
 }
 
-function DirectoryRow({ row, showMail = false }: { row: LigneAnnuaire; showMail?: boolean }) {
+function DirectoryRow({
+  row,
+  showMail = false,
+  surchargeMail,
+}: {
+  row: LigneAnnuaire;
+  showMail?: boolean;
+  surchargeMail?: SurchargeReference;
+}) {
   const hours = (row.items.reduce((n, it) => n + (it.dur || 1), 0) * 1.5).toLocaleString("fr-FR");
   // Envoi ciblé à CETTE seule personne (retour utilisateur 28/08/2026 : « un
   // bouton qui envoie le mail à la personne avec son lien ») — même endpoint
@@ -730,6 +749,14 @@ function DirectoryRow({ row, showMail = false }: { row: LigneAnnuaire; showMail?
             />
           ) : (
             <span className="ref-sans-mail">pas d'adresse</span>
+          )}
+          {row.mail && row.kind === "prof" && (
+            // Corriger l'adresse (29/09/2026) : crayon « Modifier » et marque
+            // « modifiée dans l'appli » ; l'adresse elle-même est dans la
+            // bulle de « Envoyer ».
+            <span className="ref-mail-actions">
+              <EmailEnseignant code={row.code} nom={row.label} email={row.mail} surcharge={surchargeMail} />
+            </span>
           )}
           {erreurEnvoi && <div className="alerte small">{erreurEnvoi}</div>}
         </td>

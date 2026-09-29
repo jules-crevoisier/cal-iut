@@ -255,10 +255,44 @@ def test_un_mail_deja_attribue_est_refuse(edit) -> None:
     assert edit.put("/reference/enseignants/KBR/contact", json={"email": "k@univ.test"}).status_code == 200
 
 
-def test_un_mail_fourni_par_le_fichier_ne_se_complete_pas(edit) -> None:
-    reponse = edit.put("/reference/enseignants/MRI/contact", json={"email": "autre@univ.test"})
-    assert reponse.status_code == 409
-    assert "teacher_contacts.yaml" in reponse.json()["detail"]
+def test_un_mail_du_fichier_se_corrige_dans_l_appli_puis_s_efface(edit, etat) -> None:
+    """Suite du 29/09/2026 (« go ») : la saisie a le dernier mot sur le
+    fichier ; la trace garde la valeur d'avant ET celle du fichier ; DELETE
+    rétablit la valeur du fichier."""
+    avant = revision.actuelle().numero
+    reponse = edit.put("/reference/enseignants/MRI/contact", json={"email": "Marine.R@Univ.test"})
+    assert reponse.status_code == 200, reponse.text
+    assert load_teacher_contacts(etat.config_dir)["MRI"] == "marine.r@univ.test"
+    assert revision.actuelle().numero > avant
+    ligne = surcharges_reference.journal()[0]
+    assert (ligne["avant"], ligne["apres"], ligne["valeur_fichier"]) == (None, "marine.r@univ.test", "marine.riguet@univ.test")
+    assert ligne["par"].startswith("test-edit-")
+    # La marque « modifiée dans l'appli » et la valeur d'origine sont servies.
+    surcharge = edit.get("/app-state").json()["surchargesReference"]["enseignants"]["MRI"]["email"]
+    assert (surcharge["valeur"], surcharge["origine"]) == ("marine.r@univ.test", "marine.riguet@univ.test")
+    assert surcharge["modifie_par"].startswith("test-edit-")
+
+    avant = revision.actuelle().numero
+    retour = edit.delete("/reference/enseignants/MRI/contact")
+    assert retour.status_code == 200, retour.text
+    assert load_teacher_contacts(etat.config_dir)["MRI"] == "marine.riguet@univ.test"
+    assert revision.actuelle().numero > avant
+    ligne = surcharges_reference.journal()[0]
+    assert (ligne["avant"], ligne["apres"], ligne["valeur_fichier"]) == ("marine.r@univ.test", None, "marine.riguet@univ.test")
+    assert "MRI" not in edit.get("/app-state").json()["surchargesReference"]["enseignants"]
+    assert edit.delete("/reference/enseignants/MRI/contact").status_code == 404
+
+
+def test_resaisir_la_valeur_du_fichier_retire_la_surcharge(edit, etat) -> None:
+    assert edit.put("/reference/enseignants/MRI/contact", json={"email": "autre@univ.test"}).status_code == 200
+    assert edit.put("/reference/enseignants/MRI/contact", json={"email": "MARINE.RIGUET@univ.test"}).status_code == 200
+    assert "MRI" not in surcharges_reference.valeurs("enseignants", "email")
+
+
+def test_effacer_reserve_au_role_edit(lecteur) -> None:
+    assert lecteur.delete("/reference/enseignants/MRI/contact").status_code == 403
+    assert lecteur.delete("/reference/enseignants/MRI/nom").status_code == 403
+    assert lecteur.delete("/reference/cours/WR101/intitule").status_code == 403
 
 
 def test_enseignant_inconnu(edit) -> None:
@@ -272,15 +306,15 @@ def test_lecture_seule_ne_complete_rien(lecteur) -> None:
     assert lecteur.put("/reference/cours/WRX99", json={"intitule": "Atelier"}).status_code == 403
 
 
-def test_la_config_garde_le_dernier_mot(etat, tmp_path) -> None:
-    """Saisie dans l'appli, puis l'adresse arrive dans le fichier au
-    déploiement : c'est le fichier qui s'affiche."""
+def test_la_saisie_a_le_dernier_mot_au_chargement(etat, tmp_path) -> None:
+    """Saisie dans l'appli, puis une autre adresse arrive dans le fichier au
+    déploiement : la saisie reste (marquée à l'écran, effaçable)."""
     surcharges_reference.definir("enseignants", "KBR", "email", "saisie@univ.test", par="x")
     assert load_teacher_contacts(etat.config_dir)["KBR"] == "saisie@univ.test"
     (etat.config_dir / "teacher_contacts.yaml").write_text(
         "contacts:\n  MRI: marine.riguet@univ.test\n  KBR: officielle@univ.test\n", encoding="utf-8"
     )
-    assert load_teacher_contacts(etat.config_dir)["KBR"] == "officielle@univ.test"
+    assert load_teacher_contacts(etat.config_dir)["KBR"] == "saisie@univ.test"
 
 
 def test_un_fichier_de_surcharges_illisible_ne_casse_pas_la_lecture(etat) -> None:
@@ -304,10 +338,17 @@ def test_completer_un_nom_manquant(edit, etat) -> None:
     assert "enseignant:JSA:nom" not in _ids(edit)
 
 
-def test_un_nom_deja_connu_ne_se_remplace_pas(edit) -> None:
+def test_un_nom_connu_se_corrige_et_s_efface(edit, etat) -> None:
     # APH : nom donné par `enseignants_supplementaires.yaml`.
-    reponse = edit.put("/reference/enseignants/APH", json={"nom": "Quelqu'un d'autre"})
-    assert reponse.status_code == 409
+    reponse = edit.put("/reference/enseignants/APH", json={"nom": "Alexia Petit Halajko"})
+    assert reponse.status_code == 200, reponse.text
+    assert edit.get("/app-state").json()["teacherLabels"]["APH"] == "Alexia Petit Halajko"
+    ligne = surcharges_reference.journal()[0]
+    assert ligne["valeur_fichier"] == "Alexia Petit-Halajko"
+    surcharge = edit.get("/app-state").json()["surchargesReference"]["enseignants"]["APH"]["nom"]
+    assert surcharge["origine"] == "Alexia Petit-Halajko"
+    assert edit.delete("/reference/enseignants/APH/nom").status_code == 200
+    assert edit.get("/app-state").json()["teacherLabels"]["APH"] == "Alexia Petit-Halajko"
     assert edit.put("/reference/enseignants/JSA", json={"nom": "J"}).status_code == 400
 
 
@@ -393,10 +434,22 @@ def test_completer_un_intitule(edit, etat) -> None:
     assert etat.sessions_by_id["wrx1"].course_name == "Atelier ouvert"
 
 
-def test_un_intitule_de_la_maquette_ne_se_remplace_pas(edit) -> None:
-    assert edit.put("/reference/cours/WR101", json={"intitule": "Autre chose"}).status_code == 409
+def test_un_intitule_de_la_maquette_se_corrige_et_s_efface(edit, etat) -> None:
+    assert edit.put("/reference/cours/WR101", json={"intitule": "Culture numérique (S1)"}).status_code == 200
+    assert {s.course_name for s in etat.sessions if s.course_code == "WR101"} == {"Culture numérique (S1)"}
+    ligne = surcharges_reference.journal()[0]
+    assert ligne["valeur_fichier"] == "Culture numérique"
+    surcharge = edit.get("/app-state").json()["surchargesReference"]["cours"]["WR101"]["intitule"]
+    assert surcharge["origine"] == "Culture numérique"
+    assert edit.delete("/reference/cours/WR101/intitule").status_code == 200
+    assert {s.course_name for s in etat.sessions if s.course_code == "WR101"} == {"Culture numérique"}
     assert edit.put("/reference/cours/WRX99", json={"intitule": "wrx99"}).status_code == 400
     assert edit.put("/reference/cours/NOPE", json={"intitule": "Rien"}).status_code == 404
+
+
+def test_les_surcharges_ne_sortent_pas_sur_un_lien_public(edit, etat) -> None:
+    assert edit.put("/reference/enseignants/MRI/contact", json={"email": "autre@univ.test"}).status_code == 200
+    assert TestClient(app).get("/app-state?t=MRI").json()["surchargesReference"] == {}
 
 
 # ---------------------------------------------------------------------------

@@ -13,13 +13,13 @@ Cette surcouche vit dans `data/state/references.json`, le volume persistant
 que les correspondances Celcat (`celcat/mappings.py`), les salles ajoutées
 (`api/custom_rooms.py`) et les retouches de séance (`api/session_overrides.py`).
 
-ELLE COMPLÈTE, ELLE NE REMPLACE PAS. Contrairement aux correspondances Celcat,
-la configuration garde ici le dernier mot : une adresse, un nom ou un intitulé
-saisi dans l'appli ne sert QUE tant que la source officielle (le YAML, la
-feuille des contraintes, la maquette) n'en fournit pas. Le jour où
-`teacher_contacts.yaml` reçoit l'adresse au déploiement, c'est elle qui
-s'affiche — on ne se retrouve jamais à corriger un fichier sans effet parce
-qu'une saisie ancienne, oubliée, passe devant.
+LA SAISIE A LE DERNIER MOT (décision du 29/09/2026, « go » de l'utilisateur
+pour corriger depuis l'appli une valeur déjà fournie par la configuration) :
+une adresse, un nom ou un intitulé saisi ici passe devant le YAML, la feuille
+des contraintes ou la maquette — comme les correspondances Celcat. Pour ne
+jamais « corriger un fichier sans effet » sans le savoir, chaque valeur
+surchargée est MARQUÉE à l'écran (« modifiée dans l'appli ») avec la valeur
+d'origine, et `effacer` la retire (« Revenir à la valeur du fichier »).
 
 Familles et champs :
 - `enseignants` : `email` (lu par `config_loader.load_teacher_contacts`) et
@@ -123,7 +123,9 @@ def origine(famille: str, cle: str, champ: str) -> dict[str, Any] | None:
     return dict(entree) if isinstance(entree, dict) else None
 
 
-def _ligne_journal(famille: str, cle: str, champ: str, avant: object, apres: object, par: str) -> dict[str, Any]:
+def _ligne_journal(
+    famille: str, cle: str, champ: str, avant: object, apres: object, par: str, valeur_fichier: object = None
+) -> dict[str, Any]:
     return {
         "le": datetime.now(UTC).isoformat(),
         "par": str(par or "").strip(),
@@ -132,6 +134,10 @@ def _ligne_journal(famille: str, cle: str, champ: str, avant: object, apres: obj
         "champ": champ,
         "avant": avant,
         "apres": apres,
+        # Ce que dit la configuration à ce moment-là (fichier, feuille,
+        # maquette) : une saisie qui la remplace doit laisser la trace de ce
+        # qu'elle a remplacé, pas seulement de la saisie précédente.
+        "valeur_fichier": valeur_fichier,
     }
 
 
@@ -143,7 +149,9 @@ def _ajouter_au_journal(doc: dict[str, Any], ligne: dict[str, Any]) -> None:
     )
 
 
-def definir(famille: str, cle: str, champ: str, valeur: str, *, par: str = "") -> dict[str, Any]:
+def definir(
+    famille: str, cle: str, champ: str, valeur: str, *, par: str = "", valeur_fichier: object = None
+) -> dict[str, Any]:
     """Enregistre UNE valeur (déjà validée par l'appelant). Rend l'entrée.
 
     La validation métier (format d'adresse, doublon, entité connue) est
@@ -167,9 +175,33 @@ def definir(famille: str, cle: str, champ: str, valeur: str, *, par: str = "") -
         }
         champs[champ] = entree
         doc[famille][cle_propre] = champs
-        _ajouter_au_journal(doc, _ligne_journal(famille, cle_propre, champ, avant, valeur_propre, par))
+        _ajouter_au_journal(
+            doc, _ligne_journal(famille, cle_propre, champ, avant, valeur_propre, par, valeur_fichier)
+        )
         ecrire_json(_path(), doc)
     return entree
+
+
+def effacer(famille: str, cle: str, champ: str, *, par: str = "", valeur_fichier: object = None) -> str | None:
+    """Retire une saisie (« Revenir à la valeur du fichier »). Rend la valeur
+    retirée, ou None s'il n'y en avait pas. Tracé au journal, comme une saisie."""
+    if champ not in CHAMPS.get(famille, ()):
+        raise ValueError(f"champ inconnu : « {famille}.{champ} »")
+    cle_propre = str(cle).strip()
+    with _verrou, verrou_fichier(_path()):
+        doc = charger()
+        champs = dict(doc[famille].get(cle_propre, {}))
+        entree = champs.pop(champ, None)
+        if not isinstance(entree, dict):
+            return None
+        if champs:
+            doc[famille][cle_propre] = champs
+        else:
+            doc[famille].pop(cle_propre, None)
+        avant = entree.get("valeur")
+        _ajouter_au_journal(doc, _ligne_journal(famille, cle_propre, champ, avant, None, par, valeur_fichier))
+        ecrire_json(_path(), doc)
+    return str(avant) if avant is not None else None
 
 
 def journaliser(famille: str, cle: str, champ: str, avant: object, apres: object, *, par: str = "") -> None:
@@ -197,25 +229,50 @@ def intitule_manquant(code: str, intitule: str | None) -> bool:
     return not texte or texte.upper() == str(code).strip().upper()
 
 
-def appliquer_intitules(
-    sessions: list[Any], courses: list[Any] | None = None, *, remplacables: dict[str, str] | None = None
-) -> None:
-    """Pose l'intitulé saisi sur les séances (et matières) qui n'en ont pas.
+# Intitulé de la maquette, mis de côté sur la séance quand une saisie le
+# remplace en mémoire : c'est lui qu'affiche « valeur d'origine », et lui
+# qu'on rétablit quand la saisie est effacée.
+CLE_INTITULE_MAQUETTE = "intitule_maquette"
 
-    Une séance qui porte déjà un vrai intitulé le garde : la maquette a le
-    dernier mot (cf. docstring). `remplacables` (`{code: ancienne saisie}`)
-    permet de corriger EN MÉMOIRE une saisie précédente, qui n'est plus
-    « manquante » une fois posée."""
+
+def intitule_d_origine(sessions: list[Any], code: str) -> str | None:
+    """L'intitulé que donne la maquette pour `code` (None s'il n'en donne pas)."""
+    for s in sessions:
+        if s.course_code != code:
+            continue
+        brut = (s.metadata or {}).get(CLE_INTITULE_MAQUETTE, s.course_name)
+        return None if intitule_manquant(code, brut) else str(brut)
+    return None
+
+
+def appliquer_intitules(sessions: list[Any], courses: list[Any] | None = None) -> None:
+    """Pose l'intitulé saisi sur les séances et matières chargées — la saisie
+    a le dernier mot. L'intitulé de la maquette est gardé sur la séance
+    (`CLE_INTITULE_MAQUETTE`) la première fois qu'il est remplacé."""
     intitules = valeurs("cours", "intitule")
     if not intitules:
         return
-    for objet in list(sessions) + list(courses or []):
-        code = str(getattr(objet, "course_code", None) or getattr(objet, "code", "") or "")
-        nouveau = intitules.get(code)
+    for s in sessions:
+        nouveau = intitules.get(s.course_code)
         if not nouveau:
             continue
-        attribut = "course_name" if hasattr(objet, "course_name") else "name"
-        actuel = str(getattr(objet, attribut, "") or "").strip()
-        ancien = (remplacables or {}).get(code)
-        if intitule_manquant(code, actuel) or (ancien is not None and actuel == ancien):
-            setattr(objet, attribut, nouveau)
+        if s.metadata is not None and CLE_INTITULE_MAQUETTE not in s.metadata:
+            s.metadata[CLE_INTITULE_MAQUETTE] = s.course_name
+        s.course_name = nouveau
+    for c in courses or []:
+        nouveau = intitules.get(c.code)
+        if nouveau:
+            c.name = nouveau
+
+
+def retablir_intitule(sessions: list[Any], courses: list[Any] | None, code: str) -> None:
+    """Après `effacer("cours", code, "intitule")` : chaque séance reprend
+    l'intitulé de la maquette qu'elle avait mis de côté."""
+    origine = None
+    for s in sessions:
+        if s.course_code == code and CLE_INTITULE_MAQUETTE in (s.metadata or {}):
+            origine = s.metadata.pop(CLE_INTITULE_MAQUETTE)
+            s.course_name = origine
+    for c in courses or []:
+        if c.code == code and origine is not None:
+            c.name = origine

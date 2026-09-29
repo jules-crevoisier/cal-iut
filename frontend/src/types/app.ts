@@ -245,5 +245,23 @@ export interface AppPayload {
   /** Salles réservées par des tiers (`salles_reservees.yaml`), telles que
    *  déclarées — optionnel : absent des anciens payloads et des fixtures. */
   roomReservations?: { salle: string; date: string; slots: number[]; motif: string }[];
+  /** Valeurs modifiées dans l'appli (29/09/2026, `api/reference.py::
+   *  surcharges_pour_payload`), avec la valeur d'origine. Vide sur un lien
+   *  public (adresses). Absent d'un serveur plus ancien. */
+  surchargesReference?: SurchargesReference;
   courses: CourseCatalogEntry[];
+}
+
+/** Une valeur saisie dans l'appli par-dessus la configuration. */
+export interface SurchargeReference {
+  valeur: string;
+  /** Ce que dit le fichier (ou la maquette) ; `null` s'il ne dit rien. */
+  origine: string | null;
+  modifie_le: string | null;
+  modifie_par: string;
+}
+
+export interface SurchargesReference {
+  enseignants: Record<string, { email?: SurchargeReference; nom?: SurchargeReference }>;
+  cours: Record<string, { intitule?: SurchargeReference }>;
 }

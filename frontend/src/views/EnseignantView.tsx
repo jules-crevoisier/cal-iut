@@ -40,7 +40,8 @@ import { mailtoForTeacher } from "../utils/mailto";
 import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
 import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { AnnuaireEnseignants, MailManquant } from "./Annuaires";
+import { EmailEnseignant, MailManquant, ModifierNomEnseignant } from "../components/ValeursReference";
+import { AnnuaireEnseignants } from "./Annuaires";
 
 import "./fiches.css";
 
@@ -254,6 +255,13 @@ export function EnseignantView({
 
       <FicheIdentite
         titre={nom}
+        // Nom connu : crayon « Modifier » (et marque s'il a été corrigé dans
+        // l'appli). Nom inconnu : « Ajouter le nom », dans les faits.
+        titreAction={
+          nom !== code ? (
+            <ModifierNomEnseignant code={code} nom={nom} surcharge={payload.surchargesReference?.enseignants?.[code]?.nom} />
+          ) : undefined
+        }
         faits={[
           <span className="mono">{code}</span>,
           // Nom complet inconnu de toutes les sources : le titre n'est que le
@@ -273,16 +281,21 @@ export function EnseignantView({
             ) : (
               <span className="fiche-manque">nom complet manquant</span>
             )),
-          email ? (
-            <a href={`mailto:${email}`}>{email}</a>
-          ) : (
-            <MailManquant
-              code={code}
-              nom={nom}
-              libelleBouton="Ajouter le mail"
-              lectureSeule={<span className="fiche-manque">adresse mail manquante</span>}
-            />
-          ),
+          <EmailEnseignant
+            code={code}
+            nom={nom}
+            email={email}
+            surcharge={payload.surchargesReference?.enseignants?.[code]?.email}
+            affichage={<a href={`mailto:${email}`}>{email}</a>}
+            manquant={
+              <MailManquant
+                code={code}
+                nom={nom}
+                libelleBouton="Ajouter le mail"
+                lectureSeule={<span className="fiche-manque">adresse mail manquante</span>}
+              />
+            }
+          />,
           c.solverWeek !== null && (
             <>
               <strong>{formatHeures(hoursByWeek.get(c.solverWeek) ?? 0)}</strong> en {titreSemaine.toLowerCase()}

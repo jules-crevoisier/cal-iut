@@ -1313,7 +1313,9 @@ def _build_app_context(state: object) -> _AppContext:
 #     seule, aucune raison d'être envoyées.
 # Le nom des enseignants (`teacherLabels`) reste, lui : il s'affiche sur les
 # séances de n'importe quel emploi du temps, c'est l'objet même de l'outil.
-_CLES_PRIVEES_PAYLOAD = ("teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions")
+_CLES_PRIVEES_PAYLOAD = (
+    "teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions", "surchargesReference",
+)
 
 
 def variante_lecture(request: Request) -> str:
@@ -1335,7 +1337,7 @@ def variante_lecture(request: Request) -> str:
 
 def expurger_payload(payload: dict[str, object]) -> dict[str, object]:
     """Version publique du payload (cf. `_CLES_PRIVEES_PAYLOAD`)."""
-    vide: dict[str, object] = {"teacherEmails": {}}
+    vide: dict[str, object] = {"teacherEmails": {}, "surchargesReference": {}}
     return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
 
 
@@ -1410,7 +1412,17 @@ def _calculer_payload_app_state() -> dict[str, object]:
         # son raccourci APH » — dès sa première séance.
         if libelles.get(code, code) == code:
             libelles[code] = nom
+    # Nom corrigé dans l'appli (29/09/2026) : il a le dernier mot, y compris
+    # sur le nom que donnent les séances de la maquette.
+    for code, nom in surcharges_reference.valeurs("enseignants", "nom").items():
+        if code in libelles:
+            libelles[code] = nom
     payload["teacherLabels"] = dict(sorted(libelles.items()))
+    # Ce qui a été modifié dans l'appli, avec la valeur d'origine : l'écran
+    # le marque (« modifiée dans l'appli ») et propose d'y revenir.
+    from cal_iut.api.reference import surcharges_pour_payload
+
+    payload["surchargesReference"] = surcharges_pour_payload(state)
 
     # Réservations de salles par des tiers (vue « Salles libres », 22/09/2026).
     from cal_iut.ingestion.config_loader import load_room_reservation_entries
@@ -4867,9 +4879,13 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
         if place is not None:
             entree["sans_semaine"] = False
 
+    from cal_iut.api.reference import codes_modules_releves
+
     return CelcatMappingsResponse(
         salles=_entrees("salles"),
         enseignants=_entrees("enseignants"),
+        matieres=_entrees("matieres"),
+        matieres_celcat=sorted(codes_modules_releves(Path(get_state().config_dir))),
         salles_celcat=salles_celcat,
         manquants=sorted(manquants.values(), key=lambda m: -m["tentatives"]),
         bloques_autres_semaines=ailleurs,
@@ -4882,6 +4898,8 @@ def celcat_mappings(semaine: int | None = None) -> CelcatMappingsResponse:
 # déployés ensemble pour que l'écran fonctionne.
 _MOTIF_SALLE = re.compile(r"salle\s+«\s*([^»]+?)\s*»")
 _MOTIF_ENSEIGNANT = re.compile(r"enseignant\s+([A-Z]{2,4})\s+sans code")
+# « module WR100BU sans code Celcat » (`mapping.py`) — 29/09/2026.
+_MOTIF_MATIERE = re.compile(r"module\s+(\S+)\s+sans code Celcat")
 
 
 def _famille_du_motif(motif: str) -> str:
@@ -4889,11 +4907,13 @@ def _famille_du_motif(motif: str) -> str:
         return "salles"
     if _MOTIF_ENSEIGNANT.search(motif):
         return "enseignants"
+    if _MOTIF_MATIERE.search(motif):
+        return "matieres"
     return ""
 
 
 def _cle_du_motif(motif: str) -> str:
-    for regle in (_MOTIF_SALLE, _MOTIF_ENSEIGNANT):
+    for regle in (_MOTIF_SALLE, _MOTIF_ENSEIGNANT, _MOTIF_MATIERE):
         trouve = regle.search(motif)
         if trouve:
             return trouve.group(1).strip()
@@ -4914,11 +4934,17 @@ def celcat_mappings_definir(
     appel, et le worker la relit à son passage suivant. Les séances bloquées
     sur cette clé repartent d'elles-mêmes — elles n'ont jamais quitté la file.
     """
+    from cal_iut.api.reference import valider_code_module
     from cal_iut.celcat import mappings
 
     utilisateur = getattr(getattr(request.state, "user", None), "email", "") or ""
+    valeur = body.valeur
+    if body.famille == "matieres":
+        # Même contrôle que « Données à compléter » (`api/reference.py`) :
+        # un code module que l'écriture ne saura pas retrouver est refusé ici.
+        valeur = valider_code_module(Path(get_state().config_dir), valeur)
     try:
-        mappings.definir(body.famille, body.cle, body.valeur, par=utilisateur)
+        mappings.definir(body.famille, body.cle, valeur, par=utilisateur)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
     return celcat_mappings(semaine)

@@ -997,6 +997,11 @@ class CelcatMappingsResponse(BaseModel):
 
     salles: list[CelcatMappingEntree] = Field(default_factory=list)
     enseignants: list[CelcatMappingEntree] = Field(default_factory=list)
+    # Code de cours -> code module Celcat (`TSB…`), 29/09/2026.
+    matieres: list[CelcatMappingEntree] = Field(default_factory=list)
+    # Codes modules relevés (`celcat_matieres.yaml`) : les seuls que
+    # l'écriture sait retrouver — la saisie est limitée à eux.
+    matieres_celcat: list[str] = Field(default_factory=list)
     # Les valeurs que Celcat connaît vraiment, relevées sur l'instantané :
     # choisir dans une liste réelle vaut mieux que saisir un nom au jugé.
     salles_celcat: list[str] = Field(default_factory=list)
