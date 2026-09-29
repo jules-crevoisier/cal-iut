@@ -176,6 +176,18 @@
 }
 
 @media (min-width: 1360px) {
+  /* Hauteur de la carte connue sans son contenu : les créneaux s'en
+     partagent la hauteur (6 rangées, moins l'en-tête des jours, la pause et
+     la marge du haut), sans jamais descendre sous 64 px — au-delà, la
+     grille défile dans sa carte. */
+  .semaine-grille-corps {
+    container-type: size;
+  }
+
+  .semaine-grille-corps .td-grid-cell {
+    height: max(64px, calc((100cqh - 72px) / 6));
+  }
+
   /* La grille remplit la carte et défile seule (en-têtes collants). */
   .semaine-grille-corps > .td-grid-wrap,
   .semaine-grille-corps > .calendar-wrap,

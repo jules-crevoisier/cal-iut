@@ -13,7 +13,11 @@
 
 .td-grid {
   width: 100%;
-  height: 100%;
+  /* PAS de `height: 100%` : le navigateur répartissait alors la hauteur en
+     trop entre les rangées à sa façon — Firefox et Safari la donnaient à la
+     rangée d'en-tête (un bandeau vide de 300 px au-dessus des jours, retour
+     utilisateur du 29/09/2026). L'étirement passe par la hauteur des
+     créneaux, cf. `.semaine-grille-corps` dans Toolbar.css. */
   border-collapse: collapse;
   table-layout: fixed;
   min-width: 760px;

@@ -496,6 +496,18 @@ button.promo-tuile:hover {
     inset: 0;
   }
 
+  /* Hauteur de la carte connue sans son contenu : les 6 créneaux se
+     partagent ce qui reste sous les en-têtes et la pause, jamais moins de
+     64 px (au-delà, la grille défile dans sa carte). Pas en lecture seule,
+     où la grille prend la hauteur de son contenu. */
+  .app:not(.read-only-mode) .promo-grille-cadre {
+    container-type: size;
+  }
+
+  .app:not(.read-only-mode) table.promo-grid td.promocell {
+    height: max(64px, calc((100cqh - 78px) / 6));
+  }
+
   .read-only-mode .promo-grille-defil {
     position: static;
   }
@@ -511,8 +523,10 @@ table.promo-grid {
   border-spacing: 0;
   table-layout: fixed;
   width: max(100%, calc(64px + var(--nb-colonnes, 8) * 112px));
-  /* Les créneaux s'étirent sur la hauteur disponible. */
-  height: 100%;
+  /* PAS de `height: 100%` : la hauteur en trop était répartie par le
+     navigateur à sa façon — Firefox et Safari pouvaient la donner aux
+     rangées d'en-tête (même défaut que la Vue Semaine, 29/09/2026). Les
+     créneaux s'étirent par leur propre hauteur, cf. `.promo-grille-cadre`. */
   background: var(--surface);
 }
 
