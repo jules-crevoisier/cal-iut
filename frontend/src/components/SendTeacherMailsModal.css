@@ -1,7 +1,7 @@
 /* Envoi du lien personnel par mail (Référence → Liens & partage). */
 
-.mailmodal {
-  width: min(680px, 100%);
+.confirmmodal.mailmodal {
+  width: min(720px, 100%);
   max-height: min(86vh, 760px);
   display: flex;
   flex-direction: column;
@@ -48,8 +48,9 @@
 
 .mailmodal-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 230px) auto;
   align-items: center;
+  flex-shrink: 0;
   gap: 10px;
   padding: 6px 10px;
   min-height: 36px;

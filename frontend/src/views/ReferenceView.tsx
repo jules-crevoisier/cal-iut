@@ -207,7 +207,7 @@ function RoomsTable({ payload, setRoute }: { payload: AppPayload; setRoute: (pat
               <TriColonne cle="type" tri={tri} onTrier={trierPar}>
                 Type
               </TriColonne>
-              <th>Équipement</th>
+              <th className="ref-secondaire">Équipement</th>
               <TriColonne cle="nSessions" tri={tri} onTrier={trierPar} num>
                 Séances
               </TriColonne>
@@ -232,7 +232,7 @@ function RoomsTable({ payload, setRoute }: { payload: AppPayload; setRoute: (pat
                 </td>
                 <td className="num">{r.capacity}</td>
                 <td>{humaniser(r.type)}</td>
-                <td className="ref-doux">{r.equipment.map(humaniser).join(", ") || "—"}</td>
+                <td className="ref-doux ref-secondaire">{r.equipment.map(humaniser).join(", ") || "—"}</td>
                 <td className="num">{r.nSessions}</td>
               </tr>
             ))}
@@ -332,7 +332,7 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
               {col("nTP", "TP", true)}
               {col("nEval", "Éval", true)}
               {col("nPlaced", "Placées", true)}
-              <th>Enseignants</th>
+              <th className="ref-secondaire">Enseignants</th>
             </tr>
           </thead>
           <tbody>
@@ -356,7 +356,7 @@ function CoursesTable({ payload, setRoute }: { payload: AppPayload; setRoute: (p
                 <td className="num">{c.nTP || <span className="ref-zero">0</span>}</td>
                 <td className="num">{c.nEval || <span className="ref-zero">0</span>}</td>
                 <td className="num">{c.nPlaced}</td>
-                <td className="ref-doux">{c.teachers.map((t) => payload.teacherLabels[t] ?? t).join(", ")}</td>
+                <td className="ref-doux ref-secondaire">{c.teachers.map((t) => payload.teacherLabels[t] ?? t).join(", ")}</td>
               </tr>
             ))}
           </tbody>

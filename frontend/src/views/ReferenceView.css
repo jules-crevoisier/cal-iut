@@ -123,6 +123,7 @@
 
 .ref-lien {
   padding: 0;
+  text-align: left;
   border: none;
   background: none;
   color: var(--accent);
@@ -244,6 +245,10 @@
 }
 
 @media (max-width: 640px) {
+  .ref-secondaire {
+    display: none;
+  }
+
   .ref-recherche {
     flex: 1 1 100%;
   }
