@@ -238,4 +238,57 @@ describe("KanbanView", () => {
     expect(copies[0]).toContain("pour Jules");
     await waitFor(() => expect(screen.getByText("Copié")).toBeInTheDocument());
   });
+
+  // Refonte du 29/09/2026 : création rapide, raccourcis, filtres.
+
+  it("creates a card from the quick-add field with Enter, in that column and the open tab", async () => {
+    const appels = stubFetch([]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getAllByText("Aucune tâche.").length).toBeGreaterThan(0));
+
+    const champ = screen.getByLabelText("Ajouter une tâche dans En cours");
+    fireEvent.change(champ, { target: { value: "Relancer la scolarité" } });
+    fireEvent.submit(champ.closest("form")!);
+
+    await waitFor(() => expect(screen.getByText("Relancer la scolarité")).toBeInTheDocument());
+    const post = appels.find((a) => a.method === "POST");
+    expect(post?.body).toMatchObject({ titre: "Relancer la scolarité", colonne: "en_cours", categorie: "edt" });
+    expect(champ).toHaveValue("");
+  });
+
+  it("focuses the quick-add field with the N key", async () => {
+    stubFetch([]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getAllByText("Aucune tâche.").length).toBeGreaterThan(0));
+    fireEvent.keyDown(document.body, { key: "n" });
+    expect(screen.getByLabelText("Ajouter une tâche dans À faire")).toHaveFocus();
+  });
+
+  it("filters cards by text and remembers who they are for", async () => {
+    stubFetch([
+      tache({ id: 1, titre: "Mapper WSA507D", concerne: "Jules" }),
+      tache({ id: 2, titre: "Prevenir les BUT2", concerne: "Kyllian" }),
+    ]);
+    const { unmount } = render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Mapper WSA507D")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Filtrer les tâches"), { target: { value: "wsa" } });
+    expect(screen.queryByText("Prevenir les BUT2")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Pour qui"), { target: { value: "Kyllian" } });
+    unmount();
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Prevenir les BUT2")).toBeInTheDocument());
+    expect(screen.getByLabelText("Pour qui")).toHaveValue("Kyllian");
+    expect(screen.queryByText("Mapper WSA507D")).not.toBeInTheDocument();
+  });
+
+  it("opens the edit form when the card title is clicked", async () => {
+    stubFetch([tache({ id: 1, titre: "Carte a modifier" })]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Carte a modifier")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Modifier « Carte a modifier »" }));
+    expect(screen.getByRole("dialog", { name: "Modifier la tâche" })).toBeInTheDocument();
+  });
 });
+

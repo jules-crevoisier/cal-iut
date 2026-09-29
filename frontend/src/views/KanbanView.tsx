@@ -1,34 +1,29 @@
 /**
  * Kanban « Tâches » (22/09/2026, retour utilisateur Jules) : « on voudrait
  * une partie kanban pour les choses à faire, exemple : ce prof a dit qu'il
- * ne serait pas présent ce jour, déplacer » — l'équipe se le passait par
- * mail jusqu'ici. Trois colonnes fixes (À faire / En cours / Fait), tâches
- * HUMAINES uniquement : distinct de « À traiter » (`TodoView`), qui reste
- * la liste des problèmes de qualité de données détectés automatiquement.
+ * ne serait pas présent ce jour, déplacer ». Trois colonnes fixes (À faire /
+ * En cours / Fait), tâches HUMAINES uniquement — distinct de « À traiter »,
+ * généré automatiquement.
  *
- * Le point du kanban, illustré par l'exemple même de la demande : relier une
- * carte au planning réel dès qu'elle porte un enseignant et une période —
- * `utils/kanban.ts::seancesConcernees` calcule les séances concernées
- * CÔTÉ CLIENT depuis `payload.rows`, chaque résultat ouvre la Vue Promo sur
- * le bon jour.
+ * Une carte qui porte un enseignant et une période est reliée au planning
+ * réel : `utils/kanban.ts::seancesConcernees` liste les séances concernées,
+ * chacune ouvre la Vue Promo sur le bon jour.
  *
- * Déplacer une carte : glisser-déposer (souris) ET boutons explicites
- * (← → pour changer de colonne, ↑ ↓ pour réordonner) — ces derniers sont le
- * seul moyen clavier/tactile, jamais optionnels. Mise à jour optimiste avec
- * retour arrière + message d'erreur si le serveur refuse.
+ * Déplacer une carte : glisser-déposer (souris) ET boutons ← → ↑ ↓ — ces
+ * derniers sont le seul moyen clavier/tactile, jamais optionnels. Mise à jour
+ * optimiste, retour arrière + message si le serveur refuse.
  *
- * Deux onglets EDT / Plateforme (Jules, dicté 25/09/2026 : « deux petits
- * boutons qui seraient des onglets : entre les affaires par rapport à
- * l'emploi du temps [...] et les affaires à propos de la plateforme ») —
- * ici un vrai widget `role="tablist"`/`role="tab"`/`aria-selected` : ces
- * boutons changent le contenu affiché SANS changer de page (contrairement
- * aux boutons de `SideNav`, qui naviguent et utilisent `aria-current`,
- * cf. son commentaire), donc la sémantique "tab" ARIA est celle qui
- * correspond réellement au comportement.
+ * Deux onglets EDT / Plateforme (Jules, dicté 25/09/2026) : vrai widget ARIA
+ * `tablist` (ils changent le contenu affiché sans changer de page).
+ *
+ * Refonte du 29/09/2026 : une seule barre d'outils compacte (onglets, filtres,
+ * création), ajout rapide en bas de chaque colonne (Entrée pour créer, « N »
+ * pour y aller), filtre texte, filtres mémorisés, cartes denses dont le titre
+ * ouvre la modification.
  */
 
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Tache, TacheCreateBody, TachePatchBody } from "../api/client";
 import { creerTache, fetchTaches, patchTache, supprimerTache } from "../api/client";
@@ -39,6 +34,7 @@ import { libelleDatesTache, routeVersSeance, seancesConcernees, texteTache } fro
 import { ecrireOngletTaches, lireOngletTaches } from "../utils/kanbanTabPrefs";
 import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
+import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import "./KanbanView.css";
 
 const COLONNES: { id: Tache["colonne"]; label: string }[] = [
@@ -52,20 +48,43 @@ const CATEGORIES: { id: Tache["categorie"]; label: string }[] = [
   { id: "plateforme", label: "Plateforme" },
 ];
 
+const CLE_FILTRE = "cal-iut:kanban:pour-qui:v1";
+/** Au-delà, la colonne « Fait » se replie : ce qui est fait sert d'archive,
+ * pas de liste de travail. */
+const MAX_FAIT = 8;
+
 const FMT_COURT = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+const FMT_JOUR = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
 
 function formatDateCourte(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime()) ? iso : FMT_COURT.format(d);
 }
 
-/** Premières lignes d'une description — la carte n'a pas vocation à tout
- * afficher, seulement de quoi reconnaître la tâche ; le détail complet
- * reste disponible via « Modifier ». */
+/** Premières lignes d'une description — de quoi reconnaître la tâche ; le
+ * détail complet reste dans la modification. */
 function premieresLignes(description: string, max = 2): { texte: string; tronque: boolean } {
   const lignes = description.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lignes.length <= max) return { texte: lignes.join(" "), tronque: false };
   return { texte: lignes.slice(0, max).join(" "), tronque: true };
+}
+
+function normaliser(t: string): string {
+  return t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+/** « jules.crevoisier@univ.fr » -> « jules.crevoisier » : l'auteur se lit
+ * sans occuper une ligne entière de la carte. */
+function auteurCourt(email: string): string {
+  return email.split("@")[0] || email;
+}
+
+function champDeSaisie(cible: EventTarget | null): boolean {
+  const el = cible as HTMLElement | null;
+  return !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 }
 
 interface KanbanViewProps {
@@ -83,9 +102,10 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   const [tacheEnEdition, setTacheEnEdition] = useState<Tache | null>(null);
   const [depliees, setDepliees] = useState<Set<number>>(new Set());
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [survolColonne, setSurvolColonne] = useState<Tache["colonne"] | null>(null);
+  const [faitDeplie, setFaitDeplie] = useState(false);
 
-  // Onglet actif — restauré depuis `localStorage` au premier rendu, puis
-  // réécrit à chaque changement (cf. `utils/kanbanTabPrefs.ts`).
+  // Onglet actif, restauré au premier rendu (cf. `utils/kanbanTabPrefs.ts`).
   const [categorieActive, setCategorieActive] = useState<Tache["categorie"]>(() => lireOngletTaches());
   useEffect(() => {
     ecrireOngletTaches(categorieActive);
@@ -105,44 +125,52 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     void charger();
   }, [charger]);
 
-  const [filtreConcerne, setFiltreConcerne] = useState<string>("tout");
-  // Carte tout juste copiée — confirmation brève (demande de Jules,
-  // 28/09/2026 : « un petit bouton copier qui copie toutes les infos »).
-  const [copiee, setCopiee] = useState<number | null>(null);
-
   // Filtre « pour qui » (Kyllian Bresson, 25/09/2026 : « il y a des
   // modifications qui vous concernent et d'autres qui me concernent
-  // uniquement ») — les valeurs proposées viennent des cartes existantes,
-  // jamais d'une liste figée dans le code.
+  // uniquement ») — mémorisé : chacun revient sur SES tâches.
+  const [filtreConcerne, setFiltreConcerne] = useState<string>(() =>
+    lireLocal(CLE_FILTRE, "tout", (v): v is string => typeof v === "string"),
+  );
+  useEffect(() => ecrireLocal(CLE_FILTRE, filtreConcerne), [filtreConcerne]);
+  const [filtreTexte, setFiltreTexte] = useState("");
+  // Carte tout juste copiée — confirmation brève (Jules, 28/09/2026).
+  const [copiee, setCopiee] = useState<number | null>(null);
+
+  // Personnes proposées : celles des cartes existantes, jamais une liste figée.
   const personnes = useMemo(
-    () => [...new Set((taches ?? []).map((t) => t.concerne).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b, "fr")),
+    () =>
+      [...new Set((taches ?? []).map((t) => t.concerne).filter((c): c is string => Boolean(c)))].sort((a, b) =>
+        a.localeCompare(b, "fr"),
+      ),
     [taches],
   );
 
-  // Compte par onglet — sur les cartes déjà filtrées « Pour qui », mais
-  // AVANT le filtre d'onglet lui-même (sinon l'onglet non sélectionné
-  // afficherait toujours 0) : cf. contrat de session, « le compte sur
-  // chaque onglet ».
-  const filtreesParConcerne = useMemo(
-    () =>
-      (taches ?? []).filter(
-        (t) => filtreConcerne === "tout" || (filtreConcerne === "__sans__" ? !t.concerne : t.concerne === filtreConcerne),
-      ),
-    [taches, filtreConcerne],
-  );
+  const filtrees = useMemo(() => {
+    const q = normaliser(filtreTexte.trim());
+    return (taches ?? []).filter((t) => {
+      if (filtreConcerne !== "tout" && (filtreConcerne === "__sans__" ? t.concerne : t.concerne !== filtreConcerne)) {
+        return false;
+      }
+      if (!q) return true;
+      const nomProf = t.enseignant_code ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code : "";
+      return normaliser([t.titre, t.description ?? "", t.concerne ?? "", nomProf, t.enseignant_code ?? ""].join(" ")).includes(q);
+    });
+  }, [taches, filtreConcerne, filtreTexte, payload.teacherLabels]);
 
+  // Compte par onglet, filtres appliqués mais AVANT le filtre d'onglet (sinon
+  // l'onglet non sélectionné afficherait toujours 0). Seules les tâches non
+  // faites comptent : c'est ce qui reste à faire qui intéresse.
   const parCategorie = useMemo(() => {
     const compte: Record<Tache["categorie"], number> = { edt: 0, plateforme: 0 };
-    for (const t of filtreesParConcerne) compte[t.categorie]++;
+    for (const t of filtrees) if (t.colonne !== "fait") compte[t.categorie]++;
     return compte;
-  }, [filtreesParConcerne]);
+  }, [filtrees]);
 
   const parColonne = useMemo(() => {
     const map: Record<Tache["colonne"], Tache[]> = { a_faire: [], en_cours: [], fait: [] };
-    const retenues = filtreesParConcerne.filter((t) => t.categorie === categorieActive);
-    for (const t of retenues) map[t.colonne].push(t);
-    // Urgente en tête de sa colonne (marqueur TEXTE affiché sur la carte,
-    // cf. rendu ci-dessous) — à égalité d'urgence, ordre habituel (`ordre`).
+    for (const t of filtrees) if (t.categorie === categorieActive) map[t.colonne].push(t);
+    // Urgente en tête de sa colonne (marqueur TEXTE sur la carte) — à égalité,
+    // ordre habituel.
     for (const c of COLONNES) {
       map[c.id].sort((a, b) => {
         const urgenceA = a.priorite === "urgente" ? 0 : 1;
@@ -151,13 +179,10 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
       });
     }
     return map;
-  }, [filtreesParConcerne, categorieActive]);
+  }, [filtrees, categorieActive]);
 
-  /** Applique un lot de correctifs de façon optimiste (une seule passe,
-   * pour que deux cartes échangeant leur `ordre` — cf. `reordonner` —
-   * s'affichent ensemble) ; retour arrière COMPLET si l'un des appels
-   * serveur échoue, le tableau reste visible avec un message d'erreur
-   * (jamais un écran blanc). */
+  /** Lot de correctifs appliqué de façon optimiste ; retour arrière COMPLET si
+   * un appel échoue, le tableau reste visible avec un message. */
   const appliquerLots = useCallback(
     async (mises: { id: number; corps: TachePatchBody }[], messageEchec: string) => {
       setTaches((cur) => {
@@ -179,14 +204,17 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     [charger],
   );
 
+  const ordreEnFin = (colonneId: Tache["colonne"]) => {
+    const liste = parColonne[colonneId];
+    return liste.length ? Math.max(...liste.map((x) => x.ordre)) + 1 : 0;
+  };
+
   const deplacerColonne = (t: Tache, sens: -1 | 1) => {
     const idx = COLONNES.findIndex((c) => c.id === t.colonne);
     const cible = COLONNES[idx + sens];
     if (!cible) return;
-    const cibleListe = parColonne[cible.id];
-    const nouvelOrdre = cibleListe.length ? Math.max(...cibleListe.map((x) => x.ordre)) + 1 : 0;
     void appliquerLots(
-      [{ id: t.id, corps: { colonne: cible.id, ordre: nouvelOrdre } }],
+      [{ id: t.id, corps: { colonne: cible.id, ordre: ordreEnFin(cible.id) } }],
       "Le déplacement n'a pas pu être enregistré.",
     );
   };
@@ -207,14 +235,13 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
 
   const deposerSurColonne = (colonneId: Tache["colonne"]) => (e: ReactDragEvent) => {
     e.preventDefault();
+    setSurvolColonne(null);
     if (draggingId === null) return;
     const source = (taches ?? []).find((x) => x.id === draggingId);
     setDraggingId(null);
     if (!source || source.colonne === colonneId) return;
-    const cibleListe = parColonne[colonneId];
-    const nouvelOrdre = cibleListe.length ? Math.max(...cibleListe.map((x) => x.ordre)) + 1 : 0;
     void appliquerLots(
-      [{ id: source.id, corps: { colonne: colonneId, ordre: nouvelOrdre } }],
+      [{ id: source.id, corps: { colonne: colonneId, ordre: ordreEnFin(colonneId) } }],
       "Le déplacement n'a pas pu être enregistré.",
     );
   };
@@ -222,6 +249,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   const deposerSurCarte = (cible: Tache) => (e: ReactDragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setSurvolColonne(null);
     if (draggingId === null || draggingId === cible.id) {
       setDraggingId(null);
       return;
@@ -285,12 +313,63 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     setTacheEnEdition(null);
   };
 
+  // ── Ajout rapide : un titre, Entrée, la carte existe ──
+  const [saisieRapide, setSaisieRapide] = useState<Record<Tache["colonne"], string>>({
+    a_faire: "",
+    en_cours: "",
+    fait: "",
+  });
+  const [ajoutEnCours, setAjoutEnCours] = useState<Tache["colonne"] | null>(null);
+  const refAjout = useRef<HTMLInputElement>(null);
+  const refFiltre = useRef<HTMLInputElement>(null);
+
+  const ajouterRapide = async (colonneId: Tache["colonne"]) => {
+    const titre = saisieRapide[colonneId].trim();
+    if (!titre) return;
+    setAjoutEnCours(colonneId);
+    try {
+      const creee = await creerTache({
+        titre,
+        colonne: colonneId,
+        categorie: categorieActive,
+        ordre: ordreEnFin(colonneId),
+        // Créée sous le filtre « Jules » : elle est pour Jules, sinon elle
+        // disparaîtrait de l'écran à peine créée.
+        concerne: filtreConcerne !== "tout" && filtreConcerne !== "__sans__" ? filtreConcerne : "",
+      });
+      setTaches((cur) => [...(cur ?? []), creee]);
+      setSaisieRapide((s) => ({ ...s, [colonneId]: "" }));
+      setErreur(null);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "La tâche n'a pas pu être créée.");
+    } finally {
+      setAjoutEnCours(null);
+    }
+  };
+
+  // Raccourcis : « N » = nouvelle tâche (ajout rapide), « / » = filtrer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || champDeSaisie(e.target) || modaleOuverte) return;
+      if (e.key === "n" || e.key === "N") {
+        if (!peutModifier) return;
+        e.preventDefault();
+        refAjout.current?.focus();
+      } else if (e.key === "/") {
+        e.preventDefault();
+        refFiltre.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [peutModifier, modaleOuverte]);
+
   if (taches === null && !erreur) {
     return (
       <section className="view kanban-view">
-        <div className="panel">
-          <p className="muted">Chargement…</p>
-        </div>
+        <p className="muted" role="status">
+          Chargement…
+        </p>
       </section>
     );
   }
@@ -298,11 +377,11 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   if (taches === null && erreur) {
     return (
       <section className="view kanban-view">
-        <div className="panel">
+        <div className="kanban-erreur">
           <p className="alerte" role="alert">
             {erreur}
           </p>
-          <button type="button" className="btn" onClick={() => void charger()}>
+          <button type="button" className="btn btn--sm" onClick={() => void charger()}>
             Réessayer
           </button>
         </div>
@@ -310,35 +389,82 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     );
   }
 
+  const filtreActif = filtreConcerne !== "tout" || filtreTexte.trim() !== "";
+
   return (
     <section className="view kanban-view">
-      <div className="panel kanban-header">
-        <div>
-          <h3>Tâches</h3>
-          <p className="muted">
-            Ce que l'équipe a noté pour elle-même — absences signalées, déplacements à faire, points à suivre.
-            Distinct de « À traiter », qui reste généré automatiquement.
-          </p>
-        </div>
-        <div className="kanban-header-actions">
-          <label className="kanban-filtre">
-            Pour qui
-            <select value={filtreConcerne} onChange={(e) => setFiltreConcerne(e.target.value)}>
-              <option value="tout">Tout le monde</option>
-              <option value="__sans__">Non attribuées</option>
-              {personnes.map((nom) => (
-                <option key={nom} value={nom}>
-                  {nom}
-                </option>
-              ))}
-            </select>
-          </label>
-          {peutModifier && (
-            <button type="button" className="btn btn--accent" onClick={ouvrirCreation}>
-              + Nouvelle tâche
+      <div className="kanban-barre">
+        <div className="kanban-onglets" role="tablist" aria-label="Catégorie de tâches">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              role="tab"
+              id={`kanban-onglet-${cat.id}`}
+              aria-selected={categorieActive === cat.id}
+              aria-controls="kanban-board"
+              tabIndex={categorieActive === cat.id ? 0 : -1}
+              className={`kanban-onglet ${categorieActive === cat.id ? "actif" : ""}`}
+              onClick={() => setCategorieActive(cat.id)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  const autre = CATEGORIES.find((c) => c.id !== cat.id)!;
+                  setCategorieActive(autre.id);
+                  document.getElementById(`kanban-onglet-${autre.id}`)?.focus();
+                }
+              }}
+            >
+              {cat.label}
+              <span className="kanban-onglet-nb" title="Tâches non terminées">
+                {parCategorie[cat.id]}
+              </span>
             </button>
-          )}
+          ))}
         </div>
+
+        <input
+          ref={refFiltre}
+          type="search"
+          className="kanban-recherche"
+          placeholder="Filtrer…  ( / )"
+          aria-label="Filtrer les tâches"
+          value={filtreTexte}
+          onChange={(e) => setFiltreTexte(e.target.value)}
+        />
+        <label className="kanban-filtre">
+          <span>Pour qui</span>
+          <select value={filtreConcerne} onChange={(e) => setFiltreConcerne(e.target.value)}>
+            <option value="tout">Tout le monde</option>
+            <option value="__sans__">Non attribuées</option>
+            {personnes.map((nom) => (
+              <option key={nom} value={nom}>
+                {nom}
+              </option>
+            ))}
+          </select>
+        </label>
+        {filtreActif && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => {
+              setFiltreConcerne("tout");
+              setFiltreTexte("");
+            }}
+          >
+            Réinitialiser
+          </button>
+        )}
+        {peutModifier && (
+          <button
+            type="button"
+            className="btn btn--primary kanban-nouvelle"
+            onClick={ouvrirCreation}
+            title="Formulaire complet (enseignant, dates, urgence…)"
+          >
+            + Nouvelle tâche
+          </button>
+        )}
         <datalist id="kanban-concerne-suggestions">
           {personnes.map((nom) => (
             <option key={nom} value={nom} />
@@ -346,233 +472,110 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
         </datalist>
       </div>
 
-      {/* Onglets EDT / Plateforme — un vrai widget ARIA "tab" (cf. commentaire
-          d'en-tête du fichier) : `role="tablist"` sur le conteneur,
-          `role="tab"`/`aria-selected` sur chaque bouton, `aria-controls`
-          vers le panneau qu'il pilote (`kanban-board`, `role="tabpanel"`
-          ci-dessous). Roving tabindex minimal (seul l'onglet actif est dans
-          l'ordre de tabulation) — cohérent avec le comportement clavier
-          attendu d'un tablist. */}
-      <div className="panel kanban-tabs" role="tablist" aria-label="Catégorie de tâches">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            role="tab"
-            id={`kanban-onglet-${cat.id}`}
-            aria-selected={categorieActive === cat.id}
-            aria-controls="kanban-board"
-            tabIndex={categorieActive === cat.id ? 0 : -1}
-            className={`kanban-tab ${categorieActive === cat.id ? "active" : ""}`}
-            onClick={() => setCategorieActive(cat.id)}
-          >
-            {cat.label}
-            <span className="pill mini">{parCategorie[cat.id]}</span>
-          </button>
-        ))}
-      </div>
-
       {erreur && (
-        <div className="panel">
-          <p className="alerte" role="alert">
-            {erreur}
-          </p>
-        </div>
+        <p className="alerte kanban-alerte" role="alert">
+          {erreur}
+        </p>
       )}
 
-      <div
-        className="kanban-board"
-        id="kanban-board"
-        role="tabpanel"
-        aria-labelledby={`kanban-onglet-${categorieActive}`}
-      >
-        {COLONNES.map((colonne) => {
+      <div className="kanban-board" id="kanban-board" role="tabpanel" aria-labelledby={`kanban-onglet-${categorieActive}`}>
+        {COLONNES.map((colonne, idxCol) => {
           const liste = parColonne[colonne.id];
+          const tronquee = colonne.id === "fait" && !faitDeplie && liste.length > MAX_FAIT;
+          const affichees = tronquee ? liste.slice(0, MAX_FAIT) : liste;
           return (
             <section
               key={colonne.id}
-              className="panel kanban-column"
+              className={`kanban-column${survolColonne === colonne.id ? " survol" : ""}`}
               aria-label={`Colonne ${colonne.label}`}
               onDragOver={(e) => {
-                if (draggingId !== null) e.preventDefault();
+                if (draggingId === null) return;
+                e.preventDefault();
+                if (survolColonne !== colonne.id) setSurvolColonne(colonne.id);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSurvolColonne(null);
               }}
               onDrop={deposerSurColonne(colonne.id)}
             >
-              <div className="kanban-column-titre">
-                <h4>{colonne.label}</h4>
-                <span className="pill">{liste.length}</span>
-              </div>
+              <header className="kanban-column-titre">
+                <h3>{colonne.label}</h3>
+                <span className="kanban-column-nb">{liste.length}</span>
+              </header>
+
               {liste.length === 0 ? (
-                <p className="muted small kanban-column-vide">Aucune tâche.</p>
+                <p className="kanban-column-vide">Aucune tâche.</p>
               ) : (
                 <ul className="kanban-cards">
-                  {liste.map((t, index) => {
-                    const teacherLabel = t.enseignant_code
-                      ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code
-                      : null;
-                    const datesLabel = libelleDatesTache(t.date_debut, t.date_fin);
-                    const seances = t.enseignant_code && t.date_debut ? seancesConcernees(payload, t) : null;
-                    const deplie = depliees.has(t.id);
-                    const desc = t.description ? premieresLignes(t.description) : null;
-                    const idxColonne = COLONNES.findIndex((c) => c.id === t.colonne);
-
-                    return (
-                      <li
-                        key={t.id}
-                        className={`kanban-card${draggingId === t.id ? " dragging" : ""}`}
-                        draggable={peutModifier}
-                        onDragStart={
-                          peutModifier
-                            ? (e) => {
-                                e.dataTransfer.effectAllowed = "move";
-                                setDraggingId(t.id);
-                              }
-                            : undefined
-                        }
-                        onDragEnd={() => setDraggingId(null)}
-                        onDragOver={(e) => {
-                          if (draggingId !== null) e.preventDefault();
-                        }}
-                        onDrop={deposerSurCarte(t)}
-                      >
-                        {/* Marqueur TEXTE, pas seulement une couleur (contrat de
-                            session) — « Urgent » se lit même sans distinguer les
-                            teintes. */}
-                        {t.priorite === "urgente" && (
-                          <span className="pill bad kanban-card-urgent">Urgent</span>
-                        )}
-                        <p className="kanban-card-titre">{t.titre}</p>
-                        {t.concerne && <span className="pill kanban-card-concerne">{t.concerne}</span>}
-                        {(teacherLabel || datesLabel) && (
-                          <p className="kanban-card-meta">
-                            {[teacherLabel, datesLabel].filter(Boolean).join(" · ")}
-                          </p>
-                        )}
-                        {desc && (
-                          <p className="kanban-card-desc">
-                            {desc.texte}
-                            {desc.tronque ? "…" : ""}
-                          </p>
-                        )}
-                        <p className="kanban-card-auteur muted small">Ajoutée par {t.cree_par}</p>
-
-                        {seances !== null && (
-                          <div className="kanban-card-seances">
-                            <button
-                              type="button"
-                              className="btn btn--ghost btn--sm"
-                              aria-expanded={deplie}
-                              onClick={() => basculerDeplie(t.id)}
-                            >
-                              {seances.length} séance{seances.length > 1 ? "s" : ""} concernée
-                              {seances.length > 1 ? "s" : ""}
-                            </button>
-                            {deplie && (
-                              <ul className="kanban-seances-liste">
-                                {seances.length === 0 && (
-                                  <li className="muted small">Aucune séance dans cette période.</li>
-                                )}
-                                {seances.map(({ row, dateIso }) => (
-                                  <li key={row.id}>
-                                    <button
-                                      type="button"
-                                      className="kanban-seance-lien"
-                                      onClick={() => setRoute(routeVersSeance(row))}
-                                    >
-                                      {formatDateCourte(dateIso)} · {SLOT_TIMES[row.s].label} · {row.c} ·{" "}
-                                      {row.g.map((g) => payload.groupLabels[g] ?? g).join("/")}
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="kanban-card-copie">
-                          <button
-                            type="button"
-                            className="btn btn--ghost btn--sm"
-                            aria-label={`Copier toutes les informations de « ${t.titre} »`}
-                            onClick={() => {
-                              void (async () => {
-                                await copyToClipboard(
-                                  texteTache(t, {
-                                    nomEnseignant: t.enseignant_code
-                                      ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code
-                                      : null,
-                                    seances: seances ?? [],
-                                    libelleSeance: ({ row, dateIso }) =>
-                                      `${formatDateCourte(dateIso)} · ${SLOT_TIMES[row.s].label} · ${row.c} · ${row.g
-                                        .map((g) => payload.groupLabels[g] ?? g)
-                                        .join("/")}`,
-                                  }),
-                                );
-                                setCopiee(t.id);
-                                window.setTimeout(() => setCopiee((id) => (id === t.id ? null : id)), 2000);
-                              })();
-                            }}
-                          >
-                            {copiee === t.id ? "Copié" : "Copier"}
-                          </button>
-                        </div>
-
-                        {peutModifier && (
-                          <div className="kanban-card-actions">
-                            <button
-                              type="button"
-                              aria-label={`Déplacer « ${t.titre} » vers la colonne précédente`}
-                              disabled={idxColonne === 0}
-                              onClick={() => deplacerColonne(t, -1)}
-                            >
-                              ←
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Déplacer « ${t.titre} » vers la colonne suivante`}
-                              disabled={idxColonne === COLONNES.length - 1}
-                              onClick={() => deplacerColonne(t, 1)}
-                            >
-                              →
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Monter « ${t.titre} » dans la colonne`}
-                              disabled={index === 0}
-                              onClick={() => reordonner(t, -1)}
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Descendre « ${t.titre} » dans la colonne`}
-                              disabled={index === liste.length - 1}
-                              onClick={() => reordonner(t, 1)}
-                            >
-                              ↓
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn--ghost btn--sm"
-                              aria-label={`Modifier « ${t.titre} »`}
-                              onClick={() => ouvrirEdition(t)}
-                            >
-                              Modifier
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn--ghost btn--sm"
-                              aria-label={`Supprimer « ${t.titre} »`}
-                              onClick={() => void supprimer(t)}
-                            >
-                              Supprimer
-                            </button>
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
+                  {affichees.map((t, index) => (
+                    <CarteTache
+                      key={t.id}
+                      t={t}
+                      index={index}
+                      nbDansColonne={liste.length}
+                      idxColonne={COLONNES.findIndex((c) => c.id === t.colonne)}
+                      payload={payload}
+                      peutModifier={peutModifier}
+                      deplie={depliees.has(t.id)}
+                      copiee={copiee === t.id}
+                      enTrain={draggingId === t.id}
+                      onDragStart={() => setDraggingId(t.id)}
+                      onDragEnd={() => {
+                        setDraggingId(null);
+                        setSurvolColonne(null);
+                      }}
+                      onDragOver={(e) => {
+                        if (draggingId !== null) e.preventDefault();
+                      }}
+                      onDrop={deposerSurCarte(t)}
+                      onBasculer={() => basculerDeplie(t.id)}
+                      onModifier={() => ouvrirEdition(t)}
+                      onSupprimer={() => void supprimer(t)}
+                      onColonne={(sens) => deplacerColonne(t, sens)}
+                      onOrdre={(sens) => reordonner(t, sens)}
+                      onCopier={(texte) => {
+                        void (async () => {
+                          await copyToClipboard(texte);
+                          setCopiee(t.id);
+                          window.setTimeout(() => setCopiee((id) => (id === t.id ? null : id)), 2000);
+                        })();
+                      }}
+                      setRoute={setRoute}
+                    />
+                  ))}
                 </ul>
+              )}
+              {tronquee && (
+                <button type="button" className="btn btn--ghost btn--sm kanban-plus" onClick={() => setFaitDeplie(true)}>
+                  Afficher les {liste.length - MAX_FAIT} plus anciennes
+                </button>
+              )}
+
+              {peutModifier && colonne.id !== "fait" && (
+                <form
+                  className="kanban-ajout"
+                  onSubmit={(e: FormEvent) => {
+                    e.preventDefault();
+                    void ajouterRapide(colonne.id);
+                  }}
+                >
+                  <input
+                    ref={idxCol === 0 ? refAjout : undefined}
+                    type="text"
+                    maxLength={200}
+                    aria-label={`Ajouter une tâche dans ${colonne.label}`}
+                    placeholder={idxCol === 0 ? "Ajouter une tâche…  ( N )" : "Ajouter une tâche…"}
+                    value={saisieRapide[colonne.id]}
+                    disabled={ajoutEnCours === colonne.id}
+                    onChange={(e) => setSaisieRapide((s) => ({ ...s, [colonne.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setSaisieRapide((s) => ({ ...s, [colonne.id]: "" }));
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </form>
               )}
             </section>
           );
@@ -592,6 +595,199 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
         />
       )}
     </section>
+  );
+}
+
+interface CarteTacheProps {
+  t: Tache;
+  index: number;
+  nbDansColonne: number;
+  idxColonne: number;
+  payload: AppPayload;
+  peutModifier: boolean;
+  deplie: boolean;
+  copiee: boolean;
+  enTrain: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: (e: ReactDragEvent) => void;
+  onDrop: (e: ReactDragEvent) => void;
+  onBasculer: () => void;
+  onModifier: () => void;
+  onSupprimer: () => void;
+  onColonne: (sens: -1 | 1) => void;
+  onOrdre: (sens: -1 | 1) => void;
+  onCopier: (texte: string) => void;
+  setRoute: (patch: Partial<Route>) => void;
+}
+
+function CarteTache({
+  t,
+  index,
+  nbDansColonne,
+  idxColonne,
+  payload,
+  peutModifier,
+  deplie,
+  copiee,
+  enTrain,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  onBasculer,
+  onModifier,
+  onSupprimer,
+  onColonne,
+  onOrdre,
+  onCopier,
+  setRoute,
+}: CarteTacheProps) {
+  const nomProf = t.enseignant_code ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code : null;
+  const datesLabel = libelleDatesTache(t.date_debut, t.date_fin);
+  const seances = t.enseignant_code && t.date_debut ? seancesConcernees(payload, t) : null;
+  const desc = t.description ? premieresLignes(t.description) : null;
+  const libelleSeance = ({ row, dateIso }: { row: AppPayload["rows"][number]; dateIso: string }) =>
+    `${formatDateCourte(dateIso)} · ${SLOT_TIMES[row.s].label} · ${row.c} · ${row.g
+      .map((g) => payload.groupLabels[g] ?? g)
+      .join("/")}`;
+
+  return (
+    <li
+      className={`kanban-card${enTrain ? " dragging" : ""}${t.priorite === "urgente" ? " urgente" : ""}`}
+      draggable={peutModifier}
+      onDragStart={
+        peutModifier
+          ? (e) => {
+              e.dataTransfer.effectAllowed = "move";
+              onDragStart();
+            }
+          : undefined
+      }
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <div className="kanban-card-tete">
+        {peutModifier ? (
+          <button type="button" className="kanban-card-titre" aria-label={`Modifier « ${t.titre} »`} onClick={onModifier}>
+            {t.titre}
+          </button>
+        ) : (
+          <p className="kanban-card-titre">{t.titre}</p>
+        )}
+        {/* Marqueur TEXTE, pas seulement une couleur. */}
+        {t.priorite === "urgente" && <span className="pill bad">Urgent</span>}
+      </div>
+
+      {(t.concerne || nomProf || datesLabel) && (
+        <p className="kanban-card-meta">
+          {t.concerne && <span className="kanban-card-concerne">{t.concerne}</span>}
+          {[nomProf, datesLabel].filter(Boolean).join(" · ")}
+        </p>
+      )}
+      {desc && (
+        <p className="kanban-card-desc">
+          {desc.texte}
+          {desc.tronque ? "…" : ""}
+        </p>
+      )}
+
+      {seances !== null && (
+        <div className="kanban-card-seances">
+          <button type="button" className="kanban-lien" aria-expanded={deplie} onClick={onBasculer}>
+            {seances.length} séance{seances.length > 1 ? "s" : ""} concernée{seances.length > 1 ? "s" : ""}
+          </button>
+          {deplie && (
+            <ul className="kanban-seances-liste">
+              {seances.length === 0 && <li className="muted small">Aucune séance dans cette période.</li>}
+              {seances.map((s) => (
+                <li key={s.row.id}>
+                  <button type="button" className="kanban-seance-lien" onClick={() => setRoute(routeVersSeance(s.row))}>
+                    {libelleSeance(s)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="kanban-card-pied">
+        <span className="kanban-card-auteur" title={`Ajoutée par ${t.cree_par}`}>
+          {t.colonne === "fait" && t.fait_le
+            ? `faite le ${FMT_JOUR.format(new Date(t.fait_le))}`
+            : `par ${auteurCourt(t.cree_par)}`}
+        </span>
+        <span className="kanban-card-actions">
+          {peutModifier && (
+            <>
+              <button
+                type="button"
+                className="kanban-icone"
+                aria-label={`Déplacer « ${t.titre} » vers la colonne précédente`}
+                title="Colonne précédente"
+                disabled={idxColonne === 0}
+                onClick={() => onColonne(-1)}
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                className="kanban-icone"
+                aria-label={`Déplacer « ${t.titre} » vers la colonne suivante`}
+                title="Colonne suivante"
+                disabled={idxColonne === COLONNES.length - 1}
+                onClick={() => onColonne(1)}
+              >
+                →
+              </button>
+              <button
+                type="button"
+                className="kanban-icone"
+                aria-label={`Monter « ${t.titre} » dans la colonne`}
+                title="Monter"
+                disabled={index === 0}
+                onClick={() => onOrdre(-1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="kanban-icone"
+                aria-label={`Descendre « ${t.titre} » dans la colonne`}
+                title="Descendre"
+                disabled={index === nbDansColonne - 1}
+                onClick={() => onOrdre(1)}
+              >
+                ↓
+              </button>
+            </>
+          )}
+          {/* Copier : visible aussi en lecture seule, ne modifie rien. */}
+          <button
+            type="button"
+            className="kanban-texte"
+            aria-label={`Copier toutes les informations de « ${t.titre} »`}
+            onClick={() =>
+              onCopier(texteTache(t, { nomEnseignant: nomProf, seances: seances ?? [], libelleSeance }))
+            }
+          >
+            {copiee ? "Copié" : "Copier"}
+          </button>
+          {peutModifier && (
+            <button
+              type="button"
+              className="kanban-texte kanban-texte--danger"
+              aria-label={`Supprimer « ${t.titre} »`}
+              onClick={onSupprimer}
+            >
+              Supprimer
+            </button>
+          )}
+        </span>
+      </div>
+    </li>
   );
 }
 

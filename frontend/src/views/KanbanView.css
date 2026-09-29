@@ -1,100 +1,186 @@
-/* Kanban « Tâches » (22/09/2026) — mêmes tokens que le reste de l'appli
-   (`--border`, `--surface-2`, `--accent`, échelle d'espacement 4/8/12/16px
-   déjà utilisée ailleurs), aucune valeur ad-hoc. Mobile-first (320px) :
-   colonnes empilées verticalement, une par une ; à partir de 1024px, les
-   trois colonnes passent côte à côte (grille 3 colonnes égales). */
+/* Kanban « Tâches » (refonte du 29/09/2026) : une barre d'outils, trois
+   colonnes denses sur fond discret, cartes blanches à bordure fine. Jetons
+   uniquement. Sous 900 px, les colonnes s'empilent. */
 
-.kanban-header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+.view.kanban-view {
   gap: 12px;
 }
 
-.kanban-header h3 {
-  margin: 0 0 4px;
+/* ── Barre d'outils ── */
+.kanban-barre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
 }
 
-.kanban-header p {
+.kanban-onglets {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.kanban-onglet {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: calc(var(--control-h) - 2px);
+  padding: 0 12px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.kanban-onglet:last-child {
+  border-right: none;
+}
+
+.kanban-onglet:hover:not(.actif) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.kanban-onglet.actif {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.kanban-onglet-nb {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.kanban-recherche {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+
+.kanban-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.kanban-nouvelle {
+  margin-left: auto;
+}
+
+.kanban-alerte,
+.kanban-erreur .alerte {
   margin: 0;
 }
 
-.kanban-header .btn {
-  align-self: stretch;
-  min-height: 44px;
-}
-
-@media (min-width: 768px) {
-  .kanban-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .kanban-header .btn {
-    align-self: auto;
-    flex-shrink: 0;
-  }
-}
-
-.kanban-board {
+.kanban-erreur {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
 }
 
-@media (min-width: 1024px) {
-  .kanban-board {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: start;
-  }
+/* ── Colonnes ── */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
 }
 
 .kanban-column {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
+  min-height: 120px;
+  padding: 8px;
+  background: var(--surface-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+}
+
+.kanban-column.survol {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-soft);
 }
 
 .kanban-column-titre {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
+  padding: 2px 4px 4px;
 }
 
-.kanban-column-titre h4 {
+.kanban-column-titre h3 {
   margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.kanban-column-nb {
+  font-size: 0.8rem;
+  color: var(--ink-faint);
 }
 
 .kanban-column-vide {
   margin: 0;
-  padding: 12px;
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  text-align: center;
+  padding: 10px 4px;
+  font-size: 0.8rem;
+  color: var(--ink-faint);
 }
 
 .kanban-cards {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
+.kanban-plus {
+  align-self: flex-start;
+}
+
+/* ── Ajout rapide ── */
+.kanban-ajout input {
+  width: 100%;
+  background: transparent;
+  border-color: transparent;
+}
+
+.kanban-ajout input:hover:not(:disabled):not(:focus) {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.kanban-ajout input:focus-visible {
+  background: var(--surface);
+}
+
+/* ── Cartes ── */
 .kanban-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  gap: 4px;
+  padding: 8px 10px 6px;
   background: var(--surface);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.kanban-card.urgente {
+  border-left: 3px solid var(--bad);
+  padding-left: 8px;
 }
 
 .kanban-card[draggable="true"] {
@@ -102,185 +188,205 @@
 }
 
 .kanban-card.dragging {
-  opacity: 0.5;
+  opacity: 0.45;
+}
+
+.kanban-card-tete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .kanban-card-titre {
   margin: 0;
-  font-weight: 700;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+button.kanban-card-titre {
+  cursor: pointer;
+}
+
+button.kanban-card-titre:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .kanban-card-meta {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--ink-soft);
+}
+
+.kanban-card-concerne {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .kanban-card-desc {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
-.kanban-card-auteur {
-  margin: 2px 0 0;
+.kanban-lien {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
 }
 
-.kanban-card-seances {
-  margin-top: 4px;
+.kanban-lien:hover {
+  text-decoration: underline;
 }
 
 .kanban-seances-liste {
   display: flex;
   flex-direction: column;
-  gap: 4px;
   list-style: none;
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   padding: 0;
+  border-top: 1px solid var(--border);
 }
 
 .kanban-seance-lien {
   display: block;
   width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  min-height: 44px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
+  padding: 4px 2px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
   color: var(--ink);
-  font-size: 0.82rem;
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
   cursor: pointer;
 }
 
 .kanban-seance-lien:hover {
-  border-color: var(--accent);
+  background: var(--surface-2);
+  color: var(--accent);
 }
 
-.kanban-seance-lien:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.kanban-card-pied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.kanban-card-auteur {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
 }
 
 .kanban-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-/* Boutons ← → ↑ ↓ : pas de classe `.btn` (trop larges pour tenir quatre par
-   ligne sur 320px) mais un vrai bouton de 44×44px minimum (tap target), pas
-   un simple lien texte — cible de la revue a11y. */
-.kanban-card-actions button:not(.btn) {
-  min-width: 44px;
-  min-height: 44px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.kanban-card-actions button:not(.btn):disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.kanban-card-actions button:not(.btn):hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.kanban-card-actions button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* « Pour qui » (25/09/2026) : filtre du bandeau et pastille de carte. */
-.kanban-header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: flex-end;
-}
-.kanban-filtre {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-.kanban-filtre select {
-  min-height: 44px;
-}
-.kanban-card-concerne {
-  margin-bottom: 4px;
-}
-
-/* Onglets EDT / Plateforme (25/09/2026) — mêmes tokens que le reste
-   (`--border`, `--surface-2`, `--accent`), tap target ≥44px. */
-.kanban-tabs {
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-}
-
-.kanban-tab {
-  flex: 1 1 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--ink);
+  gap: 1px;
+  flex: none;
+}
+
+.kanban-icone,
+.kanban-texte {
+  min-height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
   font: inherit;
-  font-weight: 600;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 
-.kanban-tab:hover:not(.active) {
-  border-color: var(--accent);
+.kanban-icone {
+  min-width: 24px;
+  padding: 0;
 }
 
-.kanban-tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.kanban-texte {
+  padding: 0 6px;
 }
 
-.kanban-tab.active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: var(--accent);
+.kanban-icone:hover:not(:disabled),
+.kanban-texte:hover {
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
-@media (min-width: 768px) {
-  .kanban-tabs {
-    align-self: flex-start;
+.kanban-texte--danger:hover {
+  color: var(--bad-text);
+}
+
+.kanban-icone:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Les actions restent visibles (clavier, tactile) mais discrètes tant que la
+   carte n'est pas survolée ou n'a pas le focus. */
+@media (hover: hover) {
+  .kanban-card .kanban-card-actions {
+    opacity: 0.45;
+    transition: opacity 0.12s;
   }
 
-  .kanban-tab {
-    flex: 0 0 auto;
+  .kanban-card:hover .kanban-card-actions,
+  .kanban-card:focus-within .kanban-card-actions {
+    opacity: 1;
   }
 }
 
-/* Marqueur « Urgent » (25/09/2026) — texte, jamais la couleur seule
-   (`.pill.bad` porte déjà un fond/bordure distincts, le mot suffit à lui
-   seul à identifier la carte). */
-.kanban-card-urgent {
-  align-self: flex-start;
+/* Cibles de 44 px au doigt. */
+@media (pointer: coarse) {
+  .kanban-icone {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .kanban-texte {
+    min-height: 40px;
+  }
 }
 
-/* Bouton « Copier » d'une carte (28/09/2026) — visible aussi en lecture
-   seule : copier ne modifie rien. */
-.kanban-card-copie {
-  margin-top: 6px;
-}
-.kanban-card-copie .btn {
-  min-height: 44px;
-}
+@media (max-width: 900px) {
+  .kanban-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
+  .kanban-column {
+    min-height: 0;
+  }
+
+  .kanban-recherche {
+    flex: 1 1 160px;
+  }
+
+  .kanban-nouvelle {
+    margin-left: 0;
+  }
+}
