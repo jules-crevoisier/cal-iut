@@ -13,9 +13,15 @@ sert l'API. Un redémarrage remet les compteurs à zéro, ce qui est acceptable
 pour un frein (ce n'est pas un verrouillage de compte).
 
 L'adresse IP est `request.client.host` : derrière nginx, uvicorn doit faire
-confiance à `X-Forwarded-For` (`FORWARDED_ALLOW_IPS`, cf. Dockerfile), sinon
+confiance à `X-Forwarded-For` posé par le proxy, et À LUI SEUL (cf.
+`api/anti_aspiration.py::proxys_de_confiance` et `cli.py::cmd_serve`), sinon
 tous les clients partagent l'adresse du proxy — d'où des plafonds par IP
 larges, le vrai frein étant la clé par email.
+
+`SeauxAJetons` (29/09/2026) : la même idée généralisée au trafic courant
+(`api/anti_aspiration.py`). Un seau par clé, deux nombres par seau — coût
+et mémoire constants par client, là où la fenêtre glissante ci-dessous
+garde un horodatage par essai (très bien pour 10 essais, pas pour 600).
 """
 
 from __future__ import annotations
@@ -79,6 +85,57 @@ class Limiteur:
 
 
 limiteur = Limiteur()
+
+
+class SeauxAJetons:
+    """Seau à jetons par clé : `capacite` jetons au plus (la rafale
+    tolérée), remplis au rythme de `debit` jetons par seconde. Une requête
+    consomme un jeton ; sans jeton disponible elle est en dépassement.
+
+    Mémoire bornée : au-delà de `_BALAYAGE_AU_DELA` clés, un balayage retire
+    les seaux redevenus pleins (client inactif depuis assez longtemps pour
+    que l'oublier ne change rien). Thread-safe."""
+
+    def __init__(self) -> None:
+        # clé -> [jetons restants, instant du dernier remplissage]
+        self._seaux: dict[str, list[float]] = {}
+        self._params: dict[str, tuple[float, float]] = {}
+        self._verrou = threading.Lock()
+
+    def consommer(self, cle: str, debit: float, capacite: float) -> float | None:
+        """Prend un jeton. Rend `None` si c'était possible, sinon l'attente
+        en secondes avant le prochain jeton (rien n'est consommé)."""
+        maintenant = time.monotonic()
+        with self._verrou:
+            seau = self._seaux.get(cle)
+            if seau is None:
+                if len(self._seaux) > _BALAYAGE_AU_DELA:
+                    self._balayer(maintenant)
+                seau = self._seaux[cle] = [capacite, maintenant]
+            else:
+                seau[0] = min(capacite, seau[0] + (maintenant - seau[1]) * debit)
+                seau[1] = maintenant
+            self._params[cle] = (debit, capacite)
+            if seau[0] >= 1.0:
+                seau[0] -= 1.0
+                return None
+            return (1.0 - seau[0]) / debit if debit > 0 else float("inf")
+
+    def vider(self) -> None:
+        with self._verrou:
+            self._seaux.clear()
+            self._params.clear()
+
+    def __len__(self) -> int:
+        return len(self._seaux)
+
+    def _balayer(self, maintenant: float) -> None:
+        for cle in list(self._seaux):
+            jetons, instant = self._seaux[cle]
+            debit, capacite = self._params.get(cle, (0.0, 0.0))
+            if jetons + (maintenant - instant) * debit >= capacite:
+                del self._seaux[cle]
+                self._params.pop(cle, None)
 
 
 def ip_cliente(request: Request) -> str:

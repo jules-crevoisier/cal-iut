@@ -131,6 +131,21 @@ def _limiteur_auth_vide():
 
 
 @pytest.fixture(autouse=True)
+def _anti_aspiration_isole(tmp_path, monkeypatch):
+    """Anti-aspiration (29/09/2026) : mode `off` par défaut quoi que dise
+    l'environnement du poste, liste de blocage dans un fichier temporaire
+    (jamais le vrai `data/state/blocages.json`), compteurs et seaux vidés —
+    ils sont globaux au processus."""
+    from cal_iut.api import anti_aspiration
+
+    monkeypatch.delenv(anti_aspiration.MODE_ENV, raising=False)
+    monkeypatch.setattr(anti_aspiration, "_path", lambda: tmp_path / "blocages.json")
+    anti_aspiration.vider_etat_memoire()
+    yield
+    anti_aspiration.vider_etat_memoire()
+
+
+@pytest.fixture(autouse=True)
 def _catalogues_celcat_vides():
     """Vide les caches de catalogue Celcat entre deux tests.
 

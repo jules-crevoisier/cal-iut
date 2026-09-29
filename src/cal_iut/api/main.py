@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from cal_iut.api import (
     accounts,
+    anti_aspiration,
     auth,
     cache_http,
     controle_doublons_hebdo,
@@ -609,6 +610,14 @@ class _FermerSessionsDb:
         with portee_sessions():
             await self.app(scope, receive, send)
 
+
+# Anti-aspiration (29/09/2026, cf. `api/anti_aspiration.py`) : à
+# l'extérieur de `require_auth`, pour qu'un client bloqué soit refusé avant
+# toute lecture de session. Inerte tant que `CAL_IUT_ANTI_ASPIRATION` n'est
+# pas posée (défaut `off`). `EnTeteNoIndex`, lui, est toujours actif et
+# englobe le précédent : ses 403/429 portent aussi l'en-tête.
+app.add_middleware(anti_aspiration.AntiAspiration)
+app.add_middleware(anti_aspiration.EnTeteNoIndex)
 
 app.add_middleware(_FermerSessionsDb)
 
@@ -6823,6 +6832,12 @@ def controle_doublons_hebdo_executer() -> DoublonHebdoRunResponse:
 from cal_iut.api.v1 import router as _router_v1
 
 app.include_router(_router_v1)
+
+# Trafic et liste de blocage (anti-aspiration, 29/09/2026) — sous `/admin`,
+# donc protégé par `_PROTECTED_PREFIXES`, et réservé au rôle admin.
+from cal_iut.api.admin_trafic import router as _router_admin_trafic
+
+app.include_router(_router_admin_trafic)
 
 from cal_iut.mcp.http_rpc import handle_mcp_post
 from cal_iut.mcp.server import MCP_ASGI

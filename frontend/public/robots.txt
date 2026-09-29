@@ -1,0 +1,4 @@
+# cal-iut : outil interne (emploi du temps IUT MMI Troyes). Rien à indexer.
+# Les liens personnels et les flux d'agenda ne sont pas des pages publiques.
+User-agent: *
+Disallow: /

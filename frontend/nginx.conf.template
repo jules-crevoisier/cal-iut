@@ -9,6 +9,22 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # IP RÉELLE DU CLIENT (anti-aspiration, 29/09/2026 — cf.
+    # docs/ANTI-ASPIRATION.md). nginx est derrière Traefik (Dokploy) : sans
+    # ces lignes, `$remote_addr` est l'IP de Traefik pour TOUT le monde, et
+    # le journal d'accès ne dit rien de qui aspire. Traefik ajoute l'IP du
+    # client à `X-Forwarded-For` ; on ne croit cet en-tête que s'il vient
+    # d'une adresse privée (réseau Docker), et `real_ip_recursive` le lit de
+    # droite à gauche en sautant les proxys : un `X-Forwarded-For` inventé
+    # par le client reste à gauche et n'est jamais retenu.
+    set_real_ip_from 10.0.0.0/8;
+    set_real_ip_from 172.16.0.0/12;
+    set_real_ip_from 192.168.0.0/16;
+    set_real_ip_from 127.0.0.1;
+    set_real_ip_from fc00::/7;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
     # Vérifié par le HEALTHCHECK du Dockerfile — répond directement depuis
     # nginx, sans dépendre du backend (un conteneur frontend en bonne santé
     # sert ses fichiers statiques même si l'API est momentanément injoignable).
@@ -31,8 +47,12 @@ server {
     # contenu différent, donc un cache long + immutable est sûr — un
     # nouveau déploiement produit de nouveaux noms de fichiers, jamais de
     # contenu périmé servi sous une ancienne URL.
+    # `X-Robots-Tag` répété dans chaque bloc : un `add_header` dans un
+    # `location` annule tous ceux hérités du niveau `server`. Les réponses
+    # de l'API le portent déjà (api/anti_aspiration.py::EnTeteNoIndex).
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Robots-Tag "noindex, nofollow" always;
         try_files $uri =404;
     }
 
@@ -47,6 +67,7 @@ server {
     # liste blanche de préfixes, plus fragile).
     location / {
         add_header Cache-Control "no-cache";
+        add_header X-Robots-Tag "noindex, nofollow" always;
         try_files $uri $uri/ @backend;
     }
 
@@ -84,7 +105,10 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # ÉCRASE l'en-tête (plus `$proxy_add_x_forwarded_for`, qui AJOUTAIT à
+        # ce qu'avait envoyé le client) : `$remote_addr` est ici l'IP réelle
+        # calculée plus haut (`real_ip_header`), la seule que l'API doit voir.
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }

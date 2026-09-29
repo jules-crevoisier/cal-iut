@@ -710,6 +710,159 @@ def _afficher_proposition(prop: dict) -> None:
             print(f"  - {v}")
 
 
+# ── Anti-aspiration (29/09/2026, cf. docs/ANTI-ASPIRATION.md) ──
+# `--prod` passe par l'API d'administration (clé `CAL_IUT_PROD_API_KEY` d'un
+# compte ADMIN, cf. `cmd_lisser`) ; sans, on travaille sur la liste de
+# blocage locale (`data/state/blocages.json`), que le serveur relit seul en
+# quelques secondes — utile dans le conteneur (`docker exec … cal-iut
+# bloquer …`) quand l'interface est injoignable.
+
+
+def _appel_admin_prod(methode: str, chemin: str, **kw):
+    """(code HTTP, corps JSON) d'un appel à l'API admin de production, ou
+    lève `SyncError` avec un message lisible."""
+    from dotenv import load_dotenv
+
+    from cal_iut.sync.prod import SyncError, prod_depuis_env
+
+    load_dotenv()
+    with prod_depuis_env() as distante:
+        r = distante.client.request(methode, chemin, **kw)
+    if r.status_code in (401, 403):
+        raise SyncError(f"Refus du serveur (HTTP {r.status_code}) : la clé doit appartenir à un compte admin.")
+    try:
+        corps = r.json()
+    except ValueError:
+        corps = {"message": r.text}
+    return r.status_code, corps
+
+
+def _message(corps) -> str:
+    if isinstance(corps, dict):
+        return str(corps.get("message") or corps.get("detail") or corps)
+    return str(corps)
+
+
+def _afficher_blocages(blocages: list[dict]) -> None:
+    if not blocages:
+        print("Aucun blocage actif.")
+        return
+    print(f"{len(blocages)} blocage(s) actif(s) :")
+    for b in blocages:
+        fin = b.get("expire_le") or "permanent"
+        auto = " [auto]" if b.get("automatique") else ""
+        print(f"  {b['id']}  {b['type']:<10} {b['valeur']:<24} jusqu'à {fin}{auto} — {b['motif']} ({b['auteur']})")
+
+
+def cmd_trafic(args: argparse.Namespace) -> int:
+    """Plus gros clients (IP) et liste de blocage — l'écran « Trafic » en
+    terminal. Les compteurs vivent dans la mémoire du serveur : sans
+    `--prod`, seuls les réglages et la liste locale sont affichés."""
+    from cal_iut.api import anti_aspiration as aa
+
+    if not args.prod:
+        etat = aa.etat_public()
+        print(f"Mode local : {etat['mode']} ({aa.MODE_ENV})")
+        print("Les compteurs de trafic vivent dans la mémoire du serveur : `cal-iut trafic --prod`, ou l'écran Trafic.")
+        _afficher_blocages([b.__dict__ for b in aa.blocages.lister()])
+        return 0
+
+    from cal_iut.sync.prod import SyncError
+
+    try:
+        code, corps = _appel_admin_prod("GET", "/admin/trafic", params={"fenetre": args.fenetre, "limite": args.limite})
+        if code != 200:
+            print(f"Refus du serveur (HTTP {code}) : {_message(corps)}", file=sys.stderr)
+            return 1
+        _, liste = _appel_admin_prod("GET", "/admin/blocages")
+    except SyncError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"Mode : {corps['mode']} — fenêtre {corps['fenetre']}")
+    if not corps["comptage_actif"]:
+        print(f"Comptage désactivé : poser {corps['variable']}=observe pour compter sans rien bloquer.")
+    else:
+        r = corps["resume"]
+        print(
+            f"{r['requetes']} requêtes, {r['clients']} clients, {r['depassements']} dépassements, "
+            f"{r['refus_403']} refus (403), {r['ip_bloquees']} IP/plages bloquées\n"
+        )
+        print(f"{'IP':<40} {'15 min':>7} {'1 h':>7} {'24 h':>7} {'public':>7} {'dépas.':>7}  User-Agent")
+        for c in corps["clients"]:
+            marque = " [bloqué]" if c.get("blocage_id") else ""
+            print(
+                f"{c['ip']:<40} {c['requetes_15min']:>7} {c['requetes_1h']:>7} {c['requetes_24h']:>7} "
+                f"{round(c['part_publique'] * 100):>6}% {c['depassements']:>7}  {c['user_agent'][:60]}{marque}"
+            )
+    print()
+    _afficher_blocages(liste.get("blocages", []))
+    return 0
+
+
+def cmd_bloquer(args: argparse.Namespace) -> int:
+    from cal_iut.api import anti_aspiration as aa
+
+    if args.ua:
+        type_, valeur = "user_agent", args.ua
+    elif args.cible:
+        type_, valeur = ("cidr" if "/" in args.cible else "ip"), args.cible
+    else:
+        print("Préciser une IP, une plage (CIDR) ou --ua <motif>.", file=sys.stderr)
+        return 2
+    duree = None if args.duree in (None, "", "permanent") else args.duree
+
+    if args.prod:
+        from cal_iut.sync.prod import SyncError
+
+        try:
+            code, corps = _appel_admin_prod("POST", "/admin/blocages", json={
+                "type": type_, "valeur": valeur, "motif": args.motif, "duree": duree, "forcer": args.forcer,
+            })
+        except SyncError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if code != 201:
+            print(f"Refus du serveur (HTTP {code}) : {_message(corps)}", file=sys.stderr)
+            return 1
+        _afficher_blocages([corps])
+        return 0
+
+    try:
+        duree_s = aa.lire_duree(duree) if duree else None
+        blocage = aa.blocages.ajouter(type_, valeur, args.motif, f"cli:{os.environ.get('USER', 'local')}", duree_s)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    _afficher_blocages([blocage.__dict__])
+    if aa.mode() == "off":
+        print(f"Note : {aa.MODE_ENV} vaut « off » ici — la liste ne s'applique qu'en observe ou enforce.")
+    return 0
+
+
+def cmd_debloquer(args: argparse.Namespace) -> int:
+    if args.prod:
+        from cal_iut.sync.prod import SyncError
+
+        try:
+            code, corps = _appel_admin_prod("DELETE", f"/admin/blocages/{args.id}")
+        except SyncError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if code != 200:
+            print(f"Refus du serveur (HTTP {code}) : {_message(corps)}", file=sys.stderr)
+            return 1
+        print(f"Blocage {args.id} retiré.")
+        return 0
+
+    from cal_iut.api import anti_aspiration as aa
+
+    if aa.blocages.retirer(args.id) is None:
+        print(f"Blocage {args.id} introuvable.", file=sys.stderr)
+        return 1
+    print(f"Blocage {args.id} retiré.")
+    return 0
+
+
 def cmd_sauvegarder_base(args: argparse.Namespace) -> int:
     """Sauvegarde cohérente de la base SQLite (cf. `api/sauvegardes_db.py`) :
     le fichier du jour dans `data/state/sauvegardes_db/`, ou `--sortie`.
@@ -880,11 +1033,21 @@ def cmd_serve(args: argparse.Namespace) -> int:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s"
     )
 
+    # IP réelle du client (anti-aspiration, 29/09/2026) : uvicorn ne lit
+    # `X-Forwarded-For` que s'il vient d'un proxy de confiance (réseau Docker
+    # interne), et le lit de droite à gauche. Remplace `FORWARDED_ALLOW_IPS=*`
+    # (Dockerfile), qui prenait la première adresse de l'en-tête — celle
+    # qu'écrit le client lui-même. Explicite ici : la variable
+    # `FORWARDED_ALLOW_IPS` n'est plus lue.
+    from cal_iut.api.anti_aspiration import proxys_de_confiance
+
     uvicorn.run(
         "cal_iut.api.main:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
+        proxy_headers=True,
+        forwarded_allow_ips=proxys_de_confiance(),
     )
     return 0
 
@@ -1357,6 +1520,30 @@ def main() -> int:
     lisser_parser.add_argument("--appliquer", action="store_true", help="écrire réellement (sinon simulation)")
     lisser_parser.add_argument("--json", default=None, help="enregistrer la proposition dans ce fichier")
     lisser_parser.set_defaults(func=cmd_lisser)
+
+    trafic_parser = sub.add_parser(
+        "trafic", help="Plus gros clients (IP) et liste de blocage — anti-aspiration (docs/ANTI-ASPIRATION.md)"
+    )
+    trafic_parser.add_argument("--prod", action="store_true", help="lire la production (clé API admin du .env)")
+    trafic_parser.add_argument("--fenetre", choices=["15min", "1h", "24h"], default="1h")
+    trafic_parser.add_argument("--limite", type=int, default=30, help="nombre de clients affichés")
+    trafic_parser.set_defaults(func=cmd_trafic)
+
+    bloquer_parser = sub.add_parser(
+        "bloquer", help="Bloquer une IP, une plage (CIDR) ou un User-Agent (403) — anti-aspiration"
+    )
+    bloquer_parser.add_argument("cible", nargs="?", help="IP (203.0.113.7) ou plage (203.0.113.0/24)")
+    bloquer_parser.add_argument("--ua", default=None, help="motif de User-Agent (sous-chaîne, casse ignorée)")
+    bloquer_parser.add_argument("--motif", required=True, help="pourquoi (visible dans l'écran Trafic)")
+    bloquer_parser.add_argument("--duree", default="24h", help="1h, 24h, 7j… ou « permanent » (défaut 24h)")
+    bloquer_parser.add_argument("--forcer", action="store_true", help="même si le blocage vise votre propre accès")
+    bloquer_parser.add_argument("--prod", action="store_true", help="bloquer en production (clé API admin du .env)")
+    bloquer_parser.set_defaults(func=cmd_bloquer)
+
+    debloquer_parser = sub.add_parser("debloquer", help="Retirer un blocage (identifiant donné par `cal-iut trafic`)")
+    debloquer_parser.add_argument("id")
+    debloquer_parser.add_argument("--prod", action="store_true", help="en production (clé API admin du .env)")
+    debloquer_parser.set_defaults(func=cmd_debloquer)
 
     sauvegarder_base_parser = sub.add_parser(
         "sauvegarder-base",

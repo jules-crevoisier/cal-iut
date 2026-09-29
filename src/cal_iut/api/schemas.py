@@ -1234,3 +1234,94 @@ class LissageRequest(BaseModel):
 class LissageApplicationRequest(BaseModel):
     # Séances de la proposition à NE PAS déplacer (décochées à l'écran).
     exclure: list[str] = Field(default_factory=list)
+
+
+# ── Anti-aspiration (29/09/2026, cf. api/anti_aspiration.py et
+# docs/ANTI-ASPIRATION.md) — écran d'admin « Trafic » ──
+
+
+class BudgetTraficResponse(BaseModel):
+    categorie: str
+    nombre: int
+    periode_s: float
+    rafale: int
+    description: str
+
+
+class BannissementResponse(BaseModel):
+    seuil: int
+    fenetre_s: float
+    duree_s: float
+
+
+class CheminTraficResponse(BaseModel):
+    chemin: str
+    nb: int
+
+
+class ClientTraficResponse(BaseModel):
+    ip: str
+    requetes: int
+    requetes_15min: int
+    requetes_1h: int
+    requetes_24h: int
+    part_publique: float
+    depassements: int
+    refus_403: int
+    user_agent: str
+    user_agents_distincts: int
+    chemins: list[CheminTraficResponse]
+    categorie: str
+    compte_id: int | None = None
+    compte_email: str | None = None
+    liens_distincts: int
+    dernier_passage: str
+    blocage_id: str | None = None
+
+
+class ResumeTraficResponse(BaseModel):
+    requetes: int
+    clients: int
+    depassements: int
+    refus_403: int
+    ip_bloquees: int
+
+
+class TraficResponse(BaseModel):
+    mode: Literal["off", "observe", "enforce"]
+    variable: str
+    comptage_actif: bool
+    fenetre: Literal["15min", "1h", "24h"]
+    genere_le: str
+    budgets: list[BudgetTraficResponse]
+    bannissement: BannissementResponse
+    exemptes: list[str]
+    resume: ResumeTraficResponse
+    clients: list[ClientTraficResponse]
+
+
+class BlocageResponse(BaseModel):
+    id: str
+    type: Literal["ip", "cidr", "user_agent"]
+    valeur: str
+    motif: str
+    auteur: str
+    cree_le: str
+    expire_le: str | None = None
+    automatique: bool = False
+
+
+class BlocageListResponse(BaseModel):
+    mode: Literal["off", "observe", "enforce"]
+    blocages: list[BlocageResponse]
+
+
+class BlocageCreateRequest(BaseModel):
+    type: Literal["ip", "cidr", "user_agent"]
+    valeur: str = Field(min_length=1, max_length=200)
+    motif: str = Field(default="", max_length=200)
+    # "1h", "24h", "7j"... ; absent ou null = permanent.
+    duree: str | None = Field(default=None, max_length=20)
+    # Le blocage viserait l'administrateur lui-même (son IP, sa plage ou son
+    # navigateur) : refusé sauf confirmation explicite.
+    forcer: bool = False

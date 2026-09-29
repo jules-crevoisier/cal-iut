@@ -67,12 +67,18 @@ COPY contraintes/ contraintes/
 COPY contraintes_update/ contraintes_update/
 
 ENV PYTHONUNBUFFERED=1
-# uvicorn fait confiance à `X-Forwarded-For` posé par nginx (conteneur
-# frontend, réseau Docker interne) : sans ça, toutes les requêtes semblent
-# venir de l'IP de nginx et la limitation de débit par IP des routes
-# `/auth/*` (api/limiteur.py) frapperait tout le monde à la fois. Le port
-# 8000 n'est qu'`expose` (jamais publié) : seul nginx peut poser l'en-tête.
-ENV FORWARDED_ALLOW_IPS=*
+# IP réelle du client : uvicorn fait confiance à `X-Forwarded-For` posé par
+# nginx (conteneur frontend, réseau Docker interne) — sans ça, toutes les
+# requêtes sembleraient venir de l'IP de nginx et la limitation de débit par
+# IP (`/auth/*`, anti-aspiration) frapperait tout le monde à la fois.
+#
+# Plus de `FORWARDED_ALLOW_IPS=*` (29/09/2026) : avec `*`, uvicorn prenait la
+# PREMIÈRE adresse de l'en-tête, qu'un client écrit lui-même (nginx ajoutait
+# à l'en-tête reçu au lieu de l'écraser) — changer d'IP à chaque requête
+# suffisait à passer sous tout plafond. `cal-iut serve` passe désormais à
+# uvicorn la liste des proxys de confiance (plages privées Docker, réglable
+# par `CAL_IUT_PROXYS_DE_CONFIANCE`, cf. api/anti_aspiration.py) ; nginx
+# calcule l'IP réelle et écrase l'en-tête (frontend/nginx.conf.template).
 EXPOSE 8000
 VOLUME ["/app/data/state"]
 
