@@ -296,8 +296,30 @@
   opacity: 0.8;
 }
 
-/* ── Tablette, téléphone ── */
-@media (max-width: 1280px) {
+/* ── Poste étroit, tablette, téléphone ── */
+/* Entre 700 et 1400 px, « Tout replier » se réduit à son icône (le libellé
+   reste lu, et en infobulle) : la barre de filtres tient sur une ligne. */
+@media (min-width: 701px) and (max-width: 1400px) {
+  .todo-replier {
+    width: var(--control-h);
+    padding: 0;
+  }
+
+  .todo-replier-libelle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .todo-filtres select {
+    max-width: 170px;
+  }
+}
+
+@media (max-width: 1100px) {
   .todo-sommaire.tuiles {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

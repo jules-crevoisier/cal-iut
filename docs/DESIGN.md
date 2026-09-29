@@ -162,3 +162,18 @@ Chaque vue est une colonne `.view` sur le fond de page, dans cet ordre :
 Espacements : 16 px entre blocs, 12 px à l'intérieur d'une carte, 8 px entre
 contrôles. Titres de carte en 0,98 rem graisse 600. Tableaux : en-tête collant,
 lignes de 36 px, nombres à droite en chiffres tabulaires.
+
+### Briques partagées (chantier « outils », 29/09/2026)
+
+- **Sommaire chiffré** : `components/Tuile.tsx` (`<Tuiles>` + `<Tuile>`),
+  le dessin des tuiles de l'Accueil — libellé, grand chiffre (28 px), une
+  ligne de détail, action facultative. L'état (`ton`) ne colore que la
+  valeur ; `onClick` en fait un bouton, `actif` un filtre enfoncé.
+  Utilisé par l'Accueil, À traiter, Contraintes, Celcat et Comptes.
+- **Onglets** : `components/Onglets.tsx`, contrôle segmenté (fond gris
+  léger, onglet actif blanc à anneau fin), ← / → d'un onglet à l'autre.
+- `styles/outils.css` : `.segmente` (choix exclusifs), `.pastille` (filtres
+  arrondis, active noire), `.carte-tableau` + `.carte-tete` (une carte = un
+  tableau pleine largeur, lignes de 36 px ; `--haute` pour qu'une longue
+  liste défile dans sa carte, en-tête collant), `.page-retour` (message qui
+  suit une action), `.page-note` (explication à plat).

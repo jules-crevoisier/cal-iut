@@ -322,11 +322,12 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
           )}
           <button
             type="button"
-            className="btn btn--sm"
+            className="btn btn--sm todo-replier"
+            title={toutReplie ? "Tout déplier" : "Tout replier"}
             onClick={() => setReplies(toutReplie ? new Set() : new Set(NATURES.map((n) => n.id)))}
           >
             {toutReplie ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
-            {toutReplie ? "Tout déplier" : "Tout replier"}
+            <span className="todo-replier-libelle">{toutReplie ? "Tout déplier" : "Tout replier"}</span>
           </button>
         </div>
       </div>
