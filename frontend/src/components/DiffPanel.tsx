@@ -67,7 +67,7 @@ export function DiffPanel({
       )}
 
       {diff && diff.entries.length > 0 && (
-        <ul className="diff-list">
+        <ul className="diff-list defile-y">
           {diff.entries.slice(0, 20).map((e) => (
             <DiffItem
               key={e.session_id}

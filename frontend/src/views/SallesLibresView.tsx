@@ -214,7 +214,7 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
           <div className="salleslibres-grille-header">
             <h3>
               {DAY_LABELS[day]}
-              {jourAuj === day && <span className="salleslibres-auj"> · aujourd'hui</span>}
+              {jourAuj === day && <span className="salleslibres-auj">aujourd'hui</span>}
             </h3>
             <p className="muted" role="status">
               {sallesFiltrees.length === 0
@@ -274,7 +274,13 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
                                 </span>
                               ))
                             ) : (
-                              <span className="salleslibres-libre">libre</span>
+                              // Libre : un tiret discret (le vide se lit d'un coup
+                              // d'œil entre les codes de cours), le mot pour
+                              // les lecteurs d'écran.
+                              <span className="salleslibres-libre">
+                                <span aria-hidden="true">–</span>
+                                <span className="sr-only">libre</span>
+                              </span>
                             )}
                           </td>
                         );

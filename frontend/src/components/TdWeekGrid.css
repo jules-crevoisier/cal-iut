@@ -26,7 +26,12 @@
 }
 
 .td-grid col.td-col-heures {
-  width: 76px;
+  /* Assez large pour « 12h30–14h » plus une marge avant les cartes. */
+  width: 90px;
+}
+
+.td-grid.td-grid--un-jour col.td-col-heures {
+  width: 82px;
 }
 
 .td-grid col.td-col-jour {
@@ -53,8 +58,13 @@
   font-size: 0.75rem;
   font-weight: 500;
   text-align: left;
-  padding: 8px 8px 0 12px;
+  padding: 8px 12px 0 12px;
   white-space: nowrap;
+}
+
+.td-grid--un-jour .td-grid-corner,
+.td-grid--un-jour .td-grid-slotlabel {
+  padding-inline: 8px;
 }
 
 .td-grid thead .td-grid-corner {

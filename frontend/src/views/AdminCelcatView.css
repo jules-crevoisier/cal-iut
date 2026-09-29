@@ -54,29 +54,53 @@
   font-size: 0.85rem;
 }
 
-.celcat-texte-ok {
+/* Phrases d'état : le texte reste à l'encre, un point de couleur devant
+   porte l'état (la couleur ne peint jamais une phrase entière). */
+.celcat-texte-ok,
+.celcat-texte-attention,
+.celcat-texte-panne,
+.celcat-message-ok,
+.celcat-mapping-confirmation {
+  --celcat-point: var(--good);
   margin: 0;
-  color: var(--good-text);
+  color: var(--ink);
 }
 
 .celcat-texte-attention {
-  margin: 0;
-  color: var(--warn-text);
+  --celcat-point: var(--warn);
   font-size: 0.85rem;
 }
 
 .celcat-texte-panne {
-  margin: 0;
-  color: var(--bad-text);
+  --celcat-point: var(--bad);
+}
+
+.celcat-texte-ok::before,
+.celcat-texte-attention::before,
+.celcat-texte-panne::before,
+.celcat-message-ok::before,
+.celcat-mapping-confirmation::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--celcat-point);
+  vertical-align: 1px;
+}
+
+/* Retour d'action (enregistré, correspondance ajoutée) : carte bordée. */
+.celcat-message-ok,
+.celcat-mapping-confirmation {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
 }
 
 .celcat-message-ok {
   margin: 0 0 10px;
-  padding: 6px 10px;
-  border-left: 3px solid var(--good);
-  background: var(--good-soft);
-  color: var(--good-text);
-  font-size: 0.85rem;
 }
 
 .celcat-seance-id {
@@ -143,8 +167,8 @@
   min-width: 0;
 }
 
-/* Trois signaux à plat, séparés d'un filet : un signal sain reste discret
-   (son mot), un signal qui demande attention garde sa phrase en couleur. */
+/* Trois signaux à plat : pastille neutre à point de couleur + le mot ; la
+   phrase de conséquence reste à l'encre (plus appuyée en cas de panne). */
 .celcat-signaux {
   display: flex;
   flex-wrap: wrap;
@@ -173,19 +197,13 @@
   display: contents;
 }
 
-.celcat-signal--ok .celcat-signal-detail {
-  color: var(--ink-faint);
+.celcat-signal-detail {
   font-size: 12.5px;
-}
-
-.celcat-signal--attention .celcat-signal-detail {
-  color: var(--warn-text);
-  font-size: 12.5px;
+  color: var(--ink-soft);
 }
 
 .celcat-signal--panne .celcat-signal-detail {
-  color: var(--bad-text);
-  font-size: 12.5px;
+  color: var(--ink);
   font-weight: 500;
 }
 
@@ -400,18 +418,24 @@
 
 /* ── Colonnes ── */
 
+/* Même écart que la page (16 px) entre toutes les cartes, et une colonne
+   vide ne laisse pas de trou (téléphone : semaine sans relevé). */
 .celcat-colonnes {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
   align-items: start;
+}
+
+.celcat-principal:empty {
+  display: none;
 }
 
 .celcat-principal,
 .celcat-lateral {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -422,10 +446,6 @@
 
   /* Rien à gauche (semaine sans relevé) : la colonne de droite reprend la
      largeur. */
-  .celcat-principal:empty {
-    display: none;
-  }
-
   .celcat-colonnes:has(> .celcat-principal:empty) {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -703,9 +723,20 @@
   gap: 6px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--warn);
   border-radius: var(--radius-sm);
   overflow-wrap: anywhere;
+}
+
+/* L'état « bloqué » : un point ambre devant le motif, pas de barre. */
+.celcat-blocage-entete > strong::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  vertical-align: 1px;
 }
 
 .celcat-blocage-entete {
@@ -738,11 +769,6 @@
 
 .celcat-mapping-confirmation {
   margin: 0 0 8px;
-  padding: 6px 10px;
-  border-left: 3px solid var(--good);
-  background: var(--good-soft);
-  color: var(--good-text);
-  font-size: 0.85rem;
 }
 
 /* ── Replis (activité, réglages) ── */

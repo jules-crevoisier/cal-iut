@@ -243,7 +243,7 @@ export function ReglagesCelcat({
           {LEGENDE.map((l) => (
             <div key={l.mot}>
               <dt>
-                <span className={`pill ${l.ton}`}>{l.mot}</span>
+                <span className={`pill dot ${l.ton}`}>{l.mot}</span>
               </dt>
               <dd>{l.sens}</dd>
             </div>
@@ -274,7 +274,7 @@ export function ReglagesCelcat({
                   <strong>{numero}</strong>
                   {dates ? <span>{dates}</span> : null}
                 </span>
-                {statut ? <span className={`pill ${TON_PASTILLE[statut] ?? ""}`}>{statut}</span> : null}
+                {statut ? <span className={`pill dot ${TON_PASTILLE[statut] ?? ""}`}>{statut}</span> : null}
               </button>
             );
           })}

@@ -32,6 +32,8 @@
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-soft: #eff4ff;
+  /* Texte posé sur un aplat `--accent` plein (contraste ≥ 4.5:1). */
+  --on-accent: #ffffff;
   --accent2: #d97706;
   --accent2-soft: #fffbeb;
   --teal: #059669;
@@ -111,6 +113,7 @@
     --accent: #8ea2ff;
     --accent-hover: #b4c1ff;
     --accent-soft: #1e1f3a;
+    --on-accent: #0a0a0b;
     --accent2: #fbbf24;
     --accent2-soft: #33260d;
     --teal: #34d399;
@@ -171,6 +174,7 @@
   --accent: #8ea2ff;
   --accent-hover: #b4c1ff;
   --accent-soft: #1e1f3a;
+  --on-accent: #0a0a0b;
   --accent2: #fbbf24;
   --accent2-soft: #33260d;
   --teal: #34d399;
@@ -285,13 +289,26 @@ textarea {
   max-width: 100%;
 }
 
+/* Flèche : chevron fin (trait de 1,5 px, comme `ChevronDown` de lucide),
+   teinte `--ink-soft` du thème — une image de fond ne lit pas les
+   variables, d'où la variante sombre ci-dessous. */
 select {
   appearance: none;
   padding-right: 28px;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%235c6269"/></svg>');
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="%236b6b72" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 9px center;
   cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) select {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="%238f8f98" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  }
+}
+
+:root[data-theme="dark"] select {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="%238f8f98" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
 }
 
 textarea {
@@ -742,6 +759,84 @@ table.ref {
   font-size: 0.82rem;
 }
 
+/* Indice de défilement horizontal : le contenu s'efface en fondu au bord
+   où il reste des colonnes (droite au départ, gauche une fois défilé).
+   Piloté par le défilement lui-même (animation liée au scroll) : sans
+   débordement, la chronologie est inactive et rien n'est masqué. Les deux
+   filets de 1 px haut/bas et le bord droit restent nets (carte bordée). */
+@property --fondu-g {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fondu-d {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes defile-fondu {
+  0% { --fondu-g: 0px; --fondu-d: 32px; }
+  6% { --fondu-g: 32px; }
+  94% { --fondu-d: 32px; }
+  100% { --fondu-g: 32px; --fondu-d: 0px; }
+}
+
+/* Même principe à la verticale (listes à hauteur bornée) : fondu en bas
+   tant qu'il reste des éléments, en haut une fois défilé. */
+@property --fondu-h {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fondu-b {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes defile-fondu-v {
+  0% { --fondu-h: 0px; --fondu-b: 36px; }
+  6% { --fondu-h: 24px; }
+  94% { --fondu-b: 36px; }
+  100% { --fondu-h: 24px; --fondu-b: 0px; }
+}
+
+@supports (animation-timeline: scroll()) {
+  .defile-y {
+    animation: defile-fondu-v linear both;
+    animation-timeline: scroll(self block);
+    mask-image:
+      linear-gradient(to bottom, transparent, black var(--fondu-h), black calc(100% - var(--fondu-b)), transparent),
+      linear-gradient(black, black);
+    mask-size: 100% 100%, 100% 1px;
+    mask-position: 0 0, top;
+    mask-repeat: no-repeat;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  .ref-table-wrap,
+  .annuaire-defile,
+  .panel.carte-tableau,
+  .accueil-charge-table,
+  .segmente {
+    animation: defile-fondu linear both;
+    animation-timeline: scroll(self inline);
+    mask-image:
+      linear-gradient(to right, transparent, black var(--fondu-g), black calc(100% - var(--fondu-d)), transparent),
+      linear-gradient(black, black),
+      linear-gradient(black, black),
+      linear-gradient(black, black),
+      linear-gradient(black, black);
+    mask-size: 100% 100%, 100% 1px, 100% 1px, 1px 100%, 1px 100%;
+    mask-position: 0 0, top, bottom, left, right;
+    mask-repeat: no-repeat;
+  }
+}
+
 table.ref th,
 table.ref td {
   border-bottom: 1px solid var(--border);
@@ -794,7 +889,21 @@ table.ref tbody tr:hover {
 .pill.good { background: var(--good-soft); color: var(--good-text); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
 .pill.warn { background: var(--warn-soft); color: var(--warn-text); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .pill.bad { background: var(--bad-soft); color: var(--bad-text); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
-.pill.dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+/* Statut (forme unique dans les tableaux) : pastille NEUTRE, un point de
+   couleur + le mot. La couleur d'état reste sur le point. */
+.pill.dot,
+.pill.dot.good,
+.pill.dot.warn,
+.pill.dot.bad {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--ink);
+  font-weight: 500;
+}
+.pill.dot::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); }
+.pill.dot.good::before { background: var(--good); }
+.pill.dot.warn::before { background: var(--warn); }
+.pill.dot.bad::before { background: var(--bad); }
 
 /* ══════════════ En-tête de page (PageHeader) ══════════════ */
 
@@ -989,7 +1098,7 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 .newroom-field input,
 .newroom-field select,
 .newroom-field textarea {
-  background: var(--surface-2);
+  background-color: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text);
@@ -1074,19 +1183,19 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
   /* `--variante-matiere` (0, 1 ou 2) sépare deux matières de teintes
      voisines : sans elle, 96 écrans sur 234 portaient deux couleurs
      indistinguables ; avec, il en reste 26. Cf. `utils/couleursMatiere.ts`
-     pour la mesure. */
-  border-left-color: var(--matiere-barre);
+     pour la mesure. Aplat pastel de la matière + bord fin de la même
+     teinte (pas de barre latérale, cf. docs/DESIGN.md). */
   background: var(--matiere-fond);
+  border-color: color-mix(in srgb, var(--matiere-barre) 35%, transparent);
 }
 
 .couleurs-matiere .sessiongrid-block.eval,
 .couleurs-matiere .promo-chip.eval,
 .couleurs-matiere .td-block.eval {
   /* L'évaluation reste reconnaissable : la teinte de la matière est gardée,
-     mais le liseré passe en trait double pour la distinguer sans écraser
-     l'information de matière. */
-  border-left-style: double;
-  border-left-width: 5px;
+     son bord fin passe en tirets, de la teinte pleine. */
+  border-style: dashed;
+  border-color: var(--matiere-barre);
 }
 
 /* Trois états, comme le reste du fichier : le thème système par défaut
@@ -1098,7 +1207,13 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
   :root:not([data-theme="light"]) .couleurs-matiere .promo-chip,
   :root:not([data-theme="light"]) .couleurs-matiere .td-block {
     background: var(--matiere-fond-sombre);
-    border-left-color: var(--matiere-barre-sombre);
+    border-color: color-mix(in srgb, var(--matiere-barre-sombre) 40%, transparent);
+  }
+
+  :root:not([data-theme="light"]) .couleurs-matiere .sessiongrid-block.eval,
+  :root:not([data-theme="light"]) .couleurs-matiere .promo-chip.eval,
+  :root:not([data-theme="light"]) .couleurs-matiere .td-block.eval {
+    border-color: var(--matiere-barre-sombre);
   }
 }
 
@@ -1106,7 +1221,13 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 :root[data-theme="dark"] .couleurs-matiere .promo-chip,
 :root[data-theme="dark"] .couleurs-matiere .td-block {
   background: var(--matiere-fond-sombre);
-  border-left-color: var(--matiere-barre-sombre);
+  border-color: color-mix(in srgb, var(--matiere-barre-sombre) 40%, transparent);
+}
+
+:root[data-theme="dark"] .couleurs-matiere .sessiongrid-block.eval,
+:root[data-theme="dark"] .couleurs-matiere .promo-chip.eval,
+:root[data-theme="dark"] .couleurs-matiere .td-block.eval {
+  border-color: var(--matiere-barre-sombre);
 }
 
 

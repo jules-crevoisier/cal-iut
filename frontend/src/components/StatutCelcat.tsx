@@ -40,7 +40,7 @@ export function StatutCelcat({
           <div key={s.cle} className={`celcat-signal celcat-signal--${s.ton}`} data-testid={`signal-${s.cle}`}>
             <dt>{s.libelle}</dt>
             <dd>
-              <span className={`pill ${PILULE[s.ton]}`}>{s.etat}</span>
+              <span className={`pill dot ${PILULE[s.ton]}`}>{s.etat}</span>
               {/* « Chaque modification part dans Celcat » : l'état normal n'a
                   pas besoin de sa phrase à l'écran, les lecteurs d'écran la
                   gardent. */}

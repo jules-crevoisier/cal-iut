@@ -212,7 +212,7 @@ export function VerdictCelcat({
             ) : (
               <>
                 <p className="celcat-verdict-mot">
-                  <span className={`pill ${PILULE[ton]}`}>{MOT_TON[ton]}</span>
+                  <span className={`pill dot ${PILULE[ton]}`}>{MOT_TON[ton]}</span>
                 </p>
                 <h2 id="celcat-verdict-titre" className="celcat-verdict-titre">
                   {verdict.titre}
@@ -269,7 +269,7 @@ export function VerdictCelcat({
                     return (
                       <li key={cle} className={`celcat-etape-suivi celcat-etape-suivi--${classe}`}>
                         <span className="celcat-etape-libelle">{libelle}</span>
-                        <span className={`pill ${a === "fait" ? "good" : a === "en cours" ? "warn" : ""}`}>{a}</span>
+                        <span className={`pill dot ${a === "fait" ? "good" : a === "en cours" ? "warn" : ""}`}>{a}</span>
                       </li>
                     );
                   })}

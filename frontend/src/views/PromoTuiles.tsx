@@ -23,8 +23,9 @@ interface PromoTuilesProps {
 
 function ecart(n: number, avant: number): string {
   const d = n - avant;
-  if (d === 0) return "autant que la semaine précédente";
-  return `${d > 0 ? "+" : "−"}${Math.abs(d)} par rapport à la précédente`;
+  // Court : la tuile fait la moitié d'un téléphone de large.
+  if (d === 0) return "autant que la précédente";
+  return `${d > 0 ? "+" : "−"}${Math.abs(d)} vs semaine préc.`;
 }
 
 export function PromoTuiles({ payload, solverWeek, setRoute, onOuvrirAPlacer }: PromoTuilesProps) {

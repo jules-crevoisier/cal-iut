@@ -5,7 +5,7 @@
  * Née sur l'Accueil ; partagée depuis pour que À traiter, Contraintes,
  * Celcat et Comptes parlent le même langage : un libellé, un grand nombre,
  * une ligne d'explication et, si la tuile mène quelque part, l'action en
- * lien. Le liseré de gauche porte l'état (`ton`) ; le mot, lui, est dans le
+ * lien. L'état (`ton`) ne colore que le chiffre ; le mot, lui, est dans le
  * libellé ou le détail — jamais la couleur seule.
  *
  * Avec `onClick`, la tuile est un bouton (et `actif` en fait un filtre
@@ -30,7 +30,9 @@ export interface TuileProps {
   /** Tuile utilisée comme filtre : enfoncée quand le filtre est appliqué. */
   actif?: boolean;
   title?: string;
-  /** Valeur « vide » (0, rien à signaler) : chiffre en gris. */
+  /** Valeur « vide » (0, rien à signaler). Même dessin qu'une autre valeur
+   *  (chiffre noir, cf. docs/DESIGN.md) : seul un `ton` colore le chiffre ;
+   *  la classe `is-nul` reste pour les tests et les styles d'écran. */
   nul?: boolean;
 }
 

@@ -83,7 +83,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Rampe séquentielle, une seule teinte (accent) : 0 → 6 créneaux. */
+/* Rampe séquentielle, une seule teinte (accent) : 0 → 6 créneaux. Le texte
+   reste `--ink` tant qu'il contraste (≥ 4.5:1, clair comme sombre) ; seule la
+   case pleine (accent à 100 %) passe au texte `--on-accent`. */
 .accueil-case {
   --n: 0%;
   display: flex;
@@ -104,16 +106,21 @@
 }
 
 .accueil-case.n0 { --n: 0%; color: var(--ink-faint); }
-.accueil-case.n1 { --n: 10%; }
-.accueil-case.n2 { --n: 18%; }
-.accueil-case.n3 { --n: 28%; }
-.accueil-case.n4 { --n: 40%; }
-.accueil-case.n5 { --n: 55%; color: #fff; }
-.accueil-case.n6 { --n: 72%; color: #fff; }
+.accueil-case.n1 { --n: 12%; }
+.accueil-case.n2 { --n: 22%; }
+.accueil-case.n3 { --n: 32%; }
+.accueil-case.n4 { --n: 44%; }
+.accueil-case.n5 { --n: 56%; }
+.accueil-case.n6 { --n: 100%; color: var(--on-accent); }
 
 .accueil-case:hover,
 .accueil-case:focus-visible {
   border-color: var(--accent);
+}
+
+.accueil-case.n6:hover,
+.accueil-case.n6:focus-visible {
+  border-color: var(--ink);
 }
 
 .accueil-case-barres {
@@ -207,7 +214,7 @@
 }
 
 .accueil-colonne.is-choisie .accueil-colonne-barre {
-  background: var(--accent);
+  background: var(--ink);
 }
 
 .accueil-colonne.is-choisie {
@@ -239,7 +246,7 @@
 }
 
 .accueil-colonne.is-choisie .accueil-colonne-nom {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 /* ── Listes de côté ── */
@@ -338,7 +345,7 @@
 }
 
 .accueil-raccourcis svg {
-  color: var(--accent);
+  color: var(--ink-soft);
   flex: none;
 }
 
@@ -382,10 +389,25 @@
     font-size: 0.78rem;
   }
 
+  /* Téléphone : la légende passe sous le titre ; le tableau défile dans sa
+     carte, noms de promo sur une ligne et colonne des promos fixée à gauche. */
+  .accueil-charge .accueil-section-tete {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .accueil-charge th {
+    white-space: nowrap;
+  }
+
   .accueil-charge th[scope="row"] {
-    white-space: normal;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface);
     font-size: 0.74rem;
-    padding-right: 4px;
+    padding-right: 6px;
   }
 
   .accueil-colonnes {

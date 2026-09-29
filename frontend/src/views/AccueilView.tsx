@@ -414,7 +414,7 @@ function TachesOuvertes({
             <span className="accueil-ligne-quand">{t.colonne === "en_cours" ? "en cours" : "à faire"}</span>
             <span className="accueil-ligne-texte">
               <strong>{t.titre}</strong>
-              {t.priorite === "urgente" && <span className="pill warn">Urgent</span>}
+              {t.priorite === "urgente" && <span className="pill dot bad">Urgent</span>}
               {t.concerne && <span className="muted"> · {t.concerne}</span>}
             </span>
           </button>

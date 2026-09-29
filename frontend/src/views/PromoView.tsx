@@ -1046,6 +1046,9 @@ export function PromoView({
           >
             <ListTodo size={16} aria-hidden="true" />
             <span className="promo-action-libelle">Séances à placer</span>
+            <span className="promo-action-libelle-court" aria-hidden="true">
+              À placer
+            </span>
           </button>
         )}
         {/* Créer / réorganiser : dans la barre supérieure, à droite, le

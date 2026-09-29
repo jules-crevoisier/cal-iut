@@ -227,6 +227,10 @@
   padding: 0 11px;
 }
 
+.promo-action-libelle-court {
+  display: none;
+}
+
 .promo-outils .btn.promo-aplacer[aria-pressed="true"] {
   background: var(--pri-bg);
   border-color: var(--pri-bg);
@@ -440,8 +444,9 @@ button.promo-tuile:hover {
   color: var(--ink-soft);
 }
 
-/* Cadre de défilement : ombres aux bords quand il reste des colonnes de ce
-   côté-là — on voit tout de suite que la grille continue. */
+/* Cadre de défilement : fondu vers la surface aux bords quand il reste des
+   colonnes de ce côté-là — on voit que la grille continue, sans lire une
+   ombre portée (ni un voile clair en sombre). */
 .promo-grille-cadre {
   position: relative;
   flex: 1 1 auto;
@@ -463,12 +468,12 @@ button.promo-tuile:hover {
 
 .promo-grille-cadre::before {
   left: 64px;
-  background: linear-gradient(to right, color-mix(in srgb, var(--ink) 10%, transparent), transparent);
+  background: linear-gradient(to right, var(--surface), transparent);
 }
 
 .promo-grille-cadre::after {
   right: 0;
-  background: linear-gradient(to left, color-mix(in srgb, var(--ink) 12%, transparent), transparent);
+  background: linear-gradient(to left, var(--surface), transparent);
 }
 
 .promo-grille-cadre.ombre-gauche::before,
@@ -1043,7 +1048,7 @@ table.promo-grid .sessiongrid-event {
   align-items: center;
   gap: 5px;
   margin-right: 4px;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
 }
 
 .promo-repere {
@@ -1051,17 +1056,17 @@ table.promo-grid .sessiongrid-event {
   font-size: 0.72rem;
   min-height: 24px;
   padding: 2px 9px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--surface);
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .promo-repere:hover {
   color: var(--ink);
-  border-color: var(--border-strong);
+  border-color: var(--ink-faint);
 }
 
 .promo-repere.visible {
@@ -1089,18 +1094,21 @@ table.promo-grid .sessiongrid-event {
   gap: 5px;
 }
 
+/* Carré de légende : l'aplat pastel de la carte, mais un bord nettement
+   plus marqué (la teinte pleine du type) pour rester visible à 12 px. */
 .promo-legende li::before {
+  --legende-type: var(--type-td);
   content: "";
   width: 12px;
   height: 12px;
   border-radius: 3px;
-  border: 1px solid var(--td-bd);
-  background: var(--td-bg);
+  border: 1px solid color-mix(in srgb, var(--legende-type) 55%, transparent);
+  background: color-mix(in srgb, var(--legende-type) 14%, var(--surface));
 }
 
-.promo-legende .cm::before { border-color: var(--cm-bd); background: var(--cm-bg); }
-.promo-legende .tp::before { border-color: var(--tp-bd); background: var(--tp-bg); }
-.promo-legende .eval::before { border-color: var(--ev-bd); background: var(--ev-bg); }
+.promo-legende .cm::before { --legende-type: var(--type-cm); }
+.promo-legende .tp::before { --legende-type: var(--type-tp); }
+.promo-legende .eval::before { --legende-type: var(--type-eval); }
 
 .promo-aide {
   position: relative;
@@ -1195,6 +1203,11 @@ table.promo-grid .sessiongrid-event {
     font-size: 1.4rem;
   }
 
+  /* Détail sur deux lignes plutôt que coupé (« … par rapport à la précé… »). */
+  .promo-tuile-detail {
+    white-space: normal;
+  }
+
   .promo-jours {
     display: flex;
     width: 100%;
@@ -1213,10 +1226,10 @@ table.promo-grid .sessiongrid-event {
     font-size: 0.62rem;
   }
 
+  /* Les filtres se fondent dans la barre : pastilles, puis menu enseignant
+     et « À placer » sur la même ligne (le bouton ne reste pas seul). */
   .promo-filtres {
-    width: 100%;
-    flex-wrap: wrap;
-    margin-left: 0;
+    display: contents;
   }
 
   .promo-pastille,
@@ -1231,7 +1244,13 @@ table.promo-grid .sessiongrid-event {
   }
 
   .promo-outils .btn.promo-aplacer {
+    width: auto;
     height: 36px;
+    padding: 0 12px;
+  }
+
+  .promo-aplacer .promo-action-libelle-court {
+    display: inline;
   }
 
   table.promo-grid th.timecol,

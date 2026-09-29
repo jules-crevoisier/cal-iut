@@ -19,7 +19,8 @@
 }
 
 /* ── Jours : contrôle segmenté (direction « Lumière / Nuit ») : fond gris,
-   jour choisi en blanc cerclé, date en gras, aujourd'hui souligné ── */
+   jour choisi en blanc cerclé, date en gras, aujourd'hui marqué d'un point
+   bleu sous le jour (même repère que la Vue Promo) ── */
 .salleslibres-jours {
   display: inline-flex;
   gap: 2px;
@@ -29,6 +30,7 @@
 }
 
 .salleslibres-jour {
+  position: relative;
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
@@ -57,11 +59,16 @@
   font-weight: 600;
 }
 
-.salleslibres-jour.is-today .jl,
-.salleslibres-jour.is-today .jc {
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
+.salleslibres-jour.is-today::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .salleslibres-jour.is-active {
@@ -117,9 +124,23 @@
   margin: 0;
 }
 
+/* « aujourd'hui » après le nom du jour : le même point bleu, mot discret. */
 .salleslibres-auj {
-  color: var(--accent);
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.salleslibres-auj::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* « Libres maintenant » : une ligne bordée, l'état porté par une petite
@@ -165,17 +186,26 @@
   font-size: 0.8rem;
 }
 
+/* Lignes simples, comme les autres tableaux : un filet sous chaque ligne,
+   pas de quadrillage ni de cadre (la carte borde déjà le tableau). */
 .salleslibres-grille th,
 .salleslibres-grille td {
-  border: 1px solid var(--border);
-  padding: 5px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
   text-align: left;
   vertical-align: top;
 }
 
+.salleslibres-grille tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
 .salleslibres-grille thead th {
   background: var(--surface);
-  font-weight: 600;
+  color: var(--ink-soft);
+  font-weight: 500;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -193,7 +223,7 @@
   display: block;
   font-weight: 400;
   font-size: 0.72rem;
-  color: var(--good-text);
+  color: var(--ink-faint);
 }
 
 /* Colonne « Salle » fixée au bord gauche du conteneur défilant (retour
@@ -239,21 +269,14 @@
   color: var(--ink-soft);
 }
 
-.salleslibres-cell.libre {
-  background: var(--surface);
-}
-
 .salleslibres-libre {
-  color: var(--good-text);
-  font-size: 0.75rem;
+  color: var(--ink-faint);
 }
 
-.salleslibres-cell.occupee {
-  background: var(--surface-3);
-}
-
+/* Créneau en cours : la colonne est teintée très légèrement (« maintenant »
+   est un repère de temps, comme « aujourd'hui »). */
 .salleslibres-cell.is-now {
-  box-shadow: inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 
 .salleslibres-occ {

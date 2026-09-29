@@ -86,16 +86,28 @@
   color: var(--ink-soft);
 }
 
+/* Compte rendu du placement automatique : carte bordée, l'état (réussi)
+   porté par un point vert devant la première phrase — pas de barre. */
 .aplacer-rapport {
   padding: 8px 10px;
-  background: var(--good-soft);
-  border-left: 3px solid var(--good);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
 }
 
 .aplacer-rapport p {
   margin: 0;
+}
+
+.aplacer-rapport > p:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  vertical-align: 1px;
 }
 
 .aplacer-rapport summary {
@@ -333,11 +345,11 @@
   cursor: pointer;
 }
 
+/* Carte choisie (à poser) : sélection à l'encre, anneau fin, sans barre. */
 .aplacer-carte--park-selected {
   border-style: solid;
-  border-color: var(--accent);
-  box-shadow: inset 3px 0 0 var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
 }
 
 .aplacer-carte--park-compact {

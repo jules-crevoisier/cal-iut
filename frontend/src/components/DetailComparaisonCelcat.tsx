@@ -117,7 +117,7 @@ export function DetailComparaisonCelcat({ donnees }: { donnees: CelcatComparaiso
                 return (
                   <tr key={`${l.session_id || l.course_code}-${i}`}>
                     <td data-label="Verdict">
-                      <span className={`pill ${statut.ton ? PILULE[statut.ton] : ""}`}>{statut.mot}</span>
+                      <span className={`pill dot ${statut.ton ? PILULE[statut.ton] : ""}`}>{statut.mot}</span>
                       {l.ecarts.length ? <div className="celcat-sous-texte">{l.ecarts.join(", ")}</div> : null}
                     </td>
                     <th scope="row">

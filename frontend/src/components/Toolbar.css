@@ -221,18 +221,21 @@
   white-space: nowrap;
 }
 
+/* Carré de légende : l'aplat pastel de la carte, mais un bord nettement
+   plus marqué (la teinte pleine du type) pour rester visible à 12 px. */
 .semaine-legende li::before {
+  --legende-type: var(--type-td);
   content: "";
   width: 12px;
   height: 12px;
   border-radius: 3px;
-  border: 1px solid var(--td-bd);
-  background: var(--td-bg);
+  border: 1px solid color-mix(in srgb, var(--legende-type) 55%, transparent);
+  background: color-mix(in srgb, var(--legende-type) 14%, var(--surface));
 }
 
-.semaine-legende .cm::before { border-color: var(--cm-bd); background: var(--cm-bg); }
-.semaine-legende .tp::before { border-color: var(--tp-bd); background: var(--tp-bg); }
-.semaine-legende .eval::before { border-color: var(--ev-bd); background: var(--ev-bg); }
+.semaine-legende .cm::before { --legende-type: var(--type-cm); }
+.semaine-legende .tp::before { --legende-type: var(--type-tp); }
+.semaine-legende .eval::before { --legende-type: var(--type-eval); }
 
 .semaine-grille .empty-state {
   margin: 12px;

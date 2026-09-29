@@ -216,8 +216,9 @@
 }
 
 .sessiongrid.couleurs-matiere .sessiongrid-block.eval {
-  border-style: double;
-  border-width: 3px;
+  /* Évaluation : bord fin en tirets, teinte pleine de la matière. */
+  border-style: dashed;
+  border-color: var(--matiere-barre);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -228,6 +229,10 @@
     background: var(--c-bg);
     border-color: var(--c-bd);
   }
+
+  :root:not([data-theme="light"]) .sessiongrid.couleurs-matiere .sessiongrid-block.eval {
+    border-color: var(--matiere-barre-sombre);
+  }
 }
 
 :root[data-theme="dark"] .sessiongrid.couleurs-matiere .sessiongrid-block {
@@ -236,6 +241,10 @@
   --c-fg: color-mix(in srgb, var(--matiere-barre-sombre) 55%, #ffffff);
   background: var(--c-bg);
   border-color: var(--c-bd);
+}
+
+:root[data-theme="dark"] .sessiongrid.couleurs-matiere .sessiongrid-block.eval {
+  border-color: var(--matiere-barre-sombre);
 }
 
 /* Nom du cours + salle en tête, à égalité — retour utilisateur 28/08/2026 :

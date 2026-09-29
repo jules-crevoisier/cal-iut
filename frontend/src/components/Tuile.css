@@ -69,10 +69,6 @@
   color: var(--good-text);
 }
 
-.tuile.is-nul .tuile-valeur {
-  color: var(--ink-faint);
-}
-
 .tuile-detail {
   font-size: 12px;
   color: var(--ink-faint);
@@ -92,7 +88,8 @@
 }
 
 .tuile.is-cliquable:hover .tuile-action {
-  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 @media (max-width: 700px) {
