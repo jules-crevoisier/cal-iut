@@ -1280,6 +1280,7 @@ export interface MesureLissage {
   cours_17h: number;
   trous: number;
   journees_isolees: number;
+  trous_enseignants: number;
   charge_max: number;
   charges: number[];
 }

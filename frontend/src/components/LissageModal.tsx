@@ -42,6 +42,7 @@ const INDICATEURS: { cle: keyof MesureLissage; libelle: string; aide: string }[]
   { cle: "trous", libelle: "Trous", aide: "Créneaux vides entre deux cours d'une même journée" },
   { cle: "cours_17h", libelle: "17h", aide: "Séances à 17h" },
   { cle: "journees_isolees", libelle: "Journées à 1 cours", aide: "Journées avec une seule séance" },
+  { cle: "trous_enseignants", libelle: "Trous enseignants", aide: "Attente entre deux cours d'un même enseignant dans la journée, toutes promos confondues" },
 ];
 
 function total(mesures: MesureLissage[], cle: keyof MesureLissage): number {

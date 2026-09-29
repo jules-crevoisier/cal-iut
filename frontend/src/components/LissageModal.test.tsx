@@ -19,6 +19,7 @@ const mesure = (semaine: number, cours_8h: number, trous: number) => ({
   cours_17h: 0,
   trous,
   journees_isolees: 0,
+  trous_enseignants: 0,
   charge_max: 2,
   charges: [2, 2, 0, 0, 0],
 });

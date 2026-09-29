@@ -81,6 +81,10 @@ class PoidsLissage:
     # Par (enseignant, jour) où il ne venait pas déjà : regroupe les séances
     # d'un vacataire sur ses jours de présence.
     jour_enseignant: int = 12
+    # Par créneau vide entre deux séances d'un même enseignant dans la
+    # journée (toutes promos confondues) : un vacataire qui vient pour 9h30
+    # et 15h30 attend quatre heures et demie.
+    trou_enseignant: int = 15
     deplacement: int = 8
     changement_semaine: int = 40
 
@@ -97,6 +101,9 @@ class Mesure:
     cours_17h: int = 0
     trous: int = 0
     journees_isolees: int = 0
+    # Trous dans la journée des enseignants de la promo, toutes promos
+    # confondues (un vacataire qui attend entre deux cours).
+    trous_enseignants: int = 0
     charge_max: int = 0
     charges: list[int] = field(default_factory=list)
 
@@ -178,11 +185,19 @@ def mesurer(state: Any, parcours: str, placements: dict[str, tuple[int, int, int
     offset = semester_week_offset(state.calendar, semestre)
     occupe: dict[tuple[int, int], set[int]] = defaultdict(set)
     compte: dict[int, int] = defaultdict(int)
+    profs_semaine: dict[int, set[str]] = defaultdict(set)
+    occupe_prof: dict[tuple[str, int, int], set[int]] = defaultdict(set)
     for sid, (w, d, s) in placements.items():
         seance = state.sessions_by_id.get(sid)
-        if seance is None or not (set(seance.group_ids) & groupes):
+        if seance is None:
+            continue
+        for code in seance.teacher_codes or []:
+            for k in range(_duree(seance)):
+                occupe_prof[(code, w, d)].add(s + k)
+        if not (set(seance.group_ids) & groupes):
             continue
         compte[w] += 1
+        profs_semaine[w] |= set(seance.teacher_codes or [])
         for k in range(_duree(seance)):
             occupe[(w, d)].add(s + k)
     resultat = []
@@ -201,6 +216,11 @@ def mesurer(state: Any, parcours: str, placements: dict[str, tuple[int, int, int
             m.trous += (max(slots) - min(slots) + 1) - len(slots)
             m.journees_isolees += len(slots) == 1
         m.charge_max = max(m.charges) if m.charges else 0
+        for code in profs_semaine.get(w, set()):
+            for d in range(DAYS_PER_WEEK):
+                slots = occupe_prof.get((code, w, d))
+                if slots:
+                    m.trous_enseignants += (max(slots) - min(slots) + 1) - len(slots)
         resultat.append(m)
     return resultat
 
@@ -496,6 +516,49 @@ def proposer(
         vient = modele.new_bool_var("")
         modele.add_max_equality(vient, vs)
         termes.append(poids.jour_enseignant * vient)
+
+    # Trous dans la journée d'un enseignant : ses séances figées (autres
+    # promos) comptent comme occupées, ses séances mobiles comme variables.
+    couvre_prof: dict[tuple[str, int], list[cp_model.IntVar]] = defaultdict(list)
+    jours_prof: set[tuple[str, int, int]] = set()
+    for s in mobiles:
+        for pos in domaines[s.id]:
+            for code in s.teacher_codes or []:
+                jours_prof.add((code, pos[0], pos[1]))
+                for k in range(_duree(s)):
+                    couvre_prof[(code, t_abs(pos[0], pos[1], pos[2] + k))].append(x[(s.id, pos)])
+    for code, w, d in jours_prof:
+        occ_prof: list[cp_model.IntVar | int] = []
+        for sl in range(SLOTS_PER_DAY):
+            t = t_abs(w, d, sl)
+            if t in prof_pris[code]:
+                occ_prof.append(1)
+            elif couvre_prof.get((code, t)):
+                b = modele.new_bool_var("")
+                modele.add(b == sum(couvre_prof[(code, t)]))
+                occ_prof.append(b)
+            else:
+                occ_prof.append(0)
+        for sl in range(1, SLOTS_PER_DAY - 1):
+            if isinstance(occ_prof[sl], int) and occ_prof[sl] == 1:
+                continue
+            avant_l = [o for o in occ_prof[:sl] if not (isinstance(o, int) and o == 0)]
+            apres_l = [o for o in occ_prof[sl + 1:] if not (isinstance(o, int) and o == 0)]
+            if not avant_l or not apres_l:
+                continue
+            if any(isinstance(o, int) for o in avant_l):
+                avant = 1
+            else:
+                avant = modele.new_bool_var("")
+                modele.add_max_equality(avant, avant_l)
+            if any(isinstance(o, int) for o in apres_l):
+                apres = 1
+            else:
+                apres = modele.new_bool_var("")
+                modele.add_max_equality(apres, apres_l)
+            trou = modele.new_bool_var("")
+            modele.add(trou >= avant + apres - 1 - occ_prof[sl])
+            termes.append(poids.trou_enseignant * trou)
 
     for s in mobiles:
         p = placement_par_id[s.id]

@@ -690,7 +690,8 @@ def _afficher_proposition(prop: dict) -> None:
     print(f"{prop['parcours']} — {prop['message']} ({prop['statut']}, {prop['duree_s']} s)")
     print(f"  {'':18s}{'avant':>8s}{'après':>8s}")
     for cle, libelle in (("cours_8h", "cours à 8h"), ("trous", "trous"), ("cours_17h", "cours à 17h"),
-                         ("journees_isolees", "journées à 1 cours")):
+                         ("journees_isolees", "journées à 1 cours"),
+                         ("trous_enseignants", "trous enseignants")):
         print(f"  {libelle:18s}{total(cle, 'avant'):8d}{total(cle, 'apres'):8d}")
     par_semaine: dict[int, list[dict]] = {}
     for d in prop["deplacements"]:
