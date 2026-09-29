@@ -750,7 +750,8 @@ def _afficher_blocages(blocages: list[dict]) -> None:
     print(f"{len(blocages)} blocage(s) actif(s) :")
     for b in blocages:
         fin = b.get("expire_le") or "permanent"
-        auto = " [auto]" if b.get("automatique") else ""
+        source = b.get("source") or ("debit" if b.get("automatique") else "manuel")
+        auto = {"refus": " [auto : refus 401/403]", "debit": " [auto : débit]"}.get(source, "")
         print(f"  {b['id']}  {b['type']:<10} {b['valeur']:<24} jusqu'à {fin}{auto} — {b['motif']} ({b['auteur']})")
 
 
@@ -762,7 +763,12 @@ def cmd_trafic(args: argparse.Namespace) -> int:
 
     if not args.prod:
         etat = aa.etat_public()
-        print(f"Mode local : {etat['mode']} ({aa.MODE_ENV})")
+        prot = etat["protections"]
+        print(
+            f"Protections toujours actives (blocage, bannissement sur refus 401/403) : "
+            f"{'oui' if prot['actives'] else 'NON'} ({prot['variable']})"
+        )
+        print(f"Limitation de débit : {etat['mode']} ({aa.MODE_ENV})")
         print("Les compteurs de trafic vivent dans la mémoire du serveur : `cal-iut trafic --prod`, ou l'écran Trafic.")
         _afficher_blocages([b.__dict__ for b in aa.blocages.lister()])
         return 0
@@ -778,9 +784,13 @@ def cmd_trafic(args: argparse.Namespace) -> int:
     except SyncError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    print(f"Mode : {corps['mode']} — fenêtre {corps['fenetre']}")
+    prot = corps.get("protections") or {}
+    print(
+        f"Protections toujours actives : {'oui' if prot.get('actives', True) else 'NON'} — "
+        f"limitation de débit : {corps['mode']} — fenêtre {corps['fenetre']}"
+    )
     if not corps["comptage_actif"]:
-        print(f"Comptage désactivé : poser {corps['variable']}=observe pour compter sans rien bloquer.")
+        print("Comptage désactivé (CAL_IUT_AA_PROTECTIONS=off).")
     else:
         r = corps["resume"]
         print(
@@ -834,8 +844,8 @@ def cmd_bloquer(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     _afficher_blocages([blocage.__dict__])
-    if aa.mode() == "off":
-        print(f"Note : {aa.MODE_ENV} vaut « off » ici — la liste ne s'applique qu'en observe ou enforce.")
+    if not aa.protections_actives() and aa.mode() == "off":
+        print(f"Note : {aa.PROTECTIONS_ENV}=off ici — la liste ne s'applique pas tant qu'elle est coupée.")
     return 0
 
 

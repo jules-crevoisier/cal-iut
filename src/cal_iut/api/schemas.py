@@ -1259,6 +1259,20 @@ class BannissementResponse(BaseModel):
     duree_s: float
 
 
+class ProtectionsResponse(BaseModel):
+    """Protections toujours actives (liste de blocage, bannissement sur
+    refus d'accès répétés, comptage) — distinctes de la limitation de débit
+    (`mode`)."""
+
+    actives: bool
+    variable: str
+    refus_actif: bool
+    refus_variable: str
+    refus_seuil: int
+    refus_fenetre_s: float
+    refus_duree_s: float
+
+
 class CheminTraficResponse(BaseModel):
     chemin: str
     nb: int
@@ -1273,6 +1287,9 @@ class ClientTraficResponse(BaseModel):
     part_publique: float
     depassements: int
     refus_403: int
+    # 401/403 rendus par l'application (routes fermées) — ce que compte le
+    # bannissement sur refus d'accès répétés.
+    refus_acces: int = 0
     user_agent: str
     user_agents_distincts: int
     chemins: list[CheminTraficResponse]
@@ -1289,6 +1306,7 @@ class ResumeTraficResponse(BaseModel):
     clients: int
     depassements: int
     refus_403: int
+    refus_acces: int = 0
     ip_bloquees: int
 
 
@@ -1298,6 +1316,7 @@ class TraficResponse(BaseModel):
     comptage_actif: bool
     fenetre: Literal["15min", "1h", "24h"]
     genere_le: str
+    protections: ProtectionsResponse
     budgets: list[BudgetTraficResponse]
     bannissement: BannissementResponse
     exemptes: list[str]
@@ -1314,6 +1333,7 @@ class BlocageResponse(BaseModel):
     cree_le: str
     expire_le: str | None = None
     automatique: bool = False
+    source: Literal["manuel", "refus", "debit"] = "manuel"
 
 
 class BlocageListResponse(BaseModel):

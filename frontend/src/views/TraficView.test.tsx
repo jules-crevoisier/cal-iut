@@ -20,10 +20,19 @@ function trafic(partiel: Partial<TraficResponse> = {}): TraficResponse {
     comptage_actif: true,
     fenetre: "1h",
     genere_le: "2026-09-29T10:00:00+00:00",
+    protections: {
+      actives: true,
+      variable: "CAL_IUT_AA_PROTECTIONS",
+      refus_actif: true,
+      refus_variable: "CAL_IUT_AA_REFUS",
+      refus_seuil: 30,
+      refus_fenetre_s: 600,
+      refus_duree_s: 86400,
+    },
     budgets: BUDGETS,
     bannissement: { seuil: 30, fenetre_s: 600, duree_s: 3600 },
     exemptes: [],
-    resume: { requetes: 1520, clients: 2, depassements: 45, refus_403: 0, ip_bloquees: 0 },
+    resume: { requetes: 1520, clients: 2, depassements: 45, refus_403: 0, refus_acces: 19, ip_bloquees: 0 },
     clients: [
       {
         ip: "203.0.113.66",
@@ -34,6 +43,7 @@ function trafic(partiel: Partial<TraficResponse> = {}): TraficResponse {
         part_publique: 1,
         depassements: 45,
         refus_403: 0,
+        refus_acces: 19,
         user_agent: "python-requests/2.31",
         user_agents_distincts: 1,
         chemins: [{ chemin: "/app-state", nb: 1500 }],
@@ -53,6 +63,7 @@ function trafic(partiel: Partial<TraficResponse> = {}): TraficResponse {
         part_publique: 0,
         depassements: 0,
         refus_403: 0,
+        refus_acces: 0,
         user_agent: "Mozilla/5.0 Firefox/130.0",
         user_agents_distincts: 1,
         chemins: [{ chemin: "/placements/S1", nb: 12 }],
@@ -77,6 +88,19 @@ const BLOCAGE: Blocage = {
   cree_le: "2026-09-29T09:00:00+00:00",
   expire_le: null,
   automatique: false,
+  source: "manuel",
+};
+
+const BAN_REFUS: Blocage = {
+  id: "b7",
+  type: "ip",
+  valeur: "79.137.33.236",
+  motif: "bannissement automatique : 30 refus 401/403 en 10 min",
+  auteur: "automatique",
+  cree_le: "2026-09-29T09:00:00+00:00",
+  expire_le: "2026-09-30T09:00:00+00:00",
+  automatique: true,
+  source: "refus",
 };
 
 interface Etat {
@@ -119,19 +143,40 @@ describe("TraficView", () => {
     vi.restoreAllMocks();
   });
 
-  it("mode désactivé : le dit, donne la variable, ne montre aucun chiffre", async () => {
-    stubFetch({ trafic: trafic({ mode: "off", comptage_actif: false, clients: [] }), blocages: [BLOCAGE] });
+  it("par défaut : protections actives, limitation de débit désactivée — les deux sont distinguées", async () => {
+    stubFetch({ trafic: trafic({ mode: "off", resume: { ...trafic().resume, depassements: 0 } }), blocages: [BLOCAGE, BAN_REFUS] });
     render(<TraficView />);
 
-    const etat = await screen.findByText("Désactivé");
-    expect(etat).toHaveClass("pill", "dot");
-    expect(screen.getByText(/CAL_IUT_ANTI_ASPIRATION=observe/)).toBeInTheDocument();
-    expect(screen.getByText(/Comptage désactivé : le serveur ne compte rien/)).toBeInTheDocument();
+    const protections = (await screen.findByText("Protections toujours actives")).closest("div") as HTMLElement;
+    expect(within(protections).getByText("Actives")).toHaveClass("pill", "dot", "good");
+    expect(within(protections).getByText(/cumule 30 refus 401\/403 en 10 min est bannie 24 h/)).toBeInTheDocument();
+    const debit = screen.getByText("Limitation de débit").closest("div") as HTMLElement;
+    expect(within(debit).getByText("Désactivée")).toHaveClass("pill", "dot");
+    expect(within(debit).getByText(/CAL_IUT_ANTI_ASPIRATION=observe/)).toBeInTheDocument();
+
+    // Le trafic est compté même sans limitation ; seul le 429 est « — ».
     const tuiles = screen.getByRole("region", { name: "Sommaire du trafic" });
-    expect(within(tuiles).getAllByText("—")).toHaveLength(3);
-    // La liste de blocage se prépare quand même.
-    expect(screen.getByText("préparés : s'appliqueront à l'activation")).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /192\.0\.2\.0\/24/ })).toBeInTheDocument();
+    expect(within(tuiles).getByText("1 520")).toBeInTheDocument();
+    expect(within(tuiles).getByText("19")).toBeInTheDocument();
+    expect(within(tuiles).getAllByText("—")).toHaveLength(1);
+    expect(screen.getByRole("row", { name: /203\.0\.113\.66/ })).toBeInTheDocument();
+
+    // Blocages appliqués tout de suite ; le bannissement automatique dit d'où il vient.
+    expect(screen.getByText("refus 403 immédiat")).toBeInTheDocument();
+    const ban = screen.getByRole("row", { name: /79\.137\.33\.236/ });
+    expect(within(ban).getByText("auto · refus 401/403")).toBeInTheDocument();
+    expect(within(ban).getByRole("button", { name: "Débloquer 79.137.33.236" })).toBeInTheDocument();
+  });
+
+  it("protections coupées par la variable de secours : le dit", async () => {
+    const t = trafic({ comptage_actif: false, mode: "off", clients: [] });
+    t.protections.actives = false;
+    stubFetch({ trafic: t, blocages: [BLOCAGE] });
+    render(<TraficView />);
+
+    expect(await screen.findByText("Coupées")).toHaveClass("pill", "dot", "bad");
+    expect(screen.getByText(/Comptage coupé \(CAL_IUT_AA_PROTECTIONS=off\)/)).toBeInTheDocument();
+    expect(screen.getByText("inactifs : protections coupées")).toBeInTheDocument();
   });
 
   it("observation : tuiles et plus gros clients", async () => {
@@ -255,7 +300,7 @@ describe("TraficView", () => {
     stubFetch({ trafic: t, blocages: [] });
     render(<TraficView />);
 
-    expect(await screen.findByText("Blocage actif")).toBeInTheDocument();
+    expect(await screen.findByText("Refus actifs")).toBeInTheDocument();
     expect(screen.getByText(/bannie 1 h/)).toBeInTheDocument();
     const ligne = screen.getByRole("row", { name: /203\.0\.113\.66/ });
     expect(within(ligne).getByText("bloqué")).toBeInTheDocument();

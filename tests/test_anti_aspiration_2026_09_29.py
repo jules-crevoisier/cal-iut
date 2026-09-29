@@ -45,25 +45,36 @@ def _statuts(client: TestClient, chemin: str, n: int, **kw) -> list[int]:
     return [client.get(chemin, **kw).status_code for _ in range(n)]
 
 
-# ── Mode off (défaut) : rien, pas même compter ──────────────────────────────
+# ── Par défaut : limitation de débit coupée, protections actives ────────────
 
 
-def test_mode_off_par_defaut_ne_fait_rien(budgets_serres) -> None:
+def test_limitation_de_debit_off_par_defaut(budgets_serres) -> None:
     assert aa.mode() == "off"
-    aa.blocages.ajouter("ip", IP, "préparé à l'avance", "test")
     client = _client()
     statuts = _statuts(client, PUBLIC, 20)
     assert 429 not in statuts and 403 not in statuts
-    # Ni compteur, ni seau : le middleware n'a rien touché.
-    assert len(aa.trafic) == 0
+    # Aucun seau : la limitation de débit n'a rien touché…
     assert len(aa.seaux) == 0
+    # … mais le trafic est compté (écran Trafic).
+    assert aa.trafic.instantane(3600)["clients"][0]["requetes"] == 20
 
 
 def test_valeur_inconnue_retombe_sur_off(monkeypatch, budgets_serres) -> None:
     monkeypatch.setenv(aa.MODE_ENV, "bloquer-tout")
     assert aa.mode() == "off"
     assert 429 not in _statuts(_client(), PUBLIC, 10)
-    assert len(aa.trafic) == 0
+    assert len(aa.seaux) == 0
+
+
+def test_interrupteur_de_secours_coupe_tout(monkeypatch, budgets_serres) -> None:
+    monkeypatch.setenv(aa.PROTECTIONS_ENV, "off")
+    aa.blocages.ajouter("ip", IP, "préparé", "test")
+    client = _client()
+    assert 403 not in _statuts(client, PUBLIC, 5)
+    for _ in range(40):
+        client.get("/export/json?t=promo")
+    assert len(aa.trafic) == 0 and len(aa.seaux) == 0
+    assert [b.source for b in aa.blocages.lister()] == ["manuel"]
 
 
 # ── Mode observe : compte, journalise, laisse passer ────────────────────────
@@ -188,7 +199,7 @@ def test_bannissement_automatique_apres_n_refus(monkeypatch, budgets_serres, cap
     assert statuts[6] == 403
     assert client.get("/auth/status").status_code == 403
     (ban,) = aa.blocages.lister()
-    assert ban.automatique and ban.type == "ip" and ban.valeur == IP
+    assert ban.automatique and ban.source == "debit" and ban.type == "ip" and ban.valeur == IP
     expire = datetime.fromisoformat(ban.expire_le)
     assert timedelta(minutes=59) < expire - datetime.now(UTC) <= timedelta(hours=1)
     assert any("bannissement" in r.getMessage() for r in caplog.records)
@@ -218,15 +229,18 @@ def test_un_compte_n_est_jamais_banni(db_isole, monkeypatch, budgets_serres) -> 
         ("user_agent", "python-requests", {"User-Agent": "Python-Requests/2.31"}),
     ],
 )
-def test_blocage_manuel_403_en_observe_et_enforce_ignore_en_off(monkeypatch, type_, valeur, entetes) -> None:
+def test_blocage_manuel_toujours_applique_sauf_interrupteur(monkeypatch, type_, valeur, entetes) -> None:
     aa.blocages.ajouter(type_, valeur, "aspiration", "test")
     client = _client()
-    assert client.get(PUBLIC, headers=entetes).status_code == 404  # off
-    for m in ("observe", "enforce"):
+    for m in ("off", "observe", "enforce"):
         monkeypatch.setenv(aa.MODE_ENV, m)
         refus = client.get(PUBLIC, headers=entetes)
         assert refus.status_code == 403, m
         assert refus.json() == {"detail": "Accès refusé."}
+    monkeypatch.setenv(aa.MODE_ENV, "off")
+    monkeypatch.setenv(aa.PROTECTIONS_ENV, "off")
+    assert client.get(PUBLIC, headers=entetes).status_code == 404
+    monkeypatch.delenv(aa.PROTECTIONS_ENV)
     # Une autre IP / un autre navigateur passe.
     assert _client(AUTRE_IP).get(PUBLIC, headers={"User-Agent": "Mozilla/5.0"}).status_code == 404
 
@@ -245,21 +259,21 @@ def test_blocages_persistants_et_expiration(tmp_path, monkeypatch) -> None:
 
     # Relu par une nouvelle liste (redémarrage).
     relue = aa.ListeBlocages()
-    assert relue.correspondance(IP, "", inclure_auto=False).id == b.id
+    assert relue.correspondance(IP, "", inclure_debit=False).id == b.id
 
     # Écrit à la main, déjà expiré : ignoré, puis purgé à l'écriture suivante.
     passe = (datetime.now(UTC) - timedelta(minutes=1)).isoformat(timespec="seconds")
     donnees["blocages"].append({**donnees["blocages"][0], "id": "expire", "valeur": AUTRE_IP, "expire_le": passe})
     (tmp_path / "blocages.json").write_text(json.dumps(donnees), encoding="utf-8")
     relue = aa.ListeBlocages()
-    assert relue.correspondance(AUTRE_IP, "", inclure_auto=True) is None
+    assert relue.correspondance(AUTRE_IP, "", inclure_debit=True) is None
     assert [x.id for x in relue.lister()] == [b.id]
     relue.ajouter("user_agent", "scrapy", "robot", "test")
     ids = [x["id"] for x in json.loads((tmp_path / "blocages.json").read_text())["blocages"]]
     assert "expire" not in ids and b.id in ids
 
     assert relue.retirer(b.id) is not None
-    assert relue.correspondance(IP, "", inclure_auto=True) is None
+    assert relue.correspondance(IP, "", inclure_debit=True) is None
 
 
 def test_meme_cible_remplacee_pas_empilee() -> None:
@@ -298,8 +312,10 @@ def test_routes_admin_en_mode_off(db_isole) -> None:
     creer_compte_actif_et_connecter(admin, role="admin")
     trafic = admin.get("/admin/trafic").json()
     assert trafic["mode"] == "off"
-    assert trafic["comptage_actif"] is False
-    assert trafic["clients"] == []
+    # Protections toujours actives : le comptage tourne même sans limitation.
+    assert trafic["comptage_actif"] is True
+    assert trafic["protections"]["actives"] is True and trafic["protections"]["refus_actif"] is True
+    assert trafic["protections"]["refus_seuil"] == 30
     assert {b["categorie"] for b in trafic["budgets"]} == set(aa.CATEGORIES)
     # La liste se prépare même en off.
     cree = admin.post(
@@ -513,7 +529,7 @@ def test_cli_bloquer_et_debloquer_en_local(monkeypatch, capsys) -> None:
     assert _cli(monkeypatch, "bloquer", "--ua", "python-requests", "--motif", "robot", "--duree", "permanent") == 0
     (plage, ua) = aa.blocages.lister()
     assert (plage.type, plage.valeur, ua.type, ua.expire_le) == ("cidr", "203.0.113.0/24", "user_agent", None)
-    assert "ne s'applique qu'en observe" in capsys.readouterr().out
+    assert "hébergeur" in capsys.readouterr().out
     assert _cli(monkeypatch, "trafic") == 0
     sortie = capsys.readouterr().out
     assert plage.id in sortie and "python-requests" in sortie

@@ -8,10 +8,12 @@
  * plage ou un User-Agent. Réservé aux admins : le backend refuse déjà tout
  * le reste (`require_role("admin")`), même patron que `SauvegardesView`.
  *
- * Tout le mécanisme est inerte par défaut (`CAL_IUT_ANTI_ASPIRATION=off`) :
- * le bandeau d'état le dit et donne la variable à poser. La liste de
- * blocage, elle, se prépare dès maintenant — elle s'applique à partir du
- * mode « observation ».
+ * Deux étages, que le bandeau d'état distingue :
+ *   - les PROTECTIONS TOUJOURS ACTIVES (liste de blocage, bannissement
+ *     d'une IP anonyme qui cumule les refus 401/403, comptage) — décision
+ *     utilisateur du 29/09/2026 après lecture des journaux ;
+ *   - la LIMITATION DE DÉBIT, coupée par défaut
+ *     (`CAL_IUT_ANTI_ASPIRATION=off|observe|enforce`).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -79,29 +81,46 @@ const DUREES: Array<[string, string | null]> = [
 
 const MODES: Record<ModeAntiAspiration, { pastille: string; ton: string; texte: (v: string, t: TraficResponse | null) => string }> = {
   off: {
-    pastille: "Désactivé",
+    pastille: "Désactivée",
     ton: "",
     texte: (v) =>
-      `Rien n'est compté ni bloqué. Pour observer sans rien refuser, poser ${v}=observe dans les variables du service backend (Dokploy), puis redéployer. La liste de blocage peut être préparée dès maintenant : elle s'appliquera à l'activation.`,
+      `Aucun plafond de requêtes. Pour mesurer les dépassements sans rien refuser, poser ${v}=observe dans les variables du service backend (Dokploy), puis redéployer.`,
   },
   observe: {
     pastille: "Observation",
     ton: "warn",
     texte: (v) =>
-      `Le trafic est compté et les dépassements sont journalisés, mais rien n'est refusé ; seuls les blocages manuels s'appliquent. Une fois les budgets ajustés : ${v}=enforce.`,
+      `Les dépassements de budget sont comptés et journalisés, mais aucun n'est refusé. Une fois les budgets ajustés : ${v}=enforce.`,
   },
   enforce: {
-    pastille: "Blocage actif",
+    pastille: "Refus actifs",
     ton: "good",
     texte: (v, t) => {
       const duree = t ? dureeLisible(t.bannissement.duree_s) : "1 h";
-      return `Au-delà des budgets, les requêtes sont refusées (429) ; une IP qui insiste est bannie ${duree}. Retour arrière immédiat : ${v}=off.`;
+      return `Au-delà des budgets, les requêtes sont refusées (429) ; une IP qui insiste est bannie ${duree}. Retour arrière : ${v}=off.`;
     },
   },
 };
 
+function texteProtections(t: TraficResponse): string {
+  const p = t.protections;
+  if (!p.actives) {
+    return `Coupées (${p.variable}=off) : ni liste de blocage, ni bannissement, ni comptage. Retirer la variable pour les rétablir.`;
+  }
+  const refus = p.refus_actif
+    ? `une IP sans compte qui cumule ${p.refus_seuil} refus 401/403 en ${dureeLisible(p.refus_fenetre_s)} est bannie ${dureeLisible(p.refus_duree_s)}`
+    : `bannissement sur refus coupé (${p.refus_variable}=off)`;
+  return `Liste de blocage appliquée (403) ; ${refus} ; trafic compté. Jamais un compte connecté ni une clé API.`;
+}
+
+const LIBELLE_SOURCE: Record<Blocage["source"], string | null> = {
+  manuel: null,
+  refus: "auto · refus 401/403",
+  debit: "auto · débit",
+};
+
 function dureeLisible(secondes: number): string {
-  if (secondes % 86400 === 0) return `${secondes / 86400} j`;
+  if (secondes % 86400 === 0 && secondes > 86400) return `${secondes / 86400} j`;
   if (secondes % 3600 === 0) return `${secondes / 3600} h`;
   if (secondes % 60 === 0) return `${secondes / 60} min`;
   return `${secondes} s`;
@@ -388,10 +407,24 @@ export function TraficView() {
 
   return (
     <section className="view trafic-view">
-      <div className="trafic-mode" role="status" data-mode={trafic.mode}>
-        <span className={`pill dot ${mode.ton}`}>{mode.pastille}</span>
-        <p>{mode.texte(trafic.variable, trafic)}</p>
-      </div>
+      <dl className="trafic-etat" role="status">
+        <div className="trafic-mode" data-protections={trafic.protections.actives ? "on" : "off"}>
+          <dt>Protections toujours actives</dt>
+          <dd>
+            <span className={`pill dot ${trafic.protections.actives ? "good" : "bad"}`}>
+              {trafic.protections.actives ? "Actives" : "Coupées"}
+            </span>
+            <p>{texteProtections(trafic)}</p>
+          </dd>
+        </div>
+        <div className="trafic-mode" data-mode={trafic.mode}>
+          <dt>Limitation de débit</dt>
+          <dd>
+            <span className={`pill dot ${mode.ton}`}>{mode.pastille}</span>
+            <p>{mode.texte(trafic.variable, trafic)}</p>
+          </dd>
+        </div>
+      </dl>
 
       <div className="page-outils">
         <Onglets
@@ -426,17 +459,26 @@ export function TraficView() {
           detail={compte ? "adresses IP vues" : "comptage désactivé"}
         />
         <Tuile
+          libelle="Refus 401/403"
+          valeur={compte ? NOMBRE.format(r.refus_acces) : "—"}
+          detail={compte ? "routes fermées demandées sans droit" : "comptage désactivé"}
+          ton={compte && r.refus_acces > 0 ? "warn" : undefined}
+          nul={compte && r.refus_acces === 0}
+        />
+        <Tuile
           libelle="Refus (429)"
-          valeur={compte ? NOMBRE.format(r.depassements) : "—"}
+          valeur={compte && trafic.mode !== "off" ? NOMBRE.format(r.depassements) : "—"}
           detail={
             !compte
               ? "comptage désactivé"
-              : trafic.mode === "enforce"
-                ? "requêtes au-delà du budget, refusées"
-                : "au-delà du budget : auraient été refusées"
+              : trafic.mode === "off"
+                ? "limitation de débit désactivée"
+                : trafic.mode === "enforce"
+                  ? "requêtes au-delà du budget, refusées"
+                  : "au-delà du budget : auraient été refusées"
           }
           ton={compte && r.depassements > 0 ? "warn" : undefined}
-          nul={compte && r.depassements === 0}
+          nul={compte && trafic.mode !== "off" && r.depassements === 0}
         />
         <Tuile
           libelle="IP bloquées"
@@ -470,8 +512,8 @@ export function TraficView() {
         </div>
         {!compte ? (
           <p className="carte-vide">
-            Comptage désactivé : le serveur ne compte rien tant que {trafic.variable} vaut « off ». Pour un premier
-            diagnostic sans rien activer, analyser les journaux d'accès avec <code>scripts/analyser_acces.py</code>.
+            Comptage coupé ({trafic.protections.variable}=off). Pour un diagnostic sans lui, analyser les journaux
+            d'accès avec <code>scripts/analyser_acces.py</code>.
           </p>
         ) : visibles.length === 0 ? (
           <p className="carte-vide">
@@ -525,7 +567,8 @@ export function TraficView() {
               {LIBELLE_CATEGORIE[b.categorie] ?? b.categorie} {NOMBRE.format(b.nombre)}/{periodeLisible(b.periode_s)}
             </span>
           ))}
-          . Bannissement après {trafic.bannissement.seuil} refus en {dureeLisible(trafic.bannissement.fenetre_s)}.
+          {trafic.mode === "off" ? " (limitation désactivée)" : ""}. Bannissement après {trafic.bannissement.seuil} refus 429
+          en {dureeLisible(trafic.bannissement.fenetre_s)}.
           {trafic.exemptes.length > 0 ? ` Jamais limités : ${trafic.exemptes.join(", ")}.` : ""} Réglages :
           variables <code>CAL_IUT_AA_*</code> (docs/ANTI-ASPIRATION.md).
         </p>
@@ -537,7 +580,7 @@ export function TraficView() {
             Blocages <span className="carte-tete-nb">{blocages.length}</span>
           </h2>
           <span className="carte-tete-note">
-            {trafic.mode === "off" ? "préparés : s'appliqueront à l'activation" : "refus 403 immédiat"}
+            {trafic.protections.actives ? "refus 403 immédiat" : "inactifs : protections coupées"}
           </span>
         </div>
         {blocages.length === 0 ? (
@@ -567,10 +610,10 @@ export function TraficView() {
                     </th>
                     <td>
                       {b.motif}
-                      {b.automatique ? (
+                      {LIBELLE_SOURCE[b.source ?? "manuel"] ? (
                         <>
                           {" "}
-                          <span className="pill">automatique</span>
+                          <span className="pill">{LIBELLE_SOURCE[b.source ?? "manuel"]}</span>
                         </>
                       ) : null}
                     </td>
@@ -603,7 +646,7 @@ export function TraficView() {
 }
 
 function LigneClient({ c, onBloquer }: { c: ClientTrafic; onBloquer: (cible: Cible) => void }) {
-  const refus = c.depassements + c.refus_403;
+  const refus = c.depassements + c.refus_403 + (c.refus_acces ?? 0);
   return (
     <tr>
       <th scope="row">
@@ -627,7 +670,10 @@ function LigneClient({ c, onBloquer }: { c: ClientTrafic; onBloquer: (cible: Cib
           </div>
         ))}
       </td>
-      <td className="num" title={`${c.depassements} au-delà du budget, ${c.refus_403} refus 403`}>
+      <td
+        className="num"
+        title={`${c.refus_acces ?? 0} refus 401/403 de l'application, ${c.depassements} au-delà du budget, ${c.refus_403} bloquées`}
+      >
         {refus > 0 ? <strong>{NOMBRE.format(refus)}</strong> : <span className="muted">0</span>}
       </td>
       <td className="trafic-col-action">

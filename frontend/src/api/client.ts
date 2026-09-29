@@ -405,7 +405,11 @@ export interface ClientTrafic {
   /** Requêtes au-delà du budget (refusées en mode blocage, seulement
    *  comptées en observation). */
   depassements: number;
+  /** Refusées par la liste de blocage. */
   refus_403: number;
+  /** 401/403 rendus par l'application (routes fermées) : ce que compte le
+   *  bannissement sur refus d'accès répétés. */
+  refus_acces: number;
   user_agent: string;
   user_agents_distincts: number;
   chemins: Array<{ chemin: string; nb: number }>;
@@ -424,10 +428,27 @@ export interface TraficResponse {
   comptage_actif: boolean;
   fenetre: FenetreTrafic;
   genere_le: string;
+  /** Protections toujours actives, distinctes de la limitation de débit. */
+  protections: {
+    actives: boolean;
+    variable: string;
+    refus_actif: boolean;
+    refus_variable: string;
+    refus_seuil: number;
+    refus_fenetre_s: number;
+    refus_duree_s: number;
+  };
   budgets: BudgetTrafic[];
   bannissement: { seuil: number; fenetre_s: number; duree_s: number };
   exemptes: string[];
-  resume: { requetes: number; clients: number; depassements: number; refus_403: number; ip_bloquees: number };
+  resume: {
+    requetes: number;
+    clients: number;
+    depassements: number;
+    refus_403: number;
+    refus_acces: number;
+    ip_bloquees: number;
+  };
   clients: ClientTrafic[];
 }
 
@@ -440,6 +461,9 @@ export interface Blocage {
   cree_le: string;
   expire_le: string | null;
   automatique: boolean;
+  /** « refus » : 401/403 répétés (toujours actif) ; « debit » : 429 répétés
+   *  (limitation de débit en mode blocage). */
+  source: "manuel" | "refus" | "debit";
 }
 
 export interface NouveauBlocage {

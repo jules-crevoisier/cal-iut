@@ -359,8 +359,9 @@ Sécurité (audit du 29/09/2026, `docs/AUDIT-2026-09.md`) : cookie `Secure`
 limitation de débit sur `/auth/*` et `/api/v1/*`, écriture atomique des fichiers
 d'état, schéma OpenAPI de l'appli non public (seul celui de v1, derrière un compte).
 
-Aspiration du serveur (liens publics lus en boucle) : limitation et blocage par IP,
-**désactivés par défaut** — plan d'activation dans [`docs/ANTI-ASPIRATION.md`](docs/ANTI-ASPIRATION.md).
+Aspiration du serveur (liens publics lus en boucle) : liste de blocage et bannissement
+d'une IP qui cumule les refus 401/403 **actifs par défaut** ; limitation de débit
+désactivée par défaut — cf. [`docs/ANTI-ASPIRATION.md`](docs/ANTI-ASPIRATION.md).
 
 ## Architecture
 

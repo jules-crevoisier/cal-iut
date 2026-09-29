@@ -28,7 +28,7 @@ from cal_iut.api.schemas import (
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(accounts.require_role("admin"))])
 
-_RESUME_VIDE = {"requetes": 0, "depassements": 0, "refus_403": 0, "clients": 0}
+_RESUME_VIDE = {"requetes": 0, "depassements": 0, "refus_403": 0, "refus_acces": 0, "clients": 0}
 
 
 def _emails(ids: set[int]) -> dict[int, str]:
@@ -53,7 +53,7 @@ def admin_trafic(
     fenetre: Literal["15min", "1h", "24h"] = "1h", limite: int = Query(50, ge=1, le=500),
 ) -> TraficResponse:
     etat = aa.etat_public()
-    comptage_actif = etat["mode"] != "off"
+    comptage_actif = etat["protections"]["actives"] or etat["mode"] != "off"
     instantane = (
         aa.trafic.instantane(aa.FENETRES[fenetre], limite=limite)
         if comptage_actif
@@ -63,7 +63,7 @@ def admin_trafic(
     emails = _emails({c["compte_id"] for c in instantane["clients"] if c.get("compte_id") is not None})
     clients = []
     for c in instantane["clients"]:
-        b = aa.blocages.correspondance(c["ip"], c["user_agent"], inclure_auto=True)
+        b = aa.blocages.correspondance(c["ip"], c["user_agent"], inclure_debit=True)
         clients.append({**c, "compte_email": emails.get(c.get("compte_id")), "blocage_id": b.id if b else None})
     return TraficResponse(
         mode=etat["mode"],
@@ -71,6 +71,7 @@ def admin_trafic(
         comptage_actif=comptage_actif,
         fenetre=fenetre,
         genere_le=datetime.now(UTC).isoformat(timespec="seconds"),
+        protections=etat["protections"],
         budgets=etat["budgets"],
         bannissement=etat["bannissement"],
         exemptes=etat["exemptes"],

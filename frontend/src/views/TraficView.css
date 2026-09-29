@@ -7,13 +7,35 @@
   gap: 16px;
 }
 
-/* ── État du mode : à plat, une pastille neutre à point et une phrase ── */
+/* ── État : deux lignes à plat (protections toujours actives, limitation
+   de débit), chacune un intitulé, une pastille neutre à point, une phrase ── */
+
+.trafic-etat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
 
 .trafic-mode {
+  display: grid;
+  grid-template-columns: minmax(11rem, max-content) 1fr;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.trafic-mode dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.trafic-mode dd {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px 12px;
+  margin: 0;
 }
 
 .trafic-mode .pill {
@@ -104,6 +126,10 @@
 @media (max-width: 760px) {
   .trafic-optionnel {
     display: none;
+  }
+
+  .trafic-mode {
+    grid-template-columns: 1fr;
   }
 
   .trafic-recherche {

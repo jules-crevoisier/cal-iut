@@ -1,10 +1,13 @@
 # Anti-aspiration — limiter et bloquer ceux qui aspirent le serveur
 
 Mis en place le 29/09/2026, à la suite de ce constat : des clients
-interrogent le serveur en boucle. **Tout est livré désactivé** : tant que la
-variable `CAL_IUT_ANTI_ASPIRATION` n'est pas posée, rien ne change (le
-mécanisme ne compte même pas). Ce document dit comment diagnostiquer,
-activer pas à pas, et revenir en arrière.
+interrogent le serveur en boucle. Deux étages, réglés séparément :
+
+- des **protections toujours actives**, dès le déploiement, sans aucune
+  variable (§ 0) ;
+- une **limitation de débit** par catégorie, **désactivée par défaut**
+  (`CAL_IUT_ANTI_ASPIRATION=off`), à calibrer en observation avant de
+  l'activer (§ 4).
 
 Code : `src/cal_iut/api/anti_aspiration.py` (middleware, budgets, liste de
 blocage, compteurs), `src/cal_iut/api/admin_trafic.py` (routes d'admin),
@@ -12,6 +15,93 @@ blocage, compteurs), `src/cal_iut/api/admin_trafic.py` (routes d'admin),
 debloquer`, script `scripts/analyser_acces.py`.
 
 ---
+
+## 0. Actif par défaut
+
+Décision utilisateur du 29/09/2026, après lecture des journaux de
+production. Dès le déploiement, sans rien poser :
+
+1. **IP réelle** du client, non falsifiable (§ 2.1).
+2. **Liste de blocage** (IP, plage, motif de User-Agent) : 403 sobre
+   (`{"detail": "Accès refusé."}`), avant tout autre traitement.
+3. **Bannissement sur refus d'accès répétés** : une IP **anonyme** qui
+   cumule **30 réponses 401/403 en 10 minutes** est bannie **24 h**
+   (blocage persistant, motif « bannissement automatique : 30 refus 401/403
+   en 10 min », visible et levable dans l'écran Trafic). Un humain ne se
+   prend pas 30 refus en 10 minutes ; un script qui essaie des routes
+   fermées, si.
+   - Jamais un compte connecté (cookie de session authentique) ni une clé
+     API valide.
+   - Ne comptent pas : `/auth/*` (limiteur dédié ; un mot de passe mal
+     tapé n'est pas une aspiration), `/api/v1/version`, `/ics/version`,
+     `/health`, `/healthz`, `/assets/*`, les 403 émis par la liste de
+     blocage elle-même, les IP de `CAL_IUT_AA_EXEMPTS`.
+   - Un seul refus ne bannit jamais (seuil plancher : 2).
+   - Réglable : `CAL_IUT_AA_REFUS_SEUIL`, `_FENETRE`, `_DUREE` ; coupé par
+     `CAL_IUT_AA_REFUS=off`.
+4. **Comptage du trafic** par IP pour l'écran Trafic (mémoire bornée,
+   24 h glissantes, coût constant par requête).
+5. `robots.txt` (`Disallow: /`) et `X-Robots-Tag: noindex, nofollow`.
+
+Interrupteur de secours : `CAL_IUT_AA_PROTECTIONS=off` rend tout le
+module inerte (ni liste, ni bannissement, ni comptage).
+
+**Côté interface** : une session qui expire ne peut pas faire bannir un
+vrai utilisateur. Sur un 401, l'application revient à l'écran de connexion
+et cesse de sonder ; le chargement du planning refusé (401/403) n'est plus
+retenté en boucle — avant ce correctif, un onglet dont la session avait
+expiré pile entre `/auth/me` et `/app-state` renvoyait `/app-state` toutes
+les 15 s, soit 40 refus en 10 minutes (`App.tsx`, état `refuse`, test
+`App.refusSansBoucle.test.tsx`).
+
+### Le cas réel du 29/09/2026
+
+Dans les journaux de production, **79.137.33.236** (un VPS OVH) bouclait :
+
+```
+GET /export/json?t=promo   401
+GET /app-state?t=promo     200
+GET /meta?t=promo          200
+```
+
+jusqu'à deux boucles par seconde, par rafales (≈ 19 401 en 90 s). Avec les
+protections par défaut, il est **banni à son 30e refus** (≈ 15 s de
+rafale), puis reçoit 403 sur tout, `/app-state` compris.
+
+Dans les mêmes journaux, des clients **légitimes** qui ne sont jamais
+bannis (tous couverts par `tests/test_bannissement_refus_2026_09_29.py`) :
+une appli qui sonde `/api/v1/version` (304) toutes les 2 à 7 minutes,
+Google Agenda et des box SFR/Orange sur `/ics/prof/XXX.ics?t=XXX`, un
+navigateur sur un lien personnel (`/meta`, `/app-state`,
+`/api/v1/version?t=TPA`), une lecture ponctuelle de `/app-state?t=<groupe>`.
+
+**Le bloquer tout de suite**, sans attendre le déploiement du
+bannissement automatique (le blocage manuel s'applique dès que ce code est
+déployé) :
+
+```bash
+cal-iut bloquer 79.137.33.236 --motif "aspiration /export+/app-state en boucle" --duree permanent --prod
+```
+
+ou écran **Administration → Trafic** → « Bloquer une adresse… » →
+`79.137.33.236`, durée « Permanent », motif. (Défaut de `--duree` en ligne
+de commande : 24 h.) En urgence, avant tout déploiement : pare-feu de
+l'hôte, § 6.
+
+### Vérifier après le déploiement que l'IP vue est la bonne
+
+```bash
+docker logs --since 10m <conteneur-backend> 2>&1 | grep 'INFO: ' | tail
+# INFO:     79.137.33.236:0 - "GET /meta?t=promo HTTP/1.1" 403 Forbidden
+docker logs --since 10m <conteneur-frontend> 2>&1 | tail
+# 79.137.33.236 - - [29/Sep/2026:…] "GET /meta?t=promo HTTP/1.1" 403 …
+```
+
+Les deux journaux doivent montrer des **IP publiques** variées, jamais
+uniquement une adresse 10.x / 172.x (qui serait celle de Traefik ou de
+nginx). Contre-épreuve : depuis un poste,
+`curl -s -H "X-Forwarded-For: 1.2.3.4" https://<site>/auth/status`, puis
+l'écran Trafic doit montrer **votre** IP, jamais `1.2.3.4`.
 
 ## 1. Le constat
 
@@ -34,10 +124,11 @@ coûtent.
 |---|---|---|
 | Robots polis : `robots.txt` (`Disallow: /`) et `X-Robots-Tag: noindex, nofollow` | `frontend/public/robots.txt`, nginx, `EnTeteNoIndex` | **Oui** (inoffensif) |
 | IP réelle du client (non falsifiable) | nginx `real_ip`, `cal-iut serve` | **Oui**, part au prochain déploiement (§ 2.1) |
-| Comptage du trafic par IP (15 min / 1 h / 24 h) | mémoire du backend | Non — à partir de `observe` |
+| Blocage manuel (IP, plage CIDR, motif de User-Agent) → 403 | `data/state/blocages.json` | **Oui** |
+| Bannissement sur refus d'accès répétés (401/403) | liste de blocage | **Oui** (`CAL_IUT_AA_REFUS=off` pour le couper) |
+| Comptage du trafic par IP (15 min / 1 h / 24 h) | mémoire du backend | **Oui** |
 | Limitation de débit (seau à jetons par client et par catégorie) | middleware | Non — journalise en `observe`, refuse (429) en `enforce` |
-| Blocage manuel (IP, plage CIDR, motif de User-Agent) → 403 | `data/state/blocages.json` | Non — appliqué en `observe` **et** `enforce` |
-| Bannissement automatique temporaire d'une IP qui insiste | liste de blocage | Non — `enforce` seulement |
+| Bannissement d'une IP qui insiste malgré les 429 | liste de blocage | Non — `enforce` seulement |
 
 ### 2.1 IP réelle — le prérequis de tout le reste
 
@@ -92,7 +183,7 @@ identité** :
 | `api` | `Authorization: Bearer caliut_…` valide (ou le jeton MCP d'environnement) | le **compte** |
 
 Un compte a des budgets plus larges qu'une IP anonyme, et n'est **jamais
-banni** automatiquement (on ne bannit pas un administrateur de son propre
+banni** automatiquement, ni pour 429 ni pour 401/403 (on ne bannit pas un administrateur de son propre
 outil) : il reçoit des 429, rien de plus. Un cookie ou une clé inventés ne
 donnent pas le budget d'un compte (signature HMAC / clé relue en base).
 
@@ -104,16 +195,21 @@ connecté compris — sauf `/health`, pour ne jamais faire échouer le
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `CAL_IUT_ANTI_ASPIRATION` | `off` | `off` : rien du tout. `observe` : compte, journalise, applique les blocages manuels, ne refuse rien d'autre. `enforce` : refuse (429) et bannit. Valeur inconnue = `off`. |
+| `CAL_IUT_AA_PROTECTIONS` | *(actif)* | `off` : interrupteur de secours, coupe TOUT le module (liste, bannissements, comptage). |
+| `CAL_IUT_AA_REFUS` | *(actif)* | `off` : coupe le seul bannissement sur refus 401/403. |
+| `CAL_IUT_AA_REFUS_SEUIL` | `30` | refus 401/403 avant bannissement (jamais moins de 2) |
+| `CAL_IUT_AA_REFUS_FENETRE` | `10min` | … dans cette fenêtre |
+| `CAL_IUT_AA_REFUS_DUREE` | `24h` | durée du bannissement sur refus |
+| `CAL_IUT_ANTI_ASPIRATION` | `off` | **Limitation de débit.** `off` : aucune. `observe` : compte et journalise les dépassements, ne refuse rien. `enforce` : refuse (429) et bannit une IP qui insiste. Valeur inconnue = `off`. |
 | `CAL_IUT_AA_PUBLIC` / `_BURST` | `120/min` / `120` | lien public, pages (par IP) |
 | `CAL_IUT_AA_ICS` / `_BURST` | `120/min` / `120` | flux `.ics` (par IP) |
 | `CAL_IUT_AA_SONDE` / `_BURST` | `60/min` / `30` | numéro de révision (par IP) |
 | `CAL_IUT_AA_APPLI` / `_BURST` | `600/min` / `300` | compte connecté |
 | `CAL_IUT_AA_API` / `_BURST` | `300/min` / `150` | clé API / MCP |
-| `CAL_IUT_AA_BAN_SEUIL` | `30` | refus avant bannissement (IP anonymes, `enforce`) |
+| `CAL_IUT_AA_BAN_SEUIL` | `30` | refus 429 avant bannissement (IP anonymes, `enforce`) |
 | `CAL_IUT_AA_BAN_FENETRE` | `10min` | … dans cette fenêtre |
 | `CAL_IUT_AA_BAN_DUREE` | `1h` | durée du bannissement automatique |
-| `CAL_IUT_AA_EXEMPTS` | *(vide)* | IP ou plages jamais limitées, séparées par des virgules (ex. l'IP publique de l'IUT). Le blocage manuel s'y applique quand même. |
+| `CAL_IUT_AA_EXEMPTS` | *(vide)* | IP ou plages jamais limitées ni bannies automatiquement, séparées par des virgules (ex. l'IP publique de l'IUT). Le blocage manuel s'y applique quand même. |
 | `CAL_IUT_PROXYS_DE_CONFIANCE` | `127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7` | proxys dont uvicorn accepte `X-Forwarded-For` |
 
 Formats : débit `N/s`, `N/min`, `N/h` (un nombre seul = par minute) ;
@@ -136,7 +232,10 @@ rafale = nombre de requêtes acceptées d'un coup, seau plein ; durées `30s`,
 
 Toutes ces valeurs sont **à calibrer en observation** avant tout `enforce`.
 
-## 4. Plan d'activation, pas à pas
+## 4. Plan d'activation de la limitation de débit, pas à pas
+
+Les protections du § 0 sont déjà en place au déploiement ; ce plan ne
+concerne que la **limitation de débit** (429).
 
 ### Étape 1 — Diagnostiquer sans rien déployer
 
@@ -188,8 +287,9 @@ décide pas.
 
 ### Étape 2 — Déployer le correctif d'IP réelle
 
-Déployer **frontend** (nginx) **et backend** (uvicorn) avec ce code, sans
-poser aucune variable. Rien ne change pour les utilisateurs.
+Déployer **frontend** (nginx) **et backend** (uvicorn) avec ce code. Les
+protections du § 0 démarrent avec lui ; la limitation de débit reste
+coupée. Rien ne change pour les utilisateurs légitimes.
 
 Vérifier :
 1. `docker logs <frontend>` : les nouvelles lignes montrent des IP
@@ -205,12 +305,14 @@ continue de montrer son IP : ajouter la sienne à `set_real_ip_from`
 ### Étape 3 — Observer une semaine
 
 Dokploy → service backend → **Environment** : `CAL_IUT_ANTI_ASPIRATION=observe`,
-puis redéployer. Rien n'est refusé (sauf les blocages manuels, s'il y en a).
+puis redéployer. Aucun 429 (les protections du § 0 continuent, elles).
 
 Regarder **Administration → Trafic** (ou `cal-iut trafic --prod`) sur
-15 min / 1 h / 24 h : plus gros clients, part de trafic public, User-Agent,
-chemins, nombre de liens `?t=` différents, et surtout la colonne **Refus** —
-en observation, ce sont les requêtes qui *auraient* été refusées. Les
+15 min / 1 h / 24 h — le comptage tourne déjà sans cette variable :
+plus gros clients, part de trafic public, User-Agent, chemins, nombre de
+liens `?t=` différents, et la colonne **Refus** (401/403 de l'application,
+dépassements de budget — en observation, requêtes qui *auraient* été
+refusées —, et blocages). Les
 dépassements sont aussi dans le journal du backend (logger
 `cal_iut.anti_aspiration`, une ligne par épisode et par client, au plus une
 toutes les 10 s, avec le nombre de refus tus depuis ; l'IP est la seule
@@ -266,6 +368,9 @@ cal-iut bloquer --ua "python-requests" --motif "robot" --duree permanent --prod
 cal-iut debloquer <id> --prod
 ```
 
+Les bannissements automatiques apparaissent dans la même liste avec leur
+origine (« auto · refus 401/403 » ou « auto · débit ») et se lèvent pareil.
+
 Sans `--prod`, les commandes écrivent la liste **locale**
 (`data/state/blocages.json`). Dans le conteneur backend
 (`docker exec -it <backend> cal-iut bloquer …`), c'est la liste de
@@ -285,10 +390,15 @@ un motif de User-Agent quand le robot en a un reconnaissable.
 
 ## 5. Revenir en arrière
 
-- **Tout couper** : `CAL_IUT_ANTI_ASPIRATION=off` (ou supprimer la variable)
-  puis redéployer le backend — effectif dès le redémarrage (quelques
-  secondes). En `off`, plus rien n'est compté, limité ni bloqué ; la liste
-  de blocage reste en place, inerte, pour plus tard.
+- **Couper la limitation de débit** : `CAL_IUT_ANTI_ASPIRATION=off` (ou
+  supprimer la variable) puis redéployer le backend — effectif dès le
+  redémarrage (quelques secondes). Les protections du § 0 continuent.
+- **Couper le bannissement sur refus** : `CAL_IUT_AA_REFUS=off`, puis
+  redéployer (les bans déjà posés restent jusqu'à expiration : les lever
+  dans l'écran Trafic).
+- **Tout couper** (secours) : `CAL_IUT_AA_PROTECTIONS=off` et
+  `CAL_IUT_ANTI_ASPIRATION=off`, puis redéployer : plus rien n'est compté,
+  limité ni bloqué ; la liste de blocage reste sur le disque, inerte.
 - **Un blocage de trop** : « Débloquer » dans l'écran Trafic ou
   `cal-iut debloquer <id> --prod` — immédiat, sans redémarrage.
 - **Refuser moins sans tout couper** : repasser en `observe` (les bans
@@ -303,7 +413,7 @@ Si le backend ne répond plus, l'écran Trafic non plus. Par ordre de
 préférence :
 
 1. **Liste de blocage depuis le conteneur** (si le conteneur répond encore
-   à `docker exec`) — nécessite `observe` ou `enforce` :
+   à `docker exec`) :
    `docker exec <backend> cal-iut bloquer <ip> --motif urgence --duree 24h`.
 2. **Pare-feu de l'hôte**, avant tout conteneur (effet immédiat, perdu au
    redémarrage de la machine) :

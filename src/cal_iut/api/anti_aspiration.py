@@ -8,14 +8,29 @@ vérification — décision utilisateur du 28/08/2026, NON remise en cause ici.
 On ne peut donc pas refuser « par jeton » : on identifie le client par son
 IP réelle (plus son User-Agent), on limite son débit, on le bloque.
 
-Trois modes, variable `CAL_IUT_ANTI_ASPIRATION` :
-- `off` (DÉFAUT) : le middleware ne fait RIEN, pas même compter. Aucun
-  changement de comportement tant que la variable n'est pas posée.
-- `observe` : compte, journalise les dépassements (logger
-  `cal_iut.anti_aspiration`), laisse tout passer. Les blocages MANUELS
-  s'appliquent déjà (un blocage manuel est une décision explicite).
-- `enforce` : 429 + `Retry-After` au-delà du budget, et bannissement
-  temporaire automatique d'une IP qui insiste.
+Deux étages, réglés séparément (décision utilisateur du 29/09/2026, après
+lecture des journaux de production : 79.137.33.236, un VPS, bouclait
+`/export/json?t=promo` (401) → `/app-state?t=promo` → `/meta?t=promo`
+jusqu'à deux fois par seconde) :
+
+1. PROTECTIONS TOUJOURS ACTIVES (sans aucune variable) :
+   - la liste de blocage (IP, plage, User-Agent) → 403 sobre, avant tout
+     traitement ;
+   - le bannissement sur REFUS D'ACCÈS RÉPÉTÉS : une IP anonyme qui cumule
+     `CAL_IUT_AA_REFUS_SEUIL` réponses 401/403 en `CAL_IUT_AA_REFUS_FENETRE`
+     est bannie `CAL_IUT_AA_REFUS_DUREE` (blocage persistant, visible et
+     levable dans l'écran Trafic). Un humain ne se prend pas 30 refus en
+     10 minutes ; un script qui essaie des routes fermées, si. Coupé par
+     `CAL_IUT_AA_REFUS=off` ;
+   - le comptage du trafic par IP (écran Trafic), léger et borné.
+   Interrupteur général de secours : `CAL_IUT_AA_PROTECTIONS=off` rend tout
+   le module inerte.
+2. LIMITATION DE DÉBIT, variable `CAL_IUT_ANTI_ASPIRATION` :
+   - `off` (DÉFAUT) : aucune limitation de débit ;
+   - `observe` : compte et journalise les dépassements de budget (logger
+     `cal_iut.anti_aspiration`), laisse tout passer ;
+   - `enforce` : 429 + `Retry-After` au-delà du budget, et bannissement
+     temporaire d'une IP qui insiste malgré les 429.
 
 Identité et catégorie d'une requête (cf. `classer`) :
 - clé API (`Authorization: Bearer caliut_…`, ou le jeton MCP
@@ -25,6 +40,12 @@ Identité et catégorie d'une requête (cf. `classer`) :
   (flux d'agenda), `public` (tout le reste : liens `?t=`, pages) ;
 - `statique` (`/assets/`, `/favicon.svg`, `/robots.txt`, `/health`,
   `/healthz`) : jamais limité ni compté.
+
+Seules les IP ANONYMES peuvent être bannies automatiquement : jamais un
+compte connecté ni une clé API valide (on ne bannit pas un utilisateur de
+son propre outil ; une session expirée est traitée côté interface, qui
+cesse de sonder et revient à l'écran de connexion — cf. `App.tsx`,
+état `refuse`).
 
 Un compte a des budgets plus larges qu'une IP anonyme : il a fallu un
 mot de passe pour l'obtenir, et un utilisateur connecté fait beaucoup plus
@@ -83,8 +104,27 @@ def proxys_de_confiance() -> str:
     return (os.environ.get(PROXYS_ENV) or "").strip() or PROXYS_DEFAUT
 
 
+PROTECTIONS_ENV = "CAL_IUT_AA_PROTECTIONS"
+REFUS_ENV = "CAL_IUT_AA_REFUS"
+
+
+def _interrupteur(nom: str) -> bool:
+    """Actif sauf `off`/`0`/`non`/`false` explicite."""
+    return (os.environ.get(nom) or "on").strip().lower() not in ("off", "0", "non", "false", "no")
+
+
+def protections_actives() -> bool:
+    """Liste de blocage, bannissement sur refus, comptage : actifs par
+    défaut ; `CAL_IUT_AA_PROTECTIONS=off` coupe tout (secours)."""
+    return _interrupteur(PROTECTIONS_ENV)
+
+
+def bannissement_refus_actif() -> bool:
+    return protections_actives() and _interrupteur(REFUS_ENV)
+
+
 def mode() -> str:
-    """Mode courant — relu à chaque requête (un `os.environ.get`, rien de
+    """Mode de la LIMITATION DE DÉBIT — relu à chaque requête (un `os.environ.get`, rien de
     plus) : les tests le changent à chaud, et une valeur inconnue retombe
     sur `off`, jamais sur un blocage."""
     valeur = (os.environ.get(MODE_ENV) or "off").strip().lower()
@@ -186,9 +226,20 @@ CATEGORIES = tuple(_BUDGETS_DEFAUT)
 # compte reçoit des 429, rien de plus.
 _BAN_DEFAUT = {"seuil": 30, "fenetre": "10min", "duree": "1h"}
 
+# Bannissement sur refus d'accès répétés (TOUJOURS ACTIF) : une IP anonyme
+# qui cumule 30 réponses 401/403 en 10 minutes est bannie 24 h. Cas réel du
+# 29/09/2026 : ≈ 19 401 en 90 s pour une seule IP. Un vrai utilisateur :
+# quelques 401 au plus quand sa session expire (l'interface revient alors à
+# l'écran de connexion et ne sonde plus rien). Ne comptent pas : `/auth/*`
+# (limiteur dédié, et un mot de passe mal tapé n'est pas une aspiration),
+# les sondes de version, la santé, les fichiers statiques, les 403 émis par
+# la liste de blocage elle-même, les IP exemptées.
+_REFUS_DEFAUT = {"seuil": 30, "fenetre": "10min", "duree": "24h"}
+_REFUS_NON_COMPTES = frozenset({"/api/v1/version", "/ics/version", "/health", "/healthz"})
+
 _VARIABLES = (
     MODE_ENV, "CAL_IUT_AA_EXEMPTS", "CAL_IUT_AA_BAN_SEUIL", "CAL_IUT_AA_BAN_FENETRE",
-    "CAL_IUT_AA_BAN_DUREE",
+    "CAL_IUT_AA_BAN_DUREE", "CAL_IUT_AA_REFUS_SEUIL", "CAL_IUT_AA_REFUS_FENETRE", "CAL_IUT_AA_REFUS_DUREE",
 ) + tuple(f"CAL_IUT_AA_{c.upper()}{s}" for c in CATEGORIES for s in ("", "_BURST"))
 
 
@@ -198,6 +249,9 @@ class Configuration:
     ban_seuil: int
     ban_fenetre_s: float
     ban_duree_s: float
+    refus_seuil: int
+    refus_fenetre_s: float
+    refus_duree_s: float
     exemptes: tuple[Any, ...]  # ip_network
     exemptes_texte: tuple[str, ...]
 
@@ -236,6 +290,10 @@ def _construire_configuration() -> Configuration:
         ban_seuil=max(1, int(_lire_env("CAL_IUT_AA_BAN_SEUIL", _BAN_DEFAUT["seuil"], int))),
         ban_fenetre_s=_lire_env("CAL_IUT_AA_BAN_FENETRE", _BAN_DEFAUT["fenetre"], lire_duree),
         ban_duree_s=_lire_env("CAL_IUT_AA_BAN_DUREE", _BAN_DEFAUT["duree"], lire_duree),
+        # Jamais moins de 2 : un refus isolé ne bannit personne.
+        refus_seuil=max(2, int(_lire_env("CAL_IUT_AA_REFUS_SEUIL", _REFUS_DEFAUT["seuil"], int))),
+        refus_fenetre_s=_lire_env("CAL_IUT_AA_REFUS_FENETRE", _REFUS_DEFAUT["fenetre"], lire_duree),
+        refus_duree_s=_lire_env("CAL_IUT_AA_REFUS_DUREE", _REFUS_DEFAUT["duree"], lire_duree),
         exemptes=tuple(exemptes),
         exemptes_texte=tuple(textes),
     )
@@ -394,6 +452,9 @@ class Blocage:
     cree_le: str
     expire_le: str | None = None
     automatique: bool = False
+    # « manuel » (admin, CLI), « refus » (refus d'accès répétés, toujours
+    # actif) ou « debit » (429 répétés, mode `enforce` seulement).
+    source: str = "manuel"
 
     def expire(self, maintenant: float) -> bool:
         fin = _epoch(self.expire_le)
@@ -472,6 +533,10 @@ class ListeBlocages:
                 donnees = json.loads(chemin.read_text(encoding="utf-8"))
                 for brut in donnees.get("blocages", []):
                     champs = {k: brut.get(k) for k in Blocage.__dataclass_fields__ if k in brut}
+                    if "source" not in champs:
+                        # Fichier d'avant l'origine : un bannissement
+                        # automatique ne pouvait venir que du débit.
+                        champs["source"] = "debit" if champs.get("automatique") else "manuel"
                     blocages.append(Blocage(**champs))
             except (OSError, ValueError, TypeError):
                 # Fichier illisible : on garde la liste en mémoire plutôt que
@@ -517,8 +582,11 @@ class ListeBlocages:
             maintenant = time.time()
             return [b for b in self._blocages if inclure_expires or not b.expire(maintenant)]
 
-    def correspondance(self, ip: str, user_agent: str, *, inclure_auto: bool) -> Blocage | None:
-        """Premier blocage actif qui vise ce client, ou `None`."""
+    def correspondance(self, ip: str, user_agent: str, *, inclure_debit: bool) -> Blocage | None:
+        """Premier blocage actif qui vise ce client, ou `None`. Les
+        bannissements pour débit (429 répétés) ne valent qu'en `enforce`
+        (`inclure_debit`) ; les blocages manuels et les bannissements sur
+        refus d'accès valent toujours."""
         with self._verrou:
             self._recharger_si_besoin()
             if not self._blocages:
@@ -526,7 +594,7 @@ class ListeBlocages:
             maintenant = time.time()
 
             def actif(b: Blocage) -> bool:
-                return (inclure_auto or not b.automatique) and not b.expire(maintenant)
+                return (inclure_debit or b.source != "debit") and not b.expire(maintenant)
 
             texte, adresse = _ip_normalisee(ip)
             b = self._ips.get(texte)
@@ -546,7 +614,7 @@ class ListeBlocages:
     # -- écriture --
     def ajouter(
         self, type_: str, valeur: str, motif: str, auteur: str, duree_s: float | None = None,
-        *, automatique: bool = False,
+        *, source: str = "manuel",
     ) -> Blocage:
         valeur = valider_cible(type_, valeur)
         motif = (motif or "").strip()[:200] or "sans motif"
@@ -565,7 +633,7 @@ class ListeBlocages:
             nouveau = Blocage(
                 id=uuid.uuid4().hex[:10], type=type_, valeur=valeur, motif=motif,
                 auteur=(auteur or "inconnu")[:120], cree_le=_maintenant_iso(), expire_le=expire_le,
-                automatique=automatique,
+                automatique=source != "manuel", source=source,
             )
             self._ecrire([*garder, nouveau])
             return nouveau
@@ -603,7 +671,9 @@ _MAX_CLIENTS = 20_000
 _MAX_UA, _MAX_CHEMINS, _MAX_T = 5, 8, 200
 
 # Indices des compteurs d'une tranche.
-_REQ, _DEPASSE, _REFUS403, _PUBLIQUES = 0, 1, 2, 3
+# `_REFUS403` : refusé par la liste de blocage ; `_REFUS_ACCES` : 401/403
+# rendu par l'application (route fermée, lien sans droit…).
+_REQ, _DEPASSE, _REFUS403, _PUBLIQUES, _REFUS_ACCES = 0, 1, 2, 3, 4
 
 
 def _incrementer_borne(compteurs: dict[str, int], cle: str, maximum: int) -> None:
@@ -620,7 +690,9 @@ def _incrementer_borne(compteurs: dict[str, int], cle: str, maximum: int) -> Non
 
 
 class _Client:
-    __slots__ = ("categories", "chemins", "compte", "dernier", "ordre", "refus", "t_vus", "tranches", "ua")
+    __slots__ = (
+        "categories", "chemins", "compte", "dernier", "ordre", "refus", "refus_acces", "t_vus", "tranches", "ua",
+    )
 
     def __init__(self) -> None:
         self.tranches: dict[int, list[int]] = {}
@@ -631,8 +703,11 @@ class _Client:
         self.dernier = 0.0
         self.t_vus: set[str] = set()
         self.compte: int | None = None
-        # Instants (monotones) des derniers refus, pour le bannissement.
+        # Instants (monotones) des derniers 429, pour le bannissement (débit).
         self.refus: deque[float] = deque()
+        # Instants (monotones) des derniers 401/403, pour le bannissement
+        # sur refus d'accès répétés.
+        self.refus_acces: deque[float] = deque()
 
 
 def _chemin_affiche(chemin: str) -> str:
@@ -665,12 +740,7 @@ class Trafic:
                 if len(self._clients) >= _MAX_CLIENTS:
                     self._balayer(maintenant)
                 client = self._clients[ip] = _Client()
-            compteurs = client.tranches.get(tranche)
-            if compteurs is None:
-                compteurs = client.tranches[tranche] = [0, 0, 0, 0]
-                client.ordre.append(tranche)
-                while client.ordre and client.ordre[0] <= tranche - _TRANCHES_24H:
-                    client.tranches.pop(client.ordre.popleft(), None)
+            compteurs = self._tranche(client, tranche)
             compteurs[_REQ] += 1
             if depassement:
                 compteurs[_DEPASSE] += 1
@@ -688,6 +758,38 @@ class Trafic:
                 # Empreinte courte, jamais la valeur : on veut savoir COMBIEN
                 # de liens différents une IP parcourt, pas lesquels.
                 client.t_vus.add(hashlib.sha256(t.encode()).hexdigest()[:12])
+
+    @staticmethod
+    def _tranche(client: _Client, tranche: int) -> list[int]:
+        compteurs = client.tranches.get(tranche)
+        if compteurs is None:
+            compteurs = client.tranches[tranche] = [0, 0, 0, 0, 0]
+            client.ordre.append(tranche)
+            while client.ordre and client.ordre[0] <= tranche - _TRANCHES_24H:
+                client.tranches.pop(client.ordre.popleft(), None)
+        return compteurs
+
+    def compter_refus_acces(self, ip: str, seuil: int, fenetre_s: float) -> int:
+        """Un 401/403 rendu à cette IP : compté pour l'écran Trafic, et pour
+        le bannissement. Rend le nombre de refus dans la fenêtre (borné à
+        `seuil` : mémoire constante)."""
+        maintenant_mono = time.monotonic()
+        maintenant = time.time()
+        with self._verrou:
+            client = self._clients.get(ip)
+            if client is None:
+                if len(self._clients) >= _MAX_CLIENTS:
+                    self._balayer(maintenant)
+                client = self._clients[ip] = _Client()
+                client.dernier = maintenant
+            self._tranche(client, int(maintenant // PAS_S))[_REFUS_ACCES] += 1
+            file = client.refus_acces
+            file.append(maintenant_mono)
+            while file and maintenant_mono - file[0] > fenetre_s:
+                file.popleft()
+            while len(file) > seuil:
+                file.popleft()
+            return len(file)
 
     def noter_refus(self, ip: str, seuil: int, fenetre_s: float) -> int:
         """Enregistre un refus pour le bannissement ; rend le nombre de refus
@@ -711,6 +813,7 @@ class Trafic:
             client = self._clients.get(ip)
             if client is not None:
                 client.refus.clear()
+                client.refus_acces.clear()
 
     def _balayer(self, maintenant: float) -> None:
         limite = maintenant - 86400
@@ -736,12 +839,12 @@ class Trafic:
         seuils = {nom: actuelle - s // PAS_S + 1 for nom, s in FENETRES.items()}
         seuil_fenetre = actuelle - max(1, fenetre_s // PAS_S) + 1
         lignes = []
-        total = {"requetes": 0, "depassements": 0, "refus_403": 0, "clients": 0}
+        total = {"requetes": 0, "depassements": 0, "refus_403": 0, "refus_acces": 0, "clients": 0}
         with self._verrou:
             for ip, c in self._clients.items():
                 par = {nom: 0 for nom in FENETRES}
-                req = dep = r403 = pub = 0
-                for tranche, (n, d, r, p) in c.tranches.items():
+                req = dep = r403 = pub = racc = 0
+                for tranche, (n, d, r, p, a) in c.tranches.items():
                     for nom, seuil in seuils.items():
                         if tranche >= seuil:
                             par[nom] += n
@@ -750,11 +853,13 @@ class Trafic:
                         dep += d
                         r403 += r
                         pub += p
-                if req == 0:
+                        racc += a
+                if req == 0 and racc == 0:
                     continue
                 total["requetes"] += req
                 total["depassements"] += dep
                 total["refus_403"] += r403
+                total["refus_acces"] += racc
                 total["clients"] += 1
                 ua = max(c.ua, key=c.ua.__getitem__) if c.ua else ""
                 chemins = sorted(c.chemins.items(), key=lambda kv: -kv[1])[:5]
@@ -767,6 +872,7 @@ class Trafic:
                     "part_publique": round(pub / req, 3) if req else 0.0,
                     "depassements": dep,
                     "refus_403": r403,
+                    "refus_acces": racc,
                     "user_agent": ua,
                     "user_agents_distincts": len(c.ua),
                     "chemins": [{"chemin": ch, "nb": nb} for ch, nb in chemins],
@@ -866,7 +972,11 @@ def _parametre_t(scope: dict) -> str | None:
 
 class AntiAspiration:
     """Middleware ASGI pur. Placé à l'extérieur de `require_auth` : un
-    client bloqué est refusé avant toute lecture de session ou de base."""
+    client bloqué est refusé avant toute lecture de session ou de base.
+
+    Toujours actif (sauf `CAL_IUT_AA_PROTECTIONS=off`) : liste de blocage,
+    comptage, bannissement sur refus d'accès répétés. La limitation de débit
+    ne s'ajoute qu'avec `CAL_IUT_ANTI_ASPIRATION=observe|enforce`."""
 
     def __init__(self, app: Any) -> None:
         self.app = app
@@ -876,21 +986,37 @@ class AntiAspiration:
             await self.app(scope, receive, send)
             return
         m = mode()
-        if m == "off":
-            # Rien, pas même compter : c'est la promesse du mode par défaut.
+        if m == "off" and not protections_actives():
+            # Interrupteur de secours : plus rien, pas même compter.
             await self.app(scope, receive, send)
             return
         try:
-            verdict = self._decider(scope, m)
+            verdict, ip_suivie = self._decider(scope, m)
         except Exception:
             logger.exception("anti-aspiration : erreur interne, requête laissée passer")
-            verdict = None
+            verdict, ip_suivie = None, None
         if verdict is not None:
             await _repondre(send, *verdict)
             return
-        await self.app(scope, receive, send)
+        if ip_suivie is None:
+            await self.app(scope, receive, send)
+            return
 
-    def _decider(self, scope: dict, m: str) -> tuple | None:
+        # Statut de la réponse : un 401/403 de l'application compte pour le
+        # bannissement sur refus d'accès répétés.
+        async def _send(message: dict) -> None:
+            if message.get("type") == "http.response.start" and message.get("status") in (401, 403):
+                try:
+                    _refus_acces(ip_suivie)
+                except Exception:
+                    logger.exception("anti-aspiration : comptage d'un refus impossible")
+            await send(message)
+
+        await self.app(scope, receive, _send)
+
+    def _decider(self, scope: dict, m: str) -> tuple[tuple | None, str | None]:
+        """(réponse à rendre tout de suite ou None, IP dont surveiller les
+        refus d'accès ou None)."""
         chemin = scope.get("path") or "/"
         client = scope.get("client")
         ip = _ip_normalisee(client[0])[0] if client else "inconnue"
@@ -901,30 +1027,48 @@ class AntiAspiration:
         enforce = m == "enforce"
 
         if chemin not in _SANTE:
-            blocage = blocages.correspondance(ip, ua, inclure_auto=enforce)
+            blocage = blocages.correspondance(ip, ua, inclure_debit=enforce)
             if blocage is not None:
+                # Ce 403-là ne compte pas comme refus d'accès : il ne passe
+                # pas par l'application, donc pas par `_send`.
                 if categorie != "statique":
                     trafic.noter(ip, categorie=categorie, chemin=chemin, user_agent=ua, compte=compte, refus_403=True)
-                return 403, {"detail": "Accès refusé."}
+                return (403, {"detail": "Accès refusé."}), None
         if categorie == "statique":
-            return None
+            return None, None
 
         conf = configuration()
-        budget = conf.budgets[categorie]
         exempte = False
         if conf.exemptes:
             adresse = _ip_normalisee(ip)[1]
             exempte = adresse is not None and any(
                 adresse.version == r.version and adresse in r for r in conf.exemptes
             )
-        attente = None if exempte else seaux.consommer(f"{categorie}|{identite}", budget.debit, budget.rafale)
+        suivie = (
+            ip
+            if (
+                bannissement_refus_actif()
+                and identite.startswith("ip:")
+                # Une adresse réelle seulement (pas « testclient », pas un
+                # socket Unix) : c'est elle que le bannissement inscrira.
+                and _ip_normalisee(ip)[1] is not None
+                and not exempte
+                and not chemin.startswith("/auth/")
+                and chemin not in _REFUS_NON_COMPTES
+            )
+            else None
+        )
+        attente = None
+        if m != "off" and not exempte:
+            budget = conf.budgets[categorie]
+            attente = seaux.consommer(f"{categorie}|{identite}", budget.debit, budget.rafale)
         t = _parametre_t(scope) if categorie in ("public", "sonde", "ics") else None
         trafic.noter(
             ip, categorie=categorie, chemin=chemin, user_agent=ua, compte=compte,
             depassement=attente is not None, t=t,
         )
         if attente is None:
-            return None
+            return None, suivie
 
         _journaliser_depassement(m, ip, categorie, identite, chemin, attente)
         if identite.startswith("ip:"):
@@ -933,8 +1077,8 @@ class AntiAspiration:
                 trafic.oublier_refus(ip)
                 if enforce:
                     blocages.ajouter(
-                        "ip", ip, f"{nb} refus en moins de {int(conf.ban_fenetre_s // 60)} min",
-                        "automatique", conf.ban_duree_s, automatique=True,
+                        "ip", ip, f"bannissement automatique : {nb} refus 429 en {_duree_courte(conf.ban_fenetre_s)}",
+                        "automatique", conf.ban_duree_s, source="debit",
                     )
                     logger.warning(
                         "bannissement ip=%s durée=%ss (%s refus en %ss)", ip, int(conf.ban_duree_s), nb,
@@ -943,11 +1087,40 @@ class AntiAspiration:
                 else:
                     logger.warning("bannissement (observation, non appliqué) ip=%s (%s dépassements)", ip, nb)
         if not enforce:
-            return None
+            return None, suivie
         secondes = max(1, math.ceil(attente))
-        return 429, {"detail": f"Trop de requêtes. Réessayez dans {secondes} seconde{'s' if secondes > 1 else ''}."}, [
+        return (429, {"detail": f"Trop de requêtes. Réessayez dans {secondes} seconde{'s' if secondes > 1 else ''}."}, [
             (b"retry-after", str(secondes).encode())
-        ]
+        ]), None
+
+
+def _duree_courte(secondes: float) -> str:
+    s = int(secondes)
+    if s % 86400 == 0 and s > 86400:
+        return f"{s // 86400} j"
+    if s % 3600 == 0:
+        return f"{s // 3600} h"
+    if s % 60 == 0:
+        return f"{s // 60} min"
+    return f"{s} s"
+
+
+def _refus_acces(ip: str) -> None:
+    """Un 401/403 de plus pour cette IP anonyme ; au seuil, bannissement
+    persistant (visible et levable dans l'écran Trafic)."""
+    conf = configuration()
+    nb = trafic.compter_refus_acces(ip, conf.refus_seuil, conf.refus_fenetre_s)
+    if nb < conf.refus_seuil:
+        return
+    trafic.oublier_refus(ip)
+    blocages.ajouter(
+        "ip", ip, f"bannissement automatique : {nb} refus 401/403 en {_duree_courte(conf.refus_fenetre_s)}",
+        "automatique", conf.refus_duree_s, source="refus",
+    )
+    logger.warning(
+        "bannissement ip=%s durée=%s motif=%s refus 401/403 en %s", ip, _duree_courte(conf.refus_duree_s), nb,
+        _duree_courte(conf.refus_fenetre_s),
+    )
 
 
 class EnTeteNoIndex:
@@ -982,6 +1155,15 @@ def etat_public() -> dict:
     return {
         "mode": mode(),
         "variable": MODE_ENV,
+        "protections": {
+            "actives": protections_actives(),
+            "variable": PROTECTIONS_ENV,
+            "refus_actif": bannissement_refus_actif(),
+            "refus_variable": REFUS_ENV,
+            "refus_seuil": conf.refus_seuil,
+            "refus_fenetre_s": conf.refus_fenetre_s,
+            "refus_duree_s": conf.refus_duree_s,
+        },
         "budgets": [
             {
                 "categorie": b.categorie, "nombre": b.nombre, "periode_s": b.periode_s, "rafale": b.rafale,
