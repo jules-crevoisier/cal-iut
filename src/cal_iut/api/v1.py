@@ -50,8 +50,9 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from cal_iut.api import accounts, cache_http, limiteur, revision
+from cal_iut.api import accounts, cache_http, limiteur, reference, revision
 from cal_iut.api import v1_vues as vues
+from cal_iut.api.reference import ManquesV1
 
 # Plafond de débit de l'API v1 (audit du 29/09/2026, P1-3 : le limiteur ne
 # couvrait que l'authentification). Large : l'interface web ne sonde que
@@ -111,7 +112,7 @@ OPENAPI_TAGS = [
     {"name": "v1 · SAE", "description": "Situations d'apprentissage et d'évaluation : maquette, encadrants, "
      "jours réservés, séances placées et non placées."},
     {"name": "v1 · calendrier", "description": "Jours fériés, vacances, évènements, jours SAE, réservations de salles."},
-    {"name": "v1 · contrôles", "description": "Écran « À traiter », doublons, contraintes et leur verdict."},
+    {"name": "v1 · contrôles", "description": "Écran « À traiter », doublons, contraintes et leur verdict, données à compléter."},
     {"name": "v1 · suivi", "description": "Modifications manuelles depuis la génération, tâches de l'équipe."},
     {"name": "v1 · statistiques", "description": "Charges : heures par enseignant, groupe, cours, parcours ; occupation des salles."},
     {"name": "v1 · administration", "description": "État de la synchronisation Celcat (comptes admin)."},
@@ -1741,6 +1742,45 @@ def a_traiter(
         ),
         en_plus=("doublons" if avec_doublons else "sans-doublons",),
     )
+
+
+# ── Données de référence manquantes ─────────────────────────────────────
+
+_EXEMPLE_MANQUES = {
+    "revision": 1790000000000, "modifie_le": "2026-09-29T10:12:03+00:00", "total": 2,
+    "par_gravite": {"bloque_celcat": 1, "bloque_envoi_liens": 1}, "par_famille": {"enseignant": 2},
+    "manques": [
+        {"id": "enseignant:JHU:code_celcat", "famille": "enseignant", "cle": "JHU", "libelle": "Jules Huet",
+         "champ": "code_celcat", "champ_libelle": "Correspondance Celcat", "gravite": "bloque_celcat",
+         "usage": "36 séances placées", "nb_seances": 36, "role_requis": "admin",
+         "ou_completer": "Écran Celcat, ou ici pour un administrateur.", "ecran": {"vue": "celcat"}},
+        {"id": "enseignant:MNI:email", "famille": "enseignant", "cle": "MNI", "libelle": "Marc Nino",
+         "champ": "email", "champ_libelle": "Adresse mail", "gravite": "bloque_envoi_liens",
+         "usage": "4 séances placées", "nb_seances": 4, "role_requis": "edit",
+         "ou_completer": "Annuaire des enseignants, fiche de l'enseignant ou « À traiter ».",
+         "ecran": {"vue": "prof", "prof": "MNI"}},
+    ],
+}
+
+
+@router.get(
+    "/manques", response_model=ManquesV1, tags=_TAGS_CONTROLES,
+    summary="Données de référence à compléter", responses=_exemple(_EXEMPLE_MANQUES),
+)
+def manques(request: Request) -> Response:
+    """Tout ce que l'appli signale comme manquant dans les données de
+    référence : adresse mail ou nom d'un enseignant, correspondance Celcat
+    d'un enseignant, d'une salle, d'une matière ou d'un groupe, type d'une
+    salle ajoutée à la main, intitulé d'une matière, salle d'une séance
+    placée. Même liste que l'écran « À traiter » (section « Données à
+    compléter ») et `GET /reference/manques`.
+
+    `gravite` : `bloque_celcat` (la séance ne peut pas être recopiée dans
+    Celcat), `bloque_envoi_liens` (l'enseignant ne reçoit pas son lien
+    personnel), `cosmetique`. `role_requis` : rôle qui peut compléter depuis
+    l'appli (`null` = fichier de configuration, déploiement). Aucune valeur
+    n'y figure — ni adresse, ni code Celcat : seulement ce qui manque."""
+    return _repondre(request, lambda _v: reference.manques())
 
 
 # ── Contraintes ─────────────────────────────────────────────────────────

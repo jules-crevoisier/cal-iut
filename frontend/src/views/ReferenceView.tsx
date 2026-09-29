@@ -26,6 +26,7 @@ import { downloadDirectoryCsv, type CsvRow } from "../utils/csv";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { Onglets } from "../components/Onglets";
+import { MailManquant } from "./Annuaires";
 import "../styles/outils.css";
 import "./ReferenceView.css";
 
@@ -719,10 +720,16 @@ function DirectoryRow({ row, showMail = false }: { row: LigneAnnuaire; showMail?
             >
               {etatEnvoi === "envoi" ? "Envoi…" : etatEnvoi === "ok" ? "Envoyé" : etatEnvoi === "echec" ? "Échec" : "Envoyer"}
             </button>
+          ) : row.kind === "prof" ? (
+            // Complétable ici (29/09/2026) — l'adresse ne vit plus seulement
+            // dans `data/config/teacher_contacts.yaml`, figé dans l'image.
+            <MailManquant
+              code={row.code}
+              nom={row.label}
+              lectureSeule={<span className="ref-sans-mail">pas d'adresse</span>}
+            />
           ) : (
-            <span className="ref-sans-mail" title="Adresse à compléter dans data/config/teacher_contacts.yaml">
-              pas d'adresse
-            </span>
+            <span className="ref-sans-mail">pas d'adresse</span>
           )}
           {erreurEnvoi && <div className="alerte small">{erreurEnvoi}</div>}
         </td>

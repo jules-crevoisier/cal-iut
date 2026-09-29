@@ -345,6 +345,26 @@ def load_teacher_contacts(config_dir: Path) -> dict[str, str]:
     saisi à la main et n'est jamais écrasé par une régénération. Absent ou vide
     est un cas NORMAL, pas une erreur : le brouillon s'ouvre alors sans
     destinataire.
+
+    Complété (29/09/2026) par les adresses saisies depuis l'appli — annuaire,
+    fiche enseignant, « À traiter » —, persistées dans le volume
+    (`ingestion/surcharges_reference.py`) ; le fichier garde le dernier mot.
+    """
+    from cal_iut.ingestion import surcharges_reference
+
+    return {**surcharges_reference.valeurs("enseignants", "email"), **load_teacher_contacts_yaml(config_dir)}
+
+
+def load_teacher_contacts_yaml(config_dir: Path) -> dict[str, str]:
+    """Les seules adresses du fichier, SANS les saisies faites dans l'appli.
+
+    `load_teacher_contacts` complète celles-ci par les adresses saisies
+    depuis l'annuaire (`ingestion/surcharges_reference.py`, dans le volume
+    `data/state/`) : le fichier est dans l'image Docker, le compléter
+    demandait un déploiement. Le fichier garde le dernier mot — une adresse
+    qu'il fournit passe devant une saisie. `api/reference.py` a besoin de
+    distinguer les deux sources (on ne « complète » pas ce que le fichier
+    donne déjà), d'où cette fonction à part.
     """
     path = config_dir / "teacher_contacts.yaml"
     if not path.exists():

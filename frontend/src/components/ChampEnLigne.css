@@ -1,0 +1,99 @@
+/* Compléter en ligne (29/09/2026). Jetons uniquement : le mode sombre suit.
+   Au repos, même dessin que la pastille « manquant » (`.pill.dot.warn`),
+   rendue cliquable ; en édition, un champ et deux boutons de 28 px sur une
+   ligne, qui passent à la ligne sur téléphone plutôt que de déborder. */
+
+.champ-en-ligne-hote {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.pill.champ-ajouter {
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  min-height: 24px;
+}
+
+.pill.champ-ajouter:hover {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.pill.champ-ajouter:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.champ-en-ligne {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.champ-en-ligne input,
+.champ-en-ligne select {
+  min-height: 28px;
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 0.82rem;
+  min-width: 0;
+  width: auto;
+  flex: 1 1 180px;
+  max-width: 280px;
+}
+
+.champ-en-ligne input[type="number"] {
+  flex: 0 0 90px;
+  width: 90px;
+}
+
+.champ-en-ligne .btn--sm {
+  min-height: 28px;
+}
+
+.champ-en-ligne input[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+
+.champ-en-ligne-erreur {
+  flex: 1 0 100%;
+  font-size: 0.78rem;
+  color: var(--bad-text);
+  white-space: normal;
+}
+
+.champ-en-ligne-fait {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.champ-en-ligne-valeur {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Au doigt : cibles de 44 px (docs/DESIGN.md, principe 6). */
+@media (pointer: coarse) {
+  .pill.champ-ajouter,
+  .champ-en-ligne input,
+  .champ-en-ligne select,
+  .champ-en-ligne .btn--sm {
+    min-height: 44px;
+    height: auto;
+  }
+}

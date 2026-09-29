@@ -1,0 +1,60 @@
+/* Données à compléter (29/09/2026) — jetons uniquement. */
+
+.completer-manque {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.completer-manque-note {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: normal;
+}
+
+/* En tête de fiche : à plat, sous le bandeau d'identité (pas de carte,
+   cf. docs/DESIGN.md « Gabarit de page »), une ligne par donnée. */
+.manques-fiche {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.manques-fiche-titre {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.manques-fiche-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.manques-fiche-liste li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.manques-fiche-champ {
+  font-size: 0.85rem;
+  color: var(--ink);
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   applyFeedback,
@@ -76,6 +76,7 @@ import { KanbanView } from "./views/KanbanView";
 import { SalleView } from "./views/SalleView";
 import { SallesLibresView } from "./views/SallesLibresView";
 import { TodoView } from "./views/TodoView";
+import { ContexteDroits, type Droits } from "./contexts/Droits";
 
 const DEFAULT_PARCOURS = "BUT1";
 // Serveur injoignable : nouvelle tentative à ce rythme tant que dure la panne.
@@ -373,11 +374,17 @@ export function App() {
     if (activeTab === "promo") void loadPromoTimetable();
     void rafraichirSante();
   };
-  const { verifierMaintenant } = useRevision({
+  const { verifierMaintenant, revision: revisionServeur } = useRevision({
     actif: !!readOnlyTarget || compteActif,
     intervalleMs: readOnlyTarget ? 3 * 60_000 : 30_000,
     onChange: toutRecharger,
   });
+
+  const roleCompte = !readOnlyTarget && compteActif ? (moi?.role ?? null) : null;
+  const droits = useMemo<Droits>(
+    () => ({ role: roleCompte, revision: revisionServeur, apresEnregistrement: verifierMaintenant }),
+    [roleCompte, revisionServeur, verifierMaintenant],
+  );
 
   // Pendant une panne : nouvelle tentative régulière (et immédiate avec
   // « Réessayer »). Tant que le compte est inconnu, c'est `/auth/me` qu'on
@@ -602,6 +609,10 @@ export function App() {
     {/* Semaine partagée par toutes les vues (barre supérieure) — absente sur
         un lien public, où chaque page garde sa propre navigation. */}
     <ContexteSemaine.Provider value={readOnlyTarget ? null : { index: displayWeek, setIndex: setDisplayWeek }}>
+    {/* Qui peut compléter une donnée manquante (mail, nom, salle, Celcat) :
+        aucun rôle sur un lien public, donc le manque s'y affiche sans
+        bouton. Après une saisie, la révision est relue tout de suite. */}
+    <ContexteDroits.Provider value={droits}>
     <div className={`app ${readOnlyTarget ? "read-only-mode" : ""}`}>
       {/* Lien d'évitement : premier élément focusable de la page, il permet à
           qui navigue au clavier de sauter la navigation pour atteindre
@@ -987,6 +998,7 @@ export function App() {
         />
       )}
     </div>
+    </ContexteDroits.Provider>
     </ContexteSemaine.Provider>
     </ContextePreferences.Provider>
   );

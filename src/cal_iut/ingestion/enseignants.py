@@ -86,9 +86,30 @@ def enseignants_declares(config_dir: Path) -> dict[str, str]:
     pire, un enseignant reste introuvable dans la liste — ce qui était le
     comportement d'avant — plutôt que de faire tomber tout l'état applicatif.
     """
+    noms = noms_officiels(config_dir)
+    # Noms saisis depuis l'appli (`surcharges_reference.py`) : ils comblent
+    # un absent, jamais ne renomment quelqu'un qu'une source officielle
+    # connaît — même règle que les suppléments ci-dessus.
+    from cal_iut.ingestion import surcharges_reference
+
+    for code, nom in surcharges_reference.valeurs("enseignants", "nom").items():
+        code_propre = code.strip().upper()
+        if noms.get(code_propre, code_propre) == code_propre:
+            noms[code_propre] = nom
+    return noms
+
+
+def noms_officiels(config_dir: Path) -> dict[str, str]:
+    """Comme `enseignants_declares`, sans les noms saisis dans l'appli : ce
+    que disent la feuille officielle et `enseignants_supplementaires.yaml`.
+    Sert à `api/reference.py` pour ne pas « compléter » un nom déjà connu."""
     config_dir = Path(config_dir)
     racine = config_dir.parent.parent
     noms = _depuis_supplements(config_dir)
-    # La feuille officielle a le dernier mot sur le nom.
-    noms.update(_depuis_contraintes(racine))
+    # La feuille officielle a le dernier mot sur le nom — sauf quand elle
+    # n'en donne pas (`nom_complet` vide : elle rend le code) : un
+    # supplément qui, lui, a un nom ne doit pas être effacé par ce vide.
+    for code, nom in _depuis_contraintes(racine).items():
+        if nom != code or code not in noms:
+            noms[code] = nom
     return noms

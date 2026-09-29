@@ -126,8 +126,9 @@ def add_custom_room(room: Room) -> None:
         existantes = load_custom_rooms()
         if any(r.id == room.id for r in existantes):
             return
-        existantes.append(room)
-        brut["rooms"] = [_serialize_room(r) for r in existantes]
+        # Ajout au contenu BRUT, sans resérialiser les autres depuis `Room` :
+        # les champs propres au fichier (`type_choisi`) seraient perdus.
+        brut["rooms"] = list(brut["rooms"]) + [_serialize_room(room)]
         _write_raw(brut)
 
 
@@ -155,6 +156,54 @@ def set_room_override(room_id: str, *, placement_auto: bool) -> None:
             overrides[room_id] = {**overrides.get(room_id, {}), "placement_auto": placement_auto}
             brut["overrides"] = overrides
         _write_raw(brut)
+
+
+def ids_personnalisees() -> set[str]:
+    """Identifiants des salles créées depuis l'interface (pas `rooms.yaml`)."""
+    return {r.id for r in load_custom_rooms()}
+
+
+def types_imposes() -> set[str]:
+    """Salles créées depuis l'interface dont le type n'a jamais été choisi.
+
+    `POST /rooms` impose `standard` sans rien demander : le type pilote
+    pourtant les règles génériques du placement automatique. Tant qu'il n'a
+    pas été confirmé (`completer_salle_personnalisee`), c'est une donnée à
+    compléter (`api/reference.py`), pas une information."""
+    return {
+        str(item.get("id"))
+        for item in _read_raw()["rooms"]
+        if isinstance(item, dict) and item.get("id") and not item.get("type_choisi")
+    }
+
+
+def completer_salle_personnalisee(
+    room_id: str, *, capacity: int | None = None, room_type: RoomType | None = None
+) -> dict[str, object]:
+    """Capacité et/ou type d'une salle CRÉÉE DEPUIS L'INTERFACE (29/09/2026,
+    « il faut pouvoir ajouter l'info et l'enregistrer »). Rend les valeurs
+    d'avant, pour le journal (`surcharges_reference.journaliser`).
+
+    Lève `KeyError` pour une salle du bâtiment : sa capacité et son type
+    viennent de `rooms.yaml`, tenu avec le code — les « compléter » ici
+    ferait deux sources pour une même donnée."""
+    with _verrou:
+        brut = _read_raw()
+        salles_brutes = list(brut["rooms"])
+        for item in salles_brutes:
+            if isinstance(item, dict) and str(item.get("id")) == room_id:
+                avant: dict[str, object] = {}
+                if capacity is not None:
+                    avant["capacity"] = item.get("capacity")
+                    item["capacity"] = int(capacity)
+                if room_type is not None:
+                    avant["room_type"] = item.get("room_type")
+                    item["room_type"] = room_type.value
+                    item["type_choisi"] = True
+                brut["rooms"] = salles_brutes
+                _write_raw(brut)
+                return avant
+    raise KeyError(room_id)
 
 
 def merge_into(rooms_du_batiment: list[Room]) -> list[Room]:

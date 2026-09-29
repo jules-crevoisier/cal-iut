@@ -166,6 +166,13 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
     monkeypatch.setattr(forced_pending, "_path", lambda: tmp_path / "forced_pending.json")
     monkeypatch.setattr(custom_rooms, "_path", lambda: tmp_path / "custom_rooms.json")
     monkeypatch.setattr(custom_sessions, "_path", lambda: tmp_path / "custom_sessions.json")
+    # Informations de référence complétées depuis l'appli (29/09/2026) et
+    # correspondances Celcat saisies à l'écran : même volume, même isolation.
+    from cal_iut.celcat import mappings as celcat_mappings
+    from cal_iut.ingestion import surcharges_reference
+
+    monkeypatch.setattr(surcharges_reference, "_path", lambda: tmp_path / "references.json")
+    monkeypatch.setattr(celcat_mappings, "_path", lambda: tmp_path / "celcat_mappings.json")
     # Overlay maquette (PATCH /placements/{id}/seance) — le module n'existe
     # pas encore au moment du TDD ; dès qu'il est là, l'isoler comme le reste.
     try:
