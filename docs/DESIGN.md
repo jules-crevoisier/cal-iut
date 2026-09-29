@@ -56,13 +56,20 @@ pas les raccourcis. On range, on clarifie, on accélère.
 | `--border`, `--border-strong` | séparateurs, contours de champs/boutons |
 | `--accent`, `--accent-hover`, `--accent-soft` | action principale, sélection |
 | `--good`, `--warn`, `--bad` (+ `-soft`, `-text`) | états |
-| `--type-cm`, `--type-td`, `--type-tp`, `--type-eval` | types de séance |
-| `--radius-sm` (4), `--radius` (6), `--radius-lg` (8) | rayons — rien au-delà de 8 px |
+| `--type-cm`, `--type-td`, `--type-tp`, `--type-eval` | marque de type (point, légende) |
+| `--cm-bg/fg/bd`, `--td-*`, `--tp-*`, `--ev-*` | aplat, texte et bord des cartes de séance |
+| `--pri-bg`, `--pri-fg` | bouton principal (noir en clair, blanc en sombre) |
+| `--rail-*` | navigation latérale |
+| `--radius-sm` (6), `--radius` (8), `--radius-lg` (12) | contrôles, cartes de séance, cartes de contenu |
 | `--control-h` (32 px) | hauteur des champs et boutons |
 | `--shadow-pop` | UNIQUEMENT pour ce qui flotte (modale, menu, infobulle) |
 
 Aucune couleur en dur dans les composants : toujours un jeton. Le mode sombre
-suit automatiquement si l'on n'utilise que des jetons.
+suit automatiquement si l'on n'utilise que des jetons. Les jetons sont définis
+trois fois : `:root` (clair), `@media (prefers-color-scheme: dark)` sous
+`:root:not([data-theme="light"])` (sombre du poste) et `:root[data-theme="dark"]`
+(sombre choisi). Le choix Système / Clair / Sombre est dans le menu du compte
+(`utils/theme.ts`, clé `cal-iut:theme`).
 
 ## Composants de base (déjà stylés globalement)
 
@@ -71,7 +78,7 @@ suit automatiquement si l'on n'utilise que des jetons.
 - Boutons : `.btn`, `.btn--primary` (= `.btn--accent`), `.btn--ghost`,
   `.btn--danger`, `.btn--sm`, `.btn--icon`.
 - Conteneurs : `.panel` (bordure, rayon 8, padding 14/16), `.view` (colonne,
-  gap). En-tête de page : `PageHeader` (titre + une ligne), déjà rendu par
+  gap). En-tête de page : la barre supérieure (`TopBar`, titre + une ligne), rendue par
   `App.tsx` — ne pas ajouter de second grand titre dans la vue.
 - Étiquettes : `.pill` (+ `.good`/`.warn`/`.bad`, `.dot`).
 - Tableaux : `table.ref` (en-tête collant, survol de ligne, alignement à
@@ -80,9 +87,11 @@ suit automatiquement si l'on n'utilise que des jetons.
 
 ## Typographie
 
-Police système, corps 14 px, interlignage 1,45, chiffres tabulaires. Titres en
+**Geist Sans** (texte) et **Geist Mono** (codes de cours, raccourcis),
+embarquées via `@fontsource`, aucune dépendance externe. Corps 14 px,
+interlignage 1,45, chiffres tabulaires. Titres en
 graisse 600, jamais plus de 1,2 rem dans une vue (le `h1` de page est dans
-`PageHeader`). Codes de cours en `--mono`. Pas de capitales forcées sauf les
+`TopBar`). Codes de cours en `--mono`. Pas de capitales forcées sauf les
 libellés de groupe de la navigation.
 
 ## Organisation du CSS
@@ -93,14 +102,36 @@ propres à un écran vont dans un fichier à côté de l'écran
 composant. En déplaçant un bloc hors d'`app.css`, le supprimer d'`app.css` :
 pas de doublon.
 
+## Direction visuelle « Lumière / Nuit » (v2, choisie sur maquettes)
+
+Clair « Lumière », sombre « Nuit », qui suit le réglage du poste.
+
+- Interface quasi monochrome : fonds blancs (noir profond en sombre), bordures
+  très légères, **aucune ombre sur les cartes** (`--shadow-pop` seulement pour
+  ce qui flotte). La couleur est réservée aux séances et aux états.
+- Bouton principal **noir** en clair, **blanc** en sombre (`.btn--primary`) ;
+  boutons secondaires blancs bordés.
+- Contrôles segmentés (jours, onglets, thème) : piste `--surface-3`, élément
+  actif blanc avec un anneau fin. Filtres en pastilles arrondies (999 px),
+  pastille active noire.
+- **Cartes de séance** : aplat pastel du type (`--td-bg`, bord `--td-bd`,
+  texte `--td-fg`), rayon 8, **pas de barre latérale colorée**. Ligne 1 : code
+  en Geist Mono 600 + type en petit ; ligne 2 : nom de la matière ; ligne 3 :
+  salle · enseignant abrégé. Le mode « couleurs par matière » reste en aplats.
+- Chiffres clés : 28 px graisse 600 dans des tuiles blanches bordées ; la
+  couleur d'état (`--bad`, `--warn`, `--good`) seulement sur la valeur ou un
+  point, jamais en fond ni en barre latérale.
+
 ## Coque de l'application (v2)
 
-- **Rail de navigation** (`components/SideNav.tsx`) : sombre (`--rail-*`),
-  icônes Lucide + libellés, repliable en icônes seules. Mêmes onglets et même
-  ordre qu'avant, « Accueil » en tête.
+- **Rail de navigation** (`components/SideNav.tsx`) : clair (`--rail-*`),
+  élément actif blanc avec anneau, icônes Lucide + libellés, repliable en
+  icônes seules (mémorisé). Mêmes onglets et même ordre qu'avant, « Accueil »
+  en tête.
 - **Barre supérieure** (`components/TopBar.tsx`), sur chaque écran : nom de la
   vue + une ligne, **semaine partagée** (flèches, liste de toutes les semaines,
-  « Aujourd'hui »), recherche (Ctrl K), état de synchronisation, compte.
+  « Aujourd'hui »), recherche (Ctrl K), état de synchronisation, compte (clé
+  API, thème, déconnexion).
   Une vue ne dessine donc **jamais** son propre titre de page ni sa propre
   navigation de semaine : elle lit `useSemaineGlobale()` (index d'affichage
   dans `weekRows`). `WeekStepper` et `NavSemaine` s'effacent d'eux-mêmes sous
@@ -109,8 +140,6 @@ pas de doublon.
 - **Accueil** (`views/AccueilView.tsx`) : tableau de bord — indicateurs
   cliquables, charge de la semaine par promo (carte de chaleur, une teinte),
   séances par semaine, corrections prioritaires, tâches, raccourcis.
-- Police : **IBM Plex Sans** (texte) et **IBM Plex Mono** (codes), embarquées
-  (`@fontsource`), aucune dépendance externe.
 
 ## Gabarit de page (v2)
 
