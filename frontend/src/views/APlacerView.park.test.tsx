@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Placement } from "../types";
+import type { ParkUiState } from "../features/park-week-move/parkWeekMove";
 import { emptyPayload } from "../test/payloadFixture";
 import { APlacerView } from "./APlacerView";
 
@@ -34,14 +35,19 @@ const inventaireVide = {
   resume: "Tout est placé.",
 };
 
-function parkState(selected = false) {
+// Forme actuelle de `ParkUiState` (file multi depuis le 03/09/2026) :
+// `{ items, selectedSessionId }`. L'ancienne forme `{ parked, selected }`
+// faisait lever `park.items` indéfini dans `APlacerView`.
+function parkState(selected = false): ParkUiState {
   return {
-    parked: {
-      sessionId: origin.session_id,
-      origin,
-      viaDisplayWeek: 1,
-    },
-    selected,
+    items: [
+      {
+        sessionId: origin.session_id,
+        origin,
+        viaDisplayWeek: 1,
+      },
+    ],
+    selectedSessionId: selected ? origin.session_id : null,
   };
 }
 
