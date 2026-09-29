@@ -1224,10 +1224,7 @@ export function PromoView({
                             const largeur = largeursParCreneau[s][i];
                             if (largeur === 0) return null;
                             const entries = byColSlot.get(`${i}-${s}`) ?? [];
-                            const busyHit = teacherBusyOnCell(teacherBusyMap, day, s, entries);
-                            const busyHint = busyHit ? (
-                              <span className="promocell__teacher-busy">{teacherBusyLabel(busyHit)}</span>
-                            ) : null;
+
                             const sae = payload.saeRows.find(
                               (x) => x.w === solverWeek && x.d === day && x.p === colParcours[i],
                             );
@@ -1249,6 +1246,12 @@ export function PromoView({
                             const eligibleManquante =
                               Boolean(placementActif) && colParcours[i] === placementActif?.parcours;
                             const eligible = eligiblePark || eligibleManquante;
+                            const colonneTiree = colonnesTirees.has(i);
+                            const busyHit =
+                              colonneTiree || eligible ? teacherBusyOnCell(teacherBusyMap, day, s, entries) : null;
+                            const busyHint = busyHit ? (
+                              <span className="promocell__teacher-busy">{teacherBusyLabel(busyHit)}</span>
+                            ) : null;
                             const cleCellule = `${solverWeek}-${day}-${s}`;
                             const placementProps = eligible
                               ? {
@@ -1271,7 +1274,6 @@ export function PromoView({
                             // État de dépôt : colonnes de la séance tirée
                             // seulement ; « conflit » si le groupe est déjà
                             // pris à cette heure ou l'enseignant ailleurs.
-                            const colonneTiree = colonnesTirees.has(i);
                             const autresIci = entries.some((r) => r.id !== draggingId);
                             const conflitDepot = colonneTiree && (autresIci || Boolean(busyHit));
                             const survolDepot =
@@ -1443,9 +1445,8 @@ export function PromoView({
             {!readOnly && (
               <p className="promo-raccourcis">
                 <kbd>←</kbd> <kbd>→</kbd> jour · <kbd>Maj</kbd>+<kbd>←</kbd> <kbd>→</kbd> semaine · <kbd>T</kbd>{" "}
-                aujourd'hui · <kbd>Échap</kbd> annuler un placement · <kbd>Ctrl</kbd>+<kbd>Z</kbd> annuler la dernière
-                action
-                {dragEnabled ? " · glisser une séance sur une autre pour les échanger, sur une barre de semaine pour la changer de semaine" : ""}
+                aujourd'hui · <kbd>Échap</kbd> abandonner le placement · <kbd>Ctrl</kbd>+<kbd>Z</kbd> annuler
+                {dragEnabled ? " · glisser sur une séance : échange · sur une barre de semaine : changer de semaine" : ""}
               </p>
             )}
           </div>

@@ -25,6 +25,8 @@ import { couleursMatiere } from "../utils/couleursMatiere";
 import { positionInfobulle } from "../utils/infobulle";
 import { usePreferences } from "../utils/preferences";
 import { shortGroupLabel } from "../utils/years";
+import { nomComplet } from "../utils/nomEnseignant";
+import "./TdWeekGrid.css";
 
 interface TdWeekGridProps {
   placements: Placement[];
@@ -39,6 +41,8 @@ interface TdWeekGridProps {
   parcours?: string;
   /** Un seul jour affiché (lecture mobile, cf. `DayStrip`) ; absent = les 5 jours. */
   onlyDay?: number | null;
+  /** Séance dont le détail est ouvert : repérée dans la grille. */
+  selectedId?: string | null;
 }
 
 interface DayBands {
@@ -100,6 +104,7 @@ export function TdWeekGrid({
   payload,
   parcours = "",
   onlyDay = null,
+  selectedId = null,
 }: TdWeekGridProps) {
   const [hover, setHover] = useState<{ placement: Placement; x: number; y: number } | null>(null);
   const couleursParMatiere = usePreferences().couleursParMatiere;
@@ -110,6 +115,18 @@ export function TdWeekGrid({
   const labelA = groupLabels[tpA] ?? "TP 1";
   const labelB = groupLabels[tpB] ?? "TP 2";
   const showPac = !parcours.includes("FC");
+  const teacherLabels = payload?.teacherLabels ?? {};
+  // Aujourd'hui, s'il fait partie de la semaine affichée : colonne repérée.
+  const aujourdhui = new Date();
+  const estAujourdhui = (day: number) => {
+    const d = payload ? dateForWeekDay(payload, displayWeek, day) : null;
+    return Boolean(
+      d &&
+        d.getFullYear() === aujourdhui.getFullYear() &&
+        d.getMonth() === aujourdhui.getMonth() &&
+        d.getDate() === aujourdhui.getDate(),
+    );
+  };
 
   const bandsByDay = useMemo(() => {
     const byDay: DayBands[] = Array.from({ length: DAY_COUNT }, () => ({
@@ -182,7 +199,13 @@ export function TdWeekGrid({
               Créneau
             </th>
             {days.map((day) => (
-              <th key={day} colSpan={2} scope="col" className="td-grid-dayhead">
+              <th
+                key={day}
+                colSpan={2}
+                scope="col"
+                className={`td-grid-dayhead${estAujourdhui(day) ? " td-grid-dayhead--auj" : ""}`}
+                aria-current={estAujourdhui(day) ? "date" : undefined}
+              >
                 <div>
                   {dayName(day)}
                   {payload && (
@@ -191,6 +214,7 @@ export function TdWeekGrid({
                       {formatShortDate(dateForWeekDay(payload, displayWeek, day))}
                     </span>
                   )}
+                  {estAujourdhui(day) && <span className="sr-only"> (aujourd'hui)</span>}
                 </div>
                 <div className="td-grid-tp-labels">
                   <span>{labelA}</span>
@@ -216,7 +240,7 @@ export function TdWeekGrid({
                   ))}
                 </tr>
               )}
-              <tr className={slot === 2 ? "td-grid-before-lunch" : undefined}>
+              <tr>
                 <th scope="row" className="td-grid-slotlabel">
                   {SLOT_TIMES[slot].label}
                 </th>
@@ -241,6 +265,8 @@ export function TdWeekGrid({
                         key={primarySpan.placement.session_id}
                         event={primarySpan}
                         groupLabels={groupLabels}
+                        teacherLabels={teacherLabels}
+                        selected={selectedId === primarySpan.placement.session_id}
                         onSelect={onSelect}
                         onHover={setHover}
                       />
@@ -321,6 +347,8 @@ export function TdWeekGrid({
                           key={e.placement.session_id}
                           event={e}
                           groupLabels={groupLabels}
+                          teacherLabels={teacherLabels}
+                          selected={selectedId === e.placement.session_id}
                           onSelect={onSelect}
                           onHover={setHover}
                         />
@@ -332,6 +360,8 @@ export function TdWeekGrid({
                           key={e.placement.session_id}
                           event={e}
                           groupLabels={groupLabels}
+                          teacherLabels={teacherLabels}
+                          selected={selectedId === e.placement.session_id}
                           onSelect={onSelect}
                           onHover={setHover}
                         />
@@ -359,8 +389,13 @@ export function TdWeekGrid({
             {hover.placement.is_eval ? " · Éval" : ""}
           </div>
           <div>Groupe : {hover.placement.group_ids.map((id) => groupLabels[id] ?? id).join(", ")}</div>
-          <div>Prof : {hover.placement.teacher_codes.join(", ") || "—"}</div>
-          <div>Salle : {hover.placement.room_label ?? "—"}</div>
+          <div>
+            Enseignant :{" "}
+            {hover.placement.teacher_codes.map((c) => (teacherLabels[c] ? nomComplet(teacherLabels[c]!) : c)).join(", ") ||
+              "—"}
+          </div>
+          <div>Salle : {hover.placement.room_label ?? "à définir"}</div>
+          {hover.placement.locked && <div>Verrouillée</div>}
           <div>
             {dayName(hover.placement.day)} · {slotLabel(hover.placement.slot)}
           </div>
@@ -373,23 +408,30 @@ export function TdWeekGrid({
 function SessionBlock({
   event,
   groupLabels,
+  teacherLabels,
+  selected,
   onSelect,
   onHover,
 }: {
   event: CellEvent;
   groupLabels: Record<string, string>;
+  teacherLabels: Record<string, string>;
+  selected: boolean;
   onSelect: (p: Placement | null) => void;
   onHover: (v: { placement: Placement; x: number; y: number } | null) => void;
 }) {
   const p = event.placement;
   const short = shortGroupLabel(p.group_ids, groupLabels);
   const typeClass = p.session_type.toLowerCase();
+  const enseignants = p.teacher_codes.map((c) => (teacherLabels[c] ? nomComplet(teacherLabels[c]!) : c)).join(", ");
 
   return (
     <button
       type="button"
       style={couleursMatiere(p.course_code) as React.CSSProperties}
-      className={`td-block type-${typeClass} ${event.span ? "td-block--span" : ""} ${p.is_eval ? "eval" : ""} ${p.locked ? "locked" : ""}`}
+      className={`td-block type-${typeClass} ${event.span ? "td-block--span" : ""} ${p.is_eval ? "eval" : ""} ${p.locked ? "locked" : ""}${selected ? " selected" : ""}`}
+      aria-pressed={selected}
+      aria-label={`${p.course_code} ${p.session_type}, ${dayName(p.day)} ${p.hor ?? slotLabel(p.slot)}, salle ${p.room_label ?? "à définir"}${enseignants ? `, ${enseignants}` : ""}`}
       onClick={() => onSelect(p)}
       onMouseEnter={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => onHover({ placement: p, x: e.clientX, y: e.clientY })}
@@ -403,8 +445,9 @@ function SessionBlock({
         {p.hor ? ` · ${p.hor}` : ""}
         {short ? ` · ${short}` : ""}
       </span>
-      {p.room_label && <span className="td-block-room">{p.room_label}</span>}
-      {p.locked && <span className="lockbadge" title="Verrouillée">🔒</span>}
+      <span className={`td-block-room${p.room_label ? "" : " td-block-room--absente"}`}>
+        {p.room_label ? p.room_label.replace(/\s*\([^)]*\)\s*$/, "") : "sans salle"}
+      </span>
     </button>
   );
 }

@@ -1,0 +1,137 @@
+/* ══════════════ WeekBar ══════════════
+   Histogramme (hauteur ∝ charge de la semaine), identique à `.weekbar` côté
+   export HTML — pas de simples points uniformes (retour utilisateur
+   11/08/2026). Partagé par toutes les vues à semaine. */
+
+.weekbar-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.weekbar {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 40px;
+  overflow-x: auto;
+  /* Défile dans son espace sans élargir la page (audit mobile 11/08/2026). */
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.weekbar-bar {
+  flex: 1 0 auto;
+  min-width: 10px;
+  border: none;
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+  background: var(--surface-3);
+  position: relative;
+  padding: 0;
+  height: 100%;
+}
+
+@media (pointer: coarse) {
+  .weekbar-bar {
+    min-width: 16px;
+  }
+}
+
+.weekbar-bar:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-3));
+}
+
+.weekbar-bar .bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  opacity: 0.45;
+}
+
+.weekbar-bar.active .bar {
+  opacity: 1;
+}
+
+.weekbar-bar.active {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
+/* Semaine fermée (vacances) : hachures = « rien à placer ici ». */
+.weekbar-bar.blocked {
+  background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 3px, var(--border) 3px, var(--border) 5px);
+}
+
+.weekbar-bar.blocked .bar {
+  background: transparent;
+}
+
+/* Glisser une séance au-dessus de la barre : chaque semaine devient une
+   cible de dépôt (Vue Promo, changement de semaine). */
+.weekbar-wrap.weekbar-drop-actif .weekbar-bar:not(.blocked) {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: -1px;
+}
+
+.weekbar-bar.drop-cible {
+  box-shadow: 0 0 0 2px var(--good) inset;
+  background: var(--good-soft);
+}
+
+/* Infobulle interne (retour utilisateur 28/08/2026 : « internalise moi les
+   hover ») — `position: fixed` + coordonnées calculées au survol : la barre
+   défile horizontalement, un positionnement relatif se décalerait.
+   `pointer-events: none` : elle n'intercepte jamais le clic. */
+.weekbar-tip {
+  position: fixed;
+  z-index: 60;
+  transform: translate(-50%, calc(-100% - 8px));
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+}
+
+/* Première / sélectionnée / dernière semaine : une ligne, jamais de
+   chevauchement — un libellé trop long est coupé (texte complet au survol). */
+.weekbar-caption {
+  display: flex;
+  gap: 12px;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  margin-top: 3px;
+  /* Neutralise les capitales héritées d'un `<label>` parent. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+.weekbar-caption span {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weekbar-caption span:nth-child(2):not(:last-child) {
+  text-align: center;
+}
+
+.weekbar-caption span:last-child:not(:first-child) {
+  text-align: right;
+}
+
+.weekbar-caption-courante {
+  color: var(--accent);
+  font-weight: 600;
+}
