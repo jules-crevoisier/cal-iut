@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildSearchIndex, runSearch, type SearchHit } from "./search";
+import { buildSearchIndex, rechercheGroupee, runSearch, scoreHit, surligner, type SearchHit } from "./search";
 import {
   catalogCourse,
   catalogRoom,
@@ -128,5 +128,42 @@ describe("buildSearchIndex", () => {
       expect(routeOf(hit).vue).not.toBe("reference");
       expect(routeOf(hit)).toMatchObject({ vue: "salle", salle: "B204" });
     }
+  });
+});
+
+describe("recherche : classement, groupes, surlignage", () => {
+  const index = buildSearchIndex(
+    emptyPayload({
+      teacherLabels: { KBR: "Kyllian Bresson", BRE: "Brenda Martin" },
+      rooms: [catalogRoom("H201", { label: "H.201" }), catalogRoom("H203", { label: "H.203" })],
+      courses: [catalogCourse("WR101", "Anglais"), catalogCourse("WR110", "Bresse numérique")],
+    }),
+  );
+
+  it("should rank an exact code first, then label prefixes, then matches inside words", () => {
+    const hits = runSearch(index, "bre");
+    // « BRE » est le code exact de Brenda Martin.
+    expect(hits[0].label).toBe("Brenda Martin");
+    expect(scoreHit(hits[0], "bre")).toBeLessThan(scoreHit(index.find((h) => h.sub === "KBR")!, "bre")!);
+  });
+
+  it("should require every word of a multi-word query", () => {
+    expect(runSearch(index, "kyllian bresson").map((h) => h.label)).toEqual(["Kyllian Bresson"]);
+    expect(runSearch(index, "kyllian anglais")).toEqual([]);
+  });
+
+  it("should group results by type, best group first, and cap each group", () => {
+    const groupes = rechercheGroupee(index, "h.20", 1);
+    expect(groupes[0].kind).toBe("Salle");
+    expect(groupes[0].hits).toHaveLength(1);
+    expect(groupes[0].total).toBe(2);
+  });
+
+  it("should highlight matches ignoring accents and case, on the original text", () => {
+    expect(surligner("Lefèvre Kevin", "lefevre")).toEqual([
+      { texte: "Lefèvre", surligne: true },
+      { texte: " Kevin", surligne: false },
+    ]);
+    expect(surligner("WR101", "")).toEqual([{ texte: "WR101", surligne: false }]);
   });
 });
