@@ -4118,11 +4118,12 @@ def celcat_etat() -> CelcatEtatResponse:
 
 @app.patch("/celcat/saisie", response_model=CelcatEtatResponse, dependencies=[Depends(accounts.require_role("admin"))])
 def celcat_saisie_active(body: CelcatSaisieActiveRequest) -> CelcatEtatResponse:
-    from cal_iut.celcat.etat import charger, sauver
+    from cal_iut.celcat.etat import charger, sauver, verrou
 
-    doc = charger()
-    doc["saisie_active"] = body.active
-    sauver(doc)
+    with verrou():
+        doc = charger()
+        doc["saisie_active"] = body.active
+        sauver(doc)
     if not body.active:
         from cal_iut.celcat.file_attente import vider
 
@@ -4151,16 +4152,17 @@ def celcat_autoriser_creation(body: CelcatAutoriserCreationRequest) -> CelcatEta
     worker (catégorie d'évènement, masque d'une seule semaine, journal
     anti-doublon) restent tous en place.
     """
-    from cal_iut.celcat.etat import charger, sauver
+    from cal_iut.celcat.etat import charger, sauver, verrou
 
-    doc = charger()
-    autorisees = {int(s) for s in (doc.get("semaines_creation_autorisee") or [])}
-    if body.autorisee:
-        autorisees.add(int(body.semaine_celcat))
-    else:
-        autorisees.discard(int(body.semaine_celcat))
-    doc["semaines_creation_autorisee"] = sorted(autorisees)
-    sauver(doc)
+    with verrou():
+        doc = charger()
+        autorisees = {int(s) for s in (doc.get("semaines_creation_autorisee") or [])}
+        if body.autorisee:
+            autorisees.add(int(body.semaine_celcat))
+        else:
+            autorisees.discard(int(body.semaine_celcat))
+        doc["semaines_creation_autorisee"] = sorted(autorisees)
+        sauver(doc)
     return _celcat_etat_public()
 
 
@@ -4177,11 +4179,12 @@ def celcat_worker_actif(body: CelcatWorkerRequest) -> CelcatEtatResponse:
     en attente. Ici, la file, le journal et les semaines validées restent
     exactement en l'état, et le worker reprend là où il s'était arrêté.
     """
-    from cal_iut.celcat.etat import charger, sauver
+    from cal_iut.celcat.etat import charger, sauver, verrou
 
-    doc = charger()
-    doc["worker_actif"] = bool(body.actif)
-    sauver(doc)
+    with verrou():
+        doc = charger()
+        doc["worker_actif"] = bool(body.actif)
+        sauver(doc)
     return _celcat_etat_public()
 
 
@@ -4189,12 +4192,13 @@ def celcat_worker_actif(body: CelcatWorkerRequest) -> CelcatEtatResponse:
 def celcat_valider(body: CelcatValiderRequest) -> CelcatEtatResponse:
     from datetime import datetime
 
-    from cal_iut.celcat.etat import charger, sauver
+    from cal_iut.celcat.etat import charger, sauver, verrou
 
-    doc = charger()
-    doc["semaines_validees"] = [int(s) for s in body.semaines]
-    doc["valide_le"] = datetime.now(UTC).isoformat()
-    sauver(doc)
+    with verrou():
+        doc = charger()
+        doc["semaines_validees"] = [int(s) for s in body.semaines]
+        doc["valide_le"] = datetime.now(UTC).isoformat()
+        sauver(doc)
     return _celcat_etat_public()
 
 
@@ -4958,7 +4962,7 @@ def celcat_extras(statut: str | None = None) -> dict[str, object]:
 
 @app.post("/celcat/extras/{extra_id}/ignorer", dependencies=[Depends(accounts.require_role("admin"))])
 def celcat_extra_ignorer(extra_id: str) -> dict[str, str]:
-    from cal_iut.celcat.etat import charger, sauver
+    from cal_iut.celcat.etat import charger, sauver, verrou
     from cal_iut.celcat.extras import enregistrer, trouver
 
     extra = trouver(extra_id)
@@ -4966,13 +4970,14 @@ def celcat_extra_ignorer(extra_id: str) -> dict[str, str]:
         extra = {"id": extra_id}
     extra["statut"] = "ignore"
     enregistrer(extra)
-    doc = charger()
-    ignores = dict(doc.get("ignores") or {})
-    ignores[extra_id] = True
-    if extra.get("event_id") is not None:
-        ignores[str(extra["event_id"])] = True
-    doc["ignores"] = ignores
-    sauver(doc)
+    with verrou():
+        doc = charger()
+        ignores = dict(doc.get("ignores") or {})
+        ignores[extra_id] = True
+        if extra.get("event_id") is not None:
+            ignores[str(extra["event_id"])] = True
+        doc["ignores"] = ignores
+        sauver(doc)
     return {"statut": "ignore"}
 
 

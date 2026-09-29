@@ -27,6 +27,8 @@ coverage.json
 data/state/.secret_key
 # Sauvegardes quotidiennes de la base (P1-10) : jamais dans le depot.
 data/state/sauvegardes_db/
+# Fichiers de verrou inter-processus des etats Celcat (P1-14).
+data/state/*.lock
 data/state/mail_log.json
 data/state/forced_pending.json
 data/state/custom_rooms.json

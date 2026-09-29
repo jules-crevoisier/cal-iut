@@ -1473,14 +1473,19 @@ def executer_job_nuit(
     if page is not None:
         _consommer_file(page, doc, base=base, production_autorisee=production_autorisee)
 
-    doc = charger()
-    lancees = {int(s) - 1 for s in (doc.get("semaines_lancees") or [])}
-    # Seules les semaines RÉELLEMENT balayées sont marquées. Marquer une
-    # semaine qu'on n'a pas pu traiter (relevé absent, semaine hors
-    # calendrier) la retirerait du balayage définitivement : elle ne
-    # partirait jamais, en silence. C'est la panne des semaines 1, 2 et 3,
-    # marquées « lancées » sans qu'un seul job ne parte (07/09/2026).
-    # Retour en pastilles pour l'écran, qui lit ce champ tel quel.
-    doc["semaines_lancees"] = sorted({s + 1 for s in (lancees | semaines_faites)})
-    doc["dernier_job"] = {"lance_le": datetime.now(UTC).isoformat()}
-    sauver(doc)
+    from cal_iut.celcat.etat import verrou
+
+    # Relu et réécrit sous le verrou inter-processus (P1-14) : le backend
+    # peut modifier ce même fichier au même instant.
+    with verrou():
+        doc = charger()
+        lancees = {int(s) - 1 for s in (doc.get("semaines_lancees") or [])}
+        # Seules les semaines RÉELLEMENT balayées sont marquées. Marquer une
+        # semaine qu'on n'a pas pu traiter (relevé absent, semaine hors
+        # calendrier) la retirerait du balayage définitivement : elle ne
+        # partirait jamais, en silence. C'est la panne des semaines 1, 2 et 3,
+        # marquées « lancées » sans qu'un seul job ne parte (07/09/2026).
+        # Retour en pastilles pour l'écran, qui lit ce champ tel quel.
+        doc["semaines_lancees"] = sorted({s + 1 for s in (lancees | semaines_faites)})
+        doc["dernier_job"] = {"lance_le": datetime.now(UTC).isoformat()}
+        sauver(doc)
