@@ -39,8 +39,8 @@ export function PreferencesModal({ onChoix }: PreferencesModalProps) {
       >
         <h3 id="prefsmodal-titre">Comment préférez-vous voir vos cours ?</h3>
         <p id="prefsmodal-texte" className="prefs-texte">
-          Choisissez l’affichage qui vous parle le plus. Ce choix est gardé sur cet appareil et reste modifiable en
-          haut de page.
+          Choisissez l’affichage qui vous parle le plus. Ce choix est gardé sur cet appareil et reste modifiable à
+          tout moment.
         </p>
 
         <div className="prefs-choix">
