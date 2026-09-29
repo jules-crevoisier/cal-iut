@@ -511,7 +511,7 @@ export function App() {
               (cf. `Toolbar`) : un bandeau de plus entre l'en-tete et le
               contenu etait mal place et sans rapport avec le reste
               (retour utilisateur 30/08/2026). */}
-          {!readOnlyTarget && appPayload && <PageHeader payload={appPayload} />}
+          {!readOnlyTarget && <PageHeader vue={activeTab} payload={appPayload} />}
 
           {readOnlyTarget && appPayload && (
             <header className="readonly-banner">
