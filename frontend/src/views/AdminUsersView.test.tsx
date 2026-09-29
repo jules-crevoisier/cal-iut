@@ -82,7 +82,7 @@ describe("AdminUsersView", () => {
 
     await waitFor(() => expect(screen.getByText("attente@example.test")).toBeInTheDocument());
     expect(screen.getByText("active@example.test")).toBeInTheDocument();
-    expect(screen.getByText("En attente d'activation (1)")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "En attente d'activation 1" })).toBeInTheDocument();
   });
 
   it("should PATCH the role when activating a pending account", async () => {

@@ -1,79 +1,31 @@
-/* Sauvegardes JSON datées (SauvegardesView). Mobile d'abord : à 320 px le
-   bouton passe sous le texte ; à partir de 768 px, ils se placent côte à
-   côte. */
+/* Sauvegardes JSON datées (SauvegardesView) — refonte v2 du 29/09/2026 :
+   l'état et l'action sur une barre à plat, l'historique pleine largeur
+   dans une carte-tableau (styles/outils.css). */
 
 .view.sauvegardes-view {
-  gap: 14px;
-  max-width: 960px;
+  gap: 16px;
 }
 
-.sauvegardes-view h2 {
-  margin: 0 0 10px;
-  font-size: 1rem;
-}
-
-.sauvegardes-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.sauvegardes-actions p {
+p.sauvegardes-derniere {
   margin: 0;
-  max-width: 70ch;
+  font-size: 14px;
+  color: var(--ink-soft);
 }
 
-.sauvegardes-actions p.sauvegardes-derniere {
-  margin-bottom: 4px;
-  font-size: 0.95rem;
-}
-
-.sauvegardes-actions .btn {
-  align-self: stretch;
-}
-
-@media (min-width: 768px) {
-  .sauvegardes-actions {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .sauvegardes-actions .btn {
-    align-self: auto;
-    flex-shrink: 0;
-  }
-}
-
-.sauvegardes-message {
-  padding: 6px 12px;
-  border-left: 3px solid var(--good);
-  background: var(--good-soft);
-  color: var(--good-text);
-  font-size: 0.88rem;
-}
-
-.sauvegardes-message:empty {
-  display: none;
-}
-
-.sauvegardes-table {
-  font-size: 0.875rem;
-}
-
-.view table.sauvegardes-table td,
-.view table.sauvegardes-table th {
-  vertical-align: middle;
-}
-
-.sauvegardes-table .num {
-  text-align: right;
+.sauvegardes-derniere strong {
+  color: var(--ink);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.sauvegardes-sep {
+  margin: 0 8px;
+  color: var(--ink-faint);
 }
 
 .sauvegardes-table tbody th {
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .sauvegardes-jour {
@@ -88,6 +40,14 @@
 .sauvegardes-col-fichier {
   width: 1%;
   text-align: right;
+}
+
+@media (max-width: 700px) {
+  .sauvegardes-view .page-outils-actions,
+  .sauvegardes-view .page-outils-actions .btn {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 @media (pointer: coarse) {

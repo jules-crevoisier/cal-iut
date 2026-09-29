@@ -14,11 +14,15 @@
  * Refonte du 29/09/2026 : un tableau daté, avec l'écart de séances placées
  * d'une sauvegarde à la précédente — une chute brutale se voit sans ouvrir
  * les fichiers, et c'est précisément ce qu'on vient chercher ici.
+ * Refonte v2 (même jour) : l'état et l'action sur une barre à plat, le
+ * tableau pleine largeur dans une seule carte.
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { DatabaseBackup } from "lucide-react";
 
 import { creerSauvegardeMaintenant, listSauvegardes, sauvegardeUrl, type SauvegardeMeta } from "../api/client";
+import "../styles/outils.css";
 import "./SauvegardesView.css";
 
 const DATE_FMT = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
@@ -117,28 +121,27 @@ export function SauvegardesView() {
 
   return (
     <section className="view sauvegardes-view">
-      <div className="panel sauvegardes-actions">
-        <div>
-          <p className="sauvegardes-derniere">
-            {derniere ? (
-              <>
-                Dernière sauvegarde : <strong>{derniere.date === aujourdhui ? "aujourd’hui" : formatDate(derniere.date)}</strong>
-                {" — "}
-                {NOMBRE.format(derniere.nb_placements)} séance{derniere.nb_placements > 1 ? "s" : ""} placée
-                {derniere.nb_placements > 1 ? "s" : ""}
-              </>
-            ) : (
-              "Aucune sauvegarde pour l’instant."
-            )}
-          </p>
-          <p className="muted">
-            Prise automatiquement au premier changement du planning de la journée, conservée 90 jours. Un fichier JSON
-            par jour : semaines, séances placées, séances ajoutées et retouches.
-          </p>
+      <div className="page-outils">
+        <p className="sauvegardes-derniere">
+          {derniere ? (
+            <>
+              Dernière sauvegarde : <strong>{derniere.date === aujourdhui ? "aujourd’hui" : formatDate(derniere.date)}</strong>
+              <span className="sauvegardes-sep" aria-hidden="true">
+                ·
+              </span>
+              <strong>{NOMBRE.format(derniere.nb_placements)}</strong> séance{derniere.nb_placements > 1 ? "s" : ""} placée
+              {derniere.nb_placements > 1 ? "s" : ""}
+            </>
+          ) : (
+            "Aucune sauvegarde pour l’instant."
+          )}
+        </p>
+        <div className="page-outils-actions">
+          <button type="button" className="btn btn--primary" disabled={enCours} onClick={() => void sauvegarderMaintenant()}>
+            <DatabaseBackup size={16} aria-hidden="true" />
+            {enCours ? "Sauvegarde en cours…" : "Faire une sauvegarde maintenant"}
+          </button>
         </div>
-        <button type="button" className="btn btn--primary" disabled={enCours} onClick={() => void sauvegarderMaintenant()}>
-          {enCours ? "Sauvegarde en cours…" : "Faire une sauvegarde maintenant"}
-        </button>
       </div>
 
       {erreur && (
@@ -146,16 +149,21 @@ export function SauvegardesView() {
           {erreur}
         </p>
       )}
-      <div className="sauvegardes-message" role="status" aria-live="polite">
+      <div className="page-retour" role="status" aria-live="polite">
         {message}
       </div>
 
-      <section className="panel" aria-labelledby="sauvegardes-titre">
-        <h2 id="sauvegardes-titre">Historique ({sauvegardes.length})</h2>
+      <section className="panel carte-tableau carte-tableau--haute" aria-labelledby="sauvegardes-titre">
+        <div className="carte-tete">
+          <h2 id="sauvegardes-titre">
+            Historique <span className="carte-tete-nb">{sauvegardes.length}</span>
+          </h2>
+          <span className="carte-tete-note">une sauvegarde par jour, conservée 90 jours</span>
+        </div>
         {sauvegardes.length === 0 ? (
-          <p className="muted">Aucune sauvegarde pour l'instant — la première sera prise à la prochaine modification du planning.</p>
+          <p className="carte-vide">Aucune sauvegarde pour l'instant — la première sera prise à la prochaine modification du planning.</p>
         ) : (
-          <div className="ref-table-wrap">
+          <div>
             <table className="ref sauvegardes-table">
               <thead>
                 <tr>
@@ -208,6 +216,10 @@ export function SauvegardesView() {
             </table>
           </div>
         )}
+        <p className="carte-note">
+          Prise automatiquement au premier changement du planning de la journée. Un fichier JSON par jour : semaines,
+          séances placées, séances ajoutées et retouches. « Faire une sauvegarde maintenant » remplace celle du jour.
+        </p>
       </section>
     </section>
   );

@@ -12,15 +12,18 @@
  * peut pas manquer, avec de quoi la coller directement là où elle sert (la
  * valeur « Bearer … » exacte qu'attend Claude.ai, l'adresse du serveur MCP,
  * le bloc de configuration Claude Code / Cursor — cf. docs/MCP.md). Révoquer
- * est irréversible : confirmé.
+ * est irréversible : confirmé. Refonte v2 (même jour) : l'explication et
+ * l'action sur une barre à plat, les clés dans une carte-tableau.
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { KeyRound } from "lucide-react";
 
 import { createMcpKey, listMcpKeys, revokeMcpKey } from "../api/client";
 import type { McpKey } from "../api/client";
 import { CopyButton } from "../components/CopyButton";
 import { confirmAsync } from "../utils/confirmDialog";
+import "../styles/outils.css";
 import "./McpKeysView.css";
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" });
@@ -116,18 +119,18 @@ export function McpKeysView() {
 
   return (
     <section className="view cles">
-      <div className="panel cles-intro">
-        <div>
-          <h2>Vos clés d’accès</h2>
-          <p className="muted">
-            Une clé permet à Claude (connecteur MCP) ou à un script (<code>cal-iut prod diff/pull/push</code>) d’agir
-            avec les droits de votre compte, sans votre mot de passe. Prévoyez une clé par usage : on en révoque une
-            sans casser les autres.
-          </p>
+      <div className="page-outils cles-outils">
+        <p className="page-note">
+          Une clé permet à Claude (connecteur MCP) ou à un script (<code>cal-iut prod diff/pull/push</code>) d’agir avec
+          les droits de votre compte, sans votre mot de passe. Prévoyez une clé par usage : on en révoque une sans casser
+          les autres.
+        </p>
+        <div className="page-outils-actions">
+          <button type="button" className="btn btn--primary" disabled={enCours} onClick={() => void generer()}>
+            <KeyRound size={16} aria-hidden="true" />
+            {enCours ? "Génération…" : "Générer une clé"}
+          </button>
         </div>
-        <button type="button" className="btn btn--primary" disabled={enCours} onClick={() => void generer()}>
-          {enCours ? "Génération…" : "Générer une clé"}
-        </button>
       </div>
 
       {erreur && (
@@ -135,7 +138,7 @@ export function McpKeysView() {
           {erreur}
         </p>
       )}
-      <div className="cles-message" role="status" aria-live="polite">
+      <div className="page-retour" role="status" aria-live="polite">
         {message}
       </div>
 
@@ -182,12 +185,16 @@ export function McpKeysView() {
         </section>
       )}
 
-      <section className="panel" aria-labelledby="cles-actives-titre">
-        <h2 id="cles-actives-titre">Clés actives ({cles.length})</h2>
+      <section className="panel carte-tableau" aria-labelledby="cles-actives-titre">
+        <div className="carte-tete">
+          <h2 id="cles-actives-titre">
+            Clés actives <span className="carte-tete-nb">{cles.length}</span>
+          </h2>
+        </div>
         {cles.length === 0 ? (
-          <p className="muted">Aucune clé pour l’instant. « Générer une clé » en crée une, affichée une seule fois.</p>
+          <p className="carte-vide">Aucune clé pour l’instant. « Générer une clé » en crée une, affichée une seule fois.</p>
         ) : (
-          <div className="ref-table-wrap">
+          <div>
             <table className="ref cles-table">
               <thead>
                 <tr>
