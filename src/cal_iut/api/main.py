@@ -1601,7 +1601,12 @@ def get_weights() -> WeightsResponse:
     return WeightsResponse(weights=repo.weights_as_dict(), reason=w.reason)
 
 
-@app.post("/ingest", dependencies=[Depends(accounts.require_role("edit"))])
+# `/ingest`, `/solve`, `/solve/async`, `/regen/week` : réservées aux admins
+# (audit 29/09/2026, P1-5). Aucun écran ne les appelle plus (la génération se
+# fait en CLI), et chacune peut défaire le travail de tout le monde : `/solve`
+# remplace tout le planning, `/ingest` remplace les séances en remettant
+# leurs verrous à False.
+@app.post("/ingest", dependencies=[Depends(accounts.require_role("admin"))])
 @ecriture_planning
 def ingest(body: IngestRequest) -> dict[str, object]:
     state = get_state()
@@ -1744,7 +1749,7 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
     return _build_response(result.status, result.objective_value, result.gap_penalty, with_rooms, sessions_by_id, quality, run.id)
 
 
-@app.post("/solve", response_model=TimetableResponse, dependencies=[Depends(accounts.require_role("edit"))])
+@app.post("/solve", response_model=TimetableResponse, dependencies=[Depends(accounts.require_role("admin"))])
 def solve(body: SolveRequest) -> TimetableResponse:
     global _current_job
     with _job_lock:
@@ -1765,7 +1770,7 @@ def solve(body: SolveRequest) -> TimetableResponse:
     return response
 
 
-@app.post("/solve/async", dependencies=[Depends(accounts.require_role("edit"))])
+@app.post("/solve/async", dependencies=[Depends(accounts.require_role("admin"))])
 def solve_async(body: SolveRequest) -> dict[str, str]:
     """
     Variante non bloquante de `/solve` : lance la même résolution (identique,
@@ -1817,7 +1822,7 @@ def solve_status(job_id: str | None = None) -> dict[str, object]:
     return {"job_id": job.job_id, "status": "running"}
 
 
-@app.post("/regen/week", dependencies=[Depends(accounts.require_role("edit"))])
+@app.post("/regen/week", dependencies=[Depends(accounts.require_role("admin"))])
 def regen_week(body: RegenRequest) -> dict[str, str]:
     """
     Régénère UNE semaine future, ou cette semaine + la suivante
@@ -1844,6 +1849,11 @@ def regen_week(body: RegenRequest) -> dict[str, str]:
         try:
             repo = get_repo()
             result = regen_and_persist(state, repo, weeks)
+            # Chaque séance déplacée part dans la file Celcat, comme un
+            # déplacement manuel (P1-5) : sans ça, Celcat gardait l'ancien
+            # créneau.
+            for session_id in result.deplacees:
+                _apres_ecriture_planning(session_id, "update")
             job.result = RegenResultResponse(
                 status=result.status,
                 touched_weeks=result.touched_weeks,
