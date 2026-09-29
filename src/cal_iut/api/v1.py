@@ -375,7 +375,7 @@ class SeancesNonPlaceesV1(BaseModel):
 
 
 class NatureATraiterV1(BaseModel):
-    id: Literal["non-placee", "sans-salle", "doublon", "regle", "contrainte", "compromis-sae", "trouee"]
+    id: Literal["non-placee", "sans-salle", "doublon", "regle", "contrainte", "sae-hors-journee", "compromis-sae", "trouee"]
     titre: str
     gravite: Literal["a_corriger", "a_revoir"]
     aide: str
@@ -1665,6 +1665,8 @@ def _a_traiter(
     points = vues.points_a_traiter(payload)
     if avec_doublons:
         points += vues.points_depuis_doublons(payload, module_doublons.doublons(_main().get_state(), None))
+    # Cours de SAE hors journée SAE : LA liste de `/api/v1/sae` (`anomalies`).
+    points += vues.points_depuis_sae(payload, [a.model_dump() for a in _saes().anomalies])
     points = vues.filtrer_points(
         points, semaine=semaine, parcours=parcours, enseignant=enseignant, gravite=gravite, nature=nature,
     )
@@ -1723,7 +1725,9 @@ def a_traiter(
     parcours: str | None = Query(None, description="Parcours (ex. `BUT1`)."),
     enseignant: str | None = Query(None, description="Code enseignant."),
     gravite: Literal["a_corriger", "a_revoir"] | None = Query(None),
-    nature: Literal["non-placee", "sans-salle", "doublon", "regle", "contrainte", "compromis-sae", "trouee"]
+    nature: Literal[
+        "non-placee", "sans-salle", "doublon", "regle", "contrainte", "sae-hors-journee", "compromis-sae", "trouee",
+    ]
     | None = Query(None),
 ) -> Response:
     """Même contenu, mêmes catégories et même ordre que l'écran « À traiter » :

@@ -156,6 +156,13 @@ NATURES: list[dict[str, str]] = [
         "aide": "Une indisponibilité déclarée par l'enseignant tombe sur une de ses séances.",
     },
     {
+        # 29/09/2026 : même règle et même calcul que `/api/v1/sae`
+        # (`v1._marquer`, champ `anomalie`) — cf. `points_depuis_sae`.
+        "id": "sae-hors-journee", "titre": "Cours de SAE hors journée SAE", "gravite": "a_corriger",
+        "aide": "Un cours de SAE n'a lieu que sur une journée SAE de son parcours. Les SAE que la génération "
+                "place elle-même (exception déclarée, ex. WSA501D) n'y figurent pas.",
+    },
+    {
         "id": "compromis-sae", "titre": "Encadrement SAE le même jour", "gravite": "a_revoir",
         "aide": "Compromis accepté : l'enseignant encadre une SAE le jour d'un de ses cours. "
                 "À revoir si possible, rien d'interdit.",
@@ -295,6 +302,27 @@ def points_depuis_doublons(payload: dict, doublons: list[dict]) -> list[dict]:
             parcours=_parcours_des_groupes(payload, [g for s in seances for g in s.get("groupes") or []]),
             enseignants=enseignants, type_doublon="salle" if d["type"] == "salle" else "enseignant",
             seances=[s["session_id"] for s in seances],
+        ))
+    return points
+
+
+def points_depuis_sae(payload: dict, anomalies: list[dict]) -> list[dict]:
+    """`todo.ts::pointsDepuisSae` : un point par cours de SAE placé hors
+    journée SAE SANS exception déclarée — la liste `anomalies` de
+    `/api/v1/sae` (`v1._saes`), jamais recalculée ici.
+
+    Les exceptions déclarées (`solver_scheduled_sae`, ex. WSA501D) n'y
+    figurent pas : c'est une décision déjà prise, visible avec son motif
+    dans `/api/v1/sae` ; la lister en « à revoir » la ferait revenir à
+    chaque visite sans qu'aucun geste ne puisse la faire disparaître."""
+    points = []
+    for a in anomalies:
+        groupes = ", ".join(a.get("groupes_libelles") or a.get("groupes") or [])
+        points.append(_point(
+            "sae-hors-journee", f"sae-hj|{a['id']}", f"{a['cours_code']} — {a.get('cours_nom') or a['cours_code']}",
+            f"{a['type']} · {groupes} · hors journée SAE", semaine=a["semaine"], jour=a["jour"],
+            creneau=a["creneau"], parcours=[a["parcours"]] if a.get("parcours") else [],
+            enseignants=list(a.get("enseignants") or []), seance_id=a["id"],
         ))
     return points
 

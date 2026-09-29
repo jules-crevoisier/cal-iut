@@ -21,7 +21,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type React
 import { ArrowRight, ChevronDown, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 
 import type { Doublon, DoublonHebdoRun } from "../api/client";
-import { executerControleDoublonsHebdo, fetchControleDoublonsHebdo, fetchDoublons } from "../api/client";
+import type { AnomalieSae } from "../api/client";
+import { executerControleDoublonsHebdo, fetchAnomaliesSae, fetchControleDoublonsHebdo, fetchDoublons } from "../api/client";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { libelleControleHebdo } from "../utils/controleDoublonsHebdo";
@@ -35,6 +36,7 @@ import {
   NATURES,
   occurrences,
   pointsDepuisDoublons,
+  pointsDepuisSae,
   statutsSemaines,
   trierParUrgence,
   type FiltresTodo,
@@ -128,11 +130,29 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
     }
   }, [chargerDoublons]);
 
+  // Cours de SAE hors journée SAE (29/09/2026) : la règle est jugée côté
+  // serveur (`GET /api/v1/sae`, `anomalies`) — un complément, jamais bloquant.
+  const [anomaliesSae, setAnomaliesSae] = useState<AnomalieSae[]>([]);
+  useEffect(() => {
+    let annule = false;
+    fetchAnomaliesSae()
+      .then((liste) => {
+        if (!annule) setAnomaliesSae(Array.isArray(liste) ? liste : []);
+      })
+      .catch(() => undefined);
+    return () => {
+      annule = true;
+    };
+  }, [payload]);
+
   const pointsDoublons = useMemo(
     () => (doublons ? pointsDepuisDoublons(payload, doublons, controleHebdo ?? null) : []),
     [payload, doublons, controleHebdo],
   );
-  const tous = useMemo(() => [...items, ...pointsDoublons], [items, pointsDoublons]);
+  const tous = useMemo(
+    () => [...items, ...pointsDoublons, ...pointsDepuisSae(anomaliesSae)],
+    [items, pointsDoublons, anomaliesSae],
+  );
   const statuts = useMemo(() => statutsSemaines(payload), [payload]);
 
   // ── Filtres et sections repliées, mémorisés d'une visite à l'autre ──
