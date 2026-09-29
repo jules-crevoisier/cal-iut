@@ -1428,9 +1428,11 @@ def render_html(
     ),
 ) -> str:
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    payload_json = json.dumps(payload, ensure_ascii=False)
-    if "</script" in payload_json.lower():
-        payload_json = payload_json.replace("</script", "<\\/script")
+    # `<` échappé en `\u003c` (JSON valide, relu à l'identique par
+    # `JSON.parse`) : aucune donnée ne peut fermer la balise <script> qui
+    # porte le payload, quelle que soit sa casse (`</SCRIPT>` passait :
+    # les codes enseignants sont mis en majuscules). Audit 29/09/2026, P1-8.
+    payload_json = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
 
     return (
         template.replace("__TITLE__", title)

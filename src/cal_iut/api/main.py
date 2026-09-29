@@ -5563,6 +5563,30 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
     return resultat
 
 
+def _enseignants_valides(state: object, codes: list[str]) -> list[str]:
+    """Codes enseignants normalisés (espaces retirés, majuscules), tous
+    connus — sinon 422 (audit 29/09/2026, P1-8).
+
+    « Connus » = ceux que l'écran propose : enseignants de la maquette et des
+    séances existantes, plus les enseignants déclarés (feuille officielle,
+    `enseignements_supplementaires`), cf. `codes_enseignants_connus`. Avant,
+    n'importe quelle chaîne était enregistrée telle quelle, y compris du HTML
+    réinjecté ensuite dans la page `/legacy`."""
+    from cal_iut.api.session_patch import codes_enseignants_connus
+
+    normalises = [t.strip().upper() for t in codes if t.strip()]
+    if not normalises:
+        return normalises
+    inconnus = sorted(set(normalises) - codes_enseignants_connus(state))
+    if inconnus:
+        raise HTTPException(
+            422,
+            f"Enseignant(s) inconnu(s) : {', '.join(inconnus)}. Choisissez un enseignant de la liste "
+            "(maquette ou enseignants déclarés).",
+        )
+    return normalises
+
+
 def _reference_cours(state: object, course_code: str, group_ids: list[str]) -> object:
     """Retrouve une matière déjà connue par son code — jamais n'en invente
     une. `group_ids` sert à choisir le bon `parcours` quand un même code
@@ -5623,6 +5647,7 @@ def creer_seance_personnalisee(body: CreerSeanceRequest) -> PlacementResponse:
     if inconnus:
         raise HTTPException(400, f"Groupe(s) inconnu(s) : {', '.join(inconnus)}")
 
+    enseignants = _enseignants_valides(state, body.teacher_codes)
     reference = _reference_cours(state, body.course_code, body.group_ids)
     session_id = _id_seance_personnalisee(reference.code, reference.semestre, type_seance.value, body.group_ids)
 
@@ -5635,7 +5660,7 @@ def creer_seance_personnalisee(body: CreerSeanceRequest) -> PlacementResponse:
         annee=reference.annee,
         session_type=type_seance,
         group_ids=list(body.group_ids),
-        teacher_codes=[t.strip().upper() for t in body.teacher_codes if t.strip()],
+        teacher_codes=enseignants,
         duration_slots=body.duration_slots,
         is_eval=body.is_eval,
         metadata={"custom_session": True, "note": (body.note or "").strip()},
@@ -5778,6 +5803,7 @@ def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
     if inconnus:
         raise HTTPException(400, f"Groupe(s) inconnu(s) : {', '.join(inconnus)}")
 
+    enseignants = _enseignants_valides(state, body.teacher_codes)
     premier_groupe = next((g for g in state.groups if g.id == body.group_ids[0]), None)
     parcours = premier_groupe.parcours if premier_groupe else ""
     annee = premier_groupe.annee if premier_groupe else ""
@@ -5811,7 +5837,7 @@ def creer_evenement(body: CreerEvenementRequest) -> PlacementResponse:
         annee=annee,
         session_type=SessionType.CM,
         group_ids=list(body.group_ids),
-        teacher_codes=[t.strip().upper() for t in body.teacher_codes if t.strip()],
+        teacher_codes=enseignants,
         duration_slots=body.duration_slots,
         is_eval=False,
         metadata={
@@ -5884,6 +5910,9 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         inconnus = [g for g in body.group_ids if g not in {gr.id for gr in state.groups}]
         if inconnus:
             raise HTTPException(400, f"Groupe(s) inconnu(s) : {', '.join(inconnus)}")
+    nouveaux_enseignants = (
+        _enseignants_valides(state, body.teacher_codes) if body.teacher_codes is not None else None
+    )
 
     placement = next((p for p in state.timetable if p.session_id == session_id), None)
     avant = {
@@ -5920,8 +5949,8 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
     seance.session_type = nouveau_type
     if body.group_ids is not None:
         seance.group_ids = list(body.group_ids)
-    if body.teacher_codes is not None:
-        seance.teacher_codes = [t.strip().upper() for t in body.teacher_codes if t.strip()]
+    if nouveaux_enseignants is not None:
+        seance.teacher_codes = nouveaux_enseignants
     if body.duration_slots is not None:
         seance.duration_slots = body.duration_slots
     if body.is_eval is not None:

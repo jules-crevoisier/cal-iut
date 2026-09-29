@@ -33,6 +33,14 @@ def codes_enseignants_connus(state: object) -> set[str]:
         code = getattr(dispo, "teacher_code", None)
         if code:
             codes.add(code)
+    # Enseignants déclarés (feuille officielle, `enseignements_supplementaires`)
+    # qui n'ont encore aucune séance : l'écran les propose (« Nouvelle
+    # séance »), ils doivent donc passer la validation.
+    config_dir = getattr(state, "config_dir", None)
+    if config_dir is not None:
+        from cal_iut.ingestion.enseignants import enseignants_declares
+
+        codes.update(enseignants_declares(config_dir))
     return codes
 
 
