@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 
 import { lireNotifications, testerNotifications, ecrireNotifications } from "../api/client";
 import type { NotificationConfig } from "../types";
+import "./NotificationsPanel.css";
 
 export function NotificationsPanel() {
   const [cfg, setCfg] = useState<NotificationConfig | null>(null);
@@ -68,24 +69,31 @@ export function NotificationsPanel() {
     appliquer({ destinataires: saisie.split(/[\s,;]+/).filter(Boolean) });
 
   const actifs = Object.values(cfg.evenements).filter(Boolean).length;
+  const saisieModifiee =
+    saisie.split(/[\s,;]+/).filter(Boolean).join(",") !== cfg.destinataires.join(",");
+  const actif = cfg.destinataires.length > 0 && actifs > 0;
 
   return (
-    <div className="panel">
-      <h3>Notifications par mail</h3>
-      <p className="muted">
-        Un résumé groupé est envoyé quand le planning change. Les modifications d'une même rafale tiennent dans
-        un seul mail : une réorganisation, c'est vingt déplacements en dix minutes.
+    <div className="panel notif">
+      <header className="notif-tete">
+        <h3>Notifications par mail</h3>
+        <span className={`pill dot ${actif && cfg.mail_configure ? "good" : ""}`}>
+          {actif
+            ? `${actifs} événement${actifs > 1 ? "s" : ""} suivi${actifs > 1 ? "s" : ""}, ${cfg.destinataires.length} destinataire${cfg.destinataires.length > 1 ? "s" : ""}`
+            : `Inactives : ${cfg.destinataires.length === 0 ? "aucun destinataire" : "aucun événement coché"}`}
+        </span>
+      </header>
+      <p className="notif-intro">
+        Un résumé groupé part quand le planning change : les modifications d'une même rafale tiennent dans un seul
+        mail (une réorganisation, c'est vingt déplacements en dix minutes). Rien n'est actif par défaut.
       </p>
 
       {!cfg.mail_configure && (
-        <p className="notif-alerte">
-          {/* Les DEUX variables sont nécessaires (`mailer.is_configured()`)
-              — n'en citer qu'une a fait chercher dans la mauvaise direction
-              (retour utilisateur 31/08/2026 : « j'ai bien la key dans le
-              env » — RESEND_API_KEY était bien présente, CAL_IUT_PUBLIC_URL
-              ne l'était pas, et le message ne le disait pas). On nomme
-              maintenant précisément ce qui manque, pas les deux par
-              défaut. */}
+        <p className="notif-alerte" role="alert">
+          {/* Les DEUX variables sont nécessaires (`mailer.is_configured()`) —
+              on nomme précisément ce qui manque (retour utilisateur
+              31/08/2026 : « j'ai bien la key dans le env », alors que c'était
+              CAL_IUT_PUBLIC_URL l'absente). */}
           L'envoi de mails n'est pas configuré sur ce serveur : il manque{" "}
           {!cfg.mail_a_la_clef_api && !cfg.mail_a_url_publique ? (
             <>
@@ -96,62 +104,76 @@ export function NotificationsPanel() {
           ) : (
             <span className="mono">CAL_IUT_PUBLIC_URL</span>
           )}{" "}
-          côté serveur — les réglages ci-dessous seront gardés, mais rien ne partira.
+          côté serveur. Les réglages ci-dessous sont gardés, mais rien ne partira.
         </p>
       )}
 
-      <label className="notif-champ">
-        <span>Destinataires</span>
-        <textarea
-          value={saisie}
-          onChange={(e) => setSaisie(e.target.value)}
-          rows={2}
-          placeholder="kyllian.bresson@univ-reims.fr, autre@exemple.fr"
-          spellCheck={false}
-        />
-        <span className="notif-aide">
-          Plusieurs adresses à la fois : séparez-les par une virgule, un espace ou un retour à la ligne. Les
-          doublons sont retirés à l'enregistrement.
-        </span>
-      </label>
-      <button type="button" className="btn btn--accent" onClick={enregistrerDestinataires} disabled={occupe}>
-        Enregistrer les destinataires
-      </button>
-
-      <fieldset className="notif-evenements">
-        <legend>Ce qui déclenche un mail</legend>
-        {Object.entries(cfg.libelles).map(([cle, libelle]) => (
-          <label key={cle} className="notif-case">
-            <input
-              type="checkbox"
-              checked={cfg.evenements[cle] ?? false}
-              disabled={occupe}
-              onChange={(e) => void appliquer({ evenements: { [cle]: e.target.checked } })}
+      <div className="notif-grille">
+        <div className="notif-bloc">
+          <label className="notif-champ">
+            <span className="notif-libelle">Destinataires</span>
+            <textarea
+              value={saisie}
+              onChange={(e) => setSaisie(e.target.value)}
+              rows={3}
+              placeholder="kyllian.bresson@univ-reims.fr, autre@exemple.fr"
+              spellCheck={false}
             />
-            <span>{libelle}</span>
           </label>
-        ))}
-      </fieldset>
+          <p className="notif-aide">
+            Plusieurs adresses à la fois : séparées par une virgule, un espace ou un retour à la ligne. Les doublons
+            sont retirés à l'enregistrement.
+          </p>
+          <div>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={enregistrerDestinataires}
+              disabled={occupe || !saisieModifiee}
+            >
+              Enregistrer les destinataires
+            </button>
+          </div>
+        </div>
 
-      <label className="notif-champ notif-delai">
-        <span>Regrouper les modifications pendant</span>
-        <select
-          value={cfg.delai_minutes}
-          disabled={occupe}
-          onChange={(e) => void appliquer({ delai_minutes: Number(e.target.value) })}
-        >
-          <option value={0}>Aucun regroupement (un mail par modification)</option>
-          <option value={5}>5 minutes</option>
-          <option value={15}>15 minutes</option>
-          <option value={60}>1 heure</option>
-        </select>
-      </label>
+        <div className="notif-bloc">
+          <fieldset className="notif-evenements">
+            <legend className="notif-libelle">Ce qui déclenche un mail</legend>
+            {Object.entries(cfg.libelles).map(([cle, libelle]) => (
+              <label key={cle} className="notif-case">
+                <input
+                  type="checkbox"
+                  checked={cfg.evenements[cle] ?? false}
+                  disabled={occupe}
+                  onChange={(e) => void appliquer({ evenements: { [cle]: e.target.checked } })}
+                />
+                <span>{libelle}</span>
+              </label>
+            ))}
+          </fieldset>
+
+          <label className="notif-champ notif-delai">
+            <span className="notif-libelle">Regrouper les modifications pendant</span>
+            <select
+              value={cfg.delai_minutes}
+              disabled={occupe}
+              onChange={(e) => void appliquer({ delai_minutes: Number(e.target.value) })}
+            >
+              <option value={0}>Aucun regroupement (un mail par modification)</option>
+              <option value={5}>5 minutes</option>
+              <option value={15}>15 minutes</option>
+              <option value={60}>1 heure</option>
+            </select>
+          </label>
+        </div>
+      </div>
 
       <div className="notif-actions">
         <button
           type="button"
-          className="btn btn--ghost"
-          disabled={occupe || cfg.destinataires.length === 0 || actifs === 0}
+          className="btn btn--sm"
+          disabled={occupe || !actif}
+          title={actif ? undefined : "Il faut au moins un destinataire et un événement coché."}
           onClick={async () => {
             setOccupe(true);
             setErreur(null);
@@ -169,23 +191,15 @@ export function NotificationsPanel() {
           Envoyer un mail de test
         </button>
         {cfg.en_attente > 0 && (
-          <span className="muted">{cfg.en_attente} modification(s) en attente de résumé</span>
+          <span className="notif-aide">
+            {cfg.en_attente} modification{cfg.en_attente > 1 ? "s" : ""} en attente du prochain résumé
+          </span>
         )}
+        <span aria-live="polite" className="notif-retour">
+          {message && <span className="notif-ok">{message}</span>}
+          {erreur && <span className="notif-alerte">{erreur}</span>}
+        </span>
       </div>
-
-      {cfg.destinataires.length === 0 || actifs === 0 ? (
-        <p className="muted">
-          Aucune notification n'est active :{" "}
-          {cfg.destinataires.length === 0 ? "aucun destinataire enregistré" : "aucun événement coché"}.
-        </p>
-      ) : (
-        <p className="muted">
-          {actifs} événement(s) suivi(s), envoyés à {cfg.destinataires.length} destinataire(s).
-        </p>
-      )}
-
-      {message && <p className="notif-ok">{message}</p>}
-      {erreur && <p className="notif-alerte">{erreur}</p>}
     </div>
   );
 }

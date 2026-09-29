@@ -1,0 +1,128 @@
+/* Réglage des notifications par mail (Référence → Notifications). */
+
+.notif {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 980px;
+}
+
+.notif-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.panel .notif-tete h3 {
+  margin: 0;
+}
+
+.notif-intro {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.notif-grille {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.notif-bloc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notif-libelle {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.notif-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notif-champ textarea,
+.notif-champ select {
+  width: 100%;
+}
+
+.notif-aide {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.notif-evenements {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.notif-evenements legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.notif-case {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.notif-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.notif-retour {
+  font-size: 0.85rem;
+}
+
+.notif-ok {
+  color: var(--good-text);
+}
+
+.notif-alerte {
+  margin: 0;
+  color: var(--bad-text);
+  font-size: 0.85rem;
+}
+
+p.notif-alerte {
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--bad) 30%, var(--border));
+  border-radius: var(--radius);
+  background: var(--bad-soft);
+}
+
+@media (max-width: 760px) {
+  .notif-grille {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 16 px minimum : en dessous, iOS zoome à la mise au point. */
+  .notif-champ textarea,
+  .notif-champ select {
+    font-size: 16px;
+  }
+
+  .notif-case {
+    min-height: 44px;
+  }
+}

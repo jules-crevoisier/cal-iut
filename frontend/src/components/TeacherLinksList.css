@@ -1,0 +1,68 @@
+/* Liens de tous les enseignants (vue simple, Vue Enseignant). */
+
+.teacherlinks-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.panel .teacherlinks-tete h3 {
+  margin: 0 auto 0 0;
+}
+
+.teacherlinks-tete input {
+  flex: 0 1 200px;
+  min-width: 0;
+}
+
+.teacherlinks {
+  display: flex;
+  flex-direction: column;
+}
+
+.teacherlinks-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--border);
+}
+
+.teacherlinks-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.teacherlinks-code {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.teacherlinks-input {
+  min-width: 0;
+  width: 100%;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  background: var(--surface-2);
+}
+
+.teacherlinks-vide {
+  margin: 0;
+  padding: 10px 0;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .teacherlinks-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .teacherlinks-input {
+    display: none;
+  }
+}
