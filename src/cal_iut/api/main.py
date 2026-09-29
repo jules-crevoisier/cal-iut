@@ -140,6 +140,7 @@ from cal_iut.db.session import get_db, portee_sessions
 from cal_iut.export.formatter import build_export_rows, to_csv, to_json
 from cal_iut.export.html_view import build_and_render
 from cal_iut.feedback.weights import analyze_corrections, apply_learned_weights
+from cal_iut.ingestion import surcharges_reference
 from cal_iut.ingestion.config_loader import (
     load_groups,
     load_objective_weights,
@@ -350,7 +351,7 @@ _PROTECTED_PREFIXES = (
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
-    "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
+    "/reference", "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
 )
 
 
@@ -1164,6 +1165,9 @@ def _try_restore_latest(state: object) -> None:
             state.sessions, state.sessions_by_id
         )
         session_overrides.apply_to(state.sessions_by_id)
+        # Intitulés saisis dans l'appli pour les matières qui n'en ont pas
+        # (`ingestion/surcharges_reference.py`, `api/reference.py`).
+        surcharges_reference.appliquer_intitules(state.sessions, state.courses)
 
         current = repo.db.query(CurrentPlacement).filter_by(run_id=run.id).all()
         # Un placement dont la séance n'existe PLUS après ré-ingestion est un
@@ -1633,6 +1637,7 @@ def ingest(body: IngestRequest) -> dict[str, object]:
         state.sessions, state.sessions_by_id
     )
     session_overrides.apply_to(state.sessions_by_id)
+    surcharges_reference.appliquer_intitules(state.sessions, state.courses)
     state.filter_parcours = body.parcours
     state.filter_semestre = body.semestre
     state.semestre_group = body.semestre_group
@@ -6830,6 +6835,12 @@ def controle_doublons_hebdo_executer() -> DoublonHebdoRunResponse:
 from cal_iut.api.v1 import router as _router_v1
 
 app.include_router(_router_v1)
+
+# Compléter une information de référence manquante (29/09/2026, cf.
+# `api/reference.py`) — protégé par le préfixe `/reference`.
+from cal_iut.api.reference import router as _router_reference
+
+app.include_router(_router_reference)
 
 from cal_iut.mcp.http_rpc import handle_mcp_post
 from cal_iut.mcp.server import MCP_ASGI

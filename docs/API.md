@@ -33,6 +33,7 @@ out ») : **`/api/v1/docs`**, schéma OpenAPI brut : **`/api/v1/openapi.json`**
 | `/api/v1/calendrier` | Fériés, vacances, évènements, jours SAE, réservations de salles | compte actif | oui |
 | `/api/v1/a-traiter` | Écran « À traiter » : points à corriger / à revoir | compte actif ² | oui |
 | `/api/v1/controles/doublons` | Salle ou enseignant pris deux fois | rôle **edit** | oui |
+| `/api/v1/manques` | Données de référence à compléter (mail, nom, Celcat, type de salle, intitulé) | compte actif | — |
 | `/api/v1/contraintes` | Règles globales + contrainte et verdict de chaque enseignant | compte actif | — |
 | `/api/v1/enseignants/{code}/contraintes` | La même chose pour un enseignant | compte actif | — |
 | `/api/v1/charges` | Heures par enseignant, groupe, cours, parcours ; occupation des salles | compte actif | oui ³ |
@@ -622,6 +623,56 @@ curl --compressed -H "Authorization: Bearer $CLE" \
 
 `ressource` : nom de l'enseignant (`type: "enseignant"`) ou salle(s).
 
+### `GET /api/v1/manques`
+
+Droits : compte actif (tout rôle). Pas de filtre.
+
+Tout ce que l'appli signale comme **manquant** dans les données de
+référence — la même liste que la section « Données à compléter » de l'écran
+« À traiter » et que les fiches enseignant et salle :
+
+| `famille` | `champ` | Manque | `gravite` | `role_requis` |
+|---|---|---|---|---|
+| `enseignant` | `email` | adresse mail | `bloque_envoi_liens` | `edit` |
+| `enseignant` | `nom` | nom complet (seul le code est connu) | `cosmetique` | `edit` |
+| `enseignant` | `code_celcat` | correspondance Celcat (enseignant qui a des séances placées) | `bloque_celcat` | `admin` |
+| `salle` | `code_celcat` | correspondance Celcat | `bloque_celcat` | `admin` |
+| `salle` | `type` | type d'une salle ajoutée à la main (posé d'office à « standard ») | `cosmetique` | `edit` |
+| `cours` | `intitule` | intitulé (vide ou égal au code) | `cosmetique` | `edit` |
+| `cours` | `code_celcat` | code Celcat de la matière, ou son identifiant interne | `bloque_celcat` | `null` |
+| `groupe` | `id_celcat` | identifiant interne Celcat du groupe | `bloque_celcat` | `null` |
+| `seance` | `salle` | séance placée sans salle (« salle à définir ») | `bloque_celcat` | `edit` |
+
+- `role_requis: null` : ne se complète pas depuis l'appli — identifiant
+  interne relevé dans Celcat, à ajouter au fichier de configuration indiqué
+  par `ou_completer` (déploiement).
+- `ecran` : où compléter dans l'appli (champs du fragment d'URL, ex.
+  `{"vue": "prof", "prof": "KBR"}`).
+- **Aucune valeur n'y figure** — ni adresse, ni code Celcat : seulement ce
+  qui manque, et où. Trié du plus grave au moins grave.
+
+```bash
+curl --compressed -H "Authorization: Bearer $CLE" "https://cal-iut-mmi.srko.fr/api/v1/manques"
+```
+
+```json
+{"revision": 1790000000000, "modifie_le": "2026-09-29T10:12:03+00:00", "total": 2,
+ "par_gravite": {"bloque_celcat": 1, "bloque_envoi_liens": 1}, "par_famille": {"enseignant": 2},
+ "manques": [
+  {"id": "enseignant:JHU:code_celcat", "famille": "enseignant", "cle": "JHU", "libelle": "Jules Huet",
+   "champ": "code_celcat", "champ_libelle": "Correspondance Celcat", "gravite": "bloque_celcat",
+   "usage": "36 séances placées", "nb_seances": 36, "role_requis": "admin",
+   "ou_completer": "Écran Celcat, ou ici pour un administrateur.", "ecran": {"vue": "celcat"}},
+  {"id": "enseignant:MNI:email", "famille": "enseignant", "cle": "MNI", "libelle": "Marc Nino",
+   "champ": "email", "champ_libelle": "Adresse mail", "gravite": "bloque_envoi_liens",
+   "usage": "4 séances placées", "nb_seances": 4, "role_requis": "edit",
+   "ou_completer": "Annuaire des enseignants, fiche de l'enseignant ou « À traiter ».",
+   "ecran": {"vue": "prof", "prof": "MNI"}}]}
+```
+
+Compléter une donnée n'est **pas** dans v1 (lecture seule) : c'est l'appli
+qui écrit, par ses routes internes `PUT /reference/…` (cf. §7).
+
 ### `GET /api/v1/contraintes` · `GET /api/v1/enseignants/{code}/contraintes`
 
 L'écran **Contraintes** : chaque règle institutionnelle avec son verdict
@@ -936,3 +987,24 @@ while True:
   public (`tests/test_lien_perso_perimetre_2026_09_29.py`, qui parcourt
   toutes les routes effectives) et par le contrôle de couverture
   d'authentification au démarrage.
+
+### Compléter une donnée de référence (routes internes, hors v1)
+
+`api/reference.py` — une fonction par famille, une seule liste des manques.
+Écritures dans le volume `data/state/` (jamais `data/config/`, figé dans
+l'image), sous le verrou d'écriture, journalisées (qui, quand, valeur
+d'avant, `data/state/references.json`) ; la révision avance.
+
+| Route | Corps | Droits | Persistance |
+|---|---|---|---|
+| `GET /reference/manques` | — | compte actif | — |
+| `PUT /reference/enseignants/{code}/contact` | `{"email"}` — format validé, minuscules, refus d'une adresse déjà attribuée ou déjà dans `teacher_contacts.yaml` | `edit` | `references.json` |
+| `PUT /reference/enseignants/{code}` | `{"nom"}` (`edit`), `{"code_celcat"}` (`admin`) | voir corps | `references.json`, `celcat_mappings.json` |
+| `PUT /reference/salles/{id}` | `{"capacite", "type"}` (salle ajoutée à la main, `edit`), `{"code_celcat"}` (`admin`) | voir corps | `custom_rooms.json`, `celcat_mappings.json` |
+| `PUT /reference/cours/{code}` | `{"intitule"}` | `edit` | `references.json` |
+
+La configuration garde le dernier mot : une saisie ne sert que tant que le
+fichier (ou la maquette, la feuille des contraintes) ne fournit pas la
+valeur ; une donnée déjà fournie par eux est refusée (409) et se corrige
+dans le fichier. Seules les correspondances Celcat, comme sur l'écran
+Celcat, passent par-dessus `celcat.yaml`.
