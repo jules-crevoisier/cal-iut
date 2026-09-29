@@ -161,6 +161,14 @@ class EmailToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # Jeton `confirm_email` seulement (audit du 29/09/2026, P0-3) : le hash
+    # du mot de passe choisi LORS DE L'INSCRIPTION QUI A ÉMIS CE JETON,
+    # appliqué au compte à la confirmation. Sans lui, une pré-inscription
+    # par un tiers sur l'adresse d'un collègue fixait le mot de passe du
+    # compte que le collègue confirmait ensuite. Nullable : colonne ajoutée
+    # après coup (`_ajouter_colonnes_manquantes`), `None` pour les anciens
+    # jetons et pour les jetons de réinitialisation.
+    pending_password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="tokens", foreign_keys=[user_id])
 

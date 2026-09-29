@@ -443,18 +443,35 @@ def auth_signup(body: SignupRequest) -> SignupResponse | JSONResponse:
     if existing is not None and existing.status != "pending_email":
         return JSONResponse(status_code=409, content={"message": "Un compte existe déjà pour cet email."})
 
+    password_hash = accounts.hash_password(body.password)
     if existing is None:
-        user = repo.create_pending_user(email, accounts.hash_password(body.password))
+        user = repo.create_pending_user(email, password_hash)
     else:
         # Anti mail-scanner-prefetch (décision verrouillée) : un second
         # signup sur une adresse encore `pending_email` ne 409 PAS, il
         # réémet un jeton frais et invalide les précédents plutôt que de
         # laisser croire qu'il n'y a rien à faire.
+        #
+        # Audit du 29/09/2026 (P0-3) : cette réémission GARDAIT le mot de
+        # passe de la PREMIÈRE inscription. Un tiers s'inscrivait avec
+        # l'adresse d'un collègue et son propre mot de passe ; le collègue,
+        # en s'inscrivant puis en confirmant, activait un compte dont le
+        # tiers connaissait le mot de passe. Désormais la dernière
+        # inscription remplace le mot de passe, et surtout c'est le mot de
+        # passe porté par LE JETON CONFIRMÉ qui est appliqué à la
+        # confirmation (`auth_confirm_email`) : seul le détenteur de la
+        # boîte mail confirme, et il confirme le mot de passe qu'il a
+        # lui-même choisi.
         user = existing
+        user.password_hash = password_hash
+        repo.db.commit()
         repo.invalidate_outstanding_tokens(user.id, "confirm_email")
 
     raw, token_hash = accounts.build_confirm_token()
-    repo.create_token(user.id, token_hash, "confirm_email", accounts.confirm_token_expiry())
+    repo.create_token(
+        user.id, token_hash, "confirm_email", accounts.confirm_token_expiry(),
+        pending_password_hash=password_hash,
+    )
     link = accounts.confirmation_link(raw)
     # Revue qualité du 31/08/2026 : contrairement à `/auth/forgot-password`,
     # cet envoi n'était pas protégé — une panne Resend (ou une adresse
@@ -488,8 +505,13 @@ def auth_confirm_email(token: str) -> RedirectResponse:
         return RedirectResponse(f"{base}/#compte=confirme&statut=erreur", status_code=302)
 
     user = repo.get_by_id(entry.user_id)
+    mot_de_passe_du_jeton = entry.pending_password_hash
     repo.consume_token(entry)
     if user is not None:
+        # Mot de passe de l'inscription qui a émis CE lien (P0-3, cf.
+        # `auth_signup`) — `None` pour un jeton émis avant ce correctif.
+        if mot_de_passe_du_jeton:
+            user.password_hash = mot_de_passe_du_jeton
         repo.mark_email_confirmed(user)
     return RedirectResponse(f"{base}/#compte=confirme&statut=ok", status_code=302)
 
