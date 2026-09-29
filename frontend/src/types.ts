@@ -127,16 +127,3 @@ export interface NotificationConfig {
 }
 
 export type ViewMode = "group" | "teacher" | "room";
-
-export interface CalendarEventExtended {
-  sessionId: string;
-  courseCode: string;
-  sessionType: string;
-  roomLabel: string | null;
-  teacherCodes: string[];
-  isEval: boolean;
-  locked: boolean;
-  week: number;
-  day: number;
-  slot: number;
-}

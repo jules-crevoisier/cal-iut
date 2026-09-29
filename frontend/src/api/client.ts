@@ -7,7 +7,7 @@ import type {
   TimetableResponse,
   ValidationResponse,
 } from "../types";
-import type { AppException, AppPayload } from "../types/app";
+import type { AppPayload } from "../types/app";
 
 const BASE = "";
 
@@ -247,11 +247,6 @@ export async function logout(): Promise<void> {
   await request("/auth/logout", { method: "POST" });
 }
 
-export async function checkAuthStatus(): Promise<boolean> {
-  const r = await request<{ authenticated: boolean }>("/auth/status");
-  return r.authenticated;
-}
-
 /** `null` = pas connecté (401). Toute autre erreur (panne réseau, serveur en
  * erreur) REMONTE : avant, elle rendait `null` elle aussi, et une coupure
  * réseau affichait l'écran de connexion à quelqu'un de bien connecté (audit
@@ -413,33 +408,6 @@ export function fetchVersion(): Promise<VersionEtat> {
   return request<VersionEtat>("/api/v1/version");
 }
 
-export function ingest(parcours: string, semestre: string): Promise<Record<string, unknown>> {
-  return request("/ingest", {
-    method: "POST",
-    body: JSON.stringify({ parcours, semestre }),
-  });
-}
-
-export function solve(params: {
-  parcours: string;
-  semestre: string;
-  weeks?: number;
-  optimize_gaps?: boolean;
-}): Promise<TimetableResponse> {
-  return request<TimetableResponse>("/solve", {
-    method: "POST",
-    body: JSON.stringify({
-      // weeks omis si non fourni : le backend calcule l'horizon par défaut
-      // depuis le calendrier réel (cal_iut.calendar.academic.default_horizon_weeks).
-      ...(params.weeks !== undefined ? { weeks: params.weeks } : {}),
-      optimize_gaps: params.optimize_gaps ?? false,
-      assign_rooms: true,
-      parcours: params.parcours,
-      semestre: params.semestre,
-    }),
-  });
-}
-
 export function fetchTimetable(params: {
   group_id?: string;
   teacher_code?: string;
@@ -493,66 +461,12 @@ export function movePlacement(
   });
 }
 
-export function fetchCorrections(): Promise<Record<string, unknown>[]> {
-  return request("/corrections");
-}
-
 export function exportCsvUrl(): string {
   return `${BASE}/export/csv`;
 }
 
 export function exportJson(): Promise<Record<string, unknown>[]> {
   return request("/export/json");
-}
-
-// ── Exceptions ponctuelles + régénération ciblée ──
-// Portage de la section "ONGLET SEMAINE" de `export/templates/timetable.html`
-// (`renderExceptionList`/le handler `regenBtn`) — jusqu'ici jamais câblée
-// côté React alors que le backend l'exposait déjà entièrement (retour
-// utilisateur 11/08/2026, cf. docs/DATA.md).
-
-export function listExceptions(): Promise<AppException[]> {
-  return request<AppException[]>("/exceptions");
-}
-
-export function createException(body: {
-  kind: "teacher_absence" | "room_unavailable";
-  exception_date: string;
-  teacher_code?: string | null;
-  room_id?: string | null;
-  reason?: string | null;
-}): Promise<AppException> {
-  return request<AppException>("/exceptions", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
-export function deleteException(id: number): Promise<{ deleted: boolean }> {
-  return request(`/exceptions/${id}`, { method: "DELETE" });
-}
-
-export interface RegenResult {
-  status: string;
-  touched_weeks: number[];
-  placements: Placement[];
-  message: string;
-}
-
-export function regenWeek(week: number, extendNext: boolean): Promise<{ job_id: string; status: string }> {
-  return request("/regen/week", {
-    method: "POST",
-    body: JSON.stringify({ week, extend_next: extendNext }),
-  });
-}
-
-export type RegenStatus =
-  | { job_id: string; status: "running" }
-  | { job_id: string; status: "done"; result: RegenResult }
-  | { job_id: string; status: "error"; error: string };
-
-export function fetchRegenStatus(jobId: string): Promise<RegenStatus> {
-  return request<RegenStatus>(`/regen/status?job_id=${encodeURIComponent(jobId)}`);
 }
 
 export function extractTeachers(placements: Placement[]): string[] {
