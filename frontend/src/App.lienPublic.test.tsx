@@ -52,9 +52,9 @@ describe("App en lien public", () => {
     // Laisse partir les appels déclenchés après le premier rendu.
     await new Promise((r) => setTimeout(r, 50));
     const chemins = vi.mocked(fetch).mock.calls.map(([url]) => new URL(String(url), "http://localhost").pathname);
-    const horsListe = chemins.filter(
-      (c) => !c.startsWith("/auth/") && !LECTURES_PUBLIQUES.some((p) => c.startsWith(p)),
-    );
+    // `/auth/me` compris : un lien public n'a jamais de session, la question
+    // partait en 401 à chaque ouverture (erreur rouge dans la console).
+    const horsListe = chemins.filter((c) => !LECTURES_PUBLIQUES.some((p) => c.startsWith(p)));
     expect(horsListe).toEqual([]);
   });
 });

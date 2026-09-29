@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   applyFeedback,
+  ecouterLiaison,
+  ErreurApi,
   exportCsvUrl,
   exportJson,
   extractTeachers,
@@ -11,12 +13,16 @@ import {
   fetchFeedbackAnalysis,
   fetchMeta,
   fetchMoi,
+  fetchSante,
   fetchTimetable,
+  fetchVersion,
   logout,
   setAccessToken,
 } from "./api/client";
-import type { MoiResponse } from "./api/client";
+import type { EtatSante, MoiResponse } from "./api/client";
 import { AccountPendingGate } from "./components/AccountPendingGate";
+import { BandeauPanne, BandeauServeurDegrade } from "./components/BandeauPanne";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
 import { EmailConfirmedPage } from "./components/EmailConfirmedPage";
@@ -69,6 +75,8 @@ import { SallesLibresView } from "./views/SallesLibresView";
 import { TodoView } from "./views/TodoView";
 
 const DEFAULT_PARCOURS = "BUT1";
+// Serveur injoignable : nouvelle tentative à ce rythme tant que dure la panne.
+const REESSAI_PANNE_MS = 15_000;
 // Plage d'affichage du sélecteur de semaine dans le Toolbar (UI uniquement) —
 // l'horizon réel du solveur est calculé côté backend depuis le calendrier
 // (cf. cal_iut.calendar.academic.default_horizon_weeks), pas fixé ici.
@@ -161,8 +169,31 @@ export function App() {
   // sinon le compte connecté (actif ou non — `moi.status` distingue).
   const [moi, setMoi] = useState<MoiResponse | null | undefined>(undefined);
   const rafraichirMoi = useCallback(() => {
-    fetchMoi().then(setMoi).catch(() => setMoi(null));
+    // `fetchMoi` ne rend `null` que sur un vrai 401. Une panne laisse `moi`
+    // tel quel (inconnu, ou le compte déjà connu) : le bandeau de panne le
+    // dit, et jamais l'écran de connexion à quelqu'un de bien connecté
+    // (audit du 29/09/2026, P1-13).
+    fetchMoi()
+      .then(setMoi)
+      .catch(() => undefined);
   }, []);
+
+  // Serveur injoignable (cf. `api/client.ts::ecouterLiaison`) : bandeau au
+  // lieu d'écrans vides ou trompeurs. Et une session qui expire en cours de
+  // travail (401 sur n'importe quel appel) ramène à l'écran de connexion —
+  // jamais sur un lien public, qui n'a pas de session.
+  const [panne, setPanne] = useState(false);
+  const lienPublicRef = useRef(readOnlyTarget !== null);
+  lienPublicRef.current = readOnlyTarget !== null;
+  useEffect(
+    () =>
+      ecouterLiaison((evenement) => {
+        if (evenement === "panne") setPanne(true);
+        else if (evenement === "retablie") setPanne(false);
+        else if (!lienPublicRef.current) setMoi((avant) => (avant ? null : avant));
+      }),
+    [],
+  );
 
   // Code du lien personnel (`route.t`, prof ou groupe) — posé AVANT tout
   // appel API (cf. api/client.ts::setAccessToken) : sans cet ordre, les
@@ -171,42 +202,49 @@ export function App() {
     setAccessToken(route.t || null);
   }, [route.t]);
 
+  // Lien public (`?t=`, readOnlyTarget) : le serveur ne sert plus que les
+  // lectures des vues publiques (`/meta`, `/app-state`, `/timetable`,
+  // `/ics/`, cf. `_LIEN_PERSO_PREFIXES` dans `api/main.py`). Les routes
+  // d'administration (diff, analyse des corrections, doublons) y répondent
+  // 401 : ne pas les appeler du tout. Ni `/auth/me` : un lien public n'a
+  // jamais de session, la question partait en 401 à chaque ouverture.
+  const lienPublic = readOnlyTarget !== null;
   useEffect(() => {
-    rafraichirMoi();
-  }, [rafraichirMoi]);
+    if (!lienPublic) rafraichirMoi();
+  }, [rafraichirMoi, lienPublic]);
 
   const refreshMeta = useCallback(async () => {
     try {
       setMeta(await fetchMeta());
     } catch (e) {
+      // Panne ou session : le bandeau (ou l'écran de connexion) le dit déjà.
+      if (e instanceof ErreurApi && e.genre !== "refus") return;
       setError(e instanceof Error ? e.message : "Erreur meta");
     }
   }, []);
 
+  // Pourquoi `appPayload` est vide : pas encore reçu, aucun planning côté
+  // serveur (404), ou chargement impossible (panne). Avant, une panne
+  // s'affichait « Aucun planning résolu » (audit du 29/09/2026, P1-13).
+  const [etatPlanning, setEtatPlanning] = useState<"chargement" | "charge" | "absent" | "echec">("chargement");
   const refreshAppState = useCallback(async () => {
     try {
       const recu = await fetchAppState();
       setAppPayload(recu);
+      setEtatPlanning("charge");
       if (!semaineInitialisee.current && recu?.weekRows?.length) {
         semaineInitialisee.current = true;
         setDisplayWeek(indexSemaineCourante(recu.weekRows));
       }
-    } catch {
-      // Pas encore de planning résolu — les vues en lecture seule affichent
-      // un message d'attente plutôt qu'une erreur bruyante. Un état DÉJÀ
-      // affiché est gardé tel quel (plus de `setAppPayload(null)`) : depuis
-      // `useRevision`, ce rechargement part aussi tout seul, et une coupure
-      // réseau d'une seconde ne doit pas vider l'écran de quelqu'un en train
-      // de travailler.
+    } catch (e) {
+      // Un état DÉJÀ affiché est gardé tel quel (jamais `setAppPayload(null)`) :
+      // ce rechargement part aussi tout seul (`useRevision`), et une coupure
+      // réseau ne doit pas vider l'écran de quelqu'un en train de travailler.
+      setEtatPlanning((avant) =>
+        avant === "charge" ? avant : e instanceof ErreurApi && e.status === 404 ? "absent" : "echec",
+      );
     }
   }, []);
-
-  // Lien public (`?t=`, readOnlyTarget) : le serveur ne sert plus que les
-  // lectures des vues publiques (`/meta`, `/app-state`, `/timetable`,
-  // `/ics/`, cf. `_LIEN_PERSO_PREFIXES` dans `api/main.py`). Les routes
-  // d'administration (diff, analyse des corrections, doublons) y répondent
-  // 401 : ne pas les appeler du tout.
-  const lienPublic = readOnlyTarget !== null;
 
   const refreshDiff = useCallback(async () => {
     if (lienPublic) return;
@@ -304,19 +342,79 @@ export function App() {
   // changé revient en 304 (ETag) — le coût d'un rechargement est celui de ce
   // qui a vraiment changé. Lien public en lecture seule : sondage espacé,
   // personne n'y attend une mise à jour à la seconde.
+  // Planning enregistré mais non chargé côté serveur (`/health` en 503
+  // `degraded`) : montré aux admins, les seuls à pouvoir y remédier.
+  const estAdmin = !readOnlyTarget && compteActif && moi?.role === "admin";
+  const [sante, setSante] = useState<EtatSante | null>(null);
+  const rafraichirSante = useCallback(async () => {
+    if (!estAdmin) return;
+    try {
+      setSante(await fetchSante());
+    } catch {
+      // Panne : c'est le bandeau de panne qui parle.
+    }
+  }, [estAdmin]);
+  useEffect(() => {
+    void rafraichirSante();
+  }, [rafraichirSante]);
+
+  const toutRecharger = () => {
+    void refreshAppState();
+    if (readOnlyTarget) return;
+    void refreshMeta();
+    void refreshDoublonsCount();
+    void refreshDiff();
+    void loadTimetable();
+    if (activeTab === "promo") void loadPromoTimetable();
+    void rafraichirSante();
+  };
   const { verifierMaintenant } = useRevision({
     actif: !!readOnlyTarget || compteActif,
     intervalleMs: readOnlyTarget ? 3 * 60_000 : 30_000,
-    onChange: () => {
-      void refreshAppState();
-      if (readOnlyTarget) return;
-      void refreshMeta();
-      void refreshDoublonsCount();
-      void refreshDiff();
-      void loadTimetable();
-      if (activeTab === "promo") void loadPromoTimetable();
-    },
+    onChange: toutRecharger,
   });
+
+  // Pendant une panne : nouvelle tentative régulière (et immédiate avec
+  // « Réessayer »). Tant que le compte est inconnu, c'est `/auth/me` qu'on
+  // retente ; sinon, un sondage de révision suffit à savoir si le serveur
+  // répond. Au retour, tout ce qui dépend du serveur est rechargé une fois :
+  // un écran chargé PENDANT la panne est resté vide ou périmé.
+  const reessayer = () => {
+    if (!readOnlyTarget && moi === undefined) rafraichirMoi();
+    else void fetchVersion().catch(() => undefined);
+  };
+  const reessayerRef = useRef(reessayer);
+  reessayerRef.current = reessayer;
+  const toutRechargerRef = useRef(toutRecharger);
+  toutRechargerRef.current = toutRecharger;
+  const panneAvant = useRef(false);
+  const dernierRechargementApresPanne = useRef(0);
+  useEffect(() => {
+    const sortieDePanne = panneAvant.current && !panne;
+    panneAvant.current = panne;
+    if (sortieDePanne) {
+      // Au plus un rechargement par intervalle de réessai : si une seule
+      // ressource reste en échec pendant que les autres répondent, panne et
+      // retour s'enchaîneraient sinon en boucle serrée contre le serveur.
+      const maintenant = Date.now();
+      if ((readOnlyTarget || compteActif) && maintenant - dernierRechargementApresPanne.current >= REESSAI_PANNE_MS) {
+        dernierRechargementApresPanne.current = maintenant;
+        toutRechargerRef.current();
+      }
+      return;
+    }
+    if (!panne) return;
+    const minuterie = setInterval(() => reessayerRef.current(), REESSAI_PANNE_MS);
+    return () => clearInterval(minuterie);
+  }, [panne, readOnlyTarget, compteActif]);
+
+  // Planning jamais reçu à cause d'une panne : il est retenté à son tour,
+  // même si le reste du serveur répond (délai dépassé sur lui seul).
+  useEffect(() => {
+    if (etatPlanning !== "echec") return;
+    const minuterie = setInterval(() => void refreshAppState(), REESSAI_PANNE_MS);
+    return () => clearInterval(minuterie);
+  }, [etatPlanning, refreshAppState]);
 
   const handlePlacementUpdated = (updated: Placement) => {
     setPlacements((prev) => prev.map((p) => (p.session_id === updated.session_id ? updated : p)));
@@ -478,7 +576,14 @@ export function App() {
     );
   }
   if (!readOnlyTarget && moi === undefined) {
-    return <div className="app" aria-busy="true" />;
+    // Serveur injoignable dès l'ouverture : on ne sait pas encore si une
+    // session existe — le dire, plutôt qu'une page blanche ou le formulaire
+    // de connexion.
+    return (
+      <div className="app" aria-busy={!panne}>
+        {panne && <BandeauPanne onReessayer={reessayer} />}
+      </div>
+    );
   }
   if (!readOnlyTarget && moi !== null && moi !== undefined && moi.status !== "active") {
     return <AccountPendingGate email={moi.email} onDeconnecte={() => setMoi(null)} />;
@@ -578,6 +683,9 @@ export function App() {
             </header>
           )}
 
+          {panne && <BandeauPanne onReessayer={reessayer} />}
+          {estAdmin && sante?.status === "degraded" && <BandeauServeurDegrade detail={sante.detail} />}
+
           {/* `role="alert"` pour une erreur (annoncée immédiatement), `status` pour
               une information (annoncée sans interrompre). Sans eux, un message
               d'erreur apparaissait sans qu'un lecteur d'écran le signale. */}
@@ -598,6 +706,10 @@ export function App() {
           )}
 
           <main className="app-main" id="contenu" tabIndex={-1}>
+        {/* Un écran qui plante n'emporte plus toute la page (audit du
+            29/09/2026, P1-13) : la navigation reste utilisable, et changer
+            d'écran efface l'erreur. */}
+        <ErrorBoundary cle={activeTab}>
         {activeTab === "semaine" && !readOnlyTarget && (
           // Vue Semaine, refonte du 29/09/2026 : barre d'outils en deux lignes
           // (quoi / quand), grille pleine largeur, détail de la séance choisie
@@ -654,10 +766,7 @@ export function App() {
                 {narrow && viewMode === "group" && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
 
                 {placements.length === 0 ? (
-                  <div className="empty-state">
-                    <p>Aucun planning chargé.</p>
-                    <p className="muted">Lancez le solveur CP-SAT en CLI (cal-iut solve / load-run), puis rechargez cette page.</p>
-                  </div>
+                  <EtatPlanningVide etat={panne ? "echec" : etatPlanning} />
                 ) : solverWeek === null ? (
                   <div className="empty-state">
                     <p>Semaine fermée (vacances). Choisissez une autre semaine.</p>
@@ -722,12 +831,13 @@ export function App() {
             </div>
           </div>
         )}
-        {activeTab !== "semaine" && activeTab !== "promo" && activeTab !== "comptes" && activeTab !== "celcat" && activeTab !== "mcp" && !appPayload && (
-          <div className="empty-state">
-            <p>Aucun planning résolu.</p>
-            <p className="muted">Générez un planning depuis la Vue Semaine pour voir cette page.</p>
-          </div>
-        )}
+        {activeTab !== "semaine" &&
+          activeTab !== "promo" &&
+          activeTab !== "comptes" &&
+          activeTab !== "celcat" &&
+          activeTab !== "sauvegardes" &&
+          activeTab !== "mcp" &&
+          !appPayload && <EtatPlanningVide etat={etatPlanning} />}
 
         {activeTab === "groupe" && appPayload && (
           <GroupeView
@@ -817,6 +927,7 @@ export function App() {
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
         {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}
+        </ErrorBoundary>
           </main>
         </div>
       </div>
@@ -841,6 +952,33 @@ export function App() {
   );
 }
 
+
+/** Pas (encore) de planning à montrer — en disant pourquoi : chargement en
+ *  cours, aucun planning côté serveur, ou serveur injoignable. Avant, une
+ *  panne s'affichait « Aucun planning résolu » (audit du 29/09/2026, P1-13). */
+function EtatPlanningVide({ etat }: { etat: "chargement" | "charge" | "absent" | "echec" }) {
+  if (etat === "echec") {
+    return (
+      <div className="empty-state">
+        <p>Le planning n'a pas pu être chargé : le serveur ne répond pas.</p>
+        <p className="muted">Nouvelle tentative automatique — rien n'est perdu.</p>
+      </div>
+    );
+  }
+  if (etat === "chargement") {
+    return (
+      <div className="empty-state" aria-busy="true">
+        <p>Chargement du planning…</p>
+      </div>
+    );
+  }
+  return (
+    <div className="empty-state">
+      <p>Aucun planning résolu.</p>
+      <p className="muted">Le planning se génère en ligne de commande (cal-iut solve / load-run), puis rechargez cette page.</p>
+    </div>
+  );
+}
 
 /** Réglage des couleurs, gardé accessible après le premier choix : une
  *  préférence qu'on ne peut plus changer est un piège.

@@ -379,7 +379,17 @@ a.btn {
   border-bottom-color: color-mix(in srgb, var(--accent) 25%, var(--border));
 }
 
-.banner button {
+/* Serveur injoignable (cf. `BandeauPanne`) : un état passager, pas une
+   erreur de l'utilisateur — orange plutôt que rouge. */
+.banner--warn {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  border-bottom-color: color-mix(in srgb, var(--warn) 30%, var(--border));
+}
+
+/* Le bouton de fermeture « × » ; un vrai bouton (`.btn`, « Réessayer »)
+   garde son style commun. */
+.banner button:not(.btn) {
   background: none;
   border: none;
   color: inherit;
