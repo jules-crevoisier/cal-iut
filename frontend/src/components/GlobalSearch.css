@@ -32,7 +32,9 @@
   border-bottom: 1px solid var(--border);
 }
 
-.searchbox-champ input {
+/* Par identifiant : le style de base des champs (app.css) est très
+   spécifique, et ce champ-là n'a ni bordure ni fond propres. */
+#recherche-globale {
   flex: 1;
   min-width: 0;
   min-height: 40px;
@@ -42,7 +44,7 @@
   font-size: 1rem;
 }
 
-.searchbox-champ input:focus-visible {
+#recherche-globale:focus-visible {
   outline: none;
 }
 

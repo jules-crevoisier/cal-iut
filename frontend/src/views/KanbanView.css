@@ -154,17 +154,6 @@
 /* ── Ajout rapide ── */
 .kanban-ajout input {
   width: 100%;
-  background: transparent;
-  border-color: transparent;
-}
-
-.kanban-ajout input:hover:not(:disabled):not(:focus) {
-  background: var(--surface);
-  border-color: var(--border);
-}
-
-.kanban-ajout input:focus-visible {
-  background: var(--surface);
 }
 
 /* ── Cartes ── */
