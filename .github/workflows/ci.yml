@@ -24,11 +24,22 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          # Même version que l'image de production (`Dockerfile`,
+          # `python:3.11-slim`) : tester sous 3.13 laissait passer ce qui
+          # casse en 3.11 (audit du 29/09/2026, P1-11).
+          python-version: "3.11"
           cache: pip
 
       - name: Installer le projet
         run: pip install -e ".[dev]"
+
+      - name: Lint (erreurs de syntaxe et noms indéfinis)
+        # Jeu de règles volontairement réduit (E9, F63, F7, F82) : ce qui est
+        # un bug certain (un `NameError` à l'exécution, cf. `cal-iut export`
+        # corrigé à l'introduction de cette étape). Le jeu par défaut de ruff
+        # remonte ~60 remarques de style sur le code existant ; à élargir
+        # une fois celles-ci traitées.
+        run: ruff check --select E9,F63,F7,F82 src tests
 
       - name: Ingestion (génère data/generated/*.json)
         # `data/generated/` est gitignoré (artefact de build local) — sans
@@ -51,7 +62,7 @@ jobs:
         run: pytest -q -m "not slow and not local"
 
   frontend:
-    name: Build frontend
+    name: Tests et build frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,6 +76,12 @@ jobs:
       - name: Installer les dépendances
         working-directory: frontend
         run: npm ci
+
+      - name: Tests (vitest)
+        # Absents de la CI jusqu'au 29/09/2026 (audit, P1-11) : 4 tests
+        # étaient en échec sur `main` sans que personne ne le voie.
+        working-directory: frontend
+        run: npx vitest run
 
       - name: Vérification de types + build
         # `npm run build` enchaîne déjà `tsc -b` puis `vite build` : une

@@ -1,11 +1,14 @@
 """Hook post-écriture planning → file d'attente Celcat.
 
 Ne doit jamais faire échouer une réponse HTTP de placement : toute
-exception est avalée par `apres_ecriture_planning`.
+exception est rattrapée par `apres_ecriture_planning` — mais jamais en
+silence (audit du 29/09/2026, P1-6) : journalisée, et inscrite au journal
+Celcat (`kind="blocked"`) pour que l'écran Celcat la montre.
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,8 @@ from cal_iut.celcat.file_attente import (
 from cal_iut.celcat.lecture import EvenementCelcat, meme_creneau
 from cal_iut.celcat.logs import append as append_log
 from cal_iut.celcat.mapping import SLOT_TIMES, libelle_groupe_celcat, load_celcat_config
+
+logger = logging.getLogger(__name__)
 
 _placement_retire: Any = None
 
@@ -70,8 +75,19 @@ def noter_placement_retire(placement: Any) -> None:
 def apres_ecriture_planning(session_id: str, action: str) -> None:
     try:
         _executer(session_id, action)
-    except Exception:
-        return
+    except Exception as exc:  # noqa: BLE001 — ne jamais faire échouer le placement déjà réussi
+        # Avant : `return` muet — la modification n'atteignait jamais Celcat
+        # et rien ne le disait.
+        logger.exception("File Celcat : échec de mise en file (%s %s)", action, session_id)
+        try:
+            append_log(
+                kind="blocked",
+                motif=f"mise en file Celcat impossible ({action}) : {exc}",
+                session_id=session_id,
+                regrouper=True,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Journal Celcat : écriture impossible")
 
 
 def _event_id_journal(row: dict[str, Any]) -> int | None:

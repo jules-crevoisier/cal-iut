@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from cal_iut.mcp.tools import apply, inspect, plan
 
@@ -136,7 +137,12 @@ async def handle_mcp_post(request: Request) -> Response:
         nom = str(params.get("name") or "")
         arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
         try:
-            resultat = _appeler(nom, arguments)
+            # Dans le pool de threads (audit du 29/09/2026, P1-7) : `apply`
+            # enchaîne validations, écritures SQLite et fichiers ; appelé
+            # directement ici, il bloquait la boucle d'événements et plus
+            # AUCUNE requête n'était servie pendant ce temps. Le contexte
+            # (principal MCP, `mcp.auth._principal`) est copié dans le thread.
+            resultat = await run_in_threadpool(_appeler, nom, arguments)
         except KeyError:
             return _rpc_err(req_id, -32601, f"Unknown tool: {nom}")
         except Exception as exc:  # noqa: BLE001 — renvoyé au client MCP

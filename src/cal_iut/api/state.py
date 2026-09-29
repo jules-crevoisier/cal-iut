@@ -5,7 +5,7 @@ from pathlib import Path
 
 from cal_iut.calendar.academic import AcademicCalendar, build_default_calendar_2026_2027
 from cal_iut.db.repository import PlanningRepository
-from cal_iut.db.session import get_db, init_db
+from cal_iut.db.session import get_db, init_db_une_fois
 from cal_iut.ingestion.constraints_loader import StudentPresence
 from cal_iut.models.entities import Course, Group, Room, TeacherAvailability, TeacherDuo
 from cal_iut.models.session import SessionToPlace
@@ -56,6 +56,11 @@ class AppState:
     last_status: str | None = None
     last_objective_value: int | None = None
     last_gap_penalty: int = 0
+    # Erreur de la dernière restauration du planning au démarrage
+    # (`main._try_restore_latest`) — `None` si elle a réussi. Lue par
+    # `/health` (audit du 29/09/2026, P1-6) : un serveur qui démarre avec un
+    # planning vide parce que la config ne se relit plus doit se voir.
+    restauration_erreur: str | None = None
 
 
 _state = AppState()
@@ -66,5 +71,9 @@ def get_state() -> AppState:
 
 
 def get_repo() -> PlanningRepository:
-    init_db(_state.db_path)
+    # Schéma préparé UNE fois par chemin (audit du 29/09/2026, P1-9) — avant,
+    # chaque appel recréait un moteur et rejouait `create_all`. Le chemin
+    # peut changer en cours de route (tests, `state.db_path`) : chaque
+    # nouveau chemin est préparé à son premier usage.
+    init_db_une_fois(_state.db_path)
     return PlanningRepository(get_db(_state.db_path))

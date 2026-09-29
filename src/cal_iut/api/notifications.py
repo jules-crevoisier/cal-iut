@@ -118,9 +118,9 @@ def enregistrer_config(patch: dict[str, Any]) -> dict[str, Any]:
     if "delai_minutes" in patch:
         actuel["delai_minutes"] = max(0, int(patch["delai_minutes"]))
 
-    chemin = _chemin_config()
-    chemin.parent.mkdir(parents=True, exist_ok=True)
-    chemin.write_text(json.dumps(actuel, ensure_ascii=False, indent=2), encoding="utf-8")
+    from cal_iut.celcat.fichiers import ecrire_json
+
+    ecrire_json(_chemin_config(), actuel)
     return actuel
 
 

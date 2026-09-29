@@ -19,12 +19,19 @@ seulement celles créées ici).
 
 from __future__ import annotations
 
-import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
+
+# Lecture-modification-écriture sous verrou (audit du 29/09/2026, P0-4) :
+# deux ajouts simultanés relisaient la même liste et le second écrasait le
+# premier. Réentrant : `add_custom_session` peut être appelé depuis une
+# fonction qui le tient déjà.
+_verrou = threading.RLock()
 
 
 def _path() -> Path:
@@ -32,18 +39,13 @@ def _path() -> Path:
 
 
 def load_custom_sessions() -> list[SessionToPlace]:
-    path = _path()
-    if not path.exists():
-        return []
-    try:
-        brut = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        # Fichier absent/corrompu = aucune séance ajoutée, jamais une erreur
-        # qui empêcherait l'application entière de démarrer pour ça — même
-        # principe que `custom_rooms.load_custom_rooms`.
-        return []
+    # Absent = aucune séance ajoutée. Illisible = mis de côté puis
+    # `FichierEtatIllisible` (audit du 29/09/2026, P0-4) : rendre `[]` ici
+    # faisait réécrire le fichier avec la seule séance ajoutée ensuite, et
+    # purger au démarrage suivant les placements de toutes les autres.
+    brut = lire_json_etat(_path(), [], types=list)
     seances: list[SessionToPlace] = []
-    for item in brut if isinstance(brut, list) else []:
+    for item in brut:
         try:
             seances.append(
                 SessionToPlace(
@@ -84,59 +86,55 @@ def load_custom_sessions() -> list[SessionToPlace]:
 
 
 def _ecrire(seances: list[SessionToPlace]) -> None:
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            [
-                {
-                    "id": s.id,
-                    "course_code": s.course_code,
-                    "course_name": s.course_name,
-                    "semestre": s.semestre,
-                    "parcours": s.parcours,
-                    "annee": s.annee,
-                    "session_type": s.session_type.value,
-                    "group_ids": list(s.group_ids),
-                    "teacher_codes": list(s.teacher_codes),
-                    "duration_slots": s.duration_slots,
-                    "is_eval": s.is_eval,
-                    "note": s.metadata.get("note") or "",
-                    "created_at": s.metadata.get("created_at"),
-                    "evenement": bool(s.metadata.get("evenement")),
-                    "horaire": s.metadata.get("horaire"),
-                    "pause_midi": bool(s.metadata.get("pause_midi")),
-                }
-                for s in seances
-            ],
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+    ecrire_json(
+        _path(),
+        [
+            {
+                "id": s.id,
+                "course_code": s.course_code,
+                "course_name": s.course_name,
+                "semestre": s.semestre,
+                "parcours": s.parcours,
+                "annee": s.annee,
+                "session_type": s.session_type.value,
+                "group_ids": list(s.group_ids),
+                "teacher_codes": list(s.teacher_codes),
+                "duration_slots": s.duration_slots,
+                "is_eval": s.is_eval,
+                "note": s.metadata.get("note") or "",
+                "created_at": s.metadata.get("created_at"),
+                "evenement": bool(s.metadata.get("evenement")),
+                "horaire": s.metadata.get("horaire"),
+                "pause_midi": bool(s.metadata.get("pause_midi")),
+            }
+            for s in seances
+        ],
     )
 
 
 def add_custom_session(seance: SessionToPlace) -> None:
-    existantes = load_custom_sessions()
-    if any(s.id == seance.id for s in existantes):
-        return
-    seance.metadata.setdefault("created_at", datetime.now(timezone.utc).isoformat())
-    existantes.append(seance)
-    _ecrire(existantes)
+    with _verrou:
+        existantes = load_custom_sessions()
+        if any(s.id == seance.id for s in existantes):
+            return
+        seance.metadata.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+        existantes.append(seance)
+        _ecrire(existantes)
 
 
 def update_custom_session(seance: SessionToPlace) -> bool:
     """Remplace l'entrée `seance.id` par la version fournie. Rend `False`
     si cette séance n'a jamais été créée par ce système — on ne modifie
     jamais ici une séance dont la maquette a la charge."""
-    existantes = load_custom_sessions()
-    for i, s in enumerate(existantes):
-        if s.id == seance.id:
-            seance.metadata.setdefault("created_at", s.metadata.get("created_at"))
-            existantes[i] = seance
-            _ecrire(existantes)
-            return True
-    return False
+    with _verrou:
+        existantes = load_custom_sessions()
+        for i, s in enumerate(existantes):
+            if s.id == seance.id:
+                seance.metadata.setdefault("created_at", s.metadata.get("created_at"))
+                existantes[i] = seance
+                _ecrire(existantes)
+                return True
+        return False
 
 
 def remove_custom_session(session_id: str) -> bool:
@@ -144,12 +142,13 @@ def remove_custom_session(session_id: str) -> bool:
     ici — jamais une erreur : l'état visé (séance absente) est déjà atteint,
     et surtout ça empêche qu'on supprime jamais autre chose qu'une séance
     créée par ce système."""
-    existantes = load_custom_sessions()
-    restantes = [s for s in existantes if s.id != session_id]
-    if len(restantes) == len(existantes):
-        return False
-    _ecrire(restantes)
-    return True
+    with _verrou:
+        existantes = load_custom_sessions()
+        restantes = [s for s in existantes if s.id != session_id]
+        if len(restantes) == len(existantes):
+            return False
+        _ecrire(restantes)
+        return True
 
 
 def merge_into(

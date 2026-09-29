@@ -739,6 +739,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # `override=False` (défaut) : une variable déjà présente dans
     # l'environnement réel garde la priorité, `.env` ne fait que COMPLÉTER.
     load_dotenv()
+    # Journal applicatif (audit du 29/09/2026, P1-6) : les `logger.exception`
+    # de `cal_iut.*` (restauration du planning, file Celcat...) doivent
+    # sortir sur la sortie d'erreur, lue par `docker logs`.
+    import logging
+
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s"
+    )
 
     uvicorn.run(
         "cal_iut.api.main:app",
@@ -886,7 +894,10 @@ def cmd_export(args: argparse.Namespace) -> int:
     from cal_iut.ingestion.constraints_loader import load_all_constraints as _load_cal
 
     _bundle = _load_cal(config_dir.parents[1])
-    _semestre = sessions[0].semestre if sessions else "S1"
+    # `sessions` n'existait pas ici (NameError à chaque `cal-iut export
+    # --format csv|json`, trouvé par `ruff check --select F82` en CI).
+    _sessions = list(sessions_by_id.values())
+    _semestre = _sessions[0].semestre if _sessions else "S1"
     rows = build_export_rows(
         placements, sessions_by_id,
         _bundle.calendar, semester_week_offset(_bundle.calendar, _semestre),

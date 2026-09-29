@@ -8,12 +8,17 @@ des YAML de config.
 
 from __future__ import annotations
 
-import json
+import threading
 from pathlib import Path
 from typing import Any
 
+from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 from cal_iut.models.entities import SessionType
 from cal_iut.models.session import SessionToPlace
+
+# Lecture-modification-écriture sous verrou (audit du 29/09/2026, P0-4) :
+# deux retouches simultanées, la seconde écrasait la première.
+_verrou = threading.RLock()
 
 
 def _path() -> Path:
@@ -21,26 +26,20 @@ def _path() -> Path:
 
 
 def load_overrides() -> dict[str, dict[str, Any]]:
-    path = _path()
-    if not path.exists():
-        return {}
-    try:
-        brut = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    if not isinstance(brut, dict):
-        return {}
+    # Illisible = mis de côté puis `FichierEtatIllisible`, jamais `{}` : la
+    # retouche suivante aurait réécrit le fichier sans toutes les autres
+    # (audit du 29/09/2026, P0-4).
+    brut = lire_json_etat(_path(), {}, types=dict)
     return {str(k): v for k, v in brut.items() if isinstance(v, dict)}
 
 
 def upsert_overlay(session_id: str, champs: dict[str, Any]) -> None:
-    existants = load_overrides()
-    actuel = dict(existants.get(session_id, {}))
-    actuel.update(champs)
-    existants[session_id] = actuel
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(existants, ensure_ascii=False, indent=2), encoding="utf-8")
+    with _verrou:
+        existants = load_overrides()
+        actuel = dict(existants.get(session_id, {}))
+        actuel.update(champs)
+        existants[session_id] = actuel
+        ecrire_json(_path(), existants)
 
 
 def apply_to(sessions_by_id: dict[str, SessionToPlace]) -> None:

@@ -142,6 +142,13 @@ class User(Base):
     email_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     activated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Version des sessions (audit du 29/09/2026, P1-2) : incluse dans le
+    # cookie signé, comparée à chaque requête. L'incrémenter (nouveau mot de
+    # passe, confirmation d'email) invalide d'un coup tous les cookies déjà
+    # émis — un cookie volé ne survit plus à une réinitialisation. Nullable
+    # (colonne ajoutée après coup par `_ajouter_colonnes_manquantes`) :
+    # `None` vaut 0.
+    session_version: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
 
     tokens: Mapped[list["EmailToken"]] = relationship(back_populates="user", foreign_keys="EmailToken.user_id")
     mcp_keys: Mapped[list["McpKey"]] = relationship(back_populates="user")
@@ -161,6 +168,14 @@ class EmailToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # Jeton `confirm_email` seulement (audit du 29/09/2026, P0-3) : le hash
+    # du mot de passe choisi LORS DE L'INSCRIPTION QUI A ÉMIS CE JETON,
+    # appliqué au compte à la confirmation. Sans lui, une pré-inscription
+    # par un tiers sur l'adresse d'un collègue fixait le mot de passe du
+    # compte que le collègue confirmait ensuite. Nullable : colonne ajoutée
+    # après coup (`_ajouter_colonnes_manquantes`), `None` pour les anciens
+    # jetons et pour les jetons de réinitialisation.
+    pending_password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="tokens", foreign_keys=[user_id])
 

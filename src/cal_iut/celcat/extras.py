@@ -25,9 +25,9 @@ def _lire() -> list[dict[str, Any]]:
 
 
 def _ecrire(items: list[dict[str, Any]]) -> None:
-    path = _path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    from cal_iut.celcat.fichiers import ecrire_json
+
+    ecrire_json(_path(), items)
 
 
 def enregistrer(extra: dict[str, Any]) -> None:

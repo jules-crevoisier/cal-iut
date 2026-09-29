@@ -203,7 +203,15 @@ export function App() {
     }
   }, []);
 
+  // Lien public (`?t=`, readOnlyTarget) : le serveur ne sert plus que les
+  // lectures des vues publiques (`/meta`, `/app-state`, `/timetable`,
+  // `/ics/`, cf. `_LIEN_PERSO_PREFIXES` dans `api/main.py`). Les routes
+  // d'administration (diff, analyse des corrections, doublons) y répondent
+  // 401 : ne pas les appeler du tout.
+  const lienPublic = readOnlyTarget !== null;
+
   const refreshDiff = useCallback(async () => {
+    if (lienPublic) return;
     try {
       const [d, a] = await Promise.all([fetchDiff(), fetchFeedbackAnalysis()]);
       setDiff(d);
@@ -211,7 +219,7 @@ export function App() {
     } catch {
       /* no diff yet */
     }
-  }, []);
+  }, [lienPublic]);
 
   // Total des doublons salle/enseignant (retour Kyllian Bresson 25/09/2026,
   // cf. `api/doublons.py`) — chargé ICI (pas seulement dans `TodoView`, qui
@@ -223,6 +231,7 @@ export function App() {
   // semaine.
   const [doublonsCount, setDoublonsCount] = useState(0);
   const refreshDoublonsCount = useCallback(async () => {
+    if (lienPublic) return;
     try {
       const liste = await fetchDoublons();
       setDoublonsCount(liste.length);
@@ -230,7 +239,7 @@ export function App() {
       // Le badge garde son dernier total connu — jamais d'écran cassé pour
       // un chiffre secondaire.
     }
-  }, []);
+  }, [lienPublic]);
 
   useEffect(() => {
     // Lien perso (readOnlyTarget) : le paramètre `t` fait le travail d'auth

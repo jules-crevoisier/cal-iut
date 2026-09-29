@@ -94,8 +94,19 @@ class AccountRepository:
             q = q.filter(User.status == status)
         return q.all()
 
-    def create_token(self, user_id: int, token_hash: str, purpose: str, expires_at: datetime) -> EmailToken:
-        token = EmailToken(user_id=user_id, token_hash=token_hash, purpose=purpose, expires_at=expires_at)
+    def create_token(
+        self,
+        user_id: int,
+        token_hash: str,
+        purpose: str,
+        expires_at: datetime,
+        *,
+        pending_password_hash: str | None = None,
+    ) -> EmailToken:
+        token = EmailToken(
+            user_id=user_id, token_hash=token_hash, purpose=purpose, expires_at=expires_at,
+            pending_password_hash=pending_password_hash,
+        )
         self.db.add(token)
         self.db.commit()
         self.db.refresh(token)

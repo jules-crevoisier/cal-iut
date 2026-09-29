@@ -1,6 +1,7 @@
 """API REST FastAPI — générateur d'emplois du temps IUT MMI Troyes."""
 
 import hashlib
+import logging
 import re
 import sys
 import threading
@@ -26,6 +27,7 @@ from cal_iut.api import (
     custom_sessions,
     doublons,
     forced_pending,
+    limiteur,
     mailer,
     revision,
     sauvegardes,
@@ -129,9 +131,10 @@ from cal_iut.api.schemas import (
 from cal_iut.api.state import get_repo, get_state
 from cal_iut.api.validation import suggest_alternative_slots, validate_move
 from cal_iut.calendar.academic import semester_week_offset, week_status
+from cal_iut.celcat.fichiers import FichierEtatIllisible
 from cal_iut.db.accounts_repository import AccountRepository
 from cal_iut.db.models import CurrentPlacement, User
-from cal_iut.db.session import get_db
+from cal_iut.db.session import get_db, portee_sessions
 from cal_iut.export.formatter import build_export_rows, to_csv, to_json
 from cal_iut.export.html_view import build_and_render
 from cal_iut.feedback.weights import analyze_corrections, apply_learned_weights
@@ -177,6 +180,8 @@ YEAR_DEFINITIONS: list[tuple[int, str, list[str]]] = [
 def _parcours_for_year(parcours_list: list[str], year: int) -> list[str]:
     prefix = f"BUT{year}"
     return sorted(p for p in parcours_list if p == prefix or p.startswith(f"{prefix}-"))
+
+logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(__file__).resolve().parents[3] / "data" / "config"
 FRONTEND_DIST = Path(__file__).resolve().parents[3] / "frontend" / "dist"
@@ -228,6 +233,16 @@ async def _erreurs_validation_sans_secret(request: Request, exc: RequestValidati
             erreur["msg"] = "Valeur invalide."
         erreurs.append(erreur)
     return JSONResponse(status_code=422, content={"detail": erreurs})
+
+
+@app.exception_handler(FichierEtatIllisible)
+async def _fichier_etat_illisible(request: Request, exc: FichierEtatIllisible) -> JSONResponse:
+    """Fichier d'état JSON tronqué (audit du 29/09/2026, P0-4) : mis de côté
+    par `lire_json_etat`, l'action est refusée plutôt que de réécrire le
+    fichier à partir de rien. 503 : l'erreur tient au serveur, pas à la
+    requête, et se répare côté serveur (restaurer la copie)."""
+    logger.error("%s", exc)
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 @dataclass
@@ -333,6 +348,26 @@ _PUBLIC_PATHS = frozenset({
 # peut par nature présenter aucune session ni aucun lien perso.
 _PUBLIC_PREFIXES = ("/mcp", "/mail/pixel/")
 
+# Seules routes qu'un lien personnel public (`?t=`, sans compte) peut lire —
+# exactement ce qu'appellent les vues publiques du frontend (`mode=prof|
+# groupe|promo|salles`, cf. `App.tsx`) et les agendas abonnés au flux `.ics`
+# (`utils/ics.ts::subscribeUrl`). Tout le reste (`/legacy`, `/taches`,
+# `/exceptions`, `/diff`, `/export`...) exige un compte. Égalité stricte ou
+# sous-chemin, jamais un simple préfixe de chaîne : `/metadata` ne doit pas
+# hériter de l'ouverture de `/meta`. `/api/v1/version` : le numéro de
+# révision que les pages publiques sondent (toutes les 3 min, onglet
+# visible) pour se remettre à jour sans tout retélécharger — un entier et
+# une date, rien d'autre.
+_LIEN_PERSO_CHEMINS = frozenset({"/app-state", "/meta", "/timetable", "/api/v1/version"})
+_LIEN_PERSO_PREFIXES = ("/ics/",)
+
+
+def _lien_perso_autorise(request: Request) -> bool:
+    if request.method not in ("GET", "HEAD"):
+        return False
+    path = request.url.path
+    return path in _LIEN_PERSO_CHEMINS or path.startswith(_LIEN_PERSO_PREFIXES)
+
 
 def _routes_effectives(routes: list, prefixe: str = ""):
     """Toutes les routes, y compris celles d'un `APIRouter` inclus.
@@ -413,11 +448,18 @@ async def require_auth(request: Request, call_next):
     # Lien personnel (prof ou groupe) — public depuis le 28/08/2026, cf.
     # docstring de `auth.py` pour l'historique (jeton HMAC d'abord, puis
     # "on s'en fiche on veut qu'il soit public" en retour utilisateur final).
-    if auth.verify_personal_link_param(request.query_params.get("t")):
+    # Audit du 29/09/2026 (P0-2) : `?t=` ouvrait TOUTE route protégée sans
+    # `require_role` (`/legacy`, `/taches`, `/exceptions`... mails et
+    # contraintes des enseignants). Il n'ouvre plus que les lectures des
+    # vues publiques, cf. `_LIEN_PERSO_PREFIXES`.
+    if _lien_perso_autorise(request) and auth.verify_personal_link_param(request.query_params.get("t")):
         return await call_next(request)
 
-    user_id = accounts.verify_account_session_token(request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE))
-    user = _account_repo().get_by_id(user_id) if user_id is not None else None
+    # Version de session comprise (P1-2) : un cookie émis avant une
+    # réinitialisation de mot de passe est refusé.
+    user = accounts.utilisateur_depuis_jeton(
+        _account_repo(), request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE)
+    )
     if user is None:
         # Pas de cookie (ou cookie invalide) : une clé « caliut_… » créée
         # via /auth/mcp-keys authentifie aussi les routes générales,
@@ -531,6 +573,27 @@ def _fichiers_de_configuration() -> list[Path]:
 revision.enregistrer_sonde("etat", _empreinte_etat)
 revision.enregistrer_sonde("configuration", revision.sonde_fichiers(_fichiers_de_configuration))
 
+
+class _FermerSessionsDb:
+    """Referme en fin de requête toutes les `Session` SQLAlchemy ouvertes
+    pendant celle-ci (`get_repo()`, `_account_repo()`...), jamais refermées
+    par leurs appelants (audit du 29/09/2026, P1-9, cf. `db/session.py`).
+    ASGI pur et ajouté EN DERNIER, donc le plus à l'extérieur : il englobe
+    `require_auth` et la réponse entière, flux compris."""
+
+    def __init__(self, app_asgi) -> None:
+        self.app = app_asgi
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        with portee_sessions():
+            await self.app(scope, receive, send)
+
+
+app.add_middleware(_FermerSessionsDb)
+
 # `require_admin_session` (mot de passe partagé, `auth.verify_session_token`)
 # a existé ici avant le système de comptes du 31/08/2026 — remplacé
 # partout par `Depends(require_role("admin"))`, plus aucun appelant : cf.
@@ -538,8 +601,22 @@ revision.enregistrer_sonde("configuration", revision.sonde_fichiers(_fichiers_de
 # référence plus `require_admin_session` après fusion (vérifié par grep).
 
 
+# Plafonds des routes publiques d'authentification (audit du 29/09/2026,
+# P1-3, cf. `api/limiteur.py`) : (essais, fenêtre en secondes). Par IP
+# larges (derrière un proxy mal configuré, tout le monde partage une IP),
+# par email serrés.
+_HEURE = 3600
+_LIMITE_LOGIN_IP, _LIMITE_LOGIN_EMAIL = (30, 300), (10, 900)
+_LIMITE_MAIL_IP, _LIMITE_MAIL_EMAIL = (10, _HEURE), (3, _HEURE)
+_LIMITE_RESET_IP = (10, 900)
+
+
 @app.post("/auth/signup", response_model=SignupResponse, status_code=201)
-def auth_signup(body: SignupRequest) -> SignupResponse | JSONResponse:
+def auth_signup(body: SignupRequest, request: Request) -> SignupResponse | JSONResponse:
+    limiteur.limiter(
+        request, "signup", email=accounts.normalize_email(body.email),
+        par_ip=_LIMITE_MAIL_IP, par_email=_LIMITE_MAIL_EMAIL,
+    )
     # Vérifié EN PREMIER, avant toute écriture en base : un compte qu'aucun
     # mail de confirmation ne pourra jamais atteindre resterait bloqué en
     # `pending_email` pour toujours — même philosophie que l'ancien
@@ -559,18 +636,35 @@ def auth_signup(body: SignupRequest) -> SignupResponse | JSONResponse:
     if existing is not None and existing.status != "pending_email":
         return JSONResponse(status_code=409, content={"message": "Un compte existe déjà pour cet email."})
 
+    password_hash = accounts.hash_password(body.password)
     if existing is None:
-        user = repo.create_pending_user(email, accounts.hash_password(body.password))
+        user = repo.create_pending_user(email, password_hash)
     else:
         # Anti mail-scanner-prefetch (décision verrouillée) : un second
         # signup sur une adresse encore `pending_email` ne 409 PAS, il
         # réémet un jeton frais et invalide les précédents plutôt que de
         # laisser croire qu'il n'y a rien à faire.
+        #
+        # Audit du 29/09/2026 (P0-3) : cette réémission GARDAIT le mot de
+        # passe de la PREMIÈRE inscription. Un tiers s'inscrivait avec
+        # l'adresse d'un collègue et son propre mot de passe ; le collègue,
+        # en s'inscrivant puis en confirmant, activait un compte dont le
+        # tiers connaissait le mot de passe. Désormais la dernière
+        # inscription remplace le mot de passe, et surtout c'est le mot de
+        # passe porté par LE JETON CONFIRMÉ qui est appliqué à la
+        # confirmation (`auth_confirm_email`) : seul le détenteur de la
+        # boîte mail confirme, et il confirme le mot de passe qu'il a
+        # lui-même choisi.
         user = existing
+        user.password_hash = password_hash
+        repo.db.commit()
         repo.invalidate_outstanding_tokens(user.id, "confirm_email")
 
     raw, token_hash = accounts.build_confirm_token()
-    repo.create_token(user.id, token_hash, "confirm_email", accounts.confirm_token_expiry())
+    repo.create_token(
+        user.id, token_hash, "confirm_email", accounts.confirm_token_expiry(),
+        pending_password_hash=password_hash,
+    )
     link = accounts.confirmation_link(raw)
     # Revue qualité du 31/08/2026 : contrairement à `/auth/forgot-password`,
     # cet envoi n'était pas protégé — une panne Resend (ou une adresse
@@ -604,15 +698,24 @@ def auth_confirm_email(token: str) -> RedirectResponse:
         return RedirectResponse(f"{base}/#compte=confirme&statut=erreur", status_code=302)
 
     user = repo.get_by_id(entry.user_id)
+    mot_de_passe_du_jeton = entry.pending_password_hash
     repo.consume_token(entry)
     if user is not None:
+        # Mot de passe de l'inscription qui a émis CE lien (P0-3, cf.
+        # `auth_signup`) — `None` pour un jeton émis avant ce correctif.
+        if mot_de_passe_du_jeton:
+            user.password_hash = mot_de_passe_du_jeton
+        # Aucun cookie émis avant la preuve de possession de l'adresse ne
+        # doit survivre (P1-2).
+        accounts.revoquer_sessions(user)
         repo.mark_email_confirmed(user)
     return RedirectResponse(f"{base}/#compte=confirme&statut=ok", status_code=302)
 
 
 @app.post("/auth/login")
-def auth_login(body: LoginRequest, response: Response) -> dict:
+def auth_login(body: LoginRequest, request: Request, response: Response) -> dict:
     email = accounts.normalize_email(body.email)
+    limiteur.limiter(request, "login", email=email, par_ip=_LIMITE_LOGIN_IP, par_email=_LIMITE_LOGIN_EMAIL)
     repo = _account_repo()
     user = repo.get_by_email(email)
     # Message et code IDENTIQUES pour un email inconnu et un mauvais mot de
@@ -624,15 +727,21 @@ def auth_login(body: LoginRequest, response: Response) -> dict:
     if user.status == "disabled":
         raise HTTPException(403, "Compte désactivé.")
     response.set_cookie(
-        accounts.ACCOUNT_SESSION_COOKIE, accounts.make_account_session_token(user.id),
+        accounts.ACCOUNT_SESSION_COOKIE,
+        accounts.make_account_session_token(user.id, accounts.version_session(user)),
         max_age=accounts.ACCOUNT_SESSION_MAX_AGE_S, httponly=True, samesite="lax",
+        secure=accounts.cookie_secure(),
     )
+    # Connexion réussie : les essais précédents sur cet email ne comptent plus.
+    limiteur.limiteur.oublier(f"login:email:{email}")
     return {"role": user.role, "status": user.status}
 
 
 @app.post("/auth/logout")
 def auth_logout(response: Response) -> dict:
-    response.delete_cookie(accounts.ACCOUNT_SESSION_COOKIE)
+    response.delete_cookie(
+        accounts.ACCOUNT_SESSION_COOKIE, httponly=True, samesite="lax", secure=accounts.cookie_secure(),
+    )
     return {"ok": True}
 
 
@@ -642,10 +751,12 @@ def auth_status(request: Request) -> dict:
 
 
 @app.post("/auth/forgot-password")
-def auth_forgot_password(body: ForgotPasswordRequest) -> dict:
+def auth_forgot_password(body: ForgotPasswordRequest, request: Request) -> dict:
     # TOUJOURS 200 — un email inconnu ne doit jamais être distinguable d'un
-    # email connu (même principe anti-énumération que `/auth/login`).
+    # email connu (même principe anti-énumération que `/auth/login`). Seule
+    # exception : 429 au-delà des plafonds, pour tout email, connu ou non.
     email = accounts.normalize_email(body.email)
+    limiteur.limiter(request, "forgot", email=email, par_ip=_LIMITE_MAIL_IP, par_email=_LIMITE_MAIL_EMAIL)
     repo = _account_repo()
     user = repo.get_by_email(email)
     if user is not None and user.status == "active":
@@ -670,7 +781,8 @@ def auth_forgot_password(body: ForgotPasswordRequest) -> dict:
 
 
 @app.post("/auth/reset-password")
-def auth_reset_password(body: ResetPasswordRequest) -> dict:
+def auth_reset_password(body: ResetPasswordRequest, request: Request) -> dict:
+    limiteur.limiter(request, "reset", email=None, par_ip=_LIMITE_RESET_IP)
     repo = _account_repo()
     token_hash = hashlib.sha256(body.token.encode()).hexdigest()
     entry = repo.get_valid_token(token_hash, "reset_password")
@@ -683,6 +795,11 @@ def auth_reset_password(body: ResetPasswordRequest) -> dict:
         raise HTTPException(403, "Compte désactivé.")
 
     user.password_hash = accounts.hash_password(body.new_password)
+    # Audit du 29/09/2026 (P1-2) : un cookie volé restait valable 30 jours
+    # après le changement de mot de passe. Tous les cookies de ce compte, y
+    # compris celui de la personne qui réinitialise, sont invalidés : elle
+    # se reconnecte avec le nouveau mot de passe.
+    accounts.revoquer_sessions(user)
     repo.db.commit()
     repo.consume_token(entry)
     # Invalide TOUT le reste (y compris un autre jeton reset encore valide,
@@ -894,7 +1011,13 @@ def charger_etat_applicatif() -> None:
     state.groups = load_groups(CONFIG_DIR)
     # Salles du bâtiment + celles ajoutées depuis l'interface (volume
     # persistant, cf. `api/custom_rooms.py`).
-    state.rooms = custom_rooms.merge_into(load_rooms(CONFIG_DIR))
+    try:
+        state.rooms = custom_rooms.merge_into(load_rooms(CONFIG_DIR))
+    except FichierEtatIllisible:
+        # Fichier mis de côté (`.corrompu-…`) : démarrer avec les seules
+        # salles du bâtiment plutôt que pas du tout, mais le dire.
+        logger.exception("Salles ajoutées illisibles, démarrage avec les seules salles du bâtiment")
+        state.rooms = load_rooms(CONFIG_DIR)
     state.room_rules = parse_room_rules(load_room_assignment_rules(CONFIG_DIR))
     state.room_reservations = load_room_reservations(CONFIG_DIR, state.calendar)
     state.teacher_duos = load_teacher_duos(CONFIG_DIR)
@@ -935,6 +1058,44 @@ def charger_etat_applicatif() -> None:
 
     _try_restore_latest(state)
     revision.incrementer("etat_applicatif_charge")
+
+
+# Au-delà de cette proportion de placements sans séance, la purge des
+# orphelins s'arrête (audit du 29/09/2026, P0-4) : une séance annulée de
+# temps en temps, oui ; des centaines d'un coup, c'est une maquette mal
+# relue ou un fichier d'état perdu, et supprimer leurs placements de la
+# base rendrait la perte définitive.
+_SEUIL_ORPHELINS = 0.05
+
+
+def _orphelins_a_purger(orphelins: list, total: int) -> list:
+    """Placements orphelins qu'il est sûr de retirer de la base.
+
+    - Aucun si leur proportion dépasse `_SEUIL_ORPHELINS` : journalisé, la
+      base est laissée intacte (les placements ne sont simplement pas
+      affichés tant que leurs séances manquent).
+    - Jamais ceux d'une séance personnalisée (`-CUSTOM` dans l'id, cf.
+      `_id_seance_personnalisee`) : leur suppression normale passe par
+      `DELETE /placements/personnalisees/...`, qui retire AUSSI la ligne en
+      base. Un tel orphelin ne peut donc venir que d'un
+      `custom_sessions.json` perdu ou illisible.
+    """
+    if total and len(orphelins) > _SEUIL_ORPHELINS * total:
+        logger.error(
+            "Restauration : %d placements sur %d n'ont plus de séance (> %d %%) — "
+            "aucune purge, vérifiez la maquette et data/state/custom_sessions.json. "
+            "Exemples : %s",
+            len(orphelins), total, int(_SEUIL_ORPHELINS * 100),
+            ", ".join(c.session_id for c in orphelins[:5]),
+        )
+        return []
+    personnalises = [c for c in orphelins if "-CUSTOM" in c.session_id]
+    if personnalises:
+        logger.warning(
+            "Restauration : %d placements de séances personnalisées sans séance, conservés en base : %s",
+            len(personnalises), ", ".join(c.session_id for c in personnalises[:5]),
+        )
+    return [c for c in orphelins if "-CUSTOM" not in c.session_id]
 
 
 def _try_restore_latest(state: object) -> None:
@@ -986,7 +1147,7 @@ def _try_restore_latest(state: object) -> None:
         # passage, sinon la ligne morte survit indéfiniment.
         orphelins = [c for c in current if c.session_id not in state.sessions_by_id]
         if orphelins:
-            for c in orphelins:
+            for c in _orphelins_a_purger(orphelins, len(current)):
                 repo.remove_current_placement(c.session_id)
             current = [c for c in current if c.session_id in state.sessions_by_id]
         if current:
@@ -1008,9 +1169,14 @@ def _try_restore_latest(state: object) -> None:
                 s = state.sessions_by_id.get(c.session_id)
                 if s:
                     s.locked = c.locked
-    except Exception:
-        pass
-
+    except Exception as exc:  # noqa: BLE001 — le serveur démarre quand même, mais le dit
+        # Avant (audit du 29/09/2026, P1-6) : `pass` — une config cassée
+        # après un déploiement démarrait le serveur sur un planning vide,
+        # `/health` répondait `ok` et rien n'apparaissait dans les logs.
+        logger.exception("Restauration du planning (run %s) impossible", run.id)
+        state.restauration_erreur = f"{type(exc).__name__}: {exc}"
+    else:
+        state.restauration_erreur = None
 
 
 @dataclass
@@ -1256,9 +1422,16 @@ def app_state(request: Request) -> Response:
     return cache_http.repondre(request, _cache_app_state, ("app-state", variante), _construire)
 
 
-@app.get("/legacy", response_class=HTMLResponse)
+@app.get(
+    "/legacy", response_class=HTMLResponse, dependencies=[Depends(accounts.require_role("admin"))]
+)
 def timetable_view() -> HTMLResponse:
     """
+    Réservée aux admins (audit du 29/09/2026, P0-2/P1-8) : la page embarque
+    les adresses mail et les contraintes déclarées des enseignants, et son
+    gabarit interpole des champs saisis par les comptes `edit` sans les
+    échapper (XSS stockée).
+
     Page HTML/JS historique (même rendu que `cal-iut export --format html`),
     générée en direct depuis l'état courant du serveur. Conservée en accès
     direct pour qui préfère cette présentation ou veut vérifier un rendu
@@ -1288,8 +1461,21 @@ def timetable_view() -> HTMLResponse:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "version": "1.0.0"}
+def health() -> Response:
+    """503 quand un planning existe en base mais n'a pas pu être chargé
+    (audit du 29/09/2026, P1-6) : le `HEALTHCHECK` Docker marque alors le
+    conteneur en échec au lieu de servir un planning vide en silence."""
+    state = get_state()
+    if state.current_run_id is not None and (state.restauration_erreur or not state.timetable):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "degraded",
+                "version": "1.0.0",
+                "detail": state.restauration_erreur or "Planning enregistré mais non chargé.",
+            },
+        )
+    return JSONResponse({"status": "ok", "version": "1.0.0"})
 
 
 @app.get("/calendrier/sae", response_model=CalendrierSaeResponse)
@@ -3548,8 +3734,8 @@ def _apres_ecriture_planning(session_id: str, action: str) -> None:
         from cal_iut.celcat.ops import apres_ecriture_planning
 
         apres_ecriture_planning(session_id, action)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 — jamais d'échec du placement déjà réussi, mais tracé (P1-6)
+        logger.exception("File Celcat : hook après écriture en échec (%s %s)", action, session_id)
     sauvegardes.snapshot_si_necessaire(get_state())
     controle_doublons_hebdo.verifier_si_necessaire(get_state())
 

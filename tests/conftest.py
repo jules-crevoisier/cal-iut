@@ -19,6 +19,10 @@ import pytest
 
 os.environ.setdefault("CAL_IUT_PASSWORD", "test-password")
 os.environ.setdefault("CAL_IUT_SECRET_KEY", "test-secret-key-not-for-prod")
+# Cookie de session `Secure` par défaut (audit 29/09/2026, P1-1) : le client
+# de test parle en `http://testserver` et ne renverrait jamais un cookie
+# `Secure`. `test_cookie_secure_2026_09_29.py` vérifie le cas par défaut.
+os.environ.setdefault("CAL_IUT_COOKIE_SECURE", "0")
 
 
 @pytest.fixture
@@ -112,6 +116,18 @@ def _revision_neuve():
 
     revision.incrementer("test")
     yield
+
+
+@pytest.fixture(autouse=True)
+def _limiteur_auth_vide():
+    """Compteurs de débit des routes `/auth/*` (audit 29/09/2026, P1-3)
+    remis à zéro entre deux tests : ils sont globaux au processus, et la
+    suite entière se connecte depuis la même « IP » de `TestClient`."""
+    from cal_iut.api.limiteur import limiteur
+
+    limiteur.vider()
+    yield
+    limiteur.vider()
 
 
 @pytest.fixture(autouse=True)

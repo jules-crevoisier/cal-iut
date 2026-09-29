@@ -137,9 +137,9 @@ def _load_log() -> dict[str, dict[str, str]]:
 
 
 def _save_log(log: dict[str, dict[str, str]]) -> None:
-    path = _log_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(log, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    from cal_iut.celcat.fichiers import ecrire_json
+
+    ecrire_json(_log_path(), log, sort_keys=True)
 
 
 def record_sent(code: str, message_id: str) -> None:
