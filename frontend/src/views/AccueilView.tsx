@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CalendarRange, Link2, ListChecks, Sparkles, SquarePlus } from "lucide-react";
+import { CalendarRange, Link2, ListChecks, Sparkles, SquarePlus } from "lucide-react";
 
 import { fetchDoublons, fetchTaches, type Doublon, type Tache } from "../api/client";
 import { useSemaineGlobale } from "../contexts/SemaineGlobale";
@@ -20,6 +20,7 @@ import type { AppPayload } from "../types/app";
 import { indexSemaineCourante } from "../utils/semaineCourante";
 import { buildTodoList, compterATraiter, libelleQuand, statutsSemaines, trierParUrgence } from "../utils/todo";
 import { datesSemaine, nomSemaine } from "../components/TopBar";
+import { Tuile } from "../components/Tuile";
 import "./AccueilView.css";
 
 const JOURS = ["Lun.", "Mar.", "Mer.", "Jeu.", "Ven."];
@@ -158,33 +159,6 @@ function ecart(n: number, avant: number): string {
   const d = n - avant;
   if (d === 0) return "autant que la semaine précédente";
   return `${d > 0 ? "+" : "−"}${Math.abs(d)} par rapport à la semaine précédente`;
-}
-
-function Tuile({
-  libelle,
-  valeur,
-  detail,
-  ton,
-  onClick,
-  action,
-}: {
-  libelle: string;
-  valeur: string;
-  detail: string;
-  ton?: "good" | "warn" | "bad";
-  onClick: () => void;
-  action: string;
-}) {
-  return (
-    <button type="button" className={`accueil-tuile ${ton ? `is-${ton}` : ""}`} onClick={onClick}>
-      <span className="accueil-tuile-libelle">{libelle}</span>
-      <span className="accueil-tuile-valeur">{valeur}</span>
-      <span className="accueil-tuile-detail">{detail}</span>
-      <span className="accueil-tuile-action">
-        {action} <ArrowRight size={14} aria-hidden="true" />
-      </span>
-    </button>
-  );
 }
 
 /** Carte de chaleur promo × jour : créneaux occupés par la promo (au moins un
