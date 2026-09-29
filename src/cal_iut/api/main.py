@@ -37,10 +37,10 @@ from cal_iut.api.schemas import (
     AdminUserResponse,
     AdminUserUpdateRequest,
     CalendrierSaeResponse,
+    CelcatAutoriserCreationRequest,
     CelcatComparaisonResponse,
     CelcatCompteurs,
     CelcatCorrectionEnCoursResponse,
-    CelcatAutoriserCreationRequest,
     CelcatCorrigerResponse,
     CelcatEntreeResponse,
     CelcatEtatResponse,
@@ -81,6 +81,8 @@ from cal_iut.api.schemas import (
     ForgotPasswordRequest,
     GroupMeta,
     IngestRequest,
+    LissageApplicationRequest,
+    LissageRequest,
     LoginRequest,
     McpKeyCreatedResponse,
     McpKeyListResponse,
@@ -5839,6 +5841,99 @@ def retirer_placement_force(session_id: str) -> ForcagePedagogiqueResponse:
     forced_pending.clear(session_id)
     revision.incrementer(f"forcage_retire:{session_id}")
     return ForcagePedagogiqueResponse(session_id=session_id, etait_en_attente=True)
+
+
+@dataclass
+class LissageJob:
+    job_id: str
+    status: str  # "running" | "done" | "error" | "applied"
+    parcours: str
+    proposition: object = None
+    error_detail: str | None = None
+    application: dict | None = None
+
+
+_current_lissage_job: LissageJob | None = None
+
+
+def _lissage_job(job_id: str) -> LissageJob:
+    if _current_lissage_job is None or _current_lissage_job.job_id != job_id:
+        raise HTTPException(404, "Aucune proposition de lissage avec cet identifiant (une seule est gardée à la fois).")
+    return _current_lissage_job
+
+
+@app.post("/placements/lissage", dependencies=[Depends(accounts.require_role("edit"))])
+def lancer_lissage(body: LissageRequest) -> dict[str, str]:
+    """Calcule, en tâche de fond, une proposition de lissage pour un parcours
+    (demande du 29/09/2026 sur la 3e année DEV FC). N'ÉCRIT RIEN : la
+    proposition se relit avec `GET /placements/lissage/{job_id}` et ne
+    s'applique qu'avec `POST /placements/lissage/{job_id}/appliquer`."""
+    global _current_lissage_job
+    state = get_state()
+    if not state.timetable:
+        raise HTTPException(400, "Aucun planning chargé.")
+    with _job_lock:
+        if _current_lissage_job is not None and _current_lissage_job.status == "running":
+            raise HTTPException(409, "Un lissage est déjà en cours de calcul.")
+        job = LissageJob(job_id=str(uuid.uuid4()), status="running", parcours=body.parcours)
+        _current_lissage_job = job
+
+    def _worker() -> None:
+        from cal_iut.api import lissage
+
+        try:
+            job.proposition = lissage.proposer(
+                state, body.parcours, semaines=body.semaines,
+                entre_semaines=body.entre_semaines, temps_max_s=body.temps_max_s,
+            )
+            job.status = "done"
+        except lissage.LissageErreur as exc:
+            job.error_detail = str(exc)
+            job.status = "error"
+        except Exception as exc:  # noqa: BLE001 — jamais un job bloqué en "running"
+            job.error_detail = f"Erreur inattendue : {exc}"
+            job.status = "error"
+
+    threading.Thread(target=_worker, daemon=True, name=f"lissage-{job.job_id}").start()
+    return {"job_id": job.job_id, "status": "running"}
+
+
+@app.get("/placements/lissage/{job_id}", dependencies=[Depends(accounts.require_role("edit"))])
+def statut_lissage(job_id: str) -> dict[str, object]:
+    job = _lissage_job(job_id)
+    reponse: dict[str, object] = {"job_id": job.job_id, "status": job.status, "parcours": job.parcours}
+    if job.error_detail:
+        reponse["error"] = job.error_detail
+    if job.proposition is not None:
+        reponse["proposition"] = job.proposition.as_dict()
+    if job.application is not None:
+        reponse["application"] = job.application
+    return reponse
+
+
+@app.post("/placements/lissage/{job_id}/appliquer", dependencies=[Depends(accounts.require_role("edit"))])
+def appliquer_lissage(job_id: str, body: LissageApplicationRequest) -> dict[str, object]:
+    """Applique la proposition, déplacement par déplacement, par le chemin
+    d'un déplacement manuel (mêmes contrôles, file Celcat, sauvegarde).
+    S'arrête au premier refus — le planning a pu changer depuis le calcul."""
+    import dataclasses
+
+    from cal_iut.api import lissage
+
+    job = _lissage_job(job_id)
+    if job.status != "done" or job.proposition is None:
+        raise HTTPException(409, f"Proposition non applicable (statut : {job.status}).")
+    if job.proposition.verification:
+        raise HTTPException(409, "La contre-vérification a trouvé des conflits : proposition non applicable.")
+    exclus = set(body.exclure)
+    retenue = dataclasses.replace(
+        job.proposition,
+        deplacements=[m for m in job.proposition.deplacements if m.session_id not in exclus],
+    )
+    resultat = lissage.appliquer(get_state(), retenue)
+    job.application = dataclasses.asdict(resultat)
+    job.status = "applied"
+    return job.application
 
 
 @app.post("/placements/completer", response_model=CompletionResponse, dependencies=[Depends(accounts.require_role("edit"))])

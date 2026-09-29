@@ -152,9 +152,13 @@ def _departs_valides(duree: int) -> set[int]:
 
 
 def _cohorte_de(state: Any, groupes: set[str]) -> set[str]:
-    """Tous les identifiants de groupe qui concernent LES MÊMES étudiants
-    (TD, TP, promo) — une séance de n'importe lequel occupe toute la cohorte.
-    Les parcours visés (FC) n'ont qu'un TD et un TP : même personnes."""
+    """Identifiants de groupe qui concernent LES MÊMES étudiants — une
+    séance de n'importe lequel occupe toute la cohorte.
+
+    Limite assumée : on traite tout le parcours comme UNE cohorte. C'est
+    exact pour les parcours FC (un TD, un TP, les mêmes personnes), trop
+    strict pour un parcours à plusieurs TP (deux TP en parallèle y
+    deviendraient interdits) — `proposer` refuse donc ces parcours."""
     return set(groupes)
 
 
@@ -230,7 +234,11 @@ def proposer(
         _teacher_availability_violations,
     )
     from cal_iut.solver.decomposed import _build_sequence_neighbors
-    from cal_iut.solver.rooms import build_manual_conflict_map, find_room_for_slot, occupation_salles
+    from cal_iut.solver.rooms import (
+        build_manual_conflict_map,
+        find_room_for_slot,
+        occupation_salles,
+    )
 
     debut = time.monotonic()
     poids = poids or PoidsLissage()
@@ -238,6 +246,12 @@ def proposer(
     if not groupes:
         raise LissageErreur(f"Parcours inconnu : {parcours}.")
     semestre = _semestre_du_parcours(state, parcours)
+    tps = [g for g in state.groups if g.id in groupes and str(getattr(g.kind, "value", g.kind)) == "tp"]
+    if len(tps) > 1:
+        raise LissageErreur(
+            f"{parcours} a {len(tps)} groupes de TP : le lissage ne traite que les parcours à "
+            "groupe unique (alternance FC). Utilisez la régénération de semaine pour les autres."
+        )
     cohorte = _cohorte_de(state, groupes)
 
     placement_par_id = {p.session_id: p for p in state.timetable}
@@ -403,7 +417,6 @@ def proposer(
 
     for sid in ids_mobiles:
         preds, _succs = voisins.get(sid, ([], []))
-        s = state.sessions_by_id[sid]
         for pid in preds:
             pred = state.sessions_by_id.get(pid)
             if pred is None or pid not in placement_par_id:
@@ -418,7 +431,6 @@ def proposer(
                 modele.add(debut_expr(pid) + fin_pred < debut_expr(sid))
             else:
                 modele.add(debut_expr(sid) > t_fixe(pid) + fin_pred)
-        _ = s
 
     for sid in ids_mobiles:
         _preds, succs = voisins.get(sid, ([], []))

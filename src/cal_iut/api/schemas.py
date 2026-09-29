@@ -1217,3 +1217,20 @@ class DoublonHebdoResponse(BaseModel):
     maintenant »)."""
 
     dernier: DoublonHebdoRunResponse | None = None
+
+
+class LissageRequest(BaseModel):
+    """Demande de lissage d'un parcours (cf. `api/lissage.py`)."""
+
+    parcours: str = "BUT3-DEV-FC"
+    # Index solveur des semaines à traiter ; absent = toutes les semaines futures.
+    semaines: list[int] | None = None
+    # Une ressource (WR*) peut changer de semaine si l'ordre pédagogique et la
+    # présence le permettent ; les SAE restent toujours dans leur semaine.
+    entre_semaines: bool = True
+    temps_max_s: float = Field(default=90.0, ge=5.0, le=600.0)
+
+
+class LissageApplicationRequest(BaseModel):
+    # Séances de la proposition à NE PAS déplacer (décochées à l'écran).
+    exclure: list[str] = Field(default_factory=list)
