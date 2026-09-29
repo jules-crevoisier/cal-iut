@@ -53,3 +53,7 @@ data/releves/celcat-rpc-en-tetes.json
 # chaque deploiement (cf. api/notifications.py).
 data/state/notifications.json
 captures/
+# État produit par le serveur à chaque démarrage (instantanés quotidiens,
+# contrôle hebdomadaire des doublons) : propre à chaque déploiement.
+data/state/sauvegardes/
+data/state/controle_doublons_hebdo.json
