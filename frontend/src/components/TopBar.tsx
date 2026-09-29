@@ -59,8 +59,11 @@ interface TopBarProps {
   payload: AppPayload | null;
   semaine: number;
   onSemaine: (index: number) => void;
-  onOuvrirRecherche: () => void;
+  /** Absent : pas de bouton de recherche (compte « Accès API »). */
+  onOuvrirRecherche?: () => void;
   onOuvrirNavigation: () => void;
+  /** Titre, ligne et ligne courte à la place de ceux de la vue. */
+  titres?: readonly [string, string, string?];
 }
 
 const ID_ACTIONS = "topbar-actions";
@@ -108,8 +111,9 @@ export function TopBar({
   onSemaine,
   onOuvrirRecherche,
   onOuvrirNavigation,
+  titres,
 }: TopBarProps) {
-  const [titre, sousTitre, sousTitreCourt] = TITRES_VUES[vue] ?? ["cal-iut", ""];
+  const [titre, sousTitre, sousTitreCourt] = titres ?? TITRES_VUES[vue] ?? ["cal-iut", ""];
   const avecSemaine = VUES_A_SEMAINE.has(vue) && !!payload?.weekRows.length;
   const refCourt = useSousTitreEntier();
 
@@ -134,14 +138,16 @@ export function TopBar({
 
       <div className="topbar-droite">
         <div className="topbar-actions" id={ID_ACTIONS} />
-        <button
-          type="button"
-          className="topbar-recherche-mobile"
-          onClick={onOuvrirRecherche}
-          aria-label="Rechercher"
-        >
-          <Search size={18} aria-hidden="true" />
-        </button>
+        {onOuvrirRecherche && (
+          <button
+            type="button"
+            className="topbar-recherche-mobile"
+            onClick={onOuvrirRecherche}
+            aria-label="Rechercher"
+          >
+            <Search size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
     </header>
   );

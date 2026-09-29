@@ -232,10 +232,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /** Système de comptes (31/08/2026, remplace le mot de passe partagé) —
  * session posée en cookie httpOnly par le serveur, jamais manipulée côté JS
  * directement (cf. api/accounts.py). */
+/** `api` = « Accès API » (29/09/2026) : aucun écran de données, seulement
+ * ses clés d'accès à l'API v1 en lecture (cf. `api/accounts.py::ROLE_API`). */
+export type RoleCompte = "read_only" | "edit" | "admin" | "api";
+
 export interface MoiResponse {
   id: number;
   email: string;
-  role: "read_only" | "edit" | "admin";
+  role: RoleCompte;
   status: "pending_email" | "pending_admin_activation" | "active" | "disabled";
 }
 
@@ -298,6 +302,8 @@ export async function resetPassword(token: string, newPassword: string): Promise
 export interface McpKey {
   id: number;
   prefix: string;
+  /** Nom libre donné à la création — `null` pour les clés d'avant le 29/09/2026. */
+  nom?: string | null;
   created_at: string;
   last_used_at: string | null;
 }
@@ -311,8 +317,9 @@ export async function listMcpKeys(): Promise<McpKey[]> {
   return r.keys;
 }
 
-export async function createMcpKey(): Promise<McpKeyCreated> {
-  return request("/auth/mcp-keys", { method: "POST" });
+export async function createMcpKey(nom?: string): Promise<McpKeyCreated> {
+  const propre = nom?.trim();
+  return request("/auth/mcp-keys", { method: "POST", body: JSON.stringify(propre ? { nom: propre } : {}) });
 }
 
 export async function revokeMcpKey(id: number): Promise<void> {
@@ -322,7 +329,7 @@ export async function revokeMcpKey(id: number): Promise<void> {
 export interface AdminUser {
   id: number;
   email: string;
-  role: "read_only" | "edit" | "admin";
+  role: RoleCompte;
   status: "pending_email" | "pending_admin_activation" | "active" | "disabled";
   created_at: string;
   email_confirmed_at: string | null;

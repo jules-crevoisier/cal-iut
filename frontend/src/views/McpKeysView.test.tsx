@@ -112,4 +112,35 @@ describe("McpKeysView", () => {
     fireEvent.click(screen.getByRole("button", { name: "J’ai copié la clé" }));
     expect(screen.queryByText("caliut_token-brut-une-fois")).not.toBeInTheDocument();
   });
+  it("nomme les clés (29/09/2026) : nom à la génération, nom et début de clé dans la liste", async () => {
+    stubFetch({
+      create: {
+        id: 2, token: "caliut_token-brut-une-fois", prefix: "caliut_token", nom: "Claude",
+        created_at: "2026-09-01T11:00:00+00:00", last_used_at: null,
+      },
+    });
+    render(<McpKeysView />);
+
+    await waitFor(() => expect(screen.getByText("caliut_abc12")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/nom de la nouvelle clé/i), { target: { value: "  Claude " } });
+    fireEvent.click(screen.getByRole("button", { name: /générer/i }));
+    await screen.findByText("caliut_token-brut-une-fois");
+    const post = vi.mocked(fetch).mock.calls.find((c) => c[1]?.method === "POST");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ nom: "Claude" });
+    expect(screen.getByText("Claude", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("caliut_token")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Révoquer la clé Claude" })).toBeInTheDocument();
+    // Variante compte ordinaire : le connecteur MCP reste proposé.
+    expect(screen.getByRole("button", { name: "Copier le bloc" })).toBeInTheDocument();
+  });
+
+  it("au plus 5 clés actives : la génération est bloquée, en le disant", async () => {
+    const cinq = Array.from({ length: 5 }, (_, i) => ({ ...CLES[0], id: i + 1, prefix: `caliut_k${i}` }));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ keys: cinq }) })));
+    render(<McpKeysView variante="api" />);
+
+    await screen.findByText("caliut_k0");
+    expect(screen.getByRole("button", { name: /générer une clé/i })).toBeDisabled();
+    expect(screen.getByText(/5 clés actives au plus/)).toBeInTheDocument();
+  });
 });

@@ -51,7 +51,13 @@ const LIBELLE_ROLE: Record<AdminUser["role"], string> = {
   read_only: "Lecture seule",
   edit: "Édition",
   admin: "Admin",
+  api: "Accès API",
 };
+
+/** Dans une phrase (« activé en lecture seule », « … en accès API »). */
+function roleEnPhrase(role: AdminUser["role"]): string {
+  return role === "api" ? "accès API" : LIBELLE_ROLE[role].toLowerCase();
+}
 
 type Filtre = "tous" | "active" | "disabled" | "pending_email";
 
@@ -144,7 +150,7 @@ export function AdminUsersView() {
   };
 
   const activer = (u: AdminUser, role: AdminUser["role"]) =>
-    void appliquer(u, { role }, (maj) => ({ texte: `${maj.email} activé en ${LIBELLE_ROLE[role].toLowerCase()}.` }));
+    void appliquer(u, { role }, (maj) => ({ texte: `${maj.email} activé en ${roleEnPhrase(role)}.` }));
 
   const desactiver = (u: AdminUser) =>
     void appliquer(u, { status: "disabled" }, (maj) => ({
@@ -193,7 +199,7 @@ export function AdminUsersView() {
         <Tuile
           libelle="Comptes actifs"
           valeur={actifs.length}
-          detail={`${parRole("admin")} admin · ${parRole("edit")} édition · ${parRole("read_only")} lecture`}
+          detail={`${parRole("admin")} admin · ${parRole("edit")} édition · ${parRole("read_only")} lecture · ${parRole("api")} accès API`}
           onClick={() => basculerFiltre("active")}
           actif={filtre === "active"}
         />
@@ -271,6 +277,9 @@ export function AdminUsersView() {
                   >
                     Supprimer
                   </button>
+                  <button type="button" className="btn" disabled={enCoursId === u.id} onClick={() => activer(u, "api")}>
+                    Activer en accès API
+                  </button>
                   <button type="button" className="btn" disabled={enCoursId === u.id} onClick={() => activer(u, "edit")}>
                     Activer en édition
                   </button>
@@ -344,13 +353,14 @@ export function AdminUsersView() {
                           disabled={enCoursId === u.id}
                           onChange={(e) =>
                             void appliquer(u, { role: e.target.value }, (maj) => ({
-                              texte: `Rôle de ${maj.email} : ${LIBELLE_ROLE[maj.role].toLowerCase()}.`,
+                              texte: `Rôle de ${maj.email} : ${roleEnPhrase(maj.role)}.`,
                             }))
                           }
                         >
                           <option value="read_only">Lecture seule</option>
                           <option value="edit">Édition</option>
                           <option value="admin">Admin</option>
+                          <option value="api">Accès API</option>
                         </select>
                       ) : u.status === "disabled" ? (
                         <span className="muted">{LIBELLE_ROLE[u.role]}</span>
@@ -398,7 +408,9 @@ export function AdminUsersView() {
         )}
         <p className="carte-note comptes-roles">
           <strong>Lecture seule</strong> consulte le planning · <strong>Édition</strong> le modifie ·{" "}
-          <strong>Admin</strong> gère aussi les comptes, Celcat et les sauvegardes.
+          <strong>Admin</strong> gère aussi les comptes, Celcat et les sauvegardes ·{" "}
+          <strong>Accès API</strong> ne voit aucune donnée dans l'appli ; peut créer ses clés d'accès à l'API en
+          lecture.
         </p>
       </section>
     </section>

@@ -14,6 +14,7 @@ const ROLES: Record<string, string> = {
   admin: "Administrateur",
   edit: "Édition",
   read_only: "Lecture seule",
+  api: "Accès API",
 };
 
 /** « jules.crevoisier@… » → « Jules Crevoisier ». */
@@ -31,7 +32,9 @@ interface MenuCompteProps {
   role?: string;
   /** `true` = serveur injoignable (cf. `BandeauPanne`). */
   panne: boolean;
-  onCle: () => void;
+  /** Absent (compte « Accès API », dont c'est déjà l'unique écran) : pas
+   *  d'entrée « Clé API » dans le menu. */
+  onCle?: () => void;
   onDeconnexion: () => void;
 }
 
@@ -85,16 +88,18 @@ export function MenuCompte({ email, role, panne, onCle, onDeconnexion }: MenuCom
       {ouvert && (
         <div className="compte-menu" role="menu" style={position}>
           <p className="compte-menu-email">{email}</p>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOuvert(false);
-              onCle();
-            }}
-          >
-            <KeyRound size={16} aria-hidden="true" /> Clé API
-          </button>
+          {onCle && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOuvert(false);
+                onCle();
+              }}
+            >
+              <KeyRound size={16} aria-hidden="true" /> Clé API
+            </button>
+          )}
           <div className="compte-theme" role="radiogroup" aria-label="Thème">
             {(
               [

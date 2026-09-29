@@ -23,6 +23,7 @@ import {
   ClipboardList,
   DatabaseBackup,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   Library,
   ListChecks,
@@ -96,6 +97,11 @@ const GROUPE_ADMIN: NavGroup = {
   ],
 };
 
+// Compte « Accès API » (29/09/2026) : aucun écran de données, un seul écran.
+const GROUPES_ACCES_API: NavGroup[] = [
+  { label: "Compte", items: [{ id: "mcp", label: "Accès API", icone: KeyRound }] },
+];
+
 const CLE_REPLIEE = "cal-iut:nav-repliee";
 
 interface SideNavProps {
@@ -113,6 +119,8 @@ interface SideNavProps {
   open: boolean;
   onClose: () => void;
   estAdmin?: boolean;
+  /** Compte « Accès API » : navigation réduite à son écran, sans recherche. */
+  compteApi?: boolean;
   onOpenSearch?: () => void;
   email?: string;
   role?: string;
@@ -152,6 +160,7 @@ export function SideNav({
   open,
   onClose,
   estAdmin,
+  compteApi = false,
   onOpenSearch,
   email,
   role,
@@ -160,7 +169,7 @@ export function SideNav({
   onLogout,
 }: SideNavProps) {
   const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
-  const groupes = estAdmin ? [...NAV_GROUPS, GROUPE_ADMIN] : NAV_GROUPS;
+  const groupes = compteApi ? GROUPES_ACCES_API : estAdmin ? [...NAV_GROUPS, GROUPE_ADMIN] : NAV_GROUPS;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const [repliee, setRepliee] = useState(() => lireLocal<boolean>(CLE_REPLIEE, false, (v): v is boolean => typeof v === "boolean"));
 
@@ -204,7 +213,7 @@ export function SideNav({
           </button>
         </div>
 
-        {onOpenSearch && (
+        {onOpenSearch && !compteApi && (
           <button
             type="button"
             className="sidenav-recherche"
@@ -266,10 +275,14 @@ export function SideNav({
               email={email}
               role={role}
               panne={panne}
-              onCle={() => {
-                onClose();
-                onCle?.();
-              }}
+              onCle={
+                compteApi
+                  ? undefined
+                  : () => {
+                      onClose();
+                      onCle?.();
+                    }
+              }
               onDeconnexion={() => onLogout?.()}
             />
           )}

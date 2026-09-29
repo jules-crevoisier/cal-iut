@@ -80,6 +80,11 @@ import { TodoView } from "./views/TodoView";
 import { ContexteDroits, type Droits } from "./contexts/Droits";
 
 const DEFAULT_PARCOURS = "BUT1";
+const TITRES_ACCES_API = [
+  "Accès API",
+  "Vos clés pour lire l'emploi du temps depuis un script ou une application, en lecture seule.",
+  "Clés d'accès à l'API, en lecture",
+] as const;
 // Serveur injoignable : nouvelle tentative à ce rythme tant que dure la panne.
 const REESSAI_PANNE_MS = 15_000;
 // Plage d'affichage du sélecteur de semaine dans le Toolbar (UI uniquement) —
@@ -175,6 +180,10 @@ export function App() {
   // avant la première réponse de `GET /auth/me`), `null` = pas de session,
   // sinon le compte connecté (actif ou non — `moi.status` distingue).
   const [moi, setMoi] = useState<MoiResponse | null | undefined>(undefined);
+  // Compte « Accès API » (29/09/2026, cf. `api/accounts.py::ROLE_API`) : aucun
+  // écran de données, seulement ses clés. Rien du planning n'est chargé pour
+  // lui — le serveur le refuserait de toute façon (403).
+  const compteApi = moi?.role === "api";
   const rafraichirMoi = useCallback(() => {
     // `fetchMoi` ne rend `null` que sur un vrai 401. Une panne laisse `moi`
     // tel quel (inconnu, ou le compte déjà connu) : le bandeau de panne le
@@ -302,7 +311,7 @@ export function App() {
     // `null`, ces liens n'ont jamais de session compte). Sinon, attend un
     // compte ACTIF — partir plus tôt (compte en attente d'activation)
     // échouerait en 403 pour rien.
-    if (!readOnlyTarget && moi?.status !== "active") return;
+    if (!readOnlyTarget && (moi?.status !== "active" || moi.role === "api")) return;
     void refreshMeta();
     void refreshAppState();
     // Doublons et historique des corrections : réservés aux comptes (rôle
@@ -330,7 +339,8 @@ export function App() {
   // montage, avant `/auth/me`, cet appel prenait un 401 et n'était jamais
   // relancé après la connexion — la Vue Semaine restait vide jusqu'à un F5.
   // Pas sur un lien perso : la Vue Semaine n'y est jamais affichée.
-  const compteActif = moi?.status === "active";
+  // « Actif » au sens des données : un compte « Accès API » n'en lit aucune.
+  const compteActif = moi?.status === "active" && moi.role !== "api";
   useEffect(() => {
     if (!compteActif || readOnlyTarget) return;
     void loadTimetable();
@@ -393,7 +403,7 @@ export function App() {
     onChange: toutRecharger,
   });
 
-  const roleCompte = !readOnlyTarget && compteActif ? (moi?.role ?? null) : null;
+  const roleCompte = !readOnlyTarget && compteActif && moi && moi.role !== "api" ? moi.role : null;
   const droits = useMemo<Droits>(
     () => ({ role: roleCompte, revision: revisionServeur, apresEnregistrement: verifierMaintenant }),
     [roleCompte, revisionServeur, verifierMaintenant],
@@ -551,7 +561,7 @@ export function App() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        if (!readOnlyTarget) setSearch(true);
+        if (!readOnlyTarget && !compteApi) setSearch(true);
       } else if (e.key === "Escape" && search) {
         setSearch(false);
       } else if (e.key === "Escape" && navOpen) {
@@ -560,7 +570,7 @@ export function App() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [search, navOpen, readOnlyTarget]);
+  }, [search, navOpen, readOnlyTarget, compteApi]);
 
   // Écrans du système de comptes (31/08/2026) — lus AVANT de savoir si une
   // session existe : inscription/mot de passe oublié sont volontairement
@@ -614,6 +624,57 @@ export function App() {
     return <AccountPendingGate email={moi.email} onDeconnecte={() => setMoi(null)} />;
   }
 
+  const deconnecter = () => {
+    void logout().finally(() => {
+      window.location.assign("/");
+    });
+  };
+
+  // Compte « Accès API » : une seule page, ses clés — ni Accueil, ni
+  // recherche, ni semaine dans la barre du haut, aucun appel aux données.
+  if (!readOnlyTarget && compteApi && moi) {
+    return (
+      <div className="app app--acces-api">
+        <a className="skiplink" href="#contenu">
+          Aller au contenu
+        </a>
+        <div className="app-shell">
+          <SideNav
+            activeTab="mcp"
+            onSelect={() => setRoute({ vue: "mcp" })}
+            hasPayload={false}
+            todoCount={0}
+            todoHasBad={false}
+            open={navOpen}
+            onClose={() => setNavOpen(false)}
+            compteApi
+            email={moi.email}
+            role={moi.role}
+            panne={panne}
+            onLogout={deconnecter}
+          />
+          <div className="app-content" ref={appContentRef}>
+            <TopBar
+              vue="mcp"
+              payload={null}
+              semaine={0}
+              onSemaine={() => undefined}
+              onOuvrirNavigation={() => setNavOpen(true)}
+              titres={TITRES_ACCES_API}
+            />
+            {panne && <BandeauPanne onReessayer={reessayer} />}
+            <main className="app-main" id="contenu" tabIndex={-1}>
+              <ErrorBoundary cle="mcp">
+                <McpKeysView variante="api" />
+              </ErrorBoundary>
+            </main>
+          </div>
+        </div>
+        <ConfirmModal />
+      </div>
+    );
+  }
+
   return (
     // Fournit la préférence à TOUT l'écran. Sans ce fournisseur, chaque
     // grille relisait `localStorage` de son côté et le clic ne repeignait
@@ -654,11 +715,7 @@ export function App() {
               role={moi?.role}
               panne={panne}
               onCle={() => setRoute({ vue: "mcp" })}
-              onLogout={() => {
-                void logout().finally(() => {
-                  window.location.assign("/");
-                });
-              }}
+              onLogout={deconnecter}
             />
           </>
         )}
@@ -985,7 +1042,7 @@ export function App() {
         )}
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
         {activeTab === "taches" && appPayload && !readOnlyTarget && (
-          <KanbanView payload={appPayload} role={moi?.role} setRoute={setRoute} />
+          <KanbanView payload={appPayload} role={moi?.role === "api" ? undefined : moi?.role} setRoute={setRoute} />
         )}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}

@@ -239,4 +239,46 @@ describe("AdminUsersView", () => {
       expect(reactivation).toContainEqual({ status: "active" });
     });
   });
+  // Rôle « Accès API » (29/09/2026) : proposé à l'activation et au changement
+  // de rôle, expliqué dans la légende, compté dans la tuile.
+  it("propose le rôle « Accès API » à l'activation", async () => {
+    stubFetch();
+    render(<AdminUsersView />);
+
+    await waitFor(() => expect(screen.getByText("attente@example.test")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Activer en accès API" }));
+
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(fetch)
+        .mock.calls.find((c) => String(c[0]).includes("/admin/users/1") && c[1]?.method === "PATCH");
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ role: "api" });
+    });
+    expect(await screen.findByText("attente@example.test activé en accès API.")).toBeInTheDocument();
+  });
+
+  it("propose « Accès API » au changement de rôle, avec sa ligne de légende", async () => {
+    stubFetch();
+    render(<AdminUsersView />);
+
+    const select = await screen.findByRole("combobox", { name: "Rôle de active@example.test" });
+    expect(within(select).getByRole("option", { name: "Accès API" })).toHaveValue("api");
+    fireEvent.change(select, { target: { value: "api" } });
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(fetch)
+        .mock.calls.find((c) => String(c[0]).includes("/admin/users/2") && c[1]?.method === "PATCH");
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ role: "api" });
+    });
+    expect(
+      screen.getByText((_, el) =>
+        el?.classList.contains("comptes-roles") === true &&
+        /Accès API ne voit aucune donnée dans l'appli ; peut créer ses clés d'accès à l'API en\s+lecture\./.test(
+          el.textContent ?? "",
+        ),
+      ),
+    ).toBeInTheDocument();
+    // La tuile compte le compte passé en accès API.
+    expect(await screen.findByText("0 admin · 0 édition · 0 lecture · 1 accès API")).toBeInTheDocument();
+  });
 });

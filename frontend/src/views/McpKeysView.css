@@ -89,15 +89,104 @@
   font-size: 0.82rem;
 }
 
+/* Générer : un nom facultatif et le bouton, ensemble, à droite de
+   l'explication (29/09/2026 — le nom sert à reconnaître la clé ensuite). */
+.cles-generer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.cles-generer input {
+  width: 16rem;
+  max-width: 100%;
+}
+
+.cles-plein {
+  margin: -8px 0 0;
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.cles-prefixe {
+  font-size: 0.78rem;
+}
+
+/* « Utiliser l'API » (compte Accès API) : la doc et deux exemples. */
+.cles-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cles-doc-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.cles-doc-tete h2 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.cles-doc-note {
+  margin: 0;
+  max-width: 90ch;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.cles-doc-note a {
+  color: inherit;
+}
+
+.cles-exemple {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.cles-exemple pre {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  white-space: pre;
+}
+
 @media (max-width: 639.98px) {
   .cles-usages > div {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .cles-outils .page-outils-actions,
-  .cles-outils .btn {
+  .cles-generer,
+  .cles-generer input,
+  .cles-generer .btn {
     width: 100%;
     margin-left: 0;
+  }
+
+  .cles-plein {
+    text-align: left;
+  }
+
+  .cles-exemple {
+    flex-direction: column;
+  }
+
+  .cles-exemple pre {
+    width: 100%;
   }
 }
 
@@ -112,4 +201,61 @@
 
 .btn.cles-revoquer:hover:not(:disabled) {
   background: var(--bad-soft);
+}
+
+/* Téléphone : une fiche par clé — le nom et « Révoquer » sur une ligne, les
+   deux dates dessous, libellées (quatre colonnes ne tiennent pas en 390 px). */
+@media (max-width: 639.98px) {
+  .view.cles table.cles-table,
+  .view.cles table.cles-table tbody,
+  .view.cles table.cles-table tr,
+  .view.cles table.cles-table td {
+    display: block;
+  }
+
+  .view.cles table.cles-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .view.cles table.cles-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .view.cles table.cles-table td {
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .view.cles table.cles-table td[data-label="Clé"] {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .view.cles table.cles-table td.cles-col-actions {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    align-self: start;
+  }
+
+  .view.cles table.cles-table td[data-label="Créée le"],
+  .view.cles table.cles-table td[data-label="Dernière utilisation"] {
+    grid-column: 1 / -1;
+    font-size: 0.82rem;
+  }
+
+  .view.cles table.cles-table td[data-label="Créée le"]::before,
+  .view.cles table.cles-table td[data-label="Dernière utilisation"]::before {
+    content: attr(data-label) " : ";
+    color: var(--ink-soft);
+  }
 }
