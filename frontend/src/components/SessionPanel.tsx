@@ -6,6 +6,9 @@
  * la grille et sa date (plus « Semaine 7 » = index interne), les noms des
  * groupes et des enseignants (plus leurs identifiants techniques).
  *
+ * Sans séance choisie (gabarit v2) : la semaine affichée en bref (séances,
+ * heures, répartition par type, séances sans salle) plutôt qu'une boîte vide.
+ *
  * La Vue Semaine est en lecture seule depuis le 28/08/2026 (retour
  * utilisateur : le glisser-déposer vit dans la Vue Promo) : d'où le lien
  * « Modifier dans la Vue Promo », qui ouvre la bonne semaine au bon jour.
@@ -30,6 +33,75 @@ interface SessionPanelProps {
   teacherLabels?: Record<string, string>;
   /** Ouvre la Vue Promo sur la semaine et le jour de la séance. */
   onOuvrirPromo?: (p: Placement) => void;
+  /** Séances de la semaine affichée, pour le résumé sans séance choisie. */
+  seancesSemaine?: Placement[];
+  /** Ce que montre la grille (« TD AB », « Joan Lefevre »…). */
+  portee?: string;
+}
+
+const TYPES_RESUME = ["CM", "TD", "TP"] as const;
+
+function formatHeures(n: number): string {
+  return `${n.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} h`;
+}
+
+/** La semaine affichée en bref : ce qui tient la colonne quand aucune
+ *  séance n'est choisie. */
+function ResumeSemaine({ seances, portee }: { seances: Placement[]; portee?: string }) {
+  const heures = seances.reduce((t, p) => t + Math.max(1, p.duration_slots || 1) * 1.5, 0);
+  const parType = TYPES_RESUME.map((t) => ({ t, n: seances.filter((p) => p.session_type === t).length }));
+  const autres = seances.length - parType.reduce((t, x) => t + x.n, 0);
+  const sansSalle = seances.filter((p) => !p.room_label).length;
+  const evaluations = seances.filter((p) => p.is_eval).length;
+  return (
+    <section className="session-panel session-panel--vide" aria-labelledby="session-resume-titre">
+      <h3 id="session-resume-titre">La semaine en bref</h3>
+      {portee && <p className="session-resume-portee">{portee}</p>}
+      <div className="session-resume-tuiles">
+        <div className="session-resume-tuile">
+          <span>Séances</span>
+          <strong>{seances.length}</strong>
+        </div>
+        <div className="session-resume-tuile">
+          <span>Heures</span>
+          <strong>{formatHeures(heures)}</strong>
+        </div>
+      </div>
+      {seances.length > 0 && (
+        <ul className="session-resume-types" aria-label="Par type de séance">
+          {parType
+            .filter((x) => x.n > 0)
+            .map((x) => (
+              <li key={x.t} className={`type-${x.t.toLowerCase()}`}>
+                <span>{x.t}</span>
+                <strong>{x.n}</strong>
+              </li>
+            ))}
+          {autres > 0 && (
+            <li>
+              <span>Autres</span>
+              <strong>{autres}</strong>
+            </li>
+          )}
+        </ul>
+      )}
+      {(sansSalle > 0 || evaluations > 0) && (
+        <ul className="session-resume-faits">
+          {sansSalle > 0 && (
+            <li className="manque">
+              {sansSalle} séance{sansSalle > 1 ? "s" : ""} sans salle
+            </li>
+          )}
+          {evaluations > 0 && (
+            <li>
+              {evaluations} évaluation{evaluations > 1 ? "s" : ""}
+            </li>
+          )}
+        </ul>
+      )}
+      <p className="session-resume-aide">Cliquez une séance de la grille pour voir son détail ici.</p>
+    </section>
+  );
 }
 
 export function SessionPanel({
@@ -42,14 +114,10 @@ export function SessionPanel({
   groupLabels = {},
   teacherLabels = {},
   onOuvrirPromo,
+  seancesSemaine = [],
+  portee,
 }: SessionPanelProps) {
-  if (!placement) {
-    return (
-      <div className="session-panel session-panel--vide">
-        <p>Cliquez une séance de la grille pour voir son détail ici.</p>
-      </div>
-    );
-  }
+  if (!placement) return <ResumeSemaine seances={seancesSemaine} portee={portee} />;
 
   // Le verrou ne se retire pas depuis l'interface (l'API refuse de déplacer
   // une séance verrouillée) : on demande confirmation.

@@ -24,7 +24,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Plus, SlidersHorizontal, X } from "lucide-react";
+import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Plus, Sparkles, X } from "lucide-react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
@@ -63,6 +63,7 @@ import { WeekBar } from "../components/WeekBar";
 import { WeekStepper } from "../components/WeekStepper";
 import { APlacerView } from "./APlacerView";
 import { PromoCarte } from "./PromoCarte";
+import { PromoTuiles } from "./PromoTuiles";
 import {
   addPark,
   clearPark,
@@ -463,7 +464,7 @@ export function PromoView({
   const colClass = (i: number) => {
     const pc = `pc${colGroupIdx[i] % 6}`;
     const isFirst = i === 0 || colGroupIdx[i] !== colGroupIdx[i - 1];
-    return isFirst ? `${pc} grp-first` : pc;
+    return isFirst ? `${pc} grp-first${i > 0 ? " grp-sep" : ""}` : pc;
   };
 
   const countByWeek = useMemo(() => {
@@ -849,6 +850,7 @@ export function PromoView({
     const el = defilRef.current;
     if (!el) return;
     const max = el.scrollWidth - el.clientWidth;
+    el.style.setProperty("--largeur-visible", `${el.clientWidth}px`);
     const horaires = el.querySelector<HTMLElement>("th.timecol")?.offsetWidth ?? 0;
     const debut = el.scrollLeft + horaires;
     const finVue = el.scrollLeft + el.clientWidth;
@@ -884,7 +886,11 @@ export function PromoView({
     el.scrollTo({ left: Math.max(0, th.offsetLeft - horaires), behavior: "smooth" });
   };
 
-  const filtresActifs = filtreAnnee !== "Tout" || filtreParcoursSel !== "Tout" || teacherFilter !== "";
+  // « Tout afficher » : seulement quand plusieurs filtres se cumulent — un
+  // seul se défait déjà d'un clic (pastille « Toutes », « Tous les
+  // enseignants »).
+  const filtresActifs =
+    [filtreAnnee !== "Tout" || filtreParcoursSel !== "Tout", teacherFilter !== ""].filter(Boolean).length > 1;
   const selPark = selectedParked(park);
   const parkParcours = selPark
     ? selPark.origin.group_ids.map((g) => payload.groupParcours[g]).find((pc): pc is string => Boolean(pc))
@@ -909,6 +915,18 @@ export function PromoView({
           (jour, filtres), les actions à droite, la principale en dernier. La
           semaine est dans la barre supérieure ; `WeekStepper` ne s'affiche
           que sur le lien public, qui n'a pas cette barre. */}
+      {!readOnly && (
+        <PromoTuiles
+          payload={payload}
+          solverWeek={solverWeek}
+          setRoute={setRoute}
+          onOuvrirAPlacer={() => {
+            if (!listeMasquee) return;
+            setListeMasquee(false);
+            setRoute?.({ panel: "aplacer" });
+          }}
+        />
+      )}
       <div className="page-outils promo-outils">
         <WeekStepper
           weekRows={payload.weekRows}
@@ -952,47 +970,50 @@ export function PromoView({
           })}
         </div>
         <div className="promo-filtres" role="group" aria-label="Filtrer la grille">
-          {/* Libellés portés par l'option « tout » et par `aria-label` : trois
-              étiquettes visibles de plus ne tenaient pas sur la ligne. */}
-          <select
-            aria-label="Année"
-            title="Année"
-            value={filtreAnnee}
-            className={filtreAnnee !== "Tout" ? "is-filtre" : undefined}
-            onChange={(e) => {
-              setFiltreAnnee(e.target.value);
-              setFiltreParcoursSel("Tout");
-            }}
-          >
-            <option value="Tout">Toutes années</option>
-            {anneesDispo.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
+          {/* Années en pastilles (maquette « Lumière ») ; « Toutes » garde la
+              grille historique de toutes les promos. */}
+          <div className="promo-pastilles" role="group" aria-label="Année">
+            {["Tout", ...anneesDispo].map((a) => (
+              <button
+                key={a}
+                type="button"
+                className="promo-pastille"
+                aria-pressed={filtreAnnee === a}
+                onClick={() => {
+                  setFiltreAnnee(a);
+                  setFiltreParcoursSel("Tout");
+                }}
+              >
+                {a === "Tout" ? "Toutes" : a}
+              </button>
             ))}
-          </select>
-          <select
-            aria-label="Parcours"
-            title="Parcours"
-            value={filtreParcoursSel}
-            className={filtreParcoursSel !== "Tout" ? "is-filtre" : undefined}
-            onChange={(e) => setFiltreParcoursSel(e.target.value)}
-          >
-            <option value="Tout">Tous parcours</option>
-            {parcoursDispo.map((pc) => (
-              <option key={pc} value={pc}>
-                {pc}
-              </option>
-            ))}
-          </select>
+          </div>
+          {/* Parcours : seulement quand l'année choisie en compte plusieurs
+              (BUT2 : DEV-FI et CREACOM-FC), ou quand la recherche en a fixé un. */}
+          {(filtreParcoursSel !== "Tout" || (filtreAnnee !== "Tout" && parcoursDispo.length > 1)) && (
+            <select
+              aria-label="Parcours"
+              title="Parcours"
+              value={filtreParcoursSel}
+              className={`promo-select-pastille${filtreParcoursSel !== "Tout" ? " is-filtre" : ""}`}
+              onChange={(e) => setFiltreParcoursSel(e.target.value)}
+            >
+              <option value="Tout">Tous les parcours</option>
+              {parcoursDispo.map((pc) => (
+                <option key={pc} value={pc}>
+                  {pc}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             aria-label="Enseignant"
             title="Faire ressortir les séances d'un enseignant"
             value={teacherFilter}
-            className={teacherFilter ? "is-filtre" : undefined}
+            className={`promo-select-pastille${teacherFilter ? " is-filtre" : ""}`}
             onChange={(e) => setTeacherFilter(e.target.value)}
           >
-            <option value="">Tous enseignants</option>
+            <option value="">Tous les enseignants</option>
             {teacherCodes.map((c) => (
               <option key={c} value={c}>
                 {nomComplet(payload.teacherLabels[c] ?? c)}
@@ -1002,7 +1023,7 @@ export function PromoView({
           {filtresActifs && (
             <button
               type="button"
-              className="btn btn--ghost"
+              className="btn btn--ghost promo-tout-afficher"
               onClick={() => {
                 setFiltreAnnee("Tout");
                 setFiltreParcoursSel("Tout");
@@ -1017,30 +1038,15 @@ export function PromoView({
           <div className="page-outils-actions promo-actions">
             <button
               type="button"
-              className="btn"
+              className="btn promo-action-secondaire"
               aria-pressed={listeOuverte}
               aria-label="Séances à placer"
               title={listeOuverte ? "Fermer la colonne des séances à placer" : "Ouvrir la colonne des séances à placer"}
               onClick={basculerListe}
             >
-              <ListTodo size={16} aria-hidden="true" className="promo-action-icone" />
-              <span className="promo-action-long">Séances à placer</span>
-              <span className="promo-action-court" aria-hidden="true">
-                À placer
-              </span>
+              <ListTodo size={16} aria-hidden="true" />
+              <span className="promo-action-libelle">Séances à placer</span>
             </button>
-            {seanceModaleEnabled && (
-              <button
-                type="button"
-                className="btn promo-action-secondaire"
-                onClick={() => setModaleLissage(true)}
-                aria-label="Lisser une promo…"
-                title="Lisser une promo : réorganiser ses semaines à venir (pas de 8h, pas de trou, journées équilibrées)"
-              >
-                <SlidersHorizontal size={16} aria-hidden="true" />
-                <span className="promo-action-libelle">Lisser une promo…</span>
-              </button>
-            )}
             {seanceModaleEnabled && (
               <button
                 type="button"
@@ -1054,6 +1060,18 @@ export function PromoView({
               </button>
             )}
             {seanceModaleEnabled && (
+              <button
+                type="button"
+                className="btn promo-action-lisser"
+                onClick={() => setModaleLissage(true)}
+                aria-label="Lisser une promo…"
+                title="Lisser une promo : réorganiser ses semaines à venir (pas de 8h, pas de trou, journées équilibrées)"
+              >
+                <Sparkles size={16} aria-hidden="true" />
+                <span className="promo-action-libelle">Lisser une promo</span>
+              </button>
+            )}
+            {seanceModaleEnabled && (
               <button type="button" className="btn btn--primary" onClick={() => setModaleSeance("creer")}>
                 <Plus size={16} aria-hidden="true" className="promo-action-icone" />
                 <span>Nouvelle séance</span>
@@ -1061,23 +1079,6 @@ export function PromoView({
             )}
           </div>
         )}
-      </div>
-
-      {/* Ruban des semaines : repère de charge, et surtout cible de dépôt
-          pour changer une séance de semaine (il grandit pendant un glisser). */}
-      <div className={`promo-semaines${draggingId && dragEnabled ? " promo-semaines--depot" : ""}`}>
-        <span className="promo-semaines-titre" aria-hidden="true">
-          {draggingId && dragEnabled ? "Déposer sur une semaine pour y déplacer la séance" : "Semaines"}
-        </span>
-        <WeekBar
-          weekRows={payload.weekRows}
-          countByWeekIndex={countByWeek}
-          selected={displayWeek}
-          onSelect={setDisplayWeek}
-          dropEnabled={dragEnabled && Boolean(draggingId)}
-          onDropWeek={dragEnabled ? handleDropOnWeek : undefined}
-          fine
-        />
       </div>
 
       {placementActif && (
@@ -1223,6 +1224,23 @@ export function PromoView({
             <div
               className={`promo-grille-cadre${defil.gauche ? " ombre-gauche" : ""}${defil.droite ? " ombre-droite" : ""}`}
             >
+              {/* Changer une séance de SEMAINE : pendant un glisser, les
+                  semaines s'affichent par-dessus les en-têtes ; y déposer la
+                  séance l'emmène dans la semaine choisie (colonne « À placer »). */}
+              {dragEnabled && draggingId && (
+                <div className="promo-semaines-depot">
+                  <span className="promo-semaines-titre">Déposer sur une semaine pour y déplacer la séance</span>
+                  <WeekBar
+                    weekRows={payload.weekRows}
+                    countByWeekIndex={countByWeek}
+                    selected={displayWeek}
+                    onSelect={setDisplayWeek}
+                    dropEnabled
+                    onDropWeek={handleDropOnWeek}
+                    fine
+                  />
+                </div>
+              )}
               <div className="promo-grille-defil" ref={defilRef} onScroll={mesurerDefil}>
                 <table
                   style={{ "--nb-colonnes": cols.length } as CSSProperties}
@@ -1271,7 +1289,18 @@ export function PromoView({
                   <tbody>
                     {SLOT_TIMES.map((slot, s) => (
                       <Fragment key={s}>
-                        {s === 3 && (
+                        {/* Pause méridienne : un séparateur nommé (maquette
+                            « Lumière »), sauf s'il porte un évènement à
+                            horaire libre — alors une case par colonne. */}
+                        {s === 3 && byColPause.size === 0 && (
+                          <tr className="pause">
+                            <td className="timecell" />
+                            <td colSpan={cols.length} className="pause-libelle">
+                              <span>Pause déjeuner</span>
+                            </td>
+                          </tr>
+                        )}
+                        {s === 3 && byColPause.size > 0 && (
                           <tr className="pause">
                             <td className="timecell" />
                             {cols.map((c, i) => {
@@ -1311,7 +1340,10 @@ export function PromoView({
                         )}
                         <tr>
                           <th scope="row" className="timecell">
-                            {slot.label}
+                            {/* L'heure de début se lit ; la fin reste dite aux
+                                lecteurs d'écran (« 9h30–11h »). */}
+                            {slot.label.split("–")[0]}
+                            <span className="sr-only">–{slot.label.split("–")[1]}</span>
                           </th>
                           {cols.map((c, i) => {
                             const largeur = largeursParCreneau[s][i];

@@ -41,7 +41,8 @@ import { SessionPanel } from "./components/SessionPanel";
 import { SignupPage } from "./components/SignupPage";
 import { TdWeekGrid } from "./components/TdWeekGrid";
 import { TimetableCalendar } from "./components/TimetableCalendar";
-import { Toolbar } from "./components/Toolbar";
+import { libelleCible, Toolbar } from "./components/Toolbar";
+import { SemaineAnnuaire } from "./components/SemaineAnnuaire";
 import { AdminCelcatView } from "./views/AdminCelcatView";
 import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
@@ -730,9 +731,11 @@ export function App() {
           />
         )}
         {activeTab === "semaine" && !readOnlyTarget && (
-          // Vue Semaine, refonte du 29/09/2026 : barre d'outils en deux lignes
-          // (quoi / quand), grille pleine largeur, détail de la séance choisie
-          // en tête de la colonne de droite. Styles : `components/Toolbar.css`.
+          // Vue Semaine, gabarit v2 (29/09/2026) : barre d'outils à plat et
+          // ruban des semaines, grille sur toute la hauteur utile, détail de
+          // la séance (ou la semaine en bref) en colonne à droite. Sans
+          // enseignant / salle choisi : l'annuaire avec les chiffres de la
+          // semaine. Styles : `components/Toolbar.css`.
           <div className="view semaine">
             <Toolbar
               year={year}
@@ -767,10 +770,57 @@ export function App() {
 
             <div className="semaine-layout">
               <section className="panel semaine-grille" aria-label="Planning de la semaine">
-                <div className="semaine-grille-entete">
+                {narrow && viewMode === "group" && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
+
+                <div className="semaine-grille-corps">
+                  {placements.length === 0 ? (
+                    <EtatPlanningVide etat={panne ? "echec" : etatPlanning} />
+                  ) : solverWeek === null ? (
+                    <div className="empty-state">
+                      <p>Semaine fermée (vacances). Choisissez une autre semaine.</p>
+                    </div>
+                  ) : viewMode === "teacher" && !teacherCode ? (
+                    <SemaineAnnuaire
+                      genre="enseignant"
+                      enseignants={teachers}
+                      teacherLabels={appPayload?.teacherLabels}
+                      seancesSemaine={visiblePlacements}
+                      onChoisir={setTeacherCode}
+                    />
+                  ) : viewMode === "room" && !roomId ? (
+                    <SemaineAnnuaire
+                      genre="salle"
+                      salles={rooms}
+                      seancesSemaine={visiblePlacements}
+                      onChoisir={setRoomId}
+                    />
+                  ) : viewMode === "group" && groupId && groups.find((g) => g.id === groupId)?.kind === "td" ? (
+                    <TdWeekGrid
+                      placements={placements}
+                      displayWeek={solverWeek}
+                      tdGroupId={groupId}
+                      groups={groups}
+                      groupLabels={groupLabels}
+                      onSelect={setSelected}
+                      payload={appPayload}
+                      parcours={parcours}
+                      onlyDay={narrow ? mobileDay : null}
+                      selectedId={selected?.session_id ?? null}
+                    />
+                  ) : (
+                    <TimetableCalendar
+                      placements={placements}
+                      displayWeek={solverWeek}
+                      weekDates={weekDates}
+                      groupLabels={groupLabels}
+                      onSelect={setSelected}
+                    />
+                  )}
+                </div>
+
+                <div className="semaine-grille-pied">
                   <p className="semaine-compte">
                     {visiblePlacements.length} séance{visiblePlacements.length > 1 ? "s" : ""} cette semaine
-                    {selected ? "" : " · cliquez une séance pour son détail"}
                   </p>
                   {!prefs.couleursParMatiere && (
                     <ul className="semaine-legende" aria-label="Types de séance">
@@ -781,44 +831,6 @@ export function App() {
                     </ul>
                   )}
                 </div>
-
-                {narrow && viewMode === "group" && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
-
-                {placements.length === 0 ? (
-                  <EtatPlanningVide etat={panne ? "echec" : etatPlanning} />
-                ) : solverWeek === null ? (
-                  <div className="empty-state">
-                    <p>Semaine fermée (vacances). Choisissez une autre semaine.</p>
-                  </div>
-                ) : (viewMode === "teacher" && !teacherCode) || (viewMode === "room" && !roomId) ? (
-                  <div className="empty-state">
-                    <p>
-                      Choisissez {viewMode === "teacher" ? "un enseignant" : "une salle"} dans la barre ci-dessus pour
-                      afficher sa semaine.
-                    </p>
-                  </div>
-                ) : viewMode === "group" && groupId && groups.find((g) => g.id === groupId)?.kind === "td" ? (
-                  <TdWeekGrid
-                    placements={placements}
-                    displayWeek={solverWeek}
-                    tdGroupId={groupId}
-                    groups={groups}
-                    groupLabels={groupLabels}
-                    onSelect={setSelected}
-                    payload={appPayload}
-                    parcours={parcours}
-                    onlyDay={narrow ? mobileDay : null}
-                    selectedId={selected?.session_id ?? null}
-                  />
-                ) : (
-                  <TimetableCalendar
-                    placements={placements}
-                    displayWeek={solverWeek}
-                    weekDates={weekDates}
-                    groupLabels={groupLabels}
-                    onSelect={setSelected}
-                  />
-                )}
               </section>
 
               <aside className="semaine-cote">
@@ -835,6 +847,17 @@ export function App() {
                   groupLabels={groupLabels}
                   teacherLabels={appPayload?.teacherLabels}
                   onOuvrirPromo={(p) => setRoute({ vue: "promo", sem: p.week, jour: p.day })}
+                  seancesSemaine={visiblePlacements}
+                  portee={libelleCible({
+                    viewMode,
+                    parcours,
+                    groupId,
+                    groups,
+                    teacherCode,
+                    teacherLabels: appPayload?.teacherLabels,
+                    roomId,
+                    rooms,
+                  })}
                 />
                 <DiffPanel
                   diff={diff}
