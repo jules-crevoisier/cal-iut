@@ -13,6 +13,8 @@
 import { Fragment, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 
+import "./SessionGrid.css";
+
 import type { AppPayload, AppRow } from "../types/app";
 import { couleursMatiere } from "../utils/couleursMatiere";
 import { positionInfobulle } from "../utils/infobulle";
@@ -20,6 +22,7 @@ import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { groupLabelWithParcours } from "../utils/years";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
+import { horaireSeance, jourAujourdhuiDansSemaine } from "../utils/planning";
 
 const SLOT_COUNT = 6;
 const ALL_DAYS = [0, 1, 2, 3, 4];
@@ -90,6 +93,9 @@ export function SessionGrid({
   // Depuis le contexte, jamais depuis `localStorage` : c'est ce qui fait
   // que la grille se repeint au clic (cf. `utils/preferences.ts`).
   const couleursParMatiere = usePreferences().couleursParMatiere;
+  // Colonne du jour repérée (en-tête + fond léger) : sur un lien public, la
+  // première question est « et aujourd'hui ? ».
+  const aujourdhui = jourAujourdhuiDansSemaine(payload, week, new Date());
 
   /** Props d'une case : classe de base + zone de dépôt quand la grille est
    *  éditable. Factorisé parce que la grille rend HUIT variantes de case
@@ -99,7 +105,8 @@ export function SessionGrid({
   const propsCase = (d: number, s: number) => {
     const survol = edition?.cibleCase?.day === d && edition?.cibleCase?.slot === s;
     const libelleCase = `${DAY_LABELS[d]} ${SLOT_TIMES[s].label}`;
-    if (!edition) return { className: "sessiongrid-cell" };
+    const base = `sessiongrid-cell${d === aujourdhui ? " is-today" : ""}`;
+    if (!edition) return { className: base };
     const choix = edition.onChoisirCase
       ? {
           role: "button" as const,
@@ -109,7 +116,7 @@ export function SessionGrid({
         }
       : {};
     return {
-      className: `sessiongrid-cell${survol ? " dropzone-hover" : ""}`,
+      className: `${base}${survol ? " dropzone-hover" : ""}`,
       onDragOver: (e: ReactDragEvent) => {
         if (!edition.draggingId) return;
         e.preventDefault();
@@ -189,9 +196,14 @@ export function SessionGrid({
           <tr>
             <th className="sessiongrid-corner" />
             {days.map((d) => (
-              <th key={d}>
+              <th
+                key={d}
+                className={d === aujourdhui ? "is-today" : undefined}
+                aria-current={d === aujourdhui ? "date" : undefined}
+              >
                 {DAY_LABELS[d]}
                 <span className="sessiongrid-daydate"> {formatShortDate(dateForWeekDay(payload, week, d))}</span>
+                {d === aujourdhui && <span className="sessiongrid-today-tag">aujourd'hui</span>}
               </th>
             ))}
           </tr>
@@ -348,7 +360,7 @@ export function SessionGrid({
           <div>Prof : {hover.row.te.map((t) => payload.teacherLabels[t] ?? t).join(", ") || "—"}</div>
           <div>Salle : {hover.row.r || "—"}</div>
           <div>
-            {DAY_LABELS[hover.row.d]} · {SLOT_TIMES[hover.row.s]?.label}
+            {DAY_LABELS[hover.row.d]} · {horaireSeance(hover.row).libelle}
           </div>
         </div>
       )}

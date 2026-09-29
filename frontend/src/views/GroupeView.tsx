@@ -1,20 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+/**
+ * Vue TD / TP — et, en lecture seule, le lien public d'un groupe
+ * (`#vue=groupe&groupe=…&mode=groupe&t=…`) que les étudiants ouvrent sur
+ * leur téléphone.
+ *
+ * Même organisation que la Vue Enseignant (refonte du 29/09/2026) :
+ * prochain cours, navigation de semaine avec aujourd'hui repéré, grille
+ * pleine largeur, lecture jour par jour sur téléphone. Le panneau « Profil »
+ * qui répétait le nom du groupe devient une ligne sous le sélecteur.
+ */
 
-import { DayStrip, todayIndex } from "../components/DayStrip";
-import { SemesterAgenda } from "../components/SemesterAgenda";
-import { SessionGrid } from "../components/SessionGrid";
+import { useMemo } from "react";
+
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
-import { CopyButton } from "../components/CopyButton";
-import { ShareBar } from "../components/ShareBar";
-import { usePreferences } from "../utils/preferences";
-import { WeekBar } from "../components/WeekBar";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
-import { useNarrowScreen } from "../hooks/useNarrowScreen";
+import { MenuAgenda } from "../components/MenuAgenda";
+import { NavSemaine } from "../components/NavSemaine";
+import { PlanningSemaine } from "../components/PlanningSemaine";
+import { ProchainCours } from "../components/ProchainCours";
+import { SemesterAgenda } from "../components/SemesterAgenda";
+import { ShareBar } from "../components/ShareBar";
+import { useConsultation } from "../hooks/useConsultation";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
-import { displayIndexForSolverWeek } from "../utils/weekDisplay";
+import { formatHeures, heuresDe, pluriel } from "../utils/planning";
+import { usePreferences } from "../utils/preferences";
+
+import "./fiches.css";
 
 interface GroupeViewProps {
   payload: AppPayload;
@@ -27,220 +40,155 @@ interface GroupeViewProps {
 export function GroupeView({ payload, route, setRoute, readOnly = false, onOpenSearch }: GroupeViewProps) {
   const groupIds = useMemo(
     () =>
-      Object.keys(payload.groupLabels).sort((a, b) =>
-        (payload.groupLabels[a] ?? a).localeCompare(payload.groupLabels[b] ?? b, "fr"),
-      ),
-    [payload.groupLabels],
+      Object.keys(payload.groupLabels).sort((a, b) => {
+        // Rangés par parcours puis libellé : « TD AB » existe dans plusieurs
+        // parcours, trié au seul libellé la liste les mélangeait.
+        const pa = payload.groupParcours[a] ?? "";
+        const pb = payload.groupParcours[b] ?? "";
+        return pa.localeCompare(pb, "fr") || (payload.groupLabels[a] ?? a).localeCompare(payload.groupLabels[b] ?? b, "fr");
+      }),
+    [payload.groupLabels, payload.groupParcours],
   );
-  const [groupId, setGroupId] = useState(route.groupe || payload.defaultGroup || groupIds[0] || "");
-  const [displayWeek, setDisplayWeek] = useState(() => displayIndexForSolverWeek(payload, route.sem));
-  const [mobileDay, setMobileDay] = useState(todayIndex());
-  const narrow = useNarrowScreen();
-
-  // Resynchronise depuis un lien externe (recherche, « à traiter ») qui ne
-  // touche que la route sans démonter cette vue.
-  useEffect(() => {
-    if (route.groupe && route.groupe !== groupId) setGroupId(route.groupe);
-    if (route.sem !== null) setDisplayWeek(displayIndexForSolverWeek(payload, route.sem));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route.groupe, route.sem]);
-
-  const cohort = new Set(payload.groupCohort[groupId] ?? [groupId]);
-  const allItems = useMemo(
-    () => sessionsWithDates(payload, payload.rows.filter((r) => r.g.some((g) => cohort.has(g)))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [payload, groupId],
-  );
-  const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
-  const rowsThisWeek = solverWeek === null ? [] : allItems.filter((r) => r.w === solverWeek);
+  const groupId = route.groupe || payload.defaultGroup || groupIds[0] || "";
+  const c = useConsultation(payload, route.sem);
   const couleursParMatiere = usePreferences().couleursParMatiere;
 
-  // Heures, pas un compte de séances — retour utilisateur 28/08/2026 (relayé
-  // depuis Discord, idée de Jordan) : « le nombre d'heure total de la
-  // semaine ça serait cool si il pouvait être montré ».
-  const hoursByWeek = new Map<number, number>();
-  for (const it of allItems) hoursByWeek.set(it.w, (hoursByWeek.get(it.w) ?? 0) + (it.dur || 1) * 1.5);
-
-  const tpPair = payload.groupTpPair[groupId];
-  const parcours = payload.groupParcours[groupId] ?? "";
+  // La cohorte : le groupe + son CM de promo + son TP jumelé — ce qu'un
+  // étudiant de ce groupe suit réellement.
+  const allItems = useMemo(() => {
+    const cohort = new Set(payload.groupCohort[groupId] ?? [groupId]);
+    return sessionsWithDates(payload, payload.rows.filter((r) => r.g.some((g) => cohort.has(g))));
+  }, [payload, groupId]);
 
   if (!readOnly && route.groupe && !(route.groupe in payload.groupLabels)) {
     return <FicheIntrouvable libelle="Groupe" id={route.groupe} onOpenSearch={onOpenSearch} />;
   }
 
-  const handleChangeGroup = (gid: string) => {
-    setGroupId(gid);
-    setRoute({ vue: "groupe", groupe: gid });
-  };
+  const rowsThisWeek = c.solverWeek === null ? [] : allItems.filter((r) => r.w === c.solverWeek);
+  // Heures, pas un compte de séances (retour utilisateur 28/08/2026).
+  const hoursByWeek = new Map<number, number>();
+  for (const it of allItems) hoursByWeek.set(it.w, (hoursByWeek.get(it.w) ?? 0) + heuresDe([it]));
 
-  // Nom complet (parcours en préfixe) — retour utilisateur 28/08/2026 : « on
-  // a pas le nom complet du groupe dessus ». Le libellé seul ("TD EF")
-  // existe en double identique entre plusieurs parcours FC (cf.
-  // ReferenceView.tsx, même correctif) : sans le parcours, impossible de
-  // savoir lequel des deux ce planning désigne.
+  const tpPair = payload.groupTpPair[groupId];
+  const parcours = payload.groupParcours[groupId] ?? "";
+  // Nom complet, parcours en préfixe — retour utilisateur 28/08/2026 : « on
+  // a pas le nom complet du groupe dessus ». « TD EF » existe à l'identique
+  // dans plusieurs parcours FC.
   const nomComplet = parcours ? `${parcours} · ${payload.groupLabels[groupId] ?? groupId}` : (payload.groupLabels[groupId] ?? groupId);
+  const token = payload.groupTokens[groupId] ?? "";
+  const semaineLabel = payload.weekRows[c.displayWeek]?.label ?? `Semaine ${c.displayWeek + 1}`;
+  const imageEdt = () => ({
+    titre: nomComplet,
+    sousTitre: semaineLabel,
+    rows: rowsThisWeek,
+    payload,
+    couleursParMatiere,
+  });
+  const cohorte = payload.groupCohort[groupId] ?? [];
 
   return (
-    <section className="view">
-      <div className="panel controls">
-        {/* Sélecteur de groupe caché en lecture seule (le lien personnel
-            désigne déjà UN seul groupe) — la barre de semaines reste, elle :
-            même correctif que la vue Enseignant (retour utilisateur
-            28/08/2026 : « on veut les semaines comme les profs »), sinon un
-            groupe ouvrant son lien perso restait bloqué sur une seule
-            semaine sans pouvoir parcourir le reste du semestre. */}
-        {!readOnly && (
-          <label>
-            Groupe étudiant
-            <select value={groupId} onChange={(e) => handleChangeGroup(e.target.value)}>
+    <section className="view fiche">
+      {!readOnly && (
+        <div className="fiche-entete">
+          <label className="fiche-choix">
+            <span>Groupe étudiant</span>
+            <select value={groupId} onChange={(e) => setRoute({ vue: "groupe", groupe: e.target.value })}>
               {groupIds.map((gid) => (
                 <option key={gid} value={gid}>
+                  {payload.groupParcours[gid] ? `${payload.groupParcours[gid]} · ` : ""}
                   {payload.groupLabels[gid]}
                 </option>
               ))}
             </select>
           </label>
+          <p className="fiche-identite">
+            <span className="mono">{groupId}</span>
+            <span>
+              {[payload.groupKind[groupId]?.toUpperCase(), payload.groupIsFc[groupId] ? "FC" : parcours.includes("FI") ? "FI" : ""]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+            {cohorte.length > 1 && (
+              <span title="Groupes dont les séances apparaissent dans ce planning">
+                suit : {cohorte.map((gid) => payload.groupLabels[gid] ?? gid).join(", ")}
+              </span>
+            )}
+            {tpPair && (
+              <span>
+                TP : {payload.groupLabels[tpPair[0]] ?? tpPair[0]} / {payload.groupLabels[tpPair[1]] ?? tpPair[1]}
+              </span>
+            )}
+            <span>
+              {pluriel(allItems.length, "séance")} · {formatHeures(heuresDe(allItems))} au semestre
+            </span>
+          </p>
+        </div>
+      )}
+
+      {!readOnly && (
+        <ShareBar
+          onCopyLink={() => buildLink({ vue: "groupe", groupe: groupId, mode: "groupe", t: token })}
+          onCopySubscribeLink={() => subscribeUrl("groupe", groupId, token)}
+          imageEdt={imageEdt}
+        />
+      )}
+
+      <ProchainCours payload={payload} items={allItems} onVoir={(it) => c.allerA(it.w, it.d)} />
+
+      <NavSemaine
+        weekRows={payload.weekRows}
+        selected={c.displayWeek}
+        onSelect={c.setDisplayWeek}
+        countByWeekIndex={hoursByWeek}
+        onAujourdhui={c.narrow ? c.jourAujourdhui : undefined}
+        resume={
+          c.solverWeek !== null && (
+            <strong>{formatHeures(hoursByWeek.get(c.solverWeek) ?? 0)} cette semaine</strong>
+          )
+        }
+      >
+        {readOnly && (
+          <>
+            <MenuAgenda url={subscribeUrl("groupe", groupId, token)} />
+            <BoutonsImageEdt options={imageEdt} />
+            <button type="button" className="btn btn--ghost btn--sm fiche-imprimer" onClick={() => window.print()}>
+              Imprimer
+            </button>
+          </>
         )}
-        <div className="field weekfield">
-          <WeekBar
-            weekRows={payload.weekRows}
-            countByWeekIndex={hoursByWeek}
-            selected={displayWeek}
-            onSelect={setDisplayWeek}
-            unit="heures"
+      </NavSemaine>
+
+      <div className="fiche-corps">
+        <div className="fiche-grille" id="planning">
+          <PlanningSemaine
+            payload={payload}
+            rows={rowsThisWeek}
+            displayIndex={c.displayWeek}
+            onSelectWeek={c.setDisplayWeek}
+            parcours={parcours}
+            showPac={!parcours.includes("FC")}
+            split={tpPair}
+            narrow={c.narrow}
+            jour={c.jour}
+            onJour={c.setJour}
+            titreImpression={nomComplet}
           />
         </div>
       </div>
 
-      {/* Partage/export : utile côté planification (préparer l'envoi du
-          lien), hors de propos une fois que c'est LE groupe qui regarde sa
-          propre page via ce même lien — retiré en lecture seule pour ne
-          garder que l'essentiel (barre des semaines + planning), même
-          traitement que la vue Enseignant. Le lien agenda reste accessible
-          en lecture seule, déplacé dans l'en-tête du planning ci-dessous. */}
+      {/* Lecture seule : pas de liste du semestre sous la grille (retour
+          utilisateur 28/08/2026 : « enlève les séances en dessous du
+          planning »). */}
       {!readOnly && (
-        <ShareBar
-          onCopyLink={() =>
-            buildLink({ vue: "groupe", groupe: groupId, mode: "groupe", t: payload.groupTokens[groupId] ?? "" })
-          }
-          onCopySubscribeLink={() => subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? "")}
-          imageEdt={() => ({
-            titre: nomComplet,
-            sousTitre: payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`,
-            rows: rowsThisWeek,
-            payload,
-            couleursParMatiere,
-          })}
-        />
-      )}
-
-      {!readOnly && (
-        <div className="panel">
-          <h3>Profil</h3>
-          <p>
-            <strong>{nomComplet}</strong> <span className="mono muted">{groupId}</span>
-          </p>
-          <p className="muted">
-            {[
-              payload.groupKind[groupId],
-              payload.groupIsFc[groupId] ? "FC" : parcours.includes("FI") ? "FI" : "",
-              `${allItems.length} séance(s)`,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-          {payload.groupCohort[groupId] && payload.groupCohort[groupId]!.length > 1 && (
-            <>
-              <div className="raw-label">Cohorte</div>
-              <p>
-                {payload.groupCohort[groupId]!.map((gid) => payload.groupLabels[gid] ?? gid).join(" · ")}
-              </p>
-            </>
-          )}
-          {tpPair && (
-            <>
-              <div className="raw-label">Paire TP</div>
-              <p>
-                {payload.groupLabels[tpPair[0]] ?? tpPair[0]} / {payload.groupLabels[tpPair[1]] ?? tpPair[1]}
-              </p>
-            </>
-          )}
-        </div>
-      )}
-
-      {narrow && <DayStrip selected={mobileDay} onSelect={setMobileDay} />}
-
-      {/* Lecture seule : grille seule en pleine largeur, sans la liste de
-          « toutes les séances du semestre » en dessous (retour utilisateur
-          28/08/2026 : « enlève les séances en dessous du planning ») —
-          parcourir les semaines dans la grille couvre déjà le même besoin. */}
-      {readOnly ? (
-        <div className="panel">
-          <div className="section-header">
-            <h3>
-              {nomComplet} — {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
-            </h3>
-            <div className="section-header-actions no-print">
-              <CopyButton
-                text={() => subscribeUrl("groupe", groupId, payload.groupTokens[groupId] ?? "")}
-                idleLabel="Lien agenda"
-                title="Lien à coller dans Google Agenda / Apple Calendrier / Outlook — se remet à jour tout seul."
-              />
-              {/* À CÔTÉ du lien d'abonnement, comme demandé — et surtout
-                  visible ici : c'est la page que reçoit la personne, donc
-                  celle depuis laquelle elle voudra partager. */}
-              <BoutonsImageEdt
-                options={() => ({
-                  titre: nomComplet,
-                  sousTitre: payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`,
-                  rows: rowsThisWeek,
-                  payload,
-                  couleursParMatiere,
-                })}
-              />
-            </div>
-          </div>
-          {solverWeek === null ? (
-            <p className="muted">Semaine bloquée (vacances/fermeture).</p>
-          ) : (
-            <SessionGrid
-              payload={payload}
-              rows={rowsThisWeek}
-              week={solverWeek}
-              parcours={parcours}
-              showPac={!parcours.includes("FC")}
-              split={tpPair}
-              onlyDay={narrow ? mobileDay : null}
-            />
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="panel">
-            <h3>
-              {payload.groupLabels[groupId] ?? groupId} —{" "}
-              {payload.weekRows[displayWeek]?.label ?? `Semaine ${displayWeek + 1}`}
-            </h3>
-            {solverWeek === null ? (
-              <p className="muted">Semaine bloquée (vacances/fermeture).</p>
-            ) : (
-              <SessionGrid
-                payload={payload}
-                rows={rowsThisWeek}
-                week={solverWeek}
-                parcours={parcours}
-                showPac={!parcours.includes("FC")}
-                split={tpPair}
-                onlyDay={narrow ? mobileDay : null}
-              />
-            )}
-          </div>
-
-          <div className="panel">
-            <h3>Toutes les séances du semestre</h3>
-            <SemesterAgenda payload={payload} items={allItems} />
-          </div>
-        </>
+        <section className="panel fiche-semestre">
+          <h3>Toutes les séances du semestre</h3>
+          <SemesterAgenda
+            payload={payload}
+            items={allItems}
+            semaineAffichee={c.solverWeek}
+            onChoisirSemaine={(w) => c.allerA(w)}
+          />
+        </section>
       )}
     </section>
   );

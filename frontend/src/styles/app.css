@@ -1540,22 +1540,93 @@ a.btn {
   min-width: 260px;
 }
 
+/* ══════════════ Liens publics : bandeau lecture seule ══════════════
+   Une ligne : QUI (titre) à gauche, le réglage des couleurs à droite, la
+   mention « lecture seule » en petit dessous. L'ancien bandeau empilait
+   titre, phrase, libellé « COULEURS » et un gros sélecteur : ~150 px de
+   haut sur téléphone avant la première séance. */
 .readonly-banner {
-  padding: 18px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 16px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
 
 .readonly-banner h1 {
-  margin: 0 0 4px;
-  font-size: 1.2rem;
+  grid-column: 1;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  min-width: 0;
 }
 
 .readonly-banner p {
+  grid-column: 1;
   margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
 }
+
+.readonly-banner .prefs-reglage {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+/* Réglage des couleurs : un simple `select` (retour utilisateur 30/08/2026 :
+   « fais juste un select au pire »). Ses options disent déjà « Couleurs
+   par … » : le libellé reste pour les lecteurs d'écran seulement. */
+.prefs-reglage label span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.prefs-reglage select {
+  width: auto;
+}
+
+.read-only-mode .app-main {
+  padding-top: 16px;
+}
+
+@media (max-width: 760px) {
+  .readonly-banner {
+    padding: 10px 12px;
+  }
+
+  .readonly-banner h1 {
+    font-size: 1rem;
+  }
+
+  .readonly-banner p {
+    grid-column: 1 / -1;
+    font-size: 0.75rem;
+  }
+
+  .readonly-banner .prefs-reglage {
+    grid-row: 1;
+  }
+
+  /* 16px : en dessous, iOS zoome à la mise au point du champ. */
+  .prefs-reglage select {
+    font-size: 16px;
+    min-height: 40px;
+    max-width: 52vw;
+  }
+}
+
+@media print {
+  .readonly-banner {
+    display: none;
+  }
+}
+
 
 /* ══════════════ WeekBar ══════════════
    Histogramme (hauteur ∝ charge de la semaine), identique à `.weekbar`
@@ -1689,164 +1760,6 @@ a.btn {
   display: none;
 }
 
-/* ══════════════ SessionGrid (lecture seule) ══════════════ */
-
-.sessiongrid-wrap {
-  overflow-x: auto;
-}
-
-.sessiongrid {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.78rem;
-}
-
-.sessiongrid th,
-.sessiongrid td {
-  border: 1px solid var(--border);
-  padding: 4px;
-  vertical-align: top;
-}
-
-.sessiongrid thead th {
-  background: var(--surface-2);
-  padding: 8px 4px;
-  font-size: 0.75rem;
-}
-
-.sessiongrid-daydate {
-  font-weight: 400;
-  color: var(--muted);
-  text-transform: none;
-}
-
-.sessiongrid-corner {
-  width: 76px;
-}
-
-.sessiongrid-timecell {
-  width: 76px;
-  font-size: 0.68rem;
-  color: var(--muted);
-  text-align: center;
-  background: var(--surface-2);
-}
-
-.sessiongrid-pause td {
-  background: var(--surface-2);
-  height: 22px;
-  padding: 0;
-  border-left: none;
-  border-right: none;
-}
-
-.sessiongrid-pause-label {
-  text-align: center;
-  vertical-align: middle !important;
-  color: var(--muted);
-  font-size: 0.7rem;
-  font-style: italic;
-  letter-spacing: 0.02em;
-}
-
-.sessiongrid-cell {
-  min-width: 132px;
-  height: 60px; /* vue admin : compacte, la grille partage l'écran avec le reste */
-}
-
-/* ── Lecture seule (lien perso) : occuper la hauteur de l'écran ──
-   Retour utilisateur 28/08/2026, après 3 tentatives ratées d'étirer le
-   <table> lui-même (`height: 100%` + chaîne flex) : quand on force un
-   tableau au-delà de sa hauteur naturelle, la répartition du surplus entre
-   les lignes n'est PAS définie par la spec — les navigateurs la donnent en
-   pratique à la première ligne ou la répartissent au hasard, d'où la ligne
-   vide géante et les cartes à moitié remplies observées.
-
-   Approche retenue à la place, déterministe : ne jamais étirer le tableau,
-   mais donner à chaque LIGNE une hauteur proportionnelle au viewport. 6
-   créneaux × ~9,5vh ≈ 57vh, plus l'en-tête/la barre de semaines/les marges,
-   remplit l'écran sans jamais dépendre d'un comportement indéfini. Les
-   bornes du clamp() : plancher 64px (jamais plus petit qu'avant sur un
-   écran court), plafond 120px (au-delà, les cases deviennent des pavés
-   vides sur un grand écran).
-
-   Bonus obtenu gratuitement : `height` étant ici une valeur DÉFINIE (pas
-   `auto`, pas un étirement), le `height: 100%` de `.sessiongrid-cell-inner`
-   se résout enfin correctement — c'est ce qui permet aux cartes de remplir
-   vraiment leur case, ce qui échouait dans les tentatives précédentes. Un
-   `height` sur une cellule de tableau vaut de toute façon MINIMUM : une
-   séance au contenu long fait grandir sa ligne, rien n'est jamais tronqué. */
-.read-only-mode .sessiongrid-cell {
-  height: clamp(64px, 9.5vh, 120px);
-}
-
-.read-only-mode .sessiongrid-cell-inner,
-.read-only-mode .sessiongrid-subcols > div {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.read-only-mode .sessiongrid-block {
-  flex: 1;
-  justify-content: center;
-  margin-bottom: 0; /* remplacé par le `gap` du conteneur flex ci-dessus */
-}
-
-/* La police suit la même logique que la hauteur de ligne : plancher = la
-   taille compacte d'avant (jamais plus petit qu'avant sur mobile). */
-.read-only-mode .sessiongrid {
-  font-size: clamp(0.78rem, 1.5vh, 1rem);
-}
-
-.read-only-mode .sessiongrid-block {
-  font-size: clamp(0.72rem, 1.35vh, 0.92rem);
-}
-
-.read-only-mode .sessiongrid-block .meta {
-  font-size: clamp(0.62rem, 1.1vh, 0.78rem);
-}
-
-.sessiongrid-subcols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  height: 100%;
-}
-
-.sessiongrid-block {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  text-align: left;
-  border: none;
-  border-left: 3px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--text);
-  padding: 3px 6px;
-  margin-bottom: 2px;
-  border-radius: 3px;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.72rem;
-}
-
-.sessiongrid-block.small {
-  font-size: 0.66rem;
-  padding: 2px 4px;
-}
-
-/* Même mapping que `.session.type-*` côté HTML. */
-.sessiongrid-block.type-cm { border-left-color: var(--ink-soft); background: color-mix(in srgb, var(--ink-soft) 10%, var(--surface)); }
-.sessiongrid-block.type-td { border-left-color: var(--type-td); background: color-mix(in srgb, var(--type-td) 10%, var(--surface)); }
-.sessiongrid-block.type-tp { border-left-color: var(--teal); background: color-mix(in srgb, var(--teal) 12%, var(--surface)); }
-.sessiongrid-block.type-ptut { border-left-color: #8e44ad; background: color-mix(in srgb, #8e44ad 12%, var(--surface)); }
-.sessiongrid-block.eval { border-left-color: var(--accent2); background: color-mix(in srgb, var(--accent2) 14%, var(--surface)); }
-.sessiongrid-block.locked { opacity: 0.75; }
-
-/* Édition (modale semaine par parcours uniquement — les vues Groupe et
-   Enseignant passent la même grille sans `edition`, donc sans ces états). */
 /* --- Réglage des notifications (onglet Référence) ---------------------- */
 .notif-champ {
   display: flex;
@@ -1915,255 +1828,14 @@ a.btn {
 
 /* Salle manquante : signalée, jamais silencieuse. Couleur d'alerte plutôt
    qu'un simple tiret — sur une grille dense, un vide ne se voit pas. */
-.sessiongrid-block .room--absente,
 .promo-chip .rm--absente {
   color: var(--danger);
   font-style: italic;
   font-weight: 600;
 }
 
-.sessiongrid-block--draggable { cursor: grab; }
-.sessiongrid-block--draggable:active { cursor: grabbing; }
-.sessiongrid-block.dragging { opacity: 0.35; }
-
-/* Séance survolée pendant un glisser : déposer ici ÉCHANGE les deux places.
-   Repère volontairement différent de `.dropzone-hover` (trait plein, pas
-   pointillé) — ce n'est pas le même geste : la case déplace, la séance
-   échange. */
-.sessiongrid-block.swap-target {
-  outline: 2px solid var(--accent2);
-  outline-offset: 1px;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent2) 22%, transparent);
-}
-
-.sessiongrid-cell.dropzone-hover {
-  outline: 2px dashed var(--accent);
-  outline-offset: -2px;
-}
-
-/* Nom du cours + salle en tête, mis en avant à égalité — retour utilisateur
-   28/08/2026 : le nom prime sur le code (« WSA501D ça me parle pas »), et la
-   salle mérite la même importance que le nom (« 95% du temps c'est pour
-   savoir dans quelle salle je suis »), affichée à sa droite. */
-.sessiongrid-block .head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-  width: 100%;
-}
-
-.sessiongrid-block .name {
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.sessiongrid-block .room {
-  font-weight: 700;
-  flex: none;
-  white-space: nowrap;
-}
-
-.sessiongrid-block .meta {
-  color: var(--muted);
-  font-size: 0.66rem;
-  margin-top: 1px;
-}
-
-.sessiongrid-block .meta .code {
-  font-weight: 600;
-}
-
-.sessiongrid-holiday,
-.sessiongrid-pac,
-.sessiongrid-sae,
-.sessiongrid-event {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-size: 0.68rem;
-  color: var(--muted);
-  background: var(--surface-2);
-  border-radius: 4px;
-  padding: 4px;
-}
-
-.sessiongrid-holiday .title,
-.sessiongrid-sae .title {
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.62rem;
-}
-
-.sessiongrid-pac {
-  /* même traitement que `.pac-cell` côté HTML : gris neutre + bordure
-     pointillée, pas un accent — le PAC n'est pas une action à mettre en
-     avant, juste un créneau réservé, non éditable ici. */
-  color: var(--ink-soft);
-  border: 1px dashed var(--border);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-
-.sessiongrid-hover {
-  position: fixed;
-  z-index: 40;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 0.78rem;
-  max-width: 260px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-}
-
-.sessiongrid-hover strong {
-  display: block;
-  margin-bottom: 4px;
-}
-
 .promogrid th > div:first-child {
   font-weight: 700;
-}
-
-/* ══════════════ ShareBar / Agenda ══════════════ */
-
-.sharebar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.callout {
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  font-size: 0.85rem;
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-}
-
-.callout.pass { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); background: var(--good-soft); }
-.callout.fail { border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); background: var(--bad-soft); }
-.callout .icon { font-weight: 700; }
-
-.raw-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin: 12px 0 4px;
-}
-
-.raw-label:first-child {
-  margin-top: 0;
-}
-
-.raw {
-  white-space: pre-wrap;
-  font-size: 0.82rem;
-  background: var(--surface-2);
-  border-radius: 6px;
-  padding: 8px 10px;
-}
-
-.slotlist {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* Rouge par défaut (vraie violation de disponibilité déclarée) — même
-   traitement que le HTML, jamais repris ici jusqu'au 11/08/2026 (`.slotchip`
-   restait neutre, cf. docs/DATA.md §59). `.sae` = compromis MOU accepté
-   (encadrement SAE ce jour-là), ambre plutôt que rouge : pas une règle
-   cassée, une préférence non respectée faute de mieux. */
-.slotchip {
-  background: var(--bad-soft);
-  color: var(--danger);
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 0.72rem;
-}
-
-.slotchip.sae {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
-
-.agenda-summary {
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin: 0 0 12px;
-}
-
-.agenda-week {
-  margin-bottom: 10px;
-}
-
-.agenda-week-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-
-.agenda-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.agenda-chip {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 9px;
-  font-size: 0.75rem;
-}
-
-/* ══════════════ Liens de tous les enseignants (vue simple) ══════════════ */
-
-.teacherlinks {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.teacherlinks-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-
-.teacherlinks-name {
-  flex: 0 0 180px;
-  font-size: 0.86rem;
-  font-weight: 600;
-}
-
-.teacherlinks-input {
-  flex: 1 1 240px;
-  min-width: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--muted);
-  padding: 6px 10px;
-  font-size: 0.78rem;
 }
 
 /* ══════════════ Vue Promo ══════════════ */
@@ -2974,7 +2646,6 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
   .daystrip { display: flex; }
   .daystrip .dfull { display: none; }
   .daystrip .dshort { display: inline; }
-  .sessiongrid-cell { min-width: 0; }
 }
 
 /* ══════════════ Impression ══════════════ */
@@ -4003,92 +3674,6 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
   color: var(--muted);
   font-size: 0.75rem;
   margin: 10px 0 0;
-}
-
-/* --- Réglage des couleurs, gardé accessible après le premier choix ------
-   Rien de spécifique ici : le bloc porte `toolbar-controls`, donc son
-   `label > select` hérite exactement du style de la barre d'outils. Une
-   bascule maison avait été essayée d'abord — retour utilisateur : « pas du
-   tout dans la DA du reste ». Un composant de plus à styler, c'est un
-   composant de plus à voir dériver. */
-.prefs-reglage {
-  margin: 0 0 12px;
-}
-
-.prefs-reglage select {
-  /* 16px minimum : en dessous, iOS zoome à la mise au point. La barre se
-     manie au pouce, ce zoom involontaire est particulièrement pénible. */
-  font-size: max(16px, 0.875rem);
-  min-height: 44px;
-}
-
-/* --- Menu de partage de l'image ---------------------------------------
-   Sur mobile, `navigator.share` ouvre la feuille système et ce menu ne
-   s'affiche jamais. Sur ordinateur, cette feuille n'existe pas pour les
-   fichiers : ce menu est son équivalent, et « Copier l'image » en est
-   l'option utile — on colle ensuite dans Discord ou WhatsApp Web. */
-.boutons-image {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.boutons-image-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 50;
-  min-width: 260px;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-.boutons-image-menu button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  /* 44px : cible tactile confortable — ce menu s'ouvre aussi sur les
-     tablettes, où `navigator.share` n'accepte pas toujours les fichiers. */
-  min-height: 44px;
-  padding: 10px 14px;
-  background: none;
-  border: 0;
-  font: inherit;
-  font-size: 0.85rem;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-}
-
-.boutons-image-menu button + button {
-  border-top: 1px solid var(--border);
-}
-
-.boutons-image-menu button:hover,
-.boutons-image-menu button:focus-visible {
-  background: var(--surface-2);
-}
-
-.boutons-image-menu span {
-  color: var(--muted);
-  font-size: 0.74rem;
-}
-
-@media (max-width: 560px) {
-  /* Ancré à droite, un menu de 260px déborde d'un écran étroit : on le
-     laisse partir vers la gauche. */
-  .boutons-image-menu {
-    right: auto;
-    left: 0;
-    min-width: min(260px, calc(100vw - 32px));
-  }
 }
 
 /* ══════════════ Celcat (AdminCelcatView) — écran unique ══════════════

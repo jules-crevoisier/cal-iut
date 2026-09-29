@@ -1,0 +1,208 @@
+/* ══════════════ Agenda du semestre (SemesterAgenda) ══════════════
+   Une ligne par séance, colonnes alignées : jour · heure · cours · qui ·
+   salle. Sur téléphone, les colonnes se replient sur deux lignes. */
+
+.agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.agenda-outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.agenda-resume {
+  margin: 0;
+  margin-right: auto;
+  font-size: 0.875rem;
+}
+
+.agenda-resume strong {
+  font-weight: 600;
+}
+
+.agenda-filtre {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.agenda-filtre select {
+  width: auto;
+  max-width: 22rem;
+}
+
+.agenda-case {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.agenda-semaine-titre {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.agenda-semaine-lien {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.agenda-semaine-lien:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.agenda-semaine-dates {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.agenda-semaine-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.agenda-semaine-h {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.agenda-semaine.is-shown .agenda-semaine-titre {
+  border-bottom-color: var(--accent);
+}
+
+.agenda-lignes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agenda-ligne {
+  display: grid;
+  /* Largeurs FIXES pour le jour, l'heure et la salle : chaque ligne est sa
+     propre grille, une colonne « auto » changeait de largeur d'une ligne à
+     l'autre et désalignait tout. */
+  grid-template-columns: 7rem 6rem minmax(0, 2fr) minmax(0, 1.6fr) 9.5rem;
+  align-items: baseline;
+  gap: 12px;
+  padding: 4px 8px;
+  border-left: 3px solid var(--border-strong);
+  font-size: 0.82rem;
+}
+
+/* Une seule matière : la colonne « cours » ne porte que le type. */
+.agenda-lignes--un-cours .agenda-ligne {
+  grid-template-columns: 7rem 6rem 4.5rem minmax(0, 1fr) 9.5rem;
+}
+
+.agenda-ligne + .agenda-ligne {
+  border-top: 1px solid var(--surface-3);
+}
+
+.agenda-ligne:hover {
+  background: var(--surface-2);
+}
+
+.agenda-ligne.type-cm { border-left-color: var(--type-cm); }
+.agenda-ligne.type-td { border-left-color: var(--type-td); }
+.agenda-ligne.type-tp { border-left-color: var(--type-tp); }
+.agenda-ligne.eval { border-left-color: var(--type-eval); }
+
+.couleurs-matiere .agenda-ligne {
+  border-left-color: var(--matiere-barre);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .couleurs-matiere .agenda-ligne {
+    border-left-color: var(--matiere-barre-sombre);
+  }
+}
+:root[data-theme="dark"] .couleurs-matiere .agenda-ligne {
+  border-left-color: var(--matiere-barre-sombre);
+}
+
+.agenda-ligne.is-past {
+  color: var(--ink-faint);
+}
+
+.agenda-ligne.is-past .agenda-salle {
+  color: var(--ink-faint);
+}
+
+.agenda-jour {
+  white-space: nowrap;
+}
+
+.agenda-heure {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-nom {
+  font-weight: 600;
+}
+
+.agenda-code {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+.agenda-qui {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.agenda-salle {
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.agenda-salle--absente {
+  color: var(--bad-text);
+  font-style: italic;
+}
+
+@media (max-width: 760px) {
+  .agenda-ligne,
+  .agenda-lignes--un-cours .agenda-ligne {
+    grid-template-columns: auto 1fr auto;
+    gap: 2px 10px;
+    padding: 6px 8px;
+  }
+
+  .agenda-jour { grid-column: 1; }
+  .agenda-heure { grid-column: 2; }
+  .agenda-salle { grid-column: 3; }
+  .agenda-cours,
+  .agenda-qui { grid-column: 1 / -1; }
+}
+
+@media print {
+  .agenda-outils { display: none; }
+}

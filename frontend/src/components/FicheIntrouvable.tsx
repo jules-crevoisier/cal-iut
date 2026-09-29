@@ -1,6 +1,7 @@
 /**
- * Fiche admin : l'id demandé n'existe pas dans le payload (typo, lien périmé).
- * Le bouton rouvre la recherche globale — seul moyen de retomber sur une entité réelle.
+ * Fiche : l'id demandé n'existe pas dans le planning (typo, lien périmé).
+ * Le bouton rouvre la recherche globale — seul moyen de retomber sur une
+ * entité réelle.
  */
 
 interface FicheIntrouvableProps {
@@ -12,13 +13,19 @@ interface FicheIntrouvableProps {
 export function FicheIntrouvable({ libelle, id, onOpenSearch }: FicheIntrouvableProps) {
   return (
     <section className="view">
-      <div className="panel">
+      <div className="empty-state" role="status">
         <p>
-          {libelle} « {id} » introuvable.
+          <strong>
+            {libelle} « {id} » introuvable.
+          </strong>
         </p>
-        <button type="button" className="btn" onClick={() => onOpenSearch?.()}>
-          Ouvrir la recherche
-        </button>
+        <p className="muted">Le lien est peut-être ancien, ou le code mal recopié.</p>
+        <p>
+          <button type="button" className="btn btn--primary" onClick={() => onOpenSearch?.()}>
+            Ouvrir la recherche
+          </button>{" "}
+          <span className="muted">(Ctrl+K)</span>
+        </p>
       </div>
     </section>
   );
