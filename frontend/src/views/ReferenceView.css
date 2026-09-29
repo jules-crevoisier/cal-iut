@@ -92,7 +92,7 @@
 }
 
 /* ── Tableaux ── */
-.ref-tableau {
+.panel.ref-tableau {
   padding: 0;
   overflow: auto;
 }
@@ -111,10 +111,14 @@
   vertical-align: middle;
 }
 
-.ref-tableau-titre {
+.panel .ref-tableau-titre {
   margin: 0;
   padding: 12px 16px 8px;
   font-size: 0.95rem;
+}
+
+.ref-tableau-titre .ref-doux {
+  font-weight: 400;
 }
 
 .ref-lien {

@@ -28,8 +28,10 @@
   color: var(--accent);
 }
 
-th.num,
-td.num {
+table.ref th.num,
+table.ref td.num,
+table th.num,
+table td.num {
   text-align: right;
 }
 

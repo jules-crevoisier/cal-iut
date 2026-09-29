@@ -2542,49 +2542,6 @@ table.ref tbody tr:hover {
   padding: 0;
 }
 
-/* ══════════════ Contraintes / rule checks ══════════════ */
-
-.rule-grid,
-.teacherlist,
-.todolist {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.check {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  font-size: 0.82rem;
-  width: 100%;
-  text-align: left;
-}
-
-.check.clickable {
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-}
-
-.check.clickable:hover {
-  border-color: var(--primary);
-}
-
-.check.pass { border-color: color-mix(in srgb, var(--good) 35%, var(--border)); }
-/* Anciennement rouge (--bad/--danger) — adouci en ambre (--warn), retour
-   utilisateur 27/08/2026 : "on peut enlever le rouge dans contrainte". La
-   distinction pass/fail reste visible (icône + fond), juste moins alarmante. */
-.check.fail { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); background: var(--warn-soft); }
-.check .icon { font-weight: 700; min-width: 16px; }
-.check.pass .icon { color: var(--success); }
-.check.fail .icon { color: var(--warn); }
-.check .sub { color: var(--muted); font-size: 0.76rem; margin-top: 2px; }
-
 /* ══════════════ À traiter ══════════════ */
 
 .pill {
