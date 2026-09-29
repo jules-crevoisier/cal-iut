@@ -12,6 +12,7 @@
 import { Search } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
+import { ActionsDePage } from "../components/TopBar";
 import { TriColonne, useTri } from "../components/TriColonne";
 import type { AppPayload } from "../types/app";
 import {
@@ -185,7 +186,7 @@ export function AnnuaireEnseignants({
             <option value="ecarts">Contrainte non respectée</option>
           </select>
         </label>
-        {actions && <div className="page-outils-actions">{actions}</div>}
+        {actions && <ActionsDePage>{actions}</ActionsDePage>}
       </div>
 
       <section className="panel annuaire" aria-label="Annuaire des enseignants">
@@ -318,7 +319,7 @@ export function AnnuaireGroupes({
         <span className="annuaire-compte">
           {pluriel(lignes.length, "groupe")} · heures de cours en {titre.toLowerCase()}
         </span>
-        {actions && <div className="page-outils-actions">{actions}</div>}
+        {actions && <ActionsDePage>{actions}</ActionsDePage>}
       </div>
       {solver === null && <SemaineSansCours />}
       {parParcours.size === 0 ? (
@@ -437,7 +438,7 @@ export function AnnuaireCours({
             <option value="incompletes">Pas entièrement placées</option>
           </select>
         </label>
-        {actions && <div className="page-outils-actions">{actions}</div>}
+        {actions && <ActionsDePage>{actions}</ActionsDePage>}
       </div>
 
       <section className="panel annuaire" aria-label="Annuaire des matières">
@@ -588,7 +589,7 @@ export function AnnuaireSalles({
             ))}
           </select>
         </label>
-        {actions && <div className="page-outils-actions">{actions}</div>}
+        {actions && <ActionsDePage>{actions}</ActionsDePage>}
       </div>
 
       <section className="panel annuaire" aria-label="Annuaire des salles">

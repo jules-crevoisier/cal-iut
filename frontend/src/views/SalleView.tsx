@@ -19,6 +19,7 @@ import { NavSemaine } from "../components/NavSemaine";
 import { PlanningSemaine } from "../components/PlanningSemaine";
 import { ProchainCours } from "../components/ProchainCours";
 import { RoomPlacementAutoField } from "../components/RoomPlacementAutoField";
+import { ActionsDePage } from "../components/TopBar";
 import { useConsultation } from "../hooks/useConsultation";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
@@ -130,12 +131,12 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
         options={sallesTriees.map((r) => ({ value: r.id, label: `${r.label} — ${r.capacity} places` }))}
         onChoisir={(sid) => setRoute({ vue: "salle", salle: sid })}
         onAnnuaire={() => setRoute({ vue: "salle", salle: "" })}
-        actions={
-          <button type="button" className="btn" onClick={() => setRoute({ vue: "salles-libres" })}>
-            Salles libres par créneau
-          </button>
-        }
       />
+      <ActionsDePage>
+        <button type="button" className="btn" onClick={() => setRoute({ vue: "salles-libres" })}>
+          Salles libres par créneau
+        </button>
+      </ActionsDePage>
 
       <FicheIdentite
         titre={room.label}
