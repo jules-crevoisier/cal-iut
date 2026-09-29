@@ -178,6 +178,31 @@ Pour un fichier autonome à envoyer par mail :
 cal-iut export --format html --output planning.html
 ```
 
+### Compléter une information manquante
+
+Un enseignant sans adresse mail ne reçoit pas son lien personnel ; une salle
+ou un enseignant sans correspondance Celcat bloque la recopie de ses séances.
+Ces informations se **complètent depuis l'appli**, là où le manque se voit,
+sans toucher aux fichiers ni redéployer :
+
+- **Annuaire des enseignants** (et fiche de l'enseignant, et *Référence >
+  Liens & partage*) : la pastille « manquant » de la colonne *Mail* devient
+  **Ajouter** — saisir l'adresse, **Entrée** pour enregistrer, **Échap** pour
+  annuler. Une adresse déjà attribuée à un autre enseignant est refusée.
+- **Fiche d'une salle** : le bloc *À compléter* sous son nom (type d'une
+  salle ajoutée à la main ; correspondance Celcat pour un administrateur).
+- **À traiter > Données à compléter** : tout ce qui manque, groupé par
+  famille (enseignants, salles, matières, groupes Celcat), chaque ligne avec
+  son champ. La tuile *À compléter* en donne le nombre.
+
+La correspondance Celcat d'une salle ou d'un enseignant reste réservée aux
+administrateurs (aussi depuis l'écran *Celcat*). Les identifiants internes
+Celcat des groupes et des matières ne se saisissent pas : la ligne dit dans
+quel fichier les ajouter. En lecture seule, le manque reste affiché, sans
+bouton. Ce qui est saisi est conservé dans `data/state/` (le volume) et
+survit aux déploiements ; si le fichier de configuration reçoit plus tard la
+même information, c'est lui qui s'affiche.
+
 ---
 
 ## 5 bis. Placer à la main ce que l'ordinateur n'a pas su placer

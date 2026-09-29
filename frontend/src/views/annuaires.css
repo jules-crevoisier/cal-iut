@@ -173,6 +173,12 @@ td.num .annuaire-pastille {
   font-size: 0.8rem;
 }
 
+/* Téléphone : mail manquant sous le nom (la colonne « Mail » est masquée). */
+.annuaire-mail-telephone {
+  display: flex;
+  margin-top: 4px;
+}
+
 .annuaire-profs {
   display: block;
   max-width: 15rem;

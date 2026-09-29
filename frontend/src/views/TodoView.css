@@ -7,9 +7,9 @@
   gap: 16px;
 }
 
-/* Sept natures : sept colonnes sur poste de travail. */
+/* Sept natures + « À compléter » : huit colonnes sur poste de travail. */
 .todo-sommaire.tuiles {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
 }
 
 /* ── Filtres : barre à plat, collée en haut au défilement ── */
@@ -296,6 +296,114 @@
   opacity: 0.8;
 }
 
+/* ── Données à compléter (29/09/2026) : une ligne par donnée, le champ en
+   ligne à droite ; les intertitres de famille reprennent ceux des semaines. */
+.completer-ligne {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.1fr) minmax(0, 1fr) 11.5rem minmax(0, 1.6fr);
+  align-items: center;
+  gap: 6px 12px;
+  min-height: 40px;
+  padding: 6px 16px;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+
+.completer-ligne > .pill {
+  justify-self: start;
+}
+
+.todo-semaine + .completer-ligne {
+  border-top: none;
+}
+
+.completer-qui {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.completer-nom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.completer-nom:hover {
+  text-decoration: underline;
+}
+
+.completer-nom--texte {
+  cursor: default;
+}
+
+.completer-nom--texte:hover {
+  text-decoration: none;
+}
+
+.completer-cle {
+  flex: none;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.completer-quoi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.completer-action {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.completer-renvoi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 0;
+  padding: 8px 16px 2px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 1100px) {
+  .completer-ligne {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .completer-quoi {
+    grid-column: 1;
+  }
+
+  .completer-ligne > .pill {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .completer-action {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
 /* ── Poste étroit, tablette, téléphone ── */
 /* Entre 700 et 1400 px, « Tout replier » se réduit à son icône (le libellé
    reste lu, et en infobulle) : la barre de filtres tient sur une ligne. */
@@ -326,7 +434,7 @@
 }
 
 @media (max-width: 700px) {
-  /* Sept compteurs : compacts au téléphone, la liste reste en vue. */
+  /* Huit compteurs : compacts au téléphone, la liste reste en vue. */
   .todo-sommaire.tuiles {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;

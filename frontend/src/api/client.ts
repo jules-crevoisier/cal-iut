@@ -1324,3 +1324,76 @@ export function fetchControleDoublonsHebdo(): Promise<DoublonHebdoRun | null> {
 export function executerControleDoublonsHebdo(): Promise<DoublonHebdoRun> {
   return request<DoublonHebdoRun>("/controles/doublons/hebdo", { method: "POST" });
 }
+
+// ── Compléter une information de référence manquante (29/09/2026) ──
+// « quand on a un email manquant, peut-être un numéro de salle Celcat
+// manquant, etc., il faut pouvoir ajouter l'info et l'enregistrer » — cf.
+// `api/reference.py`. Une seule liste des manques (`GET /reference/manques`),
+// relue par chaque écran qui en signale un, et une route par famille.
+
+export type FamilleManque = "enseignant" | "salle" | "cours" | "groupe" | "seance";
+export type ChampManque = "email" | "nom" | "code_celcat" | "capacite" | "type" | "intitule" | "id_celcat" | "salle";
+export type GraviteManque = "bloque_celcat" | "bloque_envoi_liens" | "cosmetique";
+
+export interface Manque {
+  id: string;
+  famille: FamilleManque;
+  cle: string;
+  libelle: string;
+  champ: ChampManque;
+  champ_libelle: string;
+  gravite: GraviteManque;
+  usage: string;
+  nb_seances: number;
+  /** Rôle qui peut compléter depuis l'appli ; `null` = fichier de configuration. */
+  role_requis: "edit" | "admin" | null;
+  ou_completer: string;
+  /** Écran où compléter (champs de `Route`). */
+  ecran: Record<string, string | number>;
+}
+
+export interface ListeManques {
+  revision: number;
+  modifie_le: string;
+  total: number;
+  par_gravite: Record<string, number>;
+  par_famille: Record<string, number>;
+  manques: Manque[];
+}
+
+export interface ReferenceEnregistree {
+  famille: FamilleManque;
+  cle: string;
+  valeurs: Record<string, string | number>;
+  message: string;
+  revision: number;
+}
+
+export function fetchManques(): Promise<ListeManques> {
+  return request<ListeManques>("/reference/manques");
+}
+
+export function completerContactEnseignant(code: string, email: string): Promise<ReferenceEnregistree> {
+  return request(`/reference/enseignants/${encodeURIComponent(code)}/contact`, {
+    method: "PUT",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function completerEnseignant(
+  code: string,
+  body: { nom?: string; code_celcat?: string },
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/enseignants/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function completerSalle(
+  roomId: string,
+  body: { capacite?: number; type?: string; code_celcat?: string },
+): Promise<ReferenceEnregistree> {
+  return request(`/reference/salles/${encodeURIComponent(roomId)}`, { method: "PUT", body: JSON.stringify(body) });
+}
+
+export function completerCours(code: string, intitule: string): Promise<ReferenceEnregistree> {
+  return request(`/reference/cours/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify({ intitule }) });
+}

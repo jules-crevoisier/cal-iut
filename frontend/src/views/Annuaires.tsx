@@ -11,9 +11,13 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
+import { completerContactEnseignant } from "../api/client";
+import { ChampEnLigne, validerEmail } from "../components/ChampEnLigne";
 import { ChampRecherche as ChampRechercheCommun } from "../components/ChampRecherche";
 import { ActionsDePage } from "../components/TopBar";
 import { TriColonne, useTri } from "../components/TriColonne";
+import { useDroits } from "../contexts/Droits";
+import { useNarrowScreen } from "../hooks/useNarrowScreen";
 import type { AppPayload } from "../types/app";
 import {
   annuaireCours,
@@ -88,7 +92,9 @@ function useOuvrirLigne(onOuvrir: (id: string) => void) {
   return (id: string) => ({
     className: "annuaire-ligne",
     onClick: (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).closest("button, a")) return;
+      // Un champ de saisie en ligne (« Ajouter » un mail) vit DANS la ligne :
+      // cliquer dedans ne doit pas ouvrir la fiche.
+      if ((e.target as HTMLElement).closest("button, a, input, select, textarea, form, [data-pas-ouvrir]")) return;
       onOuvrir(id);
     },
   });
@@ -134,6 +140,14 @@ export function AnnuaireEnseignants({
   // enseigne beaucoup. Un clic sur « Nom » revient à l'ordre alphabétique.
   const { triees, tri, trierPar } = useTri<LigneEnseignant, CleEnseignant>(visibles, VALEURS_ENSEIGNANT, { cle: "semaine", sens: -1 });
   const ouvrir = useOuvrirLigne(onOuvrir);
+  // Au téléphone, la colonne « Mail » est masquée : le mail manquant (et son
+  // « Ajouter ») passe sous le nom, plutôt que de disparaître.
+  const etroit = useNarrowScreen();
+  // Retour d'enregistrement tenu au niveau de l'annuaire : filtré sur
+  // « Adresse mail manquante », la ligne complétée disparaît aussitôt —
+  // avec elle, le « Enregistré » du champ.
+  const [retour, setRetour] = useState("");
+  const enregistre = (nom: string) => (email: string) => setRetour(`Adresse de ${nom} enregistrée : ${email}`);
 
   const maxSemaine = Math.max(0, ...lignes.map((l) => l.heuresSemaine));
   const actifs = lignes.filter((l) => l.heuresSemaine > 0);
@@ -176,6 +190,9 @@ export function AnnuaireEnseignants({
                 {pluriel(sansMail, "adresse mail manquante", "adresses mail manquantes")}
               </button>
             )}
+            <span className="annuaire-retour" role="status" aria-live="polite">
+              {retour && <span className="pill dot good">{retour}</span>}
+            </span>
           </p>
         </header>
         {solver === null && <SemaineSansCours />}
@@ -214,6 +231,17 @@ export function AnnuaireEnseignants({
                         {pluriel(l.nNonPlacees, "non placée", "non placées")}
                       </span>
                     )}
+                    {etroit && !l.email && (
+                      <span className="annuaire-mail-telephone">
+                        <MailManquant
+                          code={l.code}
+                          nom={l.nom}
+                          libelleBouton="Ajouter le mail"
+                          libelleLectureSeule="mail manquant"
+                          onEnregistre={enregistre(l.nom)}
+                        />
+                      </span>
+                    )}
                   </td>
                   <td className="mono annuaire-code">{l.code}</td>
                   <td className="num col-jauge">
@@ -230,7 +258,7 @@ export function AnnuaireEnseignants({
                         {l.email}
                       </span>
                     ) : (
-                      <span className="pill dot warn">manquant</span>
+                      !etroit && <MailManquant code={l.code} nom={l.nom} onEnregistre={enregistre(l.nom)} />
                     )}
                   </td>
                 </tr>
@@ -241,6 +269,46 @@ export function AnnuaireEnseignants({
         </div>
       </section>
     </>
+  );
+}
+
+/**
+ * Mail manquant : « Ajouter » ouvre le champ en ligne pour qui peut
+ * compléter (rôle `edit` ou `admin`) ; la pastille « manquant » seule en
+ * lecture seule. Partagé par l'annuaire, la fiche et « Liens & partage ».
+ */
+export function MailManquant({
+  code,
+  nom,
+  libelleBouton = "Ajouter",
+  libelleLectureSeule = "manquant",
+  lectureSeule,
+  onEnregistre,
+}: {
+  code: string;
+  nom: string;
+  libelleBouton?: string;
+  libelleLectureSeule?: string;
+  /** Rendu propre à l'écran en lecture seule (sinon la pastille « manquant »). */
+  lectureSeule?: ReactNode;
+  /** Après un enregistrement réussi (retour affiché par l'écran). */
+  onEnregistre?: (email: string) => void;
+}) {
+  const { peutCompleter, apresEnregistrement } = useDroits();
+  if (!peutCompleter) return <>{lectureSeule ?? <span className="pill dot warn">{libelleLectureSeule}</span>}</>;
+  return (
+    <ChampEnLigne
+      libelleBouton={libelleBouton}
+      libelleChamp={`Adresse mail de ${nom}`}
+      type="email"
+      placeholder="prenom.nom@univ-reims.fr"
+      valider={validerEmail}
+      onEnregistrer={async (email) => {
+        await completerContactEnseignant(code, email);
+        onEnregistre?.(email);
+        apresEnregistrement();
+      }}
+    />
   );
 }
 

@@ -45,11 +45,14 @@ import {
 } from "../utils/todo";
 import { ChampRecherche } from "../components/ChampRecherche";
 import { Tuile, Tuiles } from "../components/Tuile";
+import { useDroits, useManques } from "../contexts/Droits";
+import { filtrerManques, manquesDeReference, SectionCompleter, TITRE_COMPLETER, tonManques } from "./TodoCompleter";
 import "../styles/outils.css";
 import "./TodoView.css";
 
 const CLE_FILTRES = "cal-iut:a-traiter:filtres:v1";
 const CLE_REPLIES = "cal-iut:a-traiter:replies:v1";
+const CLE_COMPLETER_REPLIE = "cal-iut:a-traiter:completer-replie:v1";
 /** Les « à revoir » (compromis acceptés, confort) sont repliés tant que
  * l'utilisateur n'a rien choisi : ils ne doivent pas noyer ce qui casse. */
 const REPLIES_PAR_DEFAUT: NatureTodo[] = ["compromis-sae", "trouee"];
@@ -199,6 +202,22 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
     requestAnimationFrame(() => refSections.current[n]?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
+  // « Données à compléter » (29/09/2026) : liste du serveur, relue à chaque
+  // avance de la révision. Absente sans compte (aucun fournisseur de droits).
+  const { role } = useDroits();
+  const manques = useManques();
+  const manquesReference = useMemo(() => manquesDeReference(manques), [manques]);
+  const manquesVisibles = useMemo(() => filtrerManques(manquesReference, filtres), [manquesReference, filtres]);
+  const [completerReplie, setCompleterReplie] = useState<boolean>(() =>
+    lireLocal<boolean>(CLE_COMPLETER_REPLIE, false, (v): v is boolean => typeof v === "boolean"),
+  );
+  useEffect(() => ecrireLocal(CLE_COMPLETER_REPLIE, completerReplie), [completerReplie]);
+  const refCompleter = useRef<HTMLElement | null>(null);
+  const allerACompleter = () => {
+    setCompleterReplie(false);
+    requestAnimationFrame(() => refCompleter.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   const rechercheRef = useRef<HTMLInputElement>(null);
   // « / » place le curseur dans la recherche, comme partout ailleurs sur le web.
   useEffect(() => {
@@ -213,7 +232,7 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const toutReplie = NATURES.every((n) => replies.has(n.id));
+  const toutReplie = NATURES.every((n) => replies.has(n.id)) && (!role || completerReplie);
 
   return (
     <section className="view todo">
@@ -243,6 +262,23 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
             />
           );
         })}
+        {role && (
+          <Tuile
+            libelle="À compléter"
+            valeur={manques === null ? "…" : manquesVisibles.length}
+            detail={
+              filtresActifs && manquesVisibles.length !== manquesReference.length
+                ? `sur ${manquesReference.length}`
+                : manquesVisibles.length === 0
+                  ? "rien à signaler"
+                  : "mail, Celcat…"
+            }
+            ton={manquesVisibles.length > 0 ? tonManques(manquesVisibles) : undefined}
+            nul={manques !== null && manquesVisibles.length === 0}
+            onClick={allerACompleter}
+            title={`Aller à « ${TITRE_COMPLETER} »`}
+          />
+        )}
       </Tuiles>
 
       <div className="page-outils todo-filtres" role="search">
@@ -325,7 +361,10 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
             type="button"
             className="btn btn--sm todo-replier"
             title={toutReplie ? "Tout déplier" : "Tout replier"}
-            onClick={() => setReplies(toutReplie ? new Set() : new Set(NATURES.map((n) => n.id)))}
+            onClick={() => {
+              setReplies(toutReplie ? new Set() : new Set(NATURES.map((n) => n.id)));
+              setCompleterReplie(!toutReplie);
+            }}
           >
             {toutReplie ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
             <span className="todo-replier-libelle">{toutReplie ? "Tout déplier" : "Tout replier"}</span>
@@ -375,6 +414,20 @@ export function TodoView({ payload, setRoute }: TodoViewProps) {
           texteVide={n.id === "doublon" ? "Aucun doublon détecté." : "Rien à signaler."}
         />
       ))}
+      {role && (
+        <SectionCompleter
+          manques={manques}
+          filtres={filtres}
+          filtresActifs={filtresActifs}
+          replie={completerReplie}
+          onBasculer={() => setCompleterReplie((r) => !r)}
+          refSection={(el) => {
+            refCompleter.current = el;
+          }}
+          setRoute={setRoute}
+          onVoirSansSalle={() => allerA("sans-salle")}
+        />
+      )}
     </section>
   );
 }

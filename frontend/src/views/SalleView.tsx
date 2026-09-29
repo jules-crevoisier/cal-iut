@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { ManquesDeLaFiche } from "../components/CompleterManque";
 import { FicheIdentite, FicheOutils } from "../components/FicheEntete";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { NavSemaine } from "../components/NavSemaine";
@@ -159,6 +160,8 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
           pluriel(room.nSessions, "séance placée", "séances placées") + " au semestre",
         ]}
       />
+
+      <ManquesDeLaFiche famille="salle" cle={room.id} setRoute={setRoute} />
 
       <NavSemaine
         weekRows={payload.weekRows}

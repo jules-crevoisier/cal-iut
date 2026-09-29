@@ -17,7 +17,10 @@
 
 import { useMemo, useState } from "react";
 
+import { completerEnseignant } from "../api/client";
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
+import { ChampEnLigne } from "../components/ChampEnLigne";
+import { ManquesDeLaFiche } from "../components/CompleterManque";
 import { FicheIdentite, FicheOutils } from "../components/FicheEntete";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { MenuAgenda } from "../components/MenuAgenda";
@@ -27,6 +30,7 @@ import { ProchainCours } from "../components/ProchainCours";
 import { SemesterAgenda } from "../components/SemesterAgenda";
 import { ShareBar } from "../components/ShareBar";
 import { TeacherLinksList } from "../components/TeacherLinksList";
+import { useDroits } from "../contexts/Droits";
 import { useConsultation } from "../hooks/useConsultation";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
@@ -36,7 +40,7 @@ import { mailtoForTeacher } from "../utils/mailto";
 import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
 import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
-import { AnnuaireEnseignants } from "./Annuaires";
+import { AnnuaireEnseignants, MailManquant } from "./Annuaires";
 
 import "./fiches.css";
 
@@ -67,6 +71,7 @@ export function EnseignantView({
   onOpenSearch,
   emailCompte,
 }: EnseignantViewProps) {
+  const { peutCompleter, apresEnregistrement } = useDroits();
   const teacherCodes = useMemo(
     () =>
       Object.keys(payload.teacherLabels).sort((a, b) =>
@@ -251,12 +256,32 @@ export function EnseignantView({
         titre={nom}
         faits={[
           <span className="mono">{code}</span>,
+          // Nom complet inconnu de toutes les sources : le titre n'est que le
+          // code. Complétable ici (29/09/2026), comme le mail juste après.
+          nom === code &&
+            (peutCompleter ? (
+              <ChampEnLigne
+                libelleBouton="Ajouter le nom"
+                libelleChamp={`Nom complet de ${code}`}
+                placeholder="Prénom Nom"
+                valider={(v) => (v.trim().length < 2 ? "Saisissez le prénom et le nom." : null)}
+                onEnregistrer={async (v) => {
+                  await completerEnseignant(code, { nom: v });
+                  apresEnregistrement();
+                }}
+              />
+            ) : (
+              <span className="fiche-manque">nom complet manquant</span>
+            )),
           email ? (
             <a href={`mailto:${email}`}>{email}</a>
           ) : (
-            <span className="fiche-manque" title="À compléter dans data/config/teacher_contacts.yaml">
-              adresse mail manquante
-            </span>
+            <MailManquant
+              code={code}
+              nom={nom}
+              libelleBouton="Ajouter le mail"
+              lectureSeule={<span className="fiche-manque">adresse mail manquante</span>}
+            />
           ),
           c.solverWeek !== null && (
             <>
@@ -272,6 +297,8 @@ export function EnseignantView({
           ),
         ]}
       />
+
+      <ManquesDeLaFiche famille="enseignant" cle={code} exclure={["email", "nom"]} setRoute={setRoute} />
 
       <NavSemaine
         weekRows={payload.weekRows}
