@@ -6,7 +6,6 @@
    d'œil (date en clair, horaire, salle). */
 
 .aplacer-panneau {
-  flex: 0 0 min(360px, 32vw);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -14,20 +13,14 @@
 }
 
 @media (min-width: 1024px) {
-  /* Le panneau reste à portée pendant qu'on fait défiler la grille. */
+  /* Colonne à droite de la grille de la Vue Promo (gabarit v2) : même
+     hauteur que la grille, elle défile seule. */
   .aplacer-panneau {
-    position: sticky;
-    top: 12px;
-    max-height: calc(100dvh - 24px);
+    min-height: 0;
+    max-height: 100%;
     overflow-y: auto;
     overscroll-behavior: contain;
-  }
-}
-
-@media (max-width: 1023.98px) {
-  .aplacer-panneau {
-    flex: none;
-    width: 100%;
+    scrollbar-width: thin;
   }
 }
 

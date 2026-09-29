@@ -135,3 +135,55 @@
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ── Ruban fin (refonte v2, Vue Promo et Vue Semaine) ──
+   Repère discret sous la barre d'outils : la barre supérieure porte déjà la
+   semaine. Pendant un glisser (Vue Promo), il grandit pour servir de cible. */
+.weekbar-wrap--fine .weekbar {
+  height: 18px;
+  gap: 2px;
+  padding-bottom: 0;
+  transition: height 0.12s ease;
+}
+
+.weekbar-wrap--fine .weekbar-bar {
+  min-width: 8px;
+  border-radius: 2px;
+}
+
+.weekbar-wrap--fine .weekbar-bar .bar {
+  border-radius: 2px;
+  background: var(--ink-faint);
+  opacity: 0.55;
+}
+
+/* Monochrome (direction « Lumière / Nuit ») : la semaine affichée en encre
+   pleine, les autres en gris. */
+.weekbar-wrap--fine .weekbar-bar:hover {
+  background: var(--border-strong);
+}
+
+.weekbar-wrap--fine .weekbar-bar.active {
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--ink) inset;
+}
+
+.weekbar-wrap--fine .weekbar-bar.active .bar {
+  background: var(--ink);
+  opacity: 1;
+}
+
+.weekbar-wrap--fine .weekbar-bar.drop-cible {
+  box-shadow: 0 0 0 2px var(--good) inset;
+  background: var(--good-soft);
+}
+
+.weekbar-wrap--fine.weekbar-drop-actif .weekbar {
+  height: 40px;
+}
+
+@media (pointer: coarse) {
+  .weekbar-wrap--fine .weekbar {
+    height: 28px;
+  }
+}

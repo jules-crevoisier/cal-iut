@@ -31,6 +31,10 @@ interface WeekBarProps {
    *  visuellement (À placer) au lieu de garder le même créneau. */
   onDropWeek?: (displayIndex: number) => void;
   dropEnabled?: boolean;
+  /** Ruban fin (refonte v2) : la barre supérieure dit déjà quelle semaine
+   *  est affichée, l'histogramme n'est plus qu'un repère de charge — et une
+   *  cible de dépôt, qui s'agrandit pendant un glisser. Sans légende. */
+  fine?: boolean;
 }
 
 export function WeekBar({
@@ -41,6 +45,7 @@ export function WeekBar({
   unit = "creneaux",
   onDropWeek,
   dropEnabled = false,
+  fine = false,
 }: WeekBarProps) {
   const counts = weekRows.map((wr) => (wr.weekIndex !== null ? countByWeekIndex.get(wr.weekIndex) ?? 0 : 0));
   const max = Math.max(1, ...counts);
@@ -63,9 +68,9 @@ export function WeekBar({
   const derniere = weekRows[weekRows.length - 1];
   const courante = weekRows[selected];
   const captions: { key: string; label: string }[] = [];
-  if (premiere) captions.push({ key: "premiere", label: premiere.label });
-  if (courante && courante !== premiere) captions.push({ key: "courante", label: courante.label });
-  if (derniere && derniere !== premiere && derniere !== courante) {
+  if (premiere && !fine) captions.push({ key: "premiere", label: premiere.label });
+  if (courante && courante !== premiere && !fine) captions.push({ key: "courante", label: courante.label });
+  if (derniere && derniere !== premiere && derniere !== courante && !fine) {
     captions.push({ key: "derniere", label: derniere.label });
   }
 
@@ -75,7 +80,7 @@ export function WeekBar({
   };
 
   return (
-    <div className={"weekbar-wrap" + (dropEnabled ? " weekbar-drop-actif" : "")}>
+    <div className={"weekbar-wrap" + (fine ? " weekbar-wrap--fine" : "") + (dropEnabled ? " weekbar-drop-actif" : "")}>
       <div className="weekbar">
         {weekRows.map((wr, i) => {
           const count = counts[i];

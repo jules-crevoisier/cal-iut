@@ -11,14 +11,21 @@
  *    (`payload.groupCohort[gid]` : TP + son TD + le CM promo).
  * 3. Ordre des colonnes : année, puis FI avant FC (cf. tri plus bas).
  *
- * Refonte du 29/09/2026 : une seule barre d'outils (semaine, jour, filtres,
- * actions), cartes de séance compactes (`PromoCarte`), raccourcis clavier,
- * filtres mémorisés, retour visible après chaque action avec « Annuler »,
- * zones de dépôt lisibles pendant le glisser-déposer.
+ * Refonte du 29/09/2026 : cartes de séance compactes (`PromoCarte`),
+ * raccourcis clavier, filtres mémorisés, retour visible après chaque action
+ * avec « Annuler », zones de dépôt lisibles pendant le glisser-déposer.
+ *
+ * Gabarit v2 (même jour) : barre d'outils à plat sur une ligne (jours datés,
+ * filtres, actions), ruban fin des semaines (repère de charge + cible de
+ * dépôt), grille sur toute la hauteur utile (en-têtes et horaires collants,
+ * défilement horizontal signalé par des ombres et par les repères de promo
+ * du pied de grille), colonne « À placer » à droite quand elle est ouverte.
+ * La semaine vient de la barre supérieure (`useSemaineGlobale`).
  */
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Plus, SlidersHorizontal, X } from "lucide-react";
+import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
 import {
@@ -96,6 +103,28 @@ interface PromoViewProps {
 }
 
 const JOURS_COURTS = ["lun.", "mar.", "mer.", "jeu.", "ven."];
+const JOURS_COURTS_MAJ = ["Lun.", "Mar.", "Mer.", "Jeu.", "Ven."];
+
+/** État du défilement horizontal de la grille : ombres de bord et promos
+ *  visibles (repères du pied de grille). */
+interface EtatDefil {
+  deborde: boolean;
+  gauche: boolean;
+  droite: boolean;
+  visibles: string[];
+}
+
+const DEFIL_INITIAL: EtatDefil = { deborde: false, gauche: false, droite: false, visibles: [] };
+
+function memeDefil(a: EtatDefil, b: EtatDefil): boolean {
+  return (
+    a.deborde === b.deborde &&
+    a.gauche === b.gauche &&
+    a.droite === b.droite &&
+    a.visibles.length === b.visibles.length &&
+    a.visibles.every((v, i) => v === b.visibles[i])
+  );
+}
 
 // Filtres mémorisés sur l'appareil (refonte du 29/09/2026) : qui ne
 // travaille que sur les BUT2 n'a plus à les re-choisir à chaque visite. Le
@@ -813,358 +842,390 @@ export function PromoView({
     return () => document.removeEventListener("keydown", ecoute);
   }, []);
 
+  // ── Défilement horizontal de la grille (17 colonnes toutes promos) ──
+  const defilRef = useRef<HTMLDivElement>(null);
+  const [defil, setDefil] = useState<EtatDefil>(DEFIL_INITIAL);
+  const mesurerDefil = useCallback(() => {
+    const el = defilRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    const horaires = el.querySelector<HTMLElement>("th.timecol")?.offsetWidth ?? 0;
+    const debut = el.scrollLeft + horaires;
+    const finVue = el.scrollLeft + el.clientWidth;
+    const visibles: string[] = [];
+    el.querySelectorAll<HTMLElement>("th.grp-band[data-parcours]").forEach((th) => {
+      const g = th.offsetLeft;
+      const d = g + th.offsetWidth;
+      // Visible si au moins 40 % de la promo (ou 160 px) est à l'écran.
+      const vu = Math.min(d, finVue) - Math.max(g, debut);
+      if (vu > Math.min(160, th.offsetWidth * 0.4)) visibles.push(th.dataset.parcours ?? "");
+    });
+    const suivant: EtatDefil = {
+      deborde: max > 1,
+      gauche: el.scrollLeft > 1,
+      droite: el.scrollLeft < max - 1,
+      visibles,
+    };
+    setDefil((avant) => (memeDefil(avant, suivant) ? avant : suivant));
+  }, []);
+  useLayoutEffect(mesurerDefil);
+  useEffect(() => {
+    const el = defilRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const obs = new ResizeObserver(() => mesurerDefil());
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [mesurerDefil, solverWeek, colGroups.length]);
+  const allerAuParcours = (parcours: string) => {
+    const el = defilRef.current;
+    const th = el?.querySelector<HTMLElement>(`th.grp-band[data-parcours="${parcours}"]`);
+    if (!el || !th) return;
+    const horaires = el.querySelector<HTMLElement>("th.timecol")?.offsetWidth ?? 0;
+    el.scrollTo({ left: Math.max(0, th.offsetLeft - horaires), behavior: "smooth" });
+  };
+
   const filtresActifs = filtreAnnee !== "Tout" || filtreParcoursSel !== "Tout" || teacherFilter !== "";
-  const portee =
-    filtreAnnee === "Tout" && filtreParcoursSel === "Tout"
-      ? "Toutes promos"
-      : filtreParcoursSel !== "Tout"
-        ? filtreParcoursSel
-        : filtreAnnee;
-  const dateJour = dateForWeekDay(payload, solverWeek ?? -1, day);
   const selPark = selectedParked(park);
   const parkParcours = selPark
     ? selPark.origin.group_ids.map((g) => payload.groupParcours[g]).find((pc): pc is string => Boolean(pc))
     : undefined;
+  const listeOuverte = !readOnly && !listeMasquee;
+
+  const basculerListe = () => {
+    if (listeMasquee) {
+      setListeMasquee(false);
+      setRoute?.({ panel: "aplacer" });
+    } else {
+      if (hasParked(park)) restaurerTousParks();
+      setListeMasquee(true);
+      setChoixAPlacer(null);
+      setRoute?.({ panel: "" });
+    }
+  };
 
   return (
-    <section className="view promo">
-      <div className="promo-avec-aplacer">
-        {!readOnly && !listeMasquee && (
-          <APlacerView
-            variante="panneau"
-            payload={payload}
-            onPlacement={() => onAPlacerRefresh?.()}
-            onChoisirSurPromo={(seance) => {
-              setChoixAPlacer(seance);
-              setPark((actuel) => (actuel.selectedSessionId ? { ...actuel, selectedSessionId: null } : actuel));
+    <section className={`view promo${listeOuverte ? " promo--aplacer" : ""}`}>
+      {/* Barre d'outils À PLAT (gabarit v2) : ce que l'on regarde à gauche
+          (jour, filtres), les actions à droite, la principale en dernier. La
+          semaine est dans la barre supérieure ; `WeekStepper` ne s'affiche
+          que sur le lien public, qui n'a pas cette barre. */}
+      <div className="page-outils promo-outils">
+        <WeekStepper
+          weekRows={payload.weekRows}
+          selected={displayWeek}
+          onSelect={allerSemaine}
+          onToday={allerAujourdhui}
+          estAujourdhui={displayWeek === indexAujourdhui && day === jourAujourdhui}
+          raccourcis
+        />
+        <div className="promo-jours" role="group" aria-label="Jour affiché">
+          {DAY_LABELS.map((label, d) => {
+            const badge = dayBadges[d];
+            const dateDuJour = dateForWeekDay(payload, solverWeek ?? -1, d);
+            const estAujourdhui = displayWeek === indexAujourdhui && d === jourReelOuvre;
+            const repere =
+              badge === "holiday" ? "férié" : badge === "sae" ? "SAE" : badge === "event" ? "évènement" : "";
+            const complet = [
+              label,
+              formatShortDate(dateDuJour),
+              repere && `(${repere})`,
+              estAujourdhui && "— aujourd'hui",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <button
+                key={label}
+                type="button"
+                className={`promo-jour${d === day ? " active" : ""}${estAujourdhui ? " aujourdhui" : ""}`}
+                aria-pressed={d === day}
+                aria-current={estAujourdhui ? "date" : undefined}
+                aria-label={complet}
+                title={complet}
+                onClick={() => setDay(d)}
+              >
+                <span className="promo-jour-nom">{JOURS_COURTS_MAJ[d]}</span>
+                {dateDuJour && <span className="promo-jour-date">{dateDuJour.getDate()}</span>}
+                {repere && <span className={`promo-jour-repere ${badge}`}>{repere}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="promo-filtres" role="group" aria-label="Filtrer la grille">
+          {/* Libellés portés par l'option « tout » et par `aria-label` : trois
+              étiquettes visibles de plus ne tenaient pas sur la ligne. */}
+          <select
+            aria-label="Année"
+            title="Année"
+            value={filtreAnnee}
+            className={filtreAnnee !== "Tout" ? "is-filtre" : undefined}
+            onChange={(e) => {
+              setFiltreAnnee(e.target.value);
+              setFiltreParcoursSel("Tout");
             }}
-            onFermer={() => {
-              if (hasParked(park)) restaurerTousParks();
-              setListeMasquee(true);
-              setChoixAPlacer(null);
-              setRoute?.({ panel: "" });
-            }}
-            park={park}
-            onSelectPark={(sessionId) => {
-              setChoixAPlacer(null);
-              setPark((actuel) => selectPark(actuel, sessionId));
-            }}
-            onAnnulerPark={annulerPark}
-          />
-        )}
-        <div className="promo-principal">
-          <div className="panel promo-barre">
-            <div className="promo-barre-ligne">
-              <WeekStepper
-                weekRows={payload.weekRows}
-                selected={displayWeek}
-                onSelect={allerSemaine}
-                onToday={allerAujourdhui}
-                estAujourdhui={displayWeek === indexAujourdhui && day === jourAujourdhui}
-                raccourcis
-              />
-              <div className="promo-weekbar">
-                <WeekBar
-                  weekRows={payload.weekRows}
-                  countByWeekIndex={countByWeek}
-                  selected={displayWeek}
-                  onSelect={setDisplayWeek}
-                  dropEnabled={dragEnabled && Boolean(draggingId)}
-                  onDropWeek={dragEnabled ? handleDropOnWeek : undefined}
-                />
-              </div>
-            </div>
-            <div className="promo-barre-ligne">
-              <div className="promo-jours" role="group" aria-label="Jour affiché">
-                {DAY_LABELS.map((label, d) => {
-                  const badge = dayBadges[d];
-                  const date = formatShortDate(dateForWeekDay(payload, solverWeek ?? -1, d));
-                  const estAujourdhui = displayWeek === indexAujourdhui && d === jourReelOuvre;
-                  const repere =
-                    badge === "holiday" ? "férié" : badge === "sae" ? "SAE" : badge === "event" ? "évènement" : "";
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      className={`promo-jour${d === day ? " active" : ""}${estAujourdhui ? " aujourdhui" : ""}`}
-                      aria-pressed={d === day}
-                      aria-current={estAujourdhui ? "date" : undefined}
-                      title={estAujourdhui ? "Aujourd'hui" : undefined}
-                      onClick={() => setDay(d)}
-                    >
-                      <span className="promo-jour-nom">
-                        <span className="long">{label}</span>
-                        <span className="court">{label.slice(0, 3)}</span>
-                      </span>
-                      {date && <span className="promo-jour-date">{date}</span>}
-                      {repere && <span className={`promo-jour-repere ${badge}`}>{repere}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="promo-filtres" role="group" aria-label="Filtrer la grille">
-                <label className="promo-filtre">
-                  <span>Année</span>
-                  <select
-                    value={filtreAnnee}
-                    className={filtreAnnee !== "Tout" ? "is-filtre" : undefined}
-                    onChange={(e) => {
-                      setFiltreAnnee(e.target.value);
-                      setFiltreParcoursSel("Tout");
-                    }}
-                  >
-                    <option value="Tout">Tout</option>
-                    {anneesDispo.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="promo-filtre">
-                  <span>Parcours</span>
-                  <select
-                    value={filtreParcoursSel}
-                    className={filtreParcoursSel !== "Tout" ? "is-filtre" : undefined}
-                    onChange={(e) => setFiltreParcoursSel(e.target.value)}
-                  >
-                    <option value="Tout">Tout</option>
-                    {parcoursDispo.map((pc) => (
-                      <option key={pc} value={pc}>
-                        {pc}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="promo-filtre">
-                  <span>Enseignant</span>
-                  <select
-                    value={teacherFilter}
-                    className={teacherFilter ? "is-filtre" : undefined}
-                    onChange={(e) => setTeacherFilter(e.target.value)}
-                  >
-                    <option value="">Tous</option>
-                    {teacherCodes.map((c) => (
-                      <option key={c} value={c}>
-                        {nomComplet(payload.teacherLabels[c] ?? c)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {filtresActifs && (
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => {
-                      setFiltreAnnee("Tout");
-                      setFiltreParcoursSel("Tout");
-                      setTeacherFilter("");
-                    }}
-                  >
-                    Tout afficher
-                  </button>
-                )}
-              </div>
-              {!readOnly && (
-                <div className="promo-actions">
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    aria-pressed={!listeMasquee}
-                    onClick={() => {
-                      if (listeMasquee) {
-                        setListeMasquee(false);
-                        setRoute?.({ panel: "aplacer" });
-                      } else {
-                        if (hasParked(park)) restaurerTousParks();
-                        setListeMasquee(true);
-                        setChoixAPlacer(null);
-                        setRoute?.({ panel: "" });
-                      }
-                    }}
-                  >
-                    Séances à placer
-                  </button>
-                  {seanceModaleEnabled && (
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      onClick={() => setModaleLissage(true)}
-                      title="Réorganiser les semaines à venir d'une promo : pas de 8h, pas de trou, journées équilibrées"
-                    >
-                      Lisser une promo…
-                    </button>
-                  )}
-                  {seanceModaleEnabled && (
-                    <button type="button" className="btn btn--sm" onClick={() => setModaleEvenement(true)}>
-                      Nouvel évènement
-                    </button>
-                  )}
-                  {seanceModaleEnabled && (
-                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setModaleSeance("creer")}>
-                      Nouvelle séance
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+          >
+            <option value="Tout">Toutes années</option>
+            {anneesDispo.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Parcours"
+            title="Parcours"
+            value={filtreParcoursSel}
+            className={filtreParcoursSel !== "Tout" ? "is-filtre" : undefined}
+            onChange={(e) => setFiltreParcoursSel(e.target.value)}
+          >
+            <option value="Tout">Tous parcours</option>
+            {parcoursDispo.map((pc) => (
+              <option key={pc} value={pc}>
+                {pc}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Enseignant"
+            title="Faire ressortir les séances d'un enseignant"
+            value={teacherFilter}
+            className={teacherFilter ? "is-filtre" : undefined}
+            onChange={(e) => setTeacherFilter(e.target.value)}
+          >
+            <option value="">Tous enseignants</option>
+            {teacherCodes.map((c) => (
+              <option key={c} value={c}>
+                {nomComplet(payload.teacherLabels[c] ?? c)}
+              </option>
+            ))}
+          </select>
+          {filtresActifs && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => {
+                setFiltreAnnee("Tout");
+                setFiltreParcoursSel("Tout");
+                setTeacherFilter("");
+              }}
+            >
+              Tout afficher
+            </button>
+          )}
+        </div>
+        {!readOnly && (
+          <div className="page-outils-actions promo-actions">
+            <button
+              type="button"
+              className="btn"
+              aria-pressed={listeOuverte}
+              aria-label="Séances à placer"
+              title={listeOuverte ? "Fermer la colonne des séances à placer" : "Ouvrir la colonne des séances à placer"}
+              onClick={basculerListe}
+            >
+              <ListTodo size={16} aria-hidden="true" className="promo-action-icone" />
+              <span className="promo-action-long">Séances à placer</span>
+              <span className="promo-action-court" aria-hidden="true">
+                À placer
+              </span>
+            </button>
+            {seanceModaleEnabled && (
+              <button
+                type="button"
+                className="btn promo-action-secondaire"
+                onClick={() => setModaleLissage(true)}
+                aria-label="Lisser une promo…"
+                title="Lisser une promo : réorganiser ses semaines à venir (pas de 8h, pas de trou, journées équilibrées)"
+              >
+                <SlidersHorizontal size={16} aria-hidden="true" />
+                <span className="promo-action-libelle">Lisser une promo…</span>
+              </button>
+            )}
+            {seanceModaleEnabled && (
+              <button
+                type="button"
+                className="btn promo-action-secondaire"
+                onClick={() => setModaleEvenement(true)}
+                aria-label="Nouvel évènement"
+                title="Nouvel évènement (réunion, conférence…) hors maquette"
+              >
+                <CalendarPlus size={16} aria-hidden="true" />
+                <span className="promo-action-libelle">Nouvel évènement</span>
+              </button>
+            )}
+            {seanceModaleEnabled && (
+              <button type="button" className="btn btn--primary" onClick={() => setModaleSeance("creer")}>
+                <Plus size={16} aria-hidden="true" className="promo-action-icone" />
+                <span>Nouvelle séance</span>
+              </button>
+            )}
           </div>
+        )}
+      </div>
 
-          {placementActif && (
-            <div className="promo-bandeau promo-bandeau--placement" role="status">
-              <p>
-                <strong>Placement de {placementActif.course_code}</strong>{" "}
-                <span className="muted">
-                  {placementActif.session_type} · {placementActif.groupes_libelles.join(", ")} — cliquez une case
-                  encadrée dans les colonnes {placementActif.parcours}.
-                </span>
-              </p>
+      {/* Ruban des semaines : repère de charge, et surtout cible de dépôt
+          pour changer une séance de semaine (il grandit pendant un glisser). */}
+      <div className={`promo-semaines${draggingId && dragEnabled ? " promo-semaines--depot" : ""}`}>
+        <span className="promo-semaines-titre" aria-hidden="true">
+          {draggingId && dragEnabled ? "Déposer sur une semaine pour y déplacer la séance" : "Semaines"}
+        </span>
+        <WeekBar
+          weekRows={payload.weekRows}
+          countByWeekIndex={countByWeek}
+          selected={displayWeek}
+          onSelect={setDisplayWeek}
+          dropEnabled={dragEnabled && Boolean(draggingId)}
+          onDropWeek={dragEnabled ? handleDropOnWeek : undefined}
+          fine
+        />
+      </div>
+
+      {placementActif && (
+        <div className="promo-bandeau promo-bandeau--placement" role="status">
+          <p>
+            <strong>Placement de {placementActif.course_code}</strong>{" "}
+            <span className="muted">
+              {placementActif.session_type} · {placementActif.groupes_libelles.join(", ")} — cliquez une case
+              encadrée dans les colonnes {placementActif.parcours}.
+            </span>
+          </p>
+          <button
+            type="button"
+            className="btn btn--sm"
+            title="Échap"
+            onClick={() => {
+              setChoixAPlacer(null);
+              onAnnulerPlacement?.();
+            }}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
+      {selPark && !placementActif && (
+        <div className="promo-bandeau promo-bandeau--placement">
+          <p>
+            <strong>Déplacement de {selPark.origin.course_code}</strong>{" "}
+            <span className="muted">— choisissez le jour, puis cliquez une case encadrée.</span>
+          </p>
+        </div>
+      )}
+      {erreurPlacement && (
+        <div className="promo-bandeau promo-bandeau--erreur" role="alert">
+          <p>{erreurPlacement}</p>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setErreurPlacement(null)}>
+            Fermer
+          </button>
+        </div>
+      )}
+      {/* Retour après chaque action, avec « Annuler » quand c'est possible
+          — toujours dans le DOM : une région `aria-live` doit exister
+          avant que son texte change pour être annoncée. */}
+      <div className={`promo-retour${retour ? " visible" : ""}`} role="status" aria-live="polite">
+        {retour && (
+          <>
+            <span>{retour.texte}</span>
+            {retour.annuler && (
               <button
                 type="button"
                 className="btn btn--sm"
-                title="Échap"
-                onClick={() => {
-                  setChoixAPlacer(null);
-                  onAnnulerPlacement?.();
-                }}
+                disabled={annulationEnCours}
+                title="Ctrl + Z"
+                onClick={() => void lancerAnnulation()}
               >
-                Annuler
+                {annulationEnCours ? "Annulation…" : "Annuler"}
               </button>
-            </div>
-          )}
-          {selPark && !placementActif && (
-            <div className="promo-bandeau promo-bandeau--placement">
-              <p>
-                <strong>Déplacement de {selPark.origin.course_code}</strong>{" "}
-                <span className="muted">— choisissez le jour, puis cliquez une case encadrée.</span>
-              </p>
-            </div>
-          )}
-          {erreurPlacement && (
-            <div className="promo-bandeau promo-bandeau--erreur" role="alert">
-              <p>{erreurPlacement}</p>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setErreurPlacement(null)}>
-                Fermer
-              </button>
-            </div>
-          )}
-          {/* Retour après chaque action, avec « Annuler » quand c'est possible
-              — toujours dans le DOM : une région `aria-live` doit exister
-              avant que son texte change pour être annoncée. */}
-          <div className={`promo-retour${retour ? " visible" : ""}`} role="status" aria-live="polite">
-            {retour && (
-              <>
-                <span>{retour.texte}</span>
-                {retour.annuler && (
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    disabled={annulationEnCours}
-                    title="Ctrl + Z"
-                    onClick={() => void lancerAnnulation()}
-                  >
-                    {annulationEnCours ? "Annulation…" : "Annuler"}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--icon btn--sm promo-retour-fermer"
-                  aria-label="Masquer ce message"
-                  onClick={() => setRetour(null)}
-                >
-                  <span aria-hidden="true">×</span>
-                </button>
-              </>
             )}
-          </div>
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon btn--sm promo-retour-fermer"
+              aria-label="Masquer ce message"
+              onClick={() => setRetour(null)}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </>
+        )}
+      </div>
 
-          {modaleLissage && (
-            <LissageModal
-              parcoursInitial={filtreParcoursSel}
-              onFermer={() => setModaleLissage(false)}
-              onApplique={() => onSeanceChangee?.()}
-            />
-          )}
-          {modaleEvenement && (
-            <CreerEvenementModal
-              payload={payload}
-              suggestion={{ week: solverWeek ?? undefined, day }}
-              onCancel={() => setModaleEvenement(false)}
-              onCree={(placement) => {
-                setModaleEvenement(false);
-                signaler(`${placement.course_code} créé ${quand(placement.week, placement.day, placement.slot)}.`);
-                allerA(placement.week, placement.day);
-                onPlacementUpdated?.(placement);
-                onSeanceChangee?.();
-              }}
-            />
-          )}
+      {modaleLissage && (
+        <LissageModal
+          parcoursInitial={filtreParcoursSel}
+          onFermer={() => setModaleLissage(false)}
+          onApplique={() => onSeanceChangee?.()}
+        />
+      )}
+      {modaleEvenement && (
+        <CreerEvenementModal
+          payload={payload}
+          suggestion={{ week: solverWeek ?? undefined, day }}
+          onCancel={() => setModaleEvenement(false)}
+          onCree={(placement) => {
+            setModaleEvenement(false);
+            signaler(`${placement.course_code} créé ${quand(placement.week, placement.day, placement.slot)}.`);
+            allerA(placement.week, placement.day);
+            onPlacementUpdated?.(placement);
+            onSeanceChangee?.();
+          }}
+        />
+      )}
 
-          {modaleSeance && (
-            <CreerSeanceModal
-              payload={payload}
-              mode={
-                modaleSeance !== "creer" &&
-                !payload.rows.some((row) => row.id === modaleSeance.session_id && row.custom)
-                  ? "maquette"
-                  : undefined
-              }
-              seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
-              // Pré-remplit semaine/jour depuis ce qui est AFFICHÉ (retour
-              // Kyllian Bresson : « rester sur la semaine à saisir, sur le
-              // jour à saisir ») — à la création seulement.
-              suggestion={modaleSeance === "creer" ? { week: solverWeek ?? undefined, day } : null}
-              onCancel={() => setModaleSeance(null)}
-              onCree={(placement, options) => {
-                // « Créer et en ajouter une autre » : la modale reste ouverte
-                // et affiche sa propre confirmation.
-                if (options?.garderOuverte) {
-                  onPlacementUpdated?.(placement);
-                  onSeanceChangee?.();
-                  return;
-                }
-                setModaleSeance(null);
-                signaler(
-                  modaleSeance === "creer"
-                    ? `${placement.course_code} créée ${quand(placement.week, placement.day, placement.slot)}.`
-                    : `${placement.course_code} modifiée.`,
-                );
-                // On suit la séance là où elle a été posée, pour la voir.
-                allerA(placement.week, placement.day);
-                onPlacementUpdated?.(placement);
-                onSeanceChangee?.();
-              }}
-              onRetiree={(sessionId) => {
-                const courseCode = modaleSeance !== "creer" ? modaleSeance?.course_code : undefined;
-                setModaleSeance(null);
-                signaler(`${courseCode ?? sessionId} retirée du planning, elle attend dans « À placer ».`);
-                onSeanceChangee?.();
-              }}
-            />
-          )}
+      {modaleSeance && (
+        <CreerSeanceModal
+          payload={payload}
+          mode={
+            modaleSeance !== "creer" &&
+            !payload.rows.some((row) => row.id === modaleSeance.session_id && row.custom)
+              ? "maquette"
+              : undefined
+          }
+          seanceExistante={modaleSeance === "creer" ? null : modaleSeance}
+          // Pré-remplit semaine/jour depuis ce qui est AFFICHÉ (retour
+          // Kyllian Bresson : « rester sur la semaine à saisir, sur le
+          // jour à saisir ») — à la création seulement.
+          suggestion={modaleSeance === "creer" ? { week: solverWeek ?? undefined, day } : null}
+          onCancel={() => setModaleSeance(null)}
+          onCree={(placement, options) => {
+            // « Créer et en ajouter une autre » : la modale reste ouverte
+            // et affiche sa propre confirmation.
+            if (options?.garderOuverte) {
+              onPlacementUpdated?.(placement);
+              onSeanceChangee?.();
+              return;
+            }
+            setModaleSeance(null);
+            signaler(
+              modaleSeance === "creer"
+                ? `${placement.course_code} créée ${quand(placement.week, placement.day, placement.slot)}.`
+                : `${placement.course_code} modifiée.`,
+            );
+            // On suit la séance là où elle a été posée, pour la voir.
+            allerA(placement.week, placement.day);
+            onPlacementUpdated?.(placement);
+            onSeanceChangee?.();
+          }}
+          onRetiree={(sessionId) => {
+            const courseCode = modaleSeance !== "creer" ? modaleSeance?.course_code : undefined;
+            setModaleSeance(null);
+            signaler(`${courseCode ?? sessionId} retirée du planning, elle attend dans « À placer ».`);
+            onSeanceChangee?.();
+          }}
+        />
+      )}
 
-          <div className="panel promo-grille">
-            <div className="promo-grille-entete">
-              <h3>
-                {portee} — {DAY_LABELS[day]}
-                {dateJour ? ` ${formatShortDate(dateJour)}` : ""}
-              </h3>
-              {!couleursParMatiere && (
-                <ul className="promo-legende" aria-label="Types de séance">
-                  <li className="cm">CM</li>
-                  <li className="td">TD</li>
-                  <li className="tp">TP</li>
-                  <li className="eval">Évaluation</li>
-                </ul>
-              )}
-            </div>
-            {solverWeek === null ? (
-              <p className="promo-vide">Semaine fermée (vacances). Choisissez une autre semaine.</p>
-            ) : colGroups.length === 0 ? (
-              <p className="promo-vide">Aucun parcours pour ce filtre.</p>
-            ) : (
-              <div className="promo-grille-defil">
+      <div className="promo-corps">
+        <div className="panel promo-grille">
+          {solverWeek === null ? (
+            <p className="promo-vide">Semaine fermée (vacances). Choisissez une autre semaine.</p>
+          ) : colGroups.length === 0 ? (
+            <p className="promo-vide">Aucun parcours pour ce filtre.</p>
+          ) : (
+            <div
+              className={`promo-grille-cadre${defil.gauche ? " ombre-gauche" : ""}${defil.droite ? " ombre-droite" : ""}`}
+            >
+              <div className="promo-grille-defil" ref={defilRef} onScroll={mesurerDefil}>
                 <table
+                  style={{ "--nb-colonnes": cols.length } as CSSProperties}
                   className={`promo-grid${teacherFilter ? " teacher-filter" : ""}${couleursParMatiere ? " couleurs-matiere" : ""}${draggingId ? " promo-grid--glisser" : ""}`}
                 >
                   <thead>
@@ -1173,7 +1234,12 @@ export function PromoView({
                         <span className="sr-only">Créneau</span>
                       </th>
                       {colGroups.map((g, gi) => (
-                        <th key={g.parcours} colSpan={g.cols.length} className={`grp-band pc${gi % 6}`}>
+                        <th
+                          key={g.parcours}
+                          colSpan={g.cols.length}
+                          className={`grp-band pc${gi % 6}`}
+                          data-parcours={g.parcours}
+                        >
                           {/* Cliquable seulement en édition : en lecture seule,
                               la modale n'aurait rien à proposer. */}
                           {dragEnabled ? (
@@ -1468,46 +1534,128 @@ export function PromoView({
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+          <div className="promo-grille-pied">
+            {/* Repère de défilement : les promos hors de l'écran restent
+                nommées, celles à l'écran ressortent ; un clic y amène. */}
+            {defil.deborde && (
+              <nav className="promo-reperes" aria-label="Aller à une promo dans la grille">
+                <span className="promo-reperes-titre">
+                  <MoveHorizontal size={14} aria-hidden="true" />
+                  <span className="promo-reperes-libelle">Défiler vers</span>
+                </span>
+                {colGroups.map((g) => {
+                  const visible = defil.visibles.includes(g.parcours);
+                  return (
+                    <button
+                      key={g.parcours}
+                      type="button"
+                      className={`promo-repere${visible ? " visible" : ""}`}
+                      aria-current={visible ? "true" : undefined}
+                      onClick={() => allerAuParcours(g.parcours)}
+                    >
+                      {g.parcours}
+                    </button>
+                  );
+                })}
+              </nav>
+            )}
+            {!couleursParMatiere && (
+              <ul className="promo-legende" aria-label="Types de séance">
+                <li className="cm">CM</li>
+                <li className="td">TD</li>
+                <li className="tp">TP</li>
+                <li className="eval">Évaluation</li>
+              </ul>
             )}
             {!readOnly && (
-              <p className="promo-raccourcis">
-                <kbd>←</kbd> <kbd>→</kbd> jour · <kbd>Maj</kbd>+<kbd>←</kbd> <kbd>→</kbd> semaine · <kbd>T</kbd>{" "}
-                aujourd'hui · <kbd>Échap</kbd> abandonner le placement · <kbd>Ctrl</kbd>+<kbd>Z</kbd> annuler
-                {dragEnabled ? " · glisser sur une séance : échange · sur une barre de semaine : autre semaine" : ""}
-              </p>
+              <details className="promo-aide">
+                <summary>
+                  <Keyboard size={14} aria-hidden="true" />
+                  Raccourcis
+                </summary>
+                <div className="promo-aide-contenu">
+                  <p>
+                    <kbd>←</kbd> <kbd>→</kbd> jour précédent / suivant
+                  </p>
+                  <p>
+                    <kbd>Maj</kbd>+<kbd>←</kbd> <kbd>→</kbd> semaine précédente / suivante
+                  </p>
+                  <p>
+                    <kbd>T</kbd> aujourd'hui
+                  </p>
+                  <p>
+                    <kbd>Échap</kbd> abandonner le placement
+                  </p>
+                  <p>
+                    <kbd>Ctrl</kbd>+<kbd>Z</kbd> annuler la dernière action
+                  </p>
+                  {dragEnabled && (
+                    <p>
+                      Glisser une séance sur une autre : échange. Sur le ruban des semaines : autre semaine. Sur
+                      l'intitulé d'une promo : sa semaine complète, pour changer de jour.
+                    </p>
+                  )}
+                </div>
+              </details>
             )}
           </div>
-
-          {parcoursOuvert && placements && onPlacementUpdated && onError && (
-            <ParcoursWeekModal
-              payload={payload}
-              parcours={parcoursOuvert}
-              weekIndex={displayWeek}
-              placements={placements}
-              onClose={() => {
-                if (hasParked(park)) restaurerTousParks();
-                setParcoursOuvert(null);
-              }}
-              onPlacementUpdated={onPlacementUpdated}
-              onError={onError}
-              park={park}
-              onParkChange={setPark}
-            />
-          )}
-
-          {creationSallePour && (
-            <NewRoomModal
-              onCancel={() => setCreationSallePour(null)}
-              onCreated={(salle) => {
-                const sessionId = creationSallePour;
-                setCreationSallePour(null);
-                // Salle neuve : libre par construction, aucun conflit possible.
-                void appliquerSalle(sessionId, salle.id);
-              }}
-            />
-          )}
         </div>
+
+        {listeOuverte && (
+          <APlacerView
+            variante="panneau"
+            payload={payload}
+            onPlacement={() => onAPlacerRefresh?.()}
+            onChoisirSurPromo={(seance) => {
+              setChoixAPlacer(seance);
+              setPark((actuel) => (actuel.selectedSessionId ? { ...actuel, selectedSessionId: null } : actuel));
+            }}
+            onFermer={() => {
+              if (hasParked(park)) restaurerTousParks();
+              setListeMasquee(true);
+              setChoixAPlacer(null);
+              setRoute?.({ panel: "" });
+            }}
+            park={park}
+            onSelectPark={(sessionId) => {
+              setChoixAPlacer(null);
+              setPark((actuel) => selectPark(actuel, sessionId));
+            }}
+            onAnnulerPark={annulerPark}
+          />
+        )}
       </div>
+
+      {parcoursOuvert && placements && onPlacementUpdated && onError && (
+        <ParcoursWeekModal
+          payload={payload}
+          parcours={parcoursOuvert}
+          weekIndex={displayWeek}
+          placements={placements}
+          onClose={() => {
+            if (hasParked(park)) restaurerTousParks();
+            setParcoursOuvert(null);
+          }}
+          onPlacementUpdated={onPlacementUpdated}
+          onError={onError}
+          park={park}
+          onParkChange={setPark}
+        />
+      )}
+
+      {creationSallePour && (
+        <NewRoomModal
+          onCancel={() => setCreationSallePour(null)}
+          onCreated={(salle) => {
+            const sessionId = creationSallePour;
+            setCreationSallePour(null);
+            // Salle neuve : libre par construction, aucun conflit possible.
+            void appliquerSalle(sessionId, salle.id);
+          }}
+        />
+      )}
     </section>
   );
 }

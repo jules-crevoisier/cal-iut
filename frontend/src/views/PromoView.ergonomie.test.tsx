@@ -5,8 +5,10 @@
  * nommées).
  */
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ContexteSemaine } from "../contexts/SemaineGlobale";
 import type { Placement } from "../types";
 import { emptyPayload, placedRow, testRoute } from "../test/payloadFixture";
 import { performMove } from "../utils/moveSession";
@@ -72,36 +74,39 @@ function rendre(extra: Record<string, unknown> = {}) {
   return { ...vue, onPlacementUpdated, onError };
 }
 
-const titreGrille = () => screen.getByRole("heading", { level: 3 });
+/** Jour affiché : le bouton enfoncé du contrôle segmenté des jours (la
+ *  grille n'a plus de titre, gabarit v2). */
+const titreGrille = () =>
+  within(screen.getByRole("group", { name: "Jour affiché" })).getByRole("button", { pressed: true });
 
 describe("PromoView raccourcis clavier", () => {
   it("should go to the next day with → and back with ←", () => {
     rendre();
-    expect(titreGrille()).toHaveTextContent(/Lundi/);
+    expect(titreGrille()).toHaveAccessibleName(/^Lundi/);
     fireEvent.keyDown(document.body, { key: "ArrowRight" });
-    expect(titreGrille()).toHaveTextContent(/Mardi/);
+    expect(titreGrille()).toHaveAccessibleName(/^Mardi/);
     fireEvent.keyDown(document.body, { key: "ArrowLeft" });
-    expect(titreGrille()).toHaveTextContent(/Lundi/);
+    expect(titreGrille()).toHaveAccessibleName(/^Lundi/);
   });
 
   it("should roll over to the next week after Friday", () => {
     rendre({ route: testRoute({ vue: "promo", jour: 4, sem: 0 }) });
     fireEvent.keyDown(document.body, { key: "ArrowRight" });
     expect(screen.getByRole("heading", { name: /^semaine 3 \(/i })).toBeInTheDocument();
-    expect(titreGrille()).toHaveTextContent(/Lundi/);
+    expect(titreGrille()).toHaveAccessibleName(/^Lundi/);
   });
 
   it("should change week with Maj + →", () => {
     rendre();
     fireEvent.keyDown(document.body, { key: "ArrowRight", shiftKey: true });
     expect(screen.getByRole("heading", { name: /^semaine 3 \(/i })).toBeInTheDocument();
-    expect(titreGrille()).toHaveTextContent(/Lundi/);
+    expect(titreGrille()).toHaveAccessibleName(/^Lundi/);
   });
 
   it("should ignore arrows typed inside a field", () => {
     rendre();
     fireEvent.keyDown(screen.getByLabelText("Année"), { key: "ArrowRight" });
-    expect(titreGrille()).toHaveTextContent(/Lundi/);
+    expect(titreGrille()).toHaveAccessibleName(/^Lundi/);
   });
 });
 
@@ -184,5 +189,74 @@ describe("PromoView annuler un déplacement", () => {
 
     fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
     await waitFor(() => expect(performMove).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("PromoView semaine partagée (barre supérieure)", () => {
+  /** Enveloppe qui tient la semaine comme `App.tsx` : un seul état, lu par
+   *  la barre supérieure et par toutes les vues. */
+  function AvecSemaine({ onIndex }: { onIndex: (i: number) => void }) {
+    const [index, setIndex] = useState(0);
+    return (
+      <ContexteSemaine.Provider
+        value={{
+          index,
+          setIndex: (i) => {
+            onIndex(i);
+            setIndex(i);
+          },
+        }}
+      >
+        <PromoView
+          payload={payload}
+          route={testRoute({ vue: "promo", sem: 0, jour: 4 })}
+          placements={[placement()]}
+          onPlacementUpdated={vi.fn()}
+          onError={vi.fn()}
+          setRoute={vi.fn()}
+        />
+      </ContexteSemaine.Provider>
+    );
+  }
+
+  it("should move the SHARED week with Maj + → / ← and after Friday, without a week navigation of its own", () => {
+    const onIndex = vi.fn();
+    render(<AvecSemaine onIndex={onIndex} />);
+    // Pas de second sélecteur de semaine : c'est la barre supérieure qui l'a.
+    expect(screen.queryByRole("group", { name: "Semaine affichée" })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: "ArrowRight", shiftKey: true });
+    expect(onIndex).toHaveBeenLastCalledWith(1);
+    fireEvent.keyDown(document.body, { key: "ArrowLeft", shiftKey: true });
+    expect(onIndex).toHaveBeenLastCalledWith(0);
+
+    // Vendredi + → : lundi de la semaine suivante, dans la semaine partagée.
+    fireEvent.keyDown(document.body, { key: "ArrowRight" });
+    expect(onIndex).toHaveBeenLastCalledWith(1);
+    expect(titreGrille()).toHaveAccessibleName(/^Lundi/);
+  });
+});
+
+describe("PromoView barre d'outils", () => {
+  it("should keep the four actions, the primary one last", () => {
+    rendre({ onSeanceChangee: vi.fn() });
+    const actions = screen.getByRole("button", { name: "Séances à placer" }).parentElement as HTMLElement;
+    const noms = within(actions)
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label") ?? b.textContent);
+    expect(noms).toEqual(["Séances à placer", "Lisser une promo…", "Nouvel évènement", "Nouvelle séance"]);
+    expect(within(actions).getByRole("button", { name: "Nouvelle séance" })).toHaveClass("btn--primary");
+  });
+
+  it("should date each day button in full for assistive technologies", () => {
+    rendre();
+    const jours = within(screen.getByRole("group", { name: "Jour affiché" })).getAllByRole("button");
+    expect(jours.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Lundi 31 août",
+      "Mardi 1 sept.",
+      "Mercredi 2 sept.",
+      "Jeudi 3 sept.",
+      "Vendredi 4 sept.",
+    ]);
   });
 });
