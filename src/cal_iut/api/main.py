@@ -20,12 +20,14 @@ from fastapi.staticfiles import StaticFiles
 from cal_iut.api import (
     accounts,
     auth,
+    cache_http,
     controle_doublons_hebdo,
     custom_rooms,
     custom_sessions,
     doublons,
     forced_pending,
     mailer,
+    revision,
     sauvegardes,
     session_overrides,
 )
@@ -260,6 +262,36 @@ class RegenJob:
 
 _current_regen_job: RegenJob | None = None
 
+class _GZipSaufMcp:
+    """Compression gzip de toutes les réponses d'au moins 1 Ko, SAUF `/mcp`.
+
+    `/app-state` partait en clair : ≈ 590 Ko de JSON, ≈ 48 Ko une fois
+    compressé. `/mcp` est écarté par prudence : le transport Streamable HTTP
+    peut répondre en flux, et un client MCP n'annonce pas toujours ce qu'il
+    sait décompresser — rien à gagner à y toucher. Le pixel de suivi des
+    mails (`image/gif`) et les flux `text/event-stream` sont déjà exclus par
+    Starlette lui-même (`DEFAULT_EXCLUDED_CONTENT_TYPES`)."""
+
+    def __init__(self, app: object) -> None:
+        from starlette.middleware.gzip import GZipMiddleware
+
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=1000, compresslevel=6)
+
+    async def __call__(self, scope: dict, receive: object, send: object) -> None:
+        if scope.get("type") == "http" and (scope.get("path") or "").startswith("/mcp"):
+            await self.app(scope, receive, send)
+            return
+        await self.gzip(scope, receive, send)
+
+
+# Ajouté AVANT tous les autres = le plus INTÉRIEUR, au plus près des routes.
+# Placé à l'extérieur, il recevait les réponses déjà découpées en flux par
+# les middlewares `@app.middleware("http")` (`require_auth`...) : il
+# compressait alors tout, même 74 octets, sans `Content-Length` — le seuil
+# `minimum_size` ne s'applique qu'à une réponse reçue d'un seul bloc.
+app.add_middleware(_GZipSaufMcp)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -272,7 +304,7 @@ app.add_middleware(
 # buildés, favicon...) reste servi sans authentification : sans ça, le
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
-    "/admin", "/app-state", "/calendrier", "/celcat", "/controles", "/corrections", "/diff", "/exceptions", "/export",
+    "/admin", "/api", "/app-state", "/calendrier", "/celcat", "/controles", "/corrections", "/diff", "/exceptions", "/export",
     "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
@@ -300,11 +332,29 @@ _PUBLIC_PATHS = frozenset({
 _PUBLIC_PREFIXES = ("/mcp", "/mail/pixel/")
 
 
+def _routes_effectives(routes: list, prefixe: str = ""):
+    """Toutes les routes, y compris celles d'un `APIRouter` inclus.
+
+    Depuis FastAPI 0.14x, `app.include_router` n'aplatit plus les routes dans
+    `app.routes` : il y pose UN objet `_IncludedRouter` sans `path`, qui
+    garde ses routes pour lui. Sans cette descente, le contrôle ci-dessous
+    ne voyait tout simplement pas les routes de `/api/v1` (trouvé en les
+    ajoutant, 29/09/2026) — un routeur inclus aurait pu ouvrir n'importe quel
+    chemin sans que le démarrage ne proteste."""
+    for route in routes:
+        inclus = getattr(route, "original_router", None)
+        if inclus is not None:
+            contexte = getattr(route, "include_context", None)
+            yield from _routes_effectives(inclus.routes, prefixe + (getattr(contexte, "prefix", "") or ""))
+            continue
+        chemin = getattr(route, "path", None)
+        yield (prefixe + chemin if chemin else None), route
+
+
 def _verifier_couverture_auth() -> list[str]:
     """Chemins ni protégés ni explicitement publics — vide = tout est couvert."""
     oublis = []
-    for route in app.routes:
-        chemin = getattr(route, "path", None)
+    for chemin, route in _routes_effectives(app.routes):
         if not chemin or not getattr(route, "methods", None):
             continue
         if chemin.startswith(("/openapi", "/docs", "/redoc")):
@@ -393,6 +443,91 @@ async def require_auth(request: Request, call_next):
 from cal_iut.mcp.auth import mcp_bearer_middleware
 
 app.middleware("http")(mcp_bearer_middleware)
+
+
+# Écritures (non-GET) qui ne changent RIEN de ce que voit un client du
+# planning : comptes, administration Celcat, mails, notifications,
+# sauvegardes, contrôles. Les laisser avancer la révision ferait
+# retélécharger l'état complet à tous les onglets ouverts pour rien — le
+# worker Celcat, à lui seul, écrit toutes les minutes. `/validate` est un
+# POST de simulation (aucune écriture), appelé à chaque survol pendant un
+# glisser-déposer. Le seul chemin `/celcat` qui modifie le planning
+# (`/celcat/extras/{id}/ajouter`) passe par `creer_seance_personnalisee`,
+# donc par `_apres_ecriture_planning`, qui avance la révision lui-même.
+_ECRITURES_SANS_EFFET_VISIBLE = (
+    "/auth/", "/admin", "/celcat", "/mail", "/notifications", "/sauvegardes", "/controles",
+)
+
+
+class _RevisionApresEcriture:
+    """Filet de sécurité de `api/revision.py` : toute écriture RÉUSSIE (2xx)
+    sur un chemin protégé avance la révision, même si la route a oublié de
+    le faire elle-même. EN PLUS des appels explicites (cf.
+    `_apres_ecriture_planning`), jamais à leur place : il ne voit ni `/mcp`
+    (hors préfixes protégés), ni les threads d'arrière-plan (`/solve/async`,
+    `/regen/week` répondent AVANT d'avoir écrit).
+
+    ASGI pur plutôt que `@app.middleware("http")` : il n'a besoin que du
+    statut, et n'a aucune raison de mettre la réponse en tampon."""
+
+    def __init__(self, app: object) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: object, send: object) -> None:
+        if scope.get("type") != "http" or scope.get("method") in ("GET", "HEAD", "OPTIONS"):
+            await self.app(scope, receive, send)
+            return
+        chemin = scope.get("path") or ""
+        concerne = (
+            chemin.startswith(_PROTECTED_PREFIXES)
+            and not chemin.startswith(_ECRITURES_SANS_EFFET_VISIBLE)
+            and not chemin.endswith("/validate")
+        )
+        if not concerne:
+            await self.app(scope, receive, send)
+            return
+
+        async def _send(message: dict) -> None:
+            if message.get("type") == "http.response.start" and 200 <= int(message.get("status", 0)) < 300:
+                revision.incrementer(f"{scope.get('method')} {chemin}")
+            await send(message)
+
+        await self.app(scope, receive, _send)
+
+
+# Ajouté en dernier = le plus extérieur : il voit le statut réellement
+# renvoyé, après tous les autres middlewares.
+app.add_middleware(_RevisionApresEcriture)
+
+
+def _empreinte_etat() -> object:
+    """Sonde de révision (cf. `api/revision.py`) : repère un état REMPLACÉ
+    sans passer par une écriture de l'API — une liste réassignée (et non
+    modifiée en place) change d'identité. Filet de plus, jamais la règle :
+    toute écriture réelle avance déjà la révision explicitement. Quasi
+    gratuit (des `id()` et des `len()`), relu à chaque lecture de révision."""
+    state = get_state()
+    return (
+        id(state.timetable), len(state.timetable), id(state.sessions), len(state.sessions),
+        id(state.groups), id(state.rooms), len(state.rooms), id(state.calendar),
+        state.current_run_id, str(state.config_dir),
+    )
+
+
+def _fichiers_de_configuration() -> list[Path]:
+    """Fichiers relus EN DIRECT par `/app-state` et les flux .ics (contacts
+    enseignants, réservations de salles, fenêtres SAE...) : modifiés sur le
+    disque sans redémarrage, ils doivent quand même invalider les caches."""
+    racine = get_state().config_dir
+    fichiers = list(racine.glob("*.yaml"))
+    contraintes = racine.parents[1] / "contraintes" if len(racine.parents) > 1 else None
+    if contraintes is not None and contraintes.is_dir():
+        fichiers += list(contraintes.glob("*.json"))
+    return fichiers
+
+
+revision.enregistrer_sonde("etat", _empreinte_etat)
+revision.enregistrer_sonde("configuration", revision.sonde_fichiers(_fichiers_de_configuration))
 
 # `require_admin_session` (mot de passe partagé, `auth.verify_session_token`)
 # a existé ici avant le système de comptes du 31/08/2026 — remplacé
@@ -797,6 +932,7 @@ def charger_etat_applicatif() -> None:
     state.objective_weights = {**yaml_weights, **db_weights}
 
     _try_restore_latest(state)
+    revision.incrementer("etat_applicatif_charge")
 
 
 def _try_restore_latest(state: object) -> None:
@@ -981,17 +1117,58 @@ def _build_app_context(state: object) -> _AppContext:
 _CLES_PRIVEES_PAYLOAD = ("teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions")
 
 
-@app.get("/app-state")
-def app_state(request: Request) -> dict[str, object]:
-    """
-    Tout l'état applicatif en JSON — même calcul (`build_payload`) que celui
-    embarqué dans la page `/legacy`, exposé ici comme API pour le frontend
-    React (retour utilisateur 11/08/2026 : « je veux react en local, passe
-    toutes les fonctionnalités en local »). Source de vérité UNIQUE : les
-    vérifications (contraintes, SAE, violations enseignant) restent calculées
-    côté serveur, jamais redérivées côté client — cf. philosophie du projet
-    (« jamais une affirmation pré-écrite »).
-    """
+def variante_lecture(request: Request) -> str:
+    """« complet » pour un compte ACTIF (cookie ou clé `Bearer caliut_…`),
+    « public » sinon — lien personnel `t`, ou compte encore en attente.
+
+    Relit d'abord `request.state.user`, posé par `require_auth` : sans ça,
+    une clé API (sans cookie) recevait la version expurgée, puisque
+    `accounts.get_current_user` ne lit QUE le cookie. Et `status ==
+    "active"` exigé : un compte en attente d'activation qui ouvrait un lien
+    perso (`t` court-circuite le contrôle de statut du middleware) recevait
+    jusqu'ici le payload complet, adresses mail comprises.
+
+    Sert aussi de clé de cache : les deux variantes ne doivent JAMAIS se
+    servir l'une à la place de l'autre (cf. `api/cache_http.py`)."""
+    user = getattr(request.state, "user", None) or accounts.get_current_user(request, optional=True)
+    return "complet" if user is not None and user.status == "active" else "public"
+
+
+def expurger_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Version publique du payload (cf. `_CLES_PRIVEES_PAYLOAD`)."""
+    vide: dict[str, object] = {"teacherEmails": {}}
+    return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
+
+
+# Dernier payload complet calculé, avec la révision qui l'a produit — partagé
+# par les deux variantes de `/app-state` et par l'API v1 (`api/v1.py`) :
+# après une écriture, le premier lecteur paie les ≈ 150 ms, les suivants
+# (quelle que soit leur variante) repartent de ce calcul.
+_memo_payload: tuple[int, dict[str, object]] | None = None
+_verrou_payload = threading.Lock()
+
+
+def payload_app_state() -> dict[str, object]:
+    """Payload COMPLET de `/app-state`, recalculé seulement si la révision
+    a avancé (cf. `api/revision.py`). À ne jamais modifier en place : il est
+    partagé entre les requêtes."""
+    global _memo_payload
+    numero = revision.actuelle().numero
+    memo = _memo_payload
+    if memo is not None and memo[0] == numero:
+        return memo[1]
+    with _verrou_payload:
+        numero = revision.actuelle().numero
+        memo = _memo_payload
+        if memo is not None and memo[0] == numero:
+            return memo[1]
+        payload = _calculer_payload_app_state()
+        if revision.actuelle().numero == numero:
+            _memo_payload = (numero, payload)
+        return payload
+
+
+def _calculer_payload_app_state() -> dict[str, object]:
     state = get_state()
     ctx = _build_app_context(state)
     from cal_iut.export.html_view import build_payload
@@ -1040,16 +1217,41 @@ def app_state(request: Request) -> dict[str, object]:
     from cal_iut.ingestion.config_loader import load_room_reservation_entries
 
     payload["roomReservations"] = load_room_reservation_entries(state.config_dir)
+    return payload
 
-    # Session de compte (n'importe quel rôle actif) = payload complet. Lien
-    # personnel public = version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`).
-    # Filtré ICI, à la sortie, plutôt qu'en amont dans `build_payload` : une
-    # seule liste à relire pour savoir ce qui sort, et `/legacy` (page
-    # admin) continue d'utiliser le calcul complet sans condition.
-    if accounts.get_current_user(request, optional=True) is not None:
-        return payload
-    vide: dict[str, object] = {"teacherEmails": {}}
-    return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
+
+_cache_app_state = cache_http.CacheParRevision(taille_max=4)
+
+
+@app.get("/app-state")
+def app_state(request: Request) -> Response:
+    """
+    Tout l'état applicatif en JSON — même calcul (`build_payload`) que celui
+    embarqué dans la page `/legacy`, exposé ici comme API pour le frontend
+    React (retour utilisateur 11/08/2026 : « je veux react en local, passe
+    toutes les fonctionnalités en local »). Source de vérité UNIQUE : les
+    vérifications (contraintes, SAE, violations enseignant) restent calculées
+    côté serveur, jamais redérivées côté client — cf. philosophie du projet
+    (« jamais une affirmation pré-écrite »).
+
+    Mis en cache par (révision, variante) depuis le 29/09/2026 (cf.
+    `api/cache_http.py`) : ≈ 150 ms de calcul et ≈ 590 Ko de JSON à CHAQUE
+    appel jusque-là, alors que rien n'avait changé entre deux appels dans
+    l'immense majorité des cas. ETag + `If-None-Match` → 304 sans corps.
+
+    Session de compte active = payload complet. Lien personnel public =
+    version expurgée (cf. `_CLES_PRIVEES_PAYLOAD`, `variante_lecture`).
+    Filtré ICI, à la sortie, plutôt qu'en amont dans `build_payload` : une
+    seule liste à relire pour savoir ce qui sort, et `/legacy` (page admin)
+    continue d'utiliser le calcul complet sans condition.
+    """
+    variante = variante_lecture(request)
+
+    def _construire() -> bytes:
+        payload = payload_app_state()
+        return cache_http.serialiser_json(payload if variante == "complet" else expurger_payload(payload))
+
+    return cache_http.repondre(request, _cache_app_state, ("app-state", variante), _construire)
 
 
 @app.get("/legacy", response_class=HTMLResponse)
@@ -1139,8 +1341,19 @@ def calendrier_sae(semestre: str = "") -> CalendrierSaeResponse:
     return CalendrierSaeResponse(fenetres=fenetres)
 
 
+_cache_lectures = cache_http.CacheParRevision(taille_max=256)
+
+
 @app.get("/meta", response_model=MetaResponse)
-def get_meta() -> MetaResponse:
+def get_meta(request: Request) -> Response:
+    """ETag + cache par révision (cf. `api/cache_http.py`) : relu à chaque
+    démarrage de l'interface, il ne change pour ainsi dire jamais."""
+    return cache_http.repondre(
+        request, _cache_lectures, ("meta",), lambda: cache_http.serialiser_json(_calculer_meta())
+    )
+
+
+def _calculer_meta() -> MetaResponse:
     state = get_state()
     parcours_list = sorted({g.parcours for g in state.groups})
     # Même filtre que le payload de l'interface (cf. `html_view.build_payload`) :
@@ -1202,6 +1415,7 @@ def ingest(body: IngestRequest) -> dict[str, object]:
     state.filter_parcours = body.parcours
     state.filter_semestre = body.semestre
     state.semestre_group = body.semestre_group
+    revision.incrementer("ingest")
     return result.stats
 
 
@@ -1315,6 +1529,7 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
         current_placements=[_placement_dict(p, sessions_by_id) for p in with_rooms],
     )
     state.current_run_id = run.id
+    revision.incrementer("solve")
 
     return _build_response(result.status, result.objective_value, result.gap_penalty, with_rooms, sessions_by_id, quality, run.id)
 
@@ -1418,6 +1633,12 @@ def regen_week(body: RegenRequest) -> dict[str, str]:
             job.error_detail = str(exc)
             job.error_status = 500
             job.status = "error"
+        finally:
+            # Thread d'arrière-plan : la réponse HTTP est partie depuis
+            # longtemps, le filet du middleware ne voit pas cette écriture.
+            # `finally` : un échec à mi-chemin peut avoir déjà remplacé une
+            # partie du planning.
+            revision.incrementer("regen")
 
     threading.Thread(target=_worker, daemon=True, name=f"regen-{job.job_id}").start()
     return {"job_id": job.job_id, "status": "running"}
@@ -1466,6 +1687,7 @@ def create_exception(body: ExceptionCreateRequest) -> ExceptionResponse:
         kind=body.kind, exception_date=exc_date, teacher_code=body.teacher_code,
         room_id=body.room_id, slots=body.slots, reason=body.reason,
     )
+    revision.incrementer("exception")
     return _exception_to_response(row)
 
 
@@ -1481,6 +1703,7 @@ def delete_exception(exception_id: int) -> dict[str, bool]:
     ok = repo.deactivate_exception(exception_id)
     if not ok:
         raise HTTPException(404, "Exception introuvable")
+    revision.incrementer("exception")
     return {"deleted": True}
 
 
@@ -1529,6 +1752,7 @@ def create_tache(body: TacheCreateRequest, request: Request) -> TacheResponse:
         categorie=body.categorie, priorite=body.priorite,
         date_debut=date_debut, date_fin=date_fin,
     )
+    revision.incrementer("tache")
     return _tache_to_response(row)
 
 
@@ -1579,6 +1803,7 @@ def update_tache(tache_id: int, body: TacheUpdateRequest) -> TacheResponse:
 
     row = repo.update_tache(tache_id, **champs)
     assert row is not None
+    revision.incrementer("tache")
     return _tache_to_response(row)
 
 
@@ -1588,6 +1813,7 @@ def delete_tache(tache_id: int) -> dict[str, bool]:
     ok = repo.delete_tache(tache_id)
     if not ok:
         raise HTTPException(404, "Tâche introuvable.")
+    revision.incrementer("tache")
     return {"deleted": True}
 
 
@@ -1602,10 +1828,23 @@ def _exception_to_response(row) -> ExceptionResponse:
 
 @app.get("/timetable", response_model=TimetableResponse)
 def get_timetable(
+    request: Request,
     group_id: str | None = None,
     teacher_code: str | None = None,
     room_id: str | None = None,
     week: int | None = None,
+) -> Response:
+    """Clé de cache = révision + filtres (cf. `api/cache_http.py`) : la Vue
+    Semaine et la Vue Promo le relisent après chaque action."""
+    cle = ("timetable", group_id or "", teacher_code or "", room_id or "", "" if week is None else week)
+    return cache_http.repondre(
+        request, _cache_lectures, cle,
+        lambda: cache_http.serialiser_json(_calculer_timetable(group_id, teacher_code, room_id, week)),
+    )
+
+
+def _calculer_timetable(
+    group_id: str | None, teacher_code: str | None, room_id: str | None, week: int | None
 ) -> TimetableResponse:
     state = get_state()
     if not state.timetable:
@@ -1617,7 +1856,16 @@ def get_timetable(
 
 
 @app.get("/diff", response_model=DiffResponse)
-def get_diff(run_id: int | None = None) -> DiffResponse:
+def get_diff(request: Request, run_id: int | None = None) -> Response:
+    """Relu après chaque déplacement : ETag + cache par révision (les
+    corrections enregistrées ne changent qu'avec une écriture de placement)."""
+    return cache_http.repondre(
+        request, _cache_lectures, ("diff", run_id or ""),
+        lambda: cache_http.serialiser_json(_calculer_diff(run_id)),
+    )
+
+
+def _calculer_diff(run_id: int | None) -> DiffResponse:
     repo = get_repo()
     rid = run_id or get_state().current_run_id
     entries = repo.get_diff(rid)
@@ -1631,10 +1879,12 @@ def get_diff(run_id: int | None = None) -> DiffResponse:
 
 
 @app.get("/feedback/analysis", response_model=FeedbackAnalysisResponse)
-def feedback_analysis() -> FeedbackAnalysisResponse:
-    repo = get_repo()
-    analysis = analyze_corrections(repo.list_corrections())
-    return FeedbackAnalysisResponse(**analysis)
+def feedback_analysis(request: Request) -> Response:
+    def _construire() -> bytes:
+        analysis = analyze_corrections(get_repo().list_corrections())
+        return cache_http.serialiser_json(FeedbackAnalysisResponse(**analysis))
+
+    return cache_http.repondre(request, _cache_lectures, ("feedback-analysis",), _construire)
 
 
 @app.post("/feedback/apply", dependencies=[Depends(accounts.require_role("edit"))])
@@ -1671,16 +1921,19 @@ def export_csv() -> Response:
     return Response(content=content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=emploi_du_temps.csv"})
 
 
-# Le contenu est déjà recalculé EN DIRECT sur `state.timetable` à chaque
-# requête (rien n'est mis en cache côté serveur) — la seule staleness
-# possible vient d'un intermédiaire HTTP (proxy, CDN) qui garderait une
-# vieille réponse. `no-store` empêche ça explicitement. Retour utilisateur
-# 04/09/2026 : « en temps réel ou 1h max » — ce qu'on contrôle vraiment
-# (le serveur) est donc déjà à jour à chaque fois ; ce qu'on ne contrôle
-# PAS, c'est la fréquence à laquelle Google/Outlook/Apple repollent une URL
-# .ics abonnée (souvent plusieurs heures, parfois ~24h pour Google — aucun
-# en-tête ne force ça depuis le serveur).
-_ICS_CACHE_HEADERS = {"Cache-Control": "no-store, max-age=0"}
+# Retour utilisateur 04/09/2026 : « en temps réel ou 1h max » — ce qu'on
+# contrôle vraiment (le serveur) est à jour à chaque requête ; ce qu'on ne
+# contrôle PAS, c'est la fréquence à laquelle Google/Outlook/Apple repollent
+# une URL .ics abonnée (souvent plusieurs heures, parfois ~24h pour Google —
+# aucun en-tête ne force ça depuis le serveur).
+#
+# `no-cache` (et plus `no-store`) depuis le 29/09/2026 : un intermédiaire ou
+# un agenda peut garder la réponse, mais DOIT la revalider avant de s'en
+# resservir — jamais de flux périmé, comme avant. Ce qui change : la
+# revalidation (`If-None-Match` sur l'ETag, dérivé de la révision de l'état,
+# cf. `api/revision.py`) répond 304 sans corps tant que rien n'a bougé, au
+# lieu de reconstruire et renvoyer tout le calendrier à chaque sondage.
+_ICS_CACHE_CONTROL = "no-cache"
 
 
 def _ics_items_for_placements(state: object, placements: list) -> list:
@@ -1867,7 +2120,7 @@ def _ics_versions(state: object) -> dict[str, list[dict[str, object]]]:
 
 
 @app.get("/ics/version")
-def ics_version() -> Response:
+def ics_version(request: Request) -> Response:
     """Petit JSON — dernière modification par groupe/enseignant, et le lien
     `.ics` à réinterroger si elle a avancé (cf. `_ics_versions`). Pensé
     pour être sondé BEAUCOUP plus souvent que les flux `.ics` complets
@@ -1875,35 +2128,37 @@ def ics_version() -> Response:
     state = get_state()
     import json as _json
 
-    contenu = _json.dumps(_ics_versions(state), ensure_ascii=False)
-    return Response(
-        content=contenu, media_type="application/json; charset=utf-8",
-        headers=dict(_ICS_CACHE_HEADERS),
+    return cache_http.repondre(
+        request, _cache_lectures, ("ics-version",),
+        lambda: _json.dumps(_ics_versions(state), ensure_ascii=False).encode("utf-8"),
+        media_type="application/json; charset=utf-8", cache_control=_ICS_CACHE_CONTROL,
     )
 
 
 @app.get("/ics/prof/{code}.ics")
-def ics_teacher(code: str) -> Response:
-    """Flux .ics abonnable pour UN enseignant — cf. `api/ics_feed.py`."""
-    state = get_state()
-    placements = [p for p in state.timetable if code in (p.teacher_codes or [])]
-    items = _ics_items_for_placements(state, placements)
-    noms = _noms_enseignants(state)
-    group_labels = {g.id: g.label for g in state.groups}
-    from cal_iut.api.ics_feed import build_ics
+def ics_teacher(code: str, request: Request) -> Response:
+    """Flux .ics abonnable pour UN enseignant — cf. `api/ics_feed.py`.
+    ETag + 304 : cf. `_ICS_CACHE_CONTROL`."""
 
-    content = build_ics(items, noms.get(code, code), f"prof-{code}", group_labels, noms)
-    return Response(
-        content=content, media_type="text/calendar; charset=utf-8",
-        headers={
-            "Content-Disposition": f'inline; filename="planning-{code}.ics"',
-            **_ICS_CACHE_HEADERS,
-        },
+    def _construire() -> bytes:
+        state = get_state()
+        placements = [p for p in state.timetable if code in (p.teacher_codes or [])]
+        items = _ics_items_for_placements(state, placements)
+        noms = _noms_enseignants(state)
+        group_labels = {g.id: g.label for g in state.groups}
+        from cal_iut.api.ics_feed import build_ics
+
+        return build_ics(items, noms.get(code, code), f"prof-{code}", group_labels, noms).encode("utf-8")
+
+    return cache_http.repondre(
+        request, _cache_lectures, ("ics-prof", code), _construire,
+        media_type="text/calendar; charset=utf-8", cache_control=_ICS_CACHE_CONTROL,
+        entetes={"Content-Disposition": f'inline; filename="planning-{code}.ics"'},
     )
 
 
 @app.get("/ics/groupe/{group_id}.ics")
-def ics_groupe(group_id: str) -> Response:
+def ics_groupe(group_id: str, request: Request) -> Response:
     """Flux .ics abonnable pour UN groupe (cohorte complète : CM promo + TD
     + TP jumelé, mêmes séances que sur son lien personnel) — cf.
     `api/ics_feed.py`."""
@@ -1912,23 +2167,24 @@ def ics_groupe(group_id: str) -> Response:
     state = get_state()
     if not any(g.id == group_id for g in state.groups):
         raise HTTPException(404, f"Groupe {group_id} inconnu")
-    cohort = expand_group_filter(group_id, state.groups)
-    placements = [p for p in state.timetable if cohort.intersection(p.group_ids or [])]
-    items = _ics_items_for_placements(state, placements)
-    noms = _noms_enseignants(state)
-    group_labels = {g.id: g.label for g in state.groups}
-    label = group_labels.get(group_id, group_id)
-    parcours = next((g.parcours for g in state.groups if g.id == group_id), None)
-    sae_items = _ics_all_day_sae_items(state, parcours)
-    from cal_iut.api.ics_feed import build_ics
 
-    content = build_ics(items, label, f"groupe-{group_id}", group_labels, noms, sae_items)
-    return Response(
-        content=content, media_type="text/calendar; charset=utf-8",
-        headers={
-            "Content-Disposition": f'inline; filename="planning-{group_id}.ics"',
-            **_ICS_CACHE_HEADERS,
-        },
+    def _construire() -> bytes:
+        cohort = expand_group_filter(group_id, state.groups)
+        placements = [p for p in state.timetable if cohort.intersection(p.group_ids or [])]
+        items = _ics_items_for_placements(state, placements)
+        noms = _noms_enseignants(state)
+        group_labels = {g.id: g.label for g in state.groups}
+        label = group_labels.get(group_id, group_id)
+        parcours = next((g.parcours for g in state.groups if g.id == group_id), None)
+        sae_items = _ics_all_day_sae_items(state, parcours)
+        from cal_iut.api.ics_feed import build_ics
+
+        return build_ics(items, label, f"groupe-{group_id}", group_labels, noms, sae_items).encode("utf-8")
+
+    return cache_http.repondre(
+        request, _cache_lectures, ("ics-groupe", group_id), _construire,
+        media_type="text/calendar; charset=utf-8", cache_control=_ICS_CACHE_CONTROL,
+        entetes={"Content-Disposition": f'inline; filename="planning-{group_id}.ics"'},
     )
 
 
@@ -3233,6 +3489,7 @@ def creer_salle(body: CreateRoomRequest) -> RoomMeta:
     )
     custom_rooms.add_custom_room(salle)
     state.rooms = state.rooms + [salle]
+    revision.incrementer("salle")
     return RoomMeta(
         id=salle.id, label=salle.label, capacity=salle.capacity, room_type=salle.room_type.value,
         placement_auto=salle.placement_auto,
@@ -3257,6 +3514,7 @@ def modifier_salle(room_id: str, body: UpdateRoomRequest) -> RoomMeta:
     custom_rooms.set_room_override(room_id, placement_auto=body.placement_auto)
     salle_maj = salle.model_copy(update={"placement_auto": body.placement_auto})
     state.rooms = [salle_maj if r.id == room_id else r for r in state.rooms]
+    revision.incrementer("salle")
     return RoomMeta(
         id=salle_maj.id, label=salle_maj.label, capacity=salle_maj.capacity,
         room_type=salle_maj.room_type.value, placement_auto=salle_maj.placement_auto,
@@ -3271,7 +3529,14 @@ def _apres_ecriture_planning(session_id: str, action: str) -> None:
     controle_doublons_hebdo.py`) : au plus un contrôle par semaine ISO, pris
     au tout premier écrit de la semaine. Aucun des trois n'échoue jamais —
     une file Celcat, une sauvegarde ou un contrôle raté ne doit jamais faire
-    échouer le placement qui vient de réussir."""
+    échouer le placement qui vient de réussir.
+
+    Avance aussi la révision de l'état (`api/revision.py`) EN PREMIER :
+    c'est elle qui invalide les caches de lecture et prévient les autres
+    onglets ouverts (sondage de `GET /api/v1/version`). La faire après la
+    file Celcat laisserait une fenêtre où un collègue relit l'ancien état
+    alors que le nouveau est déjà en mémoire."""
+    revision.incrementer(f"{action}:{session_id}")
     try:
         from cal_iut.celcat.ops import apres_ecriture_planning
 
@@ -5543,6 +5808,7 @@ def valider_forcage_pedagogique(session_id: str) -> ForcagePedagogiqueResponse:
     d'erreur pour un état déjà atteint."""
     etait_en_attente = forced_pending.get(session_id) is not None
     forced_pending.clear(session_id)
+    revision.incrementer(f"forcage_valide:{session_id}")
     return ForcagePedagogiqueResponse(session_id=session_id, etait_en_attente=etait_en_attente)
 
 
@@ -5566,6 +5832,7 @@ def retirer_placement_force(session_id: str) -> ForcagePedagogiqueResponse:
     if state.current_run_id:
         get_repo().remove_current_placement(session_id)
     forced_pending.clear(session_id)
+    revision.incrementer(f"forcage_retire:{session_id}")
     return ForcagePedagogiqueResponse(session_id=session_id, etait_en_attente=True)
 
 
@@ -6157,6 +6424,12 @@ def controle_doublons_hebdo_executer() -> DoublonHebdoRunResponse:
     run = controle_doublons_hebdo.executer_maintenant(get_state())
     return DoublonHebdoRunResponse(**run)
 
+
+# API v1 en lecture seule (29/09/2026, cf. `api/v1.py`) — protégée par le
+# préfixe `/api` de `_PROTECTED_PREFIXES`, comme toute route générale.
+from cal_iut.api.v1 import router as _router_v1
+
+app.include_router(_router_v1)
 
 from cal_iut.mcp.http_rpc import handle_mcp_post
 from cal_iut.mcp.server import MCP_ASGI

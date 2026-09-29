@@ -98,6 +98,8 @@ def apply(
 
     from fastapi import HTTPException
 
+    from cal_iut.api import revision
+
     force_utilise = False
     try:
         for item in items:
@@ -106,6 +108,12 @@ def apply(
             _executer_item(item)
     except HTTPException as exc:
         return {"ok": False, "forced": False, "error": _fmt_http(exc)}
+    finally:
+        # Appels DIRECTS aux fonctions de route, hors HTTP protégé : le filet
+        # du middleware ne les voit pas, et l'op `seance` sans déplacement ne
+        # passe par aucun `_apres_ecriture_planning`. Dans `finally` : un
+        # échec au 3e item laisse les deux premiers appliqués.
+        revision.incrementer("mcp_apply")
 
     mcp_journal.append(_entree_journal(plan_id or _plan_id(items), force_utilise, items))
     return {"ok": True, "forced": force_utilise}
