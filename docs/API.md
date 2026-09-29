@@ -17,20 +17,21 @@ Documentation interactive générée (schémas exacts de chaque réponse) :
 ### Authentification
 
 Mêmes règles que tout le reste de l'API (préfixe `/api` protégé) — une de ces
-trois façons, au choix :
+deux façons, au choix :
 
-| Méthode | Comment | Variante reçue |
-|---|---|---|
-| Clé API | En-tête `Authorization: Bearer caliut_…` (créée dans l'onglet « Clé API » de l'interface) | complète |
-| Cookie de compte | Session ouverte par `POST /auth/login` | complète |
-| Lien personnel | Paramètre `?t=<n'importe quelle valeur non vide>` | publique |
+| Méthode | Comment |
+|---|---|
+| Clé API | En-tête `Authorization: Bearer caliut_…` (créée dans l'onglet « Clé API » de l'interface) |
+| Cookie de compte | Session ouverte par `POST /auth/login` |
 
 Sans rien de tout ça : `401 {"detail": "Authentification requise."}`.
 
-La **variante publique** retire ce qui n'a rien à faire sur une URL publique :
-les adresses mail des enseignants (`email` vaut `null`). Tout le reste est
-identique. Une clé API est liée à un compte : elle hérite de son rôle, et elle
-est révocable à tout moment depuis l'interface.
+Un **lien personnel public** (`?t=…`, celui envoyé aux enseignants et aux
+groupes) n'ouvre que ce que sa page affiche (`/app-state`, `/meta`,
+`/timetable`, `/ics/…`) et `GET /api/v1/version`, pour se remettre à jour —
+jamais le reste de l'API v1 (audit du 29/09/2026). Une clé API est liée à un
+compte : elle hérite de son rôle, et elle est révocable à tout moment depuis
+l'interface.
 
 ### Révision de l'état
 
@@ -169,7 +170,7 @@ curl --compressed -H "Authorization: Bearer $CLE" https://cal-iut-mmi.srko.fr/ap
  "nb_seances": 153, "cours": ["WR107", "WR110", "WR119"]}
 ```
 
-`email` vaut `null` sur un lien public (`?t=`). La liste comprend aussi les
+La liste comprend aussi les
 enseignants déclarés qui n'ont encore aucune séance (`nb_seances: 0`).
 
 `/seances` accepte les mêmes paramètres que `GET /api/v1/seances` (`semaine`,

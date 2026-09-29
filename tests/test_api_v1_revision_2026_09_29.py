@@ -276,11 +276,15 @@ def test_une_cle_api_recoit_la_variante_complete(client) -> None:
     assert reponse.json()["teacherEmails"]
 
 
-def test_v1_enseignants_sans_adresse_pour_un_lien_public(client) -> None:
+def test_v1_reservee_aux_comptes_sauf_la_version(client) -> None:
+    """Un lien perso public (`?t=`) ne lit que ce qu'affiche sa page (audit
+    du 29/09/2026, P0-2) : l'API v1 est pour les comptes et les clés API. Seul
+    le numéro de révision, que les pages publiques sondent, lui est ouvert."""
     complet = client.get("/api/v1/enseignants").json()
     assert any(e["email"] for e in complet)
-    public = TestClient(app).get("/api/v1/enseignants?t=MRI").json()
-    assert public and all(e["email"] is None for e in public)
+    anonyme = TestClient(app)
+    assert anonyme.get("/api/v1/enseignants?t=MRI").status_code == 401
+    assert anonyme.get("/api/v1/version?t=MRI").status_code == 200
 
 
 # ---------------------------------------------------------------------------
