@@ -102,6 +102,15 @@ async def mcp_bearer_middleware(request: Request, call_next) -> Response:
     principal = authentifier_bearer(auth[7:])
     if principal is None:
         return JSONResponse(status_code=401, content={"detail": "Jeton MCP invalide."})
+    from cal_iut.api.accounts import ROLE_ORDER
+
+    if principal.role not in ROLE_ORDER:
+        # Compte « Accès API » (`accounts.ROLE_API`) : sa clé ne lit que
+        # `/api/v1` — le MCP expose des outils d'ÉCRITURE du planning.
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Compte « Accès API » : le serveur MCP n'est pas ouvert à ce compte."},
+        )
     jeton = set_mcp_principal(principal)
     try:
         return await call_next(request)

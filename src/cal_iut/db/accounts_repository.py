@@ -5,7 +5,7 @@ que `PlanningRepository` (`db/repository.py`) : une classe fine autour d'une
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -73,7 +73,7 @@ class AccountRepository:
         `User.tokens`/`User.mcp_keys`, cf. `db/models.py`) : sans purger ces
         lignes d'abord, SQLAlchemy tente de les détacher en mettant leur FK à
         NULL et lève une `IntegrityError`. Un compte jamais activé n'a par
-        construction aucune `McpKey` (elle exige `require_role("read_only")`,
+        construction aucune `McpKey` (elle exige `accounts.require_gestion_cles()`,
         donc un compte `active`) ; le `delete` reste inoffensif si la liste
         est vide."""
         self.db.query(EmailToken).filter(EmailToken.user_id == user.id).delete(synchronize_session=False)
@@ -157,8 +157,8 @@ class AccountRepository:
             .count()
         )
 
-    def create_mcp_key(self, user_id: int, token_hash: str, prefix: str) -> McpKey:
-        cle = McpKey(user_id=user_id, token_hash=token_hash, prefix=prefix)
+    def create_mcp_key(self, user_id: int, token_hash: str, prefix: str, label: str | None = None) -> McpKey:
+        cle = McpKey(user_id=user_id, token_hash=token_hash, prefix=prefix, label=label)
         self.db.add(cle)
         self.db.commit()
         self.db.refresh(cle)
@@ -185,3 +185,22 @@ class AccountRepository:
     def touch_mcp_key(self, cle: McpKey) -> None:
         cle.last_used_at = datetime.now(UTC)
         self.db.commit()
+
+    def touch_mcp_key_si_ancien(self, key_id: int, intervalle_s: float) -> None:
+        """Date de dernière utilisation, au plus une écriture par
+        `intervalle_s` et par clé — pour les routes générales et `/api/v1`,
+        où une clé peut servir des centaines de fois par minute. UPDATE
+        direct, sans charger d'objet : ne touche aucun objet déjà chargé
+        par l'appelant dans une autre session."""
+        maintenant = datetime.now(UTC)
+        seuil = maintenant - timedelta(seconds=intervalle_s)
+        n = (
+            self.db.query(McpKey)
+            .filter(
+                McpKey.id == key_id,
+                (McpKey.last_used_at.is_(None)) | (McpKey.last_used_at < seuil.replace(tzinfo=None)),
+            )
+            .update({McpKey.last_used_at: maintenant}, synchronize_session=False)
+        )
+        if n:
+            self.db.commit()

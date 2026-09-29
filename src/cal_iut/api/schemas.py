@@ -84,8 +84,16 @@ class MeResponse(BaseModel):
 class McpKeyResponse(BaseModel):
     id: int
     prefix: str
+    # Nom libre donné à la création (« Script agenda », « Appli de Paul »),
+    # pour reconnaître une clé sans la révéler. `None` pour les clés
+    # d'avant le 29/09/2026.
+    nom: str | None = None
     created_at: str
     last_used_at: str | None = None
+
+
+class McpKeyCreateRequest(BaseModel):
+    nom: str | None = Field(default=None, max_length=60)
 
 
 class McpKeyCreatedResponse(McpKeyResponse):
@@ -111,7 +119,8 @@ class AdminUserListResponse(BaseModel):
 
 
 class AdminUserUpdateRequest(BaseModel):
-    role: Literal["read_only", "edit", "admin"] | None = None
+    # `api` = « Accès API » (29/09/2026, cf. `accounts.ROLE_API`).
+    role: Literal["read_only", "edit", "admin", "api"] | None = None
     status: Literal["active", "disabled"] | None = None
 
 

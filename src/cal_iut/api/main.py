@@ -89,6 +89,7 @@ from cal_iut.api.schemas import (
     LissageRequest,
     LoginRequest,
     McpKeyCreatedResponse,
+    McpKeyCreateRequest,
     McpKeyListResponse,
     McpKeyResponse,
     MeResponse,
@@ -396,6 +397,33 @@ def _lien_perso_autorise(request: Request) -> bool:
     return path in _LIEN_PERSO_CHEMINS or path.startswith(_LIEN_PERSO_PREFIXES)
 
 
+# Rôle « Accès API » (`accounts.ROLE_API`, 29/09/2026) : tout ce qu'il
+# peut atteindre, le reste est refusé en 403 par `require_auth` AVANT la
+# route — la plupart des lectures (`/app-state`, `/meta`, `/timetable`,
+# `/export/*`, `/reference/*`...) n'ont pas de `require_role` et ne sont
+# gardées que par ce middleware : c'est donc ici, et pas route par route,
+# que le périmètre doit être fermé. Vérifié sur la liste réelle des routes
+# par `tests/test_role_api_2026_09_29.py`.
+#   - cookie (l'appli) : ses clés, et la documentation de v1 ;
+#   - clé : les lectures de v1, rien d'autre (ni la gestion des clés, ni les
+#     routes internes, ni aucune écriture).
+_ROLE_API_COOKIE_CHEMINS = frozenset({"/auth/mcp-keys"})
+_ROLE_API_COOKIE_PREFIXES = ("/auth/mcp-keys/",)
+_ROLE_API_COOKIE_LECTURES = frozenset({"/api/v1/docs", "/api/v1/openapi.json"})
+_ROLE_API_CLE_PREFIXE = "/api/v1/"
+
+
+def _perimetre_role_api(request: Request, via_cle: bool) -> bool:
+    """`True` si un compte `api` peut atteindre cette requête."""
+    path = request.url.path
+    lecture = request.method in ("GET", "HEAD")
+    if via_cle:
+        return lecture and path.startswith(_ROLE_API_CLE_PREFIXE)
+    if path in _ROLE_API_COOKIE_CHEMINS or path.startswith(_ROLE_API_COOKIE_PREFIXES):
+        return True
+    return lecture and path in _ROLE_API_COOKIE_LECTURES
+
+
 def _routes_effectives(routes: list, prefixe: str = ""):
     """Toutes les routes, y compris celles d'un `APIRouter` inclus.
 
@@ -455,6 +483,13 @@ def _user_depuis_cle_api(request: Request) -> User | None:
     user = repo.get_by_id(cle.user_id)
     if user is None:
         return None
+    # Dernière utilisation (affichée dans l'écran des clés) : dans une AUTRE
+    # session, par un UPDATE direct, au plus une fois par minute et par clé
+    # — `user` ci-dessus, chargé dans `repo`, n'est pas touché.
+    try:
+        _account_repo().touch_mcp_key_si_ancien(cle.id, 60)
+    except Exception:  # noqa: BLE001 — une date d'affichage ne doit jamais refuser une requête
+        logger.exception("clé API : date de dernière utilisation non enregistrée")
     # PAS de `touch_mcp_key` ici : ça commit(), qui EXPIRE tous les objets
     # de la session (dont `user`) — `require_role`, appelé bien plus tard
     # dans la requête, retomberait sur un `DetachedInstanceError` dès que
@@ -487,6 +522,7 @@ async def require_auth(request: Request, call_next):
     user = accounts.utilisateur_depuis_jeton(
         _account_repo(), request.cookies.get(accounts.ACCOUNT_SESSION_COOKIE)
     )
+    via_cle = user is None
     if user is None:
         # Pas de cookie (ou cookie invalide) : une clé « caliut_… » créée
         # via /auth/mcp-keys authentifie aussi les routes générales,
@@ -507,7 +543,19 @@ async def require_auth(request: Request, call_next):
             status_code=403,
             content={"detail": "Compte en attente d'activation.", "status": user.status},
         )
+    if accounts.est_role_api(user) and not _perimetre_role_api(request, via_cle):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": (
+                    "Compte « Accès API » : lecture de l'API v1 avec une clé seulement."
+                    if via_cle
+                    else "Compte « Accès API » : cette page ne gère que vos clés d'accès à l'API."
+                )
+            },
+        )
     request.state.user = user
+    request.state.via_cle = via_cle
     return await call_next(request)
 
 
@@ -855,6 +903,7 @@ def _mcp_key_to_response(cle: object, *, token: str | None = None) -> McpKeyResp
     base = {
         "id": cle.id,
         "prefix": cle.prefix,
+        "nom": cle.label,
         "created_at": cle.created_at.isoformat() if cle.created_at else "",
         "last_used_at": cle.last_used_at.isoformat() if cle.last_used_at else None,
     }
@@ -863,15 +912,17 @@ def _mcp_key_to_response(cle: object, *, token: str | None = None) -> McpKeyResp
     return McpKeyResponse(**base)
 
 
-@app.get("/auth/mcp-keys", response_model=McpKeyListResponse, dependencies=[Depends(accounts.require_role("read_only"))])
+@app.get("/auth/mcp-keys", response_model=McpKeyListResponse, dependencies=[Depends(accounts.require_gestion_cles())])
 def auth_list_mcp_keys(request: Request) -> McpKeyListResponse:
     user: User = request.state.user
     repo = _account_repo()
     return McpKeyListResponse(keys=[_mcp_key_to_response(c) for c in repo.list_active_mcp_keys(user.id)])
 
 
-@app.post("/auth/mcp-keys", response_model=McpKeyCreatedResponse, dependencies=[Depends(accounts.require_role("read_only"))])
-def auth_create_mcp_key(request: Request) -> McpKeyCreatedResponse | JSONResponse:
+@app.post("/auth/mcp-keys", response_model=McpKeyCreatedResponse, dependencies=[Depends(accounts.require_gestion_cles())])
+def auth_create_mcp_key(
+    request: Request, body: McpKeyCreateRequest | None = None,
+) -> McpKeyCreatedResponse | JSONResponse:
     from cal_iut.api.mcp_keys import (
         MCP_MAX_ACTIVE_KEYS,
         generate_raw_mcp_token,
@@ -884,14 +935,15 @@ def auth_create_mcp_key(request: Request) -> McpKeyCreatedResponse | JSONRespons
     if repo.count_active_mcp_keys(user.id) >= MCP_MAX_ACTIVE_KEYS:
         return JSONResponse(
             status_code=409,
-            content={"message": f"Limite de {MCP_MAX_ACTIVE_KEYS} clés MCP atteinte. Révoquez-en une d'abord."},
+            content={"message": f"Limite de {MCP_MAX_ACTIVE_KEYS} clés API actives atteinte. Révoquez-en une d'abord."},
         )
     brut = generate_raw_mcp_token()
-    cle = repo.create_mcp_key(user.id, hash_mcp_token(brut), visible_prefix(brut))
+    nom = " ".join((body.nom or "").split()) if body is not None else ""
+    cle = repo.create_mcp_key(user.id, hash_mcp_token(brut), visible_prefix(brut), nom or None)
     return _mcp_key_to_response(cle, token=brut)
 
 
-@app.delete("/auth/mcp-keys/{key_id}", dependencies=[Depends(accounts.require_role("read_only"))])
+@app.delete("/auth/mcp-keys/{key_id}", dependencies=[Depends(accounts.require_gestion_cles())])
 def auth_revoke_mcp_key(key_id: int, request: Request) -> dict:
     user: User = request.state.user
     repo = _account_repo()
@@ -1341,6 +1393,13 @@ def variante_lecture(request: Request) -> str:
     Sert aussi de clé de cache : les deux variantes ne doivent JAMAIS se
     servir l'une à la place de l'autre (cf. `api/cache_http.py`)."""
     user = getattr(request.state, "user", None) or accounts.get_current_user(request, optional=True)
+    # Un compte « Accès API » ne lit aucune donnée par cookie : avec un lien
+    # perso `?t=` (qui passe le middleware sans poser `request.state.user`),
+    # son cookie ne doit pas débloquer la variante complète — il a la même
+    # chose que n'importe quel visiteur du lien. Par clé, il lit v1 en
+    # lecteur : `request.state.user` est posé, variante complète.
+    if user is not None and accounts.est_role_api(user) and not getattr(request.state, "via_cle", False):
+        return "public"
     return "complet" if user is not None and user.status == "active" else "public"
 
 

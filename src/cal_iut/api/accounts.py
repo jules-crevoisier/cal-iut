@@ -54,6 +54,30 @@ def cookie_secure() -> bool:
 
 ROLE_ORDER: dict[str, int] = {"read_only": 0, "edit": 1, "admin": 2}
 
+# Rôle « Accès API » (29/09/2026, demande du responsable du planning : « un
+# compte, des droits exprès, pour ceux qui ont besoin d'un token API : qui ne
+# voit pas les infos, qui peut juste créer un token, et qui ne voit pas les
+# autres tokens »). HORS de la hiérarchie ci-dessus, volontairement : le
+# mettre à 0 dans `ROLE_ORDER` le ferait passer tous les
+# `require_role("read_only")`, donc tout voir. `require_role` le refuse
+# partout ; son périmètre est posé une fois pour toutes par le middleware
+# `require_auth` (`api/main.py::_perimetre_role_api`) :
+#   - par cookie (l'appli) : ses propres clés (`/auth/mcp-keys`) et la
+#     documentation de v1 (`/api/v1/docs`, `/api/v1/openapi.json`), rien
+#     d'autre — aucun écran de données ;
+#   - par clé : `GET /api/v1/*` seulement, avec les droits d'un lecteur
+#     (`read_only`, cf. `ROLE_CLE_API`) ; ni routes internes, ni `/mcp`, ni
+#     aucune écriture.
+ROLE_API = "api"
+ROLES: tuple[str, ...] = ("read_only", "edit", "admin", ROLE_API)
+# Rôle avec lequel une clé d'un compte `api` lit le contenu de v1 : celui
+# d'un lecteur. Sert aux calculs de variante (`_role_au_moins` dans v1).
+ROLE_CLE_API = "read_only"
+
+
+def est_role_api(user: User | None) -> bool:
+    return user is not None and user.role == ROLE_API
+
 # Statuts qu'un compte JAMAIS activé peut porter — cf. `User.activated_at`
 # (`db/models.py`) : `None` tant que le compte n'est passé ni par
 # `mark_email_confirmed` (adresse `ADMIN_EMAILS`) ni par `activate`
@@ -218,7 +242,31 @@ def require_role(minimum: str) -> Callable[[Request], User]:
         user = getattr(request.state, "user", None) or get_current_user(request)
         if user.status != "active":
             raise HTTPException(403, "Compte en attente d'activation ou désactivé.")
-        if ROLE_ORDER.get(user.role, -1) < ROLE_ORDER[minimum]:
+        # `api` (et tout rôle inconnu) n'est dans aucun niveau : refusé,
+        # même pour `require_role("read_only")`.
+        if user.role not in ROLE_ORDER or ROLE_ORDER[user.role] < ROLE_ORDER[minimum]:
+            raise HTTPException(403, "Permissions insuffisantes pour cette action.")
+        return user
+
+    return checker
+
+
+def require_gestion_cles() -> Callable[[Request], User]:
+    """Gestion de SES clés API (`/auth/mcp-keys`) : tout compte actif, rôle
+    `api` compris — mais seulement depuis une session ouverte dans l'appli
+    (cookie), jamais avec une clé. Avant le 29/09/2026, une clé pouvait
+    lister, créer et révoquer les clés de son compte : une clé fuitée
+    s'en fabriquait une autre et survivait à sa propre révocation."""
+
+    def checker(request: Request) -> User:
+        user = getattr(request.state, "user", None) or get_current_user(request)
+        if user.status != "active":
+            raise HTTPException(403, "Compte en attente d'activation ou désactivé.")
+        if getattr(request.state, "via_cle", False):
+            raise HTTPException(
+                403, "Les clés API se gèrent depuis l'appli (session ouverte), pas avec une clé.",
+            )
+        if user.role not in ROLES:
             raise HTTPException(403, "Permissions insuffisantes pour cette action.")
         return user
 

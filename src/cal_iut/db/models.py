@@ -194,6 +194,9 @@ class McpKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Nom libre donné à la création (29/09/2026) — nullable : colonne ajoutée
+    # après coup par `_ajouter_colonnes_manquantes`, `None` pour les anciennes.
+    label: Mapped[str | None] = mapped_column(String(60), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="mcp_keys")
 

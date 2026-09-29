@@ -2671,6 +2671,9 @@ DESCRIPTION_OPENAPI = """API **en lecture seule** de l'emploi du temps MMI (IUT 
 
 - **Authentification** : en-tête `Authorization: Bearer caliut_…` (clé créée dans
   *Menu du compte → Clé API*), ou session ouverte dans l'appli (ce navigateur).
+  Besoin d'une clé sans compte dans l'appli ? Demandez à un administrateur un
+  compte **« Accès API »** : il ne voit aucune donnée dans l'appli, crée ses clés,
+  et ses clés lisent v1 avec les droits d'un compte lecture seule.
 - **Sonder** `GET /api/v1/version` (avec `If-None-Match`) et ne relire les données
   que quand `revision` change ; toute réponse porte un ETag et répond `304` sans
   corps si rien n'a changé. `GET /api/v1/export` = tout en un appel.
@@ -2694,7 +2697,8 @@ def schema_openapi_v1() -> dict:
     schema.setdefault("components", {})["securitySchemes"] = {
         "cleApi": {
             "type": "http", "scheme": "bearer", "bearerFormat": "caliut_…",
-            "description": "Clé API du compte (menu du compte → Clé API). Elle hérite du rôle du compte.",
+            "description": "Clé API du compte (menu du compte → Clé API). Elle hérite du rôle du compte ; "
+            "celle d'un compte « Accès API » lit v1 comme un compte lecture seule.",
         },
     }
     schema["security"] = [{"cleApi": []}]
