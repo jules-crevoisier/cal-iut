@@ -682,6 +682,117 @@ def cmd_prod(args: argparse.Namespace) -> int:
         return 1
 
 
+def _afficher_proposition(prop: dict) -> None:
+    """Rapport lisible d'une proposition de lissage (dict `Proposition.as_dict`)."""
+    def total(cle: str, cote: str) -> int:
+        return sum(int(m.get(cle) or 0) for m in prop[cote])
+
+    print(f"{prop['parcours']} — {prop['message']} ({prop['statut']}, {prop['duree_s']} s)")
+    print(f"  {'':18s}{'avant':>8s}{'après':>8s}")
+    for cle, libelle in (("cours_8h", "cours à 8h"), ("trous", "trous"), ("cours_17h", "cours à 17h"),
+                         ("journees_isolees", "journées à 1 cours")):
+        print(f"  {libelle:18s}{total(cle, 'avant'):8d}{total(cle, 'apres'):8d}")
+    par_semaine: dict[int, list[dict]] = {}
+    for d in prop["deplacements"]:
+        par_semaine.setdefault(d["vers"][0], []).append(d)
+    apres = {m["semaine"]: m for m in prop["apres"]}
+    for m in prop["avant"]:
+        a = apres.get(m["semaine"], m)
+        print(f"\n{m['libelle']} : charge/jour {m['charges']} → {a['charges']}")
+        for d in par_semaine.get(m["semaine"], []):
+            salle = f" [{d['salle']}]" if d.get("salle") else ""
+            print(f"    {d['course_code']:9s} {d['libelle_de']:>18s} → {d['libelle_vers']:<18s} "
+                  f"{'/'.join(d['enseignants'])}{salle}")
+    if prop.get("verification"):
+        print("\nCONTRE-VÉRIFICATION — conflits trouvés, proposition NON applicable :")
+        for v in prop["verification"]:
+            print(f"  - {v}")
+
+
+def cmd_lisser(args: argparse.Namespace) -> int:
+    """Lisse le planning d'une promo (cf. `api/lissage.py`) : propose, et
+    n'applique qu'avec `--appliquer`. `--prod` travaille sur la production
+    par son API (clé `CAL_IUT_PROD_API_KEY`), exactement comme l'écran « Lisser
+    une promo » de la Vue Promo."""
+    import json
+    import time as _time
+
+    if args.prod:
+        from dotenv import load_dotenv
+
+        from cal_iut.sync.prod import SyncError, prod_depuis_env
+
+        load_dotenv()
+        try:
+            with prod_depuis_env() as distante:
+                c = distante.client
+                c.timeout = 60.0
+                r = c.post("/placements/lissage", json={
+                    "parcours": args.parcours, "entre_semaines": not args.meme_semaine,
+                    "temps_max_s": args.temps,
+                })
+                if r.status_code != 200:
+                    print(f"Refus du serveur (HTTP {r.status_code}) : {r.text}", file=sys.stderr)
+                    return 1
+                job = r.json()["job_id"]
+                print(f"Calcul lancé en production ({job}), environ {int(args.temps) + 30} s…")
+                while True:
+                    _time.sleep(5)
+                    st = c.get(f"/placements/lissage/{job}").json()
+                    if st["status"] != "running":
+                        break
+                if st["status"] == "error":
+                    print(st.get("error"), file=sys.stderr)
+                    return 1
+                prop = st["proposition"]
+                _afficher_proposition(prop)
+                if args.json:
+                    Path(args.json).write_text(json.dumps(prop, ensure_ascii=False, indent=1), encoding="utf-8")
+                if not args.appliquer:
+                    print("\nSIMULATION — rien n'a été écrit. Relancer avec `--appliquer` pour appliquer.")
+                    return 0
+                if prop.get("verification"):
+                    return 1
+                r = c.post(f"/placements/lissage/{job}/appliquer", json={"exclure": []})
+                res = r.json()
+                print(f"\n{len(res.get('appliques', []))} déplacement(s) appliqué(s) en production.")
+                if res.get("echec"):
+                    print(f"Arrêt sur {res['echec']['session_id']} : {res['echec']['detail']}", file=sys.stderr)
+                    return 1
+                return 0
+        except SyncError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    from cal_iut.api import lissage
+    from cal_iut.api.main import charger_etat_applicatif
+    from cal_iut.api.state import get_state
+
+    charger_etat_applicatif()
+    etat = get_state()
+    try:
+        prop = lissage.proposer(
+            etat, args.parcours, entre_semaines=not args.meme_semaine, temps_max_s=args.temps,
+        )
+    except lissage.LissageErreur as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    _afficher_proposition(prop.as_dict())
+    if args.json:
+        Path(args.json).write_text(json.dumps(prop.as_dict(), ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    if not args.appliquer:
+        print("\nSIMULATION — rien n'a été écrit. Relancer avec `--appliquer` pour appliquer.")
+        return 0
+    if prop.verification:
+        return 1
+    res = lissage.appliquer(etat, prop)
+    print(f"\n{len(res.appliques)} déplacement(s) appliqué(s).")
+    if res.echec:
+        print(f"Arrêt sur {res.echec['session_id']} : {res.echec['detail']}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_celcat_reseau(args: argparse.Namespace) -> int:
     """Diagnostic d'accès à Celcat, qui vit derrière le VPN de l'URCA.
 
@@ -1213,6 +1324,18 @@ def main() -> int:
     )
     prod_parser.add_argument("--detail", type=int, default=10, help="lignes affichées par catégorie")
     prod_parser.set_defaults(func=cmd_prod)
+
+    lisser_parser = sub.add_parser(
+        "lisser",
+        help="Lisser le planning d'une promo (pas de 8h, pas de trou, journées équilibrées) — simulation par défaut",
+    )
+    lisser_parser.add_argument("--parcours", default="BUT3-DEV-FC")
+    lisser_parser.add_argument("--temps", type=float, default=90.0, help="secondes de calcul (défaut 90)")
+    lisser_parser.add_argument("--meme-semaine", action="store_true", help="aucune séance ne change de semaine")
+    lisser_parser.add_argument("--prod", action="store_true", help="travailler sur la production (clé API du .env)")
+    lisser_parser.add_argument("--appliquer", action="store_true", help="écrire réellement (sinon simulation)")
+    lisser_parser.add_argument("--json", default=None, help="enregistrer la proposition dans ce fichier")
+    lisser_parser.set_defaults(func=cmd_lisser)
 
     reseau_parser = sub.add_parser(
         "celcat-reseau", help="Vérifier l'accès à Celcat (VPN AnyConnect)"
