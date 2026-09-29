@@ -25,6 +25,8 @@ Thumbs.db
 coverage.json
 /export/
 data/state/.secret_key
+# Sauvegardes quotidiennes de la base (P1-10) : jamais dans le depot.
+data/state/sauvegardes_db/
 data/state/mail_log.json
 data/state/forced_pending.json
 data/state/custom_rooms.json

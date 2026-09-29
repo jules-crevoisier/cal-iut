@@ -303,6 +303,33 @@ supprimée ou, pire, conservée à tort.
 | Un enseignant n'a aucun cours | `cal-iut audit` — « un enseignant porte du volume mais n'a aucune séance ». |
 | Le résultat change à chaque exécution | C'est normal (§ 3). Gardez le meilleur : `timetable_best.json`. |
 
+### Restaurer la base
+
+La base (`data/state/cal-iut.db` : comptes, clés API, tâches, placements
+enregistrés, historique) est sauvegardée une fois par jour, au premier
+enregistrement du jour ou au démarrage, dans
+`data/state/sauvegardes_db/cal-iut-AAAA-MM-JJ.db`. Les 30 derniers jours sont
+gardés. Pour en prendre une tout de suite : `cal-iut sauvegarder-base`.
+
+Pour revenir à la sauvegarde d'un jour donné :
+
+```bash
+# 1. arrêter l'application (le service web ET le worker Celcat)
+# 2. mettre la base actuelle de côté, sans l'effacer
+mv data/state/cal-iut.db data/state/cal-iut.db.avant-restauration
+rm -f data/state/cal-iut.db-wal data/state/cal-iut.db-shm
+# 3. remettre la sauvegarde choisie à sa place
+cp data/state/sauvegardes_db/cal-iut-2026-09-28.db data/state/cal-iut.db
+# 4. vérifier qu'elle est saine (doit afficher « ok »), puis redémarrer
+sqlite3 data/state/cal-iut.db "PRAGMA integrity_check"
+```
+
+Tout ce qui a été fait depuis ce jour-là est perdu dans la base ; les
+instantanés JSON des placements (`data/state/sauvegardes/`) peuvent aider à le
+retrouver. Ces sauvegardes sont sur le même disque que la base : elles
+protègent d'une erreur, pas de la perte du serveur. Copiez le dossier ailleurs
+de temps en temps (ou activez la sauvegarde du volume dans Dokploy).
+
 ---
 
 ## 8. Formuler les contraintes des enseignants

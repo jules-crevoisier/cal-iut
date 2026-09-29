@@ -31,6 +31,7 @@ from cal_iut.api import (
     mailer,
     revision,
     sauvegardes,
+    sauvegardes_db,
     session_overrides,
 )
 from cal_iut.api.regen import RegenError, regen_and_persist, resolve_semestre
@@ -999,6 +1000,8 @@ def startup() -> None:
     # où personne n'a encore rien modifié — `_apres_ecriture_planning` ne
     # tourne alors jamais, sans ce filet le jour n'aurait aucun instantané.
     sauvegardes.snapshot_si_necessaire(get_state())
+    # Même filet pour la base SQLite elle-même (P1-10).
+    sauvegardes_db.sauvegarder_si_necessaire(get_state().db_path)
     # Contrôle doublons de la semaine manquant (Jules Crevoisier, 25/09/2026)
     # — même filet, même raison : un redémarrage un lundi où personne n'a
     # encore rien modifié ne doit pas laisser passer la semaine sans
@@ -3790,6 +3793,7 @@ def _apres_ecriture_planning(session_id: str, action: str) -> None:
     except Exception:  # noqa: BLE001 — jamais d'échec du placement déjà réussi, mais tracé (P1-6)
         logger.exception("File Celcat : hook après écriture en échec (%s %s)", action, session_id)
     sauvegardes.snapshot_si_necessaire(get_state())
+    sauvegardes_db.sauvegarder_si_necessaire(get_state().db_path)
     controle_doublons_hebdo.verifier_si_necessaire(get_state())
 
 
