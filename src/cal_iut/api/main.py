@@ -130,7 +130,7 @@ from cal_iut.calendar.academic import semester_week_offset, week_status
 from cal_iut.celcat.fichiers import FichierEtatIllisible
 from cal_iut.db.accounts_repository import AccountRepository
 from cal_iut.db.models import CurrentPlacement, User
-from cal_iut.db.session import get_db
+from cal_iut.db.session import get_db, portee_sessions
 from cal_iut.export.formatter import build_export_rows, to_csv, to_json
 from cal_iut.export.html_view import build_and_render
 from cal_iut.feedback.weights import analyze_corrections, apply_learned_weights
@@ -432,6 +432,27 @@ async def require_auth(request: Request, call_next):
 from cal_iut.mcp.auth import mcp_bearer_middleware
 
 app.middleware("http")(mcp_bearer_middleware)
+
+
+class _FermerSessionsDb:
+    """Referme en fin de requête toutes les `Session` SQLAlchemy ouvertes
+    pendant celle-ci (`get_repo()`, `_account_repo()`...), jamais refermées
+    par leurs appelants (audit du 29/09/2026, P1-9, cf. `db/session.py`).
+    ASGI pur et ajouté EN DERNIER, donc le plus à l'extérieur : il englobe
+    `require_auth` et la réponse entière, flux compris."""
+
+    def __init__(self, app_asgi) -> None:
+        self.app = app_asgi
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        with portee_sessions():
+            await self.app(scope, receive, send)
+
+
+app.add_middleware(_FermerSessionsDb)
 
 # `require_admin_session` (mot de passe partagé, `auth.verify_session_token`)
 # a existé ici avant le système de comptes du 31/08/2026 — remplacé
