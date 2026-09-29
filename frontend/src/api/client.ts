@@ -1266,3 +1266,78 @@ export function fetchControleDoublonsHebdo(): Promise<DoublonHebdoRun | null> {
 export function executerControleDoublonsHebdo(): Promise<DoublonHebdoRun> {
   return request<DoublonHebdoRun>("/controles/doublons/hebdo", { method: "POST" });
 }
+
+// ── Lissage d'un parcours (cf. `src/cal_iut/api/lissage.py`) ──────────────
+// Calcul en tâche de fond (~1 min 30) : on le lance, on sonde son statut,
+// puis on applique — éventuellement sans certains déplacements décochés.
+
+export interface MesureLissage {
+  semaine: number;
+  libelle: string;
+  seances: number;
+  cours_8h: number;
+  cours_9h30: number;
+  cours_17h: number;
+  trous: number;
+  journees_isolees: number;
+  charge_max: number;
+  charges: number[];
+}
+
+export interface DeplacementLissage {
+  session_id: string;
+  course_code: string;
+  enseignants: string[];
+  de: [number, number, number];
+  vers: [number, number, number];
+  libelle_de: string;
+  libelle_vers: string;
+  salle: string | null;
+}
+
+export interface PropositionLissage {
+  parcours: string;
+  statut: string;
+  message: string;
+  semaines: number[];
+  deplacements: DeplacementLissage[];
+  avant: MesureLissage[];
+  apres: MesureLissage[];
+  duree_s: number;
+  verification: string[];
+}
+
+export interface StatutLissage {
+  job_id: string;
+  status: "running" | "done" | "error" | "applied";
+  parcours: string;
+  error?: string;
+  proposition?: PropositionLissage;
+  application?: ResultatLissage;
+}
+
+export interface ResultatLissage {
+  appliques: string[];
+  echec: { session_id: string; vers: number[]; detail: unknown } | null;
+  restants: string[];
+}
+
+export function lancerLissage(parcours: string, entreSemaines: boolean): Promise<{ job_id: string }> {
+  return request<{ job_id: string }>("/placements/lissage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ parcours, entre_semaines: entreSemaines }),
+  });
+}
+
+export function statutLissage(jobId: string): Promise<StatutLissage> {
+  return request<StatutLissage>(`/placements/lissage/${encodeURIComponent(jobId)}`);
+}
+
+export function appliquerLissage(jobId: string, exclure: string[]): Promise<ResultatLissage> {
+  return request<ResultatLissage>(`/placements/lissage/${encodeURIComponent(jobId)}/appliquer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ exclure }),
+  });
+}

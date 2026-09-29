@@ -50,6 +50,7 @@ import { nomComplet } from "../utils/nomEnseignant";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
 import { CreerEvenementModal } from "../components/CreerEvenementModal";
+import { LissageModal } from "../components/LissageModal";
 import { WeekBar } from "../components/WeekBar";
 import { WeekStepper } from "../components/WeekStepper";
 import { APlacerView } from "./APlacerView";
@@ -215,6 +216,7 @@ export function PromoView({
   // Évènement hors maquette (réunion, conférence...) — retour utilisateur
   // 07/09/2026, avec horaire réel optionnel depuis le 23/09/2026.
   const [modaleEvenement, setModaleEvenement] = useState(false);
+  const [modaleLissage, setModaleLissage] = useState(false);
 
   const appliquerSalle = async (sessionId: string, roomId: string, ancienne?: string | null) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
@@ -976,6 +978,16 @@ export function PromoView({
                     Séances à placer
                   </button>
                   {seanceModaleEnabled && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => setModaleLissage(true)}
+                      title="Réorganiser les semaines à venir d'une promo : pas de 8h, pas de trou, journées équilibrées"
+                    >
+                      Lisser une promo…
+                    </button>
+                  )}
+                  {seanceModaleEnabled && (
                     <button type="button" className="btn btn--sm" onClick={() => setModaleEvenement(true)}>
                       Nouvel évènement
                     </button>
@@ -1058,6 +1070,13 @@ export function PromoView({
             )}
           </div>
 
+          {modaleLissage && (
+            <LissageModal
+              parcoursInitial={filtreParcoursSel}
+              onFermer={() => setModaleLissage(false)}
+              onApplique={() => onSeanceChangee?.()}
+            />
+          )}
           {modaleEvenement && (
             <CreerEvenementModal
               payload={payload}

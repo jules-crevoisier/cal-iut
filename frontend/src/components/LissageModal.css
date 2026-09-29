@@ -1,0 +1,163 @@
+/* Fenêtre « Lisser le planning d'une promo » (cf. LissageModal.tsx). */
+
+.panel.confirmmodal.lissage {
+  width: min(880px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  gap: 14px;
+}
+
+.lissage-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lissage-tete h3:focus {
+  outline: none;
+}
+
+.lissage-choix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+}
+
+.lissage-choix label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.lissage-choix label.lissage-case {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  min-height: var(--control-h);
+}
+
+.lissage-erreur {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--bad) 35%, var(--border));
+  border-radius: var(--radius);
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
+
+.lissage-erreur ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.lissage-attente {
+  padding: 24px 0;
+  text-align: center;
+}
+
+.lissage-attente p {
+  margin: 4px 0;
+}
+
+.lissage-relecture {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lissage-resume {
+  margin: 0;
+}
+
+table.ref.lissage-totaux {
+  width: auto;
+  min-width: min(100%, 520px);
+}
+
+table.ref.lissage-totaux .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.ref.lissage-totaux td.lissage-mieux {
+  color: var(--good-text);
+}
+
+table.ref.lissage-totaux td.lissage-moins {
+  color: var(--warn-text);
+}
+
+.lissage-outils {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lissage-outils .muted {
+  margin-right: auto;
+}
+
+.lissage-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lissage-semaine {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.lissage-semaine h4 {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+}
+
+.lissage-semaine ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lissage-semaine li label {
+  display: grid;
+  grid-template-columns: auto 5.5em 10.5em auto 11em 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.lissage-semaine li.lissage-exclu label {
+  opacity: 0.5;
+}
+
+.lissage-semaine li.lissage-exclu .lissage-vers {
+  text-decoration: line-through;
+}
+
+.lissage-code {
+  font-weight: 600;
+}
+
+.lissage-de {
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .lissage-semaine li label {
+    grid-template-columns: auto 1fr;
+  }
+
+  .lissage-semaine li label > :nth-child(n + 3) {
+    grid-column: 2;
+  }
+}
