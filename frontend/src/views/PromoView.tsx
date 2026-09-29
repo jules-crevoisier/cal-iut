@@ -1446,7 +1446,7 @@ export function PromoView({
               <p className="promo-raccourcis">
                 <kbd>←</kbd> <kbd>→</kbd> jour · <kbd>Maj</kbd>+<kbd>←</kbd> <kbd>→</kbd> semaine · <kbd>T</kbd>{" "}
                 aujourd'hui · <kbd>Échap</kbd> abandonner le placement · <kbd>Ctrl</kbd>+<kbd>Z</kbd> annuler
-                {dragEnabled ? " · glisser sur une séance : échange · sur une barre de semaine : changer de semaine" : ""}
+                {dragEnabled ? " · glisser sur une séance : échange · sur une barre de semaine : autre semaine" : ""}
               </p>
             )}
           </div>
