@@ -1001,3 +1001,57 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
   background: var(--matiere-fond-sombre);
   border-left-color: var(--matiere-barre-sombre);
 }
+
+
+/* ══════════════ Gabarit de page (refonte v2, cf. docs/DESIGN.md) ══════════════ */
+
+.page-outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 36px;
+}
+
+.page-outils label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.page-outils-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.page-identite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+.page-identite h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.page-identite-faits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.page-identite-faits strong {
+  color: var(--ink);
+  font-weight: 600;
+}
