@@ -235,41 +235,6 @@ code, kbd, .mono {
   flex: none;
 }
 
-.toolbar-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  flex: 1;
-  /* Item flex sans `min-width:0` = plancher fixé à la largeur intrinsèque du
-     contenu (ici ~530px, tous les champs mis bout à bout) — `flex-wrap`
-     sur SES PROPRES enfants ne peut alors jamais s'activer puisque le
-     conteneur ne rétrécit jamais en dessous de ce plancher, et c'est toute
-     la page qui déborde horizontalement. Même bug que `.calendar-section`
-     (cf. juste au-dessus), trouvé en audit mobile le 11/08/2026. */
-  min-width: 0;
-}
-
-.toolbar-controls label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.toolbar-controls select {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  padding: 6px 10px;
-  font-family: var(--font);
-  font-size: 0.875rem;
-  min-width: 120px;
-}
-
 .btn {
   font-family: var(--font);
   font-size: 0.875rem;
@@ -397,25 +362,9 @@ a.btn {
   cursor: pointer;
 }
 
-/* ── Layout ── */
-.layout {
-  display: grid;
-  /* 260px et non 300px : la colonne latérale ne porte plus que DiffPanel/
-     SessionPanel (QualityPanel/RegenPanel retirés, retour utilisateur
-     28/08/2026) — moins de contenu, place rendue à la grille elle-même. */
-  grid-template-columns: 1fr 260px;
-  gap: 0;
-  flex: 1;
-}
-
 /* 1023.98px et non 1024px : un appareil pile à 1024 de large (iPad
    paysage) doit tomber du côté "colonne fixe ≥1024px" décrit plus haut, pas
    du tiroir (audit a11y du 27/08/2026). */
-@media (max-width: 1023.98px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-}
 @media (max-width: 1023.98px) {
 
   /* Sous 1024px, la colonne fixe devient un tiroir : bande d'accès (bouton
@@ -505,32 +454,6 @@ a.btn {
   }
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.section-header h2 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.section-header .count {
-  font-size: 0.8rem;
-  color: var(--muted);
-  font-weight: 400;
-  margin-left: 8px;
-}
-
-.section-header-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .badge {
   display: inline-block;
   font-size: 0.65rem;
@@ -542,10 +465,6 @@ a.btn {
 .badge.eval {
   background: var(--danger);
   color: #fff;
-}
-
-.badge.lock {
-  background: var(--border);
 }
 
 .badge.warn {
@@ -594,15 +513,13 @@ a.btn {
 
 /* Retour visuel copie / envoi — le libellé « Copié ✓ » ne suffisait pas :
    sur un tableau dense, la couleur se voit avant même de relire le bouton. */
-.btn.is-copied,
-.subtabbtn.is-copied {
+.btn.is-copied {
   background: var(--good-soft);
   border-color: var(--good);
   color: var(--good-text);
 }
 
-.btn.is-copy-failed,
-.subtabbtn.is-copy-failed {
+.btn.is-copy-failed {
   background: var(--bad-soft);
   border-color: var(--bad);
   color: var(--bad-text);
@@ -784,10 +701,6 @@ a.btn {
   color: var(--muted);
 }
 
-.kbd {
-  opacity: 0.65;
-}
-
 .sidenav-scrim {
   display: none;
 }
@@ -935,30 +848,6 @@ a.btn {
   font-weight: 600;
 }
 
-.panel.controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 16px 24px;
-}
-
-.panel.controls label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.panel.controls select {
-  min-width: 200px;
-}
-
-.weekfield {
-  flex: 1 1 320px;
-  min-width: 260px;
-}
-
 /* ══════════════ Liens publics : bandeau lecture seule ══════════════
    Une ligne : QUI (titre) à gauche, le réglage des couleurs à droite, la
    mention « lecture seule » en petit dessous. L'ancien bandeau empilait
@@ -1070,34 +959,6 @@ a.btn {
   font-weight: 600;
 }
 
-.promogrid th > div:first-child {
-  font-weight: 700;
-}
-
-.subtabbtn {
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 7px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--muted);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.subtabbtn.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.subtabbtn.small {
-  padding: 3px 9px;
-  font-size: 0.72rem;
-}
-
 .ref-table-wrap {
   overflow-x: auto;
   min-width: 0;
@@ -1162,11 +1023,6 @@ table.ref tbody tr:hover {
 .pill.warn { background: var(--warn-soft); color: var(--warn-text); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .pill.bad { background: var(--bad-soft); color: var(--bad-text); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
 .pill.dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-/* Variante "grande" (`PageHeader` — statut solveur) : le `.pill` de base
-   ci-dessus est en réalité la taille "mini" du HTML (déjà utilisée partout
-   ailleurs en React, ex. badge "À traiter") — `.lg` restaure le format
-   d'origine (padding 6px 12px, pas de fond/bordure gris par défaut). */
-.pill.lg { padding: 6px 12px; font-size: 0.78rem; letter-spacing: 0.02em; }
 
 /* ══════════════ En-tête de page (PageHeader) ══════════════ */
 
@@ -1184,26 +1040,6 @@ header.top .titles { display: flex; align-items: baseline; flex-wrap: wrap; gap:
 header.top h1 { margin: 0; font-size: 1.2rem; font-weight: 600; }
 header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-  padding: 0 24px 18px;
-}
-.stat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px 16px;
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.stat .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
-.stat .value { font-size: 1.5rem; font-weight: 600; }
-.stat .value small { font-size: 0.95rem; color: var(--muted); font-weight: 500; }
-
 /* ══════════════ Mobile ══════════════ */
 
 @media (max-width: 760px) {
@@ -1212,31 +1048,15 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 @media (max-width: 760px) {
   header.top { padding: 12px 12px 0; flex-direction: column; align-items: flex-start; }
 }
-@media (max-width: 760px) {
-  .stats { padding: 0 12px 12px; }
-}
+
 @media (max-width: 760px) {
   .sidenav { width: min(88vw, 280px); }
-}
-@media (max-width: 760px) {
-  .searchopenbtn .kbd { display: none; }
-}
-@media (max-width: 760px) {
-  /* `.weekfield { flex: 1 1 320px }` fixe une base de 320px sur l'axe
-     PRINCIPAL du flex parent — en ligne (desktop) c'est une largeur, mais
-     `.panel.controls` passe en colonne ici, donc ce même 320px devient une
-     HAUTEUR minimale : sans le override, un grand vide apparaissait sous les
-     points de la WeekBar avant les boutons de partage. */
-  .panel.controls { flex-direction: column; align-items: stretch; }
-}
-@media (max-width: 760px) {
-  .panel.controls .weekfield { flex-basis: auto; min-width: 0; width: 100%; }
 }
 
 /* ══════════════ Impression ══════════════ */
 
 @media print {
-  .navtoggle-bar, .sidenav, .panel.controls, .no-print, .weekbar, .searchoverlay, .sharebar {
+  .navtoggle-bar, .sidenav, .no-print, .weekbar, .searchoverlay, .sharebar {
     display: none !important;
   }
 }
@@ -1311,7 +1131,6 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 @media (pointer: coarse) {
   .navbtn,
   .navtoggle,
-  .subtabbtn,
   .btn {
     min-height: 44px;
   }
@@ -1415,7 +1234,7 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 /* Champs de la modale « Nouvelle salle » — les <input> n'héritaient
    d'aucun style (l'app n'avait jusqu'ici que des <select> stylés), ils
    sortaient donc en contrôles bruts du navigateur au milieu d'une modale
-   soignée. Reprend l'apparence des <select> de `.panel.controls`. */
+   soignée. Reprend l'apparence des <select> des barres d'outils. */
 .newroom-field {
   display: flex;
   flex-direction: column;
@@ -1508,8 +1327,7 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
    `type-cm` / `type-td` / `type-tp` gardent la main, à l'identique. */
 .couleurs-matiere .sessiongrid-block,
 .couleurs-matiere .promo-chip,
-.couleurs-matiere .td-block,
-.agenda-chip.couleurs-matiere {
+.couleurs-matiere .td-block {
   /* `--variante-matiere` (0, 1 ou 2) sépare deux matières de teintes
      voisines : sans elle, 96 écrans sur 234 portaient deux couleurs
      indistinguables ; avec, il en reste 26. Cf. `utils/couleursMatiere.ts`
@@ -1535,9 +1353,7 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .couleurs-matiere .sessiongrid-block,
   :root:not([data-theme="light"]) .couleurs-matiere .promo-chip,
-  :root:not([data-theme="light"]) .couleurs-matiere .td-block,
-
-    :root:not([data-theme="light"]) .agenda-chip.couleurs-matiere {
+  :root:not([data-theme="light"]) .couleurs-matiere .td-block {
     background: var(--matiere-fond-sombre);
     border-left-color: var(--matiere-barre-sombre);
   }
@@ -1545,9 +1361,7 @@ header.top p { margin: 0; color: var(--muted); font-size: 0.85rem; }
 
 :root[data-theme="dark"] .couleurs-matiere .sessiongrid-block,
 :root[data-theme="dark"] .couleurs-matiere .promo-chip,
-:root[data-theme="dark"] .couleurs-matiere .td-block,
-
-:root[data-theme="dark"] .agenda-chip.couleurs-matiere {
+:root[data-theme="dark"] .couleurs-matiere .td-block {
   background: var(--matiere-fond-sombre);
   border-left-color: var(--matiere-barre-sombre);
 }

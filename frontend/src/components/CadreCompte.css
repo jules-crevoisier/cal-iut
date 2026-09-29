@@ -134,12 +134,7 @@
   color: var(--warn-text);
 }
 
-.compte-aide--ok {
-  color: var(--good-text);
-}
-
-.loginpanel .compte-corps > .btn,
-.loginpanel .compte-action {
+.loginpanel .compte-corps > .btn {
   width: 100%;
   min-height: 40px;
   margin-top: 2px;

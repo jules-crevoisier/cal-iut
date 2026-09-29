@@ -241,24 +241,6 @@
   margin-bottom: 12px;
 }
 
-/* ── « Tous les liens » ── */
-.teacherlinks-entete {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin-bottom: 12px;
-}
-
-.teacherlinks-entete h3 {
-  margin: 0;
-}
-
-.teacherlinks-entete input {
-  width: min(280px, 100%);
-}
-
 .teacherlinks {
   display: flex;
   flex-direction: column;
