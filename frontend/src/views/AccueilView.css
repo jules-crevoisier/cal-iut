@@ -426,6 +426,37 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Cinq tuiles sur deux colonnes : la dernière prend la ligne entière
+     plutôt que de rester seule à gauche. */
+  .accueil-tuile:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .accueil-charge table {
+    border-spacing: 2px;
+  }
+
+  .accueil-case {
+    min-width: 40px;
+    height: 40px;
+    padding: 4px;
+  }
+
+  .accueil-case-barres {
+    display: none;
+  }
+
+  .accueil-case-valeur {
+    text-align: center;
+    font-size: 0.78rem;
+  }
+
+  .accueil-charge th[scope="row"] {
+    white-space: normal;
+    font-size: 0.74rem;
+    padding-right: 4px;
+  }
+
   .accueil-colonnes {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }

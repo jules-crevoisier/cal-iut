@@ -421,3 +421,19 @@
     width: min(360px, calc(100vw - 24px));
   }
 }
+
+@media (max-width: 560px) {
+  .topbar-semaine-dates,
+  .topbar-semaine-statut,
+  .topbar-synchro-texte {
+    display: none;
+  }
+
+  .topbar-semaine-nom {
+    white-space: nowrap;
+  }
+
+  .topbar-titre h1 {
+    font-size: 1rem;
+  }
+}
