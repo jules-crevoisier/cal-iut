@@ -14,6 +14,7 @@ from cal_iut.db.models import (
     ScheduleException,
     SolverPlacement,
     Tache,
+    TacheImage,
     TeacherPreference,
 )
 
@@ -446,12 +447,69 @@ class PlanningRepository:
         return row
 
     def delete_tache(self, tache_id: int) -> bool:
+        """Supprime la tâche ET les lignes de ses images (les fichiers, eux,
+        sont retirés du disque par la route, cf. `api/pieces_jointes.py`)."""
         row = self.db.get(Tache, tache_id)
         if row is None:
             return False
+        self.db.query(TacheImage).filter(TacheImage.tache_id == tache_id).delete(synchronize_session=False)
         self.db.delete(row)
         self.db.commit()
         return True
+
+    # Images jointes aux tâches (30/09/2026) — cf. `db/models.py::TacheImage`.
+
+    def images_de_tache(self, tache_id: int) -> list[TacheImage]:
+        return (
+            self.db.query(TacheImage)
+            .filter(TacheImage.tache_id == tache_id)
+            .order_by(TacheImage.id)
+            .all()
+        )
+
+    def images_par_tache(self) -> dict[int, list[TacheImage]]:
+        """Toutes les images, groupées par tâche — une seule requête pour
+        tout le tableau (`GET /taches`)."""
+        groupes: dict[int, list[TacheImage]] = {}
+        for image in self.db.query(TacheImage).order_by(TacheImage.id).all():
+            groupes.setdefault(image.tache_id, []).append(image)
+        return groupes
+
+    def get_image_tache(self, tache_id: int, image_id: int) -> TacheImage | None:
+        image = self.db.get(TacheImage, image_id)
+        return image if image is not None and image.tache_id == tache_id else None
+
+    def ajouter_image_tache(
+        self,
+        tache_id: int,
+        fichier: str,
+        nom: str,
+        type_mime: str,
+        taille: int,
+        largeur: int | None,
+        hauteur: int | None,
+        cree_par: str,
+    ) -> TacheImage:
+        row = TacheImage(
+            tache_id=tache_id, fichier=fichier, nom=nom, type_mime=type_mime, taille=taille,
+            largeur=largeur, hauteur=hauteur, cree_par=cree_par,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    def supprimer_image_tache(self, tache_id: int, image_id: int) -> str | None:
+        """Supprime la ligne et rend le nom du fichier stocké (que l'appelant
+        retire du disque), `None` si l'image n'existe pas pour cette tâche.
+        Nom lu AVANT le `commit`, qui détache l'objet supprimé."""
+        image = self.get_image_tache(tache_id, image_id)
+        if image is None:
+            return None
+        fichier = image.fichier
+        self.db.delete(image)
+        self.db.commit()
+        return fichier
 
     def export_placements_json(self, run_id: int | None = None) -> str:
         run = self.db.get(PlanningRun, run_id) if run_id else self.get_latest_run()

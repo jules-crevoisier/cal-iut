@@ -27,6 +27,9 @@ coverage.json
 data/state/.secret_key
 # Sauvegardes quotidiennes de la base (P1-10) : jamais dans le depot.
 data/state/sauvegardes_db/
+# Images jointes aux taches (30/09/2026) : captures d'ecran de l'equipe,
+# propres a chaque deploiement, jamais dans le depot.
+data/state/pieces_jointes/
 # Fichiers de verrou inter-processus des etats Celcat (P1-14).
 data/state/*.lock
 data/state/mail_log.json

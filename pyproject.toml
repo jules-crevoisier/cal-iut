@@ -19,6 +19,10 @@ dependencies = [
     "python-dotenv>=1.0",
     "mcp>=1.9",
     "argon2-cffi>=23.1",
+    # Envoi d'images sur les tâches (`POST /taches/{id}/images`, multipart) —
+    # déjà installé comme dépendance de `mcp`, déclaré ici parce que l'appli
+    # s'en sert directement (`request.form()`).
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

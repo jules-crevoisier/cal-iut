@@ -16,6 +16,14 @@ Restauration : cf. `GUIDE.md`, « Restaurer la base ».
 Ces fichiers restent sur le même volume que la base : ils protègent d'une
 erreur de manipulation ou d'une base abîmée, pas de la perte du volume. Les
 copier hors du serveur reste à faire (sauvegarde de volume Dokploy, rclone).
+
+Images jointes aux tâches (30/09/2026) : EXCLUES, volontairement. La copie
+contient leur table (`taches_images` : nom, type, taille), pas leurs octets,
+qui restent dans `data/state/pieces_jointes/` (jusqu'à 40 Mo par tâche : les
+copier chaque jour sur 30 jours multiplierait la taille du volume). Une base
+restaurée peut donc citer une image absente du disque (lue en 404, affichée
+« Image indisponible ») — cf. `api/pieces_jointes.py` et `GUIDE.md`,
+« Restaurer la base ».
 """
 
 from __future__ import annotations

@@ -30,6 +30,7 @@ from cal_iut.api import (
     forced_pending,
     limiteur,
     mailer,
+    pieces_jointes,
     revision,
     sauvegardes,
     sauvegardes_db,
@@ -119,6 +120,7 @@ from cal_iut.api.schemas import (
     SignupResponse,
     SlotSuggestionResponse,
     SolveRequest,
+    ImageTacheResponse,
     TacheCreateRequest,
     TacheResponse,
     TacheUpdateRequest,
@@ -2042,7 +2044,15 @@ def delete_exception(exception_id: int) -> dict[str, bool]:
     return {"deleted": True}
 
 
-def _tache_to_response(row) -> TacheResponse:
+def _image_tache_to_response(image) -> ImageTacheResponse:
+    return ImageTacheResponse(
+        id=image.id, nom=image.nom, type=image.type_mime, taille=image.taille,
+        largeur=image.largeur, hauteur=image.hauteur, cree_par=image.cree_par,
+        cree_le=image.cree_le.isoformat(), url=f"/taches/{image.tache_id}/images/{image.id}",
+    )
+
+
+def _tache_to_response(row, images: list | None = None) -> TacheResponse:
     return TacheResponse(
         id=row.id, titre=row.titre, description=row.description, colonne=row.colonne, ordre=row.ordre,
         enseignant_code=row.enseignant_code, concerne=row.concerne,
@@ -2055,6 +2065,7 @@ def _tache_to_response(row) -> TacheResponse:
         date_fin=row.date_fin.isoformat() if row.date_fin else None,
         cree_par=row.cree_par, cree_le=row.cree_le.isoformat(), maj_le=row.maj_le.isoformat(),
         fait_le=row.fait_le.isoformat() if row.fait_le else None,
+        images=[_image_tache_to_response(i) for i in images or []],
     )
 
 
@@ -2094,7 +2105,8 @@ def create_tache(body: TacheCreateRequest, request: Request) -> TacheResponse:
 @app.get("/taches", response_model=list[TacheResponse])
 def list_taches() -> list[TacheResponse]:
     repo = get_repo()
-    return [_tache_to_response(r) for r in repo.list_taches()]
+    images = repo.images_par_tache()
+    return [_tache_to_response(r, images.get(r.id)) for r in repo.list_taches()]
 
 
 @app.patch("/taches/{tache_id}", response_model=TacheResponse, dependencies=[Depends(accounts.require_role("edit"))])
@@ -2139,17 +2151,176 @@ def update_tache(tache_id: int, body: TacheUpdateRequest) -> TacheResponse:
     row = repo.update_tache(tache_id, **champs)
     assert row is not None
     revision.incrementer("tache")
-    return _tache_to_response(row)
+    return _tache_to_response(row, repo.images_de_tache(tache_id))
 
 
 @app.delete("/taches/{tache_id}", dependencies=[Depends(accounts.require_role("edit"))])
 def delete_tache(tache_id: int) -> dict[str, bool]:
     repo = get_repo()
-    ok = repo.delete_tache(tache_id)
-    if not ok:
-        raise HTTPException(404, "Tâche introuvable.")
+    with pieces_jointes.verrou:
+        ok = repo.delete_tache(tache_id)
+        if not ok:
+            raise HTTPException(404, "Tâche introuvable.")
+        # Lignes des images supprimées avec la tâche (`repository.
+        # delete_tache`) ; les fichiers ici, dossier entier.
+        pieces_jointes.supprimer_dossier(tache_id)
     revision.incrementer("tache")
     return {"deleted": True}
+
+
+# ── Images jointes aux tâches (30/09/2026) ──────────────────────────────
+#
+# Cf. `api/pieces_jointes.py` (vérification sur les octets, nettoyage des
+# métadonnées, stockage dans le volume, limites). Droits = ceux des tâches :
+# lecture pour tout compte actif qui lit `GET /taches` (jamais un lien
+# public `?t=`, jamais un compte « Accès API » par cookie — cf.
+# `_LIEN_PERSO_CHEMINS` et `_perimetre_role_api`, qui ne les ouvrent pas),
+# ajout et suppression pour `edit`/`admin`. Une clé API lit les images par
+# `/api/v1/taches/{id}/images/{image_id}` (`api/v1.py`).
+
+
+def _entetes_image(image) -> dict[str, str]:
+    return {
+        "Content-Disposition": pieces_jointes.content_disposition(image.nom),
+        "X-Content-Type-Options": "nosniff",
+        # Le contenu d'un identifiant ne change jamais (identifiants jamais
+        # réattribués, cf. `db/models.py::TacheImage`) : un jour de cache
+        # NAVIGATEUR (`private` : jamais un proxy partagé).
+        "Cache-Control": "private, max-age=86400",
+        # Ouverte seule dans un onglet, l'image ne peut rien exécuter ni
+        # charger (défense en plus du type vérifié et de `nosniff`).
+        "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+        "Cross-Origin-Resource-Policy": "same-origin",
+    }
+
+
+def servir_image_tache(tache_id: int, image_id: int):
+    """Réponse fichier d'une image de tâche — partagée avec `api/v1.py`."""
+    from fastapi.responses import FileResponse
+
+    image = get_repo().get_image_tache(tache_id, image_id)
+    if image is None:
+        raise HTTPException(404, "Image introuvable.")
+    if image.type_mime not in pieces_jointes.TYPES_ACCEPTES:
+        raise HTTPException(404, "Image introuvable.")
+    try:
+        fichier = pieces_jointes.chemin(tache_id, image.fichier)
+    except ValueError:
+        raise HTTPException(404, "Image introuvable.") from None
+    if not fichier.is_file():
+        # Base restaurée sans le volume, fichier retiré à la main… (cf.
+        # docstring de `api/pieces_jointes.py`, « Sauvegardes »).
+        raise HTTPException(404, "Fichier de l'image introuvable sur le serveur.")
+    return FileResponse(fichier, media_type=image.type_mime, headers=_entetes_image(image))
+
+
+def _enregistrer_image_tache(tache_id: int, contenu: bytes, nom_client: str | None, auteur: str) -> TacheResponse:
+    repo = get_repo()
+    if repo.get_tache(tache_id) is None:
+        raise HTTPException(404, "Tâche introuvable.")
+    try:
+        image = pieces_jointes.analyser(contenu)
+    except pieces_jointes.ImageRefusee as exc:
+        raise HTTPException(exc.statut, exc.message) from None
+    with pieces_jointes.verrou:
+        # Relue sous le verrou, dans une session neuve (la précédente
+        # resservirait l'objet déjà chargé) : une tâche supprimée entre-temps
+        # ne reçoit pas de fichier orphelin.
+        repo = get_repo()
+        if repo.get_tache(tache_id) is None:
+            raise HTTPException(404, "Tâche introuvable.")
+        existantes = repo.images_de_tache(tache_id)
+        if len(existantes) >= pieces_jointes.MAX_IMAGES_PAR_TACHE:
+            raise HTTPException(
+                409, f"Cette tâche a déjà {pieces_jointes.MAX_IMAGES_PAR_TACHE} images : retirez-en une d'abord."
+            )
+        total = sum(i.taille for i in existantes) + len(image.contenu)
+        if total > pieces_jointes.TAILLE_MAX_TOTALE_PAR_TACHE:
+            raise HTTPException(
+                413,
+                "Images trop lourdes pour une seule tâche : "
+                f"{pieces_jointes.libelle_taille(pieces_jointes.TAILLE_MAX_TOTALE_PAR_TACHE)} au total au maximum.",
+            )
+        fichier = pieces_jointes.ecrire(tache_id, image.contenu, image.extension)
+        try:
+            repo.ajouter_image_tache(
+                tache_id=tache_id, fichier=fichier, nom=pieces_jointes.nom_affichable(nom_client, image.extension),
+                type_mime=image.type_mime, taille=len(image.contenu), largeur=image.largeur,
+                hauteur=image.hauteur, cree_par=auteur,
+            )
+        except Exception:
+            pieces_jointes.supprimer(tache_id, fichier)
+            raise
+    revision.incrementer("tache")
+    return _tache_to_response(repo.get_tache(tache_id), repo.images_de_tache(tache_id))
+
+
+@app.post(
+    "/taches/{tache_id}/images", response_model=TacheResponse,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+async def ajouter_image_tache(tache_id: int, request: Request) -> TacheResponse:
+    """Une image par requête, `multipart/form-data`, champ `fichier`. Rend la
+    tâche à jour (liste des images comprise).
+
+    Corps lu à la main (et non par un paramètre `UploadFile`) : FastAPI
+    lirait tout le corps AVANT tout contrôle, sans limite de taille. Ici la
+    taille annoncée est vérifiée d'abord, puis au plus `TAILLE_MAX_IMAGE + 1`
+    octets du fichier sont lus. Derrière nginx, `client_max_body_size`
+    (9m sur cette seule route) coupe de toute façon avant."""
+    from starlette.concurrency import run_in_threadpool
+    from starlette.datastructures import UploadFile as _FichierRecu
+
+    longueur = request.headers.get("content-length")
+    if longueur is None:
+        raise HTTPException(411, "Envoi sans taille annoncée (en-tête Content-Length manquant).")
+    try:
+        octets = int(longueur)
+    except ValueError:
+        raise HTTPException(400, "En-tête Content-Length invalide.") from None
+    if octets > pieces_jointes.TAILLE_MAX_REQUETE:
+        raise HTTPException(
+            413, f"Image trop lourde : {pieces_jointes.libelle_taille(pieces_jointes.TAILLE_MAX_IMAGE)} au maximum."
+        )
+    if not request.headers.get("content-type", "").startswith("multipart/form-data"):
+        raise HTTPException(415, "Envoi attendu en multipart/form-data, champ « fichier ».")
+    formulaire = await request.form(max_files=1, max_fields=4)
+    try:
+        recu = formulaire.get("fichier")
+        if not isinstance(recu, _FichierRecu):
+            raise HTTPException(422, "Champ « fichier » manquant.")
+        contenu = await recu.read(pieces_jointes.TAILLE_MAX_IMAGE + 1)
+        nom_client = recu.filename
+    finally:
+        await formulaire.close()
+    if len(contenu) > pieces_jointes.TAILLE_MAX_IMAGE:
+        raise HTTPException(
+            413, f"Image trop lourde : {pieces_jointes.libelle_taille(pieces_jointes.TAILLE_MAX_IMAGE)} au maximum."
+        )
+    user: User = request.state.user
+    return await run_in_threadpool(_enregistrer_image_tache, tache_id, contenu, nom_client, user.email)
+
+
+@app.get("/taches/{tache_id}/images/{image_id}")
+def lire_image_tache(tache_id: int, image_id: int):
+    return servir_image_tache(tache_id, image_id)
+
+
+@app.delete(
+    "/taches/{tache_id}/images/{image_id}", response_model=TacheResponse,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+def supprimer_image_tache(tache_id: int, image_id: int) -> TacheResponse:
+    repo = get_repo()
+    with pieces_jointes.verrou:
+        fichier = repo.supprimer_image_tache(tache_id, image_id)
+        if fichier is None:
+            raise HTTPException(404, "Image introuvable.")
+        pieces_jointes.supprimer(tache_id, fichier)
+    revision.incrementer("tache")
+    tache = repo.get_tache(tache_id)
+    assert tache is not None
+    return _tache_to_response(tache, repo.images_de_tache(tache_id))
 
 
 def _exception_to_response(row) -> ExceptionResponse:

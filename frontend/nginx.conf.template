@@ -71,6 +71,31 @@ server {
         try_files $uri $uri/ @backend;
     }
 
+    # ENVOI D'IMAGES SUR UNE TÂCHE (30/09/2026) — `POST /taches/{id}/images`.
+    # Partout ailleurs, `client_max_body_size` garde sa valeur par défaut
+    # (1m) : aucune autre route n'a besoin de plus, et ouvrir plus grand
+    # partout offrirait des gros corps de requête à n'importe quelle route.
+    # 9m = une image de 8 Mo au plus (`api/pieces_jointes.py::
+    # TAILLE_MAX_IMAGE`) + les en-têtes du multipart. Le backend revérifie
+    # lui-même la taille annoncée et la taille lue.
+    #
+    # Bloc de proxy COMPLET ici (même contenu que `@backend`), pas un
+    # `try_files … @backend` : la taille autorisée est contrôlée dans le bloc
+    # qui a reçu la requête, et un saut vers un bloc nommé ne la recontrôle
+    # pas de façon fiable.
+    location ~ ^/taches/[0-9]+/images/?$ {
+        client_max_body_size 9m;
+        resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+        resolver_timeout 5s;
+        set $cible ${BACKEND_URL};
+        proxy_pass $cible$request_uri;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location @backend {
         # RÉSOLUTION DNS À CHAQUE REQUÊTE, pas une seule fois au démarrage.
         #

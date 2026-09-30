@@ -258,6 +258,38 @@ class Tache(Base):
     fait_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class TacheImage(Base):
+    """Image jointe à une tâche du kanban (30/09/2026) — cf.
+    `api/pieces_jointes.py` pour la vérification, le nettoyage et le
+    stockage. Le fichier vit dans le volume (`data/state/pieces_jointes/
+    taches/<tache_id>/<fichier>`) ; cette ligne n'en garde que les
+    métadonnées. `fichier` = nom GÉNÉRÉ (uuid + extension du type réel),
+    jamais le nom envoyé par le navigateur, qui n'est gardé (nettoyé) que
+    dans `nom`, pour l'affichage.
+
+    Nouvelle table : créée au démarrage par `create_all` (`db/session.py::
+    init_db`), comme toute table absente. `sqlite_autoincrement` : un
+    identifiant n'est JAMAIS réattribué après une suppression — l'URL d'une
+    image (`/taches/{id}/images/{image_id}`) est mise en cache par le
+    navigateur, elle ne doit pas un jour désigner une autre image.
+    Pas de clé étrangère en cascade (SQLite sans `PRAGMA foreign_keys`) :
+    `repository.delete_tache` supprime les lignes, la route les fichiers."""
+
+    __tablename__ = "taches_images"
+    __table_args__ = ({"sqlite_autoincrement": True},)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tache_id: Mapped[int] = mapped_column(ForeignKey("taches.id"), index=True)
+    fichier: Mapped[str] = mapped_column(String(64))
+    nom: Mapped[str] = mapped_column(String(200))
+    type_mime: Mapped[str] = mapped_column(String(32))
+    taille: Mapped[int] = mapped_column(Integer)
+    largeur: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hauteur: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cree_par: Mapped[str] = mapped_column(String(255))
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class TeacherPreference(Base):
     """Préférences apprises par enseignant/matière."""
 

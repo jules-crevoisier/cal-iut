@@ -211,6 +211,11 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
     from cal_iut.api import sauvegardes_db
 
     monkeypatch.setattr(sauvegardes_db, "SAUVEGARDES_DB_DIR", tmp_path / "sauvegardes_db")
+    # Images jointes aux tâches (30/09/2026) : jamais dans le vrai
+    # `data/state/pieces_jointes/` du dépôt.
+    from cal_iut.api import pieces_jointes
+
+    monkeypatch.setattr(pieces_jointes, "_racine", lambda: tmp_path / "pieces_jointes" / "taches")
     # Contrôle hebdomadaire des doublons (Jules Crevoisier, 25/09/2026) —
     # `_apres_ecriture_planning` en déclenche un à chaque test qui écrit un
     # placement (au plus un par semaine ISO), jamais isolé sinon aurait

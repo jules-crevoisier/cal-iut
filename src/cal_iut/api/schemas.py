@@ -605,6 +605,22 @@ class TacheUpdateRequest(BaseModel):
     _valider_priorite = field_validator("priorite", mode="before")(_valider_priorite_tache)
 
 
+class ImageTacheResponse(BaseModel):
+    """Image jointe à une tâche (30/09/2026) — cf. `api/pieces_jointes.py`."""
+
+    id: int
+    nom: str
+    type: str  # "image/png" | "image/jpeg" | "image/webp" | "image/gif"
+    taille: int  # octets, après nettoyage des métadonnées
+    largeur: int | None = None
+    hauteur: int | None = None
+    cree_par: str
+    cree_le: str
+    # Adresse de lecture (`GET /taches/{id}/images/{image_id}`), à utiliser
+    # telle quelle comme `src` d'une balise `<img>`.
+    url: str
+
+
 class TacheResponse(BaseModel):
     id: int
     titre: str
@@ -621,6 +637,7 @@ class TacheResponse(BaseModel):
     cree_le: str
     maj_le: str
     fait_le: str | None = None
+    images: list[ImageTacheResponse] = []
 
 
 class RegenRequest(BaseModel):

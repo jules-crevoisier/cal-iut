@@ -599,6 +599,17 @@ class ModificationsV1(BaseModel):
     modifications: list[ModificationV1]
 
 
+class ImageTacheV1(BaseModel):
+    id: int
+    nom: str = Field(description="Nom d'origine du fichier (nettoyé), pour l'affichage.")
+    type: Literal["image/png", "image/jpeg", "image/webp", "image/gif"]
+    taille: int = Field(description="Taille en octets.")
+    largeur: int | None
+    hauteur: int | None
+    cree_le: str
+    url: str = Field(description="Lecture du fichier avec la même clé : `GET /api/v1/taches/{id}/images/{image_id}`.")
+
+
 class TacheV1(BaseModel):
     id: int
     titre: str
@@ -614,6 +625,7 @@ class TacheV1(BaseModel):
     cree_le: str
     maj_le: str
     fait_le: str | None
+    images: list[ImageTacheV1] = Field(default_factory=list, description="Images jointes (captures d'écran…).")
 
 
 class JourSansCoursV1(BaseModel):
@@ -2043,6 +2055,14 @@ def _taches(colonne: str | None = None, categorie: str | None = None, enseignant
             id=r.id, titre=r.titre, description=r.description, colonne=r.colonne, ordre=r.ordre,
             enseignant=r.enseignant_code, concerne=r.concerne, categorie=r.categorie, priorite=r.priorite,
             date_debut=r.date_debut, date_fin=r.date_fin, cree_le=r.cree_le, maj_le=r.maj_le, fait_le=r.fait_le,
+            # Sans `cree_par` non plus (adresse de compte), comme la carte.
+            images=[
+                ImageTacheV1(
+                    id=i.id, nom=i.nom, type=i.type, taille=i.taille, largeur=i.largeur, hauteur=i.hauteur,
+                    cree_le=i.cree_le, url=f"/api/v1/taches/{r.id}/images/{i.id}",
+                )
+                for i in r.images
+            ],
         ))
     return sortie
 
@@ -2052,6 +2072,10 @@ _EXEMPLE_TACHES = [{
     "colonne": "en_cours", "ordre": 2.0, "enseignant": "MRI", "concerne": "Jules", "categorie": "edt",
     "priorite": "urgente", "date_debut": "2026-10-12", "date_fin": "2026-10-14",
     "cree_le": "2026-09-28T08:12:03", "maj_le": "2026-09-29T09:40:11", "fait_le": None,
+    "images": [{
+        "id": 7, "nom": "capture-2026-09-29-09h38.png", "type": "image/png", "taille": 184233,
+        "largeur": 1440, "hauteur": 900, "cree_le": "2026-09-29T09:38:52", "url": "/api/v1/taches/12/images/7",
+    }],
 }]
 
 
@@ -2066,8 +2090,25 @@ def taches(
     enseignant: str | None = Query(None, description="Code enseignant."),
 ) -> Response:
     """Les cartes du tableau de suivi de l'équipe (onglet Tâches). L'auteur
-    d'une carte n'est pas exposé (c'est une adresse de compte)."""
+    d'une carte n'est pas exposé (c'est une adresse de compte). Chaque carte
+    liste ses images ; leur contenu se lit à `images[].url`."""
     return _repondre(request, lambda _v: _taches(colonne, categorie, enseignant))
+
+
+@router.get(
+    "/taches/{tache_id}/images/{image_id}", tags=_TAGS_SUIVI, summary="Image jointe à une tâche",
+    response_class=Response,
+    responses={
+        200: {"content": {t: {} for t in ("image/png", "image/jpeg", "image/webp", "image/gif")},
+              "description": "Le fichier, avec son type réel."},
+        404: {"description": "Tâche ou image inconnue, ou fichier absent du serveur."},
+    },
+)
+def image_tache(tache_id: int, image_id: int) -> Response:
+    """Le fichier d'une image jointe (PNG, JPEG, WebP ou GIF, métadonnées
+    retirées à l'envoi). Mêmes droits que `/taches` : une clé qui lit les
+    tâches lit leurs images."""
+    return _main().servir_image_tache(tache_id, image_id)
 
 
 # ── Calendrier ──────────────────────────────────────────────────────────
