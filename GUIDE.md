@@ -1,574 +1,447 @@
-# Guide de reprise — produire les emplois du temps MMI
+# Guide d'utilisation de cal-iut
 
-Ce guide s'adresse à la personne qui reprend l'outil sans l'avoir écrit. Il ne
-suppose aucune connaissance du code ni du solveur. Suivez-le dans l'ordre.
+Ce guide explique comment se servir de l'application, écran par écran.
+Il est pour les personnes qui consultent ou corrigent le planning :
+secrétariat, responsables, enseignants.
+Les tâches d'administration (comptes, Celcat, sauvegardes) sont dans [docs/ADMIN.md](docs/ADMIN.md).
 
-> Le `README.md` explique comment l'outil fonctionne à l'intérieur. Ce
-> guide-ci explique seulement comment s'en servir.
+**Sommaire**
 
----
+1. [Se connecter](#1-se-connecter)
+2. [Se repérer dans l'écran](#2-se-repérer-dans-lécran)
+3. [Accueil](#3-accueil)
+4. [Vue Semaine](#4-vue-semaine)
+5. [Vue Enseignant](#5-vue-enseignant)
+6. [Vue Promo : déplacer et placer les séances](#6-vue-promo--déplacer-et-placer-les-séances)
+7. [Vue TD / TP, Vue Cours, Vue Salle](#7-vue-td--tp-vue-cours-vue-salle)
+8. [Salles libres](#8-salles-libres)
+9. [Partager un planning](#9-partager-un-planning)
+10. [Référence](#10-référence)
+11. [Contraintes](#11-contraintes)
+12. [À traiter](#12-à-traiter)
+13. [Tâches](#13-tâches)
+14. [Rechercher, thème, compte](#14-rechercher-thème-compte)
+15. [Questions fréquentes](#15-questions-fréquentes)
 
-## 0. En trois lignes
+## 1. Se connecter
 
-L'outil lit des fichiers officiels (maquette, progression, contraintes des
-enseignants, calendrier), en déduit toutes les séances à placer, puis cherche un
-emploi du temps qui respecte les règles. Vous n'écrivez jamais d'emploi du temps
-à la main : vous **corrigez les données d'entrée** et vous **relancez**.
+### Avec un compte
 
----
+1. Ouvrir l'adresse de l'appli.
+2. Saisir **Email** et **Mot de passe**, puis cliquer sur **Se connecter**.
 
-## 1. Installation (une seule fois)
+Pas encore de compte ? Cliquer sur **Créer un compte**, puis **S'inscrire**.
+Un mail de confirmation arrive : cliquer sur son lien.
+L'écran **En attente d'activation** s'affiche ensuite.
+Un administrateur doit vous donner un rôle.
+Une fois prévenu, cliquer sur **Vérifier à nouveau**.
 
-Il faut **Python 3.13**. Ouvrez PowerShell dans le dossier du projet :
+Mot de passe perdu ? Cliquer sur **Mot de passe oublié ?** et suivre le mail reçu.
 
-```powershell
-py -3.13 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-```
+| Rôle | Ce qu'il permet |
+|---|---|
+| Lecture seule | Consulter tout le planning |
+| Édition | Consulter et modifier le planning, les tâches, les données à compléter |
+| Admin | Tout, plus les comptes, Celcat, les sauvegardes et le trafic |
+| Accès API | Aucune donnée dans l'appli : seulement créer ses clés d'accès (voir [docs/API.md](docs/API.md)) |
 
-Puis l'interface web (facultatif mais recommandé) :
+### Sans compte : le lien personnel
 
-```powershell
-cd frontend
-npm install
-npm run build
-cd ..
-```
+Chaque enseignant et chaque groupe d'étudiants a un **lien personnel**.
+Il ouvre directement son planning, sans compte ni mot de passe, en lecture seule.
+On y voit **En cours** ou **Prochain cours**, la semaine et ses heures.
+Les flèches ← → changent de semaine ; la touche T revient à la semaine en cours.
+Sur téléphone, la grille s'affiche jour par jour.
 
-Vérifiez que tout est en place :
+Deux liens publics existent aussi : **Vue Promo — accès public** et **Occupation des salles — accès public**.
+Tous ces liens se trouvent dans **Référence**, onglet **Liens & partage** (voir [section 10](#10-référence)).
 
-```powershell
-cal-iut doctor
-```
+## 2. Se repérer dans l'écran
 
-Cette commande liste ce qui va et ce qui manque, **et vous dit exactement quelle
-commande taper ensuite**. Si vous ne savez pas quoi faire, c'est toujours elle
-qu'il faut relancer.
+**À gauche**, la navigation, dans cet ordre :
+**Accueil**, **Vue Semaine**, **Vue Enseignant**, **Vue Promo**, **Vue TD / TP**,
+**Référence**, **Contraintes**, **À traiter**, **Tâches**.
+Les administrateurs voient en plus **Comptes**, **Celcat**, **Sauvegardes**, **Trafic**.
+Le bouton en bas replie la navigation en icônes seules.
+En haut de la navigation, **Rechercher…** ouvre la recherche (Ctrl K).
+En bas, votre nom ouvre le menu du compte.
 
----
+**En haut**, la barre affiche le nom de l'écran et **la semaine affichée**.
+Cette semaine est partagée : elle reste la même quand on change d'écran.
 
-## 2. Les fichiers que VOUS fournissez
+- Les flèches à gauche et à droite passent à la semaine précédente ou suivante.
+- Un clic sur le nom de la semaine (« Semaine 6 ») ouvre la liste de toutes les semaines.
+  Elle indique « vacances », « cette semaine » ou le nombre de séances.
+- **Aujourd'hui** revient à la semaine en cours.
+- « sem. 40 » rappelle le numéro de semaine du calendrier.
 
-Tout se joue dans le dossier `contraintes_update/`. Ce sont les seuls fichiers
-que vous éditez, et ils viennent tous de l'extérieur (Google Sheets exportés en
-CSV, ou exports du serveur MMI).
+Le planning se met à jour tout seul quand un collègue le modifie (environ toutes les 30 secondes).
+Si le serveur ne répond plus, **Hors ligne** s'affiche près de votre nom.
 
-| Fichier | Ce qu'il contient | D'où il vient |
+## 3. Accueil
+
+L'Accueil résume la semaine affichée.
+
+- **Chiffres en tête** : **Séances cette semaine**, **À corriger**, **Doublons cette semaine**,
+  **Séances non placées**, **Tâches ouvertes**. Un clic ouvre l'écran concerné.
+- **Charge de la semaine par promo** : une case par promo et par jour.
+  Plus la case est foncée, plus la journée est pleine. Un clic ouvre ce jour dans la Vue Promo.
+- **Séances par semaine** : un clic sur une barre change de semaine.
+- **À corriger en priorité** : les points les plus graves ; **Tout voir** ouvre À traiter.
+- **Tâches de l'équipe** : les tâches ouvertes, les urgentes d'abord.
+- **Raccourcis** : **Déplacer des séances cette semaine**, **Placer les séances manquantes**,
+  **Liens à envoyer aux enseignants**.
+
+## 4. Vue Semaine
+
+La Vue Semaine montre le planning d'une semaine, en lecture.
+Pour déplacer une séance, utiliser la [Vue Promo](#6-vue-promo--déplacer-et-placer-les-séances).
+
+1. Dans **Afficher par**, choisir **Groupe**, **Enseignant** ou **Salle**.
+2. Choisir l'année, le parcours, puis le groupe (ou l'enseignant, ou la salle).
+   Sans enseignant ni salle choisi, un annuaire s'affiche avec les chiffres de la semaine.
+3. Cliquer sur une séance : son détail s'affiche à droite.
+
+Dans le détail d'une séance :
+
+- **Modifier dans la Vue Promo** ouvre le bon jour dans la Vue Promo.
+- **Verrouiller ce créneau** fige la séance : elle ne peut plus être déplacée.
+
+> **Attention :** l'appli n'a pas de bouton pour déverrouiller une séance.
+> Ne verrouiller que ce qui est définitif.
+
+Le panneau **Modifications et export** liste les séances déplacées à la main.
+Un clic sur une ligne affiche sa semaine.
+**Exporter en CSV** et **Exporter en JSON** téléchargent le planning.
+Le réglage **Couleurs** choisit **Couleurs par type** (CM, TD, TP) ou **Couleurs par matière**.
+
+Raccourcis : Maj+← et Maj+→ changent de semaine, T revient à aujourd'hui.
+
+## 5. Vue Enseignant
+
+Sans enseignant choisi, l'écran montre l'**annuaire** des enseignants.
+On peut le filtrer (nom, code, adresse) et le trier.
+Le filtre **Afficher** montre par exemple **Adresse mail manquante** ou **Contrainte non respectée**.
+Cliquer sur un nom ouvre sa **fiche**.
+
+La fiche d'un enseignant contient :
+
+- son nom, son code (ex. KBR), son mail et ses heures ;
+- **En cours** ou **Prochain cours**, avec **Voir dans la grille** ;
+- la grille de la semaine et, au-dessus, les heures de chaque semaine ;
+- à droite, **Contrainte déclarée** (le texte qu'il a écrit, ses indisponibilités,
+  ses absences), **Ses matières** et ses séances **Non placées** ;
+- en bas, **Toutes ses interventions du semestre**, filtrables par **Matière** et **À venir seulement**.
+
+Les boutons de partage (lien, agenda, image, mail) sont décrits en [section 9](#9-partager-un-planning).
+**Retour à l'annuaire** revient à la liste.
+Dans la fiche, ← et → changent de semaine, T revient à aujourd'hui.
+
+Le bouton **Nouvel intervenant** est réservé aux administrateurs (voir [docs/ADMIN.md](docs/ADMIN.md)).
+
+## 6. Vue Promo : déplacer et placer les séances
+
+La Vue Promo montre toutes les promotions sur une même grille, **un jour à la fois**.
+C'est ici qu'on déplace les séances (rôle Édition ou Admin).
+
+### Se déplacer et filtrer
+
+- Choisir le jour avec **Lun.** à **Ven.**
+- Filtrer avec **Année**, **Parcours** et **Enseignant** ; **Tout afficher** retire les filtres.
+  Les filtres restent mémorisés.
+- En tête, quatre chiffres : **Séances cette semaine**, **À corriger**, **Non placées**, **Tâches ouvertes**.
+- Chaque carte de séance montre le code, la matière, la salle et l'enseignant.
+
+### Déplacer une séance
+
+1. Glisser la carte vers une autre case de sa colonne.
+   Pendant le glisser, les cases possibles sont encadrées (vert : libre, orange : conflit).
+2. Relâcher. Si tout va bien, la séance est déplacée.
+3. Un message confirme le déplacement (« WR101 déplacée : … → … »).
+
+Pour changer de **jour**, cliquer sur le nom de la promo en tête de colonne.
+Sa semaine complète s'ouvre : y glisser la séance sur le bon jour.
+Pour changer de **semaine**, glisser la carte sur le ruban des semaines.
+La séance attend alors dans la colonne **À placer & déplacer**, rubrique **En cours de déplacement** :
+cliquer sa carte, puis une case de la grille.
+
+### Échanger deux séances
+
+Glisser une séance **sur** une autre séance, puis confirmer **Échanger**.
+Les deux séances prennent la place l'une de l'autre.
+
+### Changer la salle
+
+1. Cliquer sur le nom de la salle, sur la carte.
+2. Choisir une salle dans la liste (sa capacité est indiquée).
+
+Si la salle est prise ou trop petite, un message l'explique.
+**Mettre quand même cette salle** confirme le choix.
+**+ Créer une salle…** ajoute une salle hors bâtiment (administrateurs).
+
+### Modifier, retirer, supprimer une séance
+
+Au survol d'une carte, de petits boutons apparaissent :
+
+- le crayon **Modifier cette séance** (ou un double-clic sur la carte) :
+  type, durée, enseignants, semaine, jour, créneau, salle.
+  Sur une séance ajoutée à la main, aussi la matière et les groupes.
+  Puis **Enregistrer**.
+- **Retirer du planning** : la séance retourne dans **Séances à placer**, sans être supprimée.
+- la corbeille **Supprimer cette séance** : seulement pour une séance ajoutée à la main.
+
+### Placer les séances qui manquent
+
+1. Cliquer sur **Séances à placer** : la colonne **À placer & déplacer** s'ouvre.
+   La rubrique **Pas encore au planning** liste les séances sans créneau.
+2. Commencer par **Tout placer automatiquement**.
+   L'appli pose chaque séance qui a un créneau valable, les plus difficiles d'abord.
+   Elle ne déplace jamais un cours déjà placé. Cela prend quelques minutes.
+3. Pour celles qui restent, cliquer sur une carte.
+   L'appli propose des **créneaux vérifiés** : enseignants disponibles, groupe et salle libres, règles respectées.
+4. Cliquer sur **Placer ici**.
+
+Autres possibilités sur une carte :
+
+- **Placer sur la grille**, puis cliquer une case encadrée (« + poser ici »).
+- **Choisir un autre créneau (hors suggestions)** : choisir **Semaine**, **Jour**, **Horaire**,
+  puis **Placer à ce créneau**. Ce créneau n'est pas vérifié à l'avance : les conflits s'affichent avant confirmation.
+
+Une séance marquée **Forcée, à valider** a été posée en passant outre l'ordre des séances.
+Vérifier, puis **Valider ce placement** ou **Revenir en arrière (retirer du planning)**.
+
+### Ajouter une séance ou un évènement
+
+- **Nouvelle séance** ajoute une séance à une matière existante et la place tout de suite.
+  Remplir **Matière**, **Type**, **Durée**, **Groupe(s)**, **Enseignant(s)**,
+  puis **Semaine**, **Jour**, **Créneau** et **Salle** (**Automatique** par défaut).
+  Cliquer **Créer et placer**, ou **Créer et en ajouter une autre**.
+- L'icône calendrier **Nouvel évènement** ajoute une réunion, une conférence, une présentation…
+  sans matière. **Heure de début** et **Heure de fin** sont facultatives :
+  une heure entre 12h30 et 14h s'affiche dans la pause de midi.
+
+### Annuler
+
+Après chaque action, un message s'affiche avec **Annuler**.
+**Ctrl+Z** (⌘+Z sur Mac) fait la même chose.
+Seule la dernière action s'annule.
+
+### Conflits et « Forcer »
+
+Avant chaque déplacement, l'appli vérifie les règles.
+Deux cas :
+
+| Message | Ce qu'il veut dire | Que faire |
 |---|---|---|
-| `maquette.json` | Modules, volumes horaires, enseignants | Serveur MMI (`cal-iut refresh`) |
-| `progression.json` | Ordre des séances de chaque module | Serveur MMI (`cal-iut refresh`) |
-| `CONTRAINTES ENSEIGNANTS … .csv` | Disponibilités et indisponibilités | Google Sheets à remplir par les enseignants |
-| `INDISPONIBILITÉS IUT TROYES … .csv` | Vacances, fériés, fermetures | Direction de l'IUT |
-| `DATES SAE … .csv` | Dates de chaque SAE | Responsables de SAE |
-| `Dates MMI … .csv` | Rentrées, interventions à heure fixe | Département |
-| `DISPONIBILITÉS ÉTUDIANTS BUT2 / BUT3 … .csv` | Semaines à l'IUT des alternants | Service alternance |
+| **Déplacement impossible** (« Impossible (non forçable) ») | Une règle de l'IUT l'interdit | Choisir un autre créneau |
+| **Forçable** | Un conflit qu'on peut accepter en connaissance de cause | **Forcer le déplacement**, ou annuler |
 
-**Règle d'or : ne modifiez jamais le dossier `contraintes/`** (sans `_update`).
-Il est entièrement regénéré à partir de `contraintes_update/`, vos modifications
-y seraient effacées sans avertissement.
+Toujours interdit, même en forçant : jeudi après-midi (PAC) en formation initiale,
+cours classique un jour de SAE, jour férié ou fermeture, fin de semestre,
+jour en entreprise d'un alternant, évènement officiel à cet horaire,
+indisponibilité stricte d'un enseignant.
 
-### Récupérer la maquette et la progression
+Forçable : salle, enseignant ou groupe déjà pris, indisponibilité déclarée d'un enseignant,
+ordre des séances d'un cours, semaine déjà commencée (« Semaine 6 non modifiable »).
+Toucher une date déjà passée demande une confirmation forte : **Oui, modifier le passé**.
 
-```powershell
-cal-iut refresh
-```
+### Raccourcis clavier
 
-Cette commande télécharge les deux exports officiels et **montre ce qui a
-changé** (modules ajoutés, retirés, volumes ou enseignants modifiés) **sans rien
-écrire**. Vous lisez, et si cela vous convient :
-
-```powershell
-cal-iut refresh --ecrire
-```
-
-L'ancienne version est sauvegardée dans `data/sauvegardes/<date>/` avant tout
-remplacement. Si le serveur est injoignable et qu'on vous a envoyé les fichiers
-par mail, mettez-les dans un dossier et faites `cal-iut refresh --depuis <dossier> --ecrire`.
-
----
-
-## 3. Produire un emploi du temps
-
-Une seule commande enchaîne tout :
-
-```powershell
-cal-iut annee
-```
-
-Elle déroule quatre étapes, en s'arrêtant net à la première qui coince :
-
-1. **Régénérer les contraintes** — traduit vos CSV en données exploitables.
-2. **Préparer les séances** — déduit la liste de tout ce qu'il faut placer.
-3. **Vérifier les données** — c'est l'audit, détaillé au § 4. S'il trouve une
-   erreur bloquante, l'outil s'arrête : il vaut mieux corriger une donnée que
-   produire un emploi du temps faux.
-4. **Construire l'emploi du temps** — plusieurs tentatives successives, en
-   gardant la meilleure.
-
-Comptez **30 minutes à plusieurs heures** selon la difficulté. C'est normal :
-c'est un problème d'optimisation, pas une mise en forme.
-
-Le résultat est dans `data/generated/timetable_best.json`.
-
-### Pourquoi plusieurs tentatives ?
-
-Le solveur n'est pas reproductible : deux exécutions identiques peuvent donner
-des résultats différents, et parfois l'une échoue là où l'autre réussit. Relancer
-avec un autre tirage est le moyen le plus efficace de débloquer une situation —
-c'est exactement ce que fait l'étape 4 automatiquement.
-
-Si vous voulez insister davantage :
-
-```powershell
-python scripts/solve_until_ok.py --max-runs 20 --max-hours 8
-```
-
-Chaque tentative est consignée dans `data/generated/solve_runs.jsonl`.
-
----
-
-## 4. L'audit : votre principal outil de diagnostic
-
-```powershell
-cal-iut audit
-```
-
-Il ne résout rien, il **vérifie**. Trois niveaux :
-
-- **`[ERREUR]`** — l'emploi du temps sera faux ou impossible. À corriger avant
-  de continuer.
-- **`[ALERTE]`** — une donnée est probablement mal comprise. À regarder.
-- **`[INFO]`** — pour information, notamment les règles que l'outil ne sait pas
-  vérifier automatiquement.
-
-Chaque ligne dit **où** est le problème et **quoi faire**. Exemples réels :
-
-> `[ERREUR] min_week_rules : aucun cours WR1119 (S1) dans la maquette — règle sans effet.`
-> `faire: Vérifier l'orthographe du code.`
-
-> `[ERREUR] AHA : 22 créneaux de FORMATION INITIALE pour 21 créneaux disponibles hors jeudi après-midi (réservé aux PAC).`
-> `faire: Le jeudi après-midi ne compte pas pour la formation initiale. Élargir ses disponibilités, ou basculer une partie de son volume en FC.`
-
-Pour vérifier aussi un emploi du temps déjà produit :
-
-```powershell
-cal-iut audit --timetable data/generated/timetable_best.json
-```
-
-**Faites-le systématiquement avant de diffuser un planning.** L'audit rejoue
-toutes les règles sur le résultat réel et dit lesquelles ne sont pas respectées.
-
----
-
-## 5. Consulter et diffuser
-
-```powershell
-cal-iut serve
-```
-
-Ouvrez `http://127.0.0.1:8000/`. Vous y trouvez les vues par groupe, par
-enseignant, par promotion, le tableau des contraintes avec leur verdict, la
-liste « À traiter » et l'onglet « À placer » (§ 5 bis). Chaque enseignant et chaque groupe a un lien personnel
-(onglet *Référence > Liens & partage*) qu'on peut envoyer tel quel.
-
-Pour un fichier autonome à envoyer par mail :
-
-```powershell
-cal-iut export --format html --output planning.html
-```
-
-### Compléter une information manquante
-
-Un enseignant sans adresse mail ne reçoit pas son lien personnel ; une salle
-ou un enseignant sans correspondance Celcat bloque la recopie de ses séances.
-Ces informations se **complètent depuis l'appli**, là où le manque se voit,
-sans toucher aux fichiers ni redéployer :
-
-- **Annuaire des enseignants** (et fiche de l'enseignant, et *Référence >
-  Liens & partage*) : la pastille « manquant » de la colonne *Mail* devient
-  **Ajouter** — saisir l'adresse, **Entrée** pour enregistrer, **Échap** pour
-  annuler. Une adresse déjà attribuée à un autre enseignant est refusée.
-- **Fiche d'une salle** : le bloc *À compléter* sous son nom (type d'une
-  salle ajoutée à la main ; correspondance Celcat pour un administrateur).
-- **À traiter > Données à compléter** : tout ce qui manque, groupé par
-  famille (enseignants, salles, matières, groupes Celcat), chaque ligne avec
-  son champ. La tuile *À compléter* en donne le nombre.
-
-**Corriger une valeur fausse** (adresse, nom, intitulé de matière) : passer
-la souris sur la valeur, ou y arriver au clavier, fait paraître un petit
-crayon **Modifier** — même champ en ligne. La valeur corrigée passe devant
-celle du fichier et porte la marque **modifiée** ; au survol (ou au clic),
-la valeur du fichier et **Revenir à la valeur du fichier**.
-
-La correspondance Celcat d'une salle, d'un enseignant ou le **code module**
-d'une matière (`TSB…`, parmi ceux déjà relevés) reste réservée aux
-administrateurs (aussi depuis l'écran *Celcat* et *Référence > Codes
-Celcat*, ci-dessous). Les identifiants internes
-Celcat des groupes (`celcat_groupes.yaml`) et des matières
-(`celcat_matieres.yaml`) ne se saisissent pas : la ligne dit dans quel
-fichier ils se règlent. En lecture seule, le manque et la marque restent
-affichés, sans bouton. Ce qui est saisi est conservé dans `data/state/` (le
-volume), survit aux déploiements et garde la trace de qui l'a saisi, quand,
-et de la valeur qu'il remplaçait.
-
-### Ajouter un intervenant
-
-Un vacataire qui arrive en cours d'année et que la feuille des contraintes ne
-connaît pas encore n'apparaît nulle part — pas même dans « Nouvelle séance » :
-on ne peut pas lui créer sa première séance. Un **administrateur** l'ajoute
-depuis l'appli, sans fichier ni déploiement : **Nouvel intervenant**, en haut
-de la *Vue Enseignant* (l'annuaire), ou dans *Référence > Codes Celcat >
-Enseignants*.
-
-Quatre champs : **nom complet** (« Prénom Nom », obligatoire), **code** (2 à
-4 lettres, le trigramme du planning, obligatoire ; un code libre tiré du nom
-est proposé), **code Celcat** (facultatif, le nombre affiché dans Celcat —
-mêmes règles que *Codes Celcat*) et **mail** (facultatif, pour le lien
-personnel). La saisie est vérifiée en direct :
-
-- un code **déjà pris** par un enseignant connu (planning, maquette, feuille
-  des contraintes, `enseignants_supplementaires.yaml`, appli) est **refusé**,
-  avec un lien vers sa fiche ; de même une adresse déjà attribuée ;
-- un code que `celcat.yaml` donne à une **autre personne** (ex. AGR = Gram
-  AMBROISE) est signalé : créé sous ce code, l'intervenant partirait dans
-  Celcat — et en paie — sous l'identifiant de cette personne. Choisir un autre
-  code, ou **Créer quand même** si c'est voulu ;
-- un code Celcat **déjà porté** par un autre enseignant (ex. 3233 = AGT,
-  GRENET ANNE) est à corriger : « c'est peut-être la même personne ? » — lien
-  vers sa fiche, ou **Retirer le code Celcat** ;
-- un **nom** qui ressemble à quelqu'un de connu (sans tenir compte des
-  accents, de la casse ni de l'ordre prénom/nom, commentaires de
-  `celcat.yaml` compris) : « Cette personne existe peut-être déjà sous le
-  code X », avec un lien vers sa fiche. **Créer quand même** si ce n'est pas
-  elle.
-
-Une fois créé, sa fiche s'ouvre (« Intervenant créé ») et il apparaît partout
-où apparaissent les enseignants : annuaire, « Nouvelle séance », filtres,
-*Codes Celcat*, API. Sa fiche porte la mention **ajouté dans l'appli** (le
-jour, et pour un administrateur le compte qui l'a ajouté) et, tant qu'il n'a
-**aucune séance**, un bouton **Supprimer** (avec son mail et son code Celcat
-saisis). Il est conservé dans `data/state/references.json` (le volume) : il
-survit aux déploiements. Quand la feuille officielle ou
-`enseignants_supplementaires.yaml` le connaîtront, leur nom prendra le pas.
-
-### Codes Celcat
-
-*Référence > Codes Celcat* liste **tout** ce que l'appli envoie à Celcat, pas
-seulement ce qui manque, en quatre sous-onglets : **Cours** (toute la
-maquette, tous parcours et semestres), **Salles** (celles de `rooms.yaml` et
-celles ajoutées dans l'appli), **Enseignants**, **Groupes**. Pour chaque
-ligne : le nombre de séances placées, le **code Celcat** qui partira, et son
-**origine** — *Fichier de config*, *saisi dans l'appli* (le jour, et pour un
-administrateur le compte qui l'a saisi, avec la valeur du fichier), ou
-*manquant* (en rouge quand des séances placées en dépendent : elles ne
-partent pas vers Celcat). La pastille d'un sous-onglet compte ses lignes
-sans code ; le filtre **Sans code / Saisis dans l'appli / Tous**, la
-recherche et le tri par colonne restent sur l'onglet.
-
-**On ne modifie que ce qu'on n'a pas.** Un code **connu** — celui du
-fichier de configuration (`celcat.yaml`) ou celui de la **maquette** — est
-affiché avec un cadenas et ne se change pas dans l'appli. Les codes de la
-maquette sont **préenregistrés** : pour chaque cours sans code dans
-`celcat.yaml`, le code de la maquette (`codelement`) est repris s'il existe
-dans le relevé des matières Celcat ; pour les cours CREACOM dont la maquette
-écrit le code en **M** alors que Celcat le connaît en **C** (WRA401M…), la
-variante en C est reprise (origine « maquette, corrigé M→C », règle de
-Kyllian). Ces codes sont figés dans `data/config/celcat_modules_maquette.yaml`,
-régénéré par `python scripts/generer_codes_maquette.py` quand la maquette ou
-le relevé change (relire le diff : ces codes servent aussi à la paie). Par
-prudence, un code de la maquette n'est **pas** repris quand le nom relevé dans
-Celcat désigne un autre cours (WSA611C → « WSA612C Alternance ») ou quand le
-cours est dans `celcat.yaml::codes_a_confirmer` (WS103, WS104, WS105, « à
-redemander ») : le cours reste manquant, le code de la maquette est proposé
-et la raison affichée — un administrateur le saisit une fois confirmé.
-
-Un **administrateur** saisit un code **manquant** directement dans la ligne
-(**Saisir**, **Entrée** pour enregistrer, **Échap** pour annuler) ; les codes
-relevés dans Celcat sont proposés sous le champ. Le code part au **prochain
-envoi vers Celcat**, sans déploiement. Une saisie se corrige (crayon) ou se
-retire (**Revenir à manquant**). Ce qui est refusé, avec le message sous le
-champ :
-
-- un code déjà connu (fichier, maquette) : « code déjà connu » ;
-- un format inattendu — cours : un code module `TSB…` **relevé** dans
-  `celcat_matieres.yaml` ; salle : le nom Celcat avec le point (« H.104 »,
-  « Amphi 3 MMI ») ; enseignant : un nombre (« 0 » ne vaut pas code) ;
-- un code **déjà porté** par un autre cours, une autre salle ou un autre
-  enseignant — seule exception : une salle réunie (H.007-008) peut porter le
-  code de l'une de ses moitiés (H.007).
-
-**Sans code (voulu).** Certaines entités ne doivent jamais aller dans Celcat
-(projets encadrés WS1PJ…, lignes administratives COR, PCA…, la visite de la
-BU WR100BU) : elles sont marquées **sans code (voulu)**, avec leur motif. Elles
-ne comptent plus comme manquantes (pastilles, filtre *Sans code*, *Données à
-compléter*) et le plan Celcat les compte « non envoyées (voulu) » au lieu de
-les bloquer — rien ne part. Celles décidées avec Kyllian sont écrites dans
-`celcat.yaml` (section `sans_code_voulu`) ; un administrateur peut en marquer
-d'autres depuis la ligne (**Sans code (voulu)…**, motif obligatoire) et les
-retirer (**Retirer « sans code »**). Une saisie faite avant ce verrou sur un
-code désormais connu reste appliquée, signalée en orange, et **Revenir au
-code connu** la retire.
-
-Les **groupes** sont en lecture seule pour tous : Celcat les désigne par un
-identifiant interne, qu'on ne lit pas dans Celcat ; il se règle dans
-`data/config/celcat_groupes.yaml` (relevé, puis déploiement). Les autres
-comptes voient la même liste en lecture seule. On y arrive aussi depuis
-*À traiter > Données à compléter* (bouton **Codes Celcat**, sur la bonne
-ligne) et depuis l'écran *Celcat* (lien **Codes Celcat →**, et **Voir dans
-Codes Celcat** sur chaque blocage).
-
-**À traiter** signale aussi les **cours de SAE hors journée SAE** : un cours
-de SAE n'a lieu que sur une journée SAE de son parcours. Les SAE que la
-génération place elle-même (exception déclarée, ex. WSA501D) n'y figurent
-pas. La ligne ouvre la Vue Promo au bon jour.
-
----
-
-### Tâches : joindre des images
-
-Onglet **Tâches** (le tableau À faire / En cours / Fait de l'équipe) : une
-tâche peut porter jusqu'à **10 images** — une capture d'écran de Celcat, la
-photo d'une affiche, un schéma.
-
-- **Coller une capture** : ouvrez la tâche (clic sur son titre) ou « Nouvelle
-  tâche », puis `Ctrl V` (`⌘ V` sur Mac). La capture est nommée d'après
-  l'heure (`capture-2026-09-30-14h05.png`). Un texte collé dans un champ
-  reste du texte.
-- **Glisser-déposer** des fichiers n'importe où sur la fenêtre de la tâche,
-  ou bouton **« Ajouter une image »**.
-- En modification, chaque image est **enregistrée aussitôt** (« Annuler » ne
-  la retire pas). À la création, elles sont marquées « en attente » et
-  partent au moment de « Créer ».
-- **Voir** : clic sur une vignette — aperçu en grand, `←` `→` pour passer
-  d'une image à l'autre, `Échap` pour fermer, « Original » pour l'ouvrir
-  dans un onglet. Sur le tableau, le petit compteur (icône image + nombre)
-  d'une carte ouvre le même aperçu.
-- **Retirer** : la croix d'une vignette, puis « Retirer » pour confirmer.
-  Supprimer une tâche supprime aussi ses images.
-
-**Qui peut quoi** : mêmes droits que les tâches. Tout compte qui voit
-l'onglet Tâches voit les images (lecture seule comprise) ; ajouter ou retirer
-demande le rôle « Modification » ou « Administrateur ». Jamais visibles par
-un lien public (`?t=`), ni par un compte « Accès API » dans l'appli ; une clé
-API les lit par l'API v1 (`docs/API.md`, « Tâches »).
-
-**Limites** : PNG, JPEG, WebP ou GIF uniquement — reconnus sur le contenu du
-fichier, pas sur son nom ; **SVG refusé** (il peut contenir du code). 8 Mo
-par image, 40 Mo par tâche, 20 000 pixels de côté. Les informations cachées
-d'une photo (position GPS, appareil, auteur) sont retirées à l'envoi ; seule
-l'orientation est gardée.
-
-**Où sont les fichiers** : dans le volume persistant, à côté de la base :
-`data/state/pieces_jointes/taches/<n° de tâche>/`, sous un nom tiré au sort
-(jamais le nom d'origine). Jamais dans le dépôt Git.
-
----
-
-## 5 bis. Placer à la main ce que l'ordinateur n'a pas su placer
-
-Il est normal qu'il reste des séances. L'outil en place environ **96 %** ; les
-dernières butent sur des combinaisons réellement impossibles (un enseignant
-disponible seulement le mercredi, un bloc de 3h, et deux autres cours qui se
-disputent les mêmes créneaux). Ce n'est pas une question de patience : laisser
-tourner plus longtemps n'y change rien.
-
-Ces séances **ne sont pas perdues**. Ouvrez l'onglet **« À placer »**.
-
-**Commencez toujours par le bouton « Tout placer automatiquement ».** L'outil
-pose lui-même toutes les séances pour lesquelles il trouve un créneau valable,
-les plus difficiles d'abord. Comptez quelques minutes. Il ne déplace jamais un
-cours déjà placé, et il vous dit ce qu'il n'a pas su faire, avec la raison. En
-pratique il en place la quasi-totalité — il n'en reste qu'une poignée.
-
-Pour celles qui restent :
-
-1. Vous voyez la liste de ce qui manque, avec le nombre restant et le
-   pourcentage déjà placé.
-2. Cliquez sur une séance : l'outil vous propose des créneaux **déjà vérifiés**.
-   Aucun d'eux ne viole une disponibilité d'enseignant, ne tombe un jeudi
-   après-midi PAC, n'écrase un autre cours du même groupe ni ne réserve une
-   salle déjà prise.
-3. Cliquez sur « Placer ici ». C'est fait, et c'est enregistré.
-
-Vous n'avez **jamais** à deviner un créneau ni à vérifier quoi que ce soit
-vous-même : si un créneau apparaît dans la liste, il est valable.
-
-Sans passer par l'application, la même chose en une commande :
-
-```powershell
-cal-iut completer --timetable data\generated\timetable_best.json
-```
-
-(`cal-iut annee` le fait déjà tout seul sur le meilleur run, à la fin.)
-
-**Si aucun créneau n'est proposé**, vous avez deux possibilités :
-
-- **Régénérer la semaine entière** (onglet *Vue Semaine*, bouton de
-  régénération) : l'outil réarrange les autres cours de cette semaine pour
-  faire de la place.
-- **Assouplir une règle** (§ 6) — par exemple autoriser une semaine un peu plus
-  chargée, ou élargir la période autorisée d'un cours.
-
----
-
-## 5 ter. Lisser le planning d'une promo en alternance
-
-Quand l'emploi du temps d'une promo FC est haché (cours à 8h, trous, une
-journée à six cours et la suivante à deux), on peut le lisser sans rien
-regénérer : **Vue Promo → « Lisser une promo… »**.
-
-1. Choisir la promo, puis « Calculer une proposition » (environ 1 min 30).
-2. Relire : le tableau avant/après (cours à 8h, trous, 17h, journées à un
-   seul cours), puis semaine par semaine chaque déplacement proposé
-   (« mar. 13/10 8h → ven. 16/10 15h30 », enseignant, salle).
-3. Décocher ce qu'on ne veut pas bouger (un enseignant déjà prévenu, une
-   séance calée à l'oral…), puis « Appliquer ».
-
-Ce qui est garanti : seules les séances **à venir** de cette promo bougent ;
-tout ce qu'un glisser-déposer refuserait est refusé ici aussi (enseignant ou
-salle déjà pris par une autre promo, PAC, jours SAE, présence en entreprise,
-indisponibilités déclarées, ordre des séances) ; rien n'est « forcé ». Les
-corrections partent ensuite vers Celcat comme pour un déplacement à la main.
-
-Même chose en ligne de commande : `cal-iut lisser` (simulation), puis
-`cal-iut lisser --appliquer`. Ajouter `--prod` pour travailler directement sur
-la production (clé API dans `.env` : `CAL_IUT_PROD_URL`, `CAL_IUT_PROD_API_KEY`).
-
-## 6. Ajuster une règle
-
-**Commencez par regarder ce qui est déjà en place :**
-
-```powershell
-cal-iut regles
-```
-
-Cette commande liste, en français et sans jargon, toutes les règles actuellement
-actives — avec **la raison de chacune** et le fichier où la modifier. C'est le
-point de départ avant toute modification : la moitié des questions (« pourquoi
-ce cours ne commence-t-il qu'en octobre ? ») y trouve sa réponse.
-
-Les règles métier vivent dans `data/config/` (fichiers `.yaml`). Ce sont des
-fichiers texte, éditables dans n'importe quel éditeur. Chaque entrée est
-commentée avec **la raison** et **la personne qui l'a demandée**.
-
-| Vous voulez… | Fichier |
+| Touche | Effet |
 |---|---|
-| Changer les groupes ou leurs effectifs | `groups.yaml` |
-| Changer les salles ou leurs règles | `rooms.yaml` |
-| Qu'un cours ne commence pas trop tôt / ne finisse pas trop tard | `course_scheduling_rules.yaml` (`min_week_rules`, `max_week_rules`) |
-| Imposer une séance à une date précise | `course_scheduling_rules.yaml` (`session_date_windows`) |
-| Faire des cours de 3h au lieu de 1h30 | `double_sessions.yaml` |
-| Alterner deux enseignants sur un module | `course_scheduling_rules.yaml` (`teacher_distribution`) |
-| Dire qu'un enseignant intervient au début et l'autre à la fin | `course_scheduling_rules.yaml` (`teacher_order_rules`) |
-| Faire placer une SAE par le solveur | `course_scheduling_rules.yaml` (`solver_scheduled_sae`) |
-| Dire qui encadre une SAE et quand | `sae_teacher_phases.yaml` |
-| Autoriser exceptionnellement une semaine plus chargée | `course_scheduling_rules.yaml` (`weekly_cap_exceptions`) |
+| ← → | Jour précédent / suivant |
+| Maj+← Maj+→ | Semaine précédente / suivante |
+| T | Aujourd'hui |
+| Échap | Abandonner le placement en cours |
+| Ctrl+Z | Annuler la dernière action |
 
-**Après toute modification, relancez `cal-iut audit`.** Il vous dira notamment
-si votre règle pointe vers un cours qui n'existe pas — une faute de frappe dans
-un code de module ne provoque aucune erreur, la règle est simplement ignorée en
-silence.
+## 7. Vue TD / TP, Vue Cours, Vue Salle
 
-**Écrivez toujours un `note:` expliquant pourquoi.** Dans un an, personne ne se
-souviendra de la raison, et une règle sans justification finit par être
-supprimée ou, pire, conservée à tort.
+Ces écrans marchent comme la Vue Enseignant : un **annuaire** filtrable, puis une **fiche**.
 
----
+- **Vue TD / TP** (dans la navigation) : le planning d'un groupe d'étudiants (ex. BUT1 · TD AB).
+  La fiche indique les groupes suivis et **Toutes les séances du semestre**.
+- **Vue Cours** : toutes les séances d'une matière ou d'une SAE (ex. WR101).
+  La fiche montre la **Maquette** (heures prévues et placées), l'**Ordonnancement**,
+  les **Intervenants**, les groupes et les salles.
+  On y arrive par la recherche ou par **Référence** → **Cours** → **Ouvrir la Vue Cours**.
+- **Vue Salle** : l'occupation d'une salle (ex. H.104), son équipement et les cours qui y passent.
+  On y arrive par la recherche ou par **Référence** → **Salles** → **Ouvrir la Vue Salle**.
+  La case **Proposée au placement automatique** se règle par un administrateur.
 
-## 7. Quand ça ne marche pas
+## 8. Salles libres
 
-| Symptôme | Que faire |
+**Salles libres** montre qui occupe quelle salle, créneau par créneau, pour un jour.
+On y arrive par le bouton **Salles libres par créneau** de la Vue Salle, ou par la recherche.
+
+- Choisir le **Jour**.
+- Filtrer par **Capacité minimum** et **Type de salle**.
+- **Inclure les salles hors placement automatique** ajoute les salles réservées à un usage précis.
+
+## 9. Partager un planning
+
+Dans la fiche d'un enseignant ou d'un groupe, en haut à droite :
+
+| Bouton | Effet |
 |---|---|
-| Je ne sais pas où j'en suis | `cal-iut doctor` |
-| « PARTIAL_WEEKS_FAILED » | Des semaines n'ont pas pu être remplies. Lancez `cal-iut audit --timetable <fichier>` : il nomme la semaine et l'enseignant en cause. Sinon, relancez avec plus de tentatives. |
-| Il manque des séances au planning | Normal, il en reste toujours quelques-unes. Onglet « À placer » (§ 5 bis) : l'outil propose des créneaux valables, un clic suffit. |
-| Une contrainte enseignant n'est pas respectée | `cal-iut audit` — regardez « contrainte non interprétée ». Si sa formulation n'est pas reconnue, reformulez-la dans le CSV. |
-| J'ai modifié un CSV, rien n'a changé | Vous avez oublié `python scripts/build_contraintes.py` puis `cal-iut ingest`. `cal-iut annee` fait les deux. |
-| Un enseignant n'a aucun cours | `cal-iut audit` — « un enseignant porte du volume mais n'a aucune séance ». |
-| Le résultat change à chaque exécution | C'est normal (§ 3). Gardez le meilleur : `timetable_best.json`. |
+| **Partager** | Copier l'image de la semaine, l'envoyer par mail ou la télécharger (PNG) |
+| **Imprimer** | Imprimer la semaine, sans les boutons |
+| **Lien agenda** | Copier l'adresse à coller dans Google Agenda, Apple Calendrier ou Outlook |
+| **Écrire un mail** | Préparer un mail à l'enseignant avec son lien |
+| **Copier son lien** | Copier le lien personnel, à envoyer tel quel |
 
-### Restaurer la base
+L'agenda abonné se met à jour tout seul quand le planning change.
+Sur un lien personnel, le bouton s'appelle **Ajouter à mon agenda**.
+Détails : [docs/ICS.md](docs/ICS.md).
 
-La base (`data/state/cal-iut.db` : comptes, clés API, tâches, placements
-enregistrés, historique) est sauvegardée une fois par jour, au premier
-enregistrement du jour ou au démarrage, dans
-`data/state/sauvegardes_db/cal-iut-AAAA-MM-JJ.db`. Les 30 derniers jours sont
-gardés. Pour en prendre une tout de suite : `cal-iut sauvegarder-base`.
+## 10. Référence
 
-Pour revenir à la sauvegarde d'un jour donné :
+**Référence** regroupe les données de base, en six onglets :
 
-```bash
-# 1. arrêter l'application (le service web ET le worker Celcat)
-# 2. mettre la base actuelle de côté, sans l'effacer
-mv data/state/cal-iut.db data/state/cal-iut.db.avant-restauration
-rm -f data/state/cal-iut.db-wal data/state/cal-iut.db-shm
-# 3. remettre la sauvegarde choisie à sa place
-cp data/state/sauvegardes_db/cal-iut-2026-09-28.db data/state/cal-iut.db
-# 4. vérifier qu'elle est saine (doit afficher « ok »), puis redémarrer
-sqlite3 data/state/cal-iut.db "PRAGMA integrity_check"
-```
+- **Salles** : capacité, type, équipement, nombre de séances. Tableau filtrable et triable.
+- **Cours** : toutes les matières de la maquette, filtrables par parcours et semestre.
+- **Codes Celcat** : le code Celcat de chaque cours, salle, enseignant et groupe, et son **Origine**.
+  Les filtres **Sans code**, **Sans code (voulu)**, **Saisis dans l’appli**, **Tous** aident à trier.
+  Un code « manquant » en rouge bloque l'envoi des séances concernées vers Celcat.
+  Pour les autres rôles, cet onglet est en lecture seule ;
+  la saisie par les administrateurs est expliquée dans [docs/ADMIN.md](docs/ADMIN.md).
+- **Calendrier** : vacances, jours fériés, rentrées et évènements, avec le délai (« dans 3 semaines »).
+- **Liens & partage** : les deux liens publics, puis le lien personnel et le **Lien agenda**
+  de chaque enseignant et groupe. Boutons **Copier**, **Copier tous les liens**, **Annuaire (.csv)**.
+  **Envoyer les liens par mail…** est réservé aux administrateurs.
+- **Notifications** : les mails envoyés quand le planning change (réglage par un administrateur).
 
-**Images des tâches** : elles ne sont PAS dans ces sauvegardes. La copie de
-la base garde leur liste (nom, taille…), pas les fichiers, qui restent dans
-`data/state/pieces_jointes/`. Restaurer une base ancienne ne touche pas à ce
-dossier : une image retirée depuis y a déjà disparu et s'affiche « Image
-indisponible », une image ajoutée depuis y reste sans être listée. Seule la
-sauvegarde du volume Dokploy protège les fichiers eux-mêmes.
+## 11. Contraintes
 
-Tout ce qui a été fait depuis ce jour-là est perdu dans la base ; les
-instantanés JSON des placements (`data/state/sauvegardes/`) peuvent aider à le
-retrouver. Ces sauvegardes sont sur le même disque que la base : elles
-protègent d'une erreur, pas de la perte du serveur. Copiez le dossier ailleurs
-de temps en temps (ou activez la sauvegarde du volume dans Dokploy).
+**Contraintes** montre chaque règle et son verdict sur le planning actuel.
 
----
+- En tête : **Règles en échec**, **Indisponibilités non respectées**,
+  **Compromis SAE acceptés**, **Contraintes déclarées**. Un clic filtre la liste.
+- **Règles globales du solveur** : les règles en échec d'abord.
+- **Contraintes enseignants** : le texte déclaré par chaque enseignant et son verdict
+  (**Respectée**, **Indisponibilité non respectée**, **Compromis SAE**).
+  Cliquer sur un nom ouvre sa Vue Enseignant.
 
-## 8. Formuler les contraintes des enseignants
+## 12. À traiter
 
-Le CSV des contraintes est du texte libre, et l'outil doit le comprendre.
-Les formulations ci-dessous sont **reconnues de façon fiable** :
+**À traiter** liste ce qui demande une décision. Le nombre rouge dans la navigation compte les points **À corriger**.
 
-- `vendredi après-midi` — tous les vendredis après-midi
-- `lundi toute la journée`
-- `jeudi 12 novembre 2026` — **une seule** date
-- `du lundi 2 au vendredi 6 novembre 2026` — une plage
-- `les jeudis après 17h00`
-- `mardi de 15h30 à 18h30`
+Les catégories, de la plus grave à la moins grave :
 
-À éviter :
+| Catégorie | Où corriger |
+|---|---|
+| Séances non placées | Vue Promo, **Séances à placer** |
+| Séances sans salle | Vue Promo |
+| Doublons salle / enseignant (H.201/H.203 et H.007/H.008 comptent pour une salle) | Vue Promo |
+| Règles globales en échec | Contraintes |
+| Indisponibilités enseignant non respectées | Vue Enseignant |
+| Cours de SAE hors journée SAE | Vue Promo |
+| Encadrement SAE le même jour (compromis accepté, à revoir si possible) | Vue Enseignant |
+| Journées trouées (au moins deux créneaux vides entre deux cours) | Vue TD / TP |
 
-- **Les dates en chiffres seuls** (`23/09/26`) sont désormais comprises, mais
-  écrire le mois en toutes lettres reste plus sûr et plus lisible.
-- Les formulations conditionnelles (« si possible », « idéalement ») : elles
-  sont conservées comme note mais **ne contraignent rien**. Si c'est un vrai
-  impératif, écrivez-le comme une indisponibilité.
-- Mélanger plusieurs idées dans une case : séparez par ` - `.
+- Cliquer sur une ligne ouvre le bon écran, au bon jour.
+- Filtrer par parcours, semaine, enseignant et **Gravité** (**À corriger** ou **À revoir**).
+- **Tout déplier** / **Tout replier** ouvre ou ferme les sections.
+- Pour les doublons, **Vérifier maintenant** relance le contrôle.
 
-Après toute mise à jour du CSV, `cal-iut audit` liste les formulations qu'il
-n'a **pas** su traduire. Elles ne s'appliquent pas du tout : c'est la première
-chose à regarder.
+### Données à compléter
 
----
+La section **Données à compléter** liste les informations absentes :
+mail ou nom d'un enseignant, type d'une salle, intitulé d'une matière, code Celcat.
 
-## 9. Changer d'année
+1. Cliquer sur **Ajouter** à côté de la donnée manquante.
+2. Saisir la valeur, puis **Entrée** pour enregistrer (**Échap** pour annuler).
 
-L'outil est calé sur 2026-2027 à deux endroits :
+Pour corriger une valeur fausse, passer la souris dessus : un crayon **Modifier** apparaît.
+La valeur corrigée porte la marque **modifiée**.
+La bulle de cette marque propose **Revenir à la valeur du fichier**.
+Une adresse déjà utilisée par un autre enseignant est refusée.
+Les codes Celcat sont réservés aux administrateurs ; les autres rôles voient le manque sans bouton.
 
-- `contraintes/02_calendrier_iut.json`, régénéré depuis le CSV
-  « INDISPONIBILITÉS IUT » — remplacez simplement le CSV.
-- `src/cal_iut/calendar/academic.py`, constante `DEPARTMENT_WEEK_ANCHOR` : le
-  lundi de la « semaine 1 » du département. **À changer chaque année** (c'est la
-  seule modification de code nécessaire).
+## 13. Tâches
 
-Puis :
+**Tâches** est le tableau de suivi de l'équipe, en trois colonnes : **À faire**, **En cours**, **Fait**.
+Deux onglets séparent **Emploi du temps** et **Plateforme**.
 
-```powershell
-cal-iut refresh --ecrire
-cal-iut doctor
-cal-iut annee
-```
+- **Ajouter une tâche…** en bas d'une colonne crée une tâche rapide (touche N).
+- **Nouvelle tâche** ouvre le formulaire complet : titre, description, catégorie,
+  pour qui, enseignant, dates, **Urgent**.
+- Glisser une carte d'une colonne à l'autre, ou utiliser ses flèches.
+- Cliquer sur le titre d'une carte pour la modifier.
+- Filtrer par **Pour qui** ou avec le champ de recherche (touche /).
 
-Les arbitrages humains de l'année précédente (décisions qui ne se déduisent
-d'aucun fichier) sont listés dans `contraintes/00_INDEX.md`. **Relisez-les** :
-certains ne valent que pour une année donnée.
+### Joindre des images
+
+Une tâche peut porter jusqu'à 10 images (capture de Celcat, photo d'une affiche…).
+
+- **Coller une capture** : ouvrir la tâche, puis Ctrl+V (⌘+V sur Mac).
+- **Glisser-déposer** des fichiers sur la fenêtre de la tâche, ou **Ajouter une image**.
+- **Voir** : cliquer sur une vignette. ← → passent d'une image à l'autre, Échap ferme.
+  **Original** ouvre l'image dans un onglet.
+- **Retirer** : la croix de la vignette, puis **Retirer**.
+
+Sur une tâche existante, chaque image est enregistrée tout de suite (**Annuler** ne la retire pas).
+Sur une nouvelle tâche, les images partent au clic sur **Créer**.
+Formats acceptés : PNG, JPEG, WebP, GIF (SVG refusé).
+Limites : 8 Mo par image, 40 Mo par tâche.
+La position GPS et les autres informations cachées d'une photo sont retirées.
+Voir les images demande l'accès à l'onglet Tâches ; en ajouter demande le rôle Édition ou Admin.
+
+## 14. Rechercher, thème, compte
+
+**Rechercher** : Ctrl K (⌘K sur Mac), ou **Rechercher…** en haut de la navigation.
+Taper un enseignant, un cours, une salle, un groupe, une promo ou un écran.
+↑ ↓ pour choisir, Entrée pour ouvrir, Échap pour fermer.
+Les derniers résultats ouverts restent proposés.
+
+**Menu du compte** (votre nom, en bas de la navigation) :
+
+- **Clé API** : créer une clé pour un script ou pour Claude.
+  La clé s'affiche une seule fois : la copier aussitôt. 5 clés actives au plus.
+  Détails : [docs/API.md](docs/API.md) et [docs/MCP.md](docs/MCP.md).
+- **Thème** : **Système**, **Clair** ou **Sombre**.
+- **Déconnexion**.
+
+Au premier passage, l'appli demande l'affichage préféré :
+**Une couleur par matière** ou **Une couleur par type de séance**.
+
+## 15. Questions fréquentes
+
+**Pourquoi mon déplacement est-il refusé ?**
+Le message dit pourquoi. « Impossible (non forçable) » : une règle de l'IUT l'interdit
+(PAC, SAE, férié…), il faut un autre créneau. Sinon, **Forcer le déplacement** est possible.
+Voir [Conflits et « Forcer »](#conflits-et--forcer-).
+
+**On me demande de forcer alors que le créneau semble libre.**
+La semaine est sans doute déjà commencée (« Semaine 6 non modifiable »).
+Forcer si le changement est bien voulu.
+
+**Je me suis trompé de matière en ajoutant une séance.**
+Dans la Vue Promo, ouvrir la séance avec le crayon **Modifier cette séance** (ou un double-clic).
+Changer **Matière**, puis **Enregistrer**.
+La matière ne se change que sur une séance ajoutée à la main, pas sur une séance de la maquette.
+
+**J'ai déplacé une séance par erreur.**
+Cliquer **Annuler** dans le message, ou Ctrl+Z, tout de suite.
+
+**Je ne trouve pas une séance.**
+Regarder dans **Séances à placer** (Vue Promo) ou dans **À traiter** → **Séances non placées**.
+
+**Une séance refuse de bouger : « Séance verrouillée ».**
+Elle a été verrouillée (bouton **Verrouiller ce créneau** de la Vue Semaine).
+L'appli n'a aucun bouton pour la déverrouiller, même pour un administrateur :
+signaler le cas à l'équipe technique.
+
+**Un enseignant ne reçoit pas son lien.**
+Son adresse manque sans doute : l'ajouter dans son annuaire ou dans **À traiter** → **Données à compléter**.
+
+**Comment un enseignant doit-il écrire ses contraintes ?**
+Dans le tableau des contraintes, ces formulations sont bien comprises :
+« vendredi après-midi », « lundi toute la journée », « jeudi 12 novembre 2026 »,
+« du lundi 2 au vendredi 6 novembre 2026 », « les jeudis après 17h00 », « mardi de 15h30 à 18h30 ».
+Écrire le mois en lettres. Séparer deux idées par « - ».
+« Si possible » ou « idéalement » ne contraint rien : pour un vrai interdit, écrire une indisponibilité.
+
+**Le planning ne se met pas à jour.**
+Si **Hors ligne** s'affiche, le serveur ne répond pas : l'appli réessaie seule.
+Sinon, recharger la page.
