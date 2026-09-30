@@ -57,7 +57,7 @@ class Inventaire:
         lignes.append("")
         lignes.append(f"{len(self.regles)} règle(s) déclarée(s) au total.")
         lignes.append(
-            "Pour en ajouter ou en modifier : cf. le tableau du § 6 de GUIDE.md. "
+            "Pour en ajouter ou en modifier : cf. le tableau « Quel fichier pour quelle règle ? » de docs/DATA.md. "
             "Après toute modification, lancez `cal-iut audit`."
         )
         return "\n".join(lignes)

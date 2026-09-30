@@ -115,8 +115,12 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
   const [subLocal, setSubState] = useState<SubTab>(() => lireLocal(CLE_ONGLET, "salles", estOnglet));
   // L'onglet de l'adresse l'emporte (lien « Codes Celcat → »), puis le
   // dernier onglet ouvert sur ce poste.
-  const sub: SubTab = route && estOnglet(route.onglet) ? route.onglet : subLocal;
-  const { apresEnregistrement } = useDroits();
+  const { apresEnregistrement, estAdmin } = useDroits();
+  // « Notifications » : réglage réservé aux administrateurs (le serveur refuse
+  // aux autres) — l'onglet ne s'affiche que pour eux.
+  const onglets = estAdmin ? ONGLETS : ONGLETS.filter((o) => o.id !== "notifications");
+  const subDemande: SubTab = route && estOnglet(route.onglet) ? route.onglet : subLocal;
+  const sub: SubTab = onglets.some((o) => o.id === subDemande) ? subDemande : "salles";
   // « Nouvel intervenant » (30/09/2026) : aussi depuis Codes Celcat →
   // Enseignants, où l'on vient souvent chercher un code manquant.
   const [nouvelOuvert, setNouvelOuvert] = useState(false);
@@ -135,7 +139,7 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
   return (
     <section className="view ref-view">
       <Onglets
-        onglets={ONGLETS.map((o) => ({ id: o.id, label: o.label, nb: compteurs[o.id] }))}
+        onglets={onglets.map((o) => ({ id: o.id, label: o.label, nb: compteurs[o.id] }))}
         actif={sub}
         onChoisir={setSub}
         label="Rubriques du référentiel"
@@ -498,6 +502,8 @@ interface LigneAnnuaire {
 }
 
 function LinksDirectory({ payload }: { payload: AppPayload }) {
+  // L'envoi des liens par mail est réservé aux administrateurs côté serveur.
+  const { estAdmin } = useDroits();
   const [showMailModal, setShowMailModal] = useState(false);
   const [texte, setTexte] = useState("");
   const teacherCodes = useMemo(
@@ -634,9 +640,11 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
           <button type="button" className="btn btn--sm" onClick={() => downloadDirectoryCsv(allRows())}>
             Annuaire (.csv)
           </button>
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => setShowMailModal(true)}>
-            Envoyer les liens par mail…
-          </button>
+          {estAdmin && (
+            <button type="button" className="btn btn--primary btn--sm" onClick={() => setShowMailModal(true)}>
+              Envoyer les liens par mail…
+            </button>
+          )}
         </span>
       </div>
       <p className="ref-aide">

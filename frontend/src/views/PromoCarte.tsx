@@ -17,6 +17,7 @@ import { Pencil, Trash2, Undo2 } from "lucide-react";
 
 import type { Placement } from "../types";
 import type { AppRow, RoomCatalogEntry } from "../types/app";
+import { useDroits } from "../contexts/Droits";
 import { couleursMatiere } from "../utils/couleursMatiere";
 import { nomComplet, nomCourt } from "../utils/nomEnseignant";
 
@@ -78,6 +79,7 @@ export function PromoCarte({
   onChoisirSalle,
   onFermerSalle,
 }: PromoCarteProps) {
+  const { estAdmin } = useDroits();
   const dur = r.dur || 1;
   const durLabel = dur > 1 ? `${(dur * 1.5).toFixed(1).replace(".0", "").replace(".", ",")} h` : "";
   const nomsComplets = r.te.map((tc) => nomComplet(teacherLabels[tc] ?? tc));
@@ -158,7 +160,8 @@ export function PromoCarte({
             onBlur={onFermerSalle}
           >
             <option value="">— choisir une salle —</option>
-            <option value="__new__">+ Créer une salle…</option>
+            {/* Créer une salle : réservé aux administrateurs côté serveur. */}
+            {estAdmin && <option value="__new__">+ Créer une salle…</option>}
             {salles.map((s2) => (
               <option key={s2.id} value={s2.id}>
                 {s2.label} ({s2.capacity} pl.)
