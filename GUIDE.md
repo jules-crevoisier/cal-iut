@@ -203,13 +203,51 @@ la valeur du fichier et **Revenir à la valeur du fichier**.
 
 La correspondance Celcat d'une salle, d'un enseignant ou le **code module**
 d'une matière (`TSB…`, parmi ceux déjà relevés) reste réservée aux
-administrateurs (aussi depuis l'écran *Celcat*). Les identifiants internes
+administrateurs (aussi depuis l'écran *Celcat* et *Référence > Codes
+Celcat*, ci-dessous). Les identifiants internes
 Celcat des groupes (`celcat_groupes.yaml`) et des matières
 (`celcat_matieres.yaml`) ne se saisissent pas : la ligne dit dans quel
 fichier ils se règlent. En lecture seule, le manque et la marque restent
 affichés, sans bouton. Ce qui est saisi est conservé dans `data/state/` (le
 volume), survit aux déploiements et garde la trace de qui l'a saisi, quand,
 et de la valeur qu'il remplaçait.
+
+### Codes Celcat
+
+*Référence > Codes Celcat* liste **tout** ce que l'appli envoie à Celcat, pas
+seulement ce qui manque, en quatre sous-onglets : **Cours** (toute la
+maquette, tous parcours et semestres), **Salles** (celles de `rooms.yaml` et
+celles ajoutées dans l'appli), **Enseignants**, **Groupes**. Pour chaque
+ligne : le nombre de séances placées, le **code Celcat** qui partira, et son
+**origine** — *Fichier de config*, *saisi dans l'appli* (le jour, et pour un
+administrateur le compte qui l'a saisi, avec la valeur du fichier), ou
+*manquant* (en rouge quand des séances placées en dépendent : elles ne
+partent pas vers Celcat). La pastille d'un sous-onglet compte ses lignes
+sans code ; le filtre **Sans code / Saisis dans l'appli / Tous**, la
+recherche et le tri par colonne restent sur l'onglet.
+
+Un **administrateur** saisit ou corrige un code directement dans la ligne
+(**Saisir** ou le crayon, **Entrée** pour enregistrer, **Échap** pour
+annuler) ; les codes déjà relevés dans Celcat sont proposés sous le champ
+(pour un cours, celui de la maquette en premier, s'il est relevé). Le code
+est pris en compte au **prochain envoi vers Celcat**, sans déploiement, et
+passe devant le fichier. **Revenir à la valeur du fichier** retire la
+saisie. Ce qui est refusé, avec le message sous le champ :
+
+- un format inattendu — cours : un code module `TSB…` **relevé** dans
+  `celcat_matieres.yaml` ; salle : le nom Celcat avec le point (« H.104 »,
+  « Amphi 3 MMI ») ; enseignant : un nombre (« 0 » ne vaut pas code) ;
+- un code **déjà porté** par un autre cours, une autre salle ou un autre
+  enseignant — seule exception : une salle réunie (H.007-008) peut porter le
+  code de l'une de ses moitiés (H.007).
+
+Les **groupes** sont en lecture seule pour tous : Celcat les désigne par un
+identifiant interne, qu'on ne lit pas dans Celcat ; il se règle dans
+`data/config/celcat_groupes.yaml` (relevé, puis déploiement). Les autres
+comptes voient la même liste en lecture seule. On y arrive aussi depuis
+*À traiter > Données à compléter* (bouton **Codes Celcat**, sur la bonne
+ligne) et depuis l'écran *Celcat* (lien **Codes Celcat →**, et **Voir dans
+Codes Celcat** sur chaque blocage).
 
 **À traiter** signale aussi les **cours de SAE hors journée SAE** : un cours
 de SAE n'a lieu que sur une journée SAE de son parcours. Les SAE que la

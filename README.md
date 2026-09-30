@@ -234,7 +234,9 @@ vite.
 - **Vue Enseignant / Vue TD-TP / Vue Cours / Vue Salle** — grille de la semaine
   avec « En cours / Prochain cours », navigation ← → et T, fiche rangée à droite
   (contrainte déclarée, matières, heures), agenda du semestre filtrable.
-- **Référence** — onglets Salles, Cours, Calendrier, Liens & partage,
+- **Référence** — onglets Salles, Cours, **Codes Celcat** (le code Celcat de
+  chaque cours, salle, enseignant et groupe, son origine, saisie par un admin
+  prise en compte au prochain envoi), Calendrier, Liens & partage,
   Notifications ; tableaux filtrables et triables.
 - **Contraintes** — les règles en échec d'abord, les enseignants dans un tableau
   filtrable avec le texte qu'ils ont déclaré.
