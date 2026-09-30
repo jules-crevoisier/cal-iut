@@ -11,7 +11,7 @@ qu'une copie de fichier ne garantit pas. Conservées 30 jours.
 
 Déclenchée au même endroit que l'instantané JSON (premier écrit du jour et
 démarrage, au plus une par jour), et à la main avec `cal-iut sauvegarder-base`.
-Restauration : cf. `GUIDE.md`, « Restaurer la base ».
+Restauration : cf. `docs/ADMIN.md`, « Restaurer la base ».
 
 Ces fichiers restent sur le même volume que la base : ils protègent d'une
 erreur de manipulation ou d'une base abîmée, pas de la perte du volume. Les
@@ -22,7 +22,7 @@ contient leur table (`taches_images` : nom, type, taille), pas leurs octets,
 qui restent dans `data/state/pieces_jointes/` (jusqu'à 40 Mo par tâche : les
 copier chaque jour sur 30 jours multiplierait la taille du volume). Une base
 restaurée peut donc citer une image absente du disque (lue en 404, affichée
-« Image indisponible ») — cf. `api/pieces_jointes.py` et `GUIDE.md`,
+« Image indisponible ») — cf. `api/pieces_jointes.py` et `docs/ADMIN.md`,
 « Restaurer la base ».
 """
 

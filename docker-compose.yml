@@ -21,9 +21,9 @@
 # ces variables dans l'environnement du process qui lance `docker compose`
 # (ou un `.env` à côté de ce fichier, jamais commité), qui est exactement ce
 # que Dokploy pose quand tu renseignes ses variables d'environnement pour ce
-# service. Une variable non définie donne une valeur vide, PAS une erreur
-# silencieuse : `CAL_IUT_PASSWORD` vide fait toujours répondre 503 partout
-# (cf. api/auth.py), jamais un accès libre par défaut.
+# service. Une variable non définie donne une valeur vide. L'accès passe par
+# les comptes utilisateurs (cf. api/accounts.py) : aucune variable ne donne
+# un accès libre. Détail des variables : docs/ADMIN.md.
 
 services:
   backend:
@@ -31,12 +31,13 @@ services:
     expose:
       - "8000"
     environment:
-      # OBLIGATOIRE — sans elle, TOUTE l'API répond 503 (cf. api/auth.py).
+      # N'est plus lue par l'API (comptes utilisateurs depuis le 31/08/2026) ;
+      # gardée pour ne pas casser un déploiement qui la renseigne encore.
       CAL_IUT_PASSWORD: ${CAL_IUT_PASSWORD}
       # Optionnel — sans elle, un secret est généré au premier démarrage et
       # écrit dans le volume `cal-iut-data` (donc stable tant que ce volume
-      # existe). La fixer explicitement évite de perdre la validité des
-      # liens enseignants déjà envoyés si ce volume est un jour recréé.
+      # existe). Il signe les sessions de connexion : la fixer évite de
+      # déconnecter tout le monde si ce volume est un jour recréé.
       CAL_IUT_SECRET_KEY: ${CAL_IUT_SECRET_KEY}
       # Envoi automatique du lien perso par mail (`POST /mail/teacher-links/
       # send`, cf. api/mailer.py). Sans `RESEND_API_KEY`/`CAL_IUT_PUBLIC_URL`,
@@ -74,7 +75,7 @@ services:
 
   # Draine chaque nuit (00h00) la file Celcat que `backend` remplit
   # (déplacements/créations/suppressions faits sur le site) — cf.
-  # docs/CELCAT.md § « Le drain de nuit tournait pour personne ». Conteneur
+  # docs/CELCAT.md (« Pour les techniciens »). Conteneur
   # À PART de `backend` : lui seul monte le VPN URCA (un tunnel complet,
   # coupe tout le reste du trafic sortant si monté ailleurs). Partage
   # `data/state/` avec `backend` via le MÊME volume nommé : voit donc les

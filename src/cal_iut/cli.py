@@ -896,8 +896,8 @@ def cmd_sauvegarder_base(args: argparse.Namespace) -> int:
 def cmd_lisser(args: argparse.Namespace) -> int:
     """Lisse le planning d'une promo (cf. `api/lissage.py`) : propose, et
     n'applique qu'avec `--appliquer`. `--prod` travaille sur la production
-    par son API (clé `CAL_IUT_PROD_API_KEY`), exactement comme l'écran « Lisser
-    une promo » de la Vue Promo."""
+    par son API (clé `CAL_IUT_PROD_API_KEY`, compte administrateur). Plus de
+    bouton dans l'interface : ligne de commande ou API seulement."""
     import json
     import time as _time
 

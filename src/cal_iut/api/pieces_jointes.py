@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 STATE_DIR = Path(__file__).resolve().parents[3] / "data" / "state"
 
-# ── Limites (documentées dans GUIDE.md, « Tâches → Images ») ────────────
+# ── Limites (documentées dans GUIDE.md, « Joindre des images ») ────────────
 #
 # 8 Mo par image : une capture d'écran pleine page en 4K fait 2 à 5 Mo en
 # PNG, une photo de téléphone 2 à 6 Mo en JPEG. Au-delà, c'est presque

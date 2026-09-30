@@ -3,9 +3,10 @@ IP et liste de blocage. Rôle admin uniquement ; sous `/admin`, donc
 protégées par `require_auth` (`_PROTECTED_PREFIXES`) ET par
 `require_role("admin")` sur chaque route.
 
-Les routes de blocage fonctionnent même en mode `off` : on peut préparer
-la liste avant d'activer quoi que ce soit (elle ne s'applique qu'à partir
-de `observe`). Le trafic, lui, n'est compté qu'à partir de `observe`.
+La liste de blocage, le bannissement sur refus répétés et le comptage du
+trafic sont actifs par défaut (« protections toujours actives », coupables
+par `CAL_IUT_AA_PROTECTIONS=off`) ; seule la limitation de débit dépend de
+`CAL_IUT_ANTI_ASPIRATION` (off / observe / enforce). Cf. docs/ANTI-ASPIRATION.md.
 """
 
 from __future__ import annotations
