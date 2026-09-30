@@ -49,6 +49,23 @@ Droits : la liste est lisible par tout compte actif (rôles `read_only`,
 comptes. Pour un non-admin, l'AUTEUR d'une saisie (l'adresse d'un compte)
 n'est pas renvoyé : seulement « saisi dans l'appli le JJ/MM ». Saisir,
 modifier, effacer : administrateurs, comme toute correspondance Celcat.
+
+VERSION 2 (30/09/2026, réponses de l'utilisateur) :
+- « il faut pouvoir modifier QUE ceux qu'on n'a pas » : un code CONNU —
+  `celcat.yaml` ou la maquette (`celcat_modules_maquette.yaml`, cf.
+  `celcat/codes_maquette.py`) — est VERROUILLÉ : 409 « code déjà connu ».
+  Ne se saisissent que les manquants ; une saisie se modifie, ou s'efface
+  (« Revenir à manquant »). Une saisie plus ancienne portée sur un code
+  désormais connu reste appliquée (rien ne casse), en lecture seule, avec
+  un avertissement si elle diffère ; l'effacer rétablit le code connu ;
+- « sans code (voulu) » : une entité qu'on ne veut PAS envoyer à Celcat,
+  avec un motif — préenregistrée dans `celcat.yaml::sans_code_voulu`
+  (décisions de Kyllian), ou saisie ici par un admin, réversible. Elle ne
+  compte plus comme manquante, et rien ne part (`mapping.py`,
+  `EntreeCelcat.non_envoyee`).
+
+Tout se lit dans `load_celcat_config` (`connus`, `origines`, `sans_code`) :
+aucune autre lecture des fichiers de codes ici.
 """
 
 from __future__ import annotations
@@ -73,6 +90,7 @@ router = APIRouter(prefix="/reference/codes-celcat", tags=["reference"])
 
 FamilleCode = Literal["cours", "salles", "enseignants", "groupes"]
 FAMILLES_CODE: tuple[str, ...] = ("cours", "salles", "enseignants", "groupes")
+Origine = Literal["fichier", "maquette", "appli", "manquant", "voulu"]
 
 # Famille de l'onglet -> famille de la surcouche (`celcat/mappings.py`).
 # `groupes` n'y est pas : lecture seule (cf. docstring du module).
@@ -93,6 +111,8 @@ EXEMPLE: dict[str, str] = {"cours": "TSBZ1M01", "salles": "H.104", "enseignants"
 
 NOTE_GROUPES = "Se règle dans data/config/celcat_groupes.yaml (identifiant interne relevé dans Celcat, puis déploiement)."
 
+LIBELLE_ORIGINE = {"fichier": "fichier de configuration (celcat.yaml)", "maquette": "maquette"}
+
 
 # ── Modèles ─────────────────────────────────────────────────────────────
 
@@ -105,16 +125,24 @@ class LigneCodeCelcat(BaseModel):
     type_salle: str | None = None
     capacite: int | None = None
     nb_seances: int = Field(description="Séances placées au planning.")
-    code: str | None = Field(description="Le code qui part vers Celcat (fichier, puis saisie par-dessus).")
-    code_fichier: str | None = Field(description="Ce que dit le fichier de configuration.")
-    origine: Literal["fichier", "appli", "manquant"]
+    code: str | None = Field(description="Le code qui part vers Celcat.")
+    code_connu: str | None = Field(description="Le code connu hors saisie : fichier ou maquette.")
+    origine: Origine
+    origine_detail: str | None = Field(
+        default=None, description="« maquette (corrigé M→C) », « celcat.yaml »… ; pour « voulu » : fichier ou appli."
+    )
+    code_maquette: str | None = Field(default=None, description="Cours : le code tel que la maquette l'écrit.")
+    motif_sans_code: str | None = Field(default=None, description="« Sans code (voulu) » : pourquoi.")
     saisi_le: str | None = None
     saisi_par: str | None = Field(default=None, description="Adresse du compte — administrateurs seulement.")
     valeur_avant: str | None = Field(default=None, description="Administrateurs seulement.")
-    suggestion: str | None = Field(default=None, description="Cours : le code de la maquette (codelement), s'il est relevé.")
     alerte: str | None = Field(default=None, description="Code présent mais inutilisable tel quel.")
+    avertissement: str | None = Field(default=None, description="Saisie ancienne qui diffère d'un code connu.")
     note: str | None = None
-    modifiable: bool = Field(description="Ce compte peut saisir, modifier ou effacer ce code.")
+    modifiable: bool = Field(description="Ce compte peut saisir ou modifier ce code (manquant ou saisi).")
+    peut_revenir: bool = Field(default=False, description="Ce compte peut retirer la saisie.")
+    peut_marquer_sans_code: bool = False
+    peut_retirer_sans_code: bool = False
 
 
 class FamilleCodesCelcat(BaseModel):
@@ -123,9 +151,11 @@ class FamilleCodesCelcat(BaseModel):
     exemple: str
     modifiable: bool
     total: int
-    sans_code: int
-    sans_code_bloquants: int = Field(description="Sans code ET avec des séances placées : bloque Celcat.")
+    sans_code: int = Field(description="Manquants (le « sans code voulu » n'en fait pas partie).")
+    sans_code_bloquants: int = Field(description="Manquants avec des séances placées : bloque Celcat.")
     saisis: int
+    voulus: int = Field(default=0, description="« Sans code (voulu) ».")
+    maquette: int = Field(default=0, description="Codes préenregistrés depuis la maquette.")
     suggestions: list[str] = Field(description="Codes relevés dans Celcat, proposés à la saisie.")
     lignes: list[LigneCodeCelcat]
 
@@ -142,56 +172,47 @@ class CodeCelcatRequest(BaseModel):
     code: str = Field(max_length=80)
 
 
+class SansCodeRequest(BaseModel):
+    famille: FamilleCode
+    cle: str = Field(min_length=1, max_length=120)
+    motif: str = Field(max_length=200)
+
+
 class CodeCelcatEnregistre(BaseModel):
     famille: FamilleCode
     cle: str
     code: str | None
-    origine: Literal["fichier", "appli", "manquant"]
+    origine: Origine
     message: str
     revision: int
 
 
-# ── Lecture des fichiers ────────────────────────────────────────────────
+# ── Lecture : tout vient de `load_celcat_config` ────────────────────────
 
 
-def _lire_yaml(chemin: Path) -> dict[str, object]:
+def _config(config_dir: Path):
+    from cal_iut.celcat.mapping import load_celcat_config
+
+    return load_celcat_config(Path(config_dir))
+
+
+def _groupes_du_fichier(config_dir: Path) -> dict[str, str]:
+    """`celcat_groupes.yaml` : nom Celcat -> identifiant interne (lecture seule)."""
+    chemin = Path(config_dir) / "celcat_groupes.yaml"
     if not chemin.exists():
         return {}
     try:
         data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
     except (yaml.YAMLError, OSError):
         return {}
-    return data if isinstance(data, dict) else {}
-
-
-def codes_du_fichier(config_dir: Path, famille: str) -> dict[str, str]:
-    """Ce que dit la configuration seule, SANS la surcouche — la « valeur du
-    fichier » que rétablit l'effacement. Mêmes règles que
-    `load_celcat_config` (trigrammes et codes de cours en majuscules, « 0 »
-    = pas de code)."""
-    from cal_iut.celcat.mapping import _code_renseigne
-
-    config_dir = Path(config_dir)
-    if famille == "groupes":
-        return {str(k).strip(): str(v).strip() for k, v in _lire_yaml(config_dir / "celcat_groupes.yaml").items() if v}
-    data = _lire_yaml(config_dir / "celcat.yaml")
-    if famille == "salles":
-        return {str(k): str(v) for k, v in (data.get("salles") or {}).items() if v}
-    if famille == "enseignants":
-        return {str(k).upper(): code for k, v in (data.get("enseignants") or {}).items() if (code := _code_renseigne(v))}
-    if famille == "cours":
-        return {str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v}
-    raise ValueError(famille)
+    return {str(k).strip(): str(v).strip() for k, v in data.items() if v} if isinstance(data, dict) else {}
 
 
 def codes_effectifs(config_dir: Path, famille: str) -> dict[str, str]:
-    """Le code qui part vers Celcat : `load_celcat_config`, la table même
-    que lisent le plan, la comparaison, la file et le worker."""
-    from cal_iut.celcat.mapping import load_celcat_config
-
+    """Le code qui part vers Celcat, par famille."""
     if famille == "groupes":
-        return codes_du_fichier(config_dir, "groupes")
-    cfg = load_celcat_config(Path(config_dir))
+        return _groupes_du_fichier(config_dir)
+    cfg = _config(config_dir)
     return {"cours": cfg.modules, "salles": cfg.salles, "enseignants": cfg.enseignants}[famille]
 
 
@@ -208,10 +229,14 @@ _RE_SALLE_SANS_POINT = re.compile(r"^([A-Za-z])(\d{3})$")
 _RE_SALLE_POINT = re.compile(r"^([a-z])\.(\d{3})$")
 
 
+def _refus_groupes() -> HTTPException:
+    return HTTPException(409, "L'identifiant Celcat d'un groupe ne se saisit pas dans l'appli : " + NOTE_GROUPES)
+
+
 def _normaliser(famille: str, config_dir: Path, brut: str) -> str:
     texte = " ".join(str(brut or "").split())
     if not texte:
-        raise HTTPException(400, "Le code Celcat est vide. Pour revenir à la valeur du fichier, utilisez « Revenir à la valeur du fichier ».")
+        raise HTTPException(400, "Le code Celcat est vide. Pour retirer une saisie, utilisez « Revenir à manquant ».")
     if famille == "cours":
         from cal_iut.api.reference import valider_code_module
 
@@ -233,9 +258,7 @@ def _normaliser(famille: str, config_dir: Path, brut: str) -> str:
         if not _RE_SALLE.match(texte):
             raise HTTPException(400, f"« {texte} » n'est pas un nom de salle Celcat (ex. H.104, Amphi 3 MMI).")
         return texte
-    raise HTTPException(
-        409, "L'identifiant Celcat d'un groupe ne se saisit pas dans l'appli : " + NOTE_GROUPES
-    )
+    raise _refus_groupes()
 
 
 def _salles_jumelees(rooms: list[object], a: str, b: str) -> bool:
@@ -251,22 +274,65 @@ def _salles_jumelees(rooms: list[object], a: str, b: str) -> bool:
     )
 
 
+def _libelle_origine(cfg, famille: str, cle: str) -> str:
+    origine = (cfg.origines.get(famille) or {}).get(cle, "")
+    if origine == "appli":
+        origine = "fichier" if cle in (cfg.connus.get(famille) or {}) else origine
+    return LIBELLE_ORIGINE.get(origine, origine)
+
+
+def _exiger_modifiable(cfg, famille: str, cle: str) -> None:
+    """Verrou (30/09/2026, « il faut pouvoir modifier QUE ceux qu'on n'a
+    pas ») : un code connu ne se change pas ici, et une entité « sans code
+    (voulu) » doit d'abord perdre ce statut."""
+    connu = (cfg.connus.get(famille) or {}).get(cle)
+    if connu:
+        source = "maquette" if str((cfg.origines.get(famille) or {}).get(cle, "")).startswith("maquette") else None
+        if source is None:
+            source = "maquette" if cle not in _codes_fichier_seul(cfg, famille) else "fichier de configuration"
+        raise HTTPException(
+            409,
+            f"Code déjà connu ({source}) : {connu}. Il ne se modifie pas dans l'appli — "
+            "seuls les codes manquants se saisissent ici.",
+        )
+    voulu = (cfg.sans_code.get(famille) or {}).get(cle)
+    if voulu:
+        raise HTTPException(
+            409,
+            f"{cle} est marqué « sans code (voulu) » ({voulu.get('motif') or 'sans motif'}) : "
+            "retirez d'abord ce statut pour saisir un code.",
+        )
+
+
+def _codes_fichier_seul(cfg, famille: str) -> set[str]:
+    """Les clés connues par `celcat.yaml` (et non par la maquette)."""
+    connus = cfg.connus.get(famille) or {}
+    origines = cfg.origines.get(famille) or {}
+    return {cle for cle in connus if not str(origines.get(cle, "")).startswith("maquette")}
+
+
 def valider_code(state: object, famille: str, cle: str, brut: str) -> str:
     """Le code nettoyé, ou une `HTTPException` qui dit quoi corriger.
 
-    Format propre à la famille, puis REFUS d'un code déjà porté par une
-    autre entité de la même famille : deux salles sous le même nom Celcat
-    y seraient confondues, deux enseignants se partageraient une paie, deux
-    cours un même module. Exception documentée : une salle fusionnée et
-    l'une de ses moitiés (`_salles_jumelees`)."""
-    config_dir = Path(state.config_dir)
-    code = _normaliser(famille, config_dir, brut)
+    Verrou d'abord (code connu, « sans code voulu »), puis format propre à
+    la famille, puis REFUS d'un code déjà porté par une autre entité de la
+    même famille : deux salles sous le même nom Celcat y seraient
+    confondues, deux enseignants se partageraient une paie, deux cours un
+    même module. Exception documentée : une salle fusionnée et l'une de ses
+    moitiés (`_salles_jumelees`)."""
+    if famille not in _FAMILLE_SURCOUCHE:
+        raise _refus_groupes()
     from cal_iut.celcat import mappings
 
+    config_dir = Path(state.config_dir)
+    cfg = _config(config_dir)
     cle_propre = mappings.cle_normalisee(_FAMILLE_SURCOUCHE[famille], cle)
+    _exiger_modifiable(cfg, famille, cle_propre)
+    code = _normaliser(famille, config_dir, brut)
     rooms = list(getattr(state, "rooms", []) or [])
     libelles = _libelles(state, famille)
-    for autre, valeur in sorted(codes_effectifs(config_dir, famille).items()):
+    effectifs = {"cours": cfg.modules, "salles": cfg.salles, "enseignants": cfg.enseignants}[famille]
+    for autre, valeur in sorted(effectifs.items()):
         if autre == cle_propre or str(valeur).strip().upper() != code.upper():
             continue
         if famille == "salles" and _salles_jumelees(rooms, cle_propre, autre):
@@ -302,65 +368,107 @@ _verrou = threading.RLock()
 
 
 def enregistrer_code(state: object, famille: str, cle: str, code: str, *, par: str = "") -> str:
-    """Persiste un code DÉJÀ validé (`valider_code`). Rend l'origine
-    résultante : « fichier » si la saisie redit la valeur du fichier (la
-    saisie est alors retirée, pour ne pas masquer une correction future du
-    fichier), « appli » sinon. Trace au journal commun, avec la valeur
-    d'avant et celle du fichier."""
+    """Persiste un code DÉJÀ validé (`valider_code`) — donc pour une entité
+    sans code connu. Trace au journal commun, avec la valeur d'avant.
+    Rend l'origine résultante (« appli »)."""
     from cal_iut.celcat import mappings
     from cal_iut.ingestion import surcharges_reference
 
-    config_dir = Path(state.config_dir)
     famille_surcouche = _FAMILLE_SURCOUCHE[famille]
     cle_propre = mappings.cle_normalisee(famille_surcouche, cle)
     with _verrou:
-        du_fichier = codes_du_fichier(config_dir, famille).get(cle_propre)
-        avant = codes_effectifs(config_dir, famille).get(cle_propre)
-        if du_fichier is not None and du_fichier.strip().upper() == code.upper():
-            retiree = mappings.retirer(famille_surcouche, cle_propre)
-            if retiree is not None:
-                surcharges_reference.journaliser(
-                    _FAMILLE_JOURNAL[famille], cle_propre, "code_celcat", avant, du_fichier, par=par,
-                    valeur_fichier=du_fichier,
-                )
-            return "fichier"
-        mappings.definir(famille_surcouche, cle_propre, code, par=par, valeur_fichier=du_fichier)
+        avant = codes_effectifs(Path(state.config_dir), famille).get(cle_propre)
+        mappings.definir(famille_surcouche, cle_propre, code, par=par, valeur_fichier=None)
         surcharges_reference.journaliser(
-            _FAMILLE_JOURNAL[famille], cle_propre, "code_celcat", avant, code, par=par, valeur_fichier=du_fichier
+            _FAMILLE_JOURNAL[famille], cle_propre, "code_celcat", avant, code, par=par, valeur_fichier=None
         )
     return "appli"
 
 
 def definir_code(state: object, famille: str, cle: str, brut: str, *, par: str = "") -> tuple[str, str]:
     """Valide puis enregistre. Rend `(code, origine)`."""
-    if famille not in _FAMILLE_SURCOUCHE:
-        raise HTTPException(409, "L'identifiant Celcat d'un groupe ne se saisit pas dans l'appli : " + NOTE_GROUPES)
     code = valider_code(state, famille, cle, brut)
     return code, enregistrer_code(state, famille, cle, code, par=par)
 
 
 def effacer_code(state: object, famille: str, cle: str, *, par: str = "") -> str | None:
-    """« Revenir à la valeur du fichier » : retire la saisie. Rend la valeur
-    du fichier (None s'il n'en a pas : l'entité redevient « manquant »).
-    404 s'il n'y avait pas de saisie."""
+    """Retire la saisie : « Revenir à manquant », ou — pour une saisie
+    ancienne sur un code désormais connu — rétablit ce code connu. Rend le
+    code qui part ensuite (None : manquant). 404 sans saisie."""
     from cal_iut.celcat import mappings
     from cal_iut.ingestion import surcharges_reference
 
     if famille not in _FAMILLE_SURCOUCHE:
-        raise HTTPException(409, "L'identifiant Celcat d'un groupe ne se saisit pas dans l'appli : " + NOTE_GROUPES)
+        raise _refus_groupes()
     config_dir = Path(state.config_dir)
     famille_surcouche = _FAMILLE_SURCOUCHE[famille]
     cle_propre = mappings.cle_normalisee(famille_surcouche, cle)
     with _verrou:
-        du_fichier = codes_du_fichier(config_dir, famille).get(cle_propre)
+        connu = (_config(config_dir).connus.get(famille) or {}).get(cle_propre)
         retiree = mappings.retirer(famille_surcouche, cle_propre)
         if retiree is None:
             raise HTTPException(404, f"Aucun code Celcat saisi dans l'appli pour {cle_propre}.")
         surcharges_reference.journaliser(
-            _FAMILLE_JOURNAL[famille], cle_propre, "code_celcat", retiree.get("valeur"), du_fichier, par=par,
-            valeur_fichier=du_fichier,
+            _FAMILLE_JOURNAL[famille], cle_propre, "code_celcat", retiree.get("valeur"), connu, par=par,
+            valeur_fichier=connu,
         )
-    return du_fichier
+    return connu
+
+
+def marquer_sans_code(state: object, famille: str, cle: str, motif: str, *, par: str = "") -> str:
+    """« Sans code (voulu) » : seulement pour une entité SANS code (ni
+    connu, ni saisi). Motif obligatoire (3 caractères au moins). Tracé."""
+    from cal_iut.celcat import mappings
+    from cal_iut.ingestion import surcharges_reference
+
+    if famille not in _FAMILLE_SURCOUCHE:
+        raise _refus_groupes()
+    famille_surcouche = _FAMILLE_SURCOUCHE[famille]
+    cle_propre = mappings.cle_normalisee(famille_surcouche, cle)
+    motif_propre = " ".join(str(motif or "").split())
+    if len(motif_propre) < 3:
+        raise HTTPException(400, "Le motif est obligatoire : dites en quelques mots pourquoi il n'y a pas de code.")
+    with _verrou:
+        cfg = _config(Path(state.config_dir))
+        effectif = {"cours": cfg.modules, "salles": cfg.salles, "enseignants": cfg.enseignants}[famille].get(cle_propre)
+        if effectif:
+            raise HTTPException(
+                409, f"{cle_propre} a un code Celcat ({effectif}) : seul ce qui n'en a pas peut être marqué « sans code »."
+            )
+        voulu = (cfg.sans_code.get(famille) or {}).get(cle_propre)
+        if voulu and voulu.get("source") == "fichier":
+            raise HTTPException(409, f"{cle_propre} est déjà « sans code (voulu) » dans celcat.yaml.")
+        avant = voulu.get("motif") if voulu else None
+        mappings.definir_sans_code(famille_surcouche, cle_propre, motif_propre, par=par)
+        surcharges_reference.journaliser(
+            _FAMILLE_JOURNAL[famille], cle_propre, "sans_code_voulu", avant, motif_propre, par=par
+        )
+    return motif_propre
+
+
+def retirer_sans_code(state: object, famille: str, cle: str, *, par: str = "") -> None:
+    """Retire un « sans code (voulu) » saisi dans l'appli : l'entité
+    redevient manquante. Celui du fichier ne se retire pas ici."""
+    from cal_iut.celcat import mappings
+    from cal_iut.ingestion import surcharges_reference
+
+    if famille not in _FAMILLE_SURCOUCHE:
+        raise _refus_groupes()
+    famille_surcouche = _FAMILLE_SURCOUCHE[famille]
+    cle_propre = mappings.cle_normalisee(famille_surcouche, cle)
+    with _verrou:
+        cfg = _config(Path(state.config_dir))
+        voulu = (cfg.sans_code.get(famille) or {}).get(cle_propre)
+        if voulu and voulu.get("source") == "fichier":
+            raise HTTPException(
+                409, f"« Sans code (voulu) » de {cle_propre} vient de celcat.yaml : il se retire dans ce fichier."
+            )
+        retiree = mappings.retirer_sans_code(famille_surcouche, cle_propre)
+        if retiree is None:
+            raise HTTPException(404, f"{cle_propre} n'est pas marqué « sans code (voulu) » dans l'appli.")
+        surcharges_reference.journaliser(
+            _FAMILLE_JOURNAL[famille], cle_propre, "sans_code_voulu", retiree.get("motif"), None, par=par
+        )
 
 
 # ── La liste complète ───────────────────────────────────────────────────
@@ -374,14 +482,17 @@ def _nom_groupe_celcat(semestre: str, libelle: str) -> str:
 
 def lister(state: object, *, admin: bool) -> CodesCelcat:
     from cal_iut.api.reference import codes_modules_releves
-    from cal_iut.celcat import mappings
+    from cal_iut.celcat import codes_maquette, mappings
     from cal_iut.celcat.instantane import lire
     from cal_iut.models.entities import RoomType
 
     config_dir = Path(state.config_dir)
+    cfg = _config(config_dir)
     timetable = list(getattr(state, "timetable", []) or [])
     sessions_by_id = getattr(state, "sessions_by_id", {}) or {}
     surcouche = mappings.charger()
+    maquette = codes_maquette.lire(config_dir)
+    effectifs = {"cours": cfg.modules, "salles": cfg.salles, "enseignants": cfg.enseignants}
 
     par_cours: Counter[str] = Counter()
     par_salle: Counter[str] = Counter()
@@ -403,60 +514,87 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
             par_groupe[_nom_groupe_celcat(semestre, libelle_groupe.get(ids[0], ids[0])).upper()] += 1
 
     def ligne(famille: str, cle: str, **champs: object) -> LigneCodeCelcat:
-        famille_surcouche = _FAMILLE_SURCOUCHE.get(famille)
-        saisie = (surcouche.get(famille_surcouche, {}) if famille_surcouche else {}).get(cle)
-        fichier = champs.pop("fichier")
-        effectif = champs.pop("effectif")
-        origine = "appli" if saisie else ("fichier" if effectif else "manquant")
+        effectif = effectifs[famille].get(cle)
+        connu = (cfg.connus.get(famille) or {}).get(cle)
+        saisie = (surcouche.get(_FAMILLE_SURCOUCHE[famille]) or {}).get(cle)
+        voulu = (cfg.sans_code.get(famille) or {}).get(cle) if not effectif else None
+        origine_brute = (cfg.origines.get(famille) or {}).get(cle, "")
+        avertissement = None
+        if saisie and connu:
+            # Saisie antérieure au verrou : appliquée, en lecture seule.
+            origine: str = "maquette" if cle not in _codes_fichier_seul(cfg, famille) else "fichier"
+            detail = origine_brute if origine_brute != "appli" else None
+            if str(saisie.get("valeur") or "").strip().upper() != connu.strip().upper():
+                avertissement = (
+                    f"Une saisie dans l'appli ({saisie.get('valeur')}) passe devant le code connu ({connu}) : "
+                    "elle reste appliquée. « Revenir au code connu » la retire."
+                )
+                origine = "appli"
+                detail = None
+            else:
+                detail = LIBELLE_ORIGINE.get(origine)
+        elif saisie:
+            origine, detail = "appli", None
+        elif effectif:
+            origine = "maquette" if origine_brute.startswith("maquette") else "fichier"
+            detail = origine_brute if origine == "maquette" else "celcat.yaml"
+        elif voulu:
+            origine, detail = "voulu", ("celcat.yaml" if voulu.get("source") == "fichier" else "appli")
+        else:
+            origine, detail = "manquant", None
+        voulu_appli = bool(voulu and voulu.get("source") == "appli")
+        modifiable = admin and not connu and not voulu
         return LigneCodeCelcat(
             cle=cle,
             code=effectif or None,
-            code_fichier=fichier or None,
+            code_connu=connu or None,
             origine=origine,
-            saisi_le=(saisie or {}).get("ajoute_le"),
-            saisi_par=(str((saisie or {}).get("ajoute_par") or "") or None) if admin else None,
+            origine_detail=detail,
+            code_maquette=(maquette.get(cle) or {}).get("maquette") if famille == "cours" else None,
+            motif_sans_code=(voulu or {}).get("motif") if origine == "voulu" else None,
+            saisi_le=(saisie or {}).get("ajoute_le") or ((voulu or {}).get("ajoute_le") if voulu_appli else None) or None,
+            saisi_par=(
+                (str((saisie or {}).get("ajoute_par") or "") or ((voulu or {}).get("ajoute_par") if voulu_appli else "") or None)
+                if admin else None
+            ),
             valeur_avant=(saisie or {}).get("valeur_avant") if admin else None,
-            modifiable=admin and famille != "groupes",
+            avertissement=avertissement,
+            modifiable=modifiable,
+            peut_revenir=admin and bool(saisie),
+            peut_marquer_sans_code=admin and origine == "manquant",
+            peut_retirer_sans_code=admin and voulu_appli,
             **champs,
         )
 
     familles: dict[str, list[LigneCodeCelcat]] = {}
 
     # ── Cours : la maquette de tous les parcours et semestres ──
-    fichier = codes_du_fichier(config_dir, "cours")
-    effectif = codes_effectifs(config_dir, "cours")
     releves = codes_modules_releves(config_dir)
     cours: dict[str, dict[str, object]] = {}
     for c in getattr(state, "courses", []) or []:
         cours.setdefault(c.code.upper(), {
-            "cle": c.code, "libelle": c.name or c.code, "semestre": c.semestre or None,
-            "parcours": c.parcours or None, "codelement": (c.codelement or "").strip().upper(),
+            "libelle": c.name or c.code, "semestre": c.semestre or None, "parcours": c.parcours or None,
         })
     for s in getattr(state, "sessions", []) or []:
         cours.setdefault(s.course_code.upper(), {
-            "cle": s.course_code, "libelle": s.course_name or s.course_code, "semestre": s.semestre or None,
-            "parcours": s.parcours or None, "codelement": "",
+            "libelle": s.course_name or s.course_code, "semestre": s.semestre or None, "parcours": s.parcours or None,
         })
     lignes: list[LigneCodeCelcat] = []
     for cle_maj, c in sorted(cours.items()):
-        code = effectif.get(cle_maj)
+        code = cfg.modules.get(cle_maj)
         alerte = None
         if code and code.strip().upper() not in releves:
             alerte = (
                 f"{code} n'est pas dans le relevé des matières Celcat (celcat_matieres.yaml) : "
                 "l'envoi échouera tant que son identifiant interne n'y est pas."
             )
-        suggestion = c["codelement"] if c["codelement"] in releves and c["codelement"] != (code or "").upper() else None
         lignes.append(ligne(
             "cours", cle_maj, libelle=str(c["libelle"]), semestre=c["semestre"], parcours=c["parcours"],
-            nb_seances=par_cours.get(cle_maj, 0), fichier=fichier.get(cle_maj), effectif=code,
-            suggestion=suggestion or None, alerte=alerte,
+            nb_seances=par_cours.get(cle_maj, 0), alerte=alerte,
         ))
     familles["cours"] = lignes
 
     # ── Salles : rooms.yaml + salles ajoutées ──
-    fichier = codes_du_fichier(config_dir, "salles")
-    effectif = codes_effectifs(config_dir, "salles")
     rooms = list(getattr(state, "rooms", []) or [])
     par_id = {r.id: r for r in rooms}
     lignes = []
@@ -469,35 +607,22 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
             note = f"Salles réunies ({moities}) : Celcat ne connaît que l'une des deux, qui peut porter le même code."
         lignes.append(ligne(
             "salles", r.id, libelle=r.label, type_salle=r.room_type.value, capacite=r.capacity,
-            nb_seances=par_salle.get(r.id, 0), fichier=fichier.get(r.id), effectif=effectif.get(r.id), note=note,
+            nb_seances=par_salle.get(r.id, 0), note=note,
         ))
     familles["salles"] = lignes
 
     # ── Enseignants : maquette, séances, enseignants déclarés ──
-    from cal_iut.api.reference import _codes_enseignants
-
-    fichier = codes_du_fichier(config_dir, "enseignants")
-    effectif = codes_effectifs(config_dir, "enseignants")
-    codes = set(_codes_enseignants(state))
-    for c in getattr(state, "courses", []) or []:
-        for bloc in c.profs or []:
-            if bloc.teacher and bloc.teacher.code:
-                codes.add(bloc.teacher.code.strip().upper())
-        if c.lead and c.lead.code:
-            codes.add(c.lead.code.strip().upper())
+    codes = enseignants_connus(state)
     noms = _libelles(state, "enseignants")
     familles["enseignants"] = [
-        ligne(
-            "enseignants", code, libelle=noms.get(code) or code, nb_seances=par_prof.get(code, 0),
-            fichier=fichier.get(code), effectif=effectif.get(code),
-        )
+        ligne("enseignants", code, libelle=noms.get(code) or code, nb_seances=par_prof.get(code, 0))
         for code in sorted(c for c in codes if c)
     ]
 
-    # ── Groupes : ceux du fichier + ceux qu'attend le planning ──
-    fichier = codes_du_fichier(config_dir, "groupes")
-    fichier_maj = {k.upper(): (k, v) for k, v in fichier.items()}
-    noms_groupes: dict[str, str] = {k.upper(): k for k in fichier}
+    # ── Groupes : ceux du fichier + ceux qu'attend le planning (lecture seule) ──
+    fichier_groupes = _groupes_du_fichier(config_dir)
+    fichier_maj = {k.upper(): v for k, v in fichier_groupes.items()}
+    noms_groupes: dict[str, str] = {k.upper(): k for k in fichier_groupes}
     for s in getattr(state, "sessions", []) or []:
         semestre = str(s.semestre or "").strip()
         if semestre and len(s.group_ids or []) == 1:
@@ -505,11 +630,12 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
             noms_groupes.setdefault(nom.upper(), nom)
     lignes = []
     for cle_maj, nom in sorted(noms_groupes.items(), key=lambda kv: _ordre_groupe(kv[1])):
-        valeur = fichier_maj.get(cle_maj, (None, None))[1]
+        valeur = fichier_maj.get(cle_maj)
         semestre = nom.split()[2] if len(nom.split()) > 2 else None
-        lignes.append(ligne(
-            "groupes", nom, libelle=nom, semestre=semestre, nb_seances=par_groupe.get(cle_maj, 0),
-            fichier=valeur, effectif=valeur, note=NOTE_GROUPES,
+        lignes.append(LigneCodeCelcat(
+            cle=nom, libelle=nom, semestre=semestre, nb_seances=par_groupe.get(cle_maj, 0),
+            code=valeur, code_connu=valeur, origine="fichier" if valeur else "manquant",
+            origine_detail="celcat_groupes.yaml" if valeur else None, note=NOTE_GROUPES, modifiable=False,
         ))
     familles["groupes"] = lignes
 
@@ -522,13 +648,8 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
                     salles_relevees.add(nom.strip())
     except Exception:  # sans relevé, les noms connus suffisent
         logger.warning("Relevé Celcat illisible : suggestions de salles limitées au fichier", exc_info=True)
-    salles_relevees |= set(codes_effectifs(config_dir, "salles").values())
-    suggestions = {
-        "cours": sorted(releves),
-        "salles": sorted(salles_relevees),
-        "enseignants": [],
-        "groupes": [],
-    }
+    salles_relevees |= set(cfg.salles.values())
+    suggestions = {"cours": sorted(releves), "salles": sorted(salles_relevees), "enseignants": [], "groupes": []}
 
     sortie: dict[str, FamilleCodesCelcat] = {}
     for famille in FAMILLES_CODE:
@@ -542,6 +663,8 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
             sans_code=sum(1 for l in lignes if l.origine == "manquant"),
             sans_code_bloquants=sum(1 for l in lignes if l.origine == "manquant" and l.nb_seances > 0),
             saisis=sum(1 for l in lignes if l.origine == "appli"),
+            voulus=sum(1 for l in lignes if l.origine == "voulu"),
+            maquette=sum(1 for l in lignes if l.origine == "maquette"),
             suggestions=suggestions[famille],
             lignes=lignes,
         )
@@ -598,9 +721,9 @@ def definir(body: CodeCelcatRequest, request: Request) -> CodeCelcatEnregistre:
     cle = entite_canonique(state, body.famille, body.cle)
     code, origine = definir_code(state, body.famille, cle, body.code, par=_par(request))
     rev = revision.incrementer(f"codes-celcat:{body.famille}:{cle}")
-    message = "Valeur du fichier : saisie retirée." if origine == "fichier" else "Enregistré pour Celcat."
     return CodeCelcatEnregistre(
-        famille=body.famille, cle=cle, code=code, origine=origine, message=message, revision=rev.numero
+        famille=body.famille, cle=cle, code=code, origine=origine, message="Enregistré pour Celcat.",
+        revision=rev.numero,
     )
 
 
@@ -609,13 +732,59 @@ def definir(body: CodeCelcatRequest, request: Request) -> CodeCelcatEnregistre:
 def effacer(famille: FamilleCode, cle: str, request: Request) -> CodeCelcatEnregistre:
     state = _main().get_state()
     cle = entite_canonique(state, famille, cle)
-    du_fichier = effacer_code(state, famille, cle, par=_par(request))
+    connu = effacer_code(state, famille, cle, par=_par(request))
     rev = revision.incrementer(f"codes-celcat:{famille}:{cle}")
+    origine = "manquant"
+    if connu:
+        cfg = _config(Path(state.config_dir))
+        origine = "maquette" if str((cfg.origines.get(famille) or {}).get(cle, "")).startswith("maquette") else "fichier"
     return CodeCelcatEnregistre(
-        famille=famille, cle=cle, code=du_fichier, origine="fichier" if du_fichier else "manquant",
-        message="Valeur du fichier rétablie." if du_fichier else "Saisie retirée : plus de code pour Celcat.",
+        famille=famille, cle=cle, code=connu, origine=origine,
+        message=f"Code connu rétabli ({connu})." if connu else "Saisie retirée : de nouveau manquant.",
         revision=rev.numero,
     )
+
+
+@router.put("/sans-code", response_model=CodeCelcatEnregistre, dependencies=[Depends(accounts.require_role("admin"))])
+@ecriture_planning
+def definir_sans_code(body: SansCodeRequest, request: Request) -> CodeCelcatEnregistre:
+    state = _main().get_state()
+    cle = entite_canonique(state, body.famille, body.cle)
+    marquer_sans_code(state, body.famille, cle, body.motif, par=_par(request))
+    rev = revision.incrementer(f"codes-celcat:{body.famille}:{cle}:sans-code")
+    return CodeCelcatEnregistre(
+        famille=body.famille, cle=cle, code=None, origine="voulu",
+        message="Marqué « sans code (voulu) » : rien ne part vers Celcat.", revision=rev.numero,
+    )
+
+
+@router.delete("/sans-code", response_model=CodeCelcatEnregistre, dependencies=[Depends(accounts.require_role("admin"))])
+@ecriture_planning
+def effacer_sans_code(famille: FamilleCode, cle: str, request: Request) -> CodeCelcatEnregistre:
+    state = _main().get_state()
+    cle = entite_canonique(state, famille, cle)
+    retirer_sans_code(state, famille, cle, par=_par(request))
+    rev = revision.incrementer(f"codes-celcat:{famille}:{cle}:sans-code")
+    return CodeCelcatEnregistre(
+        famille=famille, cle=cle, code=None, origine="manquant",
+        message="« Sans code (voulu) » retiré : de nouveau manquant.", revision=rev.numero,
+    )
+
+
+def enseignants_connus(state: object) -> set[str]:
+    """Les trigrammes du planning : séances, placements, enseignants
+    déclarés, et toute la maquette (intervenants et responsables). La même
+    liste pour l'onglet et pour la saisie."""
+    from cal_iut.api.reference import _codes_enseignants
+
+    codes = set(_codes_enseignants(state))
+    for c in getattr(state, "courses", []) or []:
+        for bloc in c.profs or []:
+            if bloc.teacher and bloc.teacher.code:
+                codes.add(bloc.teacher.code.strip().upper())
+        if c.lead and c.lead.code:
+            codes.add(c.lead.code.strip().upper())
+    return {c for c in codes if c}
 
 
 def entite_canonique(state: object, famille: str, cle: str) -> str:
@@ -633,11 +802,7 @@ def entite_canonique(state: object, famille: str, cle: str) -> str:
         connus = {c.code.upper(): c.code.upper() for c in getattr(state, "courses", []) or []}
         connus |= {s.course_code.upper(): s.course_code.upper() for s in getattr(state, "sessions", []) or []}
     else:
-        from cal_iut.api.reference import _codes_enseignants
-
-        connus = {c: c for c in _codes_enseignants(state)}
-        for c in getattr(state, "courses", []) or []:
-            connus |= {b.teacher.code.upper(): b.teacher.code.upper() for b in c.profs or [] if b.teacher and b.teacher.code}
+        connus = {c: c for c in enseignants_connus(state)}
     if cible not in connus:
         raise HTTPException(404, f"« {brut} » n'est pas connu du planning ({famille}).")
     return connus[cible]

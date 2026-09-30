@@ -179,37 +179,63 @@ def test_une_salle_fusionnee_peut_porter_le_code_de_sa_moitie(admin, etat) -> No
 
 def test_la_saisie_est_tracee(admin, etat) -> None:  # noqa: F811
     avant = revision.actuelle().numero
-    assert _put(admin, "salles", "h005", "H.006").status_code == 200
+    assert _put(admin, "salles", "h018", "H.104").status_code == 200
     assert revision.actuelle().numero > avant
-    entree = mappings.charger()["salles"]["h005"]
-    assert entree["valeur"] == "H.006" and entree["ajoute_par"].startswith("test-admin-") and entree["ajoute_le"]
-    assert (entree["valeur_avant"], entree["valeur_fichier"]) == ("H.005", "H.005")
-    assert _put(admin, "salles", "h005", "H.104").status_code == 200
-    assert mappings.charger()["salles"]["h005"]["valeur_avant"] == "H.006"
+    entree = mappings.charger()["salles"]["h018"]
+    assert entree["valeur"] == "H.104" and entree["ajoute_par"].startswith("test-admin-") and entree["ajoute_le"]
+    assert (entree["valeur_avant"], entree["valeur_fichier"]) == (None, None)
+    assert _put(admin, "salles", "h018", "Amphi 3 MMI").status_code == 200
+    assert mappings.charger()["salles"]["h018"]["valeur_avant"] == "H.104"
     ligne = surcharges_reference.journal()[0]
-    assert (ligne["famille"], ligne["cle"], ligne["champ"], ligne["avant"], ligne["apres"], ligne["valeur_fichier"]) == (
-        "salles", "h005", "code_celcat", "H.006", "H.104", "H.005",
+    assert (ligne["famille"], ligne["cle"], ligne["champ"], ligne["avant"], ligne["apres"]) == (
+        "salles", "h018", "code_celcat", "H.104", "Amphi 3 MMI",
     )
-    assert _ligne(admin, "salles", "h005")["valeur_avant"] == "H.006"
+    vue = _ligne(admin, "salles", "h018")
+    assert (vue["origine"], vue["valeur_avant"], vue["modifiable"], vue["peut_revenir"]) == ("appli", "H.104", True, True)
 
 
-def test_saisir_la_valeur_du_fichier_retire_la_saisie(admin, etat) -> None:  # noqa: F811
-    assert _put(admin, "salles", "h005", "H.006").json()["origine"] == "appli"
-    reponse = _put(admin, "salles", "h005", "H.005")
-    assert reponse.status_code == 200 and reponse.json()["origine"] == "fichier"
-    assert "h005" not in mappings.charger()["salles"]
-    assert _ligne(admin, "salles", "h005")["origine"] == "fichier"
+def test_un_code_connu_est_verrouille(admin, etat) -> None:  # noqa: F811
+    """« Il faut pouvoir modifier QUE ceux qu'on n'a pas » (30/09/2026)."""
+    refus = _put(admin, "salles", "h005", "H.006")
+    assert refus.status_code == 409 and "Code déjà connu (fichier de configuration) : H.005" in refus.json()["detail"]
+    # Même verrou par les autres chemins d'écriture (une seule fonction).
+    assert admin.put("/reference/salles/h005", json={"code_celcat": "H.006"}).status_code == 409
+    assert admin.put("/celcat/mappings", json={"famille": "salles", "cle": "h005", "valeur": "H.006"}).status_code == 409
+    assert admin.put("/reference/enseignants/MRI", json={"code_celcat": "222"}).status_code == 409
+    assert _delete(admin, "salles", "h005").status_code == 404, "rien de saisi : rien à retirer"
+    assert not any(mappings.charger().values())
+    vue = _ligne(admin, "salles", "h005")
+    assert (vue["origine"], vue["origine_detail"], vue["modifiable"], vue["peut_revenir"]) == (
+        "fichier", "celcat.yaml", False, False,
+    )
 
 
-def test_revenir_a_la_valeur_du_fichier(admin, etat) -> None:  # noqa: F811
-    assert _put(admin, "salles", "h005", "H.006").status_code == 200
-    reponse = _delete(admin, "salles", "h005")
+def test_revenir_a_manquant(admin, etat) -> None:  # noqa: F811
+    assert _put(admin, "salles", "h018", "H.104").status_code == 200
+    reponse = _delete(admin, "salles", "h018")
     assert reponse.status_code == 200, reponse.text
-    assert (reponse.json()["code"], reponse.json()["origine"]) == ("H.005", "fichier")
-    assert load_celcat_config(etat.config_dir).salles["h005"] == "H.005"
-    assert _delete(admin, "salles", "h005").status_code == 404, "plus rien à retirer"
+    assert (reponse.json()["code"], reponse.json()["origine"]) == (None, "manquant")
+    assert "h018" not in load_celcat_config(etat.config_dir).salles
+    assert _delete(admin, "salles", "h018").status_code == 404, "plus rien à retirer"
     ligne = surcharges_reference.journal()[0]
-    assert (ligne["avant"], ligne["apres"]) == ("H.006", "H.005")
+    assert (ligne["avant"], ligne["apres"]) == ("H.104", None)
+    assert _ligne(admin, "salles", "h018")["origine"] == "manquant"
+
+
+def test_une_saisie_ancienne_sur_un_code_connu_reste_appliquee_en_lecture_seule(admin, etat) -> None:  # noqa: F811
+    """Avant le verrou, on pouvait corriger un code du fichier : la saisie
+    reste appliquée (rien ne casse), signalée, et seulement retirable."""
+    mappings.definir("salles", "h005", "H.006", par="ancien@iut")
+    assert _entree(etat, "td1").salle == "H.006", "toujours appliquée"
+    vue = _ligne(admin, "salles", "h005")
+    assert (vue["origine"], vue["code"], vue["code_connu"], vue["modifiable"], vue["peut_revenir"]) == (
+        "appli", "H.006", "H.005", False, True,
+    )
+    assert "H.005" in vue["avertissement"]
+    assert _put(admin, "salles", "h005", "H.104").status_code == 409
+    reponse = _delete(admin, "salles", "h005")
+    assert (reponse.json()["code"], reponse.json()["origine"]) == ("H.005", "fichier")
+    assert _entree(etat, "td1").salle == "H.005"
 
 
 def test_les_groupes_restent_en_lecture_seule(admin) -> None:  # noqa: F811
@@ -263,11 +289,6 @@ def test_bout_en_bout_salles(admin, etat) -> None:  # noqa: F811
     assert motif not in _motifs(admin)
     assert _entree(etat, "cm1").salle == "Amphi 3 MMI"
     assert _ligne_plan(admin, "cm1")["salle"] == "Amphi 3 MMI", "le plan porte le code saisi"
-    # Une salle du fichier corrigée puis rétablie : le plan suit.
-    assert _put(admin, "salles", "h005", "H.006").status_code == 200
-    assert _entree(etat, "td1").salle == "H.006"
-    assert _delete(admin, "salles", "h005").status_code == 200
-    assert _entree(etat, "td1").salle == "H.005"
     assert _delete(admin, "salles", "h018").status_code == 200
     assert _motifs(admin).get(motif) == 1
 
@@ -281,3 +302,170 @@ def test_bout_en_bout_enseignants(admin, etat) -> None:  # noqa: F811
     assert _delete(admin, "enseignants", "KBR").status_code == 200
     assert _motifs(admin).get(motif) == 1
     assert _entree(etat, "cm1").code_enseignant is None
+
+
+# ---------------------------------------------------------------------------
+# v2 (30/09/2026) : « sans code (voulu) » et codes de la maquette
+# ---------------------------------------------------------------------------
+
+
+def _sans_code(client, famille: str, cle: str, motif: str):
+    return client.put("/reference/codes-celcat/sans-code", json={"famille": famille, "cle": cle, "motif": motif})
+
+
+def test_sans_code_voulu_ne_bloque_plus_et_rien_ne_part(admin, etat) -> None:  # noqa: F811
+    assert _sans_code(admin, "cours", "WRX99", " ").status_code == 400, "motif obligatoire"
+    assert _sans_code(admin, "cours", "WR101", "pas de code").status_code == 409, "a déjà un code"
+    ok = _sans_code(admin, "cours", "wrx99", "Visite, pas une matière")
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["origine"] == "voulu"
+
+    vue = _ligne(admin, "cours", "WRX99")
+    assert (vue["origine"], vue["origine_detail"], vue["motif_sans_code"]) == ("voulu", "appli", "Visite, pas une matière")
+    assert vue["peut_retirer_sans_code"] and not vue["modifiable"]
+    assert vue["saisi_par"].startswith("test-admin-")
+    familles = _familles(admin)
+    assert (familles["cours"]["sans_code"], familles["cours"]["voulus"]) == (0, 1)
+    # Plus un manque, plus un blocage : « non envoyée (voulu) », rien ne part.
+    assert "cours:WRX99:code_celcat" not in {m["id"] for m in admin.get("/reference/manques").json()["manques"]}
+    plan = admin.get("/celcat/plan?semaines=10").json()
+    assert "module WRX99 sans code Celcat" not in plan["motifs_blocage"]
+    assert plan["non_envoyees"] == 1
+    assert list(plan["motifs_non_envoi"]) == ["module WRX99 sans code Celcat, voulu : Visite, pas une matière"]
+    assert _ligne_plan(admin, "wrx1")["action"] == "non_envoyee"
+    entree = _entree(etat, "wrx1")
+    assert entree.non_envoyee and not entree.prete and entree.code_module is None
+    # Un code ne se saisit pas par-dessus : il faut retirer le statut.
+    assert _put(admin, "cours", "WRX99", "TSB0199").status_code == 409
+    # Tracé.
+    ligne = surcharges_reference.journal()[0]
+    assert (ligne["cle"], ligne["champ"], ligne["apres"]) == ("WRX99", "sans_code_voulu", "Visite, pas une matière")
+
+    retrait = admin.delete("/reference/codes-celcat/sans-code", params={"famille": "cours", "cle": "WRX99"})
+    assert retrait.status_code == 200 and retrait.json()["origine"] == "manquant"
+    assert _motifs(admin).get("module WRX99 sans code Celcat") == 1, "de nouveau un blocage à corriger"
+    assert admin.delete("/reference/codes-celcat/sans-code", params={"famille": "cours", "cle": "WRX99"}).status_code == 404
+
+
+def test_sans_code_voulu_du_fichier_est_en_lecture_seule(admin, lecteur, etat) -> None:  # noqa: F811
+    chemin = etat.config_dir / "celcat.yaml"
+    chemin.write_text(
+        chemin.read_text(encoding="utf-8") + 'sans_code_voulu:\n  cours:\n    WRX99: "Décidé avec Kyllian"\n',
+        encoding="utf-8",
+    )
+    vue = _ligne(admin, "cours", "WRX99")
+    assert (vue["origine"], vue["origine_detail"], vue["peut_retirer_sans_code"]) == ("voulu", "celcat.yaml", False)
+    refus = admin.delete("/reference/codes-celcat/sans-code", params={"famille": "cours", "cle": "WRX99"})
+    assert refus.status_code == 409 and "celcat.yaml" in refus.json()["detail"]
+    assert _ligne(lecteur, "cours", "WRX99")["motif_sans_code"] == "Décidé avec Kyllian"
+    assert _sans_code(lecteur, "cours", "WRX99", "x y z").status_code == 403
+
+
+def test_code_de_la_maquette_preenregistre_et_verrouille(admin, etat) -> None:  # noqa: F811
+    """Un cours sans code dans le fichier, dont la maquette porte un code
+    relevé : le code part vers Celcat sans aucune saisie."""
+    assert _motifs(admin).get("module WRX99 sans code Celcat") == 1
+    (etat.config_dir / "celcat_modules_maquette.yaml").write_text(
+        'modules:\n  WRX99: {code: "TSB0199", origine: "maquette"}\n', encoding="utf-8"
+    )
+    assert "module WRX99 sans code Celcat" not in _motifs(admin)
+    assert _entree(etat, "wrx1").code_module == "TSB0199"
+    assert not any("module" in b for b in _ligne_plan(admin, "wrx1")["bloquants"])
+    vue = _ligne(admin, "cours", "WRX99")
+    assert (vue["code"], vue["origine"], vue["origine_detail"], vue["modifiable"]) == (
+        "TSB0199", "maquette", "maquette", False,
+    )
+    refus = _put(admin, "cours", "WRX99", "TSB0101")
+    assert refus.status_code == 409 and "Code déjà connu (maquette)" in refus.json()["detail"]
+    assert _familles(admin)["cours"]["maquette"] == 1
+
+
+def test_le_fichier_passe_devant_la_maquette_et_le_voulu_aussi(etat) -> None:  # noqa: F811
+    (etat.config_dir / "celcat_modules_maquette.yaml").write_text(
+        'modules:\n  WR101: {code: "TSB0199", origine: "maquette"}\n'
+        '  WRX99: {code: "TSB0199", origine: "maquette"}\n',
+        encoding="utf-8",
+    )
+    chemin = etat.config_dir / "celcat.yaml"
+    chemin.write_text(chemin.read_text(encoding="utf-8") + 'sans_code_voulu:\n  cours:\n    WRX99: "non"\n', encoding="utf-8")
+    cfg = load_celcat_config(etat.config_dir)
+    assert cfg.modules["WR101"] == "TSB0101" and cfg.origines["cours"]["WR101"] == "fichier"
+    assert "WRX99" not in cfg.modules and cfg.sans_code["cours"]["WRX99"]["source"] == "fichier"
+
+
+def test_le_worker_retire_une_seance_non_envoyee_sans_la_bloquer(etat) -> None:  # noqa: F811
+    from types import SimpleNamespace
+
+    from cal_iut.celcat import logs, nuit
+
+    chemin = etat.config_dir / "celcat.yaml"
+    chemin.write_text(chemin.read_text(encoding="utf-8") + 'sans_code_voulu:\n  cours:\n    WRX99: "non"\n', encoding="utf-8")
+    entree = _entree(etat, "wrx1")
+    job = {"action": "create", "session_id": "wrx1", "semaine": 10}
+    a_retirer: list[dict] = []
+    bilan = SimpleNamespace(ignores=[])
+    assert nuit._retirer_si_non_envoyee(job, "wrx1", entree, a_retirer, bilan)
+    assert a_retirer == [job], "retiré de la file : il ne partira jamais"
+    kinds = {ligne.get("kind") for ligne in logs.tous()}
+    assert "non_envoye" in kinds and "blocked" not in kinds
+    # Le crochet immédiat (placement) ne la signale pas comme un échec.
+    from cal_iut.celcat import ops
+
+    assert ops._non_envoye_voulu(etat.sessions_by_id["wrx1"]).startswith("module WRX99 sans code Celcat, voulu")
+    assert ops._non_envoye_voulu(etat.sessions_by_id["td1"]) is None
+
+
+# ── Règles de préenregistrement depuis la maquette (`celcat/codes_maquette.py`)
+
+
+def test_regles_maquette_exact_corrige_m_vers_c_et_manquants() -> None:
+    from types import SimpleNamespace as C
+
+    from cal_iut.celcat import codes_maquette
+
+    cours = [
+        C(code="WR201", parcours="BUT1", codelement="TSBZ2M01"),
+        C(code="WRA401M", parcours="BUT2-CREACOM-FC", codelement="TSBZD01M"),
+        C(code="WRX401M", parcours="BUT2-DEV-FI", codelement="TSBZX01M"),  # pas CREACOM
+        C(code="WR999", parcours="BUT1", codelement="TSBZ9999"),  # non relevé
+        C(code="WS1PJ", parcours="BUT1", codelement="TSBZ15PJ"),  # voulu
+        C(code="WR101", parcours="BUT1", codelement="TSBZ1M01"),  # déjà au fichier
+        C(code="WR202", parcours="BUT1", codelement="TSBZ1M99"),  # code déjà pris
+        C(code="WR100BU", parcours="BUT1", codelement=None),
+    ]
+    releve = {c: "" for c in ("TSBZ2M01", "TSBZD01C", "TSBZD01D", "TSBZX01C", "TSBZ15PJ", "TSBZ1M01", "TSBZ1M99")}
+    retenus, manquants = codes_maquette.calculer(
+        cours, modules_fichier={"WR101": "TSBZ1M01", "WR102": "TSBZ1M99"}, sans_code_voulu={"WS1PJ"}, releve=releve
+    )
+    assert {r.cours: (r.code, r.origine) for r in retenus} == {
+        "WR201": ("TSBZ2M01", "maquette"),
+        "WRA401M": ("TSBZD01C", "maquette (corrigé M→C)"),
+    }
+    assert {c for c, _ in manquants} == {"WRX401M", "WR999", "WR202", "WR100BU"}
+
+
+def test_la_config_reelle_preenregistre_la_maquette_et_les_voulus() -> None:
+    """Le fichier généré est cohérent : codes relevés, aucun doublon avec
+    celcat.yaml, rien pour un cours « sans code (voulu) »."""
+    from pathlib import Path
+
+    import yaml
+
+    from cal_iut.celcat import codes_maquette
+
+    config = Path(__file__).resolve().parents[1] / "data" / "config"
+    data = yaml.safe_load((config / "celcat.yaml").read_text(encoding="utf-8"))
+    voulus = set(data["sans_code_voulu"]["cours"])
+    assert voulus == {"WS1PJ", "WS3PJ", "WSA3PRJ", "WS5PJ", "WSA5PRJ", "COR", "PCA", "PRP", "RC", "RN", "RRI", "WR100BU"}
+    maquette = codes_maquette.lire(config)
+    releve = codes_maquette.releve_des_matieres(config)
+    fichier = {str(v).upper() for v in data["modules"].values()}
+    assert maquette, "codes de la maquette préenregistrés"
+    assert all(e["code"] in releve for e in maquette.values())
+    assert not {e["code"] for e in maquette.values()} & fichier
+    assert not set(maquette) & voulus
+    assert len({e["code"] for e in maquette.values()}) == len(maquette)
+    cfg = load_celcat_config(config)
+    assert (cfg.modules["WR201"], cfg.origines["cours"]["WR201"]) == ("TSBZ2M01", "maquette")
+    assert (cfg.modules["WRA401M"], cfg.origines["cours"]["WRA401M"]) == ("TSBZD01C", "maquette (corrigé M→C)")
+    assert "WR100BU" not in cfg.modules and "WR100BU" in cfg.sans_code["cours"]

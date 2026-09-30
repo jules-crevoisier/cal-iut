@@ -341,3 +341,28 @@ modules:
 # réelle en face). Catégorie « [TD bénévole] » (id=846, confirmée en
 # direct le 04/09/2026) sans objet tant que ce point tient.
 #   WR100BU
+
+# --- Sans code Celcat, VOULU (onglet « Codes Celcat », 30/09/2026) ---------
+# Les décisions ci-dessus, rendues lisibles par l'appli : ces entités ne sont
+# jamais envoyées à Celcat, et ce n'est pas un manque à corriger. Elles
+# n'apparaissent plus comme « manquant » (Référence > Codes Celcat, « Données
+# à compléter ») ni comme blocage : le plan Celcat les compte « non envoyées
+# (voulu) ». Un administrateur peut en ajouter depuis l'appli (motif
+# obligatoire) ; celles-ci se retirent en modifiant ce fichier.
+# Elles passent AVANT les codes de la maquette (celcat_modules_maquette.yaml) :
+# WS1PJ, WS3PJ, WSA3PRJ ont un codelement relevé dans Celcat, mais Kyllian a
+# dit qu'on ne les saisit pas.
+sans_code_voulu:
+  cours:
+    WS1PJ: "Projet Ens. : pas de code Celcat (Kyllian, 04/09/2026)"
+    WS3PJ: "Projet Ens. : pas de code Celcat (Kyllian, 04/09/2026)"
+    WSA3PRJ: "Projet Ens. : pas de code Celcat (Kyllian, 04/09/2026)"
+    WS5PJ: "Projet Ens. : pas de code Celcat (Kyllian, 04/09/2026)"
+    WSA5PRJ: "Projet Ens. : pas de code Celcat (Kyllian, 04/09/2026)"
+    COR: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
+    PCA: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
+    PRP: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
+    RC: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
+    RN: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
+    RRI: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
+    WR100BU: "Code inventé (visite de la BU), pas une matière Celcat ni de paie (utilisateur, 05/09/2026)"

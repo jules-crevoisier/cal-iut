@@ -123,6 +123,22 @@ def _sans_code_celcat(session: Any) -> str | None:
     return None
 
 
+def _non_envoye_voulu(session: Any) -> str | None:
+    """Motif « sans code (voulu) » du cours de la séance (30/09/2026) :
+    rien ne part vers Celcat, et ce n'est ni un blocage ni un échec à
+    signaler — la décision est prise (`celcat.yaml::sans_code_voulu`)."""
+    if session is None:
+        return None
+    code = str(getattr(session, "course_code", "") or "").upper()
+    cfg = load_celcat_config(get_state().config_dir)
+    if not code or cfg.modules.get(code):
+        return None
+    voulu = (cfg.sans_code.get("cours") or {}).get(code)
+    if not voulu:
+        return None
+    return f"module {code} sans code Celcat, voulu : {voulu.get('motif') or 'sans motif'}"
+
+
 def _libelle_groupe(session: Any) -> str:
     state = get_state()
     labels = {g.id: g.label for g in state.groups}
@@ -211,6 +227,17 @@ def _executer(session_id: str, action: str) -> None:
             motif=motif,
             session_id=session_id,
             course_code=getattr(session, "course_code", None),
+        )
+        return
+
+    voulu = _non_envoye_voulu(session)
+    if voulu:
+        append_log(
+            kind="non_envoye",
+            motif=voulu,
+            session_id=session_id,
+            course_code=getattr(session, "course_code", None),
+            regrouper=True,
         )
         return
 

@@ -1193,8 +1193,10 @@ d'avant, `data/state/references.json`) ; la révision avance.
 | `PUT /reference/cours/{code}` | `{"intitule"}` (`edit`), `{"code_celcat"}` — code module `TSB…` relevé dans `celcat_matieres.yaml` (`admin`) | voir corps | `references.json`, `celcat_mappings.json` (famille `matieres`) |
 | `DELETE /reference/enseignants/{code}/contact` · `…/{code}/nom` · `DELETE /reference/cours/{code}/intitule` | — « Revenir à la valeur du fichier » | `edit` | `references.json` |
 | `GET /reference/codes-celcat[?famille=cours\|salles\|enseignants\|groupes]` | — toutes les entités du planning par famille : code Celcat, origine (`fichier`/`appli`/`manquant`), séances placées, suggestions relevées ; l'auteur d'une saisie n'est rendu qu'aux admins | compte actif | — |
-| `PUT /reference/codes-celcat` | `{"famille", "cle", "code"}` — format par famille, refus (409) d'un code déjà porté par une autre entité de la famille (sauf salle réunie / sa moitié), groupes refusés (409, `celcat_groupes.yaml`) | `admin` | `celcat_mappings.json` |
-| `DELETE /reference/codes-celcat?famille=…&cle=…` | — « Revenir à la valeur du fichier » (404 s'il n'y a pas de saisie) | `admin` | `celcat_mappings.json` |
+| `PUT /reference/codes-celcat` | `{"famille", "cle", "code"}` — seulement pour une entité SANS code connu : 409 « code déjà connu (fichier / maquette) », 409 si « sans code (voulu) » ; format par famille ; 409 d'un code déjà porté par une autre entité de la famille (sauf salle réunie / sa moitié) ; groupes refusés (409, `celcat_groupes.yaml`) | `admin` | `celcat_mappings.json` |
+| `DELETE /reference/codes-celcat?famille=…&cle=…` | — « Revenir à manquant » (ou au code connu pour une saisie antérieure au verrou) ; 404 sans saisie | `admin` | `celcat_mappings.json` |
+| `PUT /reference/codes-celcat/sans-code` | `{"famille", "cle", "motif"}` — « sans code (voulu) », motif obligatoire, seulement sans code | `admin` | `celcat_mappings.json` (`sans_code_voulu`) |
+| `DELETE /reference/codes-celcat/sans-code?famille=…&cle=…` | — retire celui saisi dans l'appli (celui de `celcat.yaml` : 409) | `admin` | `celcat_mappings.json` |
 
 La saisie a le dernier mot (29/09/2026) : elle complète une valeur absente
 ou CORRIGE celle du fichier (`teacher_contacts.yaml`, feuille des
@@ -1214,3 +1216,12 @@ même trace partout (entrée de `celcat_mappings.json` : `valeur`, `ajoute_le`,
 `ajoute_par`, `valeur_avant`, `valeur_fichier` ; ligne du journal de
 `references.json`). Lu par `load_celcat_config`, donc par le plan, la
 comparaison, la file et le worker au passage suivant.
+
+v2 (30/09/2026) : `load_celcat_config` lit aussi les codes de la maquette
+préenregistrés (`data/config/celcat_modules_maquette.yaml`, généré par
+`scripts/generer_codes_maquette.py`, après `celcat.yaml`) et les « sans code
+(voulu) » (`celcat.yaml::sans_code_voulu`, puis l'appli). Une séance dont le
+cours, l'enseignant ou la salle est « sans code (voulu) » n'est pas envoyée :
+`/celcat/plan` la compte dans `non_envoyees` / `motifs_non_envoi` (action
+`non_envoyee`) et non dans `bloquees` ; le worker retire son job de la file
+(journal `non_envoye`). `/reference/manques` ne la liste plus.

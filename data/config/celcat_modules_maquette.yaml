@@ -1,0 +1,79 @@
+# GÉNÉRÉ par scripts/generer_codes_maquette.py — ne pas éditer à la main.
+# Généré le 30/09/2026. Règles : src/cal_iut/celcat/codes_maquette.py.
+#
+# Codes module Celcat PRÉENREGISTRÉS depuis la maquette (`codelement`) pour
+# les cours sans code dans celcat.yaml : lus par `load_celcat_config` APRÈS
+# celcat.yaml (qui a toujours le dernier mot) et sauf « sans code (voulu) ».
+# Un code corrigé garde le code de la maquette (`maquette`).
+
+modules:
+  WR201: {code: "TSBZ2M01", origine: "maquette"}  # Celcat : WR201 Anglais
+  WR202: {code: "TSBZ2202", origine: "maquette"}  # Celcat : WR202 Anglais renforcé
+  WR203: {code: "TSBZ2103", origine: "maquette"}  # Celcat : WR203 Ergo. Accessi.
+  WR204: {code: "TSBZ2104", origine: "maquette"}  # Celcat : WR204 Cult. Numérique
+  WR205: {code: "TSBZ2205", origine: "maquette"}  # Celcat : WR205 Strat. De Comm.
+  WR206: {code: "TSBZ2M06", origine: "maquette"}  # Celcat : WR206 Expression Comm.
+  WR207: {code: "TSBZ2307", origine: "maquette"}  # Celcat : WR207 Ecrit. Multimédia
+  WR208: {code: "TSBZ2308", origine: "maquette"}  # Celcat : WR208 Prod. Graphique
+  WR209: {code: "TSBZ2309", origine: "maquette"}  # Celcat : WR209 Cult. Artistique
+  WR210: {code: "TSBZ2310", origine: "maquette"}  # Celcat : WR210 Prod. Audiovisuel
+  WR211: {code: "TSBZ2M11", origine: "maquette"}  # Celcat : WR211 Gest. de Contenus
+  WR212: {code: "TSBZ2412", origine: "maquette"}  # Celcat : WR212 Intégration
+  WR213: {code: "TSBZ2413", origine: "maquette"}  # Celcat : WR213 Développement Web
+  WR214: {code: "TSBZ2414", origine: "maquette"}  # Celcat : WR214 Syst. Information
+  WR215: {code: "TSBZ2415", origine: "maquette"}  # Celcat : WR215 Hébergement
+  WR216: {code: "TSBZ2M16", origine: "maquette"}  # Celcat : WR216 Traitement Info
+  WR217: {code: "TSBZ2517", origine: "maquette"}  # Celcat : WR217 Gestion de Projet
+  WR218: {code: "TSBZ2518", origine: "maquette"}  # Celcat : WR218 Eco. Droit du Num.
+  WR219: {code: "TSBZ2519", origine: "maquette"}  # Celcat : WR219 PPP
+  WR220: {code: "TSBZ2520", origine: "maquette"}  # Celcat : WR220 Soutien
+  WR401D: {code: "TSBZ401D", origine: "maquette"}  # Celcat : WR401D Anglais
+  WR402D: {code: "TSBZ402D", origine: "maquette"}  # Celcat : WR402 Eco et droit du num
+  WR403D: {code: "TSBZ403D", origine: "maquette"}  # Celcat : WR403 Design d'expérience
+  WR404D: {code: "TSBZ404D", origine: "maquette"}  # Celcat : WR404 Expression comm
+  WR405D: {code: "TSBZ405D", origine: "maquette"}  # Celcat : WR405D Création et design
+  WR406D: {code: "TSBZ406D", origine: "maquette"}  # Celcat : WR406D Devpt web
+  WR407D: {code: "TSBZ407D", origine: "maquette"}  # Celcat : WR407D Devpt back
+  WR408D: {code: "TSBZ408D", origine: "maquette"}  # Celcat : WR408D Deploiement servic
+  WR409D: {code: "TSBZ409D", origine: "maquette"}  # Celcat : WR409D Modélisation Unity
+  WR601D: {code: "TSBZ6010", origine: "maquette"}  # Celcat : WR601 Entrepreneuriat-RSE
+  WR602D: {code: "TSB1602D", origine: "maquette"}  # Celcat : WR602D Dvpt web et disp
+  WRA401M: {code: "TSBZD01C", origine: "maquette (corrigé M→C)", maquette: "TSBZD01M"}  # Celcat : WRA401C Anglais
+  WRA402M: {code: "TSBZD02C", origine: "maquette (corrigé M→C)", maquette: "TSBZD02M"}  # Celcat : WRA402C Eco, gestion
+  WRA403M: {code: "TSBZD03C", origine: "maquette (corrigé M→C)", maquette: "TSBZD03M"}  # Celcat : WRA403C Design d'exp
+  WRA404M: {code: "TSBZD04C", origine: "maquette (corrigé M→C)", maquette: "TSBZD04M"}  # Celcat : WRA404C Expression, com
+  WRA405M: {code: "TSBZD05C", origine: "maquette (corrigé M→C)", maquette: "TSBZD05M"}  # Celcat : WRA405C Gestion contenus
+  WRA406M: {code: "TSBZD06C", origine: "maquette (corrigé M→C)", maquette: "TSBZD06M"}  # Celcat : WRA406C Culture artistiqu
+  WRA407M: {code: "TSBZD07C", origine: "maquette (corrigé M→C)", maquette: "TSBZD07M"}  # Celcat : WRA407C Stratégie de Com
+  WRA408M: {code: "TSBZD08C", origine: "maquette (corrigé M→C)", maquette: "TSBZD08M"}  # Celcat : WRA408C Motion Design
+  WRA409M: {code: "TSBZD09C", origine: "maquette (corrigé M→C)", maquette: "TSBZD09M"}  # Celcat : WRA409C Game Development
+  WRA410C: {code: "TSBZD10C", origine: "maquette"}  # Celcat : WRA410CS Cryptographie
+  WRA601C: {code: "TSBZF01C", origine: "maquette"}  # Celcat : WRA601C Entrepreneuriat
+  WRA602C: {code: "TSBZF02C", origine: "maquette"}  # Celcat : WRA602C Exp. utilisateur
+  WRA603C: {code: "TSBZF03C", origine: "maquette"}  # Celcat : WRA603C Stratégie de com
+  WS103: {code: "TSBZ1353", origine: "maquette"}  # Celcat : WS103 Design Graphique
+  WS104: {code: "TSBZ1354", origine: "maquette"}  # Celcat : WS104 Prod. Audiovisuel
+  WS105: {code: "TSBZ1455", origine: "maquette"}  # Celcat : WS105 Prod. Site Web
+  WS201: {code: "TSBZ2151", origine: "maquette"}  # Celcat : WS201 Explo. des Usages
+  WS202: {code: "TSBZ2M52", origine: "maquette"}  # Celcat : WS202 Comm. Produit
+  WS203: {code: "TSBZ2453", origine: "maquette"}  # Celcat : WS203 Site Web et BDD
+  WS204: {code: "TSBZ2554", origine: "maquette"}  # Celcat : WS204 Présence en ligne
+  WS210: {code: "TSBZ2M60", origine: "maquette"}  # Celcat : WS210 Portfolio
+  WS401D: {code: "TSBZ451D", origine: "maquette"}  # Celcat : WS401D Développement Web
+  WS402D: {code: "TSBZ452D", origine: "maquette"}  # Celcat : WS402D Disp interactifs
+  WS410D: {code: "TSBZ460D", origine: "maquette"}  # Celcat : WS410 Portfolio
+  WS411D: {code: "TSBZ461D", origine: "maquette"}  # Celcat : WS411D Stage DWeb-DI
+  WS610D: {code: "TSBZ6600", origine: "maquette"}  # Celcat : WS610D Portfolio DWeb-DI
+  WS611D: {code: "TSBZ6610", origine: "maquette"}  # Celcat : WS611D Stage Dweb-di
+  WSA401M: {code: "TSBZD51C", origine: "maquette (corrigé M→C)", maquette: "TSBZD51M"}  # Celcat : WSA401C Campagne Comm
+  WSA402M: {code: "TSBZD52C", origine: "maquette (corrigé M→C)", maquette: "TSBZD52M"}  # Celcat : WSA402C e-commerce
+  WSA410M: {code: "TSBZD060", origine: "maquette"}  # Celcat : WSA410 Portfolio
+  WSA411M: {code: "TSBZD61C", origine: "maquette (corrigé M→C)", maquette: "TSBZD61M"}  # Celcat : WSA411C Alternance
+  WSA610C: {code: "TSBZF61C", origine: "maquette"}  # Celcat : WSA610C Portfolio
+  WSA611C: {code: "TSBZF51C", origine: "maquette"}  # Celcat : WSA612C Alternance
+  WSA666C: {code: "TSBZF66C", origine: "maquette"}  # Celcat : WSA666 Projet fin de BUT
+  WSA666D: {code: "TSBZF66D", origine: "maquette"}  # Celcat : WSA666 Projet fin BUT
+
+# À faire confirmer (repris de la maquette, le nom Celcat diffère) :
+#   WRA410C -> TSBZD10C : Celcat le nomme « WRA410CS Cryptographie »
+#   WSA611C -> TSBZF51C : Celcat le nomme « WSA612C Alternance »

@@ -94,12 +94,12 @@ def charger() -> dict[str, dict[str, dict[str, Any]]]:
     return sortie
 
 
-def _charger_pour_ecriture() -> dict[str, dict[str, dict[str, Any]]]:
+def _charger_pour_ecriture() -> dict[str, Any]:
     """La surcouche pour une ÉCRITURE : un fichier abîmé est mis de côté et
     `FichierEtatIllisible` levée, plutôt que de rendre un vide que
     l'écriture persisterait par-dessus toutes les correspondances saisies."""
     brut = lire_json_etat(_path(), {}, types=dict)
-    sortie: dict[str, dict[str, dict[str, Any]]] = {}
+    sortie: dict[str, Any] = {}
     for famille in FAMILLES:
         entrees = brut.get(famille)
         sortie[famille] = {
@@ -107,7 +107,75 @@ def _charger_pour_ecriture() -> dict[str, dict[str, dict[str, Any]]]:
             for cle, valeur in (entrees or {}).items()
             if isinstance(valeur, dict) and str(valeur.get("valeur") or "").strip()
         }
+    sortie[SANS_CODE] = _sans_code_depuis(brut)
     return sortie
+
+
+# « Sans code (voulu) » saisi dans l'appli (30/09/2026) : une entité que
+# l'on NE veut PAS envoyer à Celcat, avec son motif. Même fichier, clé à
+# part : `famille -> clé -> {motif, ajoute_le, ajoute_par}`. Les décisions
+# tenues avec le code vivent dans `celcat.yaml::sans_code_voulu`.
+SANS_CODE = "sans_code_voulu"
+
+
+def _sans_code_depuis(brut: object) -> dict[str, dict[str, dict[str, Any]]]:
+    bloc = brut.get(SANS_CODE) if isinstance(brut, dict) else None
+    sortie: dict[str, dict[str, dict[str, Any]]] = {famille: {} for famille in FAMILLES}
+    for famille in FAMILLES:
+        entrees = (bloc or {}).get(famille) if isinstance(bloc, dict) else None
+        sortie[famille] = {
+            str(cle): dict(valeur)
+            for cle, valeur in (entrees or {}).items()
+            if isinstance(valeur, dict) and str(valeur.get("motif") or "").strip()
+        }
+    return sortie
+
+
+def sans_code_voulus() -> dict[str, dict[str, dict[str, Any]]]:
+    """Les « sans code (voulu) » saisis dans l'appli. Ne lève jamais."""
+    chemin = _path()
+    if not chemin.exists():
+        return {famille: {} for famille in FAMILLES}
+    try:
+        brut = json.loads(chemin.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {famille: {} for famille in FAMILLES}
+    return _sans_code_depuis(brut)
+
+
+def definir_sans_code(famille: str, cle: str, motif: str, *, par: str = "") -> dict[str, Any]:
+    """Marque une entité « sans code (voulu) ». Rend l'entrée écrite."""
+    if famille not in FAMILLES:
+        raise ValueError(f"famille inconnue : « {famille} »")
+    cle_propre = cle_normalisee(famille, cle)
+    motif_propre = " ".join(str(motif or "").split())
+    if not cle_propre or not motif_propre:
+        raise ValueError("la clé et le motif sont tous deux requis")
+    with _verrou, verrou_fichier(_path()):
+        doc = _charger_pour_ecriture()
+        entree = {
+            "motif": motif_propre,
+            "ajoute_le": datetime.now(UTC).isoformat(),
+            "ajoute_par": str(par or "").strip(),
+        }
+        doc[SANS_CODE].setdefault(famille, {})[cle_propre] = entree
+        ecrire_json(_path(), doc)
+    return entree
+
+
+def retirer_sans_code(famille: str, cle: str) -> dict[str, Any] | None:
+    """Retire un « sans code (voulu) » saisi dans l'appli ; None s'il n'y
+    en avait pas."""
+    if famille not in FAMILLES:
+        raise ValueError(f"famille inconnue : « {famille} »")
+    cle_propre = cle_normalisee(famille, cle)
+    with _verrou, verrou_fichier(_path()):
+        doc = _charger_pour_ecriture()
+        entree = doc[SANS_CODE].get(famille, {}).pop(cle_propre, None)
+        if entree is None:
+            return None
+        ecrire_json(_path(), doc)
+    return entree
 
 
 def cle_normalisee(famille: str, cle: str) -> str:

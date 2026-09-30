@@ -261,8 +261,9 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
             )
     # Code Celcat : seulement pour qui a des séances placées — c'est la
     # recopie de CES séances qui bloque (`mapping.py`, premier enseignant).
+    voulus = cfg.sans_code  # « sans code (voulu) » : pas un manque (30/09/2026)
     for code, n in sorted(seances_par_prof.items()):
-        if code.upper() not in cfg.enseignants:
+        if code.upper() not in cfg.enseignants and code.upper() not in voulus.get("enseignants", {}):
             ajouter(
                 famille="enseignant", cle=code, libelle=libelles.get(code, code), champ="code_celcat",
                 gravite="bloque_celcat", nb_seances=n, role_requis="admin",
@@ -276,7 +277,7 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
         if room.room_type == RoomType.RESERVE:
             continue
         n = seances_par_salle.get(room.id, 0)
-        if room.id not in cfg.salles:
+        if room.id not in cfg.salles and room.id not in voulus.get("salles", {}):
             ajouter(
                 famille="salle", cle=room.id, libelle=room.label, champ="code_celcat", gravite="bloque_celcat",
                 nb_seances=n, role_requis="admin",
@@ -311,6 +312,8 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
     modules_manquants: Counter[str] = Counter()
     groupes_manquants: Counter[str] = Counter()
     for entree in entrees_pour_state(state).values():
+        if entree.course_code.upper() in voulus.get("cours", {}):
+            continue
         code_module = cfg.modules.get(entree.course_code.upper())
         if not code_module or code_module.strip().upper() not in matieres_connues:
             modules_manquants[entree.course_code] += 1

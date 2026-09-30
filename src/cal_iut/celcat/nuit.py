@@ -657,6 +657,25 @@ def _ids_pour(page: Any, entree: Any) -> tuple[dict, str | None]:
         return {}, f"{type(exc).__name__} : {exc}"
 
 
+def _retirer_si_non_envoyee(
+    job: dict[str, Any], session_id: str, entree: Any, a_retirer: list[dict[str, Any]], bilan: Any
+) -> bool:
+    """« Sans code (voulu) » (30/09/2026) : la séance n'ira JAMAIS dans
+    Celcat, par décision. Le job est retiré de la file — le garder le
+    ferait réécarter à chaque passage, comme un blocage à corriger — et la
+    raison est journalisée à part (`non_envoye`), pas en `blocked`."""
+    motif = str(getattr(entree, "non_envoyee", "") or "")
+    if not motif:
+        return False
+    bilan.ignores.append((session_id, motif))
+    a_retirer.append(job)
+    journaliser(
+        kind="non_envoye", session_id=session_id, motif=motif,
+        course_code=getattr(entree, "course_code", None), regrouper=True,
+    )
+    return True
+
+
 def motif_non_saisissable(entree: Any) -> str:
     """Ce qui empêche d'écrire, dit AVANT d'essayer — et dit en français.
 
@@ -1026,6 +1045,8 @@ def _consommer_file(
             bilan.ignores.append((sid_job, SANS_PLACEMENT))
             _bloquer(sid_job, SANS_PLACEMENT)
             continue
+        if _retirer_si_non_envoyee(job, sid_job, entree, a_retirer, bilan):
+            continue
         motif_b = motif_non_saisissable(entree)
         if motif_b:
             # Reste en file : le jour où l'enseignant est affecté au
@@ -1148,6 +1169,8 @@ def _consommer_file(
             )
             bilan.ignores.append((sid, motif_i))
             _bloquer(sid, motif_i)
+            continue
+        if _retirer_si_non_envoyee(job, sid, entree, a_retirer, bilan):
             continue
         motif_b = motif_non_saisissable(entree)
         if motif_b:

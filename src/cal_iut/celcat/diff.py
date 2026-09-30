@@ -120,6 +120,9 @@ def comparer(
 
     apparies: set[int] = set()
     for e in entrees:
+        if getattr(e, "non_envoyee", ""):
+            # « Sans code (voulu) » : rien à comparer, rien à envoyer.
+            continue
         if not e.prete:
             plan.bloquees.append(e)
             continue

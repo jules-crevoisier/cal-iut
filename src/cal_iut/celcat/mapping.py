@@ -39,6 +39,18 @@ class CelcatConfig:
     salles: dict[str, str] = field(default_factory=dict)
     types_seance: dict[str, int | None] = field(default_factory=dict)
     modules: dict[str, str] = field(default_factory=dict)
+    # Onglet « Codes Celcat » (30/09/2026). Par famille (`cours`, `salles`,
+    # `enseignants`) :
+    # - `connus` : les codes CONNUS avant toute saisie dans l'appli —
+    #   `celcat.yaml`, puis pour les cours la maquette
+    #   (`celcat_modules_maquette.yaml`). Verrouillés à l'écran ;
+    # - `origines` : d'où vient le code qui part (« fichier », « maquette »,
+    #   « maquette (corrigé M→C) », « appli ») ;
+    # - `sans_code` : les entités à ne PAS envoyer, voulu —
+    #   `{clé: {"motif", "source": "fichier"|"appli", ...}}`.
+    connus: dict[str, dict[str, str]] = field(default_factory=dict)
+    origines: dict[str, dict[str, str]] = field(default_factory=dict)
+    sans_code: dict[str, dict[str, dict[str, str]]] = field(default_factory=dict)
 
 
 def _code_renseigne(valeur: object) -> str | None:
@@ -68,8 +80,9 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
     l'écran une entrée que le YAML a fausse doit marcher tout de suite — sans
     quoi on se retrouve à éditer deux endroits en se demandant lequel gagne.
     """
-    from cal_iut.celcat import mappings
+    from cal_iut.celcat import codes_maquette, mappings
 
+    config_dir = Path(config_dir)
     path = config_dir / "celcat.yaml"
     data = {}
     if path.exists():
@@ -81,23 +94,66 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
         if (code := _code_renseigne(v))
     }
     salles = {str(k): str(v) for k, v in (data.get("salles") or {}).items() if v}
-    enseignants.update({
-        cle: code
-        for cle, valeur in mappings.table("enseignants").items()
-        if (code := _code_renseigne(valeur))
-    })
-    salles.update(mappings.table("salles"))
     modules = {str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v}
-    # Code module saisi à l'écran (29/09/2026) : lu par le plan, le worker
-    # et la file comme ceux du YAML — c'est ici qu'ils passent tous.
-    modules.update({cle.upper(): valeur for cle, valeur in mappings.table("matieres").items()})
+    origines: dict[str, dict[str, str]] = {
+        "cours": dict.fromkeys(modules, "fichier"),
+        "salles": dict.fromkeys(salles, "fichier"),
+        "enseignants": dict.fromkeys(enseignants, "fichier"),
+    }
+
+    # « Sans code (voulu) » : le fichier d'abord, puis l'appli.
+    sans_code: dict[str, dict[str, dict[str, str]]] = {"cours": {}, "salles": {}, "enseignants": {}}
+    for famille, entrees in (data.get("sans_code_voulu") or {}).items():
+        if famille not in sans_code or not isinstance(entrees, dict):
+            continue
+        for cle, motif in entrees.items():
+            cle_propre = str(cle).strip() if famille == "salles" else str(cle).strip().upper()
+            sans_code[famille][cle_propre] = {"motif": str(motif or "").strip(), "source": "fichier"}
+    for famille_surcouche, entrees in mappings.sans_code_voulus().items():
+        famille = _FAMILLE_ONGLET[famille_surcouche]
+        for cle, entree in entrees.items():
+            sans_code[famille].setdefault(cle, {
+                "motif": str(entree.get("motif") or ""), "source": "appli",
+                "ajoute_le": str(entree.get("ajoute_le") or ""), "ajoute_par": str(entree.get("ajoute_par") or ""),
+            })
+
+    # Codes de la maquette (préenregistrés, `celcat/codes_maquette.py`) :
+    # APRÈS le fichier, qui garde le dernier mot, et jamais pour un cours
+    # « sans code (voulu) ».
+    for cours, entree in codes_maquette.lire(config_dir).items():
+        if cours not in modules and cours not in sans_code["cours"]:
+            modules[cours] = entree["code"]
+            origines["cours"][cours] = entree["origine"]
+    connus = {"cours": dict(modules), "salles": dict(salles), "enseignants": dict(enseignants)}
+
+    # Saisies de l'appli, en dernier : les codes du plan, du worker et de la
+    # file passent tous ici. Depuis le 30/09/2026 on ne saisit plus que ce
+    # qui n'a pas de code connu ; une saisie plus ancienne sur un code connu
+    # reste appliquée (rien ne casse) et l'écran la signale.
+    for cle, valeur in mappings.table("enseignants").items():
+        if code := _code_renseigne(valeur):
+            enseignants[cle] = code
+            origines["enseignants"][cle] = "appli"
+    for cle, valeur in mappings.table("salles").items():
+        salles[cle] = valeur
+        origines["salles"][cle] = "appli"
+    for cle, valeur in mappings.table("matieres").items():
+        modules[cle.upper()] = valeur
+        origines["cours"][cle.upper()] = "appli"
 
     return CelcatConfig(
         enseignants=enseignants,
         salles=salles,
         types_seance=dict(data.get("types_seance") or {}),
         modules=modules,
+        connus=connus,
+        origines=origines,
+        sans_code=sans_code,
     )
+
+
+# Famille de la surcouche (`mappings.py`) -> famille de l'onglet.
+_FAMILLE_ONGLET = {"matieres": "cours", "salles": "salles", "enseignants": "enseignants"}
 
 
 def libelle_groupe_celcat(groupe: str) -> str:
@@ -148,10 +204,13 @@ class EntreeCelcat:
     # Repris tel quel pour l'affichage/le journal, jamais envoyé à Celcat.
     course_code: str = ""
     bloquants: list[str] = field(default_factory=list)
+    # « Sans code (voulu) » (30/09/2026) : la séance n'est PAS envoyée, et
+    # ce n'est pas un blocage à corriger. Le motif dit pourquoi.
+    non_envoyee: str = ""
 
     @property
     def prete(self) -> bool:
-        return not self.bloquants
+        return not self.bloquants and not self.non_envoyee
 
     @property
     def nom_groupe_celcat(self) -> str:
@@ -220,12 +279,16 @@ def entree_pour_placement(
     # plusieurs intervenants (duo) est signalée plutôt que tronquée en
     # silence — c'est à un humain de décider qui est saisi.
     code_ens: str | None = None
+    ens_voulu = ""
     if not teacher_codes:
         bloquants.append("aucun enseignant")
     else:
         trigramme = teacher_codes[0].upper()
         code_ens = cfg.enseignants.get(trigramme)
-        if not code_ens:
+        voulu_ens = (cfg.sans_code.get("enseignants") or {}).get(trigramme)
+        if not code_ens and voulu_ens:
+            ens_voulu = f"enseignant {trigramme} sans code Celcat, voulu : {voulu_ens.get('motif') or 'sans motif'}"
+        elif not code_ens:
             bloquants.append(f"enseignant {trigramme} sans code Celcat")
         if len(teacher_codes) > 1:
             bloquants.append(
@@ -234,11 +297,19 @@ def entree_pour_placement(
             )
 
     salle, motif_salle = _salle_celcat(cfg, room_id)
+    salle_voulue = (cfg.sans_code.get("salles") or {}).get(room_id or "")
+    if motif_salle and salle_voulue:
+        motif_salle = ""
+        ens_voulu = ens_voulu or f"salle « {room_id} » sans équivalent Celcat, voulu : {salle_voulue.get('motif') or 'sans motif'}"
     if motif_salle:
         bloquants.append(motif_salle)
 
     code_module = cfg.modules.get(course_code.upper())
-    if not code_module:
+    non_envoyee = ""
+    voulu = (cfg.sans_code.get("cours") or {}).get(course_code.upper())
+    if not code_module and voulu:
+        non_envoyee = f"module {course_code} sans code Celcat, voulu : {voulu.get('motif') or 'sans motif'}"
+    elif not code_module:
         bloquants.append(f"module {course_code} sans code Celcat")
 
     type_nom = session_type.strip().upper()
@@ -282,6 +353,7 @@ def entree_pour_placement(
         lundi=lundi.strip(),
         course_code=course_code,
         bloquants=bloquants,
+        non_envoyee=non_envoyee or ens_voulu,
     )
 
 

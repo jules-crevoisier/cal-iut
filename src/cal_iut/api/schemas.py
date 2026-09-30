@@ -780,7 +780,7 @@ class CelcatEntreeResponse(BaseModel):
     heure_fin: str
     salle: str | None = None
     groupe: str = ""
-    action: str  # "creer" | "modifier" | "inchangee" | "bloquee"
+    action: str  # "creer" | "modifier" | "inchangee" | "bloquee" | "non_envoyee"
     bloquants: list[str] = []
 
 
@@ -797,6 +797,9 @@ class CelcatPlanResponse(BaseModel):
     # Motif -> nombre de séances concernées : c'est ce qui dit quoi
     # compléter dans `data/config/celcat.yaml` avant de pouvoir lancer.
     motifs_blocage: dict[str, int] = {}
+    # « Sans code (voulu) » (30/09/2026) : jamais envoyées, pas à corriger.
+    non_envoyees: int = 0
+    motifs_non_envoi: dict[str, int] = {}
     entrees: list[CelcatEntreeResponse] = []
     # Le pilote réel est-il utilisable (Playwright installé, URL renseignée) ?
     pilote_pret: bool = False

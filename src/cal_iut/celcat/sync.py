@@ -163,6 +163,9 @@ class PlanSync:
     a_supprimer: list[str] = field(default_factory=list)
     # Non saisissables en l'état (code manquant, etc.), avec leur motif.
     bloquees: list[EntreeCelcat] = field(default_factory=list)
+    # Jamais envoyées, et c'est voulu (« sans code (voulu) », 30/09/2026) :
+    # pas un blocage à corriger — comptées à part, rien ne part.
+    non_envoyees: list[EntreeCelcat] = field(default_factory=list)
 
     @property
     def total_actions(self) -> int:
@@ -200,6 +203,9 @@ def construire_plan(entrees: list[EntreeCelcat], semaines: set[int]) -> PlanSync
         if e.semaine not in semaines:
             continue
         vus.add(e.session_id)
+        if e.non_envoyee:
+            plan.non_envoyees.append(e)
+            continue
         if not e.prete:
             plan.bloquees.append(e)
             continue

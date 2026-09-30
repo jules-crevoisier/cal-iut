@@ -4063,7 +4063,13 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
             # montrer c'est « 95 CM sans code », pas 95 lignes distinctes.
             motifs[b] = motifs.get(b, 0) + 1
 
+    non_envoi: dict[str, int] = {}
+    for e in plan.non_envoyees:
+        non_envoi[e.non_envoyee] = non_envoi.get(e.non_envoyee, 0) + 1
+
     action_par_id = {}
+    for e in plan.non_envoyees:
+        action_par_id[e.session_id] = "non_envoyee"
     for e in plan.a_creer:
         action_par_id[e.session_id] = "creer"
     for e in plan.a_modifier:
@@ -4074,8 +4080,8 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
         action_par_id[e.session_id] = "bloquee"
 
     # Les bloquées d'abord : c'est ce sur quoi il y a à agir.
-    ordre = {"bloquee": 0, "creer": 1, "modifier": 2, "inchangee": 3}
-    toutes = plan.bloquees + plan.a_creer + plan.a_modifier + plan.inchangees
+    ordre = {"bloquee": 0, "creer": 1, "modifier": 2, "inchangee": 3, "non_envoyee": 4}
+    toutes = plan.bloquees + plan.a_creer + plan.a_modifier + plan.inchangees + plan.non_envoyees
     toutes.sort(key=lambda e: (ordre[action_par_id[e.session_id]], e.semaine, e.jour, e.heure_debut))
 
     pret, message = PilotePlaywright.disponible()
@@ -4089,6 +4095,8 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
         bloquees=len(plan.bloquees),
         resume=plan.resume(),
         motifs_blocage=dict(sorted(motifs.items(), key=lambda kv: -kv[1])),
+        non_envoyees=len(plan.non_envoyees),
+        motifs_non_envoi=dict(sorted(non_envoi.items(), key=lambda kv: -kv[1])),
         entrees=[
             CelcatEntreeResponse(
                 session_id=e.session_id, course_code=e.course_code, semaine=e.semaine,
