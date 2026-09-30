@@ -164,6 +164,12 @@ def _lire_table_yaml(chemin: Path) -> dict[str, object]:
     return data if isinstance(data, dict) else {}
 
 
+def _ecran_codes(famille: str, cle: str) -> dict[str, str | int]:
+    """La bonne ligne de l'onglet « Codes Celcat » de Référence (30/09/2026) :
+    tout code Celcat y est listé, avec son origine."""
+    return {"vue": "reference", "onglet": "codes-celcat", "famille": famille, "cle": cle}
+
+
 def _usage(n: int) -> str:
     if not n:
         return "aucune séance placée"
@@ -260,8 +266,8 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
             ajouter(
                 famille="enseignant", cle=code, libelle=libelles.get(code, code), champ="code_celcat",
                 gravite="bloque_celcat", nb_seances=n, role_requis="admin",
-                ou_completer="Écran Celcat, ou ici pour un administrateur.",
-                ecran={"vue": "celcat"},
+                ou_completer="Référence → Codes Celcat, ou ici pour un administrateur.",
+                ecran=_ecran_codes("enseignants", code),
             )
 
     # ── Salles : code Celcat, type imposé à la création ──
@@ -274,8 +280,8 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
             ajouter(
                 famille="salle", cle=room.id, libelle=room.label, champ="code_celcat", gravite="bloque_celcat",
                 nb_seances=n, role_requis="admin",
-                ou_completer="Fiche de la salle ou écran Celcat (administrateurs).",
-                ecran={"vue": "salle", "salle": room.id},
+                ou_completer="Référence → Codes Celcat ou fiche de la salle (administrateurs).",
+                ecran=_ecran_codes("salles", room.id),
             )
         if room.id in imposes:
             ajouter(
@@ -319,8 +325,8 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
             ajouter(
                 famille="cours", cle=code, libelle=intitules.get(code) or code, champ="code_celcat",
                 gravite="bloque_celcat", nb_seances=n, role_requis="admin",
-                ou_completer="Écran Celcat ou « À traiter » (administrateurs) : code module TSB… de la matière.",
-                ecran={"vue": "celcat"},
+                ou_completer="Référence → Codes Celcat ou « À traiter » (administrateurs) : code module TSB… de la matière.",
+                ecran=_ecran_codes("cours", code),
             )
         else:
             # Son identifiant INTERNE, lui, ne se lit pas : relevé et figé.
@@ -331,14 +337,14 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
                     f"Se règle dans data/config/celcat_matieres.yaml : identifiant de « {cfg.modules[code.upper()]} » "
                     "à relever dans Celcat — déploiement."
                 ),
-                ecran={"vue": "celcat"},
+                ecran=_ecran_codes("cours", code),
             )
     for nom, n in sorted(groupes_manquants.items()):
         ajouter(
             famille="groupe", cle=nom, libelle=nom, champ="id_celcat", gravite="bloque_celcat",
             nb_seances=n, role_requis=None,
             ou_completer="Se règle dans data/config/celcat_groupes.yaml : identifiant à relever dans Celcat — déploiement.",
-            ecran={"vue": "celcat"},
+            ecran=_ecran_codes("groupes", nom),
         )
 
     # ── Séances placées sans salle (« salle à définir ») : déjà
@@ -417,11 +423,10 @@ def completer_enseignant(
     du fichier retire la surcharge au lieu d'en poser une identique.
     - mail : format validé, minuscules, refusé s'il est déjà celui d'un
       autre enseignant (un lien personnel partirait chez quelqu'un d'autre) ;
-    - code Celcat : administrateurs, `celcat/mappings.py` (le worker le lit
-      à son passage suivant)."""
-    from cal_iut.celcat import mappings
+    - code Celcat : administrateurs, `api/codes_celcat.py` (le worker le
+      lit à son passage suivant)."""
+    from cal_iut.api import codes_celcat
     from cal_iut.export.html_view import _teacher_names
-    from cal_iut.ingestion import surcharges_reference
     from cal_iut.ingestion.config_loader import load_teacher_contacts, load_teacher_contacts_yaml
     from cal_iut.ingestion.enseignants import enseignants_declares
 
@@ -456,9 +461,8 @@ def completer_enseignant(
     if code_celcat is not None:
         if not admin:
             raise HTTPException(403, "La correspondance Celcat est réservée aux administrateurs (écran Celcat).")
-        celcat_propre = str(code_celcat).strip()
-        if not celcat_propre or celcat_propre == "0":
-            raise HTTPException(400, "Le code Celcat est vide.")
+        # Même règle que l'onglet « Codes Celcat » : format, doublon refusé.
+        celcat_propre = codes_celcat.valider_code(state, "enseignants", code, code_celcat)
 
     if email_propre is not None:
         du_fichier = load_teacher_contacts_yaml(config_dir).get(code)
@@ -468,9 +472,7 @@ def completer_enseignant(
         _poser_ou_retirer("enseignants", code, "nom", nom_propre, _nom_officiel(state, code), par)
         ecrit["nom"] = nom_propre
     if celcat_propre is not None:
-        avant = mappings.table("enseignants").get(code)
-        mappings.definir("enseignants", code, celcat_propre, par=par)
-        surcharges_reference.journaliser("enseignants", code, "code_celcat", avant, celcat_propre, par=par)
+        codes_celcat.enregistrer_code(state, "enseignants", code, celcat_propre, par=par)
         ecrit["code_celcat"] = celcat_propre
     return ecrit
 
@@ -551,9 +553,8 @@ def completer_salle(
     Capacité et type : salles créées dans l'appli seulement (celles du
     bâtiment viennent de `rooms.yaml`, avec le code) — persistées dans
     `custom_rooms.json`, et l'état en mémoire suit tout de suite. Code
-    Celcat : administrateurs, toute salle (`celcat/mappings.py`)."""
-    from cal_iut.api import custom_rooms
-    from cal_iut.celcat import mappings
+    Celcat : administrateurs, toute salle (`api/codes_celcat.py`)."""
+    from cal_iut.api import codes_celcat, custom_rooms
     from cal_iut.ingestion import surcharges_reference
     from cal_iut.models.entities import RoomType
 
@@ -580,9 +581,7 @@ def completer_salle(
     if code_celcat is not None:
         if not admin:
             raise HTTPException(403, "La correspondance Celcat est réservée aux administrateurs (écran Celcat).")
-        celcat_propre = str(code_celcat).strip()
-        if not celcat_propre:
-            raise HTTPException(400, "Le nom Celcat de la salle est vide.")
+        celcat_propre = codes_celcat.valider_code(state, "salles", room_id, code_celcat)
 
     ecrit: dict[str, str | int] = {}
     if capacite is not None or type_enum is not None:
@@ -599,9 +598,7 @@ def completer_salle(
         salle_maj = salle.model_copy(update=maj)
         state.rooms = [salle_maj if r.id == room_id else r for r in state.rooms]
     if celcat_propre is not None:
-        avant_celcat = mappings.table("salles").get(room_id)
-        mappings.definir("salles", room_id, celcat_propre, par=par)
-        surcharges_reference.journaliser("salles", room_id, "code_celcat", avant_celcat, celcat_propre, par=par)
+        codes_celcat.enregistrer_code(state, "salles", room_id, celcat_propre, par=par)
         ecrit["code_celcat"] = celcat_propre
     return ecrit
 
@@ -645,9 +642,8 @@ def completer_cours(
 ) -> dict[str, str | int]:
     """Complète ou corrige l'intitulé d'une matière (rôle `edit`, la saisie
     a le dernier mot sur la maquette), et/ou son code module Celcat
-    (administrateurs, `celcat/mappings.py` famille `matieres`)."""
-    from cal_iut.celcat import mappings
-    from cal_iut.celcat.mapping import load_celcat_config
+    (administrateurs, `api/codes_celcat.py`, famille `cours`)."""
+    from cal_iut.api import codes_celcat
     from cal_iut.ingestion import surcharges_reference
 
     code = str(code or "").strip()
@@ -665,7 +661,7 @@ def completer_cours(
     if code_celcat is not None:
         if not admin:
             raise HTTPException(403, "La correspondance Celcat est réservée aux administrateurs (écran Celcat).")
-        module = valider_code_module(Path(state.config_dir), code_celcat)
+        module = codes_celcat.valider_code(state, "cours", code, code_celcat)
 
     ecrit: dict[str, str | int] = {}
     if propre is not None:
@@ -677,9 +673,7 @@ def completer_cours(
             surcharges_reference.appliquer_intitules(state.sessions, getattr(state, "courses", None))
         ecrit["intitule"] = propre
     if module is not None:
-        avant = load_celcat_config(Path(state.config_dir)).modules.get(code.upper())
-        mappings.definir("matieres", code, module, par=par)
-        surcharges_reference.journaliser("cours", code, "code_celcat", avant, module, par=par)
+        codes_celcat.enregistrer_code(state, "cours", code, module, par=par)
         ecrit["code_celcat"] = module
     return ecrit
 

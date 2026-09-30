@@ -821,7 +821,9 @@ référence — la même liste que la section « Données à compléter » de l'
   interne relevé dans Celcat, à ajouter au fichier de configuration indiqué
   par `ou_completer` (déploiement).
 - `ecran` : où compléter dans l'appli (champs du fragment d'URL, ex.
-  `{"vue": "prof", "prof": "KBR"}`).
+  `{"vue": "prof", "prof": "KBR"}`). Tout code Celcat (`code_celcat`,
+  `id_celcat`) pointe sur la ligne de l'onglet « Codes Celcat » de Référence :
+  `{"vue": "reference", "onglet": "codes-celcat", "famille": "cours", "cle": "WR101"}`.
 - **Aucune valeur n'y figure** — ni adresse, ni code Celcat : seulement ce
   qui manque, et où. Trié du plus grave au moins grave.
 
@@ -836,7 +838,8 @@ curl --compressed -H "Authorization: Bearer $CLE" "https://cal-iut-mmi.srko.fr/a
   {"id": "enseignant:JHU:code_celcat", "famille": "enseignant", "cle": "JHU", "libelle": "Jules Huet",
    "champ": "code_celcat", "champ_libelle": "Correspondance Celcat", "gravite": "bloque_celcat",
    "usage": "36 séances placées", "nb_seances": 36, "role_requis": "admin",
-   "ou_completer": "Écran Celcat, ou ici pour un administrateur.", "ecran": {"vue": "celcat"}},
+   "ou_completer": "Référence → Codes Celcat, ou ici pour un administrateur.",
+   "ecran": {"vue": "reference", "onglet": "codes-celcat", "famille": "enseignants", "cle": "JHU"}},
   {"id": "enseignant:MNI:email", "famille": "enseignant", "cle": "MNI", "libelle": "Marc Nino",
    "champ": "email", "champ_libelle": "Adresse mail", "gravite": "bloque_envoi_liens",
    "usage": "4 séances placées", "nb_seances": 4, "role_requis": "edit",
@@ -1189,6 +1192,9 @@ d'avant, `data/state/references.json`) ; la révision avance.
 | `PUT /reference/salles/{id}` | `{"capacite", "type"}` (salle ajoutée à la main, `edit`), `{"code_celcat"}` (`admin`) | voir corps | `custom_rooms.json`, `celcat_mappings.json` |
 | `PUT /reference/cours/{code}` | `{"intitule"}` (`edit`), `{"code_celcat"}` — code module `TSB…` relevé dans `celcat_matieres.yaml` (`admin`) | voir corps | `references.json`, `celcat_mappings.json` (famille `matieres`) |
 | `DELETE /reference/enseignants/{code}/contact` · `…/{code}/nom` · `DELETE /reference/cours/{code}/intitule` | — « Revenir à la valeur du fichier » | `edit` | `references.json` |
+| `GET /reference/codes-celcat[?famille=cours\|salles\|enseignants\|groupes]` | — toutes les entités du planning par famille : code Celcat, origine (`fichier`/`appli`/`manquant`), séances placées, suggestions relevées ; l'auteur d'une saisie n'est rendu qu'aux admins | compte actif | — |
+| `PUT /reference/codes-celcat` | `{"famille", "cle", "code"}` — format par famille, refus (409) d'un code déjà porté par une autre entité de la famille (sauf salle réunie / sa moitié), groupes refusés (409, `celcat_groupes.yaml`) | `admin` | `celcat_mappings.json` |
+| `DELETE /reference/codes-celcat?famille=…&cle=…` | — « Revenir à la valeur du fichier » (404 s'il n'y a pas de saisie) | `admin` | `celcat_mappings.json` |
 
 La saisie a le dernier mot (29/09/2026) : elle complète une valeur absente
 ou CORRIGE celle du fichier (`teacher_contacts.yaml`, feuille des
@@ -1199,3 +1205,12 @@ payload de l'écran (`/app-state`, comptes seulement) porte
 marque « modifiée dans l'appli ». Le code module d'une matière s'ajoute aussi
 depuis l'écran Celcat (`PUT /celcat/mappings`, `famille: "matieres"`, même
 validation).
+
+Onglet « Codes Celcat » (30/09/2026, `api/codes_celcat.py`) : **une seule
+fonction d'écriture par famille** (`definir_code` / `effacer_code`), appelée
+par `PUT /reference/codes-celcat`, par le `code_celcat` des routes ci-dessus
+et par `PUT/DELETE /celcat/mappings` — même format, même refus des doublons,
+même trace partout (entrée de `celcat_mappings.json` : `valeur`, `ajoute_le`,
+`ajoute_par`, `valeur_avant`, `valeur_fichier` ; ligne du journal de
+`references.json`). Lu par `load_celcat_config`, donc par le plan, la
+comparaison, la file et le worker au passage suivant.

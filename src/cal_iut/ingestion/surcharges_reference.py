@@ -204,14 +204,16 @@ def effacer(famille: str, cle: str, champ: str, *, par: str = "", valeur_fichier
     return str(avant) if avant is not None else None
 
 
-def journaliser(famille: str, cle: str, champ: str, avant: object, apres: object, *, par: str = "") -> None:
+def journaliser(
+    famille: str, cle: str, champ: str, avant: object, apres: object, *, par: str = "", valeur_fichier: object = None
+) -> None:
     """Trace une saisie persistée AILLEURS (salle, correspondance Celcat) :
     un seul journal pour « qui a complété quoi », quel que soit le fichier
     qui porte la valeur. Ne lève jamais : la saisie a déjà réussi."""
     try:
         with _verrou, verrou_fichier(_path()):
             doc = charger()
-            _ajouter_au_journal(doc, _ligne_journal(famille, str(cle), champ, avant, apres, par))
+            _ajouter_au_journal(doc, _ligne_journal(famille, str(cle), champ, avant, apres, par, valeur_fichier))
             ecrire_json(_path(), doc)
     except Exception:
         logger.exception("Journal des compléments : écriture impossible (%s %s.%s)", famille, cle, champ)

@@ -62,20 +62,20 @@ def test_une_fois_mappee_la_matiere_ne_bloque_plus_et_le_plan_l_utilise(admin, e
     avant = admin.get("/celcat/plan?semaines=10").json()
     assert avant["motifs_blocage"].get("module WRX99 sans code Celcat") == 1
 
-    reponse = admin.put("/reference/cours/WRX99", json={"code_celcat": " tsb0101 "})
+    reponse = admin.put("/reference/cours/WRX99", json={"code_celcat": " tsb0199 "})
     assert reponse.status_code == 200, reponse.text
-    assert reponse.json()["valeurs"] == {"code_celcat": "TSB0101"}
+    assert reponse.json()["valeurs"] == {"code_celcat": "TSB0199"}
 
     assert "cours:WRX99:code_celcat" not in _ids(admin)
     apres = admin.get("/celcat/plan?semaines=10").json()
     assert "module WRX99 sans code Celcat" not in apres["motifs_blocage"]
     entree = next(e for e in api_main._entrees_celcat(etat) if e.session_id == "wrx1")
-    assert entree.code_module == "TSB0101"
+    assert entree.code_module == "TSB0199"
     assert not any("module" in b for b in entree.bloquants)
     # Tracé, avec son auteur.
     assert mappings.charger()["matieres"]["WRX99"]["ajoute_par"].startswith("test-admin-")
     ligne = surcharges_reference.journal()[0]
-    assert (ligne["famille"], ligne["cle"], ligne["champ"], ligne["apres"]) == ("cours", "WRX99", "code_celcat", "TSB0101")
+    assert (ligne["famille"], ligne["cle"], ligne["champ"], ligne["apres"]) == ("cours", "WRX99", "code_celcat", "TSB0199")
 
 
 def test_l_ecran_celcat_reconnait_et_mappe_une_matiere(admin) -> None:  # noqa: F811
@@ -83,10 +83,10 @@ def test_l_ecran_celcat_reconnait_et_mappe_une_matiere(admin) -> None:  # noqa: 
     assert api_main._cle_du_motif("module WR100BU sans code Celcat") == "WR100BU"
     refus = admin.put("/celcat/mappings", json={"famille": "matieres", "cle": "WRX99", "valeur": "n'importe"})
     assert refus.status_code == 400
-    ok = admin.put("/celcat/mappings", json={"famille": "matieres", "cle": "wrx99", "valeur": "tsb0101"})
+    ok = admin.put("/celcat/mappings", json={"famille": "matieres", "cle": "wrx99", "valeur": "tsb0199"})
     assert ok.status_code == 200, ok.text
     corps = ok.json()
-    assert [(m["cle"], m["valeur"]) for m in corps["matieres"]] == [("WRX99", "TSB0101")]
+    assert [(m["cle"], m["valeur"]) for m in corps["matieres"]] == [("WRX99", "TSB0199")]
     assert "TSB0101" in corps["matieres_celcat"]
     assert admin.delete("/celcat/mappings?famille=matieres&cle=WRX99").status_code == 200
     assert not mappings.charger()["matieres"]

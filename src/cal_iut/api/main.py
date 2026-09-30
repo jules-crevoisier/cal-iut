@@ -5002,19 +5002,18 @@ def celcat_mappings_definir(
     appel, et le worker la relit à son passage suivant. Les séances bloquées
     sur cette clé repartent d'elles-mêmes — elles n'ont jamais quitté la file.
     """
-    from cal_iut.api.reference import valider_code_module
-    from cal_iut.celcat import mappings
+    from cal_iut.api import codes_celcat
 
     utilisateur = getattr(getattr(request.state, "user", None), "email", "") or ""
-    valeur = body.valeur
-    if body.famille == "matieres":
-        # Même contrôle que « Données à compléter » (`api/reference.py`) :
-        # un code module que l'écriture ne saura pas retrouver est refusé ici.
-        valeur = valider_code_module(Path(get_state().config_dir), valeur)
-    try:
-        mappings.definir(body.famille, body.cle, valeur, par=utilisateur)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from None
+    famille = _FAMILLE_CODE.get(body.famille)
+    if famille is None or not body.cle.strip():
+        raise HTTPException(400, f"famille inconnue : « {body.famille} »")
+    # La même fonction que l'onglet « Codes Celcat » et « Données à
+    # compléter » (`api/codes_celcat.py`) : même format par famille, même
+    # refus d'un code déjà pris, même trace — quel que soit l'écran.
+    with verrou_planning:
+        codes_celcat.definir_code(get_state(), famille, body.cle, body.valeur, par=utilisateur)
+    revision.incrementer(f"codes-celcat:{famille}:{body.cle}")
     return celcat_mappings(semaine)
 
 
@@ -5024,15 +5023,29 @@ def celcat_mappings_definir(
     dependencies=[Depends(accounts.require_role("admin"))],
 )
 def celcat_mappings_oublier(
-    famille: str, cle: str, semaine: int | None = None
+    famille: str, cle: str, request: Request, semaine: int | None = None
 ) -> CelcatMappingsResponse:
-    from cal_iut.celcat import mappings
+    from cal_iut.api import codes_celcat
 
+    utilisateur = getattr(getattr(request.state, "user", None), "email", "") or ""
+    famille_code = _FAMILLE_CODE.get(famille)
+    if famille_code is None:
+        raise HTTPException(400, f"famille inconnue : « {famille} »")
     try:
-        mappings.oublier(famille, cle)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from None
+        with verrou_planning:
+            codes_celcat.effacer_code(get_state(), famille_code, cle, par=utilisateur)
+    except HTTPException as exc:
+        # Rien à retirer : même réponse qu'avant, la liste telle qu'elle est.
+        if exc.status_code != 404:
+            raise
+    else:
+        revision.incrementer(f"codes-celcat:{famille_code}:{cle}")
     return celcat_mappings(semaine)
+
+
+# Famille des correspondances de l'écran Celcat -> famille de l'onglet
+# « Codes Celcat » (`api/codes_celcat.py`).
+_FAMILLE_CODE = {"salles": "salles", "enseignants": "enseignants", "matieres": "cours"}
 
 
 @app.get(
@@ -6950,6 +6963,12 @@ app.include_router(_router_admin_trafic)
 from cal_iut.api.reference import router as _router_reference
 
 app.include_router(_router_reference)
+
+# Onglet « Codes Celcat » de Référence (30/09/2026, cf. `api/codes_celcat.py`)
+# — même préfixe `/reference`, donc même protection.
+from cal_iut.api.codes_celcat import router as _router_codes_celcat
+
+app.include_router(_router_codes_celcat)
 
 from cal_iut.mcp.http_rpc import handle_mcp_post
 from cal_iut.mcp.server import MCP_ASGI

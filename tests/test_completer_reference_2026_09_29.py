@@ -70,7 +70,9 @@ def _config(racine: Path) -> Path:
         "modules:\n  WR101: \"TSB0101\"\n",
         encoding="utf-8",
     )
-    (config / "celcat_matieres.yaml").write_text('"TSB0101": 1\n', encoding="utf-8")
+    # TSB0199 : un code relevé LIBRE — TSB0101 est déjà celui de WR101, et
+    # deux cours ne partagent pas un module (`api/codes_celcat.py`, 30/09/2026).
+    (config / "celcat_matieres.yaml").write_text('"TSB0101": 1\n"TSB0199": 3\n', encoding="utf-8")
     (config / "celcat_groupes.yaml").write_text('"BUT MMI S1 TD AB": 1\n', encoding="utf-8")
     return config
 

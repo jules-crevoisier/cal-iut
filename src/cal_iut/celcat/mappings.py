@@ -29,11 +29,17 @@ ensemble de décisions que plus personne n'assume.
 from __future__ import annotations
 
 import json
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from cal_iut.celcat.fichiers import ecrire_json
+from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat, verrou_fichier
+
+# Lire, modifier, écrire : sous ce verrou (threads) ET le verrou de fichier
+# (l'API et le worker partagent `data/state/`). Deux saisies simultanées
+# depuis l'onglet « Codes Celcat » s'écrasaient sinon l'une l'autre.
+_verrou = threading.RLock()
 
 # Les familles que l'écran peut compléter. `matieres` (29/09/2026, « go » de
 # l'utilisateur) : code de cours -> code module Celcat (`TSB…`), la même
@@ -41,6 +47,14 @@ from cal_iut.celcat.fichiers import ecrire_json
 # son identifiant INTERNE (`celcat_matieres.yaml`), lui, ne l'est pas — il
 # reste relevé et figé dans la config, comme celui des groupes. Les types de
 # séance n'y sont pas : ils se corrigent dans la maquette.
+#
+# Pas de famille `groupes` (examiné le 30/09/2026 pour l'onglet « Codes
+# Celcat ») : l'identifiant d'un groupe est interne, illisible dans Celcat,
+# sans liste relevée contre laquelle valider une saisie, et un identifiant
+# faux fabrique des doublons (cf. `api/codes_celcat.py`).
+#
+# La validation (format par famille, doublon refusé) et la trace vivent dans
+# `api/codes_celcat.py`, seul chemin d'écriture de tous les écrans.
 FAMILLES = ("salles", "enseignants", "matieres")
 
 # Familles dont la clé est un code comparé en majuscules par
@@ -80,17 +94,47 @@ def charger() -> dict[str, dict[str, dict[str, Any]]]:
     return sortie
 
 
+def _charger_pour_ecriture() -> dict[str, dict[str, dict[str, Any]]]:
+    """La surcouche pour une ÉCRITURE : un fichier abîmé est mis de côté et
+    `FichierEtatIllisible` levée, plutôt que de rendre un vide que
+    l'écriture persisterait par-dessus toutes les correspondances saisies."""
+    brut = lire_json_etat(_path(), {}, types=dict)
+    sortie: dict[str, dict[str, dict[str, Any]]] = {}
+    for famille in FAMILLES:
+        entrees = brut.get(famille)
+        sortie[famille] = {
+            str(cle): dict(valeur)
+            for cle, valeur in (entrees or {}).items()
+            if isinstance(valeur, dict) and str(valeur.get("valeur") or "").strip()
+        }
+    return sortie
+
+
+def cle_normalisee(famille: str, cle: str) -> str:
+    """La clé telle que la surcouche la range (majuscules pour les
+    trigrammes et les codes de cours, cf. `_CLES_MAJUSCULES`)."""
+    cle_propre = str(cle).strip()
+    return cle_propre.upper() if famille in _CLES_MAJUSCULES else cle_propre
+
+
 def table(famille: str) -> dict[str, str]:
     """Les correspondances d'une famille, prêtes à fusionner : clé -> valeur."""
     return {cle: str(entree["valeur"]) for cle, entree in charger().get(famille, {}).items()}
 
 
-def definir(famille: str, cle: str, valeur: str, *, par: str = "") -> dict[str, Any]:
+def definir(
+    famille: str, cle: str, valeur: str, *, par: str = "", valeur_fichier: str | None = None
+) -> dict[str, Any]:
     """Ajoute ou corrige une correspondance. Rend l'entrée écrite.
 
     `valeur` vide n'est pas une suppression déguisée : `oublier` existe pour
     cela, et confondre les deux ferait effacer une correspondance en croyant
     l'enregistrer.
+
+    L'entrée garde sa trace (30/09/2026, onglet « Codes Celcat ») : qui,
+    quand, la valeur d'AVANT (saisie précédente, sinon celle du fichier) et
+    celle du fichier au moment de la saisie. La validation métier (format,
+    doublon) est faite par `api/codes_celcat.py` : ce module persiste.
     """
     if famille not in FAMILLES:
         raise ValueError(f"famille inconnue : « {famille} »")
@@ -105,27 +149,36 @@ def definir(famille: str, cle: str, valeur: str, *, par: str = "") -> dict[str, 
     if famille == "matieres":
         valeur_propre = valeur_propre.upper()
 
-    doc = charger()
-    entree = {
-        "valeur": valeur_propre,
-        "ajoute_le": datetime.now(UTC).isoformat(),
-        "ajoute_par": str(par or "").strip(),
-    }
-    doc.setdefault(famille, {})[cle_propre] = entree
-    ecrire_json(_path(), doc)
+    with _verrou, verrou_fichier(_path()):
+        doc = _charger_pour_ecriture()
+        precedente = doc.get(famille, {}).get(cle_propre) or {}
+        entree = {
+            "valeur": valeur_propre,
+            "ajoute_le": datetime.now(UTC).isoformat(),
+            "ajoute_par": str(par or "").strip(),
+            "valeur_avant": precedente.get("valeur") or valeur_fichier,
+            "valeur_fichier": valeur_fichier,
+        }
+        doc.setdefault(famille, {})[cle_propre] = entree
+        ecrire_json(_path(), doc)
     return entree
 
 
 def oublier(famille: str, cle: str) -> bool:
     """Retire une correspondance. Rend True si elle existait."""
+    return retirer(famille, cle) is not None
+
+
+def retirer(famille: str, cle: str) -> dict[str, Any] | None:
+    """Retire une correspondance (« Revenir à la valeur du fichier »). Rend
+    l'entrée retirée, ou None s'il n'y en avait pas."""
     if famille not in FAMILLES:
         raise ValueError(f"famille inconnue : « {famille} »")
-    cle_propre = str(cle).strip()
-    if famille in _CLES_MAJUSCULES:
-        cle_propre = cle_propre.upper()
-    doc = charger()
-    if cle_propre not in doc.get(famille, {}):
-        return False
-    del doc[famille][cle_propre]
-    ecrire_json(_path(), doc)
-    return True
+    cle_propre = cle_normalisee(famille, cle)
+    with _verrou, verrou_fichier(_path()):
+        doc = _charger_pour_ecriture()
+        entree = doc.get(famille, {}).pop(cle_propre, None)
+        if entree is None:
+            return None
+        ecrire_json(_path(), doc)
+    return entree
