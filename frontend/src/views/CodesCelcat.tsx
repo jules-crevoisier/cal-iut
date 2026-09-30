@@ -464,8 +464,17 @@ function CelluleCode({
   onEnregistrer: (l: LigneCodeCelcat, code: string) => Promise<void>;
 }) {
   const libelleChamp = `${NOM_CHAMP[famille]} de ${l.libelle !== l.cle ? `${l.libelle} (${l.cle})` : l.cle}`;
+  // Code de la maquette NON repris par prudence : proposé en premier, et
+  // la raison dite — il reste à confirmer puis saisir.
+  const proposees = !l.code && l.code_maquette ? [l.code_maquette, ...suggestions.filter((s) => s !== l.code_maquette)] : suggestions;
   const complements = (
     <>
+      {famille === "cours" && !l.code && l.code_maquette && (
+        <span className="codes-celcat-suggestion">
+          maquette : <span className="mono">{l.code_maquette}</span>
+        </span>
+      )}
+      {famille === "cours" && l.note && <span className="codes-celcat-note">{l.note}</span>}
       {l.alerte && <span className="codes-celcat-alerte">{l.alerte}</span>}
       {l.avertissement && <span className="codes-celcat-alerte">{l.avertissement}</span>}
     </>
@@ -481,7 +490,7 @@ function CelluleCode({
           valeurAffichee={l.code ? <code className="mono codes-celcat-valeur">{l.code}</code> : null}
           placeholder={famille === "salles" ? "H.104" : famille === "enseignants" ? "38999" : "TSBZ1M01"}
           taille={14}
-          suggestions={suggestions}
+          suggestions={proposees}
           onEnregistrer={(v) => onEnregistrer(l, v)}
         />
         {complements}

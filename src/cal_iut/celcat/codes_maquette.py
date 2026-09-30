@@ -37,6 +37,20 @@ et non marqué « sans code (voulu) » :
    DEV, jamais retenue pour un cours CREACOM ;
 3. sinon : manquant, et listé par le script.
 
+EXCLUSIONS (30/09/2026, avant fusion). Un code préenregistré est VERROUILLÉ
+dans l'appli : un code douteux ne pourrait plus y être corrigé. Ne sont
+donc PAS repris — le cours reste « manquant », saisissable par un admin,
+avec le code de la maquette proposé et la raison affichée :
+
+4. le nom relevé dans Celcat commence par un AUTRE code de cours
+   (`nom_designe_un_autre_cours`) : « WSA612C Alternance » pour WSA611C,
+   « WRA410CS Cryptographie » pour WRA410C ;
+5. le cours est dans `celcat.yaml::codes_a_confirmer` (« à redemander, pas
+   supposés » : WS103, WS104, WS105).
+
+Les exclusions sont écrites dans le fichier généré (section `exclus`, lue
+par l'onglet pour afficher la note) et en commentaire.
+
 Un code déjà porté par un autre cours n'est jamais repris (deux cours ne
 partagent pas un module) : le cours reste manquant, et le script le dit.
 """
@@ -63,6 +77,24 @@ class CodeMaquette:
     origine: str
     code_maquette: str
     nom_celcat: str = ""
+
+
+def lire_exclus(config_dir: Path) -> dict[str, dict[str, str]]:
+    """`{code de cours: {"maquette", "raison"}}` : les codes de la maquette
+    non repris (section `exclus` du fichier généré). Ne lève jamais."""
+    chemin = Path(config_dir) / FICHIER
+    if not chemin.exists():
+        return {}
+    try:
+        data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+    except (yaml.YAMLError, OSError):
+        return {}
+    bloc = data.get("exclus") if isinstance(data, dict) else None
+    return {
+        str(k).strip().upper(): {"maquette": str(v.get("maquette") or ""), "raison": str(v.get("raison") or "")}
+        for k, v in (bloc or {}).items()
+        if isinstance(v, dict)
+    }
 
 
 def lire(config_dir: Path) -> dict[str, dict[str, str]]:
@@ -104,20 +136,42 @@ def releve_des_matieres(config_dir: Path) -> dict[str, str]:
     return sortie
 
 
+_CODE_COURS = re.compile(r"^W[RS][A-Z]?\d")
+
+
+def nom_designe_un_autre_cours(cours: str, nom_celcat: str, *, corrige: bool = False) -> bool:
+    """Le nom relevé (« WSA612C Alternance ») commence-t-il par un AUTRE
+    code de cours que `cours` ? Tolérés : le code lui-même, le code sans sa
+    lettre finale de parcours (« WSA666 » pour WSA666C) et, pour une
+    correction M→C, la variante en C (« WRA401C » pour WRA401M)."""
+    premier = (nom_celcat or "").split(" ", 1)[0].strip().upper()
+    if not premier or not _CODE_COURS.match(premier):
+        return False
+    cours = cours.upper()
+    admis = {cours, cours[:-1]}
+    if corrige:
+        admis.add(f"{cours[:-1]}C")
+    return premier not in admis
+
+
 def calculer(
     cours: list[Any],
     *,
     modules_fichier: dict[str, str],
     sans_code_voulu: set[str],
     releve: dict[str, str],
-) -> tuple[list[CodeMaquette], list[tuple[str, str]]]:
-    """Les codes à préenregistrer, et les cours laissés manquants (raison).
+    a_confirmer: dict[str, str] | None = None,
+) -> tuple[list[CodeMaquette], list[tuple[str, str]], list[tuple[str, str, str]]]:
+    """Les codes à préenregistrer, les cours laissés manquants (raison), et
+    les codes de la maquette EXCLUS par prudence `(cours, code, raison)`.
 
     `cours` : objets à `code`, `parcours`, `codelement` (les `Course` de la
     maquette). Déterministe : trié par code de cours."""
     pris = {str(v).strip().upper(): k for k, v in modules_fichier.items() if v}
+    confirmer = {str(k).strip().upper(): str(v) for k, v in (a_confirmer or {}).items()}
     retenus: list[CodeMaquette] = []
     manquants: list[tuple[str, str]] = []
+    exclus: list[tuple[str, str, str]] = []
     vus: set[str] = set()
     for c in sorted(cours, key=lambda c: str(c.code).upper()):
         code_cours = str(c.code).strip().upper()
@@ -138,24 +192,19 @@ def calculer(
         else:
             manquants.append((code_cours, f"{brut} (maquette) absent du relevé des matières Celcat"))
             continue
+        if code_cours in confirmer:
+            exclus.append((code_cours, code, f"à faire confirmer ({confirmer[code_cours]})"))
+            continue
+        nom = releve.get(code, "")
+        if nom_designe_un_autre_cours(code_cours, nom, corrige=origine == ORIGINE_CORRIGE):
+            exclus.append((code_cours, code, f"Celcat nomme {code} « {nom} », pas {code_cours}"))
+            continue
         if code in pris:
             manquants.append((code_cours, f"{code} est déjà celui de {pris[code]}"))
             continue
         pris[code] = code_cours
-        retenus.append(CodeMaquette(code_cours, code, origine, brut, releve.get(code, "")))
-    return retenus, manquants
-
-
-def a_verifier(retenus: list[CodeMaquette]) -> list[str]:
-    """Les codes dont le nom Celcat ne nomme pas le cours (à la lettre
-    finale près, pour les corrigés M→C) : repris de la maquette, mais à
-    faire confirmer."""
-    sortie = []
-    for r in retenus:
-        nom = r.nom_celcat.split(" ", 1)[0].upper() if r.nom_celcat else ""
-        if nom and nom.rstrip("CDM") != r.cours.rstrip("CDM"):
-            sortie.append(f"{r.cours} -> {r.code} : Celcat le nomme « {r.nom_celcat} »")
-    return sortie
+        retenus.append(CodeMaquette(code_cours, code, origine, brut, nom))
+    return retenus, manquants, exclus
 
 
 def ecrire(
@@ -164,7 +213,7 @@ def ecrire(
     manquants: list[tuple[str, str]],
     *,
     date: str,
-    verifier: list[str] | None = None,
+    exclus: list[tuple[str, str, str]] | None = None,
 ) -> None:
     """Le fichier versionné, lisible : une ligne par cours, le nom Celcat en
     commentaire pour vérifier d'un coup d'œil que le code désigne le bon cours."""
@@ -183,9 +232,17 @@ def ecrire(
         extra = f', maquette: "{r.code_maquette}"' if r.code_maquette != r.code else ""
         commentaire = f"  # Celcat : {r.nom_celcat}" if r.nom_celcat else ""
         lignes.append(f'  {r.cours}: {{code: "{r.code}", origine: "{r.origine}"{extra}}}{commentaire}')
-    if verifier:
-        lignes += ["", "# À faire confirmer (repris de la maquette, le nom Celcat diffère) :"]
-        lignes += [f"#   {ligne}" for ligne in verifier]
+    if exclus:
+        lignes += [
+            "",
+            "# Codes de la maquette NON repris, par prudence (un code repris est",
+            "# verrouillé dans l'appli) : le cours reste « manquant », saisissable par un",
+            "# administrateur, avec ce code proposé et la raison affichée.",
+            "exclus:",
+        ]
+        for cours, code, raison in exclus:
+            raison_yaml = raison.replace('"', "'")
+            lignes.append(f'  {cours}: {{maquette: "{code}", raison: "{raison_yaml}"}}')
     if manquants:
         lignes += ["", "# Laissés manquants (à relever ou à trancher) :"]
         lignes += [f"#   {cours} : {raison}" for cours, raison in manquants]

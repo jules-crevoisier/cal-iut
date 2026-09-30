@@ -47,13 +47,9 @@ modules:
   WRA407M: {code: "TSBZD07C", origine: "maquette (corrigé M→C)", maquette: "TSBZD07M"}  # Celcat : WRA407C Stratégie de Com
   WRA408M: {code: "TSBZD08C", origine: "maquette (corrigé M→C)", maquette: "TSBZD08M"}  # Celcat : WRA408C Motion Design
   WRA409M: {code: "TSBZD09C", origine: "maquette (corrigé M→C)", maquette: "TSBZD09M"}  # Celcat : WRA409C Game Development
-  WRA410C: {code: "TSBZD10C", origine: "maquette"}  # Celcat : WRA410CS Cryptographie
   WRA601C: {code: "TSBZF01C", origine: "maquette"}  # Celcat : WRA601C Entrepreneuriat
   WRA602C: {code: "TSBZF02C", origine: "maquette"}  # Celcat : WRA602C Exp. utilisateur
   WRA603C: {code: "TSBZF03C", origine: "maquette"}  # Celcat : WRA603C Stratégie de com
-  WS103: {code: "TSBZ1353", origine: "maquette"}  # Celcat : WS103 Design Graphique
-  WS104: {code: "TSBZ1354", origine: "maquette"}  # Celcat : WS104 Prod. Audiovisuel
-  WS105: {code: "TSBZ1455", origine: "maquette"}  # Celcat : WS105 Prod. Site Web
   WS201: {code: "TSBZ2151", origine: "maquette"}  # Celcat : WS201 Explo. des Usages
   WS202: {code: "TSBZ2M52", origine: "maquette"}  # Celcat : WS202 Comm. Produit
   WS203: {code: "TSBZ2453", origine: "maquette"}  # Celcat : WS203 Site Web et BDD
@@ -70,10 +66,15 @@ modules:
   WSA410M: {code: "TSBZD060", origine: "maquette"}  # Celcat : WSA410 Portfolio
   WSA411M: {code: "TSBZD61C", origine: "maquette (corrigé M→C)", maquette: "TSBZD61M"}  # Celcat : WSA411C Alternance
   WSA610C: {code: "TSBZF61C", origine: "maquette"}  # Celcat : WSA610C Portfolio
-  WSA611C: {code: "TSBZF51C", origine: "maquette"}  # Celcat : WSA612C Alternance
   WSA666C: {code: "TSBZF66C", origine: "maquette"}  # Celcat : WSA666 Projet fin de BUT
   WSA666D: {code: "TSBZF66D", origine: "maquette"}  # Celcat : WSA666 Projet fin BUT
 
-# À faire confirmer (repris de la maquette, le nom Celcat diffère) :
-#   WRA410C -> TSBZD10C : Celcat le nomme « WRA410CS Cryptographie »
-#   WSA611C -> TSBZF51C : Celcat le nomme « WSA612C Alternance »
+# Codes de la maquette NON repris, par prudence (un code repris est
+# verrouillé dans l'appli) : le cours reste « manquant », saisissable par un
+# administrateur, avec ce code proposé et la raison affichée.
+exclus:
+  WRA410C: {maquette: "TSBZD10C", raison: "Celcat nomme TSBZD10C « WRA410CS Cryptographie », pas WRA410C"}
+  WS103: {maquette: "TSBZ1353", raison: "à faire confirmer (absent de la réponse de Kyllian du 04/09/2026 : à redemander, pas supposé)"}
+  WS104: {maquette: "TSBZ1354", raison: "à faire confirmer (absent de la réponse de Kyllian du 04/09/2026 : à redemander, pas supposé)"}
+  WS105: {maquette: "TSBZ1455", raison: "à faire confirmer (absent de la réponse de Kyllian du 04/09/2026 : à redemander, pas supposé)"}
+  WSA611C: {maquette: "TSBZF51C", raison: "Celcat nomme TSBZF51C « WSA612C Alternance », pas WSA611C"}

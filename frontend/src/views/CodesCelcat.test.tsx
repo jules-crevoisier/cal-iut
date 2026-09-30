@@ -84,7 +84,7 @@ function donnees(admin: boolean): DonneesCodes {
           ligne({ cle: "WR100BU", libelle: "Jeu de piste BU", semestre: "S1", parcours: "BUT1", nb_seances: 12, origine: "voulu", origine_detail: "celcat.yaml", motif_sans_code: "Visite de la BU" }),
           ligne({ cle: "WRA401M", libelle: "Anglais S4", semestre: "S4", parcours: "BUT2-CREACOM-FC", code: "TSBZD01C", code_connu: "TSBZD01C", origine: "maquette", origine_detail: "maquette (corrigé M→C)", code_maquette: "TSBZD01M" }),
           ligne({ cle: "WRX99", libelle: "Atelier", semestre: "S1", parcours: "BUT1", nb_seances: 4 }),
-          ligne({ cle: "WRX98", libelle: "Atelier 2", semestre: "S2", parcours: "BUT1" }),
+          ligne({ cle: "WRX98", libelle: "Atelier 2", semestre: "S2", parcours: "BUT1", code_maquette: "TSBZ2M01", note: "Code de la maquette non repris : à faire confirmer (à redemander)." }),
         ],
         ["TSBZ1M01", "TSBZ2M01"],
       ),
@@ -203,6 +203,21 @@ describe("Référence — Codes Celcat", () => {
     const put = appels.find((a) => a.init?.method === "PUT");
     expect(JSON.parse(String(put?.init?.body))).toEqual({ famille: "cours", cle: "WRX99", code: "TSBZ2M01" });
     expect(await screen.findByText(/TSBZ2M01 enregistré pour Celcat/)).toBeInTheDocument();
+  });
+
+  it("code de la maquette non repris : proposé en premier, raison affichée", async () => {
+    stubFetch(true);
+    rendre("admin");
+    const ligneExclue = (await screen.findByText("WRX98")).closest("tr")!;
+    expect(within(ligneExclue).getByText(/Code de la maquette non repris : à faire confirmer/)).toBeInTheDocument();
+    expect(within(ligneExclue).getByText("TSBZ2M01", { selector: ".mono" })).toBeInTheDocument();
+    fireEvent.click(within(ligneExclue).getByRole("button", { name: /^Saisir — / }));
+    const champ = screen.getByRole("combobox", { name: "Code module Celcat de Atelier 2 (WRX98)" });
+    const liste = document.getElementById(champ.getAttribute("list") ?? "");
+    expect(Array.from(liste?.querySelectorAll("option") ?? []).map((o) => o.getAttribute("value"))).toEqual([
+      "TSBZ2M01",
+      "TSBZ1M01",
+    ]);
   });
 
   it("marque « sans code (voulu) » avec un motif obligatoire", async () => {

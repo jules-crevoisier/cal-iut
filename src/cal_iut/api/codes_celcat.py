@@ -492,6 +492,8 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
     sessions_by_id = getattr(state, "sessions_by_id", {}) or {}
     surcouche = mappings.charger()
     maquette = codes_maquette.lire(config_dir)
+    # Codes de la maquette NON repris par prudence : proposés, jamais posés.
+    exclus = codes_maquette.lire_exclus(config_dir)
     effectifs = {"cours": cfg.modules, "salles": cfg.salles, "enseignants": cfg.enseignants}
 
     par_cours: Counter[str] = Counter()
@@ -550,7 +552,10 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
             code_connu=connu or None,
             origine=origine,
             origine_detail=detail,
-            code_maquette=(maquette.get(cle) or {}).get("maquette") if famille == "cours" else None,
+            code_maquette=(
+                ((maquette.get(cle) or {}).get("maquette") or (exclus.get(cle) or {}).get("maquette") or None)
+                if famille == "cours" else None
+            ),
             motif_sans_code=(voulu or {}).get("motif") if origine == "voulu" else None,
             saisi_le=(saisie or {}).get("ajoute_le") or ((voulu or {}).get("ajoute_le") if voulu_appli else None) or None,
             saisi_par=(
@@ -588,9 +593,12 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
                 f"{code} n'est pas dans le relevé des matières Celcat (celcat_matieres.yaml) : "
                 "l'envoi échouera tant que son identifiant interne n'y est pas."
             )
+        note = None
+        if not code and cle_maj in exclus:
+            note = f"Code de la maquette non repris : {exclus[cle_maj]['raison']}."
         lignes.append(ligne(
             "cours", cle_maj, libelle=str(c["libelle"]), semestre=c["semestre"], parcours=c["parcours"],
-            nb_seances=par_cours.get(cle_maj, 0), alerte=alerte,
+            nb_seances=par_cours.get(cle_maj, 0), alerte=alerte, note=note,
         ))
     familles["cours"] = lignes
 

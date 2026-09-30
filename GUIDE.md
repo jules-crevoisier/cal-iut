@@ -236,7 +236,12 @@ dans le relevé des matières Celcat ; pour les cours CREACOM dont la maquette
 variante en C est reprise (origine « maquette, corrigé M→C », règle de
 Kyllian). Ces codes sont figés dans `data/config/celcat_modules_maquette.yaml`,
 régénéré par `python scripts/generer_codes_maquette.py` quand la maquette ou
-le relevé change (relire le diff : ces codes servent aussi à la paie).
+le relevé change (relire le diff : ces codes servent aussi à la paie). Par
+prudence, un code de la maquette n'est **pas** repris quand le nom relevé dans
+Celcat désigne un autre cours (WSA611C → « WSA612C Alternance ») ou quand le
+cours est dans `celcat.yaml::codes_a_confirmer` (WS103, WS104, WS105, « à
+redemander ») : le cours reste manquant, le code de la maquette est proposé
+et la raison affichée — un administrateur le saisit une fois confirmé.
 
 Un **administrateur** saisit un code **manquant** directement dans la ligne
 (**Saisir**, **Entrée** pour enregistrer, **Échap** pour annuler) ; les codes

@@ -434,9 +434,10 @@ def test_regles_maquette_exact_corrige_m_vers_c_et_manquants() -> None:
         C(code="WR100BU", parcours="BUT1", codelement=None),
     ]
     releve = {c: "" for c in ("TSBZ2M01", "TSBZD01C", "TSBZD01D", "TSBZX01C", "TSBZ15PJ", "TSBZ1M01", "TSBZ1M99")}
-    retenus, manquants = codes_maquette.calculer(
+    retenus, manquants, exclus = codes_maquette.calculer(
         cours, modules_fichier={"WR101": "TSBZ1M01", "WR102": "TSBZ1M99"}, sans_code_voulu={"WS1PJ"}, releve=releve
     )
+    assert exclus == []
     assert {r.cours: (r.code, r.origine) for r in retenus} == {
         "WR201": ("TSBZ2M01", "maquette"),
         "WRA401M": ("TSBZD01C", "maquette (corrigé M→C)"),
@@ -469,3 +470,68 @@ def test_la_config_reelle_preenregistre_la_maquette_et_les_voulus() -> None:
     assert (cfg.modules["WR201"], cfg.origines["cours"]["WR201"]) == ("TSBZ2M01", "maquette")
     assert (cfg.modules["WRA401M"], cfg.origines["cours"]["WRA401M"]) == ("TSBZD01C", "maquette (corrigé M→C)")
     assert "WR100BU" not in cfg.modules and "WR100BU" in cfg.sans_code["cours"]
+    # Exclus par prudence (un code repris est verrouillé) : restent manquants.
+    exclus = codes_maquette.lire_exclus(config)
+    assert set(exclus) == {"WRA410C", "WSA611C", "WS103", "WS104", "WS105"}
+    assert not set(exclus) & set(maquette)
+    assert not {"WRA410C", "WSA611C", "WS103", "WS104", "WS105"} & set(cfg.modules)
+    assert set(data["codes_a_confirmer"]["cours"]) == {"WS103", "WS104", "WS105"}
+    # Aucun code repris dont le nom Celcat désigne un autre cours.
+    for cours, entree in maquette.items():
+        corrige = entree["origine"] != "maquette"
+        assert not codes_maquette.nom_designe_un_autre_cours(cours, releve.get(entree["code"], ""), corrige=corrige), cours
+
+
+def test_exclusion_nom_celcat_d_un_autre_cours() -> None:
+    from types import SimpleNamespace as C
+
+    from cal_iut.celcat import codes_maquette
+
+    releve = {
+        "TSBZF51C": "WSA612C Alternance",  # nomme un autre cours
+        "TSBZD10C": "WRA410CS Cryptographie",  # discordance de nom
+        "TSBZF66C": "WSA666 Projet fin de BUT",  # sans la lettre de parcours : admis
+        "TSBZD01C": "WRA401C Anglais",  # variante C d'un corrigé M→C : admis
+        "TSBZ2M01": "Anglais",  # pas de code en tête : admis
+    }
+    cours = [
+        C(code="WSA611C", parcours="BUT2-CREACOM-FC", codelement="TSBZF51C"),
+        C(code="WRA410C", parcours="BUT2-CREACOM-FC", codelement="TSBZD10C"),
+        C(code="WSA666C", parcours="BUT3-CREACOM-FC", codelement="TSBZF66C"),
+        C(code="WRA401M", parcours="BUT2-CREACOM-FC", codelement="TSBZD01M"),
+        C(code="WR201", parcours="BUT1", codelement="TSBZ2M01"),
+    ]
+    retenus, manquants, exclus = codes_maquette.calculer(
+        cours, modules_fichier={}, sans_code_voulu=set(), releve=releve
+    )
+    assert {r.cours for r in retenus} == {"WSA666C", "WRA401M", "WR201"}
+    assert {(c, code) for c, code, _ in exclus} == {("WSA611C", "TSBZF51C"), ("WRA410C", "TSBZD10C")}
+    assert "WSA612C" in next(r for c, _, r in exclus if c == "WSA611C")
+    assert manquants == []
+
+
+def test_exclusion_code_a_confirmer() -> None:
+    from types import SimpleNamespace as C
+
+    from cal_iut.celcat import codes_maquette
+
+    retenus, _, exclus = codes_maquette.calculer(
+        [C(code="WS103", parcours="BUT1", codelement="TSBZ1353"), C(code="WS101", parcours="BUT1", codelement="TSBZ1151")],
+        modules_fichier={}, sans_code_voulu=set(), releve={"TSBZ1353": "WS103 SAE", "TSBZ1151": "WS101 SAE"},
+        a_confirmer={"WS103": "à redemander"},
+    )
+    assert [r.cours for r in retenus] == ["WS101"]
+    assert exclus == [("WS103", "TSBZ1353", "à faire confirmer (à redemander)")]
+
+
+def test_un_code_de_maquette_exclu_reste_manquant_et_saisissable(admin, etat) -> None:  # noqa: F811
+    (etat.config_dir / "celcat_modules_maquette.yaml").write_text(
+        'modules: {}\nexclus:\n  WRX99: {maquette: "TSB0199", raison: "à faire confirmer (à redemander)"}\n',
+        encoding="utf-8",
+    )
+    assert _motifs(admin).get("module WRX99 sans code Celcat") == 1, "non repris : toujours bloqué"
+    vue = _ligne(admin, "cours", "WRX99")
+    assert (vue["origine"], vue["code_maquette"], vue["modifiable"]) == ("manquant", "TSB0199", True)
+    assert vue["note"] == "Code de la maquette non repris : à faire confirmer (à redemander)."
+    assert _put(admin, "cours", "WRX99", "TSB0199").status_code == 200, "un admin le confirme en le saisissant"
+    assert _entree(etat, "wrx1").code_module == "TSB0199"

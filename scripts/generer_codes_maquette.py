@@ -39,9 +39,10 @@ def main(argv: list[str] | None = None) -> int:
     data = yaml.safe_load((config_dir / "celcat.yaml").read_text(encoding="utf-8")) or {}
     modules = {str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v}
     voulus = {str(k).upper() for k in ((data.get("sans_code_voulu") or {}).get("cours") or {})}
+    confirmer = (data.get("codes_a_confirmer") or {}).get("cours") or {}
     releve = codes_maquette.releve_des_matieres(config_dir)
-    retenus, manquants = codes_maquette.calculer(
-        cours, modules_fichier=modules, sans_code_voulu=voulus, releve=releve
+    retenus, manquants, exclus = codes_maquette.calculer(
+        cours, modules_fichier=modules, sans_code_voulu=voulus, releve=releve, a_confirmer=confirmer
     )
 
     exacts = sum(1 for r in retenus if r.origine == codes_maquette.ORIGINE_MAQUETTE)
@@ -49,21 +50,20 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{len(retenus)} code(s) préenregistré(s) : {exacts} tel(s) quel(s), {corriges} corrigé(s) M→C")
     for cours_code, raison in manquants:
         print(f"  manquant : {cours_code} — {raison}")
-    # Contrôle de lecture : le nom Celcat doit nommer le cours.
-    verifier = codes_maquette.a_verifier(retenus)
-    for ligne in verifier:
-        print(f"  À VÉRIFIER : {ligne}")
+    for cours_code, code, raison in exclus:
+        print(f"  exclu : {cours_code} ({code}) — {raison}")
 
     chemin = config_dir / codes_maquette.FICHIER
     if options.verifier:
         attendu = {r.cours: r.code for r in retenus}
         actuel = {k: v["code"] for k, v in codes_maquette.lire(config_dir).items()}
-        if attendu != actuel:
+        exclus_actuels = set(codes_maquette.lire_exclus(config_dir))
+        if attendu != actuel or exclus_actuels != {c for c, _, _ in exclus}:
             print("Le fichier n'est plus à jour : relancez sans --verifier.", file=sys.stderr)
             return 1
         return 0
     codes_maquette.ecrire(
-        chemin, retenus, manquants, date=datetime.now().astimezone().strftime("%d/%m/%Y"), verifier=verifier
+        chemin, retenus, manquants, date=datetime.now().astimezone().strftime("%d/%m/%Y"), exclus=exclus
     )
     print(f"Écrit : {chemin.relative_to(RACINE)}")
     return 0

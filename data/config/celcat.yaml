@@ -321,6 +321,16 @@ modules:
 #   WS103, WS104, WS105 (S1) — pas dans la réponse de Kyllian du 04/09/2026
 #     (qui couvrait WS101/102/106/107/110 mais pas ceux-là) : à redemander,
 #     pas supposés.
+#
+# Rendu lisible par l'appli le 30/09/2026 : un cours listé ici ne reçoit PAS
+# le code de la maquette (scripts/generer_codes_maquette.py) — il reste
+# « manquant », saisissable par un administrateur, code de la maquette
+# proposé. À retirer d'ici une fois le code confirmé.
+codes_a_confirmer:
+  cours:
+    WS103: "absent de la réponse de Kyllian du 04/09/2026 : à redemander, pas supposé"
+    WS104: "absent de la réponse de Kyllian du 04/09/2026 : à redemander, pas supposé"
+    WS105: "absent de la réponse de Kyllian du 04/09/2026 : à redemander, pas supposé"
 
 # --- Sans code Celcat, confirmé — pas un manque -----------------------------
 # Kyllian 04/09/2026 : "1PJ pas de code / 3PJ pas de code / 3PRJ pas de code
