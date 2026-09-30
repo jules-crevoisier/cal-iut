@@ -1,0 +1,353 @@
+/* Images jointes aux tâches (30/09/2026) — direction « Lumière / Nuit » :
+   vignettes à plat bordées 1 px (rayon 8), aucune ombre sauf ce qui flotte
+   (l'aperçu en grand). L'aperçu est sombre dans les deux thèmes, comme toute
+   visionneuse d'images : `--scrim-apercu` / `--on-scrim` (app.css). */
+
+.pj {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pj-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pj-titre {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pj-nb {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Le vrai sélecteur de fichiers est invisible : le bouton l'ouvre. */
+.pj-choix {
+  display: none;
+}
+
+.pj-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pj-vignette {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.pj-vignette--attente {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+/* Emplacement d'une image en cours d'envoi. */
+.pj-vignette--envoi {
+  border-style: dashed;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--surface-2) 0 8px,
+    var(--surface-3) 8px 16px
+  );
+}
+
+.pj-vignette-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+.pj-vignette-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pj-vignette-image:hover img {
+  opacity: 0.9;
+}
+
+.pj-vignette-image:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.pj-indisponible {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+  padding: 4px;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.pj-vignette-note {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.pj-retirer {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.pj-retirer:hover {
+  color: var(--bad-text);
+  border-color: var(--border-strong);
+}
+
+/* Confirmation légère, DANS la vignette. */
+.pj-confirmer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.pj-confirmer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.pj-confirmer .btn--sm {
+  width: 100%;
+  min-height: 24px;
+  padding: 0 4px;
+  font-size: 0.72rem;
+}
+
+.pj-aide {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+
+.pj-aide kbd {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+}
+
+.pj-etat:empty {
+  display: none;
+}
+
+.pj-etat {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.pj-erreur {
+  margin: 0;
+}
+
+/* ── Aperçu en grand ── */
+.pj-apercu {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  background: var(--scrim-apercu);
+  color: var(--on-scrim);
+}
+
+.pj-apercu-barre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  font-size: 0.85rem;
+}
+
+.pj-apercu-nom {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.pj-apercu-infos {
+  display: inline-flex;
+  gap: 10px;
+  flex: none;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+.pj-apercu-bouton,
+.pj-apercu-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pj-apercu-bouton:hover,
+.pj-apercu-nav:hover:not(:disabled) {
+  border-color: var(--scrim-bord);
+}
+
+.pj-apercu-bouton:focus-visible,
+.pj-apercu-nav:focus-visible {
+  outline: 2px solid var(--on-scrim);
+  outline-offset: 1px;
+}
+
+.pj-apercu-scene {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 56px 24px;
+}
+
+.pj-apercu-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.pj-apercu-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--scrim-bouton);
+}
+
+.pj-apercu-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pj-apercu-nav--prec {
+  left: 8px;
+}
+
+.pj-apercu-nav--suiv {
+  right: 8px;
+}
+
+@media (max-width: 600px) {
+  .pj-apercu-scene {
+    padding: 0 8px 72px;
+  }
+
+  /* Au doigt : flèches sous l'image, pas par-dessus. */
+  .pj-apercu-nav {
+    top: auto;
+    bottom: 14px;
+    transform: none;
+  }
+
+  .pj-apercu-nav--prec {
+    left: calc(50% - 56px);
+  }
+
+  .pj-apercu-nav--suiv {
+    right: calc(50% - 56px);
+  }
+
+  .pj-apercu-libelle,
+  .pj-apercu-dim {
+    display: none;
+  }
+}
+
+/* Sans clavier ni souris (téléphone), l'aide « Ctrl V / glisser » ne
+   concerne personne : seul le bouton reste. */
+@media (hover: none) and (pointer: coarse) {
+  .pj-aide {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .pj-retirer {
+    width: 32px;
+    height: 32px;
+  }
+}

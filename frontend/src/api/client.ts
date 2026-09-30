@@ -1354,7 +1354,32 @@ export interface Tache {
   cree_le: string;
   maj_le: string;
   fait_le: string | null;
+  /** Images jointes (30/09/2026). Facultatif : un serveur plus ancien que
+   * l'interface ne l'envoie pas (déploiements décalés) — lire `?? []`. */
+  images?: ImageTache[];
 }
+
+/** Image jointe à une tâche — cf. `api/pieces_jointes.py` côté serveur. */
+export interface ImageTache {
+  id: number;
+  nom: string;
+  type: string;
+  taille: number;
+  largeur: number | null;
+  hauteur: number | null;
+  cree_par: string;
+  cree_le: string;
+  /** `src` à utiliser tel quel (même origine, cookie de session). */
+  url: string;
+}
+
+/** Limites du serveur, reprises pour refuser tout de suite côté interface
+ * (le serveur reste seul juge : types vérifiés sur le contenu). */
+export const IMAGES_TACHE = {
+  max: 10,
+  tailleMax: 8 * 1024 * 1024,
+  types: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+} as const;
 
 export interface TacheCreateBody {
   titre: string;
@@ -1385,6 +1410,19 @@ export function patchTache(id: number, body: TachePatchBody): Promise<Tache> {
 
 export function supprimerTache(id: number): Promise<{ deleted: boolean }> {
   return request(`/taches/${id}`, { method: "DELETE" });
+}
+
+/** Une image par appel (multipart, champ `fichier`) ; rend la tâche à jour. */
+export function envoyerImageTache(tacheId: number, fichier: File): Promise<Tache> {
+  const corps = new FormData();
+  corps.append("fichier", fichier, fichier.name);
+  // `headers` vide : le navigateur pose lui-même le `Content-Type`
+  // multipart avec sa frontière (le défaut JSON d'`executer` le casserait).
+  return request(`/taches/${tacheId}/images`, { method: "POST", body: corps, headers: {} });
+}
+
+export function supprimerImageTache(tacheId: number, imageId: number): Promise<Tache> {
+  return request(`/taches/${tacheId}/images/${imageId}`, { method: "DELETE" });
 }
 
 // ── Doublons salle / enseignant (retour Kyllian Bresson 25/09/2026) ──

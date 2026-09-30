@@ -20,14 +20,26 @@
  * création), ajout rapide en bas de chaque colonne (Entrée pour créer, « N »
  * pour y aller), filtre texte, filtres mémorisés, cartes denses dont le titre
  * ouvre la modification.
+ *
+ * Images jointes (30/09/2026) : bouton, collage (Ctrl V) et glisser-déposer
+ * dans la modale ; compteur sur la carte, qui ouvre l'aperçu — y compris en
+ * lecture seule (cf. `components/ImagesTache.tsx`).
  */
 
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Plus } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Image as IconeImage, Plus } from "lucide-react";
 
-import type { Tache, TacheCreateBody, TachePatchBody } from "../api/client";
-import { creerTache, fetchTaches, patchTache, supprimerTache } from "../api/client";
+import type { ImageTache, Tache, TacheCreateBody, TachePatchBody } from "../api/client";
+import {
+  IMAGES_TACHE,
+  creerTache,
+  envoyerImageTache,
+  fetchTaches,
+  patchTache,
+  supprimerImageTache,
+  supprimerTache,
+} from "../api/client";
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { confirmAsync } from "../utils/confirmDialog";
@@ -37,6 +49,8 @@ import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { ChampRecherche } from "../components/ChampRecherche";
+import type { ImageAffichable } from "../components/ImagesTache";
+import { ApercuImages, ImagesTache, imageAffichable, nommerCapture, trierFichiers } from "../components/ImagesTache";
 import { Onglets } from "../components/Onglets";
 import { ActionsDePage } from "../components/TopBar";
 import "./KanbanView.css";
@@ -108,6 +122,8 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [survolColonne, setSurvolColonne] = useState<Tache["colonne"] | null>(null);
   const [faitDeplie, setFaitDeplie] = useState(false);
+  // Aperçu des images d'une carte, ouvert depuis son compteur.
+  const [apercu, setApercu] = useState<{ tacheId: number; index: number } | null>(null);
 
   // Onglet actif, restauré au premier rendu (cf. `utils/kanbanTabPrefs.ts`).
   const [categorieActive, setCategorieActive] = useState<Tache["categorie"]>(() => lireOngletTaches());
@@ -307,7 +323,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     setModaleOuverte(true);
   };
 
-  const onSaved = (t: Tache) => {
+  const onSaved = (t: Tache, avertissement?: string) => {
     setTaches((cur) => {
       if (!cur) return [t];
       const existe = cur.some((x) => x.id === t.id);
@@ -315,6 +331,13 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     });
     setModaleOuverte(false);
     setTacheEnEdition(null);
+    if (avertissement) setErreur(avertissement);
+  };
+
+  /** Images ajoutées ou retirées depuis la modale (enregistrées aussitôt) :
+   * seules les images de la carte changent, le reste attend « Enregistrer ». */
+  const onImagesChange = (t: Tache) => {
+    setTaches((cur) => (cur ?? []).map((x) => (x.id === t.id ? { ...x, images: t.images ?? [] } : x)));
   };
 
   // ── Ajout rapide : un titre, Entrée, la carte existe ──
@@ -354,7 +377,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   // Raccourcis : « N » = nouvelle tâche (ajout rapide), « / » = filtrer.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || champDeSaisie(e.target) || modaleOuverte) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || champDeSaisie(e.target) || modaleOuverte || apercu) return;
       if (e.key === "n" || e.key === "N") {
         if (!peutModifier) return;
         e.preventDefault();
@@ -366,7 +389,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [peutModifier, modaleOuverte]);
+  }, [peutModifier, modaleOuverte, apercu]);
 
   if (taches === null && !erreur) {
     return (
@@ -524,6 +547,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
                       onDrop={deposerSurCarte(t)}
                       onBasculer={() => basculerDeplie(t.id)}
                       onModifier={() => ouvrirEdition(t)}
+                      onVoirImages={() => setApercu({ tacheId: t.id, index: 0 })}
                       onSupprimer={() => void supprimer(t)}
                       onColonne={(sens) => deplacerColonne(t, sens)}
                       onOrdre={(sens) => reordonner(t, sens)}
@@ -596,6 +620,16 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
             setTacheEnEdition(null);
           }}
           onSaved={onSaved}
+          onImagesChange={onImagesChange}
+        />
+      )}
+
+      {apercu && (
+        <ApercuImages
+          images={((taches ?? []).find((x) => x.id === apercu.tacheId)?.images ?? []).map(imageAffichable)}
+          index={apercu.index}
+          onIndex={(index) => setApercu((a) => (a ? { ...a, index } : a))}
+          onClose={() => setApercu(null)}
         />
       )}
     </section>
@@ -618,6 +652,7 @@ interface CarteTacheProps {
   onDrop: (e: ReactDragEvent) => void;
   onBasculer: () => void;
   onModifier: () => void;
+  onVoirImages: () => void;
   onSupprimer: () => void;
   onColonne: (sens: -1 | 1) => void;
   onOrdre: (sens: -1 | 1) => void;
@@ -641,6 +676,7 @@ function CarteTache({
   onDrop,
   onBasculer,
   onModifier,
+  onVoirImages,
   onSupprimer,
   onColonne,
   onOrdre,
@@ -651,6 +687,7 @@ function CarteTache({
   const datesLabel = libelleDatesTache(t.date_debut, t.date_fin);
   const seances = t.enseignant_code && t.date_debut ? seancesConcernees(payload, t) : null;
   const desc = t.description ? premieresLignes(t.description) : null;
+  const nbImages = t.images?.length ?? 0;
   const libelleSeance = ({ row, dateIso }: { row: AppPayload["rows"][number]; dateIso: string }) =>
     `${formatDateCourte(dateIso)} · ${SLOT_TIMES[row.s].label} · ${row.c} · ${row.g
       .map((g) => payload.groupLabels[g] ?? g)
@@ -718,10 +755,25 @@ function CarteTache({
       )}
 
       <div className="kanban-card-pied">
-        <span className="kanban-card-auteur" title={`Ajoutée par ${t.cree_par}`}>
-          {t.colonne === "fait" && t.fait_le
-            ? `faite le ${FMT_JOUR.format(new Date(t.fait_le))}`
-            : `par ${auteurCourt(t.cree_par)}`}
+        <span className="kanban-card-pied-gauche">
+          {/* Compteur d'images : ouvre l'aperçu, lecture seule comprise. */}
+          {nbImages > 0 && (
+            <button
+              type="button"
+              className="kanban-card-images"
+              aria-label={`Voir ${nbImages > 1 ? `les ${nbImages} images` : "l’image"} de « ${t.titre} »`}
+              title={nbImages > 1 ? `${nbImages} images` : "1 image"}
+              onClick={onVoirImages}
+            >
+              <IconeImage size={13} aria-hidden="true" />
+              {nbImages}
+            </button>
+          )}
+          <span className="kanban-card-auteur" title={`Ajoutée par ${t.cree_par}`}>
+            {t.colonne === "fait" && t.fait_le
+              ? `faite le ${FMT_JOUR.format(new Date(t.fait_le))}`
+              : `par ${auteurCourt(t.cree_par)}`}
+          </span>
         </span>
         <span className="kanban-card-actions">
           {peutModifier && (
@@ -805,10 +857,32 @@ interface TacheModalProps {
    * en édition (la carte a déjà sa catégorie). */
   categorieParDefaut: Tache["categorie"];
   onClose: () => void;
-  onSaved: (t: Tache) => void;
+  /** `avertissement` : la tâche est enregistrée, mais une partie des images
+   * choisies à la création n'a pas pu être jointe. */
+  onSaved: (t: Tache, avertissement?: string) => void;
+  /** Images ajoutées/retirées en modification (enregistrées aussitôt). */
+  onImagesChange: (t: Tache) => void;
 }
 
-function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved }: TacheModalProps) {
+interface ImageEnAttente {
+  cle: string;
+  fichier: File;
+  url: string;
+}
+
+function urlLocale(fichier: File): string {
+  return typeof URL.createObjectURL === "function" ? URL.createObjectURL(fichier) : "";
+}
+
+function libererUrl(url: string): void {
+  if (url && typeof URL.revokeObjectURL === "function") URL.revokeObjectURL(url);
+}
+
+function messageDe(e: unknown, repli: string): string {
+  return e instanceof Error ? e.message : repli;
+}
+
+function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved, onImagesChange }: TacheModalProps) {
   const [titre, setTitre] = useState(tache?.titre ?? "");
   const [description, setDescription] = useState(tache?.description ?? "");
   const [colonne, setColonne] = useState<Tache["colonne"]>(tache?.colonne ?? "a_faire");
@@ -820,6 +894,92 @@ function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved }: Ta
   const [dateFin, setDateFin] = useState(tache?.date_fin ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+
+  // ── Images ──
+  // En modification : chaque image est envoyée (ou retirée) aussitôt. À la
+  // création, la tâche n'existe pas encore : les images attendent ici et
+  // partent juste après sa création.
+  const [images, setImages] = useState<ImageTache[]>(tache?.images ?? []);
+  const [enAttente, setEnAttente] = useState<ImageEnAttente[]>([]);
+  const [envois, setEnvois] = useState(0);
+  const [erreurImages, setErreurImages] = useState<string | null>(null);
+  const [depot, setDepot] = useState(false);
+  const compteurCle = useRef(0);
+
+  const refEnAttente = useRef(enAttente);
+  refEnAttente.current = enAttente;
+  useEffect(() => () => refEnAttente.current.forEach((i) => libererUrl(i.url)), []);
+
+  const ajouterFichiers = async (fichiers: File[]) => {
+    const places = IMAGES_TACHE.max - images.length - enAttente.length - envois;
+    const { acceptes, refus } = trierFichiers(fichiers, places);
+    setErreurImages(refus.length ? refus.join(" ") : null);
+    if (!acceptes.length) return;
+    if (!tache) {
+      setEnAttente((cur) => [
+        ...cur,
+        ...acceptes.map((fichier) => ({ cle: `attente-${++compteurCle.current}`, fichier, url: urlLocale(fichier) })),
+      ]);
+      return;
+    }
+    const echecs: string[] = [];
+    setEnvois((n) => n + acceptes.length);
+    for (const fichier of acceptes) {
+      try {
+        const maj = await envoyerImageTache(tache.id, fichier);
+        setImages(maj.images ?? []);
+        onImagesChange(maj);
+      } catch (e) {
+        echecs.push(`« ${fichier.name} » : ${messageDe(e, "envoi impossible.")}`);
+      } finally {
+        setEnvois((n) => n - 1);
+      }
+    }
+    if (echecs.length) setErreurImages([...refus, ...echecs].join(" "));
+  };
+  const refAjouter = useRef(ajouterFichiers);
+  refAjouter.current = ajouterFichiers;
+
+  const retirerImage = async (image: ImageAffichable) => {
+    const attente = enAttente.find((i) => i.cle === image.cle);
+    if (attente) {
+      libererUrl(attente.url);
+      setEnAttente((cur) => cur.filter((i) => i.cle !== image.cle));
+      return;
+    }
+    const id = images.find((i) => `img-${i.id}` === image.cle)?.id;
+    if (!tache || id === undefined) return;
+    try {
+      const maj = await supprimerImageTache(tache.id, id);
+      setImages(maj.images ?? []);
+      onImagesChange(maj);
+      setErreurImages(null);
+    } catch (e) {
+      setErreurImages(messageDe(e, "L’image n’a pas pu être retirée."));
+    }
+  };
+
+  // Ctrl V n'importe où tant que la modale est ouverte (le titre a le
+  // focus à l'ouverture). Un texte collé dans un champ reste un texte.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const donnees = e.clipboardData;
+      const fichiers = Array.from(donnees?.files ?? []);
+      if (!donnees || !fichiers.length) return;
+      if (champDeSaisie(e.target) && donnees.getData("text/plain")) return;
+      e.preventDefault();
+      void refAjouter.current(fichiers.map((f) => nommerCapture(f)));
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
+
+  const fichiersGlisses = (e: ReactDragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+
+  const affichables: ImageAffichable[] = [
+    ...images.map(imageAffichable),
+    ...enAttente.map((i) => ({ cle: i.cle, url: i.url, nom: i.fichier.name, enAttente: true })),
+  ];
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -862,8 +1022,24 @@ function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved }: Ta
       date_fin: dateDebut ? dateFin || dateDebut : null,
     };
     try {
-      const resultat = tache ? await patchTache(tache.id, corps) : await creerTache(corps);
-      onSaved(resultat);
+      let resultat = tache ? await patchTache(tache.id, corps) : await creerTache(corps);
+      // Création : les images choisies partent maintenant que la tâche existe.
+      const echecs: string[] = [];
+      for (const attente of tache ? [] : enAttente) {
+        try {
+          resultat = await envoyerImageTache(resultat.id, attente.fichier);
+        } catch (e) {
+          echecs.push(`« ${attente.fichier.name} » (${messageDe(e, "envoi impossible")})`);
+        }
+      }
+      onSaved(
+        resultat,
+        echecs.length
+          ? `La tâche est créée, mais ${echecs.length > 1 ? "ces images n’ont" : "cette image n’a"} pas pu être jointe${
+              echecs.length > 1 ? "s" : ""
+            } : ${echecs.join(", ")}.`
+          : undefined,
+      );
     } catch (err) {
       setErreur(err instanceof Error ? err.message : "L'enregistrement a échoué.");
     } finally {
@@ -872,15 +1048,53 @@ function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved }: Ta
   };
 
   return (
-    <div className="confirmmodal-overlay" role="presentation" onClick={onClose}>
+    <div
+      className="confirmmodal-overlay"
+      role="presentation"
+      onClick={onClose}
+      // Une image lâchée à côté de la fenêtre ne doit pas remplacer la page.
+      onDragOver={(e) => {
+        if (fichiersGlisses(e)) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (fichiersGlisses(e)) e.preventDefault();
+      }}
+    >
       <form
-        className="panel confirmmodal seancemodal kanban-modal"
+        className={`panel confirmmodal seancemodal kanban-modal${depot ? " kanban-modal--depot" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="kanban-modal-titre"
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => void valider(e)}
+        onDragEnter={(e) => {
+          if (!fichiersGlisses(e)) return;
+          e.preventDefault();
+          setDepot(true);
+        }}
+        onDragOver={(e) => {
+          if (!fichiersGlisses(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "copy";
+          if (!depot) setDepot(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDepot(false);
+        }}
+        onDrop={(e) => {
+          if (!fichiersGlisses(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setDepot(false);
+          void ajouterFichiers(Array.from(e.dataTransfer.files ?? []));
+        }}
       >
+        {depot && (
+          <div className="kanban-modal-depot" aria-hidden="true">
+            Déposez les images pour les joindre à la tâche
+          </div>
+        )}
         <h3 id="kanban-modal-titre">{tache ? "Modifier la tâche" : "Nouvelle tâche"}</h3>
 
         <div className="seancemodal-grille">
@@ -982,6 +1196,16 @@ function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved }: Ta
           </label>
         </div>
 
+        <ImagesTache
+          images={affichables}
+          peutModifier
+          precision={tache ? "enregistrées dès l’ajout" : "jointes à la création de la tâche"}
+          envois={envois}
+          erreur={erreurImages}
+          onAjouter={(fichiers) => void ajouterFichiers(fichiers)}
+          onRetirer={(image) => void retirerImage(image)}
+        />
+
         {erreur && (
           <p className="alerte" role="alert">
             {erreur}
@@ -992,7 +1216,7 @@ function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved }: Ta
           <button type="button" className="btn btn--ghost" onClick={onClose}>
             Annuler
           </button>
-          <button type="submit" className="btn btn--accent" disabled={enCours}>
+          <button type="submit" className="btn btn--accent" disabled={enCours || envois > 0}>
             {enCours ? "…" : tache ? "Enregistrer" : "Créer"}
           </button>
         </div>

@@ -86,6 +86,12 @@
   --control-h: 32px;
   --shadow: none;
   --shadow-pop: 0 16px 40px -12px rgba(24, 24, 27, 0.25), 0 0 0 1px #ececea;
+  /* Aperçu d'image en grand (images des tâches) : sombre dans LES DEUX
+     thèmes, comme toute visionneuse — définis une seule fois, ici. */
+  --scrim-apercu: rgba(9, 9, 11, 0.94);
+  --scrim-bouton: rgba(255, 255, 255, 0.08);
+  --scrim-bord: rgba(255, 255, 255, 0.35);
+  --on-scrim: #fafafa;
   color-scheme: light;
 
   /* alias (vocabulaire React existant) */
