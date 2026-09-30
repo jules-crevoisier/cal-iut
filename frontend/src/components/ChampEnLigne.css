@@ -4,6 +4,14 @@
    ligne, qui passent à la ligne sur téléphone plutôt que de déborder. */
 
 .champ-en-ligne-hote {
+  /* Contient l'annonce `aria-live` (`.sr-only`, en position absolue).
+     Sans cela, son bloc conteneur était la page : dans un tableau qui
+     défile dans sa carte (Référence → Codes Celcat, 183 lignes), les
+     annonces des lignes masquées par la carte débordaient QUAND MÊME du
+     document — 8 361 px de haut pour un écran de 742, la page défilait
+     au-delà de la coque et la barre latérale collante décrochait
+     (signalé le 30/09/2026). */
+  position: relative;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;

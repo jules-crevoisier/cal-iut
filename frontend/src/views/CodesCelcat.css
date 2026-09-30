@@ -97,3 +97,13 @@
     white-space: nowrap;
   }
 }
+
+/* Un seul défilement sur poste de travail : celui de la carte. La hauteur
+   commune (`100dvh - 170px`, outils.css) suppose une seule ligne d'outils ;
+   ici s'y ajoutent la note, les sous-onglets et l'aide (≈ 200 px de plus) —
+   la page défilait d'abord, puis la carte. */
+@media (min-width: 701px) {
+  .codes-celcat .panel.carte-tableau.carte-tableau--haute {
+    max-height: max(280px, calc(100dvh - 372px));
+  }
+}
