@@ -335,7 +335,9 @@ curl --compressed -H "Authorization: Bearer $CLE" https://cal-iut-mmi.srko.fr/ap
 
 `email` : adresse de **contact** de l'enseignant (saisie dans la
 configuration), pas celle d'un compte. La liste comprend aussi les
-enseignants déclarés qui n'ont encore aucune séance (`nb_seances: 0`).
+enseignants déclarés qui n'ont encore aucune séance (`nb_seances: 0`), y
+compris les intervenants ajoutés dans l'appli (« Nouvel intervenant »,
+`POST /reference/enseignants`, §7).
 
 `/seances` accepte les mêmes paramètres que `GET /api/v1/seances` (`semaine`,
 `du`, `au`, `limite`, `decalage`). Contraintes de l'enseignant :
@@ -1192,6 +1194,9 @@ d'avant, `data/state/references.json`) ; la révision avance.
 | `PUT /reference/salles/{id}` | `{"capacite", "type"}` (salle ajoutée à la main, `edit`), `{"code_celcat"}` (`admin`) | voir corps | `custom_rooms.json`, `celcat_mappings.json` |
 | `PUT /reference/cours/{code}` | `{"intitule"}` (`edit`), `{"code_celcat"}` — code module `TSB…` relevé dans `celcat_matieres.yaml` (`admin`) | voir corps | `references.json`, `celcat_mappings.json` (famille `matieres`) |
 | `DELETE /reference/enseignants/{code}/contact` · `…/{code}/nom` · `DELETE /reference/cours/{code}/intitule` | — « Revenir à la valeur du fichier » | `edit` | `references.json` |
+| `POST /reference/enseignants` | « Nouvel intervenant » : `{"nom", "code", "code_celcat"?, "email"?, "confirmer"?}` — code 2 à 4 lettres (majuscules) ; 400 format ; 409 code déjà pris (planning, maquette, feuille, suppléments, appli, disponibilités, annuaire des mails) ou adresse déjà attribuée ; 409 `{"message", "avertissements", "suggestion_code"}` tant qu'un avertissement n'est pas confirmé (`confirmer: true`) : code présent dans `celcat.yaml` pour une autre personne, nom proche d'un enseignant connu ; code Celcat déjà porté par un autre trigramme = avertissement **bloquant** (même règle que Codes Celcat). 201 `{"code", "nom", "email", "code_celcat", "cree_le", "avertissements_confirmes", "message", "revision"}` | `admin` | `references.json` (`intervenants`, mail), `celcat_mappings.json` |
+| `POST /reference/enseignants/verifier` | même corps — erreurs et avertissements sans rien écrire (validation en direct de la modale) | `admin` | — |
+| `DELETE /reference/enseignants/{code}` | — intervenant créé dans l'appli, sans séance (404 sinon venu de la configuration, 409 s'il a des séances) ; retire aussi son mail et son code Celcat saisis | `admin` | `references.json`, `celcat_mappings.json` |
 | `GET /reference/codes-celcat[?famille=cours\|salles\|enseignants\|groupes]` | — toutes les entités du planning par famille : code Celcat, origine (`fichier`/`appli`/`manquant`), séances placées, suggestions relevées ; l'auteur d'une saisie n'est rendu qu'aux admins | compte actif | — |
 | `PUT /reference/codes-celcat` | `{"famille", "cle", "code"}` — seulement pour une entité SANS code connu : 409 « code déjà connu (fichier / maquette) », 409 si « sans code (voulu) » ; format par famille ; 409 d'un code déjà porté par une autre entité de la famille (sauf salle réunie / sa moitié) ; groupes refusés (409, `celcat_groupes.yaml`) | `admin` | `celcat_mappings.json` |
 | `DELETE /reference/codes-celcat?famille=…&cle=…` | — « Revenir à manquant » (ou au code connu pour une saisie antérieure au verrou) ; 404 sans saisie | `admin` | `celcat_mappings.json` |

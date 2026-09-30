@@ -11,6 +11,14 @@
 #
 # Son code Celcat, lui, se renseigne dans `celcat.yaml` (section
 # `enseignants`), sans quoi ses séances resteraient bloquées à la recopie.
+#
+# Aussi faisable depuis l'appli, sans déploiement (30/09/2026) : un
+# administrateur clique « Nouvel intervenant » (Vue Enseignant, ou Référence >
+# Codes Celcat > Enseignants) — nom, code, code Celcat et mail. L'intervenant
+# est alors conservé dans `data/state/references.json` (le volume) et lu
+# exactement comme une entrée de ce fichier ; son code Celcat va dans
+# `data/state/celcat_mappings.json`. Cf. GUIDE.md, « Ajouter un intervenant ».
+# Une entrée ici (ou la feuille officielle) prend le pas sur lui.
 
 APH:
   nom: "Alexia Petit-Halajko"

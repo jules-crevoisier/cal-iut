@@ -212,6 +212,46 @@ affichés, sans bouton. Ce qui est saisi est conservé dans `data/state/` (le
 volume), survit aux déploiements et garde la trace de qui l'a saisi, quand,
 et de la valeur qu'il remplaçait.
 
+### Ajouter un intervenant
+
+Un vacataire qui arrive en cours d'année et que la feuille des contraintes ne
+connaît pas encore n'apparaît nulle part — pas même dans « Nouvelle séance » :
+on ne peut pas lui créer sa première séance. Un **administrateur** l'ajoute
+depuis l'appli, sans fichier ni déploiement : **Nouvel intervenant**, en haut
+de la *Vue Enseignant* (l'annuaire), ou dans *Référence > Codes Celcat >
+Enseignants*.
+
+Quatre champs : **nom complet** (« Prénom Nom », obligatoire), **code** (2 à
+4 lettres, le trigramme du planning, obligatoire ; un code libre tiré du nom
+est proposé), **code Celcat** (facultatif, le nombre affiché dans Celcat —
+mêmes règles que *Codes Celcat*) et **mail** (facultatif, pour le lien
+personnel). La saisie est vérifiée en direct :
+
+- un code **déjà pris** par un enseignant connu (planning, maquette, feuille
+  des contraintes, `enseignants_supplementaires.yaml`, appli) est **refusé**,
+  avec un lien vers sa fiche ; de même une adresse déjà attribuée ;
+- un code que `celcat.yaml` donne à une **autre personne** (ex. AGR = Gram
+  AMBROISE) est signalé : créé sous ce code, l'intervenant partirait dans
+  Celcat — et en paie — sous l'identifiant de cette personne. Choisir un autre
+  code, ou **Créer quand même** si c'est voulu ;
+- un code Celcat **déjà porté** par un autre enseignant (ex. 3233 = AGT,
+  GRENET ANNE) est à corriger : « c'est peut-être la même personne ? » — lien
+  vers sa fiche, ou **Retirer le code Celcat** ;
+- un **nom** qui ressemble à quelqu'un de connu (sans tenir compte des
+  accents, de la casse ni de l'ordre prénom/nom, commentaires de
+  `celcat.yaml` compris) : « Cette personne existe peut-être déjà sous le
+  code X », avec un lien vers sa fiche. **Créer quand même** si ce n'est pas
+  elle.
+
+Une fois créé, sa fiche s'ouvre (« Intervenant créé ») et il apparaît partout
+où apparaissent les enseignants : annuaire, « Nouvelle séance », filtres,
+*Codes Celcat*, API. Sa fiche porte la mention **ajouté dans l'appli** (le
+jour, et pour un administrateur le compte qui l'a ajouté) et, tant qu'il n'a
+**aucune séance**, un bouton **Supprimer** (avec son mail et son code Celcat
+saisis). Il est conservé dans `data/state/references.json` (le volume) : il
+survit aux déploiements. Quand la feuille officielle ou
+`enseignants_supplementaires.yaml` le connaîtront, leur nom prendra le pas.
+
 ### Codes Celcat
 
 *Référence > Codes Celcat* liste **tout** ce que l'appli envoie à Celcat, pas
