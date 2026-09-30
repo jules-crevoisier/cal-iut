@@ -226,20 +226,44 @@ partent pas vers Celcat). La pastille d'un sous-onglet compte ses lignes
 sans code ; le filtre **Sans code / Saisis dans l'appli / Tous**, la
 recherche et le tri par colonne restent sur l'onglet.
 
-Un **administrateur** saisit ou corrige un code directement dans la ligne
-(**Saisir** ou le crayon, **Entrée** pour enregistrer, **Échap** pour
-annuler) ; les codes déjà relevés dans Celcat sont proposés sous le champ
-(pour un cours, celui de la maquette en premier, s'il est relevé). Le code
-est pris en compte au **prochain envoi vers Celcat**, sans déploiement, et
-passe devant le fichier. **Revenir à la valeur du fichier** retire la
-saisie. Ce qui est refusé, avec le message sous le champ :
+**On ne modifie que ce qu'on n'a pas.** Un code **connu** — celui du
+fichier de configuration (`celcat.yaml`) ou celui de la **maquette** — est
+affiché avec un cadenas et ne se change pas dans l'appli. Les codes de la
+maquette sont **préenregistrés** : pour chaque cours sans code dans
+`celcat.yaml`, le code de la maquette (`codelement`) est repris s'il existe
+dans le relevé des matières Celcat ; pour les cours CREACOM dont la maquette
+écrit le code en **M** alors que Celcat le connaît en **C** (WRA401M…), la
+variante en C est reprise (origine « maquette, corrigé M→C », règle de
+Kyllian). Ces codes sont figés dans `data/config/celcat_modules_maquette.yaml`,
+régénéré par `python scripts/generer_codes_maquette.py` quand la maquette ou
+le relevé change (relire le diff : ces codes servent aussi à la paie).
 
+Un **administrateur** saisit un code **manquant** directement dans la ligne
+(**Saisir**, **Entrée** pour enregistrer, **Échap** pour annuler) ; les codes
+relevés dans Celcat sont proposés sous le champ. Le code part au **prochain
+envoi vers Celcat**, sans déploiement. Une saisie se corrige (crayon) ou se
+retire (**Revenir à manquant**). Ce qui est refusé, avec le message sous le
+champ :
+
+- un code déjà connu (fichier, maquette) : « code déjà connu » ;
 - un format inattendu — cours : un code module `TSB…` **relevé** dans
   `celcat_matieres.yaml` ; salle : le nom Celcat avec le point (« H.104 »,
   « Amphi 3 MMI ») ; enseignant : un nombre (« 0 » ne vaut pas code) ;
 - un code **déjà porté** par un autre cours, une autre salle ou un autre
   enseignant — seule exception : une salle réunie (H.007-008) peut porter le
   code de l'une de ses moitiés (H.007).
+
+**Sans code (voulu).** Certaines entités ne doivent jamais aller dans Celcat
+(projets encadrés WS1PJ…, lignes administratives COR, PCA…, la visite de la
+BU WR100BU) : elles sont marquées **sans code (voulu)**, avec leur motif. Elles
+ne comptent plus comme manquantes (pastilles, filtre *Sans code*, *Données à
+compléter*) et le plan Celcat les compte « non envoyées (voulu) » au lieu de
+les bloquer — rien ne part. Celles décidées avec Kyllian sont écrites dans
+`celcat.yaml` (section `sans_code_voulu`) ; un administrateur peut en marquer
+d'autres depuis la ligne (**Sans code (voulu)…**, motif obligatoire) et les
+retirer (**Retirer « sans code »**). Une saisie faite avant ce verrou sur un
+code désormais connu reste appliquée, signalée en orange, et **Revenir au
+code connu** la retire.
 
 Les **groupes** sont en lecture seule pour tous : Celcat les désigne par un
 identifiant interne, qu'on ne lit pas dans Celcat ; il se règle dans
