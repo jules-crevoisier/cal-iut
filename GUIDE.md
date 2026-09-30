@@ -325,6 +325,46 @@ pas. La ligne ouvre la Vue Promo au bon jour.
 
 ---
 
+### Tâches : joindre des images
+
+Onglet **Tâches** (le tableau À faire / En cours / Fait de l'équipe) : une
+tâche peut porter jusqu'à **10 images** — une capture d'écran de Celcat, la
+photo d'une affiche, un schéma.
+
+- **Coller une capture** : ouvrez la tâche (clic sur son titre) ou « Nouvelle
+  tâche », puis `Ctrl V` (`⌘ V` sur Mac). La capture est nommée d'après
+  l'heure (`capture-2026-09-30-14h05.png`). Un texte collé dans un champ
+  reste du texte.
+- **Glisser-déposer** des fichiers n'importe où sur la fenêtre de la tâche,
+  ou bouton **« Ajouter une image »**.
+- En modification, chaque image est **enregistrée aussitôt** (« Annuler » ne
+  la retire pas). À la création, elles sont marquées « en attente » et
+  partent au moment de « Créer ».
+- **Voir** : clic sur une vignette — aperçu en grand, `←` `→` pour passer
+  d'une image à l'autre, `Échap` pour fermer, « Original » pour l'ouvrir
+  dans un onglet. Sur le tableau, le petit compteur (icône image + nombre)
+  d'une carte ouvre le même aperçu.
+- **Retirer** : la croix d'une vignette, puis « Retirer » pour confirmer.
+  Supprimer une tâche supprime aussi ses images.
+
+**Qui peut quoi** : mêmes droits que les tâches. Tout compte qui voit
+l'onglet Tâches voit les images (lecture seule comprise) ; ajouter ou retirer
+demande le rôle « Modification » ou « Administrateur ». Jamais visibles par
+un lien public (`?t=`), ni par un compte « Accès API » dans l'appli ; une clé
+API les lit par l'API v1 (`docs/API.md`, « Tâches »).
+
+**Limites** : PNG, JPEG, WebP ou GIF uniquement — reconnus sur le contenu du
+fichier, pas sur son nom ; **SVG refusé** (il peut contenir du code). 8 Mo
+par image, 40 Mo par tâche, 20 000 pixels de côté. Les informations cachées
+d'une photo (position GPS, appareil, auteur) sont retirées à l'envoi ; seule
+l'orientation est gardée.
+
+**Où sont les fichiers** : dans le volume persistant, à côté de la base :
+`data/state/pieces_jointes/taches/<n° de tâche>/`, sous un nom tiré au sort
+(jamais le nom d'origine). Jamais dans le dépôt Git.
+
+---
+
 ## 5 bis. Placer à la main ce que l'ordinateur n'a pas su placer
 
 Il est normal qu'il reste des séances. L'outil en place environ **96 %** ; les
@@ -468,6 +508,13 @@ cp data/state/sauvegardes_db/cal-iut-2026-09-28.db data/state/cal-iut.db
 # 4. vérifier qu'elle est saine (doit afficher « ok »), puis redémarrer
 sqlite3 data/state/cal-iut.db "PRAGMA integrity_check"
 ```
+
+**Images des tâches** : elles ne sont PAS dans ces sauvegardes. La copie de
+la base garde leur liste (nom, taille…), pas les fichiers, qui restent dans
+`data/state/pieces_jointes/`. Restaurer une base ancienne ne touche pas à ce
+dossier : une image retirée depuis y a déjà disparu et s'affiche « Image
+indisponible », une image ajoutée depuis y reste sans être listée. Seule la
+sauvegarde du volume Dokploy protège les fichiers eux-mêmes.
 
 Tout ce qui a été fait depuis ce jour-là est perdu dans la base ; les
 instantanés JSON des placements (`data/state/sauvegardes/`) peuvent aider à le

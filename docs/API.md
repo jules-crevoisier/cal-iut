@@ -41,7 +41,8 @@ out ») : **`/api/v1/docs`**, schéma OpenAPI brut : **`/api/v1/openapi.json`**
 | `/api/v1/enseignants/{code}/contraintes` | La même chose pour un enseignant | compte actif | — |
 | `/api/v1/charges` | Heures par enseignant, groupe, cours, parcours ; occupation des salles | compte actif | oui ³ |
 | `/api/v1/modifications` | Séances déplacées à la main depuis la génération | compte actif | oui |
-| `/api/v1/taches` | Cartes du tableau de suivi | compte actif | — |
+| `/api/v1/taches` | Cartes du tableau de suivi (avec la liste de leurs images) | compte actif | — |
+| `/api/v1/taches/{id}/images/{image_id}` | Fichier d'une image jointe à une tâche (PNG, JPEG, WebP, GIF) | compte actif | — |
 | `/api/v1/celcat/etat` | Synchronisation Celcat et file d'attente | rôle **admin** | — |
 | `/api/v1/docs`, `/api/v1/openapi.json` | Documentation interactive, schéma | compte actif | — |
 
@@ -998,11 +999,34 @@ curl --compressed -H "Authorization: Bearer $CLE" "https://cal-iut-mmi.srko.fr/a
 [{"id": 12, "titre": "Déplacer le TP de WR106 du groupe A", "description": "Salle Mac indisponible le 14/10.",
   "colonne": "en_cours", "ordre": 2.0, "enseignant": "MRI", "concerne": "Jules", "categorie": "edt",
   "priorite": "urgente", "date_debut": "2026-10-12", "date_fin": "2026-10-14",
-  "cree_le": "2026-09-28T08:12:03", "maj_le": "2026-09-29T09:40:11", "fait_le": null}]
+  "cree_le": "2026-09-28T08:12:03", "maj_le": "2026-09-29T09:40:11", "fait_le": null,
+  "images": [{"id": 7, "nom": "capture-2026-09-29-09h38.png", "type": "image/png", "taille": 184233,
+              "largeur": 1440, "hauteur": 900, "cree_le": "2026-09-29T09:38:52",
+              "url": "/api/v1/taches/12/images/7"}]}]
 ```
 
 `concerne` : à qui la carte est attribuée (prénom libre). L'**auteur** d'une
-carte n'est volontairement pas exposé : c'est l'adresse mail de son compte.
+carte n'est volontairement pas exposé : c'est l'adresse mail de son compte
+(ni celui d'une image, pour la même raison).
+
+`images` (30/09/2026) : les images jointes à la carte (captures d'écran,
+photos), dans l'ordre d'ajout ; `taille` en octets, `largeur`/`hauteur` en
+pixels, telles qu'affichées. Le fichier se lit à `url`, **avec la même clé** :
+
+```bash
+curl -H "Authorization: Bearer $CLE" -o capture.png "https://cal-iut-mmi.srko.fr/api/v1/taches/12/images/7"
+```
+
+Réponse : le fichier, avec son type réel (`Content-Type` : `image/png`,
+`image/jpeg`, `image/webp` ou `image/gif`), `ETag`/`Last-Modified` (un
+`If-None-Match` répond `304`), `Cache-Control: private, max-age=86400` (le
+contenu d'une image ne change jamais : un identifiant n'est jamais réattribué).
+`404` si la tâche ou l'image n'existe pas, ou si le fichier manque sur le
+serveur. Mêmes droits que `/api/v1/taches` : une clé qui lit les tâches lit
+leurs images (clé d'un compte « Accès API » comprise) ; un lien public `?t=`
+jamais. Types vérifiés sur le contenu à l'envoi, métadonnées (GPS, appareil)
+retirées. L'ajout et le retrait d'images restent dans l'appli (API en lecture
+seule).
 
 ### `GET /api/v1/celcat/etat`
 

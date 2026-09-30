@@ -188,3 +188,12 @@ lignes de 36 px, nombres à droite en chiffres tabulaires.
   pointillée) ; sa bulle (seul élément qui flotte, `--shadow-pop`) donne la
   valeur du fichier et « Revenir à la valeur du fichier ». Lecture seule :
   la valeur et la marque, sans bouton.
+- **Images jointes et aperçu** (`components/ImagesTache.tsx`, 30/09/2026,
+  tâches du kanban) : vignettes carrées à plat (bord 1 px, rayon 8), croix
+  de retrait qui ouvre une confirmation DANS la vignette (« Retirer » /
+  « Garder »), jamais une modale de plus. Collage (Ctrl V) et dépôt sur toute
+  la fenêtre ; pendant un glisser, cadre pointillé `--accent`. Aperçu en
+  grand : le seul fond sombre dans les deux thèmes (`--scrim-apercu`,
+  `--on-scrim`, définis une seule fois dans `:root`), Échap ferme, ← →
+  naviguent, flèches sous l'image sous 600 px. Sur une carte, compteur
+  icône + nombre (jamais d'emoji), qui ouvre l'aperçu en lecture seule aussi.
