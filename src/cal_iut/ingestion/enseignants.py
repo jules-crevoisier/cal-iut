@@ -17,13 +17,19 @@ et on ne pouvait pas lui créer sa première séance, précisément parce qu'il
 n'en avait aucune.
 
 Ce module rend la liste des enseignants DÉCLARÉS, quelle que soit leur
-activité, depuis deux sources :
+activité, depuis trois sources :
 
 1. `contraintes/05_enseignants_contraintes.json`, généré depuis la feuille
    officielle — la référence ;
 2. `data/config/enseignants_supplementaires.yaml`, pour les enseignants que
    cette feuille ne connaît pas encore (arrivée en cours d'année). Tenu à la
    main, daté, et avec la raison de chaque entrée.
+
+3. les intervenants créés DANS L'APPLI (« Nouvel intervenant », 30/09/2026,
+   `data/state/references.json`, cf. `surcharges_reference.intervenants`) :
+   l'équivalent d'une entrée de (2), sans déploiement. Ils passent en
+   dernier : si le fichier ou la feuille les connaissent ensuite, leur nom
+   à eux l'emporte.
 
 L'ordre compte : la feuille officielle a le dernier mot sur le nom. Un
 supplément ne sert qu'à combler un absent, jamais à renommer quelqu'un que
@@ -99,12 +105,17 @@ def enseignants_declares(config_dir: Path) -> dict[str, str]:
 
 
 def noms_officiels(config_dir: Path) -> dict[str, str]:
-    """Comme `enseignants_declares`, sans les noms saisis dans l'appli : ce
-    que disent la feuille officielle et `enseignants_supplementaires.yaml`.
+    """Comme `enseignants_declares`, sans les noms CORRIGÉS dans l'appli : ce
+    que disent la feuille officielle, `enseignants_supplementaires.yaml` et
+    les intervenants créés dans l'appli.
     Sert à `api/reference.py` pour ne pas « compléter » un nom déjà connu."""
+    from cal_iut.ingestion import surcharges_reference
+
     config_dir = Path(config_dir)
     racine = config_dir.parent.parent
-    noms = _depuis_supplements(config_dir)
+    # Créés dans l'appli d'abord : le fichier et la feuille les recouvrent.
+    noms = {code: str(fiche["nom"]) for code, fiche in surcharges_reference.intervenants().items()}
+    noms.update(_depuis_supplements(config_dir))
     # La feuille officielle a le dernier mot sur le nom — sauf quand elle
     # n'en donne pas (`nom_complet` vide : elle rend le code) : un
     # supplément qui, lui, a un nom ne doit pas être effacé par ce vide.

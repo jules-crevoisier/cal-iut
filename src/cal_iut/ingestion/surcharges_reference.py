@@ -26,6 +26,13 @@ Familles et champs :
   `nom` (lu par `ingestion/enseignants.py::enseignants_declares`) ;
 - `cours` : `intitule` (appliqué aux séances chargées, `appliquer_intitules`).
 
+Intervenants créés dans l'appli (« Nouvel intervenant », 30/09/2026) : clé
+`intervenants`, `{CODE: {"nom", "cree_le", "cree_par"}}` — l'équivalent,
+dans le volume, d'une entrée de `enseignants_supplementaires.yaml` (lue par
+`ingestion/enseignants.py`). Leur mail éventuel est un `enseignants.email`
+comme un autre ; leur code Celcat vit dans `celcat_mappings.json`. Création
+et suppression : `api/reference.py::creer_intervenant` / `supprimer_intervenant`.
+
 Les salles n'y sont pas : leurs attributs éditables vivent déjà dans
 `data/state/custom_rooms.json` (`api/custom_rooms.py`), et leur code Celcat
 dans `data/state/celcat_mappings.json`. Une seule persistance par donnée.
@@ -69,7 +76,7 @@ def _path() -> Path:
 
 
 def _vide() -> dict[str, Any]:
-    return {**{famille: {} for famille in CHAMPS}, "journal": []}
+    return {**{famille: {} for famille in CHAMPS}, "intervenants": {}, "journal": []}
 
 
 def _normaliser(brut: object) -> dict[str, Any]:
@@ -80,6 +87,13 @@ def _normaliser(brut: object) -> dict[str, Any]:
         entrees = brut.get(famille)
         if isinstance(entrees, dict):
             doc[famille] = {str(k): dict(v) for k, v in entrees.items() if isinstance(v, dict)}
+    intervenants = brut.get("intervenants")
+    if isinstance(intervenants, dict):
+        doc["intervenants"] = {
+            str(k).strip().upper(): dict(v)
+            for k, v in intervenants.items()
+            if isinstance(v, dict) and str(v.get("nom") or "").strip()
+        }
     journal = brut.get("journal")
     if isinstance(journal, list):
         doc["journal"] = [ligne for ligne in journal if isinstance(ligne, dict)]
@@ -217,6 +231,62 @@ def journaliser(
             ecrire_json(_path(), doc)
     except Exception:
         logger.exception("Journal des compléments : écriture impossible (%s %s.%s)", famille, cle, champ)
+
+
+def intervenants() -> dict[str, dict[str, Any]]:
+    """Intervenants créés dans l'appli : `{CODE: {"nom", "cree_le",
+    "cree_par"}}`. Lecture : ne lève jamais (cf. `_charger_pour_lecture`)."""
+    return {code: dict(fiche) for code, fiche in _charger_pour_lecture().get("intervenants", {}).items()}
+
+
+def creer_intervenant(code: str, nom: str, *, email: str | None = None, par: str = "") -> dict[str, Any]:
+    """Enregistre un intervenant créé dans l'appli (déjà validé par
+    `api/reference.py::creer_intervenant`, seul appelant) — et son mail, dans
+    la MÊME écriture : un intervenant sans l'adresse saisie avec lui, ou une
+    adresse sans intervenant, ne doit jamais rester à moitié enregistré.
+    `ValueError` si le code existe déjà dans l'appli. Rend la fiche."""
+    code_propre = str(code or "").strip().upper()
+    nom_propre = " ".join(str(nom or "").split())
+    if not code_propre or not nom_propre:
+        raise ValueError("le code et le nom sont tous deux requis")
+    maintenant = datetime.now(UTC).isoformat()
+    with _verrou, verrou_fichier(_path()):
+        doc = charger()
+        if code_propre in doc["intervenants"]:
+            raise ValueError(f"l'intervenant {code_propre} existe déjà")
+        fiche = {"nom": nom_propre, "cree_le": maintenant, "cree_par": str(par or "").strip()}
+        doc["intervenants"][code_propre] = fiche
+        _ajouter_au_journal(doc, _ligne_journal("intervenants", code_propre, "creation", None, nom_propre, par))
+        if email:
+            champs = dict(doc["enseignants"].get(code_propre, {}))
+            champs["email"] = {"valeur": email, "modifie_le": maintenant, "modifie_par": str(par or "").strip()}
+            doc["enseignants"][code_propre] = champs
+            _ajouter_au_journal(doc, _ligne_journal("enseignants", code_propre, "email", None, email, par))
+        ecrire_json(_path(), doc)
+    return dict(fiche)
+
+
+def supprimer_intervenant(code: str, *, par: str = "") -> dict[str, Any] | None:
+    """Retire un intervenant créé dans l'appli, avec ce qui a été saisi pour
+    lui (mail, nom corrigé) — une seule écriture. Rend la fiche retirée, ou
+    None s'il n'avait pas été créé dans l'appli. Le code Celcat, lui, vit
+    dans `celcat_mappings.json` : retiré par l'appelant."""
+    code_propre = str(code or "").strip().upper()
+    with _verrou, verrou_fichier(_path()):
+        doc = charger()
+        fiche = doc["intervenants"].pop(code_propre, None)
+        if fiche is None:
+            return None
+        for champ, entree in (doc["enseignants"].pop(code_propre, None) or {}).items():
+            if isinstance(entree, dict):
+                _ajouter_au_journal(
+                    doc, _ligne_journal("enseignants", code_propre, champ, entree.get("valeur"), None, par)
+                )
+        _ajouter_au_journal(
+            doc, _ligne_journal("intervenants", code_propre, "suppression", fiche.get("nom"), None, par)
+        )
+        ecrire_json(_path(), doc)
+    return dict(fiche)
 
 
 def journal() -> list[dict[str, Any]]:

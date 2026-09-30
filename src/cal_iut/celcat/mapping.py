@@ -16,6 +16,7 @@ d'affichage.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -51,6 +52,41 @@ class CelcatConfig:
     connus: dict[str, dict[str, str]] = field(default_factory=dict)
     origines: dict[str, dict[str, str]] = field(default_factory=dict)
     sans_code: dict[str, dict[str, dict[str, str]]] = field(default_factory=dict)
+    # « Nouvel intervenant » (30/09/2026) : pour chaque trigramme de la
+    # section `enseignants` de `celcat.yaml` — « 0 » compris —, le nom que
+    # porte son commentaire (`AGR: "38321"  # Gram AMBROISE`). Seule trace,
+    # dans l'appli, de personnes que Celcat connaît sans que le planning les
+    # connaisse : c'est ce qui permet d'avertir qu'un code « libre » est en
+    # fait celui de quelqu'un d'autre dans Celcat.
+    noms_fichier_enseignants: dict[str, str] = field(default_factory=dict)
+
+
+_RE_LIGNE_ENSEIGNANT = re.compile(r"""^\s+["']?([A-Za-z]{1,6})["']?\s*:\s*["']?([^"'#\s]*)["']?\s*(?:#\s*(.*))?$""")
+
+
+def noms_commentes(texte: str) -> dict[str, str]:
+    """`{TRIGRAMME: nom du commentaire}` de la section `enseignants:` d'un
+    `celcat.yaml` (texte brut : PyYAML jette les commentaires). Une entrée
+    sans commentaire rend le trigramme lui-même — elle existe, sans nom.
+    Les précisions entre parenthèses (« (ajoutée le 22/09/2026 — …) ») ne
+    font pas partie du nom."""
+    noms: dict[str, str] = {}
+    dans_section = False
+    for ligne in texte.splitlines():
+        if not ligne.strip() or ligne.lstrip().startswith("#"):
+            continue
+        if not ligne[0].isspace():
+            dans_section = ligne.split("#", 1)[0].strip() == "enseignants:"
+            continue
+        if not dans_section:
+            continue
+        m = _RE_LIGNE_ENSEIGNANT.match(ligne)
+        if not m:
+            continue
+        code = m.group(1).upper()
+        nom = re.sub(r"\s*\([^)]*\)", "", m.group(3) or "").strip()
+        noms[code] = nom or code
+    return noms
 
 
 def _code_renseigne(valeur: object) -> str | None:
@@ -85,8 +121,10 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
     config_dir = Path(config_dir)
     path = config_dir / "celcat.yaml"
     data = {}
+    texte = ""
     if path.exists():
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        texte = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(texte) or {}
 
     enseignants = {
         str(k).upper(): code
@@ -149,6 +187,10 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
         connus=connus,
         origines=origines,
         sans_code=sans_code,
+        noms_fichier_enseignants={
+            **{str(k).upper(): str(k).upper() for k in (data.get("enseignants") or {})},
+            **noms_commentes(texte),
+        },
     )
 
 

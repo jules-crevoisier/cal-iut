@@ -1376,6 +1376,7 @@ def _build_app_context(state: object) -> _AppContext:
 # séances de n'importe quel emploi du temps, c'est l'objet même de l'outil.
 _CLES_PRIVEES_PAYLOAD = (
     "teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions", "surchargesReference",
+    "intervenantsAppli",
 )
 
 
@@ -1405,7 +1406,7 @@ def variante_lecture(request: Request) -> str:
 
 def expurger_payload(payload: dict[str, object]) -> dict[str, object]:
     """Version publique du payload (cf. `_CLES_PRIVEES_PAYLOAD`)."""
-    vide: dict[str, object] = {"teacherEmails": {}, "surchargesReference": {}}
+    vide: dict[str, object] = {"teacherEmails": {}, "surchargesReference": {}, "intervenantsAppli": {}}
     return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
 
 
@@ -1488,9 +1489,12 @@ def _calculer_payload_app_state() -> dict[str, object]:
     payload["teacherLabels"] = dict(sorted(libelles.items()))
     # Ce qui a été modifié dans l'appli, avec la valeur d'origine : l'écran
     # le marque (« modifiée dans l'appli ») et propose d'y revenir.
-    from cal_iut.api.reference import surcharges_pour_payload
+    from cal_iut.api.reference import intervenants_pour_payload, surcharges_pour_payload
 
     payload["surchargesReference"] = surcharges_pour_payload(state)
+    # Intervenants créés dans l'appli (« Nouvel intervenant », 30/09/2026) :
+    # la fiche dit par qui, quand, et propose « Supprimer » sans séance.
+    payload["intervenantsAppli"] = intervenants_pour_payload(state)
 
     # Réservations de salles par des tiers (vue « Salles libres », 22/09/2026).
     from cal_iut.ingestion.config_loader import load_room_reservation_entries

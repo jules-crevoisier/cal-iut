@@ -127,6 +127,53 @@ class CoursReferenceRequest(BaseModel):
     code_celcat: str | None = Field(default=None, max_length=20)
 
 
+class NouvelIntervenantRequest(BaseModel):
+    nom: str = Field(default="", max_length=120, description="« Prénom Nom ».")
+    code: str = Field(default="", max_length=10, description="2 à 4 lettres (normalisé en majuscules).")
+    code_celcat: str | None = Field(default=None, max_length=40, description="Identifiant Celcat (un nombre), facultatif.")
+    email: str | None = Field(default=None, max_length=254)
+    confirmer: bool = Field(default=False, description="Créer malgré les avertissements (jamais malgré un bloquant).")
+
+
+class ErreurIntervenant(BaseModel):
+    champ: Literal["nom", "code", "code_celcat", "email"]
+    statut: int = Field(description="400 : saisie invalide ; 409 : déjà pris.")
+    message: str
+    code_existant: str | None = Field(default=None, description="Enseignant qui porte déjà ce code / cette adresse.")
+
+
+class AvertissementIntervenant(BaseModel):
+    type: Literal["code_dans_celcat", "code_celcat_pris", "nom_proche"]
+    titre: str
+    message: str
+    code_existant: str | None = None
+    nom_existant: str | None = None
+    fiche: bool = Field(default=False, description="`code_existant` a une fiche dans l'appli (lien).")
+    bloquant: bool = Field(default=False, description="`confirmer` ne suffit pas : corriger la saisie.")
+
+
+class VerificationIntervenant(BaseModel):
+    code: str
+    nom: str
+    email: str | None
+    code_celcat: str | None
+    erreurs: list[ErreurIntervenant]
+    avertissements: list[AvertissementIntervenant]
+    suggestion_code: str | None = Field(default=None, description="Un code libre tiré du nom.")
+    peut_creer: bool = Field(description="Aucune erreur ni avertissement bloquant (confirmation encore requise s'il y a des avertissements).")
+
+
+class IntervenantCree(BaseModel):
+    code: str
+    nom: str
+    email: str | None
+    code_celcat: str | None
+    cree_le: str
+    avertissements_confirmes: list[AvertissementIntervenant]
+    message: str
+    revision: int
+
+
 class ReferenceEnregistree(BaseModel):
     famille: Famille
     cle: str
@@ -520,12 +567,17 @@ def surcharges_pour_payload(state: object) -> dict[str, dict[str, dict[str, dict
 
     doc = surcharges_reference._charger_pour_lecture()
     fichier = load_teacher_contacts_yaml(Path(state.config_dir))
+    crees = doc.get("intervenants", {})
     sortie: dict[str, dict[str, dict[str, dict[str, object]]]] = {"enseignants": {}, "cours": {}}
     for code, champs in doc.get("enseignants", {}).items():
         for champ, entree in champs.items():
             if not isinstance(entree, dict):
                 continue
             origine = fichier.get(code) if champ == "email" else _nom_officiel(state, code)
+            # Le mail d'un intervenant créé dans l'appli n'a pas de « valeur
+            # du fichier » à laquelle revenir : ce n'est pas une modification.
+            if champ == "email" and code in crees and origine is None:
+                continue
             sortie["enseignants"].setdefault(code, {})[champ] = {
                 "valeur": entree.get("valeur"), "origine": origine,
                 "modifie_le": entree.get("modifie_le"), "modifie_par": entree.get("modifie_par") or "",
@@ -694,6 +746,387 @@ def effacer_intitule(state: object, code: str, *, par: str = "") -> str:
     return retiree
 
 
+# ── Nouvel intervenant ──────────────────────────────────────────────────
+#
+# Demande utilisateur (30/09/2026, admin) : « ajoute la possibilité de créer
+# un intervenant ». Jusque-là : une entrée dans
+# `enseignants_supplementaires.yaml`, une ligne dans `celcat.yaml`, un
+# déploiement. Un intervenant créé ici vit dans `data/state/references.json`
+# (`surcharges_reference.intervenants`) et est lu par
+# `ingestion/enseignants.py` EXACTEMENT comme une entrée du fichier : il
+# apparaît partout où apparaissent les enseignants (annuaire, fiche,
+# « Nouvelle séance », Codes Celcat, API v1…).
+#
+# GARDE-FOUS — cas réel à l'origine : « Anne Grenet », proposée sous AGR
+# avec l'identifiant Celcat 3233. Or `celcat.yaml` dit `AGR: "38321"  # Gram
+# AMBROISE` (une autre personne : ses séances partiraient en paie sous son
+# identifiant) et `AGT: "3233"  # GRENET ANNE` (la même personne, déjà là).
+# D'où, en plus des refus (code pris par un enseignant connu, formats,
+# adresse déjà attribuée) :
+# - un code présent dans `celcat.yaml` pour une AUTRE personne : avertissement ;
+# - un code Celcat déjà porté par un autre trigramme : avertissement
+#   BLOQUANT (même règle de doublon que l'onglet Codes Celcat) ;
+# - un nom qui ressemble à un enseignant connu (accents, casse, ordre
+#   prénom/nom, commentaires de `celcat.yaml` compris) : avertissement.
+# Un avertissement non bloquant se franchit par `confirmer=true`.
+
+_RE_CODE_INTERVENANT = re.compile(r"^[A-Z]{2,4}$")
+
+
+def _jetons_nom(nom: str) -> frozenset[str]:
+    """« Anne-Sophie DIEHL » -> {"anne", "sophie", "diehl"} : sans accents,
+    sans casse, sans ordre."""
+    import unicodedata
+
+    texte = unicodedata.normalize("NFD", str(nom or ""))
+    texte = "".join(c for c in texte if not unicodedata.combining(c)).lower()
+    return frozenset(m for m in re.split(r"[^a-z]+", texte) if m)
+
+
+def noms_proches(a: str, b: str) -> bool:
+    """Même personne, vraisemblablement : mêmes mots (dans n'importe quel
+    ordre), ou tous les mots de l'un (deux au moins) dans l'autre —
+    « Anne Grenet » ~ « GRENET ANNE » ~ « Anne Grenet-Martin »."""
+    ja, jb = _jetons_nom(a), _jetons_nom(b)
+    if not ja or not jb:
+        return False
+    if ja == jb:
+        return True
+    petit, grand = (ja, jb) if len(ja) <= len(jb) else (jb, ja)
+    return len(petit) >= 2 and petit <= grand
+
+
+def _noms_connus(state: object) -> dict[str, str]:
+    """Trigramme -> nom affiché, pour tout enseignant connu de l'appli."""
+    from cal_iut.api import codes_celcat
+
+    noms: dict[str, str] = {}
+    for c in getattr(state, "courses", []) or []:
+        for t in [getattr(b, "teacher", None) for b in c.profs or []] + [c.lead]:
+            if t is not None and t.code and (t.prenom or t.nom):
+                noms.setdefault(t.code.strip().upper(), f"{t.prenom} {t.nom}".strip())
+    noms.update({k: v for k, v in codes_celcat._libelles(state, "enseignants").items() if v and v != k})
+    return noms
+
+
+def codes_enseignants_pris(state: object) -> set[str]:
+    """Tout trigramme déjà connu : planning, maquette, feuille des
+    contraintes, `enseignants_supplementaires.yaml`, intervenants créés dans
+    l'appli, disponibilités, annuaire des mails. Un code de cette liste ne
+    se crée pas (il existe)."""
+    from cal_iut.api import codes_celcat
+    from cal_iut.ingestion.config_loader import load_teacher_contacts_yaml
+
+    codes = set(codes_celcat.enseignants_connus(state))
+    codes |= {
+        str(d.teacher_code).strip().upper()
+        for d in getattr(state, "teacher_availability", []) or []
+        if getattr(d, "teacher_code", None)
+    }
+    codes |= {c.strip().upper() for c in load_teacher_contacts_yaml(Path(state.config_dir))}
+    return {c for c in codes if c}
+
+
+def _suggerer_code(nom: str, pris: set[str]) -> str | None:
+    """Un trigramme libre tiré du nom (« Prénom Nom » : initiale du prénom,
+    puis lettres du nom), ni pris ni présent dans `celcat.yaml`."""
+    import unicodedata
+
+    texte = unicodedata.normalize("NFD", nom)
+    mots = ["".join(c for c in m if c.isalpha()).upper() for m in texte.split()]
+    mots = [m for m in ("".join(ch for ch in m if "A" <= ch <= "Z") for m in mots) if m]
+    if len(mots) < 2:
+        return None
+    prenom, famille = mots[0], "".join(mots[1:])
+    candidats = [prenom[0] + famille[0] + famille[1:2], prenom[0] + famille[0] + famille[-1]]
+    candidats += [prenom[0] + famille[0] + x for x in famille[2:]]
+    candidats += [prenom[:2] + famille[0]]
+    candidats += [prenom[0] + famille[0] + x for x in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+    for c in candidats:
+        if len(c) == 3 and c not in pris:
+            return c
+    return None
+
+
+def verifier_intervenant(
+    state: object,
+    *,
+    nom: str,
+    code: str,
+    code_celcat: str | None = None,
+    email: str | None = None,
+) -> VerificationIntervenant:
+    """Tout ce qui s'oppose à la création, sans rien écrire : erreurs
+    (refus) et avertissements. Sert la validation en direct de la modale
+    (`POST /reference/enseignants/verifier`) ET la création elle-même :
+    une seule règle."""
+    from cal_iut.api import codes_celcat
+    from cal_iut.ingestion.config_loader import load_teacher_contacts
+
+    config_dir = Path(state.config_dir)
+    cfg = codes_celcat._config(config_dir)
+    erreurs: list[ErreurIntervenant] = []
+    avertissements: list[AvertissementIntervenant] = []
+    connus = _noms_connus(state)
+    pris = codes_enseignants_pris(state)
+    # Ceux qui ont une fiche dans l'appli (lien « Voir sa fiche ») : la
+    # liste de l'annuaire, pas toute la maquette.
+    fiches = set(codes_celcat._libelles(state, "enseignants"))
+    dans_celcat = cfg.noms_fichier_enseignants
+
+    nom_propre = " ".join(str(nom or "").split())
+    code_propre = "".join(str(code or "").split()).upper()
+    if len(nom_propre) < 3 or not any(ch.isalpha() for ch in nom_propre):
+        erreurs.append(ErreurIntervenant(champ="nom", statut=400, message="Le nom complet est obligatoire (« Prénom Nom »)."))
+    if not code_propre:
+        erreurs.append(ErreurIntervenant(champ="code", statut=400, message="Le code est obligatoire (2 à 4 lettres, ex. AGN)."))
+    elif not _RE_CODE_INTERVENANT.match(code_propre):
+        erreurs.append(ErreurIntervenant(
+            champ="code", statut=400,
+            message=f"« {code_propre} » n'est pas un code d'enseignant : 2 à 4 lettres sans accent (ex. AGN).",
+        ))
+    elif code_propre in pris:
+        qui = connus.get(code_propre)
+        erreurs.append(ErreurIntervenant(
+            champ="code", statut=409, code_existant=code_propre if code_propre in fiches else None,
+            message=(
+                f"Le code {code_propre} est déjà pris" + (f" par {qui}" if qui else "")
+                + " : choisissez-en un autre."
+            ),
+        ))
+
+    email_propre = None
+    if str(email or "").strip():
+        try:
+            email_propre = normaliser_email(str(email))
+        except ValueError as exc:
+            erreurs.append(ErreurIntervenant(champ="email", statut=400, message=str(exc)))
+        else:
+            for autre, adresse in load_teacher_contacts(config_dir).items():
+                if adresse.strip().lower() == email_propre:
+                    autre = autre.strip().upper()
+                    qui = connus.get(autre)
+                    erreurs.append(ErreurIntervenant(
+                        champ="email", statut=409, code_existant=autre if autre in fiches else None,
+                        message=f"L'adresse {email_propre} est déjà celle de {qui + ' ' if qui else ''}({autre}).",
+                    ))
+                    break
+
+    celcat_propre = None
+    if str(code_celcat or "").strip():
+        try:
+            celcat_propre = codes_celcat._normaliser("enseignants", config_dir, str(code_celcat))
+        except HTTPException as exc:
+            erreurs.append(ErreurIntervenant(champ="code_celcat", statut=exc.status_code, message=str(exc.detail)))
+
+    def libelle_celcat(autre: str) -> str:
+        """Le nom sous lequel Celcat connaît `autre` : le commentaire de
+        `celcat.yaml` d'abord (c'est lui qui dit à qui va la paie)."""
+        commentaire = dans_celcat.get(autre)
+        return commentaire if commentaire and commentaire != autre else connus.get(autre, autre)
+
+    # ── Le code est-il celui de quelqu'un d'autre dans Celcat ? ──
+    code_valide = bool(code_propre) and not any(e.champ == "code" for e in erreurs)
+    if code_valide and code_propre in dans_celcat:
+        nom_celcat = dans_celcat[code_propre]
+        meme_personne = nom_celcat != code_propre and bool(nom_propre) and noms_proches(nom_celcat, nom_propre)
+        ident = (cfg.connus.get("enseignants") or {}).get(code_propre)
+        if not meme_personne:
+            qui = nom_celcat if nom_celcat != code_propre else "une autre entrée"
+            if ident:
+                message = (
+                    f"celcat.yaml associe déjà {code_propre} à {qui} (identifiant Celcat {ident}) : créé sous ce "
+                    f"code, l'intervenant partirait dans Celcat — et en paie — sous l'identifiant de {qui}. "
+                    "Choisissez un autre code si ce n'est pas la même personne."
+                )
+            else:
+                message = (
+                    f"celcat.yaml réserve déjà {code_propre} à {qui} (sans identifiant Celcat pour l'instant). "
+                    "Choisissez un autre code si ce n'est pas la même personne."
+                )
+            bloquant = bool(celcat_propre and ident and celcat_propre != ident)
+            if bloquant:
+                message += f" Le code Celcat saisi ({celcat_propre}) ne peut pas remplacer celui du fichier."
+            avertissements.append(AvertissementIntervenant(
+                type="code_dans_celcat", titre=f"{code_propre} est {qui} dans Celcat", message=message,
+                code_existant=code_propre, nom_existant=nom_celcat if nom_celcat != code_propre else None,
+                fiche=False, bloquant=bloquant,
+            ))
+        elif celcat_propre and ident and celcat_propre != ident:
+            erreurs.append(ErreurIntervenant(
+                champ="code_celcat", statut=409, code_existant=code_propre,
+                message=(
+                    f"celcat.yaml donne déjà l'identifiant {ident} à {code_propre} ({nom_celcat}) : "
+                    "laissez le code Celcat vide, il sera repris du fichier."
+                ),
+            ))
+
+    # ── Le code Celcat est-il déjà celui d'un autre trigramme ? ──
+    if celcat_propre:
+        for autre, valeur in sorted(cfg.enseignants.items()):
+            if autre == code_propre or str(valeur).strip() != celcat_propre:
+                continue
+            qui = libelle_celcat(autre)
+            avertissements.append(AvertissementIntervenant(
+                type="code_celcat_pris", titre=f"{celcat_propre} est déjà {autre} ({qui})",
+                message=(
+                    f"Ce code Celcat est déjà celui de {autre} ({qui}) — c'est peut-être la même personne ? "
+                    "Deux enseignants ne partagent pas un identifiant Celcat : ouvrez sa fiche, "
+                    "ou créez sans code Celcat."
+                ),
+                code_existant=autre, nom_existant=qui, fiche=autre in fiches, bloquant=True,
+            ))
+
+    # ── Le nom ressemble-t-il à quelqu'un de connu ? ──
+    if len(nom_propre) >= 3:
+        vus: set[str] = set()
+        candidats = [(c, n) for c, n in connus.items()] + [
+            (c, n) for c, n in dans_celcat.items() if n and n != c
+        ]
+        for autre, nom_autre in candidats:
+            if autre == code_propre or autre in vus or not noms_proches(nom_autre, nom_propre):
+                continue
+            vus.add(autre)
+            fiche = autre in fiches
+            if autre in pris:
+                message = (
+                    f"{connus.get(autre, nom_autre)} ({autre}) est déjà dans l'appli. "
+                    "Ouvrez sa fiche plutôt que de créer un doublon."
+                )
+            else:
+                ident = cfg.enseignants.get(autre)
+                message = (
+                    f"celcat.yaml connaît {nom_autre} sous {autre}"
+                    + (f" (identifiant Celcat {ident})" if ident else "")
+                    + f" : si c'est la même personne, créez-la sous le code {autre}."
+                )
+            avertissements.append(AvertissementIntervenant(
+                type="nom_proche", titre=f"Cette personne existe peut-être déjà sous le code {autre}",
+                message=message, code_existant=autre, nom_existant=connus.get(autre, nom_autre), fiche=fiche,
+            ))
+
+    suggestion = None
+    if nom_propre and (not code_valide or code_propre in dans_celcat):
+        suggestion = _suggerer_code(nom_propre, pris | set(dans_celcat))
+    return VerificationIntervenant(
+        code=code_propre, nom=nom_propre, email=email_propre, code_celcat=celcat_propre,
+        erreurs=erreurs, avertissements=avertissements, suggestion_code=suggestion,
+        peut_creer=not erreurs and not any(a.bloquant for a in avertissements),
+    )
+
+
+def creer_intervenant(
+    state: object,
+    *,
+    nom: str,
+    code: str,
+    code_celcat: str | None = None,
+    email: str | None = None,
+    confirmer: bool = False,
+    par: str = "",
+) -> IntervenantCree:
+    """LA création d'un intervenant (admin). Refus : 400 (saisie), 409
+    (déjà pris). Avertissements : 409 avec `{"message", "avertissements"}`
+    tant que `confirmer` n'est pas vrai — toujours pour un bloquant.
+
+    Écrit l'intervenant ET son mail en une seule écriture atomique
+    (`surcharges_reference.creer_intervenant`), puis son code Celcat par
+    l'écriture de l'onglet Codes Celcat (`codes_celcat.valider_code` /
+    `enregistrer_code` : même format, même refus des doublons, même trace) ;
+    un code Celcat refusé à ce dernier moment défait la création."""
+    from cal_iut.api import codes_celcat
+    from cal_iut.ingestion import surcharges_reference
+
+    v = verifier_intervenant(state, nom=nom, code=code, code_celcat=code_celcat, email=email)
+    if v.erreurs:
+        # Le plus grave d'abord : un « déjà pris » (409) avant un format (400).
+        premiere = sorted(v.erreurs, key=lambda e: -e.statut)[0]
+        raise HTTPException(premiere.statut, premiere.message)
+    bloquants = [a for a in v.avertissements if a.bloquant]
+    if bloquants or (v.avertissements and not confirmer):
+        raise HTTPException(409, {
+            "message": (
+                "À corriger avant de créer : " + " ; ".join(a.titre for a in bloquants) + "."
+                if bloquants else
+                "À vérifier avant de créer : " + " ; ".join(a.titre for a in v.avertissements)
+                + ". Renvoyez avec « confirmer » pour créer quand même."
+            ),
+            "avertissements": [a.model_dump() for a in v.avertissements],
+            "suggestion_code": v.suggestion_code,
+        })
+
+    cfg = codes_celcat._config(Path(state.config_dir))
+    ecrire_celcat = v.code_celcat is not None and (cfg.connus.get("enseignants") or {}).get(v.code) != v.code_celcat
+    if ecrire_celcat:
+        # Dernière vérification, la même que l'onglet (verrou, doublon).
+        codes_celcat.valider_code(state, "enseignants", v.code, v.code_celcat)
+    try:
+        fiche = surcharges_reference.creer_intervenant(v.code, v.nom, email=v.email, par=par)
+    except ValueError:
+        raise HTTPException(409, f"Le code {v.code} est déjà pris : choisissez-en un autre.") from None
+    if ecrire_celcat:
+        try:
+            codes_celcat.enregistrer_code(state, "enseignants", v.code, v.code_celcat, par=par)
+        except Exception:
+            surcharges_reference.supprimer_intervenant(v.code, par=par)
+            raise
+    rev = revision.incrementer(f"reference:enseignant:{v.code}:creation")
+    return IntervenantCree(
+        code=v.code, nom=v.nom, email=v.email, code_celcat=v.code_celcat, cree_le=str(fiche["cree_le"]),
+        avertissements_confirmes=v.avertissements, message="Intervenant créé.", revision=rev.numero,
+    )
+
+
+def seances_de(state: object, code: str) -> int:
+    """Séances (placées ou non, maquette ou créées à la main) de `code`."""
+    ids = {s.id for s in getattr(state, "sessions", []) or [] if code in (s.teacher_codes or [])}
+    ids |= {p.session_id for p in getattr(state, "timetable", []) or [] if code in (p.teacher_codes or [])}
+    return len(ids)
+
+
+def supprimer_intervenant(state: object, code: str, *, par: str = "") -> str:
+    """Retire un intervenant créé dans l'appli, s'il n'a AUCUNE séance —
+    avec son mail, son nom corrigé et son code Celcat saisis. Rend son nom."""
+    from cal_iut.celcat import mappings
+    from cal_iut.ingestion import surcharges_reference
+
+    code = str(code or "").strip().upper()
+    fiche = surcharges_reference.intervenants().get(code)
+    if fiche is None:
+        raise HTTPException(
+            404, f"{code} n'a pas été créé dans l'appli : il vient de la configuration, il ne se supprime pas ici."
+        )
+    n = seances_de(state, code)
+    if n:
+        raise HTTPException(
+            409,
+            f"{fiche['nom']} ({code}) a {n} séance{'s' if n > 1 else ''} : "
+            "retirez-les ou changez-en l'enseignant avant de le supprimer.",
+        )
+    surcharges_reference.supprimer_intervenant(code, par=par)
+    if code in mappings.table("enseignants"):
+        from cal_iut.api import codes_celcat
+
+        codes_celcat.effacer_code(state, "enseignants", code, par=par)
+    mappings.retirer_sans_code("enseignants", code)
+    return str(fiche["nom"])
+
+
+def intervenants_pour_payload(state: object) -> dict[str, dict[str, object]]:
+    """Intervenants créés dans l'appli, pour la fiche (« ajouté dans l'appli
+    par X le JJ/MM », « Supprimer » sans séance). Réservé aux comptes
+    (`_CLES_PRIVEES_PAYLOAD` : adresse de l'auteur)."""
+    from cal_iut.ingestion import surcharges_reference
+
+    return {
+        code: {
+            "nom": fiche.get("nom"), "cree_le": fiche.get("cree_le"), "cree_par": fiche.get("cree_par") or "",
+            "nb_seances": seances_de(state, code),
+        }
+        for code, fiche in sorted(surcharges_reference.intervenants().items())
+    }
+
+
 def _reponse(famille: str, cle: str, ecrit: dict[str, str | int], message: str) -> ReferenceEnregistree:
     rev = revision.incrementer(f"reference:{famille}:{cle}")
     return ReferenceEnregistree(famille=famille, cle=cle, valeurs=ecrit, message=message, revision=rev.numero)
@@ -801,3 +1234,46 @@ def effacer_nom(code: str, request: Request) -> ReferenceEnregistree:
 def effacer_intitule_cours(code: str, request: Request) -> ReferenceEnregistree:
     retiree = effacer_intitule(_main().get_state(), code, par=_par(request))
     return _reponse("cours", code.strip(), {"intitule": retiree}, "Valeur du fichier rétablie.")
+
+
+# « Nouvel intervenant » (30/09/2026) : administrateurs — même règle que le
+# reste des données Celcat (un intervenant, c'est d'abord un trigramme et un
+# identifiant Celcat, donc une paie).
+
+
+@router.post(
+    "/enseignants/verifier",
+    response_model=VerificationIntervenant,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+def verifier_nouvel_intervenant(body: NouvelIntervenantRequest) -> VerificationIntervenant:
+    """Validation en direct de la modale : erreurs et avertissements, sans
+    rien écrire."""
+    return verifier_intervenant(
+        _main().get_state(), nom=body.nom, code=body.code, code_celcat=body.code_celcat, email=body.email
+    )
+
+
+@router.post(
+    "/enseignants",
+    response_model=IntervenantCree,
+    status_code=201,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+@ecriture_planning
+def creer_nouvel_intervenant(body: NouvelIntervenantRequest, request: Request) -> IntervenantCree:
+    return creer_intervenant(
+        _main().get_state(), nom=body.nom, code=body.code, code_celcat=body.code_celcat, email=body.email,
+        confirmer=body.confirmer, par=_par(request),
+    )
+
+
+@router.delete(
+    "/enseignants/{code}",
+    response_model=ReferenceEnregistree,
+    dependencies=[Depends(accounts.require_role("admin"))],
+)
+@ecriture_planning
+def supprimer_nouvel_intervenant(code: str, request: Request) -> ReferenceEnregistree:
+    nom = supprimer_intervenant(_main().get_state(), code, par=_par(request))
+    return _reponse("enseignant", code.strip().upper(), {"nom": nom}, f"{nom} supprimé.")
