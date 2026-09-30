@@ -67,6 +67,34 @@
   white-space: nowrap;
 }
 
+.codes-celcat-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  white-space: normal;
+}
+
+/* Code connu : affiché, verrouillé (pas de crayon). */
+.codes-celcat-verrouille {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.codes-celcat-cadenas {
+  color: var(--ink-faint);
+  flex: none;
+}
+
+.codes-celcat-motif {
+  display: block;
+  max-width: 40ch;
+  font-size: 0.78rem;
+  color: var(--ink);
+  white-space: normal;
+}
+
 /* Ligne visée par un lien (« Données à compléter », blocages Celcat) :
    un fond d'accent léger, pas une couleur d'état. */
 .codes-celcat-table tr.codes-celcat-visee > td {

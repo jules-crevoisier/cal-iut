@@ -11,9 +11,12 @@
  * Salles, Enseignants, Groupes) : le code qui partira, son origine (fichier
  * de configuration, saisi dans l'appli, manquant), le nombre de séances.
  *
- * - administrateurs : saisir, modifier (champ en ligne, Entrée / Échap),
- *   « Revenir à la valeur du fichier » ; les codes relevés dans Celcat sont
- *   proposés sous le champ ;
+ * - administrateurs : saisir un code MANQUANT, modifier une saisie (champ en
+ *   ligne, Entrée / Échap), « Revenir à manquant », ou marquer « sans code
+ *   (voulu) » avec un motif ; les codes relevés dans Celcat sont proposés
+ *   sous le champ. Un code CONNU (fichier de configuration, maquette) est
+ *   verrouillé : « il faut pouvoir modifier QUE ceux qu'on n'a pas »
+ *   (30/09/2026) ;
  * - autres comptes : la même liste, en lecture seule ;
  * - groupes : identifiant INTERNE Celcat, lecture seule pour tous — il se
  *   règle dans `celcat_groupes.yaml` (cf. `api/codes_celcat.py`).
@@ -25,10 +28,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { Lock } from "lucide-react";
+
 import {
   definirCodeCelcat,
   effacerCodeCelcat,
   fetchCodesCelcat,
+  marquerSansCodeCelcat,
+  retirerSansCodeCelcat,
   type CodesCelcat as DonneesCodes,
   type FamilleCodeCelcat,
   type LigneCodeCelcat,
@@ -53,17 +60,18 @@ export function estFamilleCode(v: unknown): v is FamilleCodeCelcat {
   return FAMILLES_CODES.some((f) => f.id === v);
 }
 
-type Filtre = "sans" | "appli" | "tous";
+type Filtre = "sans" | "voulu" | "appli" | "tous";
 
 const FILTRES: { id: Filtre; label: string }[] = [
   { id: "sans", label: "Sans code" },
+  { id: "voulu", label: "Sans code (voulu)" },
   { id: "appli", label: "Saisis dans l’appli" },
   { id: "tous", label: "Tous" },
 ];
 
 type CleTri = "cle" | "libelle" | "semestre" | "parcours" | "type" | "capacite" | "nb" | "code" | "origine";
 
-const ORDRE_ORIGINE: Record<LigneCodeCelcat["origine"], number> = { manquant: 0, appli: 1, fichier: 2 };
+const ORDRE_ORIGINE: Record<LigneCodeCelcat["origine"], number> = { manquant: 0, appli: 1, voulu: 2, maquette: 3, fichier: 4 };
 
 const VALEURS: Record<CleTri, (l: LigneCodeCelcat) => string | number> = {
   cle: (l) => l.cle,
@@ -160,6 +168,7 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }:
     const q = normaliser(texte.trim());
     return lignes.filter((l) => {
       if (filtre === "sans" && l.origine !== "manquant") return false;
+      if (filtre === "voulu" && l.origine !== "voulu") return false;
       if (filtre === "appli" && l.origine !== "appli") return false;
       if (!q) return true;
       const botte = `${l.cle} ${l.libelle} ${l.code ?? ""} ${l.semestre ?? ""} ${l.parcours ?? ""} ${humaniser(l.type_salle ?? "")}`;
@@ -191,37 +200,54 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }:
     }
   }, [cleRoute, donnees, famille]);
 
-  const enregistrer = async (l: LigneCodeCelcat, code: string) => {
-    const r = await definirCodeCelcat(famille, l.cle, code);
-    setRetour(
-      r.origine === "fichier"
-        ? `${l.libelle} : ${r.code} est la valeur du fichier — la saisie a été retirée.`
-        : `${l.libelle} : ${r.code} enregistré pour Celcat.`,
-    );
+  const apres = async (message: string) => {
+    setRetour(message);
     await recharger();
     apresEnregistrement();
   };
 
-  const revenir = async (l: LigneCodeCelcat) => {
-    const ok = await confirmAsync(
-      l.code_fichier
-        ? `${l.libelle} repartira vers Celcat avec la valeur du fichier : ${l.code_fichier} (au lieu de ${l.code}).`
-        : `${l.libelle} n’a pas de code dans le fichier : sans la saisie (${l.code}), ses séances ne pourront plus partir vers Celcat.`,
-      { title: "Revenir à la valeur du fichier ?", confirmLabel: "Revenir à la valeur du fichier", cancelLabel: "Annuler" },
-    );
+  const enregistrer = async (l: LigneCodeCelcat, code: string) => {
+    const r = await definirCodeCelcat(famille, l.cle, code);
+    await apres(`${l.libelle} : ${r.code} enregistré pour Celcat.`);
+  };
+
+  const marquerSansCode = async (l: LigneCodeCelcat, motif: string) => {
+    await marquerSansCodeCelcat(famille, l.cle, motif);
+    await apres(`${l.libelle} : marqué « sans code (voulu) », rien ne part vers Celcat.`);
+  };
+
+  const confirmerPuis = async (message: string, titre: string, action: () => Promise<string>) => {
+    const ok = await confirmAsync(message, { title: titre, confirmLabel: titre.replace(/ \?$/, ""), cancelLabel: "Annuler" });
     if (!ok) return;
     try {
-      const r = await effacerCodeCelcat(famille, l.cle);
-      setRetour(
-        r.code ? `${l.libelle} : valeur du fichier rétablie (${r.code}).` : `${l.libelle} : saisie retirée, plus de code Celcat.`,
-      );
-      await recharger();
-      apresEnregistrement();
+      await apres(await action());
     } catch (e) {
       setRetour("");
-      setErreur(e instanceof Error ? e.message : "Retour impossible.");
+      setErreur(e instanceof Error ? e.message : "Action impossible.");
     }
   };
+
+  const revenir = (l: LigneCodeCelcat) =>
+    confirmerPuis(
+      l.code_connu
+        ? `${l.libelle} repartira vers Celcat avec le code connu : ${l.code_connu} (au lieu de ${l.code}).`
+        : `${l.libelle} n’aura plus de code : ses séances ne pourront plus partir vers Celcat tant qu’il n’est pas ressaisi.`,
+      l.code_connu ? "Revenir au code connu ?" : "Revenir à manquant ?",
+      async () => {
+        const r = await effacerCodeCelcat(famille, l.cle);
+        return r.code ? `${l.libelle} : code connu rétabli (${r.code}).` : `${l.libelle} : saisie retirée, de nouveau manquant.`;
+      },
+    );
+
+  const retirerSansCode = (l: LigneCodeCelcat) =>
+    confirmerPuis(
+      `${l.libelle} redeviendra « manquant » : il faudra lui saisir un code pour que ses séances partent vers Celcat.`,
+      "Retirer « sans code (voulu) » ?",
+      async () => {
+        await retirerSansCodeCelcat(famille, l.cle);
+        return `${l.libelle} : de nouveau manquant.`;
+      },
+    );
 
   if (!donnees) {
     return erreur ? (
@@ -235,7 +261,6 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }:
     );
   }
 
-  const modifiable = !!bloc?.modifiable;
   const admin = donnees.admin;
   const colAction = admin && famille !== "groupes";
   const col = (cle: CleTri, libelle: string, num = false, className?: string) => (
@@ -244,15 +269,22 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }:
     </TriColonne>
   );
   const compte = (f: Filtre) =>
-    f === "sans" ? (bloc?.sans_code ?? 0) : f === "appli" ? (bloc?.saisis ?? 0) : (bloc?.total ?? 0);
+    f === "sans"
+      ? (bloc?.sans_code ?? 0)
+      : f === "voulu"
+        ? (bloc?.voulus ?? 0)
+        : f === "appli"
+          ? (bloc?.saisis ?? 0)
+          : (bloc?.total ?? 0);
 
   return (
     <div className="codes-celcat">
       <p className="page-note">
         Le code qui part vers Celcat pour chaque cours, salle, enseignant et groupe du planning, et d’où il vient.{" "}
+        Les codes connus (fichier de configuration, maquette) sont verrouillés.{" "}
         {admin
-          ? "Réservé aux administrateurs : un code saisi ici est pris en compte au prochain envoi vers Celcat, sans déploiement, et passe devant le fichier de configuration."
-          : "Lecture seule : seuls les administrateurs saisissent ou modifient un code Celcat."}
+          ? "Réservé aux administrateurs : un code manquant saisi ici part au prochain envoi vers Celcat, sans déploiement ; « sans code (voulu) » dit qu’il n’y en aura pas."
+          : "Lecture seule : seuls les administrateurs saisissent un code Celcat."}
       </p>
 
       <Onglets
@@ -394,11 +426,13 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }:
                   </td>
                   {colAction && (
                     <td className="codes-celcat-action">
-                      {l.origine === "appli" && modifiable && (
-                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => void revenir(l)}>
-                          Revenir à la valeur du fichier
-                        </button>
-                      )}
+                      <Actions
+                        ligne={l}
+                        famille={famille}
+                        onRevenir={() => void revenir(l)}
+                        onMarquer={(motif) => marquerSansCode(l, motif)}
+                        onRetirerSansCode={() => void retirerSansCode(l)}
+                      />
                     </td>
                   )}
                 </tr>
@@ -407,7 +441,9 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }:
           </table>
           {triees.length === 0 && (
             <p className="ref-vide">
-              {filtre === "sans" && !texte ? "Tout a un code Celcat dans cette famille." : "Aucune ligne ne correspond."}
+              {filtre === "sans" && !texte
+                ? "Rien ne manque dans cette famille : tout a un code Celcat, ou « sans code (voulu) »."
+                : "Aucune ligne ne correspond."}
             </p>
           )}
         </div>
@@ -428,46 +464,124 @@ function CelluleCode({
   onEnregistrer: (l: LigneCodeCelcat, code: string) => Promise<void>;
 }) {
   const libelleChamp = `${NOM_CHAMP[famille]} de ${l.libelle !== l.cle ? `${l.libelle} (${l.cle})` : l.cle}`;
-  const proposees = l.suggestion ? [l.suggestion, ...suggestions.filter((s) => s !== l.suggestion)] : suggestions;
-  const valeur = l.code ? <code className="mono codes-celcat-valeur">{l.code}</code> : null;
   const complements = (
     <>
-      {l.suggestion && (
-        <span className="codes-celcat-suggestion">
-          maquette : <span className="mono">{l.suggestion}</span>
-        </span>
-      )}
       {l.alerte && <span className="codes-celcat-alerte">{l.alerte}</span>}
+      {l.avertissement && <span className="codes-celcat-alerte">{l.avertissement}</span>}
     </>
   );
-  if (!l.modifiable) {
+  if (l.modifiable) {
     return (
       <>
-        {valeur ?? <span className={`pill dot ${l.nb_seances > 0 ? "bad" : "warn"}`}>manquant</span>}
+        <ChampEnLigne
+          mode={l.code ? "modifier" : "ajouter"}
+          libelleBouton="Saisir"
+          libelleChamp={libelleChamp}
+          valeurInitiale={l.code ?? ""}
+          valeurAffichee={l.code ? <code className="mono codes-celcat-valeur">{l.code}</code> : null}
+          placeholder={famille === "salles" ? "H.104" : famille === "enseignants" ? "38999" : "TSBZ1M01"}
+          taille={14}
+          suggestions={suggestions}
+          onEnregistrer={(v) => onEnregistrer(l, v)}
+        />
         {complements}
       </>
     );
   }
+  if (l.code) {
+    // Code connu (fichier, maquette) ou saisie ancienne : verrouillé.
+    const verrou = l.code_connu !== null;
+    return (
+      <>
+        <span className="codes-celcat-verrouille" title={verrou ? "Code connu : il ne se modifie pas dans l’appli" : undefined}>
+          <code className="mono codes-celcat-valeur">{l.code}</code>
+          {verrou && <Lock size={12} aria-label="verrouillé" className="codes-celcat-cadenas" />}
+        </span>
+        {complements}
+      </>
+    );
+  }
+  if (l.origine === "voulu") return <span className="ref-zero">—</span>;
   return (
     <>
-      <ChampEnLigne
-        mode={l.code ? "modifier" : "ajouter"}
-        libelleBouton="Saisir"
-        libelleChamp={libelleChamp}
-        valeurInitiale={l.code ?? ""}
-        valeurAffichee={valeur}
-        placeholder={famille === "salles" ? "H.104" : famille === "enseignants" ? "38999" : "TSBZ1M01"}
-        taille={14}
-        suggestions={proposees}
-        onEnregistrer={(v) => onEnregistrer(l, v)}
-      />
+      <span className={`pill dot ${l.nb_seances > 0 ? "bad" : "warn"}`}>manquant</span>
       {complements}
     </>
   );
 }
 
+function Actions({
+  ligne: l,
+  famille,
+  onRevenir,
+  onMarquer,
+  onRetirerSansCode,
+}: {
+  ligne: LigneCodeCelcat;
+  famille: FamilleCodeCelcat;
+  onRevenir: () => void;
+  onMarquer: (motif: string) => Promise<void>;
+  onRetirerSansCode: () => void;
+}) {
+  return (
+    <span className="codes-celcat-actions">
+      {l.peut_revenir && (
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onRevenir}>
+          {l.code_connu ? "Revenir au code connu" : "Revenir à manquant"}
+        </button>
+      )}
+      {l.peut_marquer_sans_code && (
+        <ChampEnLigne
+          libelleBouton="Sans code (voulu)…"
+          classeBouton="btn btn--ghost btn--sm"
+          libelleChamp={`Motif « sans code (voulu) » de ${l.libelle !== l.cle ? `${l.libelle} (${l.cle})` : l.cle}`}
+          placeholder="Pourquoi pas de code ? (obligatoire)"
+          taille={24}
+          libelleEnregistrer="Marquer"
+          valider={(v) => (v.trim().length < 3 ? "Le motif est obligatoire (quelques mots)." : null)}
+          onEnregistrer={onMarquer}
+        />
+      )}
+      {l.peut_retirer_sans_code && (
+        <button type="button" className="btn btn--ghost btn--sm" onClick={onRetirerSansCode}>
+          Retirer « sans code »
+        </button>
+      )}
+      {famille !== "groupes" && l.origine === "voulu" && !l.peut_retirer_sans_code && (
+        <span className="codes-celcat-qui">se retire dans celcat.yaml</span>
+      )}
+    </span>
+  );
+}
+
 function Origine({ ligne: l, admin }: { ligne: LigneCodeCelcat; admin: boolean }) {
   if (l.origine === "fichier") return <span className="codes-celcat-origine">Fichier de config</span>;
+  if (l.origine === "maquette") {
+    const corrige = l.origine_detail && l.origine_detail !== "maquette";
+    return (
+      <span className="codes-celcat-origine">
+        Maquette
+        {corrige && (
+          <span className="codes-celcat-qui">
+            corrigé M→C{l.code_maquette ? ` (maquette : ${l.code_maquette})` : ""}
+          </span>
+        )}
+      </span>
+    );
+  }
+  if (l.origine === "voulu") {
+    return (
+      <span className="codes-celcat-origine">
+        <span className="pill dot">sans code (voulu)</span>
+        <span className="codes-celcat-motif">{l.motif_sans_code}</span>
+        <span className="codes-celcat-qui">
+          {l.origine_detail === "celcat.yaml"
+            ? "décidé dans celcat.yaml"
+            : `saisi dans l’appli${admin && l.saisi_par ? ` par ${l.saisi_par}` : ""}${l.saisi_le ? ` le ${dateCourte(l.saisi_le)}` : ""}`}
+        </span>
+      </span>
+    );
+  }
   if (l.origine === "manquant") {
     return l.nb_seances > 0 ? (
       <span className="pill dot bad">manquant — bloque Celcat</span>
@@ -482,7 +596,7 @@ function Origine({ ligne: l, admin }: { ligne: LigneCodeCelcat; admin: boolean }
       <span className="codes-celcat-qui">
         {admin && l.saisi_par ? `par ${l.saisi_par}` : ""}
         {quand ? ` le ${quand}` : ""}
-        {l.code_fichier ? ` · fichier : ${l.code_fichier}` : " · rien dans le fichier"}
+        {l.code_connu ? ` · code connu : ${l.code_connu}` : ""}
       </span>
     </span>
   );

@@ -56,6 +56,9 @@ interface ChampEnLigneProps {
   suggestions?: string[];
   /** Texte visible du bouton « Enregistrer ». */
   libelleEnregistrer?: string;
+  /** Classe du bouton d'ouverture en mode « ajouter » (défaut : la
+   *  pastille « manquant »). */
+  classeBouton?: string;
 }
 
 type Etat = "repos" | "edition" | "envoi" | "fait";
@@ -86,6 +89,7 @@ export function ChampEnLigne({
   apres,
   suggestions,
   libelleEnregistrer = "Enregistrer",
+  classeBouton = "pill dot warn champ-ajouter",
 }: ChampEnLigneProps) {
   const [etat, setEtat] = useState<Etat>("repos");
   // Mode « modifier » : l'écran a rechargé la valeur enregistrée — retour
@@ -168,7 +172,7 @@ export function ChampEnLigne({
         <button
           ref={bouton}
           type="button"
-          className="pill dot warn champ-ajouter"
+          className={classeBouton}
           aria-label={`${libelleBouton} — ${libelleChamp}`}
           title={`${libelleChamp} : à compléter`}
           onClick={ouvrir}

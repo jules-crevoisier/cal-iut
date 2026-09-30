@@ -1568,7 +1568,9 @@ export function fetchAnomaliesSae(): Promise<AnomalieSae[]> {
 // planning, leur code Celcat et son origine ; saisie réservée aux admins.
 
 export type FamilleCodeCelcat = "cours" | "salles" | "enseignants" | "groupes";
-export type OrigineCodeCelcat = "fichier" | "appli" | "manquant";
+/** `fichier` et `maquette` : code CONNU, verrouillé ; `appli` : saisi ici ;
+ *  `voulu` : « sans code (voulu) », rien ne part ; `manquant` : à saisir. */
+export type OrigineCodeCelcat = "fichier" | "maquette" | "appli" | "manquant" | "voulu";
 
 export interface LigneCodeCelcat {
   cle: string;
@@ -1578,19 +1580,29 @@ export interface LigneCodeCelcat {
   type_salle: string | null;
   capacite: number | null;
   nb_seances: number;
-  /** Le code qui part vers Celcat (fichier, puis saisie par-dessus). */
+  /** Le code qui part vers Celcat. */
   code: string | null;
-  code_fichier: string | null;
+  /** Le code connu hors saisie (fichier ou maquette). */
+  code_connu: string | null;
   origine: OrigineCodeCelcat;
+  /** « celcat.yaml », « maquette (corrigé M→C) » ; pour « voulu » : celcat.yaml ou appli. */
+  origine_detail: string | null;
+  /** Cours : le code tel que la maquette l'écrit. */
+  code_maquette: string | null;
+  motif_sans_code: string | null;
   saisi_le: string | null;
   /** Adresse du compte — administrateurs seulement. */
   saisi_par: string | null;
   valeur_avant: string | null;
-  /** Cours : le code de la maquette, s'il est relevé dans Celcat. */
-  suggestion: string | null;
   alerte: string | null;
+  /** Saisie ancienne qui passe devant un code connu différent. */
+  avertissement: string | null;
   note: string | null;
+  /** Saisir ou modifier le code (manquant ou saisi dans l'appli). */
   modifiable: boolean;
+  peut_revenir: boolean;
+  peut_marquer_sans_code: boolean;
+  peut_retirer_sans_code: boolean;
 }
 
 export interface FamilleCodesCelcat {
@@ -1599,9 +1611,12 @@ export interface FamilleCodesCelcat {
   exemple: string;
   modifiable: boolean;
   total: number;
+  /** Manquants (le « sans code voulu » n'en fait pas partie). */
   sans_code: number;
   sans_code_bloquants: number;
   saisis: number;
+  voulus: number;
+  maquette: number;
   suggestions: string[];
   lignes: LigneCodeCelcat[];
 }
@@ -1632,8 +1647,22 @@ export function definirCodeCelcat(famille: FamilleCodeCelcat, cle: string, code:
   });
 }
 
-/** « Revenir à la valeur du fichier » : retire la saisie faite dans l'appli. */
+/** Retire la saisie faite dans l'appli : « Revenir à manquant » (ou au
+ *  code connu, pour une saisie antérieure au verrou). */
 export function effacerCodeCelcat(famille: FamilleCodeCelcat, cle: string): Promise<CodeCelcatEnregistre> {
   const q = new URLSearchParams({ famille, cle });
   return request<CodeCelcatEnregistre>(`/reference/codes-celcat?${q.toString()}`, { method: "DELETE" });
+}
+
+/** « Sans code (voulu) » : rien ne part vers Celcat, motif obligatoire. */
+export function marquerSansCodeCelcat(famille: FamilleCodeCelcat, cle: string, motif: string): Promise<CodeCelcatEnregistre> {
+  return request<CodeCelcatEnregistre>("/reference/codes-celcat/sans-code", {
+    method: "PUT",
+    body: JSON.stringify({ famille, cle, motif }),
+  });
+}
+
+export function retirerSansCodeCelcat(famille: FamilleCodeCelcat, cle: string): Promise<CodeCelcatEnregistre> {
+  const q = new URLSearchParams({ famille, cle });
+  return request<CodeCelcatEnregistre>(`/reference/codes-celcat/sans-code?${q.toString()}`, { method: "DELETE" });
 }

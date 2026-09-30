@@ -29,21 +29,36 @@ function ligne(p: Partial<LigneCodeCelcat> & Pick<LigneCodeCelcat, "cle">): Lign
     capacite: null,
     nb_seances: 0,
     code: null,
-    code_fichier: null,
+    code_connu: null,
     origine: "manquant",
+    origine_detail: null,
+    code_maquette: null,
+    motif_sans_code: null,
     saisi_le: null,
     saisi_par: null,
     valeur_avant: null,
-    suggestion: null,
     alerte: null,
+    avertissement: null,
     note: null,
     modifiable: true,
+    peut_revenir: false,
+    peut_marquer_sans_code: false,
+    peut_retirer_sans_code: false,
     ...p,
   };
 }
 
 function donnees(admin: boolean): DonneesCodes {
   const m = admin;
+  // Droits calculés comme le serveur (`api/codes_celcat.py::lister`).
+  const droits = (l: LigneCodeCelcat, famille: string): LigneCodeCelcat => ({
+    ...l,
+    modifiable: m && famille !== "groupes" && l.code_connu === null && l.origine !== "voulu",
+    peut_revenir: m && l.origine === "appli",
+    peut_marquer_sans_code: m && famille !== "groupes" && l.origine === "manquant",
+    peut_retirer_sans_code: m && l.origine === "voulu" && l.origine_detail === "appli",
+    saisi_par: m ? l.saisi_par : null,
+  });
   const bloc = (famille: DonneesCodes["familles"]["cours"]["famille"], lignes: LigneCodeCelcat[], suggestions: string[] = []) => ({
     famille,
     aide: `Aide ${famille}`,
@@ -53,8 +68,10 @@ function donnees(admin: boolean): DonneesCodes {
     sans_code: lignes.filter((l) => l.origine === "manquant").length,
     sans_code_bloquants: lignes.filter((l) => l.origine === "manquant" && l.nb_seances > 0).length,
     saisis: lignes.filter((l) => l.origine === "appli").length,
+    voulus: lignes.filter((l) => l.origine === "voulu").length,
+    maquette: lignes.filter((l) => l.origine === "maquette").length,
     suggestions,
-    lignes: lignes.map((l) => ({ ...l, modifiable: m && famille !== "groupes" })),
+    lignes: lignes.map((l) => droits(l, famille)),
   });
   return {
     revision: 1,
@@ -63,22 +80,24 @@ function donnees(admin: boolean): DonneesCodes {
       cours: bloc(
         "cours",
         [
-          ligne({ cle: "WR101", libelle: "Anglais", semestre: "S1", parcours: "BUT1", nb_seances: 12, code: "TSBZ1M01", code_fichier: "TSBZ1M01", origine: "fichier" }),
-          ligne({ cle: "WR100BU", libelle: "Jeu de piste BU", semestre: "S1", parcours: "BUT1", nb_seances: 4 }),
-          ligne({ cle: "WR201", libelle: "Anglais S2", semestre: "S2", parcours: "BUT1", suggestion: "TSBZ2M01" }),
+          ligne({ cle: "WR101", libelle: "Anglais", semestre: "S1", parcours: "BUT1", nb_seances: 12, code: "TSBZ1M01", code_connu: "TSBZ1M01", origine: "fichier", origine_detail: "celcat.yaml" }),
+          ligne({ cle: "WR100BU", libelle: "Jeu de piste BU", semestre: "S1", parcours: "BUT1", nb_seances: 12, origine: "voulu", origine_detail: "celcat.yaml", motif_sans_code: "Visite de la BU" }),
+          ligne({ cle: "WRA401M", libelle: "Anglais S4", semestre: "S4", parcours: "BUT2-CREACOM-FC", code: "TSBZD01C", code_connu: "TSBZD01C", origine: "maquette", origine_detail: "maquette (corrigé M→C)", code_maquette: "TSBZD01M" }),
+          ligne({ cle: "WRX99", libelle: "Atelier", semestre: "S1", parcours: "BUT1", nb_seances: 4 }),
+          ligne({ cle: "WRX98", libelle: "Atelier 2", semestre: "S2", parcours: "BUT1" }),
         ],
         ["TSBZ1M01", "TSBZ2M01"],
       ),
       salles: bloc(
         "salles",
         [
-          ligne({ cle: "h005", libelle: "H.005", type_salle: "tp_standard", capacite: 15, nb_seances: 30, code: "H.006", code_fichier: "H.005", origine: "appli", saisi_le: "2026-09-30T08:00:00+00:00", saisi_par: admin ? "jules@iut.fr" : null }),
+          ligne({ cle: "e102", libelle: "E.102", type_salle: "standard", capacite: 30, nb_seances: 30, code: "E.102", origine: "appli", saisi_le: "2026-09-30T08:00:00+00:00", saisi_par: "jules@iut.fr" }),
           ligne({ cle: "h018", libelle: "H.018 (Amphi MMI)", type_salle: "amphi", capacite: 150, nb_seances: 8 }),
         ],
         ["H.005", "H.006", "Amphi 3 MMI"],
       ),
-      enseignants: bloc("enseignants", [ligne({ cle: "KBR", libelle: "Kyllian Bresson", code: "35543", code_fichier: "35543", origine: "fichier" })]),
-      groupes: bloc("groupes", [ligne({ cle: "BUT MMI S1 CM", libelle: "BUT MMI S1 CM", code: "1661971", code_fichier: "1661971", origine: "fichier", note: "Se règle dans celcat_groupes.yaml" })]),
+      enseignants: bloc("enseignants", [ligne({ cle: "KBR", libelle: "Kyllian Bresson", code: "35543", code_connu: "35543", origine: "fichier", origine_detail: "celcat.yaml" })]),
+      groupes: bloc("groupes", [ligne({ cle: "BUT MMI S1 CM", libelle: "BUT MMI S1 CM", code: "1661971", code_connu: "1661971", origine: "fichier", note: "Se règle dans celcat_groupes.yaml" })]),
     },
   };
 }
@@ -119,14 +138,13 @@ describe("Référence — Codes Celcat", () => {
     window.localStorage.clear();
   });
 
-  it("montre un sous-onglet par famille, avec le nombre de lignes sans code", async () => {
+  it("montre un sous-onglet par famille, avec le nombre de lignes sans code (hors « voulu »)", async () => {
     stubFetch(true);
     rendre("admin");
     const cours = await screen.findByRole("tab", { name: /^Cours/ });
     expect(cours).toHaveAttribute("aria-selected", "true");
     expect(within(cours).getByText("2")).toBeInTheDocument();
     expect(within(screen.getByRole("tab", { name: /^Salles/ })).getByText("1")).toBeInTheDocument();
-    // Rien ne manque chez les enseignants : pas de pastille.
     expect(screen.getByRole("tab", { name: "Enseignants" })).toBeInTheDocument();
     expect(screen.getByText("WR101")).toBeInTheDocument();
     expect(screen.getByText(/Réservé aux administrateurs/)).toBeInTheDocument();
@@ -137,38 +155,70 @@ describe("Référence — Codes Celcat", () => {
     expect(screen.queryByText("WR101")).not.toBeInTheDocument();
   });
 
-  it("filtre « Sans code » : seulement ce qui n'a pas de code", async () => {
+  it("filtres « Sans code » et « Sans code (voulu) »", async () => {
     stubFetch(true);
     rendre("admin");
     await screen.findByText("WR101");
-    fireEvent.click(screen.getByRole("button", { name: /Sans code/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Sans code\d/ }));
     expect(screen.queryByText("WR101")).not.toBeInTheDocument();
-    expect(screen.getByText("WR100BU")).toBeInTheDocument();
-    expect(screen.getByText("WR201")).toBeInTheDocument();
+    expect(screen.queryByText("WR100BU")).not.toBeInTheDocument();
+    expect(screen.getByText("WRX99")).toBeInTheDocument();
     expect(screen.getByText("manquant — bloque Celcat")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Filtrer les cours"), { target: { value: "piste" } });
-    expect(screen.queryByText("WR201")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Filtrer les cours"), { target: { value: "atelier 2" } });
+    expect(screen.queryByText("WRX99")).not.toBeInTheDocument();
+    expect(screen.getByText("WRX98")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Filtrer les cours"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Sans code \(voulu\)\d/ }));
     expect(screen.getByText("WR100BU")).toBeInTheDocument();
+    expect(screen.getByText("Visite de la BU")).toBeInTheDocument();
+    expect(screen.getByText("décidé dans celcat.yaml")).toBeInTheDocument();
+    expect(screen.queryByText("WRX99")).not.toBeInTheDocument();
   });
 
-  it("saisit un code en ligne, avec les codes relevés en suggestion (maquette d'abord)", async () => {
+  it("un code connu (fichier, maquette) est verrouillé : pas de crayon", async () => {
+    stubFetch(true);
+    rendre("admin");
+    await screen.findByText("WR101");
+    expect(screen.queryByRole("button", { name: /Modifier — .*WR101/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Modifier — .*WRA401M/ })).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText("verrouillé")).toHaveLength(2);
+    const ligneMaquette = screen.getByText("WRA401M").closest("tr")!;
+    expect(within(ligneMaquette).getByText(/corrigé M→C \(maquette : TSBZD01M\)/)).toBeInTheDocument();
+  });
+
+  it("saisit un code manquant en ligne, avec les codes relevés en suggestion", async () => {
     const appels = stubFetch(true);
     const { apresEnregistrement } = rendre("admin");
-    await screen.findByText("WR201");
-    expect(screen.getByText("TSBZ2M01", { selector: ".mono" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Saisir — Code module Celcat de Anglais S2 \(WR201\)/ }));
-    const champ = screen.getByRole("combobox", { name: "Code module Celcat de Anglais S2 (WR201)" });
+    await screen.findByText("WRX99");
+    fireEvent.click(screen.getByRole("button", { name: /Saisir — Code module Celcat de Atelier \(WRX99\)/ }));
+    const champ = screen.getByRole("combobox", { name: "Code module Celcat de Atelier (WRX99)" });
     const liste = document.getElementById(champ.getAttribute("list") ?? "");
     expect(Array.from(liste?.querySelectorAll("option") ?? []).map((o) => o.getAttribute("value"))).toEqual([
-      "TSBZ2M01",
       "TSBZ1M01",
+      "TSBZ2M01",
     ]);
     fireEvent.change(champ, { target: { value: "TSBZ2M01" } });
     fireEvent.submit(champ.closest("form")!);
     await waitFor(() => expect(apresEnregistrement).toHaveBeenCalled());
     const put = appels.find((a) => a.init?.method === "PUT");
-    expect(JSON.parse(String(put?.init?.body))).toEqual({ famille: "cours", cle: "WR201", code: "TSBZ2M01" });
+    expect(JSON.parse(String(put?.init?.body))).toEqual({ famille: "cours", cle: "WRX99", code: "TSBZ2M01" });
     expect(await screen.findByText(/TSBZ2M01 enregistré pour Celcat/)).toBeInTheDocument();
+  });
+
+  it("marque « sans code (voulu) » avec un motif obligatoire", async () => {
+    const appels = stubFetch(true);
+    rendre("admin");
+    await screen.findByText("WRX99");
+    fireEvent.click(screen.getByRole("button", { name: /Sans code \(voulu\)… — Motif « sans code \(voulu\) » de Atelier \(WRX99\)/ }));
+    const champ = screen.getByRole("textbox", { name: /Motif « sans code \(voulu\) » de Atelier/ });
+    fireEvent.change(champ, { target: { value: "x" } });
+    fireEvent.submit(champ.closest("form")!);
+    expect(await screen.findByRole("alert")).toHaveTextContent("motif est obligatoire");
+    fireEvent.change(champ, { target: { value: "Pas une matière" } });
+    fireEvent.submit(champ.closest("form")!);
+    await waitFor(() => expect(appels.some((a) => a.url.includes("/sans-code") && a.init?.method === "PUT")).toBe(true));
+    const put = appels.find((a) => a.url.includes("/sans-code"))!;
+    expect(JSON.parse(String(put.init?.body))).toEqual({ famille: "cours", cle: "WRX99", motif: "Pas une matière" });
   });
 
   it("affiche le refus du serveur sous le champ, qui reste ouvert", async () => {
@@ -183,21 +233,20 @@ describe("Référence — Codes Celcat", () => {
     expect(screen.getByRole("combobox", { name: /Nom Celcat de H.018/ })).toHaveValue("H.005");
   });
 
-  it("revient à la valeur du fichier après confirmation", async () => {
+  it("revient à manquant après confirmation", async () => {
     const appels = stubFetch(true);
     vi.mocked(confirmAsync).mockResolvedValue(true);
     rendre("admin");
     fireEvent.click(await screen.findByRole("tab", { name: /^Salles/ }));
-    const ligneH005 = screen.getByText("H.005", { selector: "td" }).closest("tr")!;
-    expect(within(ligneH005).getByText("saisi dans l’appli")).toBeInTheDocument();
-    expect(within(ligneH005).getByText(/par jules@iut\.fr/)).toBeInTheDocument();
-    fireEvent.click(within(ligneH005).getByRole("button", { name: "Revenir à la valeur du fichier" }));
+    const ligneE102 = screen.getByText("E.102", { selector: "td" }).closest("tr")!;
+    expect(within(ligneE102).getByText("saisi dans l’appli")).toBeInTheDocument();
+    expect(within(ligneE102).getByText(/par jules@iut\.fr/)).toBeInTheDocument();
+    fireEvent.click(within(ligneE102).getByRole("button", { name: "Revenir à manquant" }));
     await waitFor(() => expect(appels.some((a) => a.init?.method === "DELETE")).toBe(true));
     const del = appels.find((a) => a.init?.method === "DELETE")!;
     expect(del.url).toContain("famille=salles");
-    expect(del.url).toContain("cle=h005");
-    expect(vi.mocked(confirmAsync).mock.calls[0][0]).toContain("H.005");
-    expect(await screen.findByText(/valeur du fichier rétablie \(H\.005\)/)).toBeInTheDocument();
+    expect(del.url).toContain("cle=e102");
+    expect(vi.mocked(confirmAsync).mock.calls[0][1]?.title).toBe("Revenir à manquant ?");
   });
 
   it("lecture seule pour un compte non administrateur", async () => {
@@ -205,10 +254,9 @@ describe("Référence — Codes Celcat", () => {
     rendre("read_only");
     await screen.findByText("WR101");
     expect(screen.getByText(/Lecture seule/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Saisir/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Modifier/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Saisir|^Modifier|^Sans code \(voulu\)…/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /^Salles/ }));
-    expect(screen.queryByRole("button", { name: "Revenir à la valeur du fichier" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revenir à manquant" })).not.toBeInTheDocument();
     expect(screen.queryByText(/jules@iut\.fr/)).not.toBeInTheDocument();
   });
 
