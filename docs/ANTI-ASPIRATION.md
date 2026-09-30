@@ -30,6 +30,7 @@ Puis on le **bloque**.
 | **Liste de blocage** | Une IP, une plage d'adresses ou un User-Agent bloqué reçoit « Accès refusé. » sur tout. |
 | **Bannissement automatique** | Une IP **sans compte** qui reçoit **30 refus (401/403) en 10 minutes** est bloquée **24 h**. |
 | **Comptage du trafic** | Chaque IP est comptée pour l'écran **Trafic** (sur 24 h glissantes). |
+| **Limites de connexion et d'API** | Connexion, inscription, mot de passe oublié et API v1 ont leur propre plafond (voir [§ 6.1](#61-les-couches)). |
 | **Robots polis** | `robots.txt` et un en-tête demandent aux moteurs de recherche de ne pas indexer le site. |
 
 Un refus 401 veut dire « pas connecté » ; 403, « pas le droit ».
@@ -166,6 +167,17 @@ Un compte connecté ou une clé API a des budgets plus larges et n'est jamais ba
 | Bannissement d'une IP qui insiste malgré les 429 | liste de blocage | Non : `enforce` seulement |
 
 Code : `src/cal_iut/api/anti_aspiration.py` (middleware, budgets, liste, compteurs), `src/cal_iut/api/admin_trafic.py` (routes `/admin/trafic` et `/admin/blocages`, admin seulement), `frontend/src/views/TraficView.tsx`, commandes `cal-iut trafic | bloquer | debloquer`, `scripts/analyser_acces.py`.
+
+**Limiteurs dédiés, toujours actifs** (`src/cal_iut/api/limiteur.py`, fenêtre glissante en mémoire, indépendants de `CAL_IUT_ANTI_ASPIRATION`) :
+
+| Route | Plafond |
+|---|---|
+| `/auth/login` | 10 essais en 15 min par adresse mail ; 30 en 5 min par IP |
+| `/auth/signup`, `/auth/forgot-password` (envoi de mail) | 3 par heure par adresse mail ; 10 par heure par IP |
+| `/auth/reset-password` | 10 en 15 min par IP |
+| `/api/v1/*` | 600 par minute par compte ; 3 000 par minute par IP sur un lien public |
+
+Un redémarrage remet ces compteurs à zéro : c'est un frein, pas un verrouillage de compte.
 
 Un blocage manuel vise **tout le monde**, compte connecté compris, sauf `/health` et `/healthz` (le contrôle de santé Docker ne doit jamais échouer).
 Réponse d'un blocage : `403 {"detail": "Accès refusé."}`, avant tout autre traitement.

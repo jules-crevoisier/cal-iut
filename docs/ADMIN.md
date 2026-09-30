@@ -12,15 +12,17 @@ Pour l'usage courant du planning, voir [GUIDE.md](../GUIDE.md).
 4. [Les codes Celcat](#4-les-codes-celcat)
 5. [Ajouter un intervenant](#5-ajouter-un-intervenant)
 6. [Compléter ou corriger une donnée](#6-compléter-ou-corriger-une-donnée)
-7. [Surveiller le trafic et bloquer un client](#7-surveiller-le-trafic-et-bloquer-un-client)
-8. [Les sauvegardes](#8-les-sauvegardes)
-9. [Lisser le planning d'une promo](#9-lisser-le-planning-dune-promo)
-10. [Envoyer le planning local vers la production](#10-envoyer-le-planning-local-vers-la-production)
-11. [Déployer](#11-déployer)
-12. [En cas de problème](#12-en-cas-de-problème)
-13. [Pour les techniciens](#13-pour-les-techniciens)
+7. [Liens par mail, notifications, salles : les autres gestes admin](#7-liens-par-mail-notifications-salles--les-autres-gestes-admin)
+8. [Surveiller le trafic et bloquer un client](#8-surveiller-le-trafic-et-bloquer-un-client)
+9. [Les sauvegardes](#9-les-sauvegardes)
+10. [Lisser le planning d'une promo](#10-lisser-le-planning-dune-promo)
+11. [Envoyer le planning local vers la production](#11-envoyer-le-planning-local-vers-la-production)
+12. [Déployer](#12-déployer)
+13. [En cas de problème](#13-en-cas-de-problème)
+14. [Pour les techniciens](#14-pour-les-techniciens)
 
 L'écran **Celcat** (envoi du planning dans Celcat) a son propre document : [docs/CELCAT.md](CELCAT.md).
+Son bouton **Corriger** ne supprime jamais rien dans Celcat.
 
 ---
 
@@ -39,6 +41,7 @@ Chaque compte a un seul rôle. Un admin le choisit à l'activation (écran **Com
 - **Édition** peut aussi déplacer et placer des séances, gérer les tâches, compléter ou corriger un mail, un nom, un intitulé.
 - **Admin** a en plus **Comptes**, **Celcat**, **Sauvegardes** et **Trafic**.
   Lui seul saisit les codes Celcat, ajoute un intervenant, bloque un client, lance un lissage.
+  Lui seul envoie les liens par mail, règle les notifications, crée une salle, ouvre la page historique `/legacy` ([§ 7](#7-liens-par-mail-notifications-salles--les-autres-gestes-admin)).
 - **Accès API** n'a qu'une page, **Accès API**, pour créer et révoquer ses clés. Ni MCP, ni écriture.
 
 > **À savoir :** un changement de rôle ou une désactivation prend effet à la requête suivante de la personne.
@@ -90,7 +93,8 @@ Un compte déjà utilisé se **désactive**, il ne se supprime pas : il a pu cr�
 > - Deux adresses deviennent admin toutes seules à la confirmation de leur mail : `crevoisier.ju@gmail.com` et `kyllian.bresson@univ-reims.fr`.
 >   C'est ce qui permet d'avoir un premier admin.
 > - Impossible de retirer le dernier admin actif : l'appli refuse.
-> - Une session dure 30 jours. Un changement de mot de passe (lien « Mot de passe oublié ? », valable 1 h) ferme les anciennes sessions.
+> - Une session dure 30 jours. Un changement de mot de passe (lien « Mot de passe oublié ? », valable 1 h) ferme toutes les anciennes sessions.
+>   Pour couper l'accès de quelqu'un tout de suite : **Désactiver**.
 > - Les tentatives de connexion sont limitées (10 essais en 15 min par adresse). Les mails d'inscription et de mot de passe oublié aussi (3 par heure et par adresse).
 
 ---
@@ -198,6 +202,8 @@ Un identifiant faux crée des doublons dans Celcat : ne jamais le deviner.
 
 ### Cas particuliers
 
+- **Codes de la maquette.** Pour un cours sans code dans `celcat.yaml`, le code de la maquette est repris s'il existe dans le relevé des matières Celcat.
+  Pour les cours CREACOM dont la maquette écrit le code en **M** alors que Celcat le connaît en **C** (WRA401M…), la variante en C est reprise : origine « corrigé M→C » (règle donnée par Kyllian).
 - **Codes à confirmer.** Les cours de `celcat.yaml` → `codes_a_confirmer` (WS103, WS104, WS105) restent **manquants**.
   Le code de la maquette est proposé, avec la raison. Le saisir une fois confirmé.
 - **Code de la maquette douteux.** Quand le nom relevé dans Celcat désigne un autre cours (WSA611C → « WSA612C Alternance »), le code n'est pas repris. Même traitement.
@@ -255,10 +261,58 @@ Rôle **Édition** ou **Admin**.
 Où : annuaire des enseignants, fiche d'un enseignant, fiche d'une salle (bloc **À compléter**), **Référence → Liens & partage**, **À traiter → Données à compléter**.
 Une adresse déjà attribuée à un autre enseignant est refusée.
 La correspondance Celcat (salle, enseignant, code module d'un cours) reste réservée aux admins : voir [§ 4](#4-les-codes-celcat).
+En lecture seule, le manque et la marque restent affichés, sans bouton.
+
+Ce qui est saisi est gardé dans le volume (`data/state/references.json`) et survit aux déploiements.
+L'appli garde qui l'a saisi, quand, et la valeur remplacée.
 
 ---
 
-## 7. Surveiller le trafic et bloquer un client
+## 7. Liens par mail, notifications, salles : les autres gestes admin
+
+Ces gestes sont réservés aux admins. Un autre compte peut voir certains boutons, mais l'action est refusée.
+
+### Envoyer leur lien personnel aux enseignants
+
+1. Ouvrir **Référence → Liens & partage**.
+2. Cliquer sur **Envoyer les liens par mail…**.
+3. Dans la fenêtre **Envoyer le lien personnel par mail**, cocher les enseignants (champ **Filtrer…** pour chercher).
+4. Cliquer sur **Envoyer à N enseignants**.
+
+Un enseignant sans adresse ne peut pas être coché : compléter d'abord son mail ([§ 6](#6-compléter-ou-corriger-une-donnée)).
+L'envoi demande `RESEND_API_KEY`, `RESEND_FROM` et `CAL_IUT_PUBLIC_URL` ([§ 12](#12-déployer)).
+
+### Régler les notifications par mail
+
+**Référence → Notifications** (carte **Notifications par mail**). Rien n'est actif par défaut.
+
+1. **Destinataires** : une ou plusieurs adresses, séparées par une virgule ou un retour à la ligne. Puis **Enregistrer les destinataires**.
+2. **Ce qui déclenche un mail** : cocher les évènements voulus.
+3. **Regrouper les modifications pendant** : aucun regroupement, 5 minutes, 15 minutes ou 1 heure.
+4. **Envoyer un mail de test** pour vérifier.
+
+### Créer une salle
+
+Pour une salle hors du bâtiment (autre site, salle empruntée…).
+
+1. Dans la **Vue Promo**, ouvrir le choix de salle d'une séance.
+2. Choisir **+ Créer une salle…**.
+3. Remplir la fenêtre **Nouvelle salle**, puis **Créer et utiliser**.
+
+La case **Proposée au placement automatique** dit si l'appli peut la choisir toute seule.
+
+### Retirer une salle du placement automatique
+
+Sur la fiche de la salle, décocher **Proposée au placement automatique**.
+La salle reste choisissable à la main. Exemple : la BU, réservée à un seul module.
+
+### La page historique `/legacy`
+
+L'ancienne page de l'appli (mêmes données, autre présentation). Admins seulement : elle montre les mails et les contraintes des enseignants.
+
+---
+
+## 8. Surveiller le trafic et bloquer un client
 
 Écran **Administration → Trafic**. Il sert à repérer un robot qui interroge le serveur en boucle, et à le bloquer.
 
@@ -310,7 +364,7 @@ Durée par défaut : 24 h. Tout le détail (variables, limitation de débit, urg
 
 ---
 
-## 8. Les sauvegardes
+## 9. Les sauvegardes
 
 ### Ce qui est sauvegardé
 
@@ -337,9 +391,9 @@ Pour une sauvegarde immédiate de la base : `cal-iut sauvegarder-base`.
 Seule la **sauvegarde du volume dans Dokploy** protège les images et la perte du serveur. L'activer.
 À défaut, copier de temps en temps le dossier `data/state/` ailleurs.
 
-### Restaurer la base d'un jour donné
+### Restaurer la base
 
-Tout ce qui a été fait depuis ce jour-là sera perdu dans la base.
+Pour revenir à la base d'un jour donné. Tout ce qui a été fait depuis ce jour-là sera perdu dans la base.
 
 1. Arrêter l'appli : le service **backend** et le service **celcat-nuit**.
 2. Ouvrir un terminal sur le volume (le dossier monté sur `/app/data/state`).
@@ -360,11 +414,11 @@ Tout ce qui a été fait depuis ce jour-là sera perdu dans la base.
 
 Les images des tâches ne bougent pas.
 Une image retirée depuis s'affiche « Image indisponible ». Une image ajoutée depuis reste sur le disque sans être listée.
-Les sauvegardes JSON du planning (écran **Sauvegardes**) peuvent aider à retrouver les placements perdus.
+Les sauvegardes JSON du planning (écran **Sauvegardes**, fichiers `data/state/sauvegardes/`) peuvent aider à retrouver les placements perdus.
 
 ---
 
-## 9. Lisser le planning d'une promo
+## 10. Lisser le planning d'une promo
 
 Le lissage réorganise les séances **à venir** d'une promo en alternance (FC) : pas de cours à 8 h, pas de trou, journées de charge égale, peu de 17 h.
 Seule cette promo bouge. Chaque déplacement passe les mêmes contrôles qu'un glisser-déposer. Rien n'est écrit sans `--appliquer`.
@@ -389,7 +443,7 @@ Les séances déplacées partent ensuite vers Celcat comme un déplacement à la
 
 ---
 
-## 10. Envoyer le planning local vers la production
+## 11. Envoyer le planning local vers la production
 
 Un redéploiement ne touche **jamais** la base de production : c'est ce qui protège les modifications faites en ligne.
 Une correction faite en local ne part donc pas toute seule.
@@ -409,7 +463,7 @@ cal-iut prod pull --appliquer     # l'inverse : ramène la production en local
 
 ---
 
-## 11. Déployer
+## 12. Déployer
 
 ### Comment l'appli est hébergée
 
@@ -429,7 +483,7 @@ Il survit aux déploiements. `data/config/` est hors du volume : il est mis à j
 
 > **Attention :** ne jamais supprimer le volume pour « repartir propre ».
 > On perdrait comptes, clés, tâches, images, saisies et historique.
-> Pour mettre la production à jour depuis le local : [§ 10](#10-envoyer-le-planning-local-vers-la-production).
+> Pour mettre la production à jour depuis le local : [§ 11](#11-envoyer-le-planning-local-vers-la-production).
 
 ### Déployer une nouvelle version
 
@@ -448,7 +502,7 @@ Il survit aux déploiements. `data/config/` est hors du volume : il est mis à j
 | `RESEND_API_KEY`, `RESEND_FROM` | backend | Oui, pour les mails | Envoi des mails (confirmation, mot de passe, liens enseignants). Sans eux, chaque envoi échoue avec un message clair |
 | `CAL_IUT_SECRET_KEY` | backend | Conseillé | Secret de signature des sessions. Sans lui, un secret est créé dans le volume |
 | `CAL_IUT_MCP_TOKEN` | backend | Non | Jeton MCP de secours (droits Édition). Sinon, chacun utilise sa clé |
-| `CAL_IUT_COOKIE_SECURE` | backend | Non | `0` seulement pour un serveur de test en http |
+| `CAL_IUT_COOKIE_SECURE` | backend | Non | `0` seulement pour un serveur servi en http ailleurs que sur `localhost` |
 | `CAL_IUT_ANTI_ASPIRATION`, `CAL_IUT_AA_*`, `CAL_IUT_PROXYS_DE_CONFIANCE` | backend | Non | Protection contre l'aspiration : voir [docs/ANTI-ASPIRATION.md](ANTI-ASPIRATION.md) |
 | `BACKEND_URL` | frontend | Si le backend porte un autre nom | Adresse du backend sur le réseau interne (défaut `http://backend:8000`) |
 | `DNS_RESOLVER` | frontend | Non | Résolveur DNS de Docker (défaut `127.0.0.11`) |
@@ -472,7 +526,7 @@ Côté poste seulement : `CAL_IUT_PROD_URL`, `CAL_IUT_PROD_API_KEY` (ou `CAL_IUT
 
 ---
 
-## 12. En cas de problème
+## 13. En cas de problème
 
 | Symptôme | Que faire |
 |---|---|
@@ -487,13 +541,14 @@ Côté poste seulement : `CAL_IUT_PROD_URL`, `CAL_IUT_PROD_API_KEY` (ou `CAL_IUT
 | « Trop de requêtes. Réessayez dans N secondes. » | La limitation de débit est active : [docs/ANTI-ASPIRATION.md](ANTI-ASPIRATION.md). |
 | Une image de tâche est refusée ou n'arrive pas | PNG, JPEG, WebP ou GIF, 8 Mo au plus, 10 par tâche. Si toutes échouent : redéployer le frontend. |
 | « Image indisponible » sur une tâche | Le fichier n'est plus sur le disque (base restaurée, par exemple). Pas récupérable sans sauvegarde du volume. |
-| Le planning a perdu beaucoup de séances | **Sauvegardes** : comparer les jours (colonne **Écart**), télécharger le bon jour. Restaurer la base si besoin : [§ 8](#8-les-sauvegardes). |
-| Une modification locale n'apparaît pas en production | Normal : `cal-iut prod push` ([§ 10](#10-envoyer-le-planning-local-vers-la-production)). |
+| Le planning a perdu beaucoup de séances | **Sauvegardes** : comparer les jours (colonne **Écart**), télécharger le bon jour. Restaurer la base si besoin : [§ 9](#9-les-sauvegardes). |
+| Une modification locale n'apparaît pas en production | Normal : `cal-iut prod push` ([§ 11](#11-envoyer-le-planning-local-vers-la-production)). |
+| « Séance verrouillée : la déverrouiller d'abord » | Il n'existe **aucun** bouton ni appel d'API pour déverrouiller une séance. Demander à un technicien (le verrou est enregistré côté serveur). |
 | Un nouveau vacataire introuvable dans **Nouvelle séance** | L'ajouter : [§ 5](#5-ajouter-un-intervenant). |
 
 ---
 
-## 13. Pour les techniciens
+## 14. Pour les techniciens
 
 **Fichiers du volume `data/state/`** (persistants, jamais dans Git) :
 
