@@ -306,4 +306,28 @@ describe("Référence — Codes Celcat", () => {
     fireEvent.click(within(familles).getByRole("tab", { name: /^Enseignants/ }));
     expect(setRoute).toHaveBeenCalledWith({ onglet: "codes-celcat", famille: "enseignants", cle: "" });
   });
+
+  it("« Nouvel intervenant » depuis Codes Celcat → Enseignants, administrateurs seulement", async () => {
+    stubFetch(true);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <ContexteDroits.Provider value={{ role: "admin", revision: 1, apresEnregistrement: vi.fn() }}>{children}</ContexteDroits.Provider>
+    );
+    render(
+      <ReferenceView
+        payload={emptyPayload()}
+        setRoute={vi.fn()}
+        route={{ vue: "reference", onglet: "codes-celcat", famille: "enseignants", cle: "" }}
+      />,
+      { wrapper },
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Nouvel intervenant" }));
+    expect(screen.getByRole("dialog", { name: "Nouvel intervenant" })).toBeInTheDocument();
+  });
+
+  it("pas de « Nouvel intervenant » pour un non-administrateur, ni hors Enseignants", async () => {
+    stubFetch(false);
+    rendre("read_only", { famille: "enseignants", onNouvelIntervenant: vi.fn() });
+    await screen.findByRole("tab", { name: "Enseignants" });
+    expect(screen.queryByRole("button", { name: "Nouvel intervenant" })).not.toBeInTheDocument();
+  });
 });

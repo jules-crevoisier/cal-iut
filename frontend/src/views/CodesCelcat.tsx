@@ -123,9 +123,11 @@ interface CodesCelcatProps {
   cle?: string;
   /** Mémorise le sous-onglet dans l'adresse. */
   onFamille?: (famille: FamilleCodeCelcat) => void;
+  /** « Nouvel intervenant » (administrateurs, sous-onglet Enseignants). */
+  onNouvelIntervenant?: () => void;
 }
 
-export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }: CodesCelcatProps) {
+export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille, onNouvelIntervenant }: CodesCelcatProps) {
   const { apresEnregistrement } = useDroits();
   const [donnees, setDonnees] = useState<DonneesCodes | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -337,6 +339,18 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille }:
               </>
             )}
           </span>
+          {admin && famille === "enseignants" && onNouvelIntervenant && (
+            <span className="page-outils-actions">
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={onNouvelIntervenant}
+                title="Un enseignant que la configuration ne connaît pas encore (administrateurs)"
+              >
+                Nouvel intervenant
+              </button>
+            </span>
+          )}
         </div>
 
         {bloc && famille !== "groupes" && <p className="ref-aide">{bloc.aide}</p>}

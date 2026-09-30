@@ -1516,6 +1516,84 @@ export function completerEnseignant(
   return request(`/reference/enseignants/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) });
 }
 
+// ── « Nouvel intervenant » (30/09/2026, administrateurs) ──
+
+export interface SaisieIntervenant {
+  nom: string;
+  code: string;
+  code_celcat?: string;
+  email?: string;
+}
+
+export interface ErreurIntervenant {
+  champ: "nom" | "code" | "code_celcat" | "email";
+  statut: number;
+  message: string;
+  code_existant: string | null;
+}
+
+export interface AvertissementIntervenant {
+  type: "code_dans_celcat" | "code_celcat_pris" | "nom_proche";
+  titre: string;
+  message: string;
+  code_existant: string | null;
+  nom_existant: string | null;
+  /** `code_existant` a une fiche dans l'appli : lien vers elle. */
+  fiche: boolean;
+  /** « Créer quand même » ne suffit pas : corriger la saisie. */
+  bloquant: boolean;
+}
+
+export interface VerificationIntervenant {
+  code: string;
+  nom: string;
+  email: string | null;
+  code_celcat: string | null;
+  erreurs: ErreurIntervenant[];
+  avertissements: AvertissementIntervenant[];
+  suggestion_code: string | null;
+  peut_creer: boolean;
+}
+
+export interface IntervenantCree {
+  code: string;
+  nom: string;
+  email: string | null;
+  code_celcat: string | null;
+  cree_le: string;
+  avertissements_confirmes: AvertissementIntervenant[];
+  message: string;
+  revision: number;
+}
+
+/** Validation en direct de la modale : rien n'est écrit. */
+export function verifierIntervenant(saisie: SaisieIntervenant): Promise<VerificationIntervenant> {
+  return request("/reference/enseignants/verifier", { method: "POST", body: JSON.stringify(saisie) });
+}
+
+/** Crée l'intervenant. 409 avec `{message, avertissements}` (JSON dans le
+ *  message de l'erreur, cf. `messageErreur`) tant qu'un avertissement n'est
+ *  pas confirmé — `avertissementsDeLErreur` les relit. */
+export function creerIntervenant(saisie: SaisieIntervenant & { confirmer?: boolean }): Promise<IntervenantCree> {
+  return request("/reference/enseignants", { method: "POST", body: JSON.stringify(saisie) });
+}
+
+/** Les avertissements d'un refus de `creerIntervenant`, ou null. */
+export function avertissementsDeLErreur(e: unknown): AvertissementIntervenant[] | null {
+  if (!(e instanceof Error)) return null;
+  try {
+    const d = JSON.parse(e.message) as { avertissements?: AvertissementIntervenant[] };
+    return Array.isArray(d.avertissements) ? d.avertissements : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Supprime un intervenant créé dans l'appli, sans séance. */
+export function supprimerIntervenant(code: string): Promise<ReferenceEnregistree> {
+  return request(`/reference/enseignants/${encodeURIComponent(code)}`, { method: "DELETE" });
+}
+
 export function completerSalle(
   roomId: string,
   body: { capacite?: number; type?: string; code_celcat?: string },

@@ -15,15 +15,16 @@
  * La semaine est celle de la barre supérieure (`useConsultation`).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { completerEnseignant } from "../api/client";
+import { completerEnseignant, supprimerIntervenant, type IntervenantCree } from "../api/client";
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
 import { ChampEnLigne } from "../components/ChampEnLigne";
 import { ManquesDeLaFiche } from "../components/CompleterManque";
 import { FicheIdentite, FicheOutils } from "../components/FicheEntete";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { MenuAgenda } from "../components/MenuAgenda";
+import { NouvelIntervenantModal } from "../components/NouvelIntervenantModal";
 import { NavSemaine } from "../components/NavSemaine";
 import { PlanningSemaine } from "../components/PlanningSemaine";
 import { ProchainCours } from "../components/ProchainCours";
@@ -34,16 +35,88 @@ import { useDroits } from "../contexts/Droits";
 import { useConsultation } from "../hooks/useConsultation";
 import type { Route } from "../hooks/useHashRoute";
 import { buildLink } from "../hooks/useHashRoute";
-import type { AppPayload, TeacherInfo } from "../types/app";
+import type { AppPayload, IntervenantAppli, TeacherInfo } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
 import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
+import { confirmAsync } from "../utils/confirmDialog";
+import { marquerIntervenantCree, oublierIntervenantCree, vientDEtreCree } from "../utils/intervenantCree";
 import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { EmailEnseignant, MailManquant, ModifierNomEnseignant } from "../components/ValeursReference";
 import { AnnuaireEnseignants } from "./Annuaires";
 
+import "../styles/outils.css";
 import "./fiches.css";
+
+/** « le 30/09 » depuis une date ISO. */
+function jourMois(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Fiche d'un intervenant créé dans l'appli (« Nouvel intervenant ») :
+ *  qui l'a ajouté et quand (l'auteur : administrateurs seulement), et
+ *  « Supprimer » tant qu'il n'a aucune séance. */
+export function IntervenantAppliMention({
+  code,
+  nom,
+  info,
+  aDesSeances,
+  onSupprime,
+}: {
+  code: string;
+  nom: string;
+  info: IntervenantAppli;
+  /** Séances placées ou non vues par l'écran (le serveur revérifie). */
+  aDesSeances: boolean;
+  onSupprime: () => void;
+}) {
+  const { estAdmin, apresEnregistrement } = useDroits();
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enCours, setEnCours] = useState(false);
+  const le = jourMois(info.cree_le);
+  const supprimable = estAdmin && info.nb_seances === 0 && !aDesSeances;
+
+  const supprimer = async () => {
+    const ok = await confirmAsync(
+      `${nom} (${code}) sera retiré de l’appli : annuaire, « Nouvelle séance », Codes Celcat — avec son mail et son code Celcat saisis ici. Il n’a aucune séance.`,
+      { title: "Supprimer cet intervenant ?", confirmLabel: "Supprimer", cancelLabel: "Annuler", variant: "danger" },
+    );
+    if (!ok) return;
+    setEnCours(true);
+    setErreur(null);
+    try {
+      await supprimerIntervenant(code);
+      apresEnregistrement();
+      onSupprime();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Suppression impossible.");
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  return (
+    <span className="fiche-intervenant-appli">
+      <span className="pill">
+        ajouté dans l’appli{estAdmin && info.cree_par ? ` par ${info.cree_par}` : ""}
+        {le ? ` le ${le}` : ""}
+      </span>
+      {supprimable && (
+        <button type="button" className="btn btn--danger btn--sm" onClick={() => void supprimer()} disabled={enCours}>
+          {enCours ? "Suppression…" : "Supprimer"}
+        </button>
+      )}
+      {erreur && (
+        <span className="fiche-manque" role="alert">
+          {erreur}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface EnseignantViewProps {
   payload: AppPayload;
@@ -72,7 +145,11 @@ export function EnseignantView({
   onOpenSearch,
   emailCompte,
 }: EnseignantViewProps) {
-  const { peutCompleter, apresEnregistrement } = useDroits();
+  const { peutCompleter, apresEnregistrement, estAdmin } = useDroits();
+  // « Nouvel intervenant » (30/09/2026, administrateurs).
+  const [nouvelOuvert, setNouvelOuvert] = useState(false);
+  // « Intervenant créé », annoncé sur sa fiche une fois qu'elle s'ouvre.
+  const [annonce, setAnnonce] = useState("");
   const teacherCodes = useMemo(
     () =>
       Object.keys(payload.teacherLabels).sort((a, b) =>
@@ -96,9 +173,43 @@ export function EnseignantView({
     [payload, code],
   );
 
-  if (!readOnly && route.prof && !(route.prof in payload.teacherLabels)) {
+  const connu = !route.prof || route.prof in payload.teacherLabels;
+  useEffect(() => {
+    if (route.prof && connu && vientDEtreCree(route.prof)) {
+      setAnnonce(route.prof);
+      oublierIntervenantCree();
+    }
+  }, [route.prof, connu]);
+
+  if (!readOnly && route.prof && !connu) {
+    // Tout juste créé : le planning est en train d'être relu.
+    if (vientDEtreCree(route.prof)) {
+      return (
+        <section className="view fiche">
+          <p className="page-retour" role="status">
+            Intervenant créé — ouverture de sa fiche…
+          </p>
+        </section>
+      );
+    }
     return <FicheIntrouvable libelle="Enseignant" id={route.prof} onOpenSearch={onOpenSearch} />;
   }
+
+  const nouvelIntervenant = nouvelOuvert && (
+    <NouvelIntervenantModal
+      onCancel={() => setNouvelOuvert(false)}
+      onVoirFiche={(tc) => {
+        setNouvelOuvert(false);
+        setRoute({ vue: "prof", prof: tc });
+      }}
+      onCreated={(cree: IntervenantCree) => {
+        marquerIntervenantCree(cree.code);
+        setNouvelOuvert(false);
+        apresEnregistrement();
+        setRoute({ vue: "prof", prof: cree.code });
+      }}
+    />
+  );
 
   const ouvrirAnnuaire = () => {
     setAnnuaireDemande(true);
@@ -131,9 +242,26 @@ export function EnseignantView({
         <AnnuaireEnseignants
           payload={payload}
           displayWeek={c.displayWeek}
-          actions={tousLesLiens}
+          actions={
+            estAdmin ? (
+              <>
+                {tousLesLiens}
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => setNouvelOuvert(true)}
+                  title="Ajouter un enseignant que la configuration ne connaît pas encore (administrateurs)"
+                >
+                  Nouvel intervenant
+                </button>
+              </>
+            ) : (
+              tousLesLiens
+            )
+          }
           onOuvrir={(tc) => setRoute({ vue: "prof", prof: tc })}
         />
+        {nouvelIntervenant}
       </section>
     );
   }
@@ -156,6 +284,7 @@ export function EnseignantView({
 
   const nom = payload.teacherLabels[code] ?? code;
   const email = payload.teacherEmails[code] ?? "";
+  const creeDansLAppli = payload.intervenantsAppli?.[code];
   const info = payload.teachers.find((t) => t.code === code);
   const manquantes = (payload.seancesNonPlacees ?? []).filter((s) => s.profs.includes(code));
   const absences = payload.exceptions.filter(
@@ -308,8 +437,23 @@ export function EnseignantView({
           manquantes.length > 0 && (
             <span className="fiche-manque">{pluriel(manquantes.length, "séance non placée", "séances non placées")}</span>
           ),
+          creeDansLAppli && (
+            <IntervenantAppliMention
+              code={code}
+              nom={nom}
+              info={creeDansLAppli}
+              aDesSeances={allItems.length > 0 || manquantes.length > 0}
+              onSupprime={ouvrirAnnuaire}
+            />
+          ),
         ]}
       />
+
+      {annonce === code && (
+        <p className="page-retour" role="status">
+          Intervenant créé : {nom} ({code}).
+        </p>
+      )}
 
       <ManquesDeLaFiche famille="enseignant" cle={code} exclure={["email", "nom"]} setRoute={setRoute} />
 

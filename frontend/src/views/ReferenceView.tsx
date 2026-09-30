@@ -15,6 +15,9 @@ import { sendTeacherMails } from "../api/client";
 import { ChampRecherche } from "../components/ChampRecherche";
 import { CopyButton } from "../components/CopyButton";
 import { NotificationsPanel } from "../components/NotificationsPanel";
+import { NouvelIntervenantModal } from "../components/NouvelIntervenantModal";
+import { useDroits } from "../contexts/Droits";
+import { marquerIntervenantCree } from "../utils/intervenantCree";
 import { OpenLinkButton } from "../components/OpenLinkButton";
 import { SendTeacherMailsModal } from "../components/SendTeacherMailsModal";
 import { TriColonne, useTri } from "../components/TriColonne";
@@ -113,6 +116,10 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
   // L'onglet de l'adresse l'emporte (lien « Codes Celcat → »), puis le
   // dernier onglet ouvert sur ce poste.
   const sub: SubTab = route && estOnglet(route.onglet) ? route.onglet : subLocal;
+  const { apresEnregistrement } = useDroits();
+  // « Nouvel intervenant » (30/09/2026) : aussi depuis Codes Celcat →
+  // Enseignants, où l'on vient souvent chercher un code manquant.
+  const [nouvelOuvert, setNouvelOuvert] = useState(false);
   const setSub = (s: SubTab) => {
     setSubState(s);
     ecrireLocal(CLE_ONGLET, s);
@@ -145,6 +152,22 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
             cle={route?.cle}
             onFamille={(famille) => {
               if (route) setRoute({ onglet: "codes-celcat", famille, cle: "" });
+            }}
+            onNouvelIntervenant={() => setNouvelOuvert(true)}
+          />
+        )}
+        {nouvelOuvert && (
+          <NouvelIntervenantModal
+            onCancel={() => setNouvelOuvert(false)}
+            onVoirFiche={(code) => {
+              setNouvelOuvert(false);
+              setRoute({ vue: "prof", prof: code });
+            }}
+            onCreated={(cree) => {
+              marquerIntervenantCree(cree.code);
+              setNouvelOuvert(false);
+              apresEnregistrement();
+              setRoute({ vue: "prof", prof: cree.code });
             }}
           />
         )}

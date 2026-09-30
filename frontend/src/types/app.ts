@@ -249,7 +249,20 @@ export interface AppPayload {
    *  surcharges_pour_payload`), avec la valeur d'origine. Vide sur un lien
    *  public (adresses). Absent d'un serveur plus ancien. */
   surchargesReference?: SurchargesReference;
+  /** Intervenants créés dans l'appli (« Nouvel intervenant », 30/09/2026,
+   *  `api/reference.py::intervenants_pour_payload`) : par qui, quand, et
+   *  combien de séances (supprimable à 0). Vide sur un lien public. */
+  intervenantsAppli?: Record<string, IntervenantAppli>;
   courses: CourseCatalogEntry[];
+}
+
+/** Un intervenant créé dans l'appli plutôt que dans la configuration. */
+export interface IntervenantAppli {
+  nom: string;
+  cree_le: string;
+  /** Adresse du compte qui l'a créé (affichée aux administrateurs). */
+  cree_par: string;
+  nb_seances: number;
 }
 
 /** Une valeur saisie dans l'appli par-dessus la configuration. */

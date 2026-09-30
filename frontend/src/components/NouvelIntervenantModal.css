@@ -1,0 +1,168 @@
+/* ══════════════ Modale « Nouvel intervenant » (30/09/2026) ══════════════
+   Gabarit commun des modales (`.confirmmodal*`, app.css) ; champs à la norme
+   du socle. Les avertissements : une liste bordée, l'état porté par un point
+   et le mot (« À corriger » / « À vérifier »), jamais par un fond coloré. */
+
+.panel.nouvint {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+
+.nouvint-intro {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.nouvint-grille {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 560px) {
+  .nouvint-grille {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .nouvint-grille > .nouvint-champ:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.nouvint-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nouvint-champ label {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.nouvint-champ input {
+  width: 100%;
+  background-color: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  padding: 5px 9px;
+  min-height: var(--control-h);
+  color: var(--ink);
+}
+
+.nouvint-champ input.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+}
+
+.nouvint-champ input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+  border-color: var(--focus);
+}
+
+.nouvint-champ.is-invalide input {
+  border-color: var(--bad);
+}
+
+.nouvint-aide,
+.nouvint-erreur {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.nouvint-aide {
+  color: var(--ink-faint);
+}
+
+.nouvint-erreur {
+  color: var(--bad-text);
+}
+
+.nouvint-avertissements {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.nouvint-avertissements.is-perime {
+  opacity: 0.55;
+}
+
+.nouvint .nouvint-avertissements h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.nouvint-avertissements ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nouvint-avertissements li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 16px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.nouvint-avertissements li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.45em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.nouvint-avertissements li.is-bloquant::before {
+  background: var(--bad);
+}
+
+.nouvint-avertissements strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.nouvint-liens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.nouvint-liens:empty {
+  display: none;
+}
+
+.nouvint .linklike {
+  color: var(--accent);
+  min-height: 24px;
+}
+
+/* Fiche d'un intervenant créé dans l'appli : la mention, et « Supprimer ». */
+.fiche-intervenant-appli {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
