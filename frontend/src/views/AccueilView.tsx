@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Link2, Sparkles, SquarePlus } from "lucide-react";
+import { CalendarRange, Link2, SquarePlus } from "lucide-react";
 
 import { fetchDoublons, fetchTaches, type Doublon, type Tache } from "../api/client";
 import { useSemaineGlobale } from "../contexts/SemaineGlobale";
@@ -138,11 +138,6 @@ export function AccueilView({ payload, setRoute, peutModifier }: AccueilViewProp
             {peutModifier && (
               <button type="button" onClick={() => setRoute({ vue: "promo", panel: "aplacer" })}>
                 <SquarePlus size={16} aria-hidden="true" /> Placer les séances manquantes
-              </button>
-            )}
-            {peutModifier && (
-              <button type="button" onClick={() => setRoute({ vue: "promo", sem: solverWeek })} title="Bouton « Lisser une promo… » de la Vue Promo">
-                <Sparkles size={16} aria-hidden="true" /> Lisser le planning d'une promo FC
               </button>
             )}
             <button type="button" onClick={() => setRoute({ vue: "reference" })}>

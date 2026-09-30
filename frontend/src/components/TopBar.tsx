@@ -7,7 +7,7 @@
  *     `contexts/SemaineGlobale.tsx`) — flèches, retour à aujourd'hui, et la
  *     liste de toutes les semaines de l'année pour sauter loin ;
  *   - les actions de la page ouverte (`ActionsDePage`, rendues ici par
- *     portail : « Nouvelle séance », « Lisser une promo »…).
+ *     portail : « Nouvelle séance », « Nouvel intervenant »…).
  * Maquette « Lumière » validée le 29/09/2026 : titre, semaine et actions sur
  * une seule ligne ; la recherche et le compte sont dans la navigation.
  */
