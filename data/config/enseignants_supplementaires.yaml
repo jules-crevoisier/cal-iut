@@ -19,3 +19,12 @@ APH:
   # APH et non APE : APE est déjà Anne-Laure Perrone. Choix de l'équipe,
   # relayé avec la demande.
   code_celcat: "40584"
+
+AGT:
+  nom: "Anne Grenet"
+  ajoute_le: "2026-09-30"
+  demande_par: "Jules Crevoisier"
+  # Demandée sous « AGR », mais AGR est Gram AMBROISE dans Celcat (38321) et
+  # Anne Grenet y est déjà AGT (3233), code sous lequel le planning a ses
+  # séances : on garde AGT (décision du 30/09/2026).
+  code_celcat: "3233"
