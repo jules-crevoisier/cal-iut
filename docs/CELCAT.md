@@ -1,714 +1,144 @@
-# Celcat : ce qu'on sait, et ce qu'il reste à faire
+# Celcat : recopier le planning dans Celcat
 
-Relevé les 31 août et 1er septembre 2026, en explorant le vrai Celcat de
-l'URCA depuis un conteneur, en **lecture seule** (rôle `985_consultation`).
-Tout ce qui suit a été constaté, pas supposé — ce qui n'a pas pu être
-vérifié est signalé comme tel.
+Ce document explique comment l'appli recopie le planning dans Celcat, l'outil d'emploi du temps de l'université.
+Il est pour les administrateurs (écran **Celcat**) et les techniciens.
+Les codes Celcat (cours, salles, enseignants) se règlent dans **Référence → Codes Celcat** : voir [docs/ADMIN.md](ADMIN.md).
 
-## L'essentiel en dix lignes
+**Sommaire**
 
-Celcat Timetabler Live est une application **qooxdoo** sur IIS/ASP.NET :
-des `<div>` positionnés au pixel, sans `id`, sans `name`, sans `role`.
-Aucun sélecteur ne tient. On repère le **texte affiché** et on clique à ses
-coordonnées.
+1. [Ce que ça fait](#1-ce-que-ça-fait)
+2. [Ce que vous voyez : l'écran Celcat](#2-ce-que-vous-voyez--lécran-celcat)
+3. [Que faire quand ça bloque](#3-que-faire-quand-ça-bloque)
+4. [Pour les techniciens](#4-pour-les-techniciens)
 
-Elle s'appuie sur un service **JSON-RPC 2.0** (`/script/CTWebService.dll`)
-qu'on ne peut pas appeler directement — mais dont on peut **lire les
-réponses**. C'est de loin le meilleur moyen d'extraire des données : complet,
-exact, sans dépendre de ce qui est affiché à l'écran.
+---
 
-## Y accéder
+## 1. Ce que ça fait
 
-`celcat-lv.univ-reims.fr` **ne résout pas** depuis l'extérieur : le VPN est
-obligatoire hors site. Sur place, à l'IUT, l'accès est direct — d'où la
-règle : **toujours essayer sans VPN d'abord** (`celcat/reseau.py`).
+Quand on déplace, ajoute ou supprime une séance dans l'appli, la modification est **mise en file d'attente**.
+Un **robot d'envoi** la recopie ensuite dans Celcat, tout seul.
 
-Le VPN AnyConnect fonctionne aussi bien depuis Windows (client Cisco) que
-depuis Linux (**OpenConnect**, même protocole). Testé de bout en bout depuis
-un conteneur : authentification identifiant + mot de passe, sans second
-facteur, `tun0` monté, Celcat joignable.
+- Le robot passe **toutes les 30 secondes environ**. Il ne se connecte que s'il a quelque chose à envoyer.
+- **Chaque nuit**, il compare les semaines choisies (« balayage de nuit ») avec Celcat et met en file ce qui diffère.
+  Il repère aussi les cours présents **seulement dans Celcat**.
+- Celcat n'est joignable que par le **VPN de l'université**. Le robot le monte lui-même, puis le rend.
+  Ce VPN et le compte Celcat sont **partagés avec l'équipe** : d'où le bouton de pause.
 
-## Se connecter
+### Ce qui part, ce qui ne part pas
 
-1. Choisir une base : `URCA_2023` … `URCA_2026`, et **`URCA_FORMATION`**.
-2. Bouton « Connexion » → dialogue « Sécurité CELCAT ».
-3. Identifiant + mot de passe : **les mêmes que le VPN**.
-4. Champ « Rôle » — décocher « Utiliser le rôle par défaut » :
-   - `985_consultation` : **lecture seule** ;
-   - `985_T_MMI` : écriture sur le périmètre MMI.
-
-> **Se déconnecter à la fin.** Celcat garde les sessions ouvertes. En
-> enchaîner sans rendre la précédente finit par saturer le serveur, qui
-> cesse alors d'afficher la liste des bases. Constaté en explorant.
-
-> **Deux garde-fous gratuits.** Explorer en `985_consultation` rend toute
-> écriture *impossible*, plutôt que simplement *évitée*. Et `URCA_FORMATION`
-> permet d'essayer une saisie sans toucher aux données réelles.
-
-## Les données
-
-Le service expose `udlResources.load(<type>, …)`. Types relevés :
-
-| type | ressource | volume (URCA_2026) |
-|-----:|-----------|-------------------:|
-| 601 | Matières | trop pour un chargement global |
-| 602 | Groupes | trop pour un chargement global |
-| 603 | Personnel | 4 975 |
-| 604 | **Salles** | 2 444 |
-| 607 | Équipes | 300 |
-| 610 | Départements | 155 |
-| 618 | Catégories d'événements | 38 |
-
-Les catégories d'événements portent une **pondération** (`[CM]` 100,
-`[TD]` 100, `[CM bénévole]`, `[CM Capacite]`, `[TD bénévole]`) : c'est par
-là que passe la paie. À rapprocher de `types_seance` dans `celcat.yaml`.
-
-### Trois pièges dans les réponses
-
-1. **Ce n'est pas du JSON.** L'en-tête `X-Use-Object-Date: yes` fait
-   renvoyer des `new Date(2026,5,12,11,11,5,0)`. `lire_reponse` les
-   convertit — attention, le mois est en base 0, le 5 est **juin**.
-2. **La session est liée à la connexion.** Ni cookie, ni en-tête, ni jeton :
-   un `fetch` séparé reçoit `ESessionTimeout`, même en réutilisant l'URL de
-   session ou en poursuivant la numérotation JSON-RPC. Les deux ont été
-   essayés. On lit donc les réponses de l'application, on ne la remplace pas.
-3. **Le chargement est paresseux.** Seules les lignes visibles sont
-   détaillées. Pour en obtenir plus il faut faire défiler **le tableau** —
-   `mouse.wheel` agit là où est le pointeur, et laissé sur le champ de
-   filtre il ne défile rien du tout. Ça m'a coûté plusieurs essais où une
-   seule ligne remontait.
-
-### Chercher
-
-La recherche par **nom exact** est fiable : 21 salles cherchées, 21
-retrouvées. Un préfixe trop court déclenche `ETooManyRecords` et
-l'application ne charge alors aucun détail. Donc : chercher précis.
-
-Pour un **enseignant**, chercher par le **nom de famille** ; Celcat trouve
-mal par le prénom. Ne concerne que les 3 enseignants dont le code Celcat
-vaut `0` dans `celcat.yaml` — les 80 autres ont un code numérique.
-
-## Ce que la vérification des salles a donné
-
-19 libellés sur 21 concordent. Trois écarts, tous reportés dans
-`celcat.yaml` :
-
-- **H.018 (Amphi MMI) est introuvable.** Ni « H.018 », ni « amphi » côté IUT
-  de Troyes. C'est bloquant pour les CM. → **question pour Kyllian**.
-- **H.022 s'appelle « H.022 studio »** chez eux. Une recherche sur « H.022 »
-  seul ne remonte rien.
-- **H.203 n'existe pas**, ce que notre contournement vers H.023 supposait
-  déjà. Confirmé.
-
-Restent les deux salles **combinées** (H.007-008, H.201-203) : leurs moitiés
-existent séparément dans Celcat, la combinaison non. Il faudra soit saisir
-deux séances, soit n'en garder qu'une.
-
-Les capacités Celcat diffèrent parfois des nôtres (H.201 : 10 chez eux,
-H.104 : 0). Ce sont les leurs qui décident d'un conflit de leur côté.
-
-## Les groupes
-
-Convention relevée sur S1, S3 et S5, en CM, TD et TP :
-
-```
-BUT MMI <semestre> <libellé> - <année de cohorte>     ex. « BUT MMI S1 TD AB - 2024 »
-```
-
-L'année est celle d'**entrée de la cohorte**, pas celle de la base : dans
-`URCA_2026` les groupes s'appellent encore « - 2024 ». Une recherche sans le
-suffixe les retrouve, ce qui évite d'avoir à deviner. Département :
-`T_MMI T29`.
-
-## La vue emploi du temps
-
-Un double-clic sur un groupe ouvre son emploi du temps. Le titre porte le
-**code Celcat** du groupe : « BUT MMI S1 TD AB - 2024 **[6TSBZ1TD_1]** ». Ce
-code est plus stable que le libellé — c'est lui qu'il faudra mémoriser.
-
-En bas à gauche, un sélecteur de **semaines** en grille (Août → Juillet),
-avec des numéros de semaine et des infobulles du type « 4 (1/25/27-1/31/27) ».
-Les dates y sont au format américain.
-
-> **Celcat contient DÉJÀ nos groupes et leurs séances.** « BUT MMI S1 TD AB »
-> affiche 206 h 48 d'emploi du temps. La saisie n'écrit donc pas sur une page
-> blanche : elle doit comparer, créer, modifier, supprimer — ce que
-> `sync.construire_plan` fait déjà. Ne jamais créer en aveugle.
-
-Avec le rôle `985_consultation`, un bandeau annonce « Vous avez un accès en
-lecture seulement à cet emploi du temps ». Avec `985_T_MMI`, il disparaît :
-c'est le témoin le plus simple pour vérifier qu'on a bien les droits.
-
-Un double-clic sur une case vide n'ouvre PAS un formulaire de création mais
-l'**inspecteur d'événement**, avec cinq onglets :
-
-| onglet | ce qu'on y attend |
+| Cas | Ce qui se passe |
 |---|---|
-| Détails | date, horaire, durée, catégorie |
-| Ressources | enseignant, salle, groupe |
-| Remarques et personnaliser | libellés libres |
-| Critères requis | contraintes de salle |
-| Historique | qui a modifié quoi |
+| La séance a tous ses codes Celcat | Elle part. |
+| Un code manque (cours, salle, enseignant, groupe) | Elle est **bloquée** : elle ne part pas tant que le code n'est pas saisi. |
+| Le cours est marqué **sans code (voulu)** | Elle n'est **pas envoyée**, volontairement, sans rien bloquer. |
+| La semaine n'est pas encore ouverte dans Celcat par l'équipe | Les **créations attendent**. Un admin peut autoriser la semaine. |
+| Une séance est retirée de l'appli | Son évènement Celcat est supprimé aussi (jamais un jour férié ni un évènement protégé). |
+| Celcat a un évènement **en trop** (qui ne vient pas de l'appli) | Rien n'est supprimé automatiquement. Un admin décide, après vérification. |
 
-**C'est le même formulaire que celui de la création** — voir « Le formulaire,
-enfin ouvert » plus bas. C'est ce qui a permis de le relever sans rien créer.
+---
 
-La création passe par le bouton **+** en haut à droite du panneau — repéré
-le 01/09/2026, voir la section suivante.
+## 2. Ce que vous voyez : l'écran Celcat
 
-## Session du 01/09/2026 — le bouton +, et un incident
+**Administration → Celcat** (admins seulement). L'écran se lit de haut en bas.
 
-Réponses de Kyllian Bresson à la première exploration :
+1. **L'état du système** : écriture dans Celcat, robot d'envoi, dernière lecture de Celcat.
+2. **La semaine comparée** : celle choisie dans la barre du haut (flèches pour changer).
+3. **Les compteurs** : **À modifier**, **À créer**, **En trop**, **Identiques**, en file.
+4. **Le verdict** : « concorde », « à traiter » ou « bloqué ».
+5. **À gauche** : les écarts séance par séance, puis les évènements en trop.
+6. **À droite** : la file d'attente (« File d'attente vide — tout est poussé. » quand tout est parti) et ce qui bloque.
+7. **Repliés en bas** : **Activité récente** (créées, modifiées, supprimées, échecs) et **Réglages**.
 
-- Premier écran Celcat (choix de base) : **`URCA_2026`**.
-- Rôle à choisir pour écrire : **`985_T_MMI`** (déjà nommé `ROLE_ECRITURE`
-  dans le code).
-- **H.018 (Amphi MMI) = « Amphi 3 MMI »** dans Celcat — la question
-  bloquante de la session précédente est résolue, reporté dans
-  `celcat.yaml`.
-- Salles combinées (H.007-008, H.201-203) : **une seule des deux retenue**
-  (« on en choisit une seule et on met le TD dedans »), pas de double
-  saisie. `celcat.yaml` retient H.007 et H.201 (les premières de chaque
-  paire).
-- Champ Groupe : taper **« BUT MMI »** suffit à retrouver un groupe.
+### Corriger une semaine
 
-### Les boutons créer et supprimer, enfin repérés
+1. Choisir la semaine dans la barre du haut.
+2. Lire les écarts.
+3. Cliquer sur **Corriger les N écarts** (ou **Corriger l'écart**).
+   Les corrections partent en file. L'écran suit leur avancée : mise en file, passage du robot d'envoi, nouvelle lecture de Celcat.
+4. Quand la file est vide, cliquer sur **Relire Celcat et vérifier**.
 
-Ce ne sont PAS des glyphes `+` / `−` mais les icônes `new.png` et
-`delete.png`, dans la barre du panneau « Emploi du temps » du groupe (à
-droite du titre `Enregistrement`) : 5 icônes, dans l'ordre — `new` (créer),
-`delete` (supprimer), `refresh`, `save`, `cancel`. Repérées par leur image
-de fond (`background-image`), pas par texte : qooxdoo ne leur donne aucun
-libellé accessible. Un survol affiche l'infobulle **« Créer un nouvel
-événement »** sur l'icône `new`.
+Le verdict doit passer à « concorde ». **Corriger** ne supprime jamais rien.
 
-> **`new.png` apparaît DEUX fois à l'écran**, et c'est un piège coûteux : la
-> barre du panneau de gauche (liste de ressources) porte la même image. Le
-> relevé du 01/09 en a compté deux, à 460 px d'écart horizontal. Cliquer la
-> mauvaise, c'est créer un objet dans la mauvaise fenêtre.
->
-> `navigateur.cliquer_icone_barre` exige donc un **repère** : on lui nomme
-> une icône présente une seule fois dans la barre visée (`refresh`, `save`),
-> il en déduit la barre, et ne retient que les icônes qui s'y trouvent. Sans
-> repère, une icône ambiguë fait **lever** plutôt que choisir au hasard.
-> Verrouillé par deux tests.
+### Les réglages
 
-### Le sélecteur de semaines : l'infobulle au survol donne la vraie date
-
-Le mini calendrier en bas du panneau (`Semaines de l'emploi du temps`) ne
-porte AUCUN attribut exploitable (`title`, `qxtooltip`) dans le DOM — ses
-infobulles n'existent que le temps d'un survol réel (`mouse.move` + pause),
-pas comme un attribut statique. Cliquer une cellule au hasard ne suffit
-donc pas à savoir quelle semaine on vient de sélectionner. Capture
-utilisateur du 01/09/2026 : survoler une cellule affiche bien
-**« 1 (04/01/27–10/01/27) »** — semaine + plage de dates, exact format
-attendu.
-
-**Fait** (`navigateur.choisir_semaine`) : le pilote survole chaque cellule,
-lit l'infobulle, et ne clique que celle qui désigne la semaine visée —
-sinon il lève. Plus aucune coordonnée devinée.
-
-Une subtilité qui a demandé une décision. Les deux relevés se
-**contredisent** sur le format de date : « 4 (1/25/27-1/31/27) » ne se lit
-qu'en mois/jour, « 1 (04/01/27–10/01/27) » ne se lit qu'en jour/mois (avril
-→ octobre ne serait pas une semaine). Plutôt que de trancher au hasard, les
-deux lectures sont essayées, et c'est la **cohérence de l'intervalle** qui
-départage : il faut une lecture donnant six jours pleins commençant au lundi
-visé. Cela suffit à écarter le seul cas dangereux — prendre la semaine du
-1er avril (`01/04/27–07/04/27`) pour celle du 4 janvier, les mêmes chiffres
-inversés. Verrouillé par `tests/test_celcat_pilote_2026_09_01.py`.
-
-### Incident : un événement vide créé par erreur
-
-En sélectionnant une case vide (mardi 9h, groupe test **BUT MMI S1 TD AB**,
-Celcat `group_id` 1661972) puis en cliquant l'icône `new`, le total
-d'heures affiché du groupe est passé de 208h18 à **235h18 (+27h)**, sans
-qu'aucun champ n'ait été rempli ni « Enregistrer » cliqué. Confirmé réel
-(pas un brouillon d'écran) par une reconnexion **complètement neuve, en
-rôle lecture seule** (`985_consultation`) : le total restait à 235h18.
-
-Diagnostic complet obtenu via `udlTimetables.load` (méthode JSON-RPC qui
-charge les événements d'un groupe — `params: [{"GroupIDs": [<id>]}]`,
-jusque-là non documentée ici) :
-
-```json
-{
-  "event_id": 1929034,
-  "day_of_week": 1,
-  "start_time": null, "end_time": null,
-  "evCatName": null, "rooms": [], "modules": [], "staff": [],
-  "weeks": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
-  "date_change": "2026-09-01T00:50:53",
-  "userName": "bres0026", "user_id_change": 107817,
-  "protected": "N", "suspended": "N"
-}
-```
-
-Un événement réel, sans horaire ni salle ni catégorie ni module, mais
-**actif sur les 54 semaines de l'année** (`weeks`, une chaîne de `Y`) — ce
-qui explique le total : cliquer `new` sans rien remplir crée d'emblée un
-événement récurrent par défaut, reconduit sur toute l'année, plutôt qu'une
-occurrence isolée à la date sélectionnée.
-
-Repéré visuellement : rendu quasi invisible (`rgba(255,207,118,0.1)`, 10 %
-d'opacité — sans catégorie, sans couleur assignée) vers 7h30 le mardi de la
-semaine affichée, superposé à un « Jour férié » existant au même endroit
-(l'application affichait alors « Événement 1 de 2 » avec un chevron pour
-passer au 2e).
-
-**Non résolu, non supprimé.** Les tentatives de sélectionner précisément
-cet événement (au lieu du jour férié superposé) puis de le supprimer via
-l'icône `delete` ont été bloquées à plusieurs reprises par le
-classificateur de sécurité de l'environnement d'exécution — un signal pris
-au sérieux plutôt que contourné, pour ne pas risquer de supprimer par
-erreur le jour férié protégé qui se trouve au même endroit à la place.
-
-**À faire en priorité, avec supervision** : ouvrir `BUT MMI S1 TD AB` dans
-Celcat (rôle `985_T_MMI`), aller sur la case mardi ~7h30 de la semaine du
-17-23 août 2026, cliquer dessus, passer à « Événement 2 de 2 » via le
-chevron, vérifier qu'il s'agit bien de l'événement sans catégorie/horaire
-(`event_id` 1929034 si l'identifiant est visible quelque part dans
-l'inspecteur), puis le supprimer. Le total du groupe doit revenir à 208h18.
-
-## Le formulaire, enfin ouvert — sans rien créer
-
-Le point de blocage était circulaire : pour connaître les libellés du
-formulaire il fallait l'ouvrir, et l'ouvrir par `new` créait un événement.
-
-**La sortie tenait en une phrase du relevé précédent** : « un double-clic sur
-une case vide ouvre l'inspecteur d'événement ». Cet inspecteur *est* le
-formulaire de création — mêmes onglets, mêmes champs, en lecture. On le lit
-donc sur un événement **existant**, sans jamais toucher `new`. Le script
-`scripts/relever_formulaire_celcat.py` ne clique cette icône à aucun moment.
-
-```powershell
-docker build -t cal-iut-celcat deploy/celcat-sidecar
-docker run --rm --cap-add NET_ADMIN --device /dev/net/tun `
-  --env-file .env -v "${PWD}:/travail" -w /travail cal-iut-celcat `
-  python scripts/relever_formulaire_celcat.py --vpn `
-    --base URCA_2026 --role 985_consultation `
-    --semaines 2026-09-14,2027-03-29
-.venv\Scripts\python.exe scripts/lire_releve_celcat.py data/releves/celcat-formulaire-<…>
-```
-
-Options utiles : `--lister-groupes MMI` (les libellés exacts, plutôt que les
-deviner), `--calendrier` (la géométrie du sélecteur de semaines et ses
-infobulles), `--semaines` (plusieurs lundis essayés jusqu'à en trouver un qui
-porte des séances).
-
-### Ce que ça a donné
-
-| repère | valeur relevée |
+| Réglage | Effet |
 |---|---|
-| Onglets | `Détails`, `Ressources`, `Remarques et personnaliser`, `Critères requis`, `Historique` |
-| Jour | libellé `Jour:` — les deux points font partie du texte |
-| Heure | libellé `Heure:` |
-| Catégorie | `Catégorie d'événement:` (onglet Détails) |
-| Département | `Département:` (onglet Détails) |
-
-Trois corrections que le relevé impose, et qu'aucun raisonnement n'aurait
-données :
-
-**1. Le champ est SOUS son libellé, pas à sa droite.** « Jour: » en
-(952, 737), sa valeur « Mon » en (956, 770). Même écart pour « Heure: » et
-« Temps de pause: » : **+32 px vers le bas, à x quasi constant**. On avait
-supposé 120 px vers la droite, d'après les coordonnées de l'ancien
-autoclicker. Cette supposition visait (1072, 737) — soit le libellé
-« Heure: » à 18 px près : on aurait saisi l'heure dans le champ du jour, et
-le formulaire aurait accepté.
-
-**2. Il n'y a qu'UN champ d'horaire, en 12 heures.** L'écran affiche
-« 7:00 AM-11:59 PM » : un intervalle entier dans un seul champ, pas un début
-et une fin. `heure_debut` / `heure_fin` ont disparu de la carte, et
-`navigateur.intervalle_12h` convertit nos `08:00`/`09:30` en
-`8:00 AM-9:30 AM`.
-
-**3. Il n'y a pas de bouton texte pour valider l'horaire.** Aucun « OK »
-n'existe à l'écran ; c'est l'icône `save` de la barre qui commet.
-`validation_horaire` reste vide, volontairement.
-
-### Le sélecteur de semaines : deuxième correction
-
-La méthode « survoler chaque cellule et lire son infobulle » supposait des
-cellules identifiables. En vrai, **seule la semaine sélectionnée porte du
-texte** ; les autres sont des `<div>` vides. Et le format réel de l'infobulle
-n'est ni l'un ni l'autre des deux relevés précédents : c'est
-**`Week: 37 (9/7/26-9/13/26)`**, en anglais, mois/jour.
-
-`choisir_semaine` procède donc géométriquement : il énumère les cellules par
-position, **fusionne celles qui se superposent** (qooxdoo empile plusieurs
-`<div>` par case — sans cette fusion on comptait 3 fois trop de cellules),
-calcule où devrait tomber la semaine visée, y saute directement, et corrige
-au survol suivant. Il ne clique que sur une cellule dont l'infobulle confirme
-le lundi attendu ; sinon il lève.
-
-### Détecter les séances : ni par le texte, ni par l'Échap
-
-Deux impasses, notées pour ne pas y retomber :
-
-- Chercher les séances par leur **texte** remonte aussi les en-têtes de
-  colonnes et, pire, les **bulles de survol** — qui contiennent les mêmes
-  mots. Les blocs sont donc détectés **géométriquement**, par leur couleur de
-  fond et leur taille.
-- Fermer une bulle de survol par `Échap` ferme **tout le panneau** emploi du
-  temps. On éloigne le pointeur (`mouse.move` vers la liste) et la bulle
-  s'efface d'elle-même.
-
-### Onglet Ressources — relevé le 01/09/2026 sur URCA_2025
-
-`URCA_2026` n'avait que des jours fériés : pas d'onglet Ressources à lire.
-Sur `URCA_2025`, groupe `BUT MMI S1 CM - 2024` (78 événements, 67 avec
-ressources), l'onglet affiche des **sections** :
-
-| à l'écran | champ chez nous |
-|---|---|
-| `Matières [0]` | `champs.matiere` = `Matières` |
-| `Salles [1]` | `champs.salle` = `Salles` |
-| `Personnel [1]` | `champs.enseignant` = `Personnel` |
-| `Groupes [1]` | (le groupe est déjà celui de l'emploi du temps) |
-
-Le chiffre entre crochets est un compte, il change. On dépose sur le nom.
-
-Catégories lues dans `udlTimetables.load` des groupes CM / TD / TP :
-
-- CM → `[CM]`
-- TD → `[TD]` (distinct de `TD0`)
-- TP → `[TP]`
-
-Piège en chemin : cliquer l'icône « Groupes » aux Y de 2026 ouvrait
-**Départements** (type 610). `ouvrir_ressource` vérifie maintenant le titre
-du panneau et balaie la colonne si ce n'est pas le bon.
-
-`carte.manques()` est vide. `POST /celcat/saisie` n'est plus bloqué par le
-formulaire.
-
-### Catégories d'événement — la liste complète
-
-Relevée en entier cette nuit (38 catégories, `TYPE_CATEGORIES_EVENEMENT`
-= 618) : **`[CM]` existe bel et bien**, distinct de `[CM bénévole]`
-(`event_cat_id` 845) et de `[CM Capacite]`. Mais `TD: 4` / `TP: 6` dans
-`celcat.yaml::types_seance` sont des INDEX DE POSITION dans un menu
-déroulant (hérités des `.bat` d'origine), pas des `event_cat_id` réels —
-ceux-ci sont des nombres à trois chiffres (845 pour CM bénévole). Le
-formulaire de création n'ayant pas pu être rempli pour de vrai cette nuit
-(incident ci-dessus), on ne sait toujours pas laquelle des deux formes
-(position ou id) il attend pour la catégorie.
-
-## Ce que l'ancien autoclicker a appris
-
-`~/Desktop/clickclick/` est l'autoclicker nut-js qui précédait cet outil :
-23 étapes en coordonnées absolues, calibrées pour un écran 2560×1440 à 75 %
-de zoom sous macOS. Inutilisable tel quel — c'est justement ce que le
-pilotage par TEXTE remplace. Mais il consignait une chose qu'aucune autre
-trace ne documentait, et qui manquait pour finir le travail :
-
-**Les champs du formulaire se remplissent par GLISSER-DÉPOSER** depuis la
-liste de ressources de gauche. On ne tape pas dedans : on y dépose une
-ligne. Il procède ainsi pour les cinq champs — catégorie, département,
-enseignant, salle, matière. Les pauses comptent : qooxdoo implémente son
-propre glisser-déposer sur les événements souris, et sans temps d'arrêt
-après l'appui puis positions intermédiaires, aucun glissement ne démarre
-(`navigateur.glisser_deposer`).
-
-Accessoirement, l'ordre de ses icônes de barre latérale correspond
-exactement à `navigateur.ICONES`, ce qui confirme cette table de position.
-
-## Où en est l'outil
-
-Acquis :
-
-- accès réseau (direct ou VPN), sur poste comme sur serveur ;
-- connexion, choix de la base et du rôle ;
-- lecture fiable des ressources, et recherche par nom ;
-- correspondance des salles vérifiée (y compris l'amphi et les salles
-  combinées), convention des groupes établie ;
-- l'icône de création (`new`) repérée, ainsi que celles de suppression
-  (`delete`), sauvegarde et annulation — et la levée d'ambiguïté quand la
-  même image apparaît dans deux barres ;
-- **le formulaire ouvert et relevé sans rien créer** (double-clic sur un
-  événement existant) : onglets, libellés du jour, de l'heure, de la
-  catégorie et du département, écart libellé→champ, format d'horaire ;
-- lecture fiable des événements d'un groupe (`udlTimetables.load`) ;
-- liste complète des 38 catégories d'événement, dont `[CM]` confirmé ;
-- **le pilote lui-même** (`driver.PilotePlaywright`) : connexion, ouverture
-  d'un groupe par son nom Celcat, choix de la semaine confirmé par
-  infobulle, glisser-déposer, onglets, icônes de barre — vérifié hors ligne
-  contre une fausse page qui enregistre la séquence ;
-- **le lancement** : `POST /celcat/saisie`, simulation par défaut, base
-  d'entraînement par défaut, refus avant tout clic si une séance est bloquée,
-  si Celcat est injoignable, ou si le formulaire n'est pas relevé.
-
-## Catégories CM / TD / TP
-
-Les libellés Celcat sont `[CM]`, `[TD]`, `[TP]` (`celcat_formulaire.yaml`).
-L'id numérique de `[CM]` est **430** (canari).
-
-**Bug historique** : l'ancien autoclicker (`clickclick`) ne connaissait que
-TD=4 sinon TP — un CM était donc enregistré en `[TP]` (ex. WR116 mardi
-8 sept. 14h). Le chemin RPC actuel résout `[CM]` par libellé ; un filet
-refuse toute charge CM dont `event_cat_id ≠ 430`
-(`cal_iut.celcat.categories`).
-
-Audit / correctif Live (VPN URCA requis) :
-
-```powershell
-python scripts/corriger_cm_categories_celcat.py --vpn --lundi 2026-09-07 --base URCA_2026
-python scripts/corriger_cm_categories_celcat.py --vpn --lundi 2026-09-07 `
-  --base URCA_2026 --production --ecrire
-```
-
-Le diff `comparer` envoie aussi en `a_modifier` un événement dont la
-catégorie Live ne correspond pas au type maquette (salle OK mais [TP] pour un CM).
-
-## Voie durable : JSON-RPC dans la page (pas le clicker)
-
-Le `new` / glisser-déposer n'est **pas** le chemin d'écriture. Après `new`,
-Conflits s'ouvre, Détails n'apparaît souvent pas, et l'événement naît sur
-**54 semaines**. Un `fetch` Python à part reçoit `ESessionTimeout` : la
-session est la connexion du navigateur.
-
-La suite : Playwright ne fait que le login ; les appels passent par le
-client qooxdoo `ctweb.io.Rpc.invoke` (événement `result`) — un `fetch` /
-XHR neuf reçoit `ESessionTimeout` sur `udlTimetables.load`. Méthode
-d'écriture relevée dans les scripts : **`udlTimetables.save`**. Premier
-write : `URCA_FORMATION`. Production seulement après un canari 1 semaine
-là-bas.
-
-Preuve du 01/09/2026 (FORMATION, `985_T_MMI`) :
-
-- `udlTimetables.load` `{GroupIDs:[47925]}` → **266 événements**.
-- `udlTimetables.save` **create** (sans `event_id`) a créé l'événement
-  **1523405**, 1 semaine, notes `cal-iut-create` (clone WR113).
-  `event_id: 0` est refusé (« l'enregistrement n'existe pas »).
-- Un `fetch`/`XHR` séparé sur la même page timeoute.
-
-```powershell
-python scripts/sonder_rpc_celcat.py --vpn --base URCA_FORMATION
-python scripts/pousser_manquants_celcat.py --lundi 2026-09-07 --vpn --base URCA_2026
-```
-
-Le second, sans `--ecrire`, liste ce qui manque (WR107 AB, etc.) en lisant
-Live. `--ecrire` est refusé tant que `methode_ecriture` est vide.
-
-Manquant :
-
-1. **Nettoyer l'événement vide créé par erreur** (`event_id` 1929034, groupe
-   `BUT MMI S1 TD AB`) — voir incident ci-dessus, en priorité. À la main.
-2. **Pousser les manquants** en production (`--limite 1 --production --ecrire`
-   d'abord, WR107 AB mercredi). Create RPC prouvé sur FORMATION (1523405).
-3. Les codes Celcat de 3 enseignants (`0` dans `celcat.yaml`) et de
-   WSA501D.
-
-## Modifier / supprimer une séance déjà posée (cause racine du « partial key »)
-
-Le bug historique **`EUDLDSError: Cannot locate a record using only a
-partial key`** sur un update RPC n'était pas un champ manquant isolé — la
-tentation naturelle (« il manque `original_id` », « il manque
-`accessRights` »...) était fausse. Le canari du 01/09/2026 (event_id
-202985, FORMATION) l'a prouvé par comparaison : **c'est la DIFFÉRENCE
-STRUCTURELLE** entre un objet reconstruit à la main (quelques champs +
-`event_id` accroché dessus, comme le fait `charge_utile()` pour une
-création) et l'enregistrement **complet** que `udlTimetables.load` renvoie,
-qui fait échouer `save`. Un update Celcat n'accepte que sa propre forme
-complète, avec seulement les champs voulus modifiés dessus.
-
-Le correctif (`src/cal_iut/celcat/modification.py`) :
-
-1. `localiser_evenement(page, event_id, group_ids=...)` recharge l'EDT des
-   groupes concernés via `udlTimetables.load` et renvoie le dict **brut**
-   portant `event_id` — jamais un `EvenementCelcat` normalisé qui aurait
-   perdu des clés.
-2. `fusionner_deltas(brut, ...)` **clone** ce dict et n'écrase QUE
-   `day_of_week` / `start_time` / `end_time` / `weeks` / `event_cat_id` /
-   `dept_id` / `modules` / `rooms` / `staff` / `groups` / `notes` — le même
-   jeu de champs que `ecriture.charge_utile()`, mais superposé sur
-   l'enregistrement complet plutôt qu'à la place de rien.
-3. `modifier_evenement(...)` enchaîne localiser → fusionner → revérifier
-   (`categories.verifier_charge_categorie`, `ecriture.verifier_avant_envoi`
-   — mêmes garde-fous que la création : CM sans catégorie refusé,
-   masque semaines à 1×Y, `--production` exigé sur URCA_2026) → `save`.
-
-`modifier_seance`/`supprimer_seance` (RPC) sont désormais **branchés** :
-`nuit.py::executer_job_nuit(page=...)` consomme les jobs `update` de
-`celcat_file_attente.json` via `modification.modifier_manquants`, aux
-côtés des `create` (`ecriture.creer_manquants`, inchangé).
-
-**La suppression suit la même cause racine** (`suppression.py`) : on
-localise l'événement AVANT de le supprimer, jamais un `event_id` nu. Le
-garde-fou `file_attente.autoriser_suppression` (jour férié protégé,
-fantôme, `protected=Y`, Celcat-en-plus) est réévalué sur l'enregistrement
-**frais** rechargé, jamais sur l'instantané porté par le job en file — un
-jour férié devenu protégé après la mise en file bloque quand même.
-
-**La méthode RPC de suppression est PROUVÉE (05/09/2026).** Trois
-hypothèses testées, deux écartées avec preuve, la bonne trouvée grâce à un
-retour utilisateur précis (« il faut cliquer sur la séance et il y a un
-bouton supprimer en haut du planning » — UN SEUL clic, pas un double-clic
-pour ouvrir l'inspecteur) :
-
-1. *`suspended: "Y"`* — ÉCARTÉE. Accepté et persisté sans erreur par
-   `udlTimetables.save`, mais l'événement **reste visible** dans
-   `udlTimetables.load` ensuite. Ce champ existe (posé à `"N"` à la
-   création) mais ne fait pas ce qu'on espérait.
-2. *`weeks` tout à `N`* — ÉCARTÉE, refusée par le SERVEUR lui-même :
-   `EUDLDSError` sur la contrainte `CK_EVENT_WKLEN` de la table
-   `dbo.CT_EVENT`. Celcat interdit par construction qu'un événement
-   existant n'ait plus aucune semaine active.
-3. **La bonne piste** : **aucune méthode RPC dédiée** — la suppression
-   passe par la **même méthode que création/modification**
-   (`udlTimetables.save`, `methode_ecriture`), avec un enregistrement
-   **MINIMAL** `{"-event_id": <id>, "_type_": "Event"}` (clé au signe
-   moins — convention Celcat « supprimer cet id » dans un batch save, pas
-   une valeur négative) plutôt que l'enregistrement complet. Prouvé en
-   direct sur URCA_FORMATION avec capture d'écran (le blocage précédent
-   était le repérage du bloc canari sur la grille en environnement
-   headless — résolu en prenant un `page.screenshot()` et en lisant les
-   coordonnées dessus plutôt qu'en devinant par correspondance de texte),
-   puis reproduit deux fois de plus dont une via le **vrai chemin de code**
-   (`suppression.py::supprimer_evenement`, pas un script ad-hoc,
-   `scripts/verifier_suppression_reelle_celcat.py`) : canari créé, visible,
-   supprimé, disparu du rechargement `udlTimetables.load` qui suit.
-
-`data/config/celcat_rpc.yaml::methode_suppression: udlTimetables.save` —
-plus vide. `rpc.py::supprimer_evenement_rpc(page, event_id, *, methode)`
-construit directement le payload minimal (plus besoin de l'enregistrement
-complet en entrée, contrairement à `enregistrer_evenement`).
-
-Scan complémentaire (`scripts/scanner_methodes_udl_celcat.py`, gardé pour
-référence) : 108 méthodes `udl*.*` recensées sur URCA_FORMATION, aucune
-`udlTimetables.delete`/`.remove` — cohérent avec le point 3, la
-suppression ne passe effectivement pas par une méthode dédiée.
-
-### Ce qui est PROUVÉ en direct vs ce qui ne l'est PAS (02/09/2026)
-
-Deux cas très différents se cachaient derrière la même erreur « partial
-key », et ils n'ont pas le même niveau de preuve :
-
-- **Catégorie / horaire / semaines, ressources INCHANGÉES** — prouvé en
-  direct à deux reprises : sur URCA_FORMATION (canari 202985, aller-retour
-  notes), puis en production sur URCA_2026 (les 2 CM WR116, `event_id`
-  1931709 et 1933218, `[TP] → [CM]`, confirmé par une relecture d'audit à
-  0 écart). **C'est le seul chemin qu'on peut recommander aujourd'hui.**
-- **Changement de RESSOURCE (salle/enseignant/matière)** — la première
-  version de `fusionner_deltas` (greffer le nouvel id sur le sous-objet de
-  l'ANCIENNE ressource) écrivait **sans erreur mais sans effet** : `save`
-  répond succès, la ressource ne change pas (constaté sur le canari
-  202985, salle A.018 → une autre salle, ça a marché ; le retour vers
-  A.018 est resté silencieusement bloqué). Une deuxième version (recharger
-  le VRAI enregistrement de la ressource visée via `udlResources.load`)
-  s'est heurtée à un « partial key » sur le sous-objet lui-même — corrigé
-  en y incluant `event_id` (l'association événement↔ressource se localise
-  par les DEUX, pas par le seul id de la ressource). Après ce correctif,
-  le retour vers A.018 est **resté silencieusement sans effet, à nouveau**
-  — aucune erreur, la salle ne change toujours pas. Hypothèse non vérifiée :
-  la salle visée (A.018, dept `iut Troyes T00`, site 101287) est hors du
-  périmètre d'écriture du rôle utilisé, et Celcat ignore l'affectation au
-  lieu de la refuser explicitement — mais ce n'est PAS confirmé.
-  **Ne pas activer ce chemin pour un déplacement de salle/enseignant/matière
-  avant d'avoir compris ce dernier silencieux.** L'événement canari
-  (202985, URCA_FORMATION) est resté sur la mauvaise salle après ce test —
-  base d'entraînement, pas de production concernée.
-
-**Retenté le 05/09/2026** à la lumière de la convention `-champ` découverte
-pour la suppression (`{"-event_id": id}` = retirer). Hypothèse : un tableau
-`rooms` à deux entrées, `{"-room_id": ancien, "event_id": ..., ...}` (retire
-l'ancienne association) + `{"room_id": nouveau, "event_id": ...}` (ajoute
-la nouvelle), plutôt qu'un tableau à une seule entrée portant le nouvel id
-(déjà essayé, silencieux). Résultat (`scripts/tester_reaffectation_salle_celcat.py`,
-canari sur URCA_FORMATION) : **progrès partiel, toujours pas d'effet**.
-Le silence a laissé place à une VRAIE erreur explicite —
-`EUDLDSError: Cannot delete a record using only a partial key` — essayé
-avec juste `{"-room_id": ..., "event_id": ...}` puis avec le sous-objet
-`rooms[0]` COMPLET (toutes ses clés d'origine) plus `-room_id` : même
-erreur les deux fois. La clé composite qu'attend le serveur pour
-identifier PRÉCISÉMENT quelle association supprimer reste inconnue —
-`event_id` + `room_id` ne suffisent pas. Cette piste s'arrête ici pour
-l'instant, faute d'avoir capturé le payload d'un vrai changement de salle
-fait à la main dans l'UI (la même méthode qui a fini par percer la
-suppression, cf. § suppression ci-dessus) — à reprendre avec cette
-technique plutôt qu'en devinant la forme du payload.
-
-## Relire le formulaire (si Celcat change)
-
-Le relevé du 01/09/2026 a rempli `celcat_formulaire.yaml`. Pour le
-recommencer sans rien créer (jamais l'icône `new`) :
-
-```powershell
-docker run --rm --cap-add NET_ADMIN --device /dev/net/tun `
-  --env-file .env -v "${PWD}:/travail" -w /travail cal-iut-celcat `
-  python scripts/relever_formulaire_celcat.py --vpn `
-    --base URCA_2025 --role 985_consultation --lister-groupes "BUT MMI"
-.venv\Scripts\python.exe scripts/lire_releve_celcat.py data/releves/celcat-formulaire-<…>
-.venv\Scripts\python.exe -c "from cal_iut.celcat.formulaire import charger_carte; print(charger_carte('data/config').manques())"
-```
-
-`--lister-groupes "MMI"` seul ne marche pas (`ETooManyRecords`). « BUT MMI »
-si. Le script enchaîne sur le premier groupe TD trouvé.
-
-Liste vide → la carte est complète. Fermer l'inspecteur par **Annuler**.
-
-## L'architecture qui va avec
-
-`deploy/celcat-sidecar/` contient l'image utilisée pour toute cette
-exploration : OpenConnect + Playwright, lancée avec `--cap-add NET_ADMIN
---device /dev/net/tun`.
-
-**Ce conteneur doit rester séparé de l'application.** La passerelle URCA
-pousse un tunnel *complet* : monter ce VPN dans le conteneur qui sert
-cal-iut détournerait tout son trafic sortant et couperait le site public.
-
-Pour un déploiement sur site, ce même conteneur tourne sans VPN du tout —
-d'où la règle de l'accès direct d'abord, qui rend les deux cas identiques
-au lancement près.
-
-### Le drain de nuit tournait pour personne (trouvé le 04/09/2026)
-
-`POST /celcat/lancer-nuit` (bouton admin de l'application) appelle
-`executer_job_nuit()` **sans `page`** : ça empile bien les jobs
-create/update/delete dans `celcat_file_attente.json` et scanne les extras,
-mais ça n'envoie jamais rien à Celcat — `_consommer_file` exige un `page`
-Playwright connecté en VPN, que l'application déployée n'a justement
-jamais (cf. ci-dessus). Sans un processus À PART qui relance
-`scripts/celcat_nuit.py --ecrire --vpn --production` régulièrement, la
-file grossit sans jamais se vider — cause directe d'un déplacement de
-séance jamais remonté sur Celcat (retour Kyllian Bresson, 04/09/2026).
-
-**Fix, deux formes du même script (`deploy/celcat-sidecar/nuit-quotidienne.sh`)
-— une boucle qui reste vivante dans CE conteneur (jamais celui de
-l'appli) et relance le job de nuit chaque 00h00 :**
-
-**1. Service Dokploy (05/09/2026, recommandé)** — `docker-compose.yml`
-porte désormais un 3e service, `celcat-nuit`, à côté de `backend`/
-`frontend` : même volume nommé `cal-iut-data` que `backend`
-(`-v cal-iut-data:/app/data/state`), donc voit les VRAIS jobs mis en file
-par l'appli déployée sans configuration manuelle. Se déploie tout seul au
-prochain push sur `main` — **à condition que Dokploy soit configuré en
-mode "Docker Compose" pointant sur ce fichier** (pas le mode "Dockerfile
-x2 services" : dans ce cas-là ce fichier n'est jamais lu, cf. l'avertissement
-en tête de `docker-compose.yml`, et il faut ajouter `celcat-nuit` comme un
-3e service Dokploy séparé à la main). Suivre : `docker compose logs -f
-celcat-nuit` (ou l'équivalent dans le dashboard Dokploy).
-
-**Bug trouvé et corrigé le 06/09/2026** : la toute première version dormait
-une fois pour toutes jusqu'au PROCHAIN minuit calculé au démarrage — un
-simple redéploiement (qui redémarre TOUS les services du compose, même
-ceux qui n'ont pas changé) repartait sur un nouveau sommeil de ~24h à
-chaque fois, sans jamais atteindre un vrai passage. Constaté en
-production après plusieurs merges le même jour : démarré le 05/09 à
-00h03, toujours pas de passage réel 39h plus tard. Corrigé avec un
-marqueur persistant (`data/state/celcat_nuit_dernier_passage.txt`, dans
-le MÊME volume que `backend` — survit à un redémarrage) : la boucle
-revérifie ce marqueur toutes les 5 minutes plutôt que de dormir
-longtemps ; un redémarrage ne fait que ré-entrer dans la boucle et relire
-le marqueur. Effet de bord assumé : le job peut désormais se déclencher
-n'importe quand dans la journée (dès qu'il détecte ne pas encore avoir
-tourné aujourd'hui), pas forcément pile à minuit — la fiabilité (au moins
-un passage par jour, quel que soit le nombre de redéploiements) prime sur
-l'heure exacte.
-
-**2. Lancement manuel (repli, si le mode Dokploy ne convient pas)** — un
-conteneur à part, à démarrer une fois sur la machine qui sert vraiment
-`cal-iut-mmi.srko.fr` :
+| **Écriture dans Celcat** (active / coupée) | Coupée : plus rien ne part, et **la file est vidée** (corrections abandonnées). |
+| **Robot d'envoi** (actif / en pause) | En pause : le VPN est libre pour l'équipe. La file est **gardée** et repart à la reprise. |
+| **Envoi par semaine — balayage de nuit** | Cocher les semaines, puis **Enregistrer la sélection**. **Envoyer maintenant** fait le balayage tout de suite. |
+| **Cours présents seulement dans Celcat** | Pour chaque cours : **Ajouter** au planning, ou **Ignorer**. |
+| **Reconstruire la file** | Refait la file à partir des seuls écarts réels (après un gros changement). |
+
+**Reconstruire la file** propose deux boutons :
+**Reconstruire sans supprimer**, ou **Reconstruire avec suppressions…**, qui supprime **définitivement** ce que Celcat a en trop.
+
+> **Attention :** pour libérer le VPN, mettre le **robot en pause**. Ne pas couper l'écriture : cela vide la file.
+
+---
+
+## 3. Que faire quand ça bloque
+
+### Une séance est bloquée par un code manquant
+
+1. Dans la carte de ce qui bloque, cliquer sur **Mapper…** et saisir le code.
+   Ou cliquer sur **Voir dans Codes Celcat →** et le saisir là.
+2. Le code part au passage suivant du robot.
+
+Un **groupe** ou une **matière** « identifiant interne » ne se saisit pas dans l'appli.
+Il se règle dans `celcat_groupes.yaml` ou `celcat_matieres.yaml`, puis on redéploie. Prévenir un technicien.
+
+### « En attente d'une semaine que Celcat n'a pas encore ouverte »
+
+Le robot ne crée rien dans une semaine que l'équipe n'a pas encore saisie dans Celcat.
+Si c'est bien à l'appli de remplir cette semaine : **Autoriser la création sur la semaine affichée**.
+Sinon, attendre.
+
+### Celcat a des évènements en trop
+
+1. Vérifier dans Celcat que personne n'est en train de les saisir à la main.
+2. Cliquer sur **Supprimer N évènements**, relire la liste, confirmer.
+
+Si l'écran dit « Relisez Celcat d'abord », la dernière lecture est trop ancienne : cliquer sur **Relire Celcat**, attendre, recommencer.
+
+### Le robot ne passe pas, ou la file ne descend pas
+
+- « Le robot d'envoi n'est pas encore passé » depuis longtemps : vérifier qu'il n'est pas en pause (**Réglages**).
+  Sinon, regarder les journaux du service **celcat-nuit** dans Dokploy.
+- Des **échecs** : ouvrir **Activité récente**. Un échec répété ralentit le robot (jusqu'à 30 min entre deux essais), pour ne pas faire bloquer le compte partagé.
+  Prévenir un technicien.
+
+### L'équipe a besoin du VPN
+
+**Réglages → Robot d'envoi** : pause. Le remettre en marche après.
+
+### Un cours existe dans Celcat mais pas dans l'appli
+
+**Réglages → Cours présents seulement dans Celcat** : **Ajouter** ou **Ignorer**.
+
+---
+
+## 4. Pour les techniciens
+
+### 4.1 Architecture
+
+- Le **backend** ne parle jamais à Celcat. Il écrit la file dans le volume partagé `data/state/` (un fichier par job : création, modification, suppression).
+- Le service **celcat-nuit** (`deploy/celcat-sidecar/`, OpenConnect + Playwright) lit ce même volume et parle à Celcat.
+  Il tourne avec `--cap-add NET_ADMIN --device /dev/net/tun`.
+- **Il doit rester séparé du backend** : la passerelle de l'URCA pousse un tunnel complet. Monté dans le conteneur du site, il couperait tout son trafic sortant.
+- Sa boucle (`deploy/celcat-sidecar/nuit-quotidienne.sh`) :
+  1. toutes les 30 s : `scripts/celcat_immediat.py --ecrire --vpn --production --base URCA_2026` draine la file (sort sans réseau si elle est vide) ;
+  2. `scripts/celcat_instantane.py --vpn` relit Celcat si le dernier relevé a plus de 2 h, ou si quelqu'un a demandé **Relire Celcat** ;
+  3. une fois par jour (UTC) : `scripts/celcat_nuit.py --ecrire --vpn --production --base URCA_2026` balaie les semaines validées, cherche les cours en trop, et draine aussi la file.
+- Le passage quotidien est noté dans `data/state/celcat_nuit_dernier_passage.txt` (dans le volume) : un redémarrage ne le fait ni sauter ni recommencer.
+  Il peut donc tourner à n'importe quelle heure de la journée, au premier tour où il n'a pas encore été fait.
+- Sur échec, l'attente double à chaque tour, jusqu'à 30 min, puis revient à 30 s au premier succès.
+- Le robot dépose son compte rendu (`data/state/celcat_drainage.json`, avec son âge) : c'est ce qu'affiche l'écran.
+- La comparaison (`celcat/planification.py`) est la même pour l'écran et pour le robot. Seul ce qui diffère part : identique → rien ; écart → modifier ; absent de Celcat → créer ; en trop → supprimer (sur décision humaine).
+
+**Déploiement du service.**
+En mode Dokploy « Docker Compose » sur `docker-compose.yml`, `celcat-nuit` part avec les deux autres.
+En mode « un Dockerfile par service », le créer à la main : Dockerfile `deploy/celcat-sidecar/Dockerfile`, même volume que le backend, variables `CELCAT_*` / `VPN_*`, `cap_add NET_ADMIN` et device `/dev/net/tun`.
+Repli sans Dokploy, sur la machine qui sert le site :
 
 ```bash
 docker build -t cal-iut-celcat -f deploy/celcat-sidecar/Dockerfile .
@@ -717,11 +147,169 @@ docker run -d --restart unless-stopped --name celcat-nuit \
   --env-file /chemin/vers/.env \
   -v cal-iut-data:/app/data/state \
   cal-iut-celcat
+docker logs -f celcat-nuit
 ```
 
-**Le volume est le point critique** dans les deux cas : il doit être le
-MÊME que celui du service `backend` (le nom `cal-iut-data` du
-`docker-compose.yml`, ou l'équivalent Dokploy) — jamais une copie locale
-de dev — sans quoi ce conteneur drainerait une file que personne ne
-remplit.
-Suivre : `docker logs -f celcat-nuit`.
+**Le volume est le point critique** : exactement celui du backend, jamais une copie locale. Sinon le robot draine une file que personne ne remplit.
+
+### 4.2 Accès réseau
+
+- `celcat-lv.univ-reims.fr` ne résout pas depuis l'extérieur : VPN obligatoire hors site. Sur place, à l'IUT, l'accès est direct.
+  Règle : toujours essayer **sans VPN d'abord** (`celcat/reseau.py`).
+- VPN AnyConnect : client Cisco sous Windows, **OpenConnect** sous Linux (même protocole). Identifiant et mot de passe, sans second facteur.
+- Diagnostic sans rien envoyer : `cal-iut celcat-reseau` (`--connecter` pour tenter de monter le VPN avec les identifiants `VPN_*`).
+- Variables : `CELCAT_URL`, `CELCAT_UTILISATEUR`, `CELCAT_MOT_DE_PASSE` (le même que le VPN) ; facultatives `VPN_PASSERELLE`, `VPN_UTILISATEUR`, `VPN_MOT_DE_PASSE`, `VPN_GROUPE`, `VPN_CODE`.
+
+### 4.3 Se connecter à Celcat à la main
+
+1. Choisir une base : `URCA_2023` … `URCA_2026` (la vraie, pour 2026-2027), ou **`URCA_FORMATION`** (base d'entraînement).
+2. **Connexion** → dialogue « Sécurité CELCAT ». Identifiant et mot de passe du VPN.
+3. Champ « Rôle » : décocher « Utiliser le rôle par défaut », puis :
+   - `985_consultation` : **lecture seule** (toute écriture impossible) ;
+   - `985_T_MMI` : écriture sur le périmètre MMI.
+   Témoin : en lecture seule, un bandeau dit « Vous avez un accès en lecture seulement à cet emploi du temps ».
+4. **Se déconnecter à la fin.** Celcat garde les sessions : trop de sessions ouvertes saturent le serveur, qui n'affiche plus la liste des bases.
+
+Pour essayer : `985_consultation` pour explorer, `URCA_FORMATION` pour écrire sans toucher aux vraies données.
+
+### 4.4 Le service JSON-RPC
+
+Celcat Timetabler Live est une application **qooxdoo** (IIS/ASP.NET) : des `<div>` placés au pixel, sans `id` ni rôle accessible.
+Elle s'appuie sur un service **JSON-RPC 2.0** (`/script/CTWebService.dll`).
+
+- **On ne peut pas l'appeler depuis un `fetch` séparé** : la session est liée à la connexion du navigateur (ni cookie, ni jeton). Un appel à part reçoit `ESessionTimeout`.
+  L'appli passe donc par le client de la page, `ctweb.io.Rpc.invoke` : Playwright fait seulement la connexion.
+- **Les réponses ne sont pas du JSON strict** : l'en-tête `X-Use-Object-Date: yes` renvoie des `new Date(2026,5,12,…)`, mois en base 0 (5 = juin). `lire_reponse` les convertit.
+- **Chargement paresseux** dans l'interface : seules les lignes visibles sont détaillées. Pour en voir plus, faire défiler le **tableau** (la molette agit sous le pointeur).
+- **Chercher précis** : un préfixe trop court donne `ETooManyRecords` et rien ne se charge. « BUT MMI » suffit pour les groupes ; « MMI » seul échoue.
+
+Ressources (`udlResources.load(<type>, …)`) :
+
+| Type | Ressource | Volume (URCA_2026) |
+|---:|---|---:|
+| 601 | Matières | trop pour un chargement global |
+| 602 | Groupes | trop pour un chargement global |
+| 603 | Personnel | 4 975 |
+| 604 | Salles | 2 444 |
+| 607 | Équipes | 300 |
+| 610 | Départements | 155 |
+| 618 | Catégories d'évènements | 38 |
+
+Évènements d'un groupe : `udlTimetables.load` avec `{"GroupIDs": [<id>]}`.
+Un évènement porte `event_id`, `day_of_week`, `start_time`, `end_time`, `evCatName`, `rooms`, `modules`, `staff`, `weeks` (une lettre par semaine de l'année, `Y` = active), `protected`, `suspended`.
+
+### 4.5 Écrire dans Celcat
+
+Une seule méthode : **`udlTimetables.save`** (`data/config/celcat_rpc.yaml` : `methode_ecriture` et `methode_suppression`).
+Il n'existe pas de `udlTimetables.delete` (108 méthodes `udl*` recensées, `scripts/scanner_methodes_udl_celcat.py`).
+
+| Action | Forme | Code |
+|---|---|---|
+| **Créer** | Enregistrement **sans** `event_id` (`event_id: 0` est refusé), masque `weeks` d'**une seule** semaine | `ecriture.py` |
+| **Modifier** | Recharger l'enregistrement **complet** (`udlTimetables.load`), le cloner, n'écraser que les champs voulus, renvoyer | `modification.py` |
+| **Supprimer** | Enregistrement minimal `{"-event_id": <id>, "_type_": "Event"}` | `suppression.py` |
+| **Changer de salle** | Dans le même appel : retirer l'ancienne `{"-event_id": E, "-room_id": R, "_type_": "Room"}` et poser la nouvelle | `modification.py` |
+
+À savoir :
+
+- Un objet reconstruit à la main (quelques champs + `event_id`) fait échouer une modification : « Cannot locate a record using only a partial key ». Il faut la forme complète.
+- Le signe moins devant **tous** les composants de la clé veut dire « retirer ». L'association évènement↔salle se repère par le couple `(event_id, room_id)`.
+- `save` **ajoute** une salle au lieu de la remplacer : sans le retrait, le cours se retrouve sur deux salles.
+- Pour une nouvelle ressource (salle, enseignant, matière), on recharge son vrai enregistrement (`udlResources.load`), jamais l'ancien sous-objet avec un nouvel id.
+- `suspended: "Y"` ne supprime pas (l'évènement reste visible). Un masque `weeks` tout à `N` est refusé par le serveur (contrainte `CK_EVENT_WKLEN`).
+- Avant une suppression, l'évènement est **relu** : un jour férié, un évènement protégé (`protected=Y`) ou un « fantôme » est refusé, même si le job a été mis en file avant.
+- Garde-fous avant tout envoi : catégorie vérifiée, masque d'une semaine, `--production` exigé pour écrire sur `URCA_2026` (sinon base d'entraînement), journal anti-doublon.
+
+**Catégories CM / TD / TP.** Libellés `[CM]`, `[TD]` (distinct de `TD0`), `[TP]` (`celcat_formulaire.yaml`).
+Les catégories portent une pondération (`[CM]` 100, `[TD]` 100, `[CM bénévole]`, `[CM Capacite]`…) : c'est par là que passe la paie.
+L'id de `[CM]` est **430** : toute charge CM avec un autre `event_cat_id` est refusée (`celcat/categories.py`).
+L'ancien autoclicker enregistrait les CM en `[TP]`. Audit et correction :
+
+```powershell
+python scripts/corriger_cm_categories_celcat.py --vpn --lundi 2026-09-07 --base URCA_2026
+python scripts/corriger_cm_categories_celcat.py --vpn --lundi 2026-09-07 --base URCA_2026 --production --ecrire
+```
+
+La comparaison classe aussi en « à modifier » un évènement dont la catégorie ne correspond pas au type de la maquette.
+
+### 4.6 Semaines « posées »
+
+L'équipe saisit Celcat semaine par semaine. Le robot ne **crée** rien dans une semaine que Celcat n'a pas encore ouverte, pour ne pas se mélanger au travail en cours.
+Une semaine est « posée » quand Celcat couvre au moins **la moitié** de ce que l'appli prévoit dessus (seuil relatif, pas un nombre fixe : `celcat/semaines_posees.py`).
+Un job différé repart au cycle suivant.
+L'admin lève la garde semaine par semaine (**Autoriser la création sur la semaine affichée**, `PATCH /celcat/semaines/creation`). Les autres garde-fous restent actifs.
+
+### 4.7 Données de référence relevées dans Celcat
+
+**Groupes.** Nom : `BUT MMI <semestre> <libellé> - <année d'entrée de la cohorte>` (ex. « BUT MMI S1 TD AB - 2024 »).
+L'année est celle d'**entrée** de la cohorte, pas celle de la base. Département : `T_MMI T29`.
+Le titre de l'emploi du temps d'un groupe montre aussi un code (« [6TSBZ1TD_1] »).
+L'appli utilise l'**identifiant interne** (`group_id`, ex. 1661972), relevé dans `data/config/celcat_groupes.yaml`.
+Un identifiant faux crée des doublons (une modification localisée sur le mauvais groupe fait croire l'évènement disparu, puis il est recréé).
+
+**Salles.** Recherche par nom exact fiable. Écarts reportés dans `celcat.yaml` :
+
+- H.018 (Amphi MMI) = « **Amphi 3 MMI** » dans Celcat ;
+- H.022 s'appelle « **H.022 studio** » (« H.022 » seul ne trouve rien) ;
+- H.203 n'existe pas (renvoi vers H.023) ;
+- salles réunies (H.007-008, H.201-203) : n'existent pas dans Celcat. On en garde **une seule** : H.007 et H.201.
+- Les capacités Celcat diffèrent parfois (H.201 : 10, H.104 : 0) : ce sont les leurs qui jugent un conflit chez eux.
+
+**Enseignants.** Chercher par le **nom de famille** (Celcat trouve mal par le prénom). Un code `0` dans `celcat.yaml` = code inconnu.
+
+**Matières.** Codes module `TSB…`, relevés dans `data/config/celcat_matieres.yaml`. Codes de la maquette : `data/config/celcat_modules_maquette.yaml` (voir [docs/ADMIN.md](ADMIN.md)).
+
+**Semaines.** Le sélecteur en bas à gauche (août → juillet) n'a de texte que sur la semaine sélectionnée.
+Son infobulle, au survol seulement, est en anglais, mois/jour : `Week: 37 (9/7/26-9/13/26)`.
+D'anciens relevés montraient aussi jour/mois : `navigateur.choisir_semaine` essaie les deux lectures et ne garde que celle qui donne une semaine commençant au lundi visé.
+Il place les cellules par géométrie (en fusionnant les `<div>` superposés), et ne clique que si l'infobulle confirme ce lundi.
+
+### 4.8 L'ancien pilotage par l'écran (sans bouton)
+
+Avant le JSON-RPC, l'écriture passait par des clics (Playwright, `driver.PilotePlaywright`), et avant encore par un autoclicker en coordonnées fixes.
+Ce chemin existe encore par l'API (`POST /celcat/saisie`, admin : simulation et base d'entraînement par défaut ; refus si une séance est bloquée, si Celcat est injoignable, ou si le formulaire n'est pas relevé).
+Aucun bouton de l'appli ne l'utilise. Ce qu'on en a appris :
+
+- l'icône `new` (« Créer un nouvel évènement ») crée **aussitôt** un évènement vide actif sur les 54 semaines, sans rien enregistrer. Ne jamais cliquer dessus pour « voir » ;
+- `new.png` apparaît **deux fois** à l'écran (deux barres) : `navigateur.cliquer_icone_barre` exige un repère (`refresh`, `save`) et lève plutôt que choisir au hasard ;
+- ordre des icônes de la barre : `new`, `delete`, `refresh`, `save`, `cancel` ;
+- le formulaire de création est le même que l'**inspecteur** (double-clic sur un évènement existant) : onglets `Détails`, `Ressources`, `Remarques et personnaliser`, `Critères requis`, `Historique` ;
+- le champ est **sous** son libellé (+32 px), pas à droite ; libellés avec deux-points (`Jour:`, `Heure:`, `Catégorie d'événement:`, `Département:`) ;
+- un seul champ horaire, en 12 h (« 8:00 AM-9:30 AM ») ; pas de bouton OK, c'est l'icône `save` qui valide ;
+- les champs se remplissent par **glisser-déposer** depuis la liste de gauche, avec des pauses (qooxdoo gère son propre glisser) ;
+- onglet Ressources : sections `Matières [n]`, `Salles [n]`, `Personnel [n]`, `Groupes [n]` (le chiffre est un compte) ;
+- `Échap` ferme tout le panneau : éloigner le pointeur pour fermer une bulle ;
+- les séances se détectent par la géométrie (couleur, taille), pas par le texte (les bulles répètent les mêmes mots).
+
+Relever à nouveau le formulaire si Celcat change (jamais l'icône `new`) :
+
+```powershell
+docker build -t cal-iut-celcat -f deploy/celcat-sidecar/Dockerfile .
+docker run --rm --cap-add NET_ADMIN --device /dev/net/tun `
+  --env-file .env -v "${PWD}:/travail" -w /travail cal-iut-celcat `
+  python scripts/relever_formulaire_celcat.py --vpn `
+    --base URCA_2025 --role 985_consultation --lister-groupes "BUT MMI"
+.venv\Scripts\python.exe scripts/lire_releve_celcat.py data/releves/celcat-formulaire-<…>
+.venv\Scripts\python.exe -c "from cal_iut.celcat.formulaire import charger_carte; print(charger_carte('data/config').manques())"
+```
+
+Options : `--lister-groupes`, `--calendrier` (géométrie du sélecteur de semaines), `--semaines 2026-09-14,2027-03-29` (lundis essayés).
+Liste vide à la fin : la carte `celcat_formulaire.yaml` est complète. Fermer l'inspecteur par **Annuler**.
+
+### 4.9 Scripts utiles
+
+| Script | Rôle |
+|---|---|
+| `scripts/sonder_rpc_celcat.py --vpn --base URCA_FORMATION` | Essayer le RPC sur la base d'entraînement |
+| `scripts/pousser_manquants_celcat.py --lundi 2026-09-07 --vpn --base URCA_2026` | Lister ce qui manque (sans `--ecrire`) ; `--limite 1 --production --ecrire` pour envoyer |
+| `scripts/verifier_suppression_reelle_celcat.py` | Canari : créer, supprimer, vérifier (base d'entraînement) |
+| `scripts/capturer_changement_salle_celcat.py` | Canari du changement de salle |
+| `scripts/nettoyer_canaris_formation.py` | Nettoyer les canaris de la base d'entraînement |
+| `scripts/celcat_nuit.py`, `celcat_immediat.py`, `celcat_instantane.py` | Les trois étapes du robot (voir § 4.1) |
+
+### 4.10 Points ouverts
+
+- **Évènement vide créé par erreur** (01/09/2026, `event_id` 1929034, groupe `BUT MMI S1 TD AB`, mardi vers 7 h 30, semaine du 17 au 23 août 2026, superposé à un « Jour férié »).
+  Aucune trace de sa suppression dans le dépôt : **à vérifier dans Celcat**, puis supprimer à la main si besoin (« Évènement 2 de 2 », sans catégorie ni horaire).
+  Le robot le reconnaît comme « fantôme » et refuse d'y toucher.
+- Codes Celcat des enseignants à `0` dans `celcat.yaml` : à compléter dans **Codes Celcat** quand ils sont connus.
