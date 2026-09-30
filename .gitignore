@@ -66,6 +66,8 @@ captures/
 # État produit par le serveur à chaque démarrage (instantanés quotidiens,
 # contrôle hebdomadaire des doublons) : propre à chaque déploiement.
 data/state/sauvegardes/
+# Copies faites par `cal-iut refresh --ecrire` avant d'écraser les sources.
+data/sauvegardes/
 data/state/controle_doublons_hebdo.json
 # Liste de blocage anti-aspiration (IP de clients) : état de production,
 # jamais dans le dépôt (cf. docs/ANTI-ASPIRATION.md).
