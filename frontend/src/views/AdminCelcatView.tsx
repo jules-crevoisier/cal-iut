@@ -321,6 +321,12 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
           <p className="celcat-sous-texte">Chargement du calendrier…</p>
         )}
         <StatutCelcat etat={etat} instantane={instantane} file={file} erreurInstantane={erreurInstantane} />
+        {/* Tous les codes Celcat (cours, salles, enseignants, groupes) et leur
+            origine vivent dans Référence (30/09/2026) : un lien, pas un
+            second écran de saisie. */}
+        <a className="btn btn--ghost btn--sm celcat-lien-codes" href="#vue=reference&onglet=codes-celcat">
+          Codes Celcat →
+        </a>
       </div>
 
       {semaineFermee ? (

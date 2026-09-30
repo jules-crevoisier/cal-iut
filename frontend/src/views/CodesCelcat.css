@@ -1,0 +1,99 @@
+/* Référence → « Codes Celcat » (30/09/2026). Mêmes briques que les autres
+   onglets de Référence (`.segmente`, `.pastille`, `.carte-tableau`) ; jetons
+   uniquement : le mode sombre suit. */
+
+.codes-celcat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.codes-celcat > .segmente {
+  align-self: flex-start;
+}
+
+.codes-celcat-bloquants {
+  color: var(--bad-text);
+  font-weight: 500;
+}
+
+.codes-celcat-table td {
+  vertical-align: middle;
+}
+
+.codes-celcat-code {
+  min-width: 150px;
+}
+
+.codes-celcat-code .champ-en-ligne-hote {
+  vertical-align: middle;
+}
+
+.codes-celcat-valeur {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: none;
+  padding: 0;
+}
+
+.codes-celcat-suggestion,
+.codes-celcat-note,
+.codes-celcat-qui {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+.codes-celcat-alerte {
+  display: block;
+  max-width: 44ch;
+  font-size: 0.74rem;
+  color: var(--warn-text);
+  white-space: normal;
+}
+
+.codes-celcat-origine {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.codes-celcat-action {
+  white-space: nowrap;
+}
+
+/* Ligne visée par un lien (« Données à compléter », blocages Celcat) :
+   un fond d'accent léger, pas une couleur d'état. */
+.codes-celcat-table tr.codes-celcat-visee > td {
+  background: var(--accent-soft);
+}
+
+.codes-celcat-retour:empty {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .codes-celcat-code {
+    min-width: 0;
+  }
+
+  .codes-celcat-alerte {
+    max-width: none;
+  }
+
+  /* Au téléphone : l'origine en un mot, le détail (qui, quand, fichier)
+     reste sur poste de travail. */
+  .codes-celcat-qui,
+  .codes-celcat-note {
+    display: none;
+  }
+
+  .codes-celcat-origine {
+    white-space: nowrap;
+  }
+}

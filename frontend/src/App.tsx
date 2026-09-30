@@ -1035,7 +1035,7 @@ export function App() {
           <APlacerView onPlacement={() => void loadTimetable()} payload={null} />
         )}
         {activeTab === "reference" && appPayload && !readOnlyTarget && (
-          <ReferenceView payload={appPayload} setRoute={setRoute} />
+          <ReferenceView payload={appPayload} setRoute={setRoute} route={route} />
         )}
         {activeTab === "contraintes" && appPayload && !readOnlyTarget && (
           <ContraintesView payload={appPayload} setRoute={setRoute} />

@@ -160,14 +160,25 @@ interface CompleterManqueProps {
   setRoute?: (patch: Partial<Route>) => void;
 }
 
+const FAMILLE_CODES: Record<string, string> = { enseignant: "enseignants", salle: "salles", cours: "cours", groupe: "groupes" };
+
+/** La ligne du manque dans Référence → « Codes Celcat » : l'écran donné
+ *  par le serveur, sinon reconstruit depuis la famille et la clé. */
+export function ecranCodesCelcat(m: Pick<Manque, "famille" | "cle" | "ecran">): Partial<Route> {
+  if (m.ecran?.vue === "reference" && m.ecran?.onglet === "codes-celcat") return m.ecran as Partial<Route>;
+  return { vue: "reference", onglet: "codes-celcat", famille: FAMILLE_CODES[m.famille] ?? "", cle: m.cle };
+}
+
 /** Le moyen de compléter UN manque, selon le rôle du compte. */
 export function CompleterManque({ manque: m, setRoute }: CompleterManqueProps) {
-  const { role, estAdmin, apresEnregistrement } = useDroits();
+  const { role, apresEnregistrement } = useDroits();
   const celcat = m.champ === "code_celcat" || m.champ === "id_celcat";
+  // Tout code Celcat a sa ligne dans Référence → « Codes Celcat »
+  // (30/09/2026), visible de tout compte : on y mène, sur la bonne ligne.
   const lienCelcat =
-    celcat && estAdmin && setRoute ? (
-      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRoute({ vue: "celcat" })}>
-        Écran Celcat <ArrowRight size={13} aria-hidden="true" />
+    celcat && role && setRoute ? (
+      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRoute(ecranCodesCelcat(m))}>
+        Codes Celcat <ArrowRight size={13} aria-hidden="true" />
       </button>
     ) : null;
 

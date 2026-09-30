@@ -50,6 +50,13 @@ describe("BlocagesCelcat — matières et groupes", () => {
     expect(onMapper).toHaveBeenCalledWith("matieres", "WR100BU", "TSBZ1202");
   });
 
+  it("mène à la ligne de la matière dans Référence → Codes Celcat (30/09/2026)", () => {
+    render(<BlocagesCelcat mappings={mappings()} occupe={false} erreur={null} onMapper={vi.fn()} onOublier={vi.fn()} />);
+    const lien = within(screen.getByTestId("blocage-matieres")).getByRole("link", { name: /Voir dans Codes Celcat/ });
+    const params = new URLSearchParams(lien.getAttribute("href")!.slice(1));
+    expect(Object.fromEntries(params)).toEqual({ vue: "reference", onglet: "codes-celcat", famille: "cours", cle: "WR100BU" });
+  });
+
   it("dit qu'un identifiant de groupe se règle dans celcat_groupes.yaml, sans champ", () => {
     render(<BlocagesCelcat mappings={mappings()} occupe={false} erreur={null} onMapper={vi.fn()} onOublier={vi.fn()} />);
     const ligne = screen.getByText(GROUPE.motif).closest("li")!;

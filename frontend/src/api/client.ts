@@ -1561,3 +1561,79 @@ export function fetchAnomaliesSae(): Promise<AnomalieSae[]> {
     Array.isArray(r?.anomalies) ? r.anomalies : [],
   );
 }
+
+// ── Onglet « Codes Celcat » de Référence (30/09/2026) ──
+// « un onglet [...] où on pouvait renseigner les codes Celcat pour les cours
+// et les salles aussi » — cf. `api/codes_celcat.py`. Toutes les entités du
+// planning, leur code Celcat et son origine ; saisie réservée aux admins.
+
+export type FamilleCodeCelcat = "cours" | "salles" | "enseignants" | "groupes";
+export type OrigineCodeCelcat = "fichier" | "appli" | "manquant";
+
+export interface LigneCodeCelcat {
+  cle: string;
+  libelle: string;
+  semestre: string | null;
+  parcours: string | null;
+  type_salle: string | null;
+  capacite: number | null;
+  nb_seances: number;
+  /** Le code qui part vers Celcat (fichier, puis saisie par-dessus). */
+  code: string | null;
+  code_fichier: string | null;
+  origine: OrigineCodeCelcat;
+  saisi_le: string | null;
+  /** Adresse du compte — administrateurs seulement. */
+  saisi_par: string | null;
+  valeur_avant: string | null;
+  /** Cours : le code de la maquette, s'il est relevé dans Celcat. */
+  suggestion: string | null;
+  alerte: string | null;
+  note: string | null;
+  modifiable: boolean;
+}
+
+export interface FamilleCodesCelcat {
+  famille: FamilleCodeCelcat;
+  aide: string;
+  exemple: string;
+  modifiable: boolean;
+  total: number;
+  sans_code: number;
+  sans_code_bloquants: number;
+  saisis: number;
+  suggestions: string[];
+  lignes: LigneCodeCelcat[];
+}
+
+export interface CodesCelcat {
+  revision: number;
+  admin: boolean;
+  familles: Record<FamilleCodeCelcat, FamilleCodesCelcat>;
+}
+
+export interface CodeCelcatEnregistre {
+  famille: FamilleCodeCelcat;
+  cle: string;
+  code: string | null;
+  origine: OrigineCodeCelcat;
+  message: string;
+  revision: number;
+}
+
+export function fetchCodesCelcat(): Promise<CodesCelcat> {
+  return request<CodesCelcat>("/reference/codes-celcat");
+}
+
+export function definirCodeCelcat(famille: FamilleCodeCelcat, cle: string, code: string): Promise<CodeCelcatEnregistre> {
+  return request<CodeCelcatEnregistre>("/reference/codes-celcat", {
+    method: "PUT",
+    body: JSON.stringify({ famille, cle, code }),
+  });
+}
+
+/** « Revenir à la valeur du fichier » : retire la saisie faite dans l'appli. */
+export function effacerCodeCelcat(famille: FamilleCodeCelcat, cle: string): Promise<CodeCelcatEnregistre> {
+  const q = new URLSearchParams({ famille, cle });
+  return request<CodeCelcatEnregistre>(`/reference/codes-celcat?${q.toString()}`, { method: "DELETE" });
+}

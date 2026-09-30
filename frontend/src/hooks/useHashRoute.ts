@@ -89,6 +89,14 @@ export interface Route {
   /** Jeton de réinitialisation de mot de passe (`#compte=reinitialiser
    * &token=...`, lien envoyé par mail) — à usage unique côté serveur. */
   token: string;
+  /** Onglet d'un écran à onglets (Référence : `codes-celcat`…), pour qu'un
+   * lien — « Données à compléter », blocages Celcat — ouvre le bon onglet
+   * (30/09/2026, onglet « Codes Celcat »). */
+  onglet: string;
+  /** Sous-onglet (Codes Celcat : `cours`, `salles`, `enseignants`, `groupes`). */
+  famille: string;
+  /** Ligne visée dans cet onglet (code de cours, salle, trigramme…). */
+  cle: string;
 }
 
 const EMPTY_ROUTE: Route = {
@@ -106,11 +114,14 @@ const EMPTY_ROUTE: Route = {
   statut: "",
   token: "",
   parcours: "",
+  onglet: "",
+  famille: "",
+  cle: "",
 };
 
 const ENTITY_RESET: Pick<
   Route,
-  "prof" | "groupe" | "salle" | "cours" | "panel" | "compte" | "statut" | "token" | "parcours"
+  "prof" | "groupe" | "salle" | "cours" | "panel" | "compte" | "statut" | "token" | "parcours" | "onglet" | "famille" | "cle"
 > = {
   prof: "",
   groupe: "",
@@ -121,6 +132,9 @@ const ENTITY_RESET: Pick<
   statut: "",
   token: "",
   parcours: "",
+  onglet: "",
+  famille: "",
+  cle: "",
 };
 
 function asPanel(value: string | null): RoutePanel {
@@ -153,6 +167,9 @@ function readHash(): Route {
     statut: (params.get("statut") as Route["statut"]) || "",
     token: params.get("token") || "",
     parcours: params.get("parcours") || "",
+    onglet: params.get("onglet") || "",
+    famille: params.get("famille") || "",
+    cle: params.get("cle") || "",
   });
 }
 

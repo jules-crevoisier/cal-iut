@@ -59,6 +59,13 @@ function conseil(motif: string): string {
   return "Rien à mapper ici.";
 }
 
+/** La ligne de ce blocage dans Référence → « Codes Celcat » (30/09/2026). */
+export function lienCodes(famille: string, cle: string): string {
+  const onglet = famille === "matieres" ? "cours" : famille;
+  const q = new URLSearchParams({ vue: "reference", onglet: "codes-celcat", famille: onglet, cle });
+  return `#${q.toString()}`;
+}
+
 const AIDE_FAMILLE: Record<string, string> = {
   salles: "Sous quel nom Celcat connaît-il cette salle ?",
   enseignants: "Identifiant Celcat de cet enseignant (un nombre, visible dans Celcat).",
@@ -218,6 +225,11 @@ export function BlocagesCelcat({
             <div className="celcat-sous-texte">{b.seances.slice(0, 6).join(", ")}
               {b.seances.length > 6 ? ` et ${pluriel(b.seances.length - 6, "autre")}` : ""}
             </div>
+            {b.famille && b.cle ? (
+              <a className="celcat-sous-texte celcat-lien-code" href={lienCodes(b.famille, b.cle)}>
+                Voir dans Codes Celcat →
+              </a>
+            ) : null}
             {b.famille && b.cle ? (
               <FormulaireMapping
                 blocage={b}

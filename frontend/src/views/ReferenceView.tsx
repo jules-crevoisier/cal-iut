@@ -33,14 +33,18 @@ import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { Onglets } from "../components/Onglets";
 import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
+import { CodesCelcat } from "./CodesCelcat";
 import "../styles/outils.css";
 import "./ReferenceView.css";
 
-type SubTab = "salles" | "cours" | "calendrier" | "liens" | "notifications";
+type SubTab = "salles" | "cours" | "codes-celcat" | "calendrier" | "liens" | "notifications";
 
 const ONGLETS: { id: SubTab; label: string }[] = [
   { id: "salles", label: "Salles" },
   { id: "cours", label: "Cours" },
+  // 30/09/2026 : « un onglet [...] où on pouvait renseigner les codes Celcat
+  // pour les cours et les salles aussi » — tous les codes, avec leur origine.
+  { id: "codes-celcat", label: "Codes Celcat" },
   { id: "calendrier", label: "Calendrier" },
   { id: "liens", label: "Liens & partage" },
   { id: "notifications", label: "Notifications" },
@@ -99,13 +103,20 @@ export function humaniser(id: string): string {
 interface ReferenceViewProps {
   payload: AppPayload;
   setRoute: (patch: Partial<Route>) => void;
+  /** L'adresse courante : `onglet=` (et, pour « Codes Celcat », `famille=`
+   *  et `cle=`) ouvre l'onglet visé par un lien. */
+  route?: Pick<Route, "vue" | "onglet" | "famille" | "cle">;
 }
 
-export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
-  const [sub, setSubState] = useState<SubTab>(() => lireLocal(CLE_ONGLET, "salles", estOnglet));
+export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) {
+  const [subLocal, setSubState] = useState<SubTab>(() => lireLocal(CLE_ONGLET, "salles", estOnglet));
+  // L'onglet de l'adresse l'emporte (lien « Codes Celcat → »), puis le
+  // dernier onglet ouvert sur ce poste.
+  const sub: SubTab = route && estOnglet(route.onglet) ? route.onglet : subLocal;
   const setSub = (s: SubTab) => {
     setSubState(s);
     ecrireLocal(CLE_ONGLET, s);
+    if (route) setRoute({ onglet: s, famille: "", cle: "" });
   };
 
   const compteurs: Partial<Record<SubTab, number>> = {
@@ -128,6 +139,15 @@ export function ReferenceView({ payload, setRoute }: ReferenceViewProps) {
       <div id="ref-panneau" role="tabpanel" aria-labelledby={`ref-onglet-${sub}`} className="ref-panneau">
         {sub === "salles" && <RoomsTable payload={payload} setRoute={setRoute} />}
         {sub === "cours" && <CoursesTable payload={payload} setRoute={setRoute} />}
+        {sub === "codes-celcat" && (
+          <CodesCelcat
+            famille={route?.famille}
+            cle={route?.cle}
+            onFamille={(famille) => {
+              if (route) setRoute({ onglet: "codes-celcat", famille, cle: "" });
+            }}
+          />
+        )}
         {sub === "calendrier" && <CalendarTimeline payload={payload} />}
         {sub === "liens" && <LinksDirectory payload={payload} />}
         {/* Sous-onglet À PART, pas au pied de l'annuaire des liens : sous un

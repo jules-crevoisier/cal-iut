@@ -51,6 +51,11 @@ interface ChampEnLigneProps {
   valeurAffichee?: ReactNode;
   /** Mode « modifier » : ce qui suit le crayon (marque « modifiée »). */
   apres?: ReactNode;
+  /** Valeurs proposées sous le champ libre (`<datalist>`) — codes relevés
+   *  dans Celcat, par exemple (onglet « Codes Celcat », 30/09/2026). */
+  suggestions?: string[];
+  /** Texte visible du bouton « Enregistrer ». */
+  libelleEnregistrer?: string;
 }
 
 type Etat = "repos" | "edition" | "envoi" | "fait";
@@ -79,6 +84,8 @@ export function ChampEnLigne({
   mode = "ajouter",
   valeurAffichee,
   apres,
+  suggestions,
+  libelleEnregistrer = "Enregistrer",
 }: ChampEnLigneProps) {
   const [etat, setEtat] = useState<Etat>("repos");
   // Mode « modifier » : l'écran a rechargé la valeur enregistrée — retour
@@ -91,6 +98,7 @@ export function ChampEnLigne({
   const bouton = useRef<HTMLButtonElement>(null);
   const champ = useRef<HTMLInputElement & HTMLSelectElement>(null);
   const idErreur = useId();
+  const idListe = useId();
   const rendreFocus = useRef(false);
 
   useEffect(() => {
@@ -215,6 +223,7 @@ export function ChampEnLigne({
               disabled={etat === "envoi"}
               autoComplete="off"
               spellCheck={false}
+              list={suggestions && suggestions.length > 0 ? idListe : undefined}
               onChange={(e) => {
                 setValeur(e.target.value);
                 if (erreur) setErreur(null);
@@ -224,11 +233,18 @@ export function ChampEnLigne({
             />
           )}
           <button type="submit" className="btn btn--primary btn--sm" disabled={etat === "envoi"}>
-            {etat === "envoi" ? "Enregistrement…" : "Enregistrer"}
+            {etat === "envoi" ? "Enregistrement…" : libelleEnregistrer}
           </button>
           <button type="button" className="btn btn--ghost btn--sm" onClick={annuler} disabled={etat === "envoi"}>
             Annuler
           </button>
+          {suggestions && suggestions.length > 0 && (
+            <datalist id={idListe}>
+              {suggestions.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          )}
           {erreur && (
             <span id={idErreur} className="champ-en-ligne-erreur" role="alert">
               {erreur}

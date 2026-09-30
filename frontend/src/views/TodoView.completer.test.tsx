@@ -118,15 +118,16 @@ describe("TodoView — Données à compléter", () => {
     expect(within(ligneGroupe).getByText(/celcat_groupes\.yaml/)).toBeInTheDocument();
   });
 
-  it("un admin complète la salle en ligne ou ouvre l'écran Celcat", async () => {
+  it("un admin complète la salle en ligne ou ouvre sa ligne dans Codes Celcat", async () => {
     stubFetch();
     const { setRoute } = rendre("admin");
     const corps = section();
     await within(corps).findByText("H.018");
     const ligneSalle = within(corps).getByText("H.018").closest("li")!;
     expect(within(ligneSalle).getByRole("button", { name: "Ajouter — Correspondance Celcat de H.018" })).toBeInTheDocument();
-    fireEvent.click(within(ligneSalle).getByRole("button", { name: /Écran Celcat/ }));
-    expect(setRoute).toHaveBeenCalledWith({ vue: "celcat" });
+    fireEvent.click(within(ligneSalle).getByRole("button", { name: /Codes Celcat/ }));
+    // 30/09/2026 : tout code Celcat a sa ligne dans Référence → Codes Celcat.
+    expect(setRoute).toHaveBeenCalledWith({ vue: "reference", onglet: "codes-celcat", famille: "salles", cle: "h018" });
   });
 
   it("lecture seule : les manques restent listés, sans aucun bouton pour compléter", async () => {
