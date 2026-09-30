@@ -6058,9 +6058,21 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
     nouveaux_enseignants = (
         _enseignants_valides(state, body.teacher_codes) if body.teacher_codes is not None else None
     )
+    # Changer de matière (30/09/2026 : WS103 saisie au lieu de WS102). L'id
+    # de la séance ne change pas — il est opaque, et c'est lui qui relie la
+    # séance à sa ligne en base et à son évènement Celcat.
+    nouvelle_matiere = None
+    if body.course_code is not None and body.course_code.strip().upper() != seance.course_code.upper():
+        if seance.metadata.get("evenement"):
+            raise HTTPException(400, "Un évènement n'a pas de matière : son libellé se change en le recréant.")
+        nouvelle_matiere = _reference_cours(
+            state, body.course_code, body.group_ids if body.group_ids is not None else seance.group_ids,
+        )
 
     placement = next((p for p in state.timetable if p.session_id == session_id), None)
     avant = {
+        "course_code": seance.course_code, "course_name": seance.course_name,
+        "semestre": seance.semestre, "parcours": seance.parcours, "annee": seance.annee,
         "session_type": seance.session_type, "group_ids": list(seance.group_ids),
         "teacher_codes": list(seance.teacher_codes), "duration_slots": seance.duration_slots,
         "is_eval": seance.is_eval, "note": seance.metadata.get("note"),
@@ -6071,7 +6083,8 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         "pause_midi": bool(seance.metadata.get("pause_midi")),
     }
     avant_placement = (
-        (list(placement.group_ids), list(placement.teacher_codes)) if placement is not None else None
+        (list(placement.group_ids), list(placement.teacher_codes), placement.course_code)
+        if placement is not None else None
     )
 
     def restaurer() -> None:
@@ -6089,8 +6102,14 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
             else:
                 setattr(seance, champ, valeur)
         if placement is not None and avant_placement is not None:
-            placement.group_ids, placement.teacher_codes = avant_placement
+            placement.group_ids, placement.teacher_codes, placement.course_code = avant_placement
 
+    if nouvelle_matiere is not None:
+        seance.course_code = nouvelle_matiere.code
+        seance.course_name = nouvelle_matiere.name
+        seance.semestre = nouvelle_matiere.semestre
+        seance.parcours = nouvelle_matiere.parcours
+        seance.annee = nouvelle_matiere.annee
     seance.session_type = nouveau_type
     if body.group_ids is not None:
         seance.group_ids = list(body.group_ids)
@@ -6120,8 +6139,9 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
     if placement is not None:
         placement.group_ids = list(seance.group_ids)
         placement.teacher_codes = list(seance.teacher_codes)
+        placement.course_code = seance.course_code
 
-    identite = any(
+    identite = nouvelle_matiere is not None or any(
         v is not None
         for v in (body.session_type, body.group_ids, body.teacher_codes, body.duration_slots, body.is_eval)
     )
@@ -6184,6 +6204,19 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         raise
 
     custom_sessions.update_custom_session(seance)
+    # Matière changée : le code est aussi dans la ligne du placement en base,
+    # que le démarrage relit — sans cette écriture, l'ancienne matière
+    # revenait au redémarrage suivant.
+    if nouvelle_matiere is not None and state.current_run_id:
+        courant = _find_placement(state, session_id)
+        if courant is not None:
+            courant.course_code = seance.course_code
+            get_repo().update_current_placement(
+                session_id, courant.week, courant.day, courant.slot, courant.room_id, courant.room_label,
+                bool(getattr(seance, "locked", False)),
+                run_id=state.current_run_id, course_code=seance.course_code,
+            )
+            resultat = _to_placement(courant, state.sessions_by_id)
     # Enseignant, groupes ou type changés sur place : Celcat doit suivre.
     # `enfiler` déduplique, un second signal après `move_session` est sans effet.
     _apres_ecriture_planning(session_id, "update")

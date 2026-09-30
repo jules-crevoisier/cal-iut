@@ -815,6 +815,7 @@ export function creerEvenement(body: CreerEvenementBody): Promise<Placement> {
 }
 
 export interface ModifierSeanceBody {
+  course_code?: string;
   session_type?: string;
   group_ids?: string[];
   teacher_codes?: string[];

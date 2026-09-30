@@ -195,6 +195,9 @@ export function CreerSeanceModal({
     if (seanceExistante) {
       try {
         const resultat = await modifierSeancePersonnaliseeAvecConfirmation(seanceExistante.session_id, {
+          // Matière modifiable après coup (30/09/2026 : séances de SAE saisies
+          // sous WS103 au lieu de WS102) — envoyée seulement si elle change.
+          ...(courseChoisi.code !== seanceExistante.course_code ? { course_code: courseChoisi.code } : {}),
           session_type: sessionType,
           group_ids: groupIds,
           teacher_codes: teacherCodes,
@@ -346,7 +349,6 @@ export function CreerSeanceModal({
                 <select
                   ref={premierChampRef}
                   value={courseCode}
-                  disabled={!!seanceExistante}
                   onChange={(e) => setCourseCode(e.target.value)}
                 >
                   {coursTries.map((c) => (

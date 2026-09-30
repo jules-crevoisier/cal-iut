@@ -238,6 +238,10 @@ class ModifierSeancePersonnaliseeRequest(BaseModel):
     replace ensemble (les trois ou aucun) et déclenche une revalidation
     complète, exactement comme un déplacement normal."""
 
+    # Matière (retour utilisateur du 30/09/2026 : séances de SAE saisies sous
+    # WS103 au lieu de WS102, impossibles à corriger une fois placées). Doit
+    # désigner une matière connue ; refusé sur un évènement, qui n'en a pas.
+    course_code: str | None = None
     session_type: str | None = None
     group_ids: list[str] | None = None
     teacher_codes: list[str] | None = None

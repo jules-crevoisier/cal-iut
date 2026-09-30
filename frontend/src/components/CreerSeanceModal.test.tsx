@@ -355,3 +355,71 @@ describe("CreerSeanceModal creation shortcuts", () => {
     expect(onCree).toHaveBeenCalledWith(placementCree, { garderOuverte: true });
   });
 });
+
+/**
+ * Matière modifiable sur une séance ajoutée à la main — retour utilisateur
+ * du 30/09/2026 : des séances de SAE saisies sous WS103 au lieu de WS102 ne
+ * pouvaient plus être corrigées une fois placées.
+ */
+describe("CreerSeanceModal : matière d'une séance ajoutée", () => {
+  const payloadSae = emptyPayload({
+    courses: [
+      catalogCourse("WS102", "Concevoir", { parcours: "BUT1" }),
+      catalogCourse("WS103", "Produire", { parcours: "BUT1" }),
+    ],
+    groupLabels: { "but1-td-cd": "TD CD" },
+    groupParcours: { "but1-td-cd": "BUT1" },
+    teacherLabels: { ALO: "Loizon Ariane" },
+    rooms: [],
+    weekRows: [{ monday: "2027-01-04", label: "S20", blocked: false, weekIndex: 0 }],
+  });
+  const seance: Placement = {
+    session_id: "WS103-S1-TD-CUSTOM1-but1-td-cd",
+    week: 0,
+    day: 0,
+    slot: 1,
+    course_code: "WS103",
+    course_name: "Produire",
+    session_type: "TD",
+    group_ids: ["but1-td-cd"],
+    teacher_codes: ["ALO"],
+    room_id: null,
+    room_label: null,
+    is_eval: false,
+    locked: false,
+    duration_slots: 1,
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...seance, course_code: "WS102" }) }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function corpsEnvoye(): Record<string, unknown> {
+    const appel = vi.mocked(fetch).mock.calls.find((c) => String(c[0]).includes("/placements/personnalisees/"));
+    return JSON.parse(String(appel?.[1]?.body ?? "{}")) as Record<string, unknown>;
+  }
+
+  it("should let the course be changed and send it", async () => {
+    const onCree = vi.fn();
+    render(<CreerSeanceModal payload={payloadSae} seanceExistante={seance} onCree={onCree} onCancel={vi.fn()} />);
+    const matiere = screen.getByLabelText("Matière");
+    expect(matiere).not.toBeDisabled();
+    fireEvent.change(matiere, { target: { value: "WS102" } });
+    fireEvent.click(screen.getByRole("button", { name: /^enregistrer$/i }));
+    await waitFor(() => expect(onCree).toHaveBeenCalled());
+    expect(corpsEnvoye().course_code).toBe("WS102");
+  });
+
+  it("should not send the course when it is unchanged", async () => {
+    const onCree = vi.fn();
+    render(<CreerSeanceModal payload={payloadSae} seanceExistante={seance} onCree={onCree} onCancel={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^enregistrer$/i }));
+    await waitFor(() => expect(onCree).toHaveBeenCalled());
+    expect(corpsEnvoye()).not.toHaveProperty("course_code");
+  });
+});
