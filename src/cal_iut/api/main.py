@@ -1376,9 +1376,14 @@ def _build_app_context(state: object) -> _AppContext:
 #     seule, aucune raison d'être envoyées.
 # Le nom des enseignants (`teacherLabels`) reste, lui : il s'affiche sur les
 # séances de n'importe quel emploi du temps, c'est l'objet même de l'outil.
+#   - identité (prénom, nom, type Enseignant / Vacataire, 01/10/2026) : le
+#     type est une information de gestion ; un lien perso n'en a pas besoin.
+# Le TÉLÉPHONE n'est dans AUCUNE variante du payload : il n'est servi que par
+# `GET /reference/enseignants`, aux rôles `edit` et `admin`
+# (`api/reference.py::annuaire_enseignants`).
 _CLES_PRIVEES_PAYLOAD = (
     "teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions", "surchargesReference",
-    "intervenantsAppli",
+    "intervenantsAppli", "teacherIdentites",
 )
 
 
@@ -1408,7 +1413,9 @@ def variante_lecture(request: Request) -> str:
 
 def expurger_payload(payload: dict[str, object]) -> dict[str, object]:
     """Version publique du payload (cf. `_CLES_PRIVEES_PAYLOAD`)."""
-    vide: dict[str, object] = {"teacherEmails": {}, "surchargesReference": {}, "intervenantsAppli": {}}
+    vide: dict[str, object] = {
+        "teacherEmails": {}, "surchargesReference": {}, "intervenantsAppli": {}, "teacherIdentites": {},
+    }
     return {k: (vide.get(k, []) if k in _CLES_PRIVEES_PAYLOAD else v) for k, v in payload.items()}
 
 
@@ -1488,7 +1495,16 @@ def _calculer_payload_app_state() -> dict[str, object]:
     for code, nom in surcharges_reference.valeurs("enseignants", "nom").items():
         if code in libelles:
             libelles[code] = nom
+    # Prénom / nom corrigés séparément (onglet « Enseignants & vacataires »,
+    # 01/10/2026) : le nom affiché partout devient « Prénom NOM ». Sans
+    # correction, il reste tel quel. Les identités (prénom, nom, type) vont
+    # dans `teacherIdentites` — une seule source pour l'onglet, l'annuaire,
+    # la fiche et « Liens & partage ».
+    from cal_iut.ingestion import identite_enseignants
+
+    libelles, identites = identite_enseignants.appliquer(libelles)
     payload["teacherLabels"] = dict(sorted(libelles.items()))
+    payload["teacherIdentites"] = dict(sorted(identites.items()))
     # Ce qui a été modifié dans l'appli, avec la valeur d'origine : l'écran
     # le marque (« modifiée dans l'appli ») et propose d'y revenir.
     from cal_iut.api.reference import intervenants_pour_payload, surcharges_pour_payload
@@ -5468,7 +5484,14 @@ def _noms_enseignants(state: object) -> dict[str, str]:
         for t in candidats:
             if t is not None and getattr(t, "code", None) and t.code not in noms:
                 noms[t.code] = f"{t.prenom} {t.nom}".strip()
-    return noms
+    # Noms corrigés dans l'appli (nom complet, puis prénom / nom séparés,
+    # 01/10/2026) : les flux .ics affichent le même nom que l'écran.
+    from cal_iut.ingestion import identite_enseignants, surcharges_reference
+
+    for code, nom in surcharges_reference.valeurs("enseignants", "nom").items():
+        if code in noms:
+            noms[code] = nom
+    return identite_enseignants.appliquer(noms)[0]
 
 
 def _raison_non_placee(state: object, session: object, allowed_weeks: set[int], n_semaines: int) -> str:

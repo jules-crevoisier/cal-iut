@@ -52,12 +52,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from cal_iut.api import accounts, revision
+from cal_iut.api.codes_celcat import LigneCodeCelcat
 from cal_iut.api.verrou import ecriture_planning
 
 router = APIRouter(prefix="/reference", tags=["reference"])
 
 Famille = Literal["enseignant", "salle", "cours", "groupe", "seance"]
 Champ = Literal["email", "nom", "code_celcat", "capacite", "type", "intitule", "id_celcat", "salle"]
+# Champs d'identité d'un enseignant (onglet « Enseignants & vacataires »,
+# 01/10/2026) : effaçables (« Revenir à la valeur du fichier »).
+ChampIdentite = Literal["prenom", "nom_famille", "telephone", "type"]
+TypeEnseignant = Literal["enseignant", "vacataire"]
 Gravite = Literal["bloque_celcat", "bloque_envoi_liens", "cosmetique"]
 
 LIBELLES_CHAMP: dict[str, str] = {
@@ -69,7 +74,12 @@ LIBELLES_CHAMP: dict[str, str] = {
     "intitule": "Intitulé",
     "id_celcat": "Identifiant Celcat",
     "salle": "Salle",
+    "prenom": "Prénom",
+    "nom_famille": "Nom",
+    "telephone": "Numéro de téléphone",
 }
+
+LIBELLES_CHAMP_ENSEIGNANT: dict[str, str] = {**LIBELLES_CHAMP, "type": "Type (enseignant ou vacataire)"}
 
 ORDRE_GRAVITE = {"bloque_celcat": 0, "bloque_envoi_liens": 1, "cosmetique": 2}
 ORDRE_FAMILLE = {"enseignant": 0, "salle": 1, "cours": 2, "groupe": 3, "seance": 4}
@@ -112,7 +122,11 @@ class ContactEnseignantRequest(BaseModel):
 
 
 class EnseignantReferenceRequest(BaseModel):
-    nom: str | None = Field(default=None, max_length=120)
+    nom: str | None = Field(default=None, max_length=120, description="Nom complet « Prénom Nom ».")
+    prenom: str | None = Field(default=None, max_length=60)
+    nom_famille: str | None = Field(default=None, max_length=80, description="Nom de famille (rangé en capitales).")
+    telephone: str | None = Field(default=None, max_length=40, description="Format français ou international.")
+    type: str | None = Field(default=None, max_length=20, description="`enseignant` ou `vacataire`.")
     code_celcat: str | None = Field(default=None, max_length=40)
 
 
@@ -132,11 +146,13 @@ class NouvelIntervenantRequest(BaseModel):
     code: str = Field(default="", max_length=10, description="2 à 4 lettres (normalisé en majuscules).")
     code_celcat: str | None = Field(default=None, max_length=40, description="Identifiant Celcat (un nombre), facultatif.")
     email: str | None = Field(default=None, max_length=254)
+    telephone: str | None = Field(default=None, max_length=40, description="Facultatif (01/10/2026).")
+    type: str | None = Field(default=None, max_length=20, description="`enseignant` ou `vacataire`, facultatif.")
     confirmer: bool = Field(default=False, description="Créer malgré les avertissements (jamais malgré un bloquant).")
 
 
 class ErreurIntervenant(BaseModel):
-    champ: Literal["nom", "code", "code_celcat", "email"]
+    champ: Literal["nom", "code", "code_celcat", "email", "telephone", "type"]
     statut: int = Field(description="400 : saisie invalide ; 409 : déjà pris.")
     message: str
     code_existant: str | None = Field(default=None, description="Enseignant qui porte déjà ce code / cette adresse.")
@@ -157,6 +173,8 @@ class VerificationIntervenant(BaseModel):
     nom: str
     email: str | None
     code_celcat: str | None
+    telephone: str | None = Field(default=None, description="Normalisé (E.164).")
+    type: TypeEnseignant | None = None
     erreurs: list[ErreurIntervenant]
     avertissements: list[AvertissementIntervenant]
     suggestion_code: str | None = Field(default=None, description="Un code libre tiré du nom.")
@@ -168,6 +186,8 @@ class IntervenantCree(BaseModel):
     nom: str
     email: str | None
     code_celcat: str | None
+    telephone: str | None = None
+    type: TypeEnseignant | None = None
     cree_le: str
     avertissements_confirmes: list[AvertissementIntervenant]
     message: str
@@ -456,6 +476,28 @@ def _nom_officiel(state: object, code: str) -> str | None:
     return nom if nom and nom.upper() != code.upper() else None
 
 
+def _nom_base(state: object, code: str) -> str | None:
+    """Le nom complet AVANT toute correction de prénom ou de nom : le nom
+    complet corrigé dans l'appli s'il y en a un, sinon celui du fichier
+    (`_nom_officiel`). C'est de lui que se dérivent prénom et nom
+    (`identite_enseignants.separer_nom`)."""
+    from cal_iut.ingestion import surcharges_reference
+
+    return surcharges_reference.valeurs("enseignants", "nom").get(code) or _nom_officiel(state, code)
+
+
+def identite_d_origine(state: object, code: str, champ: str) -> str | None:
+    """La valeur « du fichier » d'un champ d'identité : prénom et nom dérivés
+    du nom complet ; type et téléphone n'ont pas de source (None)."""
+    from cal_iut.ingestion.identite_enseignants import separer_nom
+
+    if champ not in ("prenom", "nom_famille"):
+        return None
+    prenom, nom = separer_nom(_nom_base(state, code), code)
+    valeur = prenom if champ == "prenom" else nom
+    return valeur or None
+
+
 def completer_enseignant(
     state: object,
     code: str,
@@ -463,10 +505,15 @@ def completer_enseignant(
     email: str | None = None,
     nom: str | None = None,
     code_celcat: str | None = None,
+    prenom: str | None = None,
+    nom_famille: str | None = None,
+    telephone: str | None = None,
+    type_: str | None = None,
     par: str = "",
     admin: bool = False,
 ) -> dict[str, str | int]:
-    """Complète OU CORRIGE mail, nom et/ou code Celcat d'un enseignant connu.
+    """Complète OU CORRIGE mail, nom, prénom, nom de famille, téléphone,
+    type et/ou code Celcat d'un enseignant connu.
 
     La saisie a le dernier mot sur la configuration (29/09/2026) ; la trace
     garde la valeur d'avant ET celle du fichier. Saisir exactement la valeur
@@ -474,17 +521,24 @@ def completer_enseignant(
     - mail : format validé, minuscules, refusé s'il est déjà celui d'un
       autre enseignant (un lien personnel partirait chez quelqu'un d'autre) ;
     - code Celcat : administrateurs, `api/codes_celcat.py` (le worker le
-      lit à son passage suivant)."""
+      lit à son passage suivant) ;
+    - prénom, nom de famille (01/10/2026) : le nom affiché devient « Prénom
+      NOM » ; saisir la valeur dérivée du fichier retire la surcharge ;
+    - téléphone : format français ou international, rangé en E.164 ;
+    - type : `enseignant` ou `vacataire`."""
     from cal_iut.api import codes_celcat
     from cal_iut.export.html_view import _teacher_names
+    from cal_iut.ingestion import identite_enseignants as ident
     from cal_iut.ingestion.config_loader import load_teacher_contacts, load_teacher_contacts_yaml
     from cal_iut.ingestion.enseignants import enseignants_declares
 
     code = str(code or "").strip().upper()
     if code not in _codes_enseignants(state):
         raise HTTPException(404, f"Enseignant « {code} » inconnu.")
-    if email is None and nom is None and code_celcat is None:
-        raise HTTPException(400, "Rien à enregistrer : indiquez une adresse, un nom ou un code Celcat.")
+    if all(v is None for v in (email, nom, code_celcat, prenom, nom_famille, telephone, type_)):
+        raise HTTPException(
+            400, "Rien à enregistrer : indiquez une adresse, un nom, un prénom, un téléphone, un type ou un code Celcat."
+        )
     config_dir = Path(state.config_dir)
     noms = {**enseignants_declares(config_dir), **{k: v for k, v in _teacher_names(state.sessions).items() if v != k}}
     ecrit: dict[str, str | int] = {}
@@ -507,6 +561,19 @@ def completer_enseignant(
         nom_propre = " ".join(str(nom).split())
         if len(nom_propre) < 2 or nom_propre.upper() == code:
             raise HTTPException(400, "Le nom complet est vide (attendu : « Prénom Nom »).")
+    identite: dict[str, str] = {}
+    for champ, brut, normaliser in (
+        ("prenom", prenom, ident.normaliser_prenom),
+        ("nom_famille", nom_famille, ident.normaliser_nom_famille),
+        ("telephone", telephone, ident.normaliser_telephone),
+        ("type", type_, ident.normaliser_type),
+    ):
+        if brut is None:
+            continue
+        try:
+            identite[champ] = normaliser(brut)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
     celcat_propre = None
     if code_celcat is not None:
         if not admin:
@@ -521,6 +588,17 @@ def completer_enseignant(
     if nom_propre is not None:
         _poser_ou_retirer("enseignants", code, "nom", nom_propre, _nom_officiel(state, code), par)
         ecrit["nom"] = nom_propre
+        # Le nom complet ressaisi d'un bloc passe devant un prénom ou un nom
+        # corrigés avant lui : sans ça, ils le masqueraient sans le dire.
+        if "prenom" not in identite and "nom_famille" not in identite:
+            from cal_iut.ingestion import surcharges_reference
+
+            for champ in ("prenom", "nom_famille"):
+                if surcharges_reference.origine("enseignants", code, champ):
+                    surcharges_reference.effacer("enseignants", code, champ, par=par)
+    for champ, valeur in identite.items():
+        _poser_ou_retirer("enseignants", code, champ, valeur, identite_d_origine(state, code, champ), par)
+        ecrit[champ] = valeur
     if celcat_propre is not None:
         codes_celcat.enregistrer_code(state, "enseignants", code, celcat_propre, par=par)
         ecrit["code_celcat"] = celcat_propre
@@ -537,6 +615,8 @@ def _poser_ou_retirer(famille: str, cle: str, champ: str, valeur: str, du_fichie
     identique = du_fichier is not None and (
         du_fichier.strip().lower() == valeur.lower() if champ == "email" else du_fichier.strip() == valeur
     )
+    # Pas de valeur du fichier pour un champ d'identité sans source (type,
+    # téléphone) : la saisie s'enregistre, toujours.
     if identique:
         surcharges_reference.effacer(famille, cle, champ, par=par, valeur_fichier=du_fichier)
     else:
@@ -544,17 +624,23 @@ def _poser_ou_retirer(famille: str, cle: str, champ: str, valeur: str, du_fichie
 
 
 def effacer_enseignant(state: object, code: str, champ: str, *, par: str = "") -> str:
-    """« Revenir à la valeur du fichier » : retire la saisie (mail ou nom)."""
+    """« Revenir à la valeur du fichier » : retire la saisie (mail, nom,
+    prénom, nom de famille, téléphone, type). Type et téléphone n'ont pas de
+    valeur de fichier : ils redeviennent « à préciser »."""
     from cal_iut.ingestion import surcharges_reference
     from cal_iut.ingestion.config_loader import load_teacher_contacts_yaml
 
     code = str(code or "").strip().upper()
-    du_fichier = (
-        load_teacher_contacts_yaml(Path(state.config_dir)).get(code) if champ == "email" else _nom_officiel(state, code)
-    )
+    if champ == "email":
+        du_fichier = load_teacher_contacts_yaml(Path(state.config_dir)).get(code)
+    elif champ == "nom":
+        du_fichier = _nom_officiel(state, code)
+    else:
+        du_fichier = identite_d_origine(state, code, champ)
     retiree = surcharges_reference.effacer("enseignants", code, champ, par=par, valeur_fichier=du_fichier)
     if retiree is None:
-        raise HTTPException(404, f"Aucune valeur modifiée dans l'appli pour {code} ({LIBELLES_CHAMP[champ].lower()}).")
+        libelle = LIBELLES_CHAMP_ENSEIGNANT[champ].lower()
+        raise HTTPException(404, f"Aucune valeur modifiée dans l'appli pour {code} ({libelle}).")
     return retiree
 
 
@@ -571,12 +657,21 @@ def surcharges_pour_payload(state: object) -> dict[str, dict[str, dict[str, dict
     sortie: dict[str, dict[str, dict[str, dict[str, object]]]] = {"enseignants": {}, "cours": {}}
     for code, champs in doc.get("enseignants", {}).items():
         for champ, entree in champs.items():
-            if not isinstance(entree, dict):
+            # Le téléphone n'entre JAMAIS dans le payload (lu par tout compte,
+            # lecture seule comprise) : il n'est servi qu'aux rôles `edit` et
+            # `admin`, par `GET /reference/enseignants` (01/10/2026).
+            if not isinstance(entree, dict) or champ == "telephone":
                 continue
-            origine = fichier.get(code) if champ == "email" else _nom_officiel(state, code)
-            # Le mail d'un intervenant créé dans l'appli n'a pas de « valeur
-            # du fichier » à laquelle revenir : ce n'est pas une modification.
-            if champ == "email" and code in crees and origine is None:
+            if champ == "email":
+                origine = fichier.get(code)
+            elif champ == "nom":
+                origine = _nom_officiel(state, code)
+            else:
+                origine = identite_d_origine(state, code, champ)
+            # Le mail (le type) d'un intervenant créé dans l'appli n'a pas de
+            # « valeur du fichier » à laquelle revenir : ce n'est pas une
+            # modification.
+            if champ in ("email", "type") and code in crees and origine is None:
                 continue
             sortie["enseignants"].setdefault(code, {})[champ] = {
                 "valeur": entree.get("valeur"), "origine": origine,
@@ -855,6 +950,8 @@ def verifier_intervenant(
     code: str,
     code_celcat: str | None = None,
     email: str | None = None,
+    telephone: str | None = None,
+    type_: str | None = None,
 ) -> VerificationIntervenant:
     """Tout ce qui s'oppose à la création, sans rien écrire : erreurs
     (refus) et avertissements. Sert la validation en direct de la modale
@@ -918,6 +1015,22 @@ def verifier_intervenant(
             celcat_propre = codes_celcat._normaliser("enseignants", config_dir, str(code_celcat))
         except HTTPException as exc:
             erreurs.append(ErreurIntervenant(champ="code_celcat", statut=exc.status_code, message=str(exc.detail)))
+
+    # Téléphone et type (01/10/2026) : facultatifs, format seulement.
+    from cal_iut.ingestion import identite_enseignants as ident
+
+    telephone_propre = None
+    if str(telephone or "").strip():
+        try:
+            telephone_propre = ident.normaliser_telephone(str(telephone))
+        except ValueError as exc:
+            erreurs.append(ErreurIntervenant(champ="telephone", statut=400, message=str(exc)))
+    type_propre = None
+    if str(type_ or "").strip():
+        try:
+            type_propre = ident.normaliser_type(str(type_))
+        except ValueError as exc:
+            erreurs.append(ErreurIntervenant(champ="type", statut=400, message=str(exc)))
 
     def libelle_celcat(autre: str) -> str:
         """Le nom sous lequel Celcat connaît `autre` : le commentaire de
@@ -1010,7 +1123,7 @@ def verifier_intervenant(
         suggestion = _suggerer_code(nom_propre, pris | set(dans_celcat))
     return VerificationIntervenant(
         code=code_propre, nom=nom_propre, email=email_propre, code_celcat=celcat_propre,
-        erreurs=erreurs, avertissements=avertissements, suggestion_code=suggestion,
+        telephone=telephone_propre, type=type_propre, erreurs=erreurs, avertissements=avertissements, suggestion_code=suggestion,
         peut_creer=not erreurs and not any(a.bloquant for a in avertissements),
     )
 
@@ -1022,6 +1135,8 @@ def creer_intervenant(
     code: str,
     code_celcat: str | None = None,
     email: str | None = None,
+    telephone: str | None = None,
+    type_: str | None = None,
     confirmer: bool = False,
     par: str = "",
 ) -> IntervenantCree:
@@ -1037,7 +1152,9 @@ def creer_intervenant(
     from cal_iut.api import codes_celcat
     from cal_iut.ingestion import surcharges_reference
 
-    v = verifier_intervenant(state, nom=nom, code=code, code_celcat=code_celcat, email=email)
+    v = verifier_intervenant(
+        state, nom=nom, code=code, code_celcat=code_celcat, email=email, telephone=telephone, type_=type_
+    )
     if v.erreurs:
         # Le plus grave d'abord : un « déjà pris » (409) avant un format (400).
         premiere = sorted(v.erreurs, key=lambda e: -e.statut)[0]
@@ -1061,7 +1178,9 @@ def creer_intervenant(
         # Dernière vérification, la même que l'onglet (verrou, doublon).
         codes_celcat.valider_code(state, "enseignants", v.code, v.code_celcat)
     try:
-        fiche = surcharges_reference.creer_intervenant(v.code, v.nom, email=v.email, par=par)
+        fiche = surcharges_reference.creer_intervenant(
+            v.code, v.nom, email=v.email, telephone=v.telephone, type_=v.type, par=par
+        )
     except ValueError:
         raise HTTPException(409, f"Le code {v.code} est déjà pris : choisissez-en un autre.") from None
     if ecrire_celcat:
@@ -1072,7 +1191,8 @@ def creer_intervenant(
             raise
     rev = revision.incrementer(f"reference:enseignant:{v.code}:creation")
     return IntervenantCree(
-        code=v.code, nom=v.nom, email=v.email, code_celcat=v.code_celcat, cree_le=str(fiche["cree_le"]),
+        code=v.code, nom=v.nom, email=v.email, code_celcat=v.code_celcat, telephone=v.telephone, type=v.type,
+        cree_le=str(fiche["cree_le"]),
         avertissements_confirmes=v.avertissements, message="Intervenant créé.", revision=rev.numero,
     )
 
@@ -1164,7 +1284,8 @@ def completer_contact(code: str, body: ContactEnseignantRequest, request: Reques
 def completer_fiche_enseignant(code: str, body: EnseignantReferenceRequest, request: Request) -> ReferenceEnregistree:
     state = _main().get_state()
     ecrit = completer_enseignant(
-        state, code, nom=body.nom, code_celcat=body.code_celcat, par=_par(request), admin=_est_admin(request)
+        state, code, nom=body.nom, code_celcat=body.code_celcat, prenom=body.prenom, nom_famille=body.nom_famille,
+        telephone=body.telephone, type_=body.type, par=_par(request), admin=_est_admin(request),
     )
     return _reponse("enseignant", code.strip().upper(), ecrit, "Enregistré.")
 
@@ -1250,7 +1371,8 @@ def verifier_nouvel_intervenant(body: NouvelIntervenantRequest) -> VerificationI
     """Validation en direct de la modale : erreurs et avertissements, sans
     rien écrire."""
     return verifier_intervenant(
-        _main().get_state(), nom=body.nom, code=body.code, code_celcat=body.code_celcat, email=body.email
+        _main().get_state(), nom=body.nom, code=body.code, code_celcat=body.code_celcat, email=body.email,
+        telephone=body.telephone, type_=body.type,
     )
 
 
@@ -1264,7 +1386,7 @@ def verifier_nouvel_intervenant(body: NouvelIntervenantRequest) -> VerificationI
 def creer_nouvel_intervenant(body: NouvelIntervenantRequest, request: Request) -> IntervenantCree:
     return creer_intervenant(
         _main().get_state(), nom=body.nom, code=body.code, code_celcat=body.code_celcat, email=body.email,
-        confirmer=body.confirmer, par=_par(request),
+        telephone=body.telephone, type_=body.type, confirmer=body.confirmer, par=_par(request),
     )
 
 
@@ -1277,3 +1399,152 @@ def creer_nouvel_intervenant(body: NouvelIntervenantRequest, request: Request) -
 def supprimer_nouvel_intervenant(code: str, request: Request) -> ReferenceEnregistree:
     nom = supprimer_intervenant(_main().get_state(), code, par=_par(request))
     return _reponse("enseignant", code.strip().upper(), {"nom": nom}, f"{nom} supprimé.")
+
+
+# ── Onglet « Enseignants & vacataires » (01/10/2026) ────────────────────
+#
+# Demande de Kyllian Bresson (responsable) : la liste de TOUS les
+# enseignants et vacataires — prénom, nom, diminutif, code Celcat, mail,
+# téléphone, type —, recherchable, triable, modifiable. Aucune nouvelle
+# source : la liste est `teacherLabels`, les identités `teacherIdentites`
+# (payload de `/app-state`), les mails `teacherEmails`, les codes Celcat la
+# ligne même de l'onglet « Codes Celcat » (`codes_celcat.lister`), et ce qui
+# a été saisi vit dans `data/state/references.json`.
+#
+# DONNÉES PERSONNELLES : le téléphone n'est renvoyé qu'aux rôles `edit` et
+# `admin`. `read_only` reçoit `telephone: null` et `telephone_visible:
+# false` ; le rôle `api` n'a pas accès à cette route (ni par cookie, ni par
+# clé : hors de `/api/v1`) ; le payload de `/app-state` et l'API v1 ne le
+# portent jamais.
+
+
+class SurchargeIdentiteV(BaseModel):
+    valeur: str | None
+    origine: str | None = Field(description="Valeur du fichier (ou dérivée du nom complet) ; `null` : aucune.")
+    modifie_le: str | None
+    modifie_par: str
+
+
+class LigneAnnuaireEnseignant(BaseModel):
+    code: str = Field(description="Le diminutif (« KBR ») : identifiant, non modifiable.")
+    prenom: str
+    nom: str = Field(description="Nom de famille, en capitales.")
+    nom_complet: str = Field(description="Le nom affiché partout dans l'appli.")
+    type: TypeEnseignant | None = Field(description="`null` : à préciser.")
+    email: str | None
+    telephone: str | None = Field(description="E.164 ; `null` si absent OU masqué (lecture seule).")
+    telephone_affiche: str | None = Field(description="« 06 12 34 56 78 ».")
+    nb_seances: int = Field(description="Séances placées au planning.")
+    code_celcat: LigneCodeCelcat | None = Field(default=None, description="La ligne de l'onglet « Codes Celcat ».")
+    cree_dans_appli: bool
+    surcharges: dict[str, SurchargeIdentiteV]
+
+
+class AnnuaireEnseignantsV(BaseModel):
+    revision: int
+    peut_modifier: bool = Field(description="Rôle `edit` ou `admin` : prénom, nom, mail, téléphone, type.")
+    admin: bool = Field(description="Code Celcat et « Nouvel intervenant ».")
+    telephone_visible: bool
+    compteurs: dict[str, int | None]
+    lignes: list[LigneAnnuaireEnseignant]
+
+
+def annuaire_enseignants(state: object, *, role: str) -> AnnuaireEnseignantsV:
+    """Tous les enseignants de l'appli, avec tout ce qui les décrit."""
+    from cal_iut.api import codes_celcat
+    from cal_iut.ingestion import identite_enseignants as ident
+    from cal_iut.ingestion import surcharges_reference
+
+    admin = role == "admin"
+    peut_modifier = role in ("edit", "admin")
+    payload = _main().payload_app_state()
+    libelles: dict[str, str] = dict(payload.get("teacherLabels") or {})
+    identites: dict[str, dict] = dict(payload.get("teacherIdentites") or {})
+    emails: dict[str, str] = dict(payload.get("teacherEmails") or {})
+    surcharges_payload = (payload.get("surchargesReference") or {}).get("enseignants") or {}
+    crees = set(surcharges_reference.intervenants())
+    telephones = surcharges_reference.valeurs("enseignants", "telephone") if peut_modifier else {}
+    celcat = {l.cle: l for l in codes_celcat.lister(state, admin=admin).familles["enseignants"].lignes}
+
+    seances: Counter[str] = Counter()
+    for p in getattr(state, "timetable", []) or []:
+        for c in p.teacher_codes or []:
+            seances[str(c).upper()] += 1
+
+    lignes: list[LigneAnnuaireEnseignant] = []
+    for code in sorted(libelles):
+        identite = identites.get(code) or {}
+        prenom = str(identite.get("prenom") or "")
+        nom = str(identite.get("nom") or "")
+        if not prenom and not nom:
+            prenom, nom = ident.separer_nom(libelles[code], code)
+        surcharges = {
+            champ: SurchargeIdentiteV(
+                valeur=str(e.get("valeur")) if e.get("valeur") is not None else None,
+                origine=str(e.get("origine")) if e.get("origine") is not None else None,
+                modifie_le=e.get("modifie_le"),
+                modifie_par=str(e.get("modifie_par") or ""),
+            )
+            for champ, e in (surcharges_payload.get(code) or {}).items()
+            if isinstance(e, dict)
+        }
+        telephone = telephones.get(code)
+        if telephone:
+            entree = surcharges_reference.origine("enseignants", code, "telephone") or {}
+            surcharges["telephone"] = SurchargeIdentiteV(
+                valeur=telephone, origine=None, modifie_le=entree.get("modifie_le"),
+                modifie_par=str(entree.get("modifie_par") or ""),
+            )
+        ligne_celcat = celcat.get(code.upper())
+        lignes.append(LigneAnnuaireEnseignant(
+            code=code, prenom=prenom, nom=nom, nom_complet=libelles[code],
+            type=identite.get("type") if identite.get("type") in ident.TYPES else None,
+            email=(emails.get(code) or "").strip() or None,
+            telephone=telephone or None,
+            telephone_affiche=ident.formater_telephone(telephone) if telephone else None,
+            nb_seances=seances.get(code.upper(), 0),
+            code_celcat=ligne_celcat,
+            cree_dans_appli=code in crees,
+            surcharges=surcharges,
+        ))
+    compteurs: dict[str, int | None] = {
+        "total": len(lignes),
+        "enseignants": sum(1 for l in lignes if l.type == "enseignant"),
+        "vacataires": sum(1 for l in lignes if l.type == "vacataire"),
+        "a_preciser": sum(1 for l in lignes if l.type is None),
+        "sans_mail": sum(1 for l in lignes if not l.email),
+        "sans_telephone": sum(1 for l in lignes if not l.telephone) if peut_modifier else None,
+        "sans_code_celcat": sum(1 for l in lignes if l.code_celcat and l.code_celcat.origine == "manquant"),
+    }
+    return AnnuaireEnseignantsV(
+        revision=revision.actuelle().numero, peut_modifier=peut_modifier, admin=admin,
+        telephone_visible=peut_modifier, compteurs=compteurs, lignes=lignes,
+    )
+
+
+def _role(request: Request) -> str:
+    return str(getattr(getattr(request.state, "user", None), "role", "") or "")
+
+
+@router.get(
+    "/enseignants",
+    response_model=AnnuaireEnseignantsV,
+    dependencies=[Depends(accounts.require_role("read_only"))],
+)
+def lister_enseignants(request: Request) -> AnnuaireEnseignantsV:
+    """L'annuaire des enseignants et vacataires. Téléphone : rôles `edit`
+    et `admin` seulement."""
+    return annuaire_enseignants(_main().get_state(), role=_role(request))
+
+
+@router.delete(
+    "/enseignants/{code}/{champ}",
+    response_model=ReferenceEnregistree,
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+@ecriture_planning
+def effacer_identite(code: str, champ: ChampIdentite, request: Request) -> ReferenceEnregistree:
+    """« Revenir à la valeur du fichier » pour le prénom, le nom de famille,
+    le téléphone ou le type (ces deux derniers redeviennent « à préciser »)."""
+    retiree = effacer_enseignant(_main().get_state(), code, champ, par=_par(request))
+    return _reponse("enseignant", code.strip().upper(), {champ: retiree}, "Valeur du fichier rétablie.")

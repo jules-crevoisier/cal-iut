@@ -191,8 +191,14 @@ class SemaineV1(BaseModel):
 
 
 class EnseignantV1(BaseModel):
-    code: str
-    nom: str
+    code: str = Field(description="Le diminutif (« KBR »), identifiant de l'enseignant.")
+    nom: str = Field(description="Nom complet affiché (« Kyllian BRESSON »).")
+    prenom: str = Field(default="", description="Prénom (01/10/2026) ; vide s'il est inconnu.")
+    nom_famille: str = Field(default="", description="Nom de famille, en capitales (01/10/2026).")
+    type: Literal["enseignant", "vacataire"] | None = Field(
+        default=None,
+        description="`enseignant` ou `vacataire` ; `null` : à préciser — ou lien public (uniquement pour un compte connecté).",
+    )
     email: str | None = Field(default=None, description="Uniquement pour un compte connecté.")
     nb_seances: int
 
@@ -977,11 +983,25 @@ def _enseignants(variante: str) -> list[EnseignantV1]:
         for code in p.teacher_codes or []:
             compte[code] = compte.get(code, 0) + 1
     libelles = _libelles_enseignants()
+    # Prénom / nom : publics, comme le nom complet (ils s'en déduisent). Le
+    # type, comme le mail, seulement pour un compte connecté. Le téléphone
+    # n'est JAMAIS dans v1 (01/10/2026, `GET /reference/enseignants`).
+    from cal_iut.ingestion.identite_enseignants import separer_nom
+
+    identites = payload.get("teacherIdentites") or {}
     codes = sorted(set(libelles) | set(compte))
-    return [
-        EnseignantV1(code=c, nom=libelles.get(c, c), email=emails.get(c) or None, nb_seances=compte.get(c, 0))
-        for c in codes
-    ]
+    sortie = []
+    for c in codes:
+        ident = identites.get(c) or {}
+        prenom, nom_famille = (ident.get("prenom") or "", ident.get("nom") or "")
+        if not prenom and not nom_famille:
+            prenom, nom_famille = separer_nom(libelles.get(c, c), c)
+        sortie.append(EnseignantV1(
+            code=c, nom=libelles.get(c, c), prenom=prenom, nom_famille=nom_famille,
+            type=(ident.get("type") if variante == "complet" else None) or None,
+            email=emails.get(c) or None, nb_seances=compte.get(c, 0),
+        ))
+    return sortie
 
 
 def _groupes() -> list[GroupeV1]:

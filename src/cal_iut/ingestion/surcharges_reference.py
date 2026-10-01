@@ -22,8 +22,10 @@ surchargée est MARQUÉE à l'écran (« modifiée dans l'appli ») avec la vale
 d'origine, et `effacer` la retire (« Revenir à la valeur du fichier »).
 
 Familles et champs :
-- `enseignants` : `email` (lu par `config_loader.load_teacher_contacts`) et
-  `nom` (lu par `ingestion/enseignants.py::enseignants_declares`) ;
+- `enseignants` : `email` (lu par `config_loader.load_teacher_contacts`),
+  `nom` (nom complet, lu par `ingestion/enseignants.py::enseignants_declares`),
+  et depuis le 01/10/2026 `prenom`, `nom_famille`, `telephone`, `type`
+  (`enseignant` | `vacataire`), lus par `ingestion/identite_enseignants.py` ;
 - `cours` : `intitule` (appliqué aux séances chargées, `appliquer_intitules`).
 
 Intervenants créés dans l'appli (« Nouvel intervenant », 30/09/2026) : clé
@@ -60,7 +62,9 @@ from cal_iut.celcat.fichiers import (
 logger = logging.getLogger(__name__)
 
 CHAMPS: dict[str, tuple[str, ...]] = {
-    "enseignants": ("email", "nom"),
+    # `prenom`, `nom_famille`, `telephone`, `type` : onglet « Enseignants &
+    # vacataires » (01/10/2026, `ingestion/identite_enseignants.py`).
+    "enseignants": ("email", "nom", "prenom", "nom_famille", "telephone", "type"),
     "cours": ("intitule",),
 }
 
@@ -239,11 +243,20 @@ def intervenants() -> dict[str, dict[str, Any]]:
     return {code: dict(fiche) for code, fiche in _charger_pour_lecture().get("intervenants", {}).items()}
 
 
-def creer_intervenant(code: str, nom: str, *, email: str | None = None, par: str = "") -> dict[str, Any]:
+def creer_intervenant(
+    code: str,
+    nom: str,
+    *,
+    email: str | None = None,
+    telephone: str | None = None,
+    type_: str | None = None,
+    par: str = "",
+) -> dict[str, Any]:
     """Enregistre un intervenant créé dans l'appli (déjà validé par
-    `api/reference.py::creer_intervenant`, seul appelant) — et son mail, dans
-    la MÊME écriture : un intervenant sans l'adresse saisie avec lui, ou une
-    adresse sans intervenant, ne doit jamais rester à moitié enregistré.
+    `api/reference.py::creer_intervenant`, seul appelant) — et son mail, son
+    téléphone et son type, dans la MÊME écriture : un intervenant sans
+    l'adresse saisie avec lui, ou une adresse sans intervenant, ne doit
+    jamais rester à moitié enregistré.
     `ValueError` si le code existe déjà dans l'appli. Rend la fiche."""
     code_propre = str(code or "").strip().upper()
     nom_propre = " ".join(str(nom or "").split())
@@ -257,18 +270,20 @@ def creer_intervenant(code: str, nom: str, *, email: str | None = None, par: str
         fiche = {"nom": nom_propre, "cree_le": maintenant, "cree_par": str(par or "").strip()}
         doc["intervenants"][code_propre] = fiche
         _ajouter_au_journal(doc, _ligne_journal("intervenants", code_propre, "creation", None, nom_propre, par))
-        if email:
+        for champ, valeur in (("email", email), ("telephone", telephone), ("type", type_)):
+            if not valeur:
+                continue
             champs = dict(doc["enseignants"].get(code_propre, {}))
-            champs["email"] = {"valeur": email, "modifie_le": maintenant, "modifie_par": str(par or "").strip()}
+            champs[champ] = {"valeur": valeur, "modifie_le": maintenant, "modifie_par": str(par or "").strip()}
             doc["enseignants"][code_propre] = champs
-            _ajouter_au_journal(doc, _ligne_journal("enseignants", code_propre, "email", None, email, par))
+            _ajouter_au_journal(doc, _ligne_journal("enseignants", code_propre, champ, None, valeur, par))
         ecrire_json(_path(), doc)
     return dict(fiche)
 
 
 def supprimer_intervenant(code: str, *, par: str = "") -> dict[str, Any] | None:
     """Retire un intervenant créé dans l'appli, avec ce qui a été saisi pour
-    lui (mail, nom corrigé) — une seule écriture. Rend la fiche retirée, ou
+    lui (mail, nom corrigé, prénom, téléphone, type) — une seule écriture. Rend la fiche retirée, ou
     None s'il n'avait pas été créé dans l'appli. Le code Celcat, lui, vit
     dans `celcat_mappings.json` : retiré par l'appelant."""
     code_propre = str(code or "").strip().upper()
