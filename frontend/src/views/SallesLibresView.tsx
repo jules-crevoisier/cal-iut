@@ -28,6 +28,7 @@ import type { AppPayload } from "../types/app";
 import { jourAujourdhuiDansSemaine, pluriel } from "../utils/planning";
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
 import { occupationSalles } from "../utils/sallesLibres";
+import { BandeauOccupationsCelcat } from "../components/BandeauOccupationsCelcat";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { dateForWeekDay } from "../utils/weekDates";
 import { displayIndexForSolverWeek } from "../utils/weekDisplay";
@@ -196,6 +197,8 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
       </div>
 
       {globale && navSemaine}
+
+      <BandeauOccupationsCelcat payload={payload} />
 
       {solverWeek === null ? (
         <div className="panel">

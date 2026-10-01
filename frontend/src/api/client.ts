@@ -1241,6 +1241,64 @@ export function rafraichirCelcatInstantane(): Promise<{ demande: boolean; messag
   return request("/celcat/instantane/rafraichir", { method: "POST" });
 }
 
+/** Une occupation hors MMI telle que relevée dans Celcat (fichier du
+ *  sidecar, `celcat/occupations.py::_occurrence`). */
+export interface OccupationCelcatBrute {
+  type: "salle" | "enseignant";
+  code: string;
+  libelle: string;
+  date: string;
+  debut: string;
+  fin: string;
+  departement: string;
+  departement_nom: string;
+  categorie: string;
+  intitule: string;
+  groupes: string[];
+  enseignants: string[];
+  salles: string[];
+  event_id: number | null;
+}
+
+export interface RessourceSurveilleeCelcat {
+  type: "salle" | "enseignant";
+  code: string;
+  libelle: string;
+  celcat: string;
+  celcat_id: number | null;
+  trouvee: boolean;
+  nombre: number;
+}
+
+/** Écran Celcat → « Occupations hors MMI » (`GET /celcat/occupations-externes`). */
+export interface OccupationsHorsMmi {
+  releveLe: string | null;
+  ageSecondes: number | null;
+  absent: boolean;
+  perime: boolean;
+  fraicheurHeures: number;
+  strict: boolean;
+  erreur: string | null;
+  demandeEnCours: boolean;
+  periode: { du?: string | null; au?: string | null };
+  base: string;
+  ignores: Record<string, number>;
+  erreurs: string[];
+  ressources: RessourceSurveilleeCelcat[];
+  evenements: OccupationCelcatBrute[];
+  conflits: import("../types/app").ConflitOccupationExterne[];
+}
+
+export function fetchOccupationsHorsMmi(): Promise<OccupationsHorsMmi> {
+  return request("/celcat/occupations-externes");
+}
+
+/** « Relire maintenant » : une DEMANDE au sidecar, honorée à son prochain
+ *  passage (même mécanisme que la relecture de l'instantané). */
+export function rafraichirOccupationsHorsMmi(): Promise<{ demande: boolean; message: string }> {
+  return request("/celcat/occupations-externes/rafraichir", { method: "POST" });
+}
+
 /** Une correction encore en vol pour une semaine, retrouvée après avoir
  *  quitté l'onglet Celcat puis y être revenu (retour utilisateur du
  *  25/09/2026). L'état vit CÔTÉ SERVEUR, jamais dans ce navigateur : Jules et

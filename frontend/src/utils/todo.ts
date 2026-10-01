@@ -25,6 +25,7 @@ export type NatureTodo =
   | "doublon"
   | "regle"
   | "contrainte"
+  | "occupation-externe"
   | "sae-hors-journee"
   | "compromis-sae"
   | "trouee";
@@ -114,6 +115,19 @@ export const NATURES: NatureInfo[] = [
     aide: "Une indisponibilité déclarée par l'enseignant tombe sur une de ses séances.",
     sev: "bad",
     cible: "Vue Enseignant",
+  },
+  {
+    // 01/10/2026 : séances déjà placées sur un créneau où l'enseignant ou la
+    // salle est pris AILLEURS dans Celcat (relevé du sidecar) — la liste
+    // `payload.occupationsExternes.conflits`, calculée par le serveur
+    // (`api/occupations_externes.py::seances_en_conflit`), miroir
+    // `v1_vues.py::points_a_traiter`.
+    id: "occupation-externe",
+    titre: "Occupés ailleurs dans Celcat",
+    court: "Occupés ailleurs",
+    aide: "L'enseignant ou la salle est déjà pris dans Celcat (autre département, réunion, réservation) sur le créneau d'une séance placée. À déplacer, ou à vérifier dans Celcat si le relevé est ancien.",
+    sev: "bad",
+    cible: "Vue Promo",
   },
   {
     // 29/09/2026 : la liste `anomalies` de `GET /api/v1/sae` — le serveur
@@ -341,6 +355,28 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
         n: 1,
       });
     }
+  }
+
+  // Occupés ailleurs dans Celcat (01/10/2026) — mêmes clés et même ordre
+  // que `v1_vues.py::points_a_traiter` (test de parité).
+  for (const c of payload.occupationsExternes?.conflits ?? []) {
+    items.push({
+      sev: "bad",
+      nature: "occupation-externe",
+      cle: `oe|${c.seance_id}|${c.ressource_type}|${c.ressource}`,
+      title: `${c.course_code} — ${c.nom || c.type || ""}`,
+      sub: c.message,
+      route:
+        c.ressource_type === "enseignant"
+          ? { vue: "prof", prof: c.ressource, sem: c.semaine }
+          : { vue: "promo", sem: c.semaine, jour: c.jour },
+      semaine: c.semaine,
+      jour: c.jour,
+      creneau: c.creneau,
+      parcours: parcoursDesGroupes(payload, c.groupes),
+      enseignants: [...c.enseignants],
+      n: 1,
+    });
   }
 
   return items;

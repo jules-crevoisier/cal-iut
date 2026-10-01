@@ -50,6 +50,7 @@ import {
   teacherBusyOnCell,
   type TeacherBusyHit,
 } from "../utils/teacherBusy";
+import { occupationsParCase } from "../utils/occupationsExternes";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { lettresGroupe } from "../utils/years";
@@ -375,8 +376,18 @@ export function PromoView({
       teachers = sel.origin.teacher_codes;
       excludeId = sel.sessionId;
     }
-    return teacherBusyByDaySlot(payload.rows, teachers, solverWeek, excludeId);
-  }, [draggingId, placementActif, park, payload.rows, solverWeek]);
+    const hits = teacherBusyByDaySlot(payload.rows, teachers, solverWeek, excludeId);
+    // Enseignant occupé AILLEURS dans Celcat (autre département, réunion…) :
+    // signalé de la même façon pendant le placement — le serveur, lui,
+    // demandera de forcer (cf. `api/occupations_externes.py`).
+    for (const code of teachers) {
+      for (const [cle, liste] of occupationsParCase(payload, "enseignant", code, solverWeek)) {
+        if (hits.has(cle)) continue;
+        hits.set(cle, { course: `occupé ailleurs (${liste[0].dep || "Celcat"})`, teachers: [code] });
+      }
+    }
+    return hits;
+  }, [draggingId, placementActif, park, payload, solverWeek]);
 
   // À l'activation d'un placement (arrivée depuis « À placer »), saute sur
   // sa première semaine idéale et remet les filtres sur « Tout » : sinon la

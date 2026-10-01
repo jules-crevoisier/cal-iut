@@ -74,6 +74,11 @@ interface SessionGridProps {
   onSelect?: (row: AppRow) => void;
   /** Absent = grille en lecture seule (comportement historique). */
   edition?: EditionGrille;
+  /** Occupations HORS MMI relevées dans Celcat, par case « jour-créneau »
+   *  (`utils/occupationsExternes.ts::libellesParCase`) : bloc discret
+   *  « Occupé ailleurs (TC) » / « Réservé dans Celcat » dans une case vide,
+   *  alerte dans une case qui a déjà une séance (conflit). */
+  externes?: Map<string, string[]>;
 }
 
 export function SessionGrid({
@@ -87,6 +92,7 @@ export function SessionGrid({
   showPromo = false,
   onSelect,
   edition,
+  externes,
 }: SessionGridProps) {
   const [hover, setHover] = useState<{ row: AppRow; x: number; y: number } | null>(null);
   const days = onlyDay === null ? ALL_DAYS : [onlyDay];
@@ -235,6 +241,7 @@ export function SessionGrid({
                   const holiday = holidayByDay.get(d);
                   const eventsAtSlot = eventSlotByKey.get(key);
                   const dayEvent = dayEventByDay.get(d);
+                  const externesCase = externes?.get(key);
 
                   if (shared.length) {
                     return (
@@ -253,6 +260,11 @@ export function SessionGrid({
                           {shared.map((r) => (
                             <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} edition={edition} />
                           ))}
+                          {externesCase?.length ? (
+                            <span className="sessiongrid-externe-alerte" role="note">
+                              Conflit Celcat : {externesCase.join(", ")}
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                     );
@@ -320,6 +332,19 @@ export function SessionGrid({
                       <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-event">
                           {dayEvent.map((e) => (
+                            <span key={e} className="label">
+                              {e}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    );
+                  }
+                  if (externesCase?.length) {
+                    return (
+                      <td key={d} {...propsCase(d, s)}>
+                        <div className="sessiongrid-externe">
+                          {externesCase.map((e) => (
                             <span key={e} className="label">
                               {e}
                             </span>

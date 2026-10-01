@@ -1177,3 +1177,40 @@
     transition: none;
   }
 }
+
+/* ── Occupations hors MMI (01/10/2026) ── */
+
+.celcat-occupations-outils,
+.celcat-occupations-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  margin: 8px 0;
+}
+
+.celcat-occupations-filtres label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.82rem;
+}
+
+.celcat-occupations-defile {
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.celcat-occupations table {
+  width: 100%;
+}
+
+.celcat-occupations-conflits ul {
+  margin: 4px 0 12px;
+  padding-left: 18px;
+}
+
+.celcat-occupations h3 {
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
+}

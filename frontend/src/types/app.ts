@@ -245,6 +245,10 @@ export interface AppPayload {
   /** Salles réservées par des tiers (`salles_reservees.yaml`), telles que
    *  déclarées — optionnel : absent des anciens payloads et des fixtures. */
   roomReservations?: { salle: string; date: string; slots: number[]; motif: string }[];
+  /** Occupations HORS MMI relevées dans Celcat par le sidecar (01/10/2026,
+   *  `api/occupations_externes.py::pour_payload`). Absent d'un serveur plus
+   *  ancien et d'un lien public. */
+  occupationsExternes?: OccupationsExternesPayload;
   /** Valeurs modifiées dans l'appli (29/09/2026, `api/reference.py::
    *  surcharges_pour_payload`), avec la valeur d'origine. Vide sur un lien
    *  public (adresses). Absent d'un serveur plus ancien. */
@@ -304,4 +308,52 @@ export interface SurchargesReference {
     }
   >;
   cours: Record<string, { intitule?: SurchargeReference }>;
+}
+
+/** Une occupation hors MMI sur NOS créneaux (clés courtes, comme `rows`). */
+export interface OccupationExterne {
+  /** « enseignant » : programmé ailleurs ; « salle » : réservée dans Celcat. */
+  t: "enseignant" | "salle";
+  /** Trigramme (« AFR ») ou id de salle (« h018 »). */
+  code: string;
+  /** Semaine SOLVEUR, jour (0 = lundi), créneaux chevauchés (0-5). */
+  w: number;
+  d: number;
+  s: number[];
+  date: string;
+  /** Heures RÉELLES dans Celcat (« 10:00 », « 12:30 »). */
+  debut: string;
+  fin: string;
+  /** Département abrégé (« TC ») ; vide = administration / hors département. */
+  dep: string;
+  lib: string;
+  cat: string;
+}
+
+/** Séance MMI déjà placée sur une occupation externe (« À traiter »). */
+export interface ConflitOccupationExterne {
+  seance_id: string;
+  course_code: string;
+  nom: string;
+  type: string;
+  semaine: number;
+  jour: number;
+  creneau: number;
+  groupes: string[];
+  enseignants: string[];
+  ressource_type: "enseignant" | "salle";
+  ressource: string;
+  message: string;
+}
+
+export interface OccupationsExternesPayload {
+  releveLe: string | null;
+  ageSecondes: number | null;
+  absent: boolean;
+  perime: boolean;
+  fraicheurHeures: number;
+  strict: boolean;
+  erreur: string | null;
+  occupations: OccupationExterne[];
+  conflits: ConflitOccupationExterne[];
 }

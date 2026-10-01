@@ -116,6 +116,23 @@ export function occupationSalles(
     }
   }
 
+  // Salles prises dans Celcat (relevé du sidecar, 01/10/2026) : même effet
+  // qu'une réservation de tiers. Miroir : `v1_vues.py::occupation_salles`.
+  for (const o of payload.occupationsExternes?.occupations ?? []) {
+    if (o.t !== "salle" || o.w !== week || o.d !== day) continue;
+    const entree: OccupationEntree = {
+      code: "Celcat",
+      type: "celcat",
+      groupes: [o.dep ? `Réservé dans Celcat (${o.dep})` : "Réservé dans Celcat", o.lib].filter(Boolean),
+    };
+    const room = payload.rooms.find((r) => r.id === o.code);
+    for (const slot of o.s) {
+      marquer(o.code, slot, entree);
+      for (const partieId of room?.combines ?? []) marquer(partieId, slot, entree);
+      for (const combineeId of fusionsParPartie.get(o.code) ?? []) marquer(combineeId, slot, entree);
+    }
+  }
+
   return grille;
 }
 

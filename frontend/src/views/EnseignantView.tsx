@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { completerEnseignant, supprimerIntervenant, type IntervenantCree } from "../api/client";
+import { BandeauOccupationsCelcat } from "../components/BandeauOccupationsCelcat";
 import { BoutonsImageEdt } from "../components/BoutonsImageEdt";
 import { ChampEnLigne } from "../components/ChampEnLigne";
 import { ManquesDeLaFiche } from "../components/CompleterManque";
@@ -38,6 +39,7 @@ import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload, IntervenantAppli, TeacherInfo } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
+import { libellesParCase, occupationsParCase } from "../utils/occupationsExternes";
 import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
 import { confirmAsync } from "../utils/confirmDialog";
 import { marquerIntervenantCree, oublierIntervenantCree, vientDEtreCree } from "../utils/intervenantCree";
@@ -315,20 +317,27 @@ export function EnseignantView({
   });
   const nMatieres = new Set(allItems.map((it) => it.c)).size;
 
+  // Occupé AILLEURS dans Celcat (autre département, réunion…), relevé par le
+  // sidecar : blocs discrets « Occupé ailleurs (TC) » sur la grille.
+  const externes = libellesParCase(occupationsParCase(payload, "enseignant", code, c.solverWeek));
   const grille = (
-    <PlanningSemaine
-      payload={payload}
-      rows={rowsThisWeek}
-      displayIndex={c.displayWeek}
-      onSelectWeek={c.setDisplayWeek}
-      parcours={parcoursDeLaSemaine}
-      showPromo
-      narrow={c.narrow}
-      jour={c.jour}
-      onJour={c.setJour}
-      titreImpression={nom}
-      exclureProf={code}
-    />
+    <>
+      <BandeauOccupationsCelcat payload={payload} />
+      <PlanningSemaine
+        payload={payload}
+        rows={rowsThisWeek}
+        displayIndex={c.displayWeek}
+        onSelectWeek={c.setDisplayWeek}
+        parcours={parcoursDeLaSemaine}
+        showPromo
+        narrow={c.narrow}
+        jour={c.jour}
+        onJour={c.setJour}
+        titreImpression={nom}
+        exclureProf={code}
+        externes={externes}
+      />
+    </>
   );
 
   // Lien public : « juste l'essentiel c'est à dire la barre des semaine et
