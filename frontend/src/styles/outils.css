@@ -13,22 +13,22 @@
 
 :root {
   --seg-bg: var(--surface-3);
-  --seg-on: #ffffff;
-  --seg-ring: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px #ececea;
+  --seg-on: #fdfdfc;
+  --seg-ring: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px #e2e2df;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --seg-bg: var(--surface-2);
-    --seg-on: #242428;
-    --seg-ring: inset 0 0 0 1px #2e2e33;
+    --seg-on: #313238;
+    --seg-ring: inset 0 0 0 1px #404147;
   }
 }
 
 :root[data-theme="dark"] {
   --seg-bg: var(--surface-2);
-  --seg-on: #242428;
-  --seg-ring: inset 0 0 0 1px #2e2e33;
+  --seg-on: #313238;
+  --seg-ring: inset 0 0 0 1px #404147;
 }
 
 /* ── Contrôle segmenté ── */

@@ -225,7 +225,7 @@
   :root:not([data-theme="light"]) .sessiongrid.couleurs-matiere .sessiongrid-block {
     --c-bg: color-mix(in srgb, var(--matiere-fond-sombre) 55%, transparent);
     --c-bd: color-mix(in srgb, var(--matiere-barre-sombre) 35%, transparent);
-    --c-fg: color-mix(in srgb, var(--matiere-barre-sombre) 55%, #ffffff);
+    --c-fg: color-mix(in srgb, var(--matiere-barre-sombre) 55%, #e2e2e6);
     background: var(--c-bg);
     border-color: var(--c-bd);
   }
@@ -238,7 +238,7 @@
 :root[data-theme="dark"] .sessiongrid.couleurs-matiere .sessiongrid-block {
   --c-bg: color-mix(in srgb, var(--matiere-fond-sombre) 55%, transparent);
   --c-bd: color-mix(in srgb, var(--matiere-barre-sombre) 35%, transparent);
-  --c-fg: color-mix(in srgb, var(--matiere-barre-sombre) 55%, #ffffff);
+  --c-fg: color-mix(in srgb, var(--matiere-barre-sombre) 55%, #e2e2e6);
   background: var(--c-bg);
   border-color: var(--c-bd);
 }
