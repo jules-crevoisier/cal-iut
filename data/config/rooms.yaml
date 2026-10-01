@@ -194,6 +194,26 @@ rooms:
     room_type: evaluation
     equipment: [salle_examen]  # ex. WR107 CM2 = évaluation
 
+  # --- Amphis d'autres départements (demande de Kyllian Bresson, 01/10/2026) ---
+  # Nom IDENTIQUE à celui de Celcat (cf. celcat.yaml, section `salles`).
+  # Utilisés aussi par d'autres départements : jamais proposés par le
+  # placement automatique (`placement_auto: false`) — on les choisit à la
+  # main ; leur occupation par les autres départements vient de Celcat.
+  # Capacité : NON communiquée, 150 comme les autres amphis — à confirmer.
+  - id: amphi1_tc_gea
+    label: Amphi 1 TC/GEA
+    capacity: 150
+    room_type: amphi
+    placement_auto: false
+    equipment: []
+
+  - id: amphi2_gmp_geii
+    label: Amphi 2 GMP/GEII
+    capacity: 150
+    room_type: amphi
+    placement_auto: false
+    equipment: []
+
 # Règles d'affectation salle. `_find_matching_rule` retient la DERNIÈRE règle qui
 # matche (session_types + course_code_patterns) -> règles génériques d'abord,
 # règles spécifiques par module ensuite pour qu'elles priment.

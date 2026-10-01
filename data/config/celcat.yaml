@@ -139,6 +139,8 @@ salles:
               # retenue (H.201, pas H.023).
   h205: "H.205"  # H.205 (VR/Réseaux)
   a018: "A.018"  # A.018 — Celcat : 150 places
+  amphi1_tc_gea: "Amphi 1 TC/GEA"  # nom identique dans Celcat (01/10/2026)
+  amphi2_gmp_geii: "Amphi 2 GMP/GEII"  # nom identique dans Celcat (01/10/2026)
 
 # --- Groupes : convention de nommage Celcat ---
 # Relevée le 31/08/2026 (S1, S3, S5, en CM, TD et TP) :
