@@ -1137,6 +1137,10 @@ class CelcatEtatResponse(BaseModel):
     # lot, lancer le job), jamais une écriture réelle confirmée.
     derniere_ecriture_celcat: str | None = None
     compteurs: CelcatCompteurs = CelcatCompteurs()
+    # Interrupteur des règles d'envoi (WR100BU, PTUT) : variable
+    # d'environnement `CAL_IUT_REGLES_ENVOI`, `off` par défaut.
+    regles_envoi_actives: bool = False
+    variable_regles_envoi: str = "CAL_IUT_REGLES_ENVOI"
     worker_ok: bool = True
 
 

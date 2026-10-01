@@ -551,6 +551,7 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
         voulu = (cfg.sans_code.get(famille) or {}).get(cle) if not effectif else None
         origine_brute = (cfg.origines.get(famille) or {}).get(cle, "")
         regle = cfg.regle_sans_module(cle) if famille == "cours" else None
+        from cal_iut.celcat.mapping import regles_actives
         avertissement = None
         if regle is not None:
             # Envoi sans module (règle) : ni code, ni manque, ni « non envoyé ».
@@ -561,7 +562,7 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
                 code=None,
                 code_connu=None,
                 origine="regle",
-                origine_detail=LIBELLE_ORIGINE["regle"],
+                origine_detail=LIBELLE_ORIGINE["regle"] if regles_actives() else "règle d'envoi (inactive)",
                 motif_sans_code=regle.motif or None,
                 note=note_regle(regle),
                 modifiable=False,

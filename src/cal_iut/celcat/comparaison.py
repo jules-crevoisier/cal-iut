@@ -458,6 +458,7 @@ def comparer(
     types_seance: dict[str, str] | None = None,
     journal: dict[str, int] | None = None,
     categories_regle: dict[str, str] | None = None,
+    non_envoyees: set[str] | None = None,
 ) -> list[dict]:
     """Une ligne par séance, avec son verdict.
 
@@ -465,7 +466,9 @@ def comparer(
     séances envoyées sous une règle d'envoi
     (`celcat.yaml::regles_envoi`). Elles sont dans le périmètre Celcat
     bien que leur cours n'ait pas de code module, et leur catégorie se
-    compare à celle de la règle.
+    compare à celle de la règle. `non_envoyees` : séances visées par une
+    règle mais qui ne partent pas (interrupteur coupé, autre enseignant) —
+    hors périmètre, jamais « absentes » à créer.
 
     `journal` est la table `session_id -> event_id` tenue par
     `celcat/sync.py` : ce que NOUS avons ecrit, et ou. Facultative, mais
@@ -544,7 +547,7 @@ def comparer(
                 # Envoyée sans module par une règle : elle a vocation à y
                 # être, son absence est un vrai manque.
                 and str(getattr(placement, "session_id", "")) not in (categories_regle or {})
-            )
+            ) or str(getattr(placement, "session_id", "")) in (non_envoyees or set())
             lignes.append(
                 {
                     "statut": "hors_celcat" if hors_perimetre else "absente_celcat",

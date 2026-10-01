@@ -976,6 +976,10 @@ export interface CelcatEtat {
   derniere_ecriture_celcat: string | null;
   compteurs: { created: number; modified: number; deleted: number; blocked: number };
   worker_ok: boolean;
+  /** Règles d'envoi (WR100BU, PTUT) actives ? Variable d'environnement
+   *  `CAL_IUT_REGLES_ENVOI` (`off` par défaut) des services backend et celcat-nuit. */
+  regles_envoi_actives?: boolean;
+  variable_regles_envoi?: string;
 }
 
 export interface CelcatExtra {

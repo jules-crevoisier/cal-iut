@@ -5,6 +5,9 @@ Il est pour l'administrateur qui fera les essais, avec le VPN.
 Chaque section est indépendante : une fonctionnalité, ses essais, ce qu'on doit voir, et un prompt prêt pour Claude Code.
 
 **Règle commune à toutes les sections : ne jamais écrire dans `URCA_2026`** (la vraie base, celle de la paie).
+
+**Interrupteur.** Les règles d'envoi (WR100BU, PTUT) sont **inactives** en production tant que `CAL_IUT_REGLES_ENVOI`
+ne vaut pas `on` : rien ne part par le robot. La commande d'essai `cal-iut celcat-essai-regle` marche quand même.
 Les écritures d'essai se font dans `URCA_FORMATION` (base d'entraînement). La lecture de `URCA_2026` est permise.
 
 **Sommaire**
@@ -94,6 +97,9 @@ Le planning lu est celui de la base locale (`data/state/cal-iut.db`) : il contie
    semaine affichée par la commande, double-clic sur l'évènement.
 
 4. Remettre le robot en marche (cas A).
+5. **Une fois les essais concluants** (WR100BU et PTUT) : poser `CAL_IUT_REGLES_ENVOI=on` sur les services **backend**
+   et **celcat-nuit** dans Dokploy, redéployer, puis vérifier le plan (`GET /celcat/plan` : « sans module (règle WR100BU) »)
+   et l'écran **Celcat → Réglages** (« Règles d'envoi : actives »).
 
 `--ecrire` avec `--base URCA_2026` est **refusé** avant toute connexion (code de sortie 2).
 
@@ -167,6 +173,7 @@ src/cal_iut/celcat/ecriture.py (resoudre_ids, charge_utile), src/cal_iut/celcat/
 RÈGLE ABSOLUE : ne jamais écrire dans URCA_2026. Lecture seule sur URCA_2026 (simulation, rôle
 985_consultation). Toute écriture se fait dans URCA_FORMATION, via la commande d'essai, qui supprime
 son évènement à la fin. Ne pas lancer le robot (celcat_nuit.py, celcat_immediat.py) ni --production.
+Les règles sont inactives (CAL_IUT_REGLES_ENVOI=off) : ne pas les activer ; la commande d'essai les force pour elle seule.
 
 Étapes :
 1. cal-iut celcat-reseau : l'accès direct doit être OK.
@@ -247,6 +254,8 @@ Deux cas à essayer : un cours **avec** code Celcat (matière posée), un cours 
 
 `--ecrire` avec `--base URCA_2026` est **refusé** avant toute connexion.
 
+Dernière étape, commune aux deux règles : activer avec `CAL_IUT_REGLES_ENVOI=on` ([§ 2 de WR100BU, étape 5](#2-les-commandes-dans-lordre)).
+
 ### 3. Ce qu'on doit voir
 
 - La séance : « module du cours (règle PTUT), module TSBZ1M01 » ou « sans module — cours sans code Celcat (règle PTUT), module aucun ».
@@ -292,6 +301,7 @@ département T_MMI T29, enseignant/salle/groupe de la séance, et la matière DU
 
 RÈGLE ABSOLUE : ne jamais écrire dans URCA_2026 (lecture seule permise). Écritures d'essai uniquement dans
 URCA_FORMATION, par la commande d'essai, qui supprime son évènement. Ne pas lancer le robot ni --production.
+Les règles sont inactives (CAL_IUT_REGLES_ENVOI=off) : ne pas les activer ; la commande d'essai les force pour elle seule.
 
 Étapes :
 1. cal-iut celcat-reseau (accès direct OK).

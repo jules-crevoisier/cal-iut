@@ -16,7 +16,11 @@ d'affichage.
 
 from __future__ import annotations
 
+import os
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -220,6 +224,35 @@ def lire_regles_envoi(data: dict) -> tuple[dict[str, RegleEnvoi], dict[str, Regl
     return par_cours, par_type
 
 
+# Interrupteur des règles d'envoi (01/10/2026) : DÉSACTIVÉES par défaut, pour
+# qu'aucune séance ne parte en production sous une règle avant les essais de
+# l'administrateur (docs/A-TESTER-SUR-CELCAT.md). Lu par le backend ET par le
+# robot Celcat : les deux conteneurs doivent porter la même valeur.
+VARIABLE_REGLES = "CAL_IUT_REGLES_ENVOI"
+MOTIF_REGLES_INACTIVES = f"non envoyée — règle d'envoi en attente d'activation ({VARIABLE_REGLES})"
+_REGLES_FORCEES: ContextVar[bool] = ContextVar("regles_envoi_forcees", default=False)
+
+
+def regles_actives() -> bool:
+    """`CAL_IUT_REGLES_ENVOI=on` (ou `1`, `true`, `oui`) active les règles.
+    Absente, vide ou autre : inactives."""
+    if _REGLES_FORCEES.get():
+        return True
+    return os.environ.get(VARIABLE_REGLES, "").strip().lower() in ("on", "1", "true", "oui", "yes")
+
+
+@contextmanager
+def regles_forcees() -> Iterator[None]:
+    """Active les règles le temps du bloc, QUEL QUE SOIT l'interrupteur.
+    Réservé à l'essai (`cal-iut celcat-essai-regle`) : c'est l'outil qui
+    sert à les valider avant de les activer. Jamais le plan ni le robot."""
+    jeton = _REGLES_FORCEES.set(True)
+    try:
+        yield
+    finally:
+        _REGLES_FORCEES.reset(jeton)
+
+
 def regle_pour(
     cfg: CelcatConfig, course_code: str, session_type: str, teacher_codes: list[str] | tuple[str, ...]
 ) -> tuple[RegleEnvoi | None, str]:
@@ -230,12 +263,18 @@ def regle_pour(
     du TYPE de séance. Une règle passe devant « sans code (voulu) » et devant
     les codes module ordinaires : c'est le sens de « appliquées
     systématiquement à toutes les séances PTUT » (Kyllian, 01/10/2026).
+
+    Interrupteur coupé (`CAL_IUT_REGLES_ENVOI`, `off` par défaut) : toute
+    séance visée par une règle rend `MOTIF_REGLES_INACTIVES` — non envoyée,
+    pas un blocage à corriger.
     """
     regle = cfg.regles_cours.get(str(course_code or "").strip().upper()) or cfg.regles_types.get(
         str(session_type or "").strip().upper()
     )
     if regle is None:
         return None, ""
+    if not regles_actives():
+        return None, MOTIF_REGLES_INACTIVES
     if not regle.accepte(list(teacher_codes or [])):
         return None, regle.motif_refus()
     return regle, ""
@@ -591,7 +630,8 @@ def entree_pour_placement(
     # (WR100BU : rien n'est cherché, le code est inventé) ou « cours » (PTUT :
     # le module du cours s'il est connu, AUCUN sinon, jamais un module
     # « PTUT »). Une règle passe devant « sans code (voulu) ».
-    regle_appliquee, non_envoyee = regle_pour(cfg, course_code, session_type, teacher_codes)
+    regle_appliquee, refus_regle = regle_pour(cfg, course_code, session_type, teacher_codes)
+    non_envoyee = refus_regle
     code_module: str | None = None
     if regle_appliquee is not None:
         if regle_appliquee.module == MODULE_COURS:
@@ -611,7 +651,7 @@ def entree_pour_placement(
     # le 01/09/2026. Un CM n'a pas d'index et n'en a plus besoin.
     # Sous une règle d'envoi, la catégorie est celle de la règle : le type
     # de la séance n'en décide plus (PTUT n'a pas de catégorie ordinaire).
-    if regle_appliquee is not None:
+    if regle_appliquee is not None or refus_regle:
         pass
     elif not type_nom:
         bloquants.append("type de séance manquant")

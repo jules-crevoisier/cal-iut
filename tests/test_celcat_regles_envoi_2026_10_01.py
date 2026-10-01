@@ -76,6 +76,18 @@ from cal_iut.celcat.navigateur import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def _regles_actives(monkeypatch):
+    """Les règles sont DÉSACTIVÉES par défaut (`CAL_IUT_REGLES_ENVOI`) ; ce
+    fichier décrit leur comportement une fois activées. Les tests de
+    l'interrupteur coupé la retirent eux-mêmes (`_regles_coupees`)."""
+    monkeypatch.setenv("CAL_IUT_REGLES_ENVOI", "on")
+
+
+def _regles_coupees(monkeypatch) -> None:
+    monkeypatch.delenv("CAL_IUT_REGLES_ENVOI", raising=False)
 CONFIG = ROOT / "data" / "config"
 
 # Catalogues d'une base Celcat factice. « TD0 bis » et « T_MMI » sont là pour
@@ -796,3 +808,127 @@ def test_l_essai_rend_le_blocage_quand_td0_manque(catalogues, monkeypatch) -> No
     res = essai.preparer(FaussePage(), _entree(), base=BASE_PRODUCTION, masque="N" * 5 + "Y" + "N" * 48, group_id=1661972)
     assert not res.ok and "catégorie « TD0 » introuvable dans Celcat" in res.erreur
     assert res.charge == {}
+
+
+# ---------------------------------------------------------------------------
+# L'interrupteur CAL_IUT_REGLES_ENVOI (off par défaut)
+# ---------------------------------------------------------------------------
+
+INACTIVE = "non envoyée — règle d'envoi en attente d'activation (CAL_IUT_REGLES_ENVOI)"
+
+
+@pytest.mark.parametrize("valeur", [None, "", "off", "non", "0"])
+def test_les_regles_sont_inactives_par_defaut(monkeypatch, valeur) -> None:
+    from cal_iut.celcat.mapping import regles_actives
+
+    if valeur is None:
+        _regles_coupees(monkeypatch)
+    else:
+        monkeypatch.setenv("CAL_IUT_REGLES_ENVOI", valeur)
+    assert regles_actives() is False
+    e = _entree()
+    assert (e.prete, e.regle, e.non_envoyee, e.bloquants) == (False, "", INACTIVE, [])
+    ptut = _entree("MRI", cours="WRZ99", sid="WRZ99-S1-PTUT-1", type_="PTUT")
+    assert (ptut.regle, ptut.non_envoyee, ptut.bloquants) == ("", INACTIVE, [])
+    # Rien d'autre ne change : une séance ordinaire part comme avant.
+    ordinaire = _entree("MRI", cours="WR101", sid="WR101-S1-TD-1")
+    assert ordinaire.prete and ordinaire.code_module == "TSBZ1M01" and not ordinaire.regle
+
+
+def test_interrupteur_coupe_le_plan_montre_les_seances_non_envoyees(bu, monkeypatch) -> None:
+    _regles_coupees(monkeypatch)
+    corps = bu.get(f"/celcat/plan?semaines={SEMAINE}").json()
+    par_id = {e["session_id"]: e for e in corps["entrees"]}
+    for sid in ("bu-vma", "bu-mri", "ptut-avec", "ptut-sans"):
+        assert par_id[sid]["action"] == "non_envoyee", sid
+        assert par_id[sid]["motif_non_envoi"] == INACTIVE and par_id[sid]["regle"] == ""
+    assert par_id["wr101-td"]["action"] == "creer"
+    assert corps["regles_envoi"] == {}
+    assert corps["motifs_non_envoi"] == {INACTIVE: 4}
+    assert not any("PTUT" in m or "WR100BU" in m for m in corps["motifs_blocage"])
+    assert bu.get("/celcat/etat").json()["regles_envoi_actives"] is False
+
+
+def test_interrupteur_coupe_rien_ne_part_par_le_robot(bu, catalogues, monkeypatch) -> None:
+    from cal_iut.celcat.file_attente import enfiler, lister
+    from cal_iut.celcat.logs import tous
+    from cal_iut.celcat.nuit import drainer_file_immediate
+
+    _regles_coupees(monkeypatch)
+
+    def _enregistrer(page, charge, *, methode):
+        raise AssertionError(f"rien ne doit partir : {charge.get('notes')}")
+
+    monkeypatch.setattr(ecriture, "enregistrer_evenement", _enregistrer)
+    activer_saisie(bu)
+    vider_file()
+    for sid in ("bu-vma", "bu-mri", "ptut-avec", "ptut-sans"):
+        enfiler({"action": "create", "session_id": sid, "semaine": SEMAINE})
+    poser_semaines_celcat()
+
+    drainer_file_immediate(FaussePage(), production_autorisee=False)
+
+    assert not lister(), "aucune entrée sous règle ne reste dans la file d'envoi"
+    non_envoyes = {l["session_id"]: l["motif"] for l in tous() if l.get("kind") == "non_envoye"}
+    assert non_envoyes == dict.fromkeys(("bu-vma", "bu-mri", "ptut-avec", "ptut-sans"), INACTIVE)
+    assert not [l for l in tous() if l.get("kind") == "blocked"]
+
+
+def test_interrupteur_coupe_le_hook_immediat_n_enfile_rien(bu, monkeypatch) -> None:
+    from cal_iut.celcat.file_attente import lister
+    from cal_iut.celcat.ops import _executer
+
+    _regles_coupees(monkeypatch)
+    activer_saisie(bu)
+    vider_file()
+    for sid in ("bu-vma", "ptut-avec", "ptut-sans"):
+        _executer(sid, "create")
+    _executer("wr101-td", "create")
+    assert [j["session_id"] for j in lister()] == ["wr101-td"]
+
+
+def test_interrupteur_coupe_la_comparaison_ne_les_reclame_pas(bu, monkeypatch) -> None:
+    from cal_iut.celcat.comparaison import comparer
+    from cal_iut.celcat.planification import contexte
+
+    _regles_coupees(monkeypatch)
+    ctx = contexte(get_state())
+    assert ctx.categories_regle == {}
+    assert ctx.non_envoyees == {"bu-vma", "bu-mri", "ptut-avec", "ptut-sans"}
+    lignes = comparer(
+        placements=list(get_state().timetable), evenements=[], semaine=SEMAINE, semaine_celcat=SEMAINE + 3,
+        groupes_celcat=ctx.groupes_celcat, codes_celcat=ctx.codes_celcat, categories_regle=ctx.categories_regle,
+        non_envoyees=ctx.non_envoyees,
+    )
+    statuts = {l["session_id"]: l["statut"] for l in lignes}
+    assert statuts["ptut-avec"] == "hors_celcat" and statuts["bu-vma"] == "hors_celcat"
+    assert statuts["wr101-td"] == "absente_celcat"
+
+
+def test_interrupteur_coupe_codes_celcat_dit_regle_inactive(bu, monkeypatch) -> None:
+    _regles_coupees(monkeypatch)
+    corps = bu.get("/reference/codes-celcat?famille=cours").json()
+    ligne = next(l for l in corps["familles"]["cours"]["lignes"] if l["cle"] == "WR100BU")
+    assert (ligne["origine"], ligne["origine_detail"]) == ("regle", "règle d'envoi (inactive)")
+
+
+def test_l_essai_force_les_regles_quel_que_soit_l_interrupteur(bu, monkeypatch) -> None:
+    from cal_iut import cli
+    from cal_iut.celcat import essai_regle as essai
+    from cal_iut.celcat.mapping import regles_actives, regles_forcees
+
+    _regles_coupees(monkeypatch)
+    with regles_forcees():
+        assert regles_actives()
+        entrees = entrees_pour_state(get_state())
+        assert entrees["bu-vma"].regle == "WR100BU"
+        assert essai.entree_comme_type(get_state(), "wr101-td", "PTUT").regle == "PTUT"
+    assert not regles_actives()
+    assert entrees_pour_state(get_state())["bu-vma"].non_envoyee == INACTIVE
+
+    vu: list[bool] = []
+    monkeypatch.setattr(cli, "_essai_regle", lambda args: vu.append(regles_actives()) or 0)
+    monkeypatch.setattr("sys.argv", ["cal-iut", "celcat-essai-regle", "--cours", "WR100BU"])
+    assert cli.main() == 0 and vu == [True]
+    assert not regles_actives()
+

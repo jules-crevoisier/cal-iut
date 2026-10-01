@@ -48,6 +48,10 @@ services:
       CAL_IUT_PUBLIC_URL: ${CAL_IUT_PUBLIC_URL}
       # MCP distant (`POST /mcp`) — absent ou vide → 503, login site inchangé.
       CAL_IUT_MCP_TOKEN: ${CAL_IUT_MCP_TOKEN}
+      # Règles d'envoi Celcat (WR100BU, PTUT — celcat.yaml::regles_envoi) :
+      # `off` tant que l'administrateur ne les a pas essayées
+      # (docs/A-TESTER-SUR-CELCAT.md). MÊME valeur que pour `celcat-nuit`.
+      CAL_IUT_REGLES_ENVOI: ${CAL_IUT_REGLES_ENVOI:-off}
     volumes:
       # `data/state/` SEULEMENT (pas `data/` en entier) — sépare la config
       # (rafraîchie à chaque déploiement, hors du volume) de l'état
@@ -93,6 +97,8 @@ services:
       - /dev/net/tun
     environment:
       CELCAT_URL: ${CELCAT_URL}
+      # Règles d'envoi Celcat : MÊME valeur que pour `backend` (`off` par défaut).
+      CAL_IUT_REGLES_ENVOI: ${CAL_IUT_REGLES_ENVOI:-off}
       CELCAT_UTILISATEUR: ${CELCAT_UTILISATEUR}
       CELCAT_MOT_DE_PASSE: ${CELCAT_MOT_DE_PASSE}
       # Optionnels — sans eux, reseau.py retombe sur CELCAT_UTILISATEUR/

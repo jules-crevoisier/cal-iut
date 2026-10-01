@@ -1020,6 +1020,18 @@ def cmd_celcat_reseau(args: argparse.Namespace) -> int:
 
 
 def cmd_celcat_essai_regle(args: argparse.Namespace) -> int:
+    """Essai d'une règle d'envoi — QUEL QUE SOIT l'interrupteur
+    `CAL_IUT_REGLES_ENVOI` : c'est l'outil qui sert à valider une règle
+    avant de l'activer. Le forçage ne vaut que pour ce processus."""
+    from cal_iut.celcat.mapping import VARIABLE_REGLES, regles_actives, regles_forcees
+
+    etat = "actives" if regles_actives() else "INACTIVES (essai seulement : rien ne part par le robot)"
+    print(f"Règles d'envoi en service ({VARIABLE_REGLES}) : {etat}")
+    with regles_forcees():
+        return _essai_regle(args)
+
+
+def _essai_regle(args: argparse.Namespace) -> int:
     """Essai d'une règle d'envoi (celcat.yaml::regles_envoi) contre Celcat.
 
     Simulation par défaut (lecture seule, même sur URCA_2026) ; `--ecrire`

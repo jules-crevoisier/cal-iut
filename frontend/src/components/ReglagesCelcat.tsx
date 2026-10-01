@@ -227,6 +227,12 @@ export function ReglagesCelcat({
           </div>
         </div>
         <p className="celcat-sous-texte">
+          Règles d’envoi (WR100BU, PTUT) : <strong>{etat.regles_envoi_actives ? "actives" : "inactives"}</strong>.{" "}
+          {etat.regles_envoi_actives
+            ? "Ces séances partent avec la catégorie de leur règle."
+            : `Ces séances ne partent pas. Pour les activer : ${etat.variable_regles_envoi ?? "CAL_IUT_REGLES_ENVOI"}=on sur les services backend et celcat-nuit, puis redéployer.`}
+        </p>
+        <p className="celcat-sous-texte">
           {etat.derniere_ecriture_celcat
             ? `Dernière écriture réelle dans Celcat : ${dateLisible(etat.derniere_ecriture_celcat)}.`
             : "Aucune écriture encore faite dans Celcat."}

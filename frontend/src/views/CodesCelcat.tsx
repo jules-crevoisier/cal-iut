@@ -626,7 +626,9 @@ function Origine({ ligne: l, admin }: { ligne: LigneCodeCelcat; admin: boolean }
   if (l.origine === "regle") {
     return (
       <span className="codes-celcat-origine">
-        <span className="pill dot good">envoi sans module (règle)</span>
+        <span className={`pill dot ${l.origine_detail?.includes("inactive") ? "warn" : "good"}`}>
+          {l.origine_detail ?? "envoi sans module (règle)"}
+        </span>
         {l.motif_sans_code && <span className="codes-celcat-motif">{l.motif_sans_code}</span>}
         <span className="codes-celcat-qui">décidé dans celcat.yaml</span>
       </span>

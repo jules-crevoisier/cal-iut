@@ -331,6 +331,18 @@ Deux règles, demandées par Kyllian Bresson le 01/10/2026 :
 
 Pour les deux : département **T_MMI T29** ; salle, groupe (classe) et enseignant de la séance.
 
+### L'interrupteur : inactives par défaut
+
+Les règles ne s'appliquent que si la variable d'environnement **`CAL_IUT_REGLES_ENVOI=on`** est posée
+sur les **deux** services, `backend` et `celcat-nuit` (`docker-compose.yml` : `${CAL_IUT_REGLES_ENVOI:-off}`).
+
+- **`off`** (défaut) : les séances visées ne partent pas et ne bloquent rien.
+  Plan, comparaison et robot les montrent « non envoyée — règle d'envoi en attente d'activation (CAL_IUT_REGLES_ENVOI) »
+  (journal « non envoyé »). Codes Celcat affiche « règle d'envoi (inactive) ». Rien ne change pour les autres séances.
+- **`on`** : elles partent comme décrit ci-dessous.
+- L'écran **Celcat → Réglages** affiche « Règles d'envoi (WR100BU, PTUT) : inactives / actives », avec la variable à poser.
+- La commande d'essai (`cal-iut celcat-essai-regle`) marche **quelle que soit** la valeur : c'est elle qui sert à valider avant d'activer.
+
 ### Ce qui part
 
 - **Remarque** (onglet « Remarques et personnaliser », champ `notes`) : la remarque, puis l'identifiant de la séance.
@@ -358,7 +370,11 @@ Avant cette règle, une séance PTUT était bloquée (« type de séance PTUT sa
 ### Activer, désactiver
 
 Les règles sont dans `data/config/celcat.yaml`, section `regles_envoi` ([DATA.md](DATA.md#envoyer-avec-une-règle-denvoi)).
-Elles s'appliquent au déploiement suivant.
+Elles ne s'appliquent qu'avec `CAL_IUT_REGLES_ENVOI=on` (voir ci-dessus).
+
+- **Activer** : une fois les essais concluants, poser `CAL_IUT_REGLES_ENVOI=on` sur `backend` et `celcat-nuit`
+  (Dokploy : variables d'environnement de chaque service), redéployer, puis vérifier le plan et l'écran **Celcat → Réglages**.
+- **Tout couper d'un coup** : remettre `off` (ou retirer la variable), redéployer.
 
 - **Désactiver** : retirer le bloc (`WR100BU:` sous `cours:`, ou `PTUT:` sous `types:`), redéployer.
   Pour que WR100BU ne parte plus du tout, le remettre dans `sans_code_voulu.cours` (avec un motif).

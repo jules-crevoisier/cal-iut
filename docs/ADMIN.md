@@ -204,6 +204,11 @@ Certaines séances partent dans Celcat avec une catégorie, une remarque et un d
   (pondération 0), remarque **WR100BU**, département **T_MMI T29**, **sans matière**.
 - **Toute séance PTUT** : catégorie **Projet** (pondération 0), remarque **PTUT**, avec la matière du cours si son code est connu.
 
+> **À savoir :** ces règles sont **inactives** tant que la variable `CAL_IUT_REGLES_ENVOI` ne vaut pas `on`
+> (services backend et celcat-nuit). Inactives, ces séances ne partent pas et ne bloquent rien.
+> L'écran **Celcat → Réglages** affiche « Règles d'envoi : inactives / actives ».
+> Codes Celcat affiche alors « règle d'envoi (inactive) ».
+
 Dans **Codes Celcat**, WR100BU affiche « sans module » et l'origine **envoi sans module (règle)**, avec ce qui part.
 Rien ne s'y saisit : les règles sont dans `celcat.yaml` (section `regles_envoi`, voir [DATA.md](DATA.md#envoyer-avec-une-règle-denvoi)).
 Une séance WR100BU d'un autre enseignant n'est pas envoyée, sans rien bloquer (motif dans le plan Celcat, `GET /celcat/plan`).
@@ -553,6 +558,7 @@ Il survit aux déploiements. `data/config/` est hors du volume : il est mis à j
 | `BACKEND_URL` | frontend | Si le backend porte un autre nom | Adresse du backend sur le réseau interne (défaut `http://backend:8000`) |
 | `DNS_RESOLVER` | frontend | Non | Résolveur DNS de Docker (défaut `127.0.0.11`) |
 | `CELCAT_URL`, `CELCAT_UTILISATEUR`, `CELCAT_MOT_DE_PASSE` | celcat-nuit | Oui | Accès à Celcat (même mot de passe que le VPN) |
+| `CAL_IUT_REGLES_ENVOI` | backend **et** celcat-nuit | Non | Règles d'envoi Celcat (WR100BU, PTUT). `off` par défaut ; `on` après les essais ([A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md)) |
 | `VPN_PASSERELLE`, `VPN_UTILISATEUR`, `VPN_MOT_DE_PASSE`, `VPN_GROUPE`, `VPN_CODE` | celcat-nuit | Non | Seulement si le compte VPN diffère de celui de Celcat |
 
 Sur le poste local, ces valeurs vont dans `.env` (modèle : `.env.example`, jamais commité).

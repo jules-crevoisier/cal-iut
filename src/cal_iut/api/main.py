@@ -4092,6 +4092,7 @@ def _apres_ecriture_planning(session_id: str, action: str) -> None:
 def _celcat_etat_public() -> CelcatEtatResponse:
     from cal_iut.celcat.etat import charger, semaines_celcat_passees
     from cal_iut.celcat.logs import tous
+    from cal_iut.celcat.mapping import VARIABLE_REGLES, regles_actives
 
     doc = charger()
     compteurs = CelcatCompteurs()
@@ -4127,6 +4128,8 @@ def _celcat_etat_public() -> CelcatEtatResponse:
         derniere_ecriture_celcat=derniere_ecriture,
         compteurs=compteurs,
         worker_ok=_worker_joignable(),
+        regles_envoi_actives=regles_actives(),
+        variable_regles_envoi=VARIABLE_REGLES,
     )
 
 
@@ -4661,6 +4664,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
             codes_celcat=ctx.codes_celcat,
             types_seance=ctx.types_seance,
             categories_regle=ctx.categories_regle,
+            non_envoyees=ctx.non_envoyees,
             # Ce que NOUS avons ecrit, et ou. Sans cette table, deux seances
             # de meme matiere, meme groupe et meme jour peuvent echanger leur
             # evenement d'un releve a l'autre — et l'ecran montrerait alors

@@ -62,6 +62,8 @@ const ETAT = {
   derniere_ecriture_celcat: "2026-09-16T08:42:00",
   compteurs: { created: 1, modified: 0, deleted: 0, blocked: 1 },
   worker_ok: true,
+  regles_envoi_actives: false,
+  variable_regles_envoi: "CAL_IUT_REGLES_ENVOI",
 };
 
 const ECART = {
@@ -456,6 +458,18 @@ describe("Réglages", () => {
     fireEvent.click(screen.getByRole("switch", { name: /écriture dans celcat/i }));
     await waitFor(() => expect(urls(mock).some((u) => u.includes("/celcat/saisie"))).toBe(true));
     expect(confirmAsync).not.toHaveBeenCalled();
+  });
+
+  it("dit si les règles d'envoi sont inactives, et quelle variable poser", async () => {
+    await ouvrir();
+    expect(await screen.findByText(/CAL_IUT_REGLES_ENVOI=on sur les services backend et celcat-nuit/)).toBeInTheDocument();
+    expect(screen.getByText("inactives")).toBeInTheDocument();
+  });
+
+  it("dit quand les règles d'envoi sont actives", async () => {
+    await ouvrir({ etat: { regles_envoi_actives: true, variable_regles_envoi: "CAL_IUT_REGLES_ENVOI" } });
+    expect(await screen.findByText("actives")).toBeInTheDocument();
+    expect(screen.queryByText(/CAL_IUT_REGLES_ENVOI=on/)).not.toBeInTheDocument();
   });
 
   it("met le worker en pause sans jamais toucher à l'écriture, et le dit", async () => {
