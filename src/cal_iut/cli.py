@@ -1190,6 +1190,52 @@ def _essai_regle(args: argparse.Namespace) -> int:
                 navigateur.close()
 
 
+def cmd_celcat_occupations(args: argparse.Namespace) -> int:
+    """Occupations HORS MMI des salles et enseignants surveillés, lues dans
+    Celcat — LECTURE SEULE, toujours (rôle `985_consultation`).
+
+    C'est la commande que l'admin lance dans le conteneur `celcat-nuit` (ou
+    sur son PC, VPN monté) pour vérifier ce que le sidecar relève toutes les
+    2 h (cf. docs/A-TESTER-SUR-CELCAT.md). `--simulation` rejoue un relevé
+    enregistré, sans réseau.
+    """
+    from datetime import date
+
+    from cal_iut.celcat import occupations
+
+    def _date(valeur: str | None) -> date | None:
+        return date.fromisoformat(valeur) if valeur else None
+
+    try:
+        du, au = _date(args.du), _date(args.au)
+    except ValueError as exc:
+        print(f"date invalide : {exc}", file=sys.stderr)
+        return 2
+    filtre = [r for brut in args.ressource or [] for r in brut.split(",") if r.strip()]
+    kwargs = dict(
+        filtre=filtre or None, du=du, au=au, ecrire_fichier=args.ecrire_fichier,
+        base=args.base, details=args.details,
+    )
+    if args.simulation:
+        page = occupations.PageSimulee.depuis_fichier(Path(args.simulation))
+        occupations.executer(page, **kwargs)
+        return 0
+
+    from dotenv import load_dotenv
+
+    from cal_iut.celcat.session_lecture import CelcatInjoignable, session_lecture
+
+    load_dotenv()
+    try:
+        with session_lecture(base=args.base, vpn=args.vpn) as page:
+            print(f"Connecté à {args.base} en lecture seule.")
+            occupations.executer(page, **kwargs)
+    except CelcatInjoignable as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
     from dotenv import load_dotenv
@@ -1389,7 +1435,7 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Générateur d'emplois du temps IUT MMI Troyes")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -1771,6 +1817,29 @@ def main() -> int:
     essai_parser.add_argument("--json", default=None, help="écrire la charge et la relecture dans ce fichier")
     essai_parser.set_defaults(func=cmd_celcat_essai_regle)
 
+
+    celcat_parser = sub.add_parser("celcat", help="Celcat en lecture seule (occupations hors MMI…)")
+    celcat_sub = celcat_parser.add_subparsers(dest="celcat_commande", required=True)
+    occ_parser = celcat_sub.add_parser(
+        "occupations",
+        help="Occupations HORS MMI des salles et enseignants surveillés (lecture seule)",
+    )
+    occ_parser.add_argument(
+        "--ressource", action="append", metavar="H018|AFR",
+        help="salle (H018, H.018, h018) ou trigramme enseignant ; répétable ou séparé par des virgules",
+    )
+    occ_parser.add_argument("--du", help="début de période (AAAA-MM-JJ, défaut : lundi de cette semaine)")
+    occ_parser.add_argument("--au", help="fin de période (AAAA-MM-JJ, défaut : 31 juillet)")
+    occ_parser.add_argument(
+        "--ecrire-fichier", action="store_true",
+        help="dépose data/state/celcat_occupations_externes.json (relevé complet seulement, sans --ressource)",
+    )
+    occ_parser.add_argument("--vpn", action="store_true", help="monter le VPN si Celcat n'est pas joignable en direct")
+    occ_parser.add_argument("--base", default="URCA_2026", help="base Celcat (lecture seule ; défaut URCA_2026)")
+    occ_parser.add_argument("--details", action="store_true", help="liste aussi les évènements ignorés et pourquoi")
+    occ_parser.add_argument("--simulation", metavar="FICHIER", help="rejoue un relevé JSON, sans réseau")
+    occ_parser.set_defaults(func=cmd_celcat_occupations)
+
     serve_parser = sub.add_parser("serve", help="Démarrer l'API FastAPI")
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8000)
@@ -1796,7 +1865,7 @@ def main() -> int:
     )
     export_parser.set_defaults(func=cmd_export)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args.func(args)
 
 

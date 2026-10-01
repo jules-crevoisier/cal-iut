@@ -373,6 +373,34 @@
   font-weight: 600;
 }
 
+/* Occupé ailleurs dans Celcat (autre département, réservation) : même
+   bande discrète que PAC, hachurée pour se distinguer d'un créneau MMI. */
+.sessiongrid-externe {
+  height: 100%;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, transparent 6px 12px);
+}
+
+/* Une séance posée SUR une occupation externe : le conflit se voit dans la
+   case même, sans attendre « À traiter ». */
+.sessiongrid-externe-alerte {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--bad, #b42318);
+  padding: 2px 4px 0;
+}
+
 /* ── Infobulle ── */
 .sessiongrid-hover {
   position: fixed;

@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { ManquesDeLaFiche } from "../components/CompleterManque";
+import { BandeauOccupationsCelcat } from "../components/BandeauOccupationsCelcat";
 import { FicheIdentite, FicheOutils } from "../components/FicheEntete";
 import { FicheIntrouvable } from "../components/FicheIntrouvable";
 import { NavSemaine } from "../components/NavSemaine";
@@ -26,6 +27,7 @@ import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { annuaireSalles, CRENEAUX_SEMAINE, libelleTypeSalle } from "../utils/annuaires";
 import { sessionsWithDates } from "../utils/ics";
+import { libellesParCase, occupationsParCase } from "../utils/occupationsExternes";
 import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
 import { SLOT_TIMES } from "../utils/slots";
 import { AnnuaireSalles, SEUIL_SATUREE } from "./Annuaires";
@@ -176,6 +178,7 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
 
       <div className="fiche-corps avec-cote">
         <div className="fiche-grille" id="planning">
+          <BandeauOccupationsCelcat payload={payload} />
           <PlanningSemaine
             payload={payload}
             rows={rowsThisWeek}
@@ -187,6 +190,7 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
             onJour={c.setJour}
             titreImpression={`Salle ${room.label}`}
             videLibelle="Salle libre toute la semaine."
+            externes={libellesParCase(occupationsParCase(payload, "salle", room.id, c.solverWeek))}
           />
         </div>
         <aside className="fiche-cote" aria-label="Fiche de la salle">

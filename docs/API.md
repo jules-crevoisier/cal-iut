@@ -146,6 +146,7 @@ C'est le schéma d'une appli comme « MMI Troyes EDT » : elle sonde `/version`,
 | Ce qui se passe un jour de SAE | `/api/v1/sae/journees?du=…&au=…` |
 | Suivre une SAE | `/api/v1/sae/WS501D`, ou `/api/v1/sae` (anomalies en tête). |
 | Corrections à faire | `/api/v1/a-traiter`, `/api/v1/seances/non-placees`, `/api/v1/controles/doublons`. |
+| Enseignant ou salle pris ailleurs dans Celcat | `/api/v1/occupations-externes?ressource=AFR` |
 | Données de référence manquantes | `/api/v1/manques` |
 | Contraintes d'un enseignant | `/api/v1/enseignants/MRI/contraintes` |
 | Tableau de bord des charges | `/api/v1/charges` (toutes les semaines d'un coup dans `heures_par_semaine`). |
@@ -186,6 +187,7 @@ documentation interactive : [`/api/v1/docs`](#documentation-interactive).
 | `/api/v1/sae[/{code}]` | Cours de SAE : placés, non placés, anomalies | compte actif | oui |
 | `/api/v1/a-traiter` | Écran « À traiter » | compte actif ² | oui |
 | `/api/v1/controles/doublons` | Salle ou enseignant pris deux fois | rôle **édition** ou **admin** | oui |
+| `/api/v1/occupations-externes` | Salles et enseignants pris hors MMI dans Celcat | compte actif | oui |
 | `/api/v1/manques` | Données de référence à compléter | compte actif | — |
 | `/api/v1/contraintes` | Règles globales et contraintes des enseignants | compte actif | — |
 | `/api/v1/enseignants/{code}/contraintes` | Contraintes d'un enseignant | compte actif | — |
@@ -333,6 +335,7 @@ curl --compressed -H "Authorization: Bearer $CLE" \
  "occupees": [
    {"salle_id": "h018", "motif": "seance", "seance_id": "WR118-S1-CM-3", "cours_code": "WR118"},
    {"salle_id": "h018", "motif": "reservation", "detail": "Besoin de la Direction"},
+   {"salle_id": "h105", "motif": "celcat", "detail": "Réservée dans Celcat (département TC, Marketing, 10:00–12:30)"},
    {"salle_id": "h008", "motif": "salle_liee", "detail": "h007"}]}
 ```
 
@@ -340,6 +343,7 @@ Une salle est occupée par :
 
 - une séance (y compris un bloc de 3 h commencé au créneau d'avant) ;
 - une réservation d'un tiers ;
+- une réservation **dans Celcat** hors MMI (`celcat` : autre département, administration — relevé du robot Celcat) ;
 - une salle **liée** occupée (`salle_liee`) : H.007 prise rend H.008 et H.007+H.008 indisponibles.
 
 Une salle annoncée libre ici est une salle que le serveur acceptera.
@@ -476,6 +480,7 @@ Les trois endpoints SAE sont décrits au [§ 6](#6-les-sae-simplement).
 | `doublon` | Doublons salle / enseignant | `a_corriger` |
 | `regle` | Règles globales en échec | `a_corriger` |
 | `contrainte` | Indisponibilités enseignant non respectées | `a_corriger` |
+| `occupation-externe` | Occupés ailleurs dans Celcat : séance placée sur un créneau où l'enseignant ou la salle est pris hors MMI (`detail` = message du placement) | `a_corriger` |
 | `sae-hors-journee` | Cours de SAE placés hors journée SAE (les `anomalies` de `/api/v1/sae`) | `a_corriger` |
 | `compromis-sae` | Encadrement SAE le même jour (compromis accepté) | `a_revoir` |
 | `trouee` | Journées trouées (≥ 2 créneaux vides entre deux cours d'un groupe) | `a_revoir` |
@@ -496,11 +501,40 @@ Les trois endpoints SAE sont décrits au [§ 6](#6-les-sae-simplement).
 
 - Les compteurs comptent des **occurrences** (un point « ×5 » compte 5), après filtres.
 - `cle` : identifiant stable d'un point, pour voir ce qui apparaît ou disparaît.
-- Champs selon la nature : `seance_id` (sans salle), `seances` et `type_doublon` (doublon), `groupe` (journée
+- Champs selon la nature : `seance_id` (sans salle, occupation externe), `seances` et `type_doublon` (doublon), `groupe` (journée
   trouée), `regle` (règle), `motif` (contrainte, compromis SAE).
 - Tri : sans semaine, semaine en cours, semaines à venir, puis semaines passées (la plus récente d'abord).
   Avec `semaine=`, les points sans semaine restent inclus, comme à l'écran.
 - Le badge « nouveau » de l'écran n'est pas repris.
+
+#### `GET /api/v1/occupations-externes`
+
+**But :** ce que Celcat contient sur nos salles et nos enseignants **hors de nos évènements** (cours d'un autre
+département, réunion, réservation de l'administration), tel que le robot Celcat l'a relevé (toutes les 2 h).
+Ces occupations sont des contraintes pour le générateur et un conflit au placement manuel (cf. [CELCAT.md § 6](CELCAT.md#6-occupations-hors-mmi)).
+**Droits :** compte actif (pas de lien public).
+**Filtres :** `type` (`salle` | `enseignant`), `ressource` (`h018`, `AFR`), `semaine`.
+
+```json
+{"releve_le": "2026-10-01T06:00:12+00:00", "age_secondes": 3600.0, "perime": false,
+ "fraicheur_heures": 6.0, "strict": false, "erreur": null, "total": 1,
+ "occupations": [
+   {"type": "enseignant", "ressource": "AFR", "libelle": "Anthony Froli", "date": "2026-10-05",
+    "debut": "10:00", "fin": "12:30", "semaine": 5, "numero_semaine": 41, "jour": 0, "jour_nom": "lundi",
+    "creneaux": [1, 2], "departement": "TC", "categorie": "[CM]", "intitule": "Marketing digital",
+    "event_id": 1950001}],
+ "conflits": [
+   {"seance_id": "WR101-S1-TD-3", "cours_code": "WR101", "semaine": 5, "jour": 0, "creneau": 1,
+    "type": "enseignant", "ressource": "AFR",
+    "message": "Enseignant indisponible — Anthony Froli est déjà programmé dans le département TC sur ce créneau (lundi 05/10, 10h00–12h30, Celcat)."}]}
+```
+
+- `debut`/`fin` : heures **réelles** dans Celcat ; `creneaux` : nos créneaux qu'elles chevauchent (0 = 08:00 … 5 = 17:00).
+- `departement` vide = administration / hors département.
+- `releve_le: null` : aucun relevé, donc aucune contrainte externe. `perime: true` : relevé plus vieux que
+  `fraicheur_heures` ; il reste appliqué tel quel.
+- `conflits` : séances déjà placées sur une occupation (même liste que la nature `occupation-externe` de `/a-traiter`).
+- ETag : la révision avance dès qu'un nouveau relevé est déposé.
 
 #### `GET /api/v1/controles/doublons`
 

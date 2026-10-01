@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from cal_iut.api import occupations_externes
 from cal_iut.api import (
     accounts,
     anti_aspiration,
@@ -649,6 +650,9 @@ def _fichiers_de_configuration() -> list[Path]:
 
 revision.enregistrer_sonde("etat", _empreinte_etat)
 revision.enregistrer_sonde("configuration", revision.sonde_fichiers(_fichiers_de_configuration))
+# Relevé des occupations hors MMI déposé par le sidecar dans le volume
+# partagé : un nouveau relevé fait avancer la révision, l'écran se recharge.
+revision.enregistrer_sonde("occupations_externes", occupations_externes.sonde)
 
 
 class _FermerSessionsDb:
@@ -1384,6 +1388,9 @@ def _build_app_context(state: object) -> _AppContext:
 _CLES_PRIVEES_PAYLOAD = (
     "teacherEmails", "teachers", "seancesNonPlacees", "ruleChecks", "exceptions", "surchargesReference",
     "intervenantsAppli", "teacherIdentites",
+    # Occupations hors MMI (Celcat) : intitulés et groupes d'AUTRES
+    # départements — rien à faire sur un lien public (01/10/2026).
+    "occupationsExternes",
 )
 
 
@@ -1518,6 +1525,10 @@ def _calculer_payload_app_state() -> dict[str, object]:
     from cal_iut.ingestion.config_loader import load_room_reservation_entries
 
     payload["roomReservations"] = load_room_reservation_entries(state.config_dir)
+    # Occupations HORS MMI relevées dans Celcat par le sidecar (01/10/2026) :
+    # blocs « Occupé ailleurs » / « Réservé dans Celcat », fraîcheur du
+    # relevé, et séances déjà placées en conflit (« À traiter »).
+    payload["occupationsExternes"] = occupations_externes.pour_payload(state)
     return payload
 
 
@@ -1799,7 +1810,9 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
     try:
         result = solve_fn(
             all_sessions,
-            state.teacher_availability,
+            # + occupations hors MMI relevées dans Celcat : contraintes dures,
+            # comme une indisponibilité datée (cf. `api/occupations_externes.py`).
+            occupations_externes.disponibilites_avec_externes(state, state.teacher_availability),
             calendar=state.calendar,
             student_presences=state.student_presences,
             semestre=resolved_semestre,
@@ -1821,7 +1834,7 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
     with_rooms = (
         assign_rooms(
             placements, sessions_by_id, state.rooms, state.groups, state.room_rules,
-            state.teacher_duos, reserved=state.room_reservations,
+            state.teacher_duos, reserved=occupations_externes.reservations_effectives(state),
         )
         if body.assign_rooms
         else [
@@ -2931,7 +2944,9 @@ def _resolve_room(state: object, session: object, week: int, day: int, slot: int
     return find_room_for_slot(
         session, week, day, slot, state.timetable, state.sessions_by_id,
         state.rooms, state.groups, state.room_rules, prefer_room_id=prefer_room_id,
-        reserved=getattr(state, "room_reservations", None),
+        # Réservations de tiers (`salles_reservees.yaml`) ET salles prises
+        # dans Celcat (relevé du sidecar, cf. `api/occupations_externes.py`).
+        reserved=occupations_externes.reservations_effectives(state),
         # Même carte que la validation qui suit (`validate_move`) : H.007 et
         # H.008 « c'est la même salle » pour un placement manuel (Kyllian
         # Bresson, 25/09/2026). Avec la carte de l'affectation automatique,
@@ -3312,7 +3327,31 @@ def _conflits_deplacement(
         institutional = institutional + strictes
     else:
         forceable += _teacher_availability_violations(state, session, week, day, slot)
+    # Enseignant déjà programmé AILLEURS dans Celcat (autre département,
+    # réunion…), relevé par le sidecar (01/10/2026, cf.
+    # `api/occupations_externes.py`). Forçable par défaut — le relevé peut
+    # avoir deux heures — sauf `strict: true` dans `celcat_occupations.yaml`.
+    externes = occupations_externes.conflits_enseignant(state, session, week, day, slot)
+    if externes:
+        if occupations_externes.strict():
+            institutional = institutional + externes
+        else:
+            forceable += externes
     return institutional, forceable
+
+
+def _refuser_si_salle_externe_stricte(bloquants: list[str]) -> None:
+    """Mode `strict` des occupations Celcat (`celcat_occupations.yaml`) : une
+    salle prise dans Celcat refuse le placement sans « Forcer ». Hors mode
+    strict, `occupations_externes.appliquer_salle` a déjà ajouté le conflit
+    (forçable) au résultat de `validate_move` et rend une liste vide."""
+    if bloquants:
+        raise HTTPException(409, detail={
+            "message": "Déplacement impossible",
+            "hard_conflicts": bloquants,
+            "blocking_conflicts": bloquants,
+            "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+        })
 
 
 def _indisponibilites_strictes(state: object, session: object, week: int, day: int, slot: int) -> list[str]:
@@ -3381,7 +3420,7 @@ def _suggestions_for(state: object, session_id: str, match: object) -> tuple[lis
     # candidat "propre", un créneau qu'il faudrait ensuite forcer quand même.
     raw = suggest_alternative_slots(
         session_id, match.group_ids, match.teacher_codes, _as_placed(state.timetable),
-        state.calendar, session.semestre, teacher_availability=state.teacher_availability,
+        state.calendar, session.semestre, teacher_availability=occupations_externes.disponibilites_avec_externes(state, state.teacher_availability),
         room_id=None, search_from_week=match.week, max_suggestions=8,
         extra_blocked=extra_blocked | extra_blocked_pedago, allowed_weeks=allowed_weeks,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
@@ -3458,6 +3497,11 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         sessions_by_id=state.sessions_by_id,
         groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+    )
+    # Salle prise dans Celcat (relevé du sidecar) : forçable, ou bloquante
+    # en mode strict (cf. `occupations_externes.appliquer_salle`).
+    institutional = institutional + occupations_externes.appliquer_salle(
+        state, session, target_room_id, body.week, body.day, body.slot, result
     )
     # `blocking_conflicts` DOIT rester un sous-ensemble de `hard_conflicts`
     # (cf. schemas.ValidationResponse.blocking_conflicts) : un message
@@ -3569,6 +3613,9 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         # d'atteindre `validate_move` — bug réel trouvé le 25/09/2026, retour
         # Kyllian Bresson, cf. `api/doublons.py`).
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+    )
+    _refuser_si_salle_externe_stricte(
+        occupations_externes.appliquer_salle(state, session, target_room_id, body.week, body.day, body.slot, validation)
     )
 
     if not validation.valid and not body.force:
@@ -3843,6 +3890,13 @@ def _controler_echange(
             conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle, set()) if salle else None,
             ignore_session_ids=ignorees,
         )
+        # Salle prise dans Celcat : forçable (ajoutée à `resultat`), ou
+        # bloquante en mode strict.
+        stricts_salle = occupations_externes.appliquer_salle(
+            state, seance, salle, placement.week, placement.day, placement.slot, resultat
+        )
+        bloquants += stricts_salle
+        durs += stricts_salle
         durs += resultat.hard_conflicts
         doux += resultat.soft_warnings
     return durs, bloquants, doux
@@ -3952,11 +4006,19 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
             f"pour un effectif de {effectif}."
         )
 
-    if (occupants or avertissements or verrous) and not body.force:
+    # Salle prise dans Celcat (relevé du sidecar) : un conflit de plus,
+    # forçable — ou un refus en mode strict.
+    externes_salle = occupations_externes.conflits_salle(
+        state, session, salle.id, match.week, match.day, match.slot
+    ) if session is not None else []
+    if externes_salle and occupations_externes.strict():
+        _refuser_si_salle_externe_stricte(externes_salle)
+
+    if (occupants or avertissements or verrous or externes_salle) and not body.force:
         conflits = verrous + (
             [f"Conflit salle : {', '.join(sorted(set(occupants)))} occupe(nt) déjà {salle.label} à ce créneau."]
             if occupants else []
-        )
+        ) + externes_salle
         raise HTTPException(409, detail={
             "message": "Conflit",
             "hard_conflicts": conflits,
@@ -5684,7 +5746,7 @@ def creneaux_libres(session_id: str, depuis_semaine: int = 0, maximum: int = 12)
     brutes = suggest_alternative_slots(
         session_id, list(session.group_ids or []), list(session.teacher_codes or []),
         _as_placed(state.timetable), state.calendar, session.semestre,
-        teacher_availability=state.teacher_availability, room_id=None,
+        teacher_availability=occupations_externes.disponibilites_avec_externes(state, state.teacher_availability), room_id=None,
         search_from_week=depuis_semaine,
         max_weeks=len(state.calendar.teaching_mondays),
         max_suggestions=maximum, extra_blocked=extra_blocked | extra_blocked_pedago, allowed_weeks=allowed_weeks,
@@ -5718,7 +5780,7 @@ def creneaux_libres(session_id: str, depuis_semaine: int = 0, maximum: int = 12)
         forcable = suggest_alternative_slots(
             session_id, list(session.group_ids or []), list(session.teacher_codes or []),
             _as_placed(state.timetable), state.calendar, session.semestre,
-            teacher_availability=state.teacher_availability, room_id=None,
+            teacher_availability=occupations_externes.disponibilites_avec_externes(state, state.teacher_availability), room_id=None,
             search_from_week=depuis_semaine,
             max_weeks=len(state.calendar.teaching_mondays),
             max_suggestions=1, extra_blocked=extra_blocked, allowed_weeks=None,
@@ -5841,6 +5903,9 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
         salle_id,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
+    )
+    _refuser_si_salle_externe_stricte(
+        occupations_externes.appliquer_salle(state, session, salle_id, body.week, body.day, body.slot, validation)
     )
     if not validation.valid and not body.force:
         raise HTTPException(409, detail={
@@ -6621,7 +6686,7 @@ def completer() -> CompletionResponse:
         brutes = suggest_alternative_slots(
             session.id, list(session.group_ids or []), list(session.teacher_codes or []),
             _as_placed(state.timetable), state.calendar, session.semestre,
-            teacher_availability=state.teacher_availability, room_id=None,
+            teacher_availability=occupations_externes.disponibilites_avec_externes(state, state.teacher_availability), room_id=None,
             search_from_week=0, max_weeks=horizon, max_suggestions=25,
             extra_blocked=extra_blocked | extra_blocked_pedago, allowed_weeks=allowed_weeks,
             sessions_by_id=state.sessions_by_id, groups=state.groups,
@@ -6646,7 +6711,7 @@ def completer() -> CompletionResponse:
         calendar=state.calendar,
         semestre_par_defaut=semestre,
         config_dir=state.config_dir,
-        teacher_availability=state.teacher_availability,
+        teacher_availability=occupations_externes.disponibilites_avec_externes(state, state.teacher_availability),
         contexte_dur=lambda s: _hard_constraint_context(state, s),
         creneaux_candidats=_candidats,
         poser=_poser,
@@ -7192,6 +7257,12 @@ app.include_router(_router_admin_trafic)
 from cal_iut.api.reference import router as _router_reference
 
 app.include_router(_router_reference)
+
+# Occupations hors MMI relevées dans Celcat (01/10/2026, cf.
+# `api/occupations_externes.py`) — sous `/celcat`, réservé aux admins.
+from cal_iut.api.occupations_externes_routes import router as _router_occupations_externes
+
+app.include_router(_router_occupations_externes)
 
 # Onglet « Codes Celcat » de Référence (30/09/2026, cf. `api/codes_celcat.py`)
 # — même préfixe `/reference`, donc même protection.

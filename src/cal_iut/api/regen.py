@@ -240,6 +240,12 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
 
     exceptions = repo.list_exceptions(active_only=True)
     teacher_availability = _merge_adhoc_teacher_exceptions(state.teacher_availability, exceptions)
+    # Occupations hors MMI relevées dans Celcat (autre département, réunion…)
+    # : contraintes dures, comme une indisponibilité datée — cf.
+    # `api/occupations_externes.py`.
+    from cal_iut.api import occupations_externes
+
+    teacher_availability = occupations_externes.disponibilites_avec_externes(state, teacher_availability)
 
     # `fixed` : séances verrouillées dans la portée -> pinnées à leur créneau
     # LOCAL actuel (incluses dans le modèle pour les NoOverlap, jamais déplacées).
@@ -325,7 +331,7 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
     with_rooms = assign_rooms(
         new_placements, state.sessions_by_id, state.rooms, state.groups, state.room_rules,
         state.teacher_duos, course_cm_room_seed=course_cm_room_seed,
-        reserved=getattr(state, "room_reservations", None),
+        reserved=occupations_externes.reservations_effectives(state),
     )
 
     deplacees = fusionner(state, repo, weeks, positions_depart, with_rooms)

@@ -53,6 +53,9 @@ interface PlanningSemaineProps {
   videLibelle?: string;
   /** Enseignant à ne pas répéter sur chaque carte (c'est son planning). */
   exclureProf?: string;
+  /** Occupations hors MMI (Celcat) par case « jour-créneau » — cf.
+   *  `SessionGrid.externes`. */
+  externes?: Map<string, string[]>;
 }
 
 export function PlanningSemaine({
@@ -70,6 +73,7 @@ export function PlanningSemaine({
   titreImpression,
   videLibelle = "Aucun cours cette semaine.",
   exclureProf,
+  externes,
 }: PlanningSemaineProps) {
   const semaine = payload.weekRows[displayIndex];
   const week = semaine?.weekIndex ?? null;
@@ -112,6 +116,7 @@ export function PlanningSemaine({
           exclureProf={exclureProf}
           jour={jour}
           onJour={onJour}
+          externes={externes}
         />
       ) : (
         <SessionGrid
@@ -122,6 +127,7 @@ export function PlanningSemaine({
           showPac={showPac}
           split={split}
           showPromo={showPromo}
+          externes={externes}
         />
       )}
     </div>
@@ -138,12 +144,24 @@ interface ListeJoursProps {
   exclureProf?: string;
   jour: number;
   onJour: (jour: number) => void;
+  externes?: Map<string, string[]>;
 }
 
 const JOUR_LONG = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
 /** Lecture jour par jour, sur téléphone. */
-export function ListeJours({ payload, rows, week, parcours, showPac, showPromo, exclureProf, jour, onJour }: ListeJoursProps) {
+export function ListeJours({
+  payload,
+  rows,
+  week,
+  parcours,
+  showPac,
+  showPromo,
+  exclureProf,
+  jour,
+  onJour,
+  externes,
+}: ListeJoursProps) {
   const couleursParMatiere = usePreferences().couleursParMatiere;
   const aujourdhui = jourAujourdhuiDansSemaine(payload, week, new Date());
   const toucher = useRef<{ x: number; y: number } | null>(null);
@@ -169,6 +187,14 @@ export function ListeJours({ payload, rows, week, parcours, showPac, showPromo, 
     ),
   );
   const evenementsJour = payload.eventRows.filter((e) => e.w === week && e.d === jour).flatMap((e) => e.labels);
+  // Occupations hors MMI du jour (Celcat) : une bande par libellé et créneaux.
+  const externesJour: string[] = [];
+  for (let s = 0; s < 6; s += 1) {
+    for (const libelle of externes?.get(`${jour}-${s}`) ?? []) {
+      const texte = `${libelle} — ${["8h", "9h30", "11h", "14h", "15h30", "17h"][s]}`;
+      if (!externesJour.includes(texte)) externesJour.push(texte);
+    }
+  }
   const matin = duJour.filter((r) => r.s < 3);
   const apresMidi = duJour.filter((r) => r.s >= 3);
   const prochainJourAvecCours = [1, 2, 3, 4].map((k) => jour + k).find((d) => d <= 4 && parJour[d].length > 0);
@@ -270,6 +296,11 @@ export function ListeJours({ payload, rows, week, parcours, showPac, showPromo, 
         )}
         {[...evenementsJour, ...evenements].map((e) => (
           <p key={e} className="jour-bande">
+            {e}
+          </p>
+        ))}
+        {externesJour.map((e) => (
+          <p key={e} className="jour-bande jour-bande--externe">
             {e}
           </p>
         ))}

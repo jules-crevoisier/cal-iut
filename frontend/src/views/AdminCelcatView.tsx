@@ -54,6 +54,7 @@ import { BlocagesCelcat } from "../components/BlocagesCelcat";
 import { DetailComparaisonCelcat } from "../components/DetailComparaisonCelcat";
 import { EtatFileCelcat } from "../components/EtatFileCelcat";
 import { JournalCelcat } from "../components/JournalCelcat";
+import { OccupationsHorsMmi } from "../components/OccupationsHorsMmi";
 import { ReglagesCelcat } from "../components/ReglagesCelcat";
 import { StatutCelcat } from "../components/StatutCelcat";
 import { SuppressionsCelcat } from "../components/SuppressionsCelcat";
@@ -404,6 +405,8 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
           />
         </aside>
       </div>
+
+      <OccupationsHorsMmi />
 
       <JournalCelcat logs={logs} />
 

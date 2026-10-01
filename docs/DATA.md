@@ -94,6 +94,7 @@ Colonne « Effet » : ce qu'il faut faire pour qu'une modification compte (déta
 | [`celcat_matieres.yaml`](#celcat_matieresyaml) | Identifiants Celcat des matières | main (relevé) | Redéploiement |
 | [`celcat_formulaire.yaml`](#celcat_formulaireyaml-et-celcat_rpcyaml) | Libellés du formulaire Celcat | main (relevé) | Redéploiement |
 | [`celcat_rpc.yaml`](#celcat_formulaireyaml-et-celcat_rpcyaml) | Méthodes d'écriture Celcat | main (relevé) | Redéploiement |
+| [`celcat_occupations.yaml`](#celcat_occupationsyaml) | Occupations hors MMI : salles et enseignants surveillés dans Celcat, période, forçable ou strict, fraîcheur | main | Redéploiement (sidecar et appli) |
 
 #### `data/state/` (volume persistant, écrit par l'appli, jamais versionné sauf la base)
 
@@ -109,6 +110,7 @@ Colonne « Effet » : ce qu'il faut faire pour qu'une modification compte (déta
 | `celcat_file/` | File d'attente Celcat : un fichier par écriture à faire | appli + worker | Immédiat |
 | `celcat_sync.json` | Ce qui a été saisi dans Celcat (signature par séance) | worker | — |
 | `celcat_instantane.json`, `celcat_instantane_demande.json` | Relevé de Celcat fait par le worker, et sa demande | worker / appli | — |
+| `celcat_occupations_externes.json`, `celcat_occupations_demande.json` | Occupations hors MMI de nos salles et enseignants relevées dans Celcat (cf. [`celcat_occupations.yaml`](#celcat_occupationsyaml)), et la demande « Relire maintenant » | worker / appli | Immédiat (l'appli le relit dès qu'il change) |
 | `celcat_drainage.json`, `celcat_logs.json`, `celcat_extras.json` | Trace du dernier passage, journal, cours présents seulement dans Celcat | worker | — |
 | `celcat_correction_en_cours.json` | Correction Celcat envoyée, en attente du worker | appli | — |
 | `*.lock`, `*.migre`, `celcat_file_attente.json` | Verrous entre conteneurs ; ancienne file mise de côté | technique | Ne pas toucher |
@@ -1053,6 +1055,44 @@ reservations:
 - Utilisé par l'attribution automatique des salles et la vue « Salles libres ». Aucun cours n'est déplacé.
 - BUT1 et BUT2-DEV-FI n'ont que l'amphi pour leurs CM : réserver H.018 peut laisser un CM sans salle.
 
+### `celcat_occupations.yaml`
+
+Occupations **hors MMI** lues dans Celcat (demande du 01/10/2026) : un autre département programme
+un de nos enseignants, l'administration réserve l'amphi H.018. Le sidecar `celcat-nuit` les relit
+toutes les 2 h (et sur « Relire maintenant ») et dépose `data/state/celcat_occupations_externes.json`.
+
+```yaml
+actif: true
+salles: toutes            # ou [h018, h103] ; « toutes » = celles qui ont un équivalent Celcat
+salles_prioritaires: [h018, amphi1_tc_gea, amphi2_gmp_geii]   # toujours surveillées
+exclure_salles: []
+enseignants: tous         # ou [AFR, KBR] ; « tous » = ceux qui ont un code Celcat
+exclure_enseignants: []
+periode: {du: auto, au: auto}   # auto = lundi de cette semaine → 31 juillet
+prefixes_groupes_mmi: ["BUT MMI"]
+departements_mmi: ["T_MMI"]
+libelles_departements: {}       # ex. {"T_TC T27": "TC"} si le sigle n'est pas déduit
+categories_ignorees: []
+strict: false             # true : refus au placement manuel, sans « Forcer »
+fraicheur_heures: 6       # au-delà, bandeau « relevé il y a N h »
+cadence_heures: 2
+lot: 10                   # identifiants par requête udlTimetables.load
+pause_s: 0.3
+cles_filtre_salles: [RoomIDs]
+cles_filtre_enseignants: [StaffIDs, StaffID]
+```
+
+- **Ce qui est ignoré (« à nous »)** : un évènement écrit par cal-iut (journal `celcat_sync.json`, ou `notes` = identifiant de séance),
+  un **cours** (catégorie entre crochets) d'un groupe « BUT MMI … », ou du département MMI sans groupe ;
+  un jour férié, un évènement global, suspendu ou sans horaire.
+- **Ce qui compte** : tout le reste — cours d'un autre département, réunion, jury, réservation de l'administration,
+  y compris une réunion MMI saisie seulement dans Celcat.
+- **Conversion** : heure réelle → nos créneaux chevauchés (10h00-12h30 bloque 9h30-11h et 11h-12h30 ; tolérance 5 min).
+- **Effet** : générateur et lissage → contrainte dure ; affectation et recherche de salle → salle exclue ;
+  placement manuel → conflit **forçable** (ou refus si `strict: true`) ; « À traiter » → catégorie **Occupés ailleurs dans Celcat**.
+- Fichier d'état **absent** : aucune contrainte externe. **Ancien** (> `fraicheur_heures`) : contraintes gardées, bandeau.
+- Détail technique et marche à suivre si une occupation est fausse : [CELCAT.md](CELCAT.md#6-occupations-hors-mmi).
+
 ### `evenements_supplementaires.yaml`
 
 Événements fixes annoncés après l'export officiel « Dates MMI ».
@@ -1281,6 +1321,13 @@ En mode décomposé, plusieurs poids mous sont fixés dans `solver/decomposed.py
 
 Les salles ne sont **pas** dans le calcul : elles sont attribuées après (cf. [`rooms.yaml`](#roomsyaml)).
 En manuel : un conflit de salle est forçable ; l'appli garde la salle si elle est libre, sinon en cherche une autre.
+Une salle réservée par un tiers (`salles_reservees.yaml`) ou **prise dans Celcat** (`celcat_occupations.yaml`) n'est jamais attribuée automatiquement.
+
+### Occupations hors MMI (Celcat)
+
+Un enseignant programmé ailleurs dans Celcat (autre département, réunion) est **indisponible** pour le solveur,
+la régénération et le lissage, exactement comme une indisponibilité datée (`TeacherDateSlotRule`, dure).
+Cf. [`celcat_occupations.yaml`](#celcat_occupationsyaml).
 
 ### Ce qui se force, ce qui ne se force pas
 
@@ -1290,6 +1337,7 @@ En manuel : un conflit de salle est forçable ; l'appli garde la salle si elle e
 | Ordre pédagogique | Oui (la séance reste signalée dans « À placer » jusqu'à validation) |
 | Indisponibilité d'enseignant déclarée | Oui |
 | Indisponibilité `stricte: true` | **Non** |
+| Enseignant ou salle déjà pris dans Celcat (hors MMI) | Oui (message « Enseignant indisponible — … Celcat ») ; **Non** si `strict: true` dans `celcat_occupations.yaml` |
 | Semaine passée ou en cours, date passée | Oui, avec confirmation forte |
 | Jour fermé, jeudi PAC, journée SAE, événement fixe, présence alternant, fin de semestre FI | **Non** |
 | Moitié de duo déplacée seule | Oui (aucune suggestion ; mieux : régénérer la semaine) |

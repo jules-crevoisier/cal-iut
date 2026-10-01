@@ -11,6 +11,7 @@ Les codes Celcat (cours, salles, enseignants) se règlent dans **Référence →
 3. [Que faire quand ça bloque](#3-que-faire-quand-ça-bloque)
 4. [Pour les techniciens](#4-pour-les-techniciens)
 5. [Règles d'envoi : WR100BU et PTUT](#5-règles-denvoi--wr100bu-et-ptut)
+6. [Occupations hors MMI](#6-occupations-hors-mmi)
 
 ---
 
@@ -49,7 +50,8 @@ Un **robot d'envoi** la recopie ensuite dans Celcat, tout seul.
 4. **Le verdict** : « concorde », « à traiter » ou « bloqué ».
 5. **À gauche** : les écarts séance par séance, puis les évènements en trop.
 6. **À droite** : la file d'attente (« File d'attente vide — tout est poussé. » quand tout est parti) et ce qui bloque.
-7. **Repliés en bas** : **Activité récente** (créées, modifiées, supprimées, échecs) et **Réglages**.
+7. **Repliés en bas** : **Occupations hors MMI** (ce que Celcat contient d'autre sur nos salles et enseignants, voir [§ 6](#6-occupations-hors-mmi)),
+   **Activité récente** (créées, modifiées, supprimées, échecs) et **Réglages**.
 
 ### Corriger une semaine
 
@@ -130,6 +132,7 @@ Si l'écran dit « Relisez Celcat d'abord », la dernière lecture est trop anci
 - Sa boucle (`deploy/celcat-sidecar/nuit-quotidienne.sh`) :
   1. toutes les 30 s : `scripts/celcat_immediat.py --ecrire --vpn --production --base URCA_2026` draine la file (sort sans réseau si elle est vide) ;
   2. `scripts/celcat_instantane.py --vpn` relit Celcat si le dernier relevé a plus de 2 h, ou si quelqu'un a demandé **Relire Celcat** ;
+     dans la même session, il relit aussi les **occupations hors MMI** ([§ 6](#6-occupations-hors-mmi)) quand elles sont dues ;
   3. une fois par jour (UTC) : `scripts/celcat_nuit.py --ecrire --vpn --production --base URCA_2026` balaie les semaines validées, cherche les cours en trop, et draine aussi la file.
 - Le passage quotidien est noté dans `data/state/celcat_nuit_dernier_passage.txt` (dans le volume) : un redémarrage ne le fait ni sauter ni recommencer.
   Il peut donc tourner à n'importe quelle heure de la journée, au premier tour où il n'a pas encore été fait.
@@ -426,3 +429,88 @@ Ce que la commande affiche :
 
 Codes de sortie : 0 réussi ; 1 bloqué (motif affiché) ou suppression à refaire à la main ; 2 refusé ; 3 Celcat injoignable.
 Ancien nom, toujours accepté : `celcat-essai-sans-module`.
+## 6. Occupations hors MMI
+
+> **Coupé par défaut.** `data/config/celcat_occupations.yaml` est livré avec `actif: false` :
+> le robot ne relève rien et rien ne change tant que les essais ([A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md#occupations-hors-mmi))
+> ne sont pas faits. Pour l'allumer : `actif: true`, redéployer, puis **Celcat → Occupations hors MMI → Relire maintenant**.
+
+### À quoi ça sert
+
+Celcat contient plus que nos cours. Deux cas comptent pour nous (demande de Kyllian Bresson, 01/10/2026) :
+
+- **une salle prise ailleurs** : l'amphi H.018 (« Amphi 3 MMI » dans Celcat) est réservable par l'administration,
+  un autre département, ou pour un évènement saisi hors de l'appli ;
+- **un enseignant pris ailleurs** : le département TC programme Anthony Froli (AFR) le lundi de 10h00 à 12h30.
+
+L'appli relève ces occupations et les traite **comme une séance déjà placée** :
+
+| Où | Effet |
+|---|---|
+| Génération (`/solve`, régénération de semaine), lissage, suggestions, complétion | Créneau interdit à l'enseignant ; salle jamais attribuée |
+| Placement manuel (déplacer, échanger, placer, créer, modifier, changer de salle) | Conflit **forçable** avec le motif exact ; refus si `strict: true` |
+| Vue Enseignant, Vue Salle | Bloc hachuré **Occupé ailleurs (TC)** / **Réservé dans Celcat** ; **Conflit Celcat** sur une séance déjà posée |
+| Vue Promo (placement en cours) | « AFR déjà occupé ailleurs (TC) » dans la case |
+| Salles libres (écran et `/api/v1/salles/libres`) | Salle occupée (**Celcat**) |
+| À traiter (écran et `/api/v1/a-traiter`) | Catégorie **Occupés ailleurs dans Celcat** (à corriger) : séances MMI déjà placées sur une occupation externe |
+
+Messages au placement :
+
+> Enseignant indisponible — Anthony Froli est déjà programmé dans le département TC sur ce créneau (lundi 28/09, 10h00–12h30, Celcat).
+>
+> Salle indisponible — H.018 est réservée dans Celcat sur ce créneau (administration, Conseil de département, mardi 29/09, 14h00–17h00).
+
+**Forçable par défaut** : le relevé a jusqu'à deux heures, une réunion a pu être annulée entre-temps.
+Le générateur, lui, ne force jamais. `strict: true` dans `data/config/celcat_occupations.yaml` rend le placement manuel impossible.
+
+### D'où ça vient
+
+Le backend ne joint pas Celcat (§ 4.1). C'est le service **celcat-nuit** qui lit, en **lecture seule** (rôle `985_consultation`) :
+
+1. il résout l'identifiant Celcat de chaque ressource surveillée — **salles** : celles de `celcat.yaml`, en premier H.018 et les amphis partagés « Amphi 1 TC/GEA » et « Amphi 2 GMP/GEII » ;
+   **enseignants** : tous ceux qui ont un code Celcat — avec deux catalogues (`udlResources.load` 604 et 603), plus les départements (610) ;
+2. il charge leurs évènements par **lots** de 10 identifiants (`udlTimetables.load` avec `{"RoomIDs": [...]}` puis `{"StaffIDs": [...]}`) :
+   une vingtaine de requêtes en tout, jamais une par créneau ; un lot refusé est coupé en deux ;
+3. il écarte **nos** évènements : `event_id` au journal de synchronisation, `notes` = identifiant de séance cal-iut,
+   cours d'un groupe « BUT MMI … », cours du département MMI sans groupe ; puis les fériés, évènements globaux, suspendus ou sans horaire ;
+4. il déplie le masque `weeks` en dates, du lundi de la semaine courante au 31 juillet, avec l'**heure réelle**
+   (le décalage historique de Paris, +00:09:21, est retiré) ;
+5. il écrit **atomiquement** `data/state/celcat_occupations_externes.json` : horodatage, période, ressources surveillées
+   (trouvées ou non), occurrences (ressource, date, début, fin, département abrégé, catégorie, intitulé, groupes, `event_id`),
+   compteurs d'ignorés. Un relevé raté garde les occupations précédentes et note l'erreur.
+
+Le backend relit ce fichier dès qu'il change (sonde de révision : les écrans se mettent à jour seuls),
+et convertit chaque occurrence en **créneaux chevauchés** : 10h00-12h30 bloque 9h30-11h et 11h-12h30 (tolérance de 5 minutes).
+
+### Fréquence
+
+- **Toutes les 2 h** (`cadence_heures`), dans le même passage et la même session que l'instantané Celcat.
+- **À la demande** : écran **Celcat → Occupations hors MMI → Relire maintenant** (prise en compte au passage suivant du robot, moins d'une minute).
+- **À la main** dans le conteneur : `cal-iut celcat occupations --ecrire-fichier --vpn` (voir [A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md)).
+- Robot en **pause** : rien n'est relu ; le dernier relevé reste appliqué.
+
+### Ce que montre l'écran
+
+**Celcat → Occupations hors MMI** (replié) : date du dernier relevé et son âge, période, ressources surveillées
+(trouvées dans Celcat ou non) avec leur nombre d'occupations, séances déjà placées en conflit,
+liste filtrable (texte, type, ressource), bouton **Relire maintenant**.
+
+- **Aucun relevé** : rien n'est appliqué ; l'écran le dit.
+- **Relevé ancien** (plus de `fraicheur_heures`, 6 h par défaut) : les contraintes restent appliquées telles quelles,
+  un bandeau discret le signale dans les vues (« Occupations Celcat relevées il y a 9 h »).
+
+### Que faire si c'est faux
+
+| Constat | Geste |
+|---|---|
+| Une occupation n'existe plus dans Celcat (réunion annulée) | **Relire maintenant**. En attendant, **Forcer** le placement. |
+| Un de NOS cours apparaît comme « occupé ailleurs » | Il n'a été reconnu ni par le journal, ni par ses `notes`, ni par son groupe. Le vérifier avec `cal-iut celcat occupations --ressource AFR --details`, puis ajuster `prefixes_groupes_mmi` / `departements_mmi`. |
+| Une salle n'est jamais relue (« introuvable dans Celcat ») | Son libellé Celcat est faux dans `celcat.yaml` (`salles:`). Le corriger dans **Codes Celcat** ou le fichier. |
+| Un enseignant n'est jamais relu | Pas de code Celcat (`0`), ou code faux : **Codes Celcat**. |
+| Le département s'affiche mal (« Direction IUT » au lieu d'un sigle) | `libelles_departements` dans `celcat_occupations.yaml`. |
+| Une catégorie ne devrait pas bloquer (ex. « Réservation BU ») | `categories_ignorees`. |
+| Tout couper | `actif: false` (plus de relecture) ; supprimer `data/state/celcat_occupations_externes.json` lève toutes les contraintes. |
+
+Code : `src/cal_iut/celcat/occupations.py` (lecture, sidecar), `src/cal_iut/celcat/session_lecture.py` (session lecture seule),
+`src/cal_iut/api/occupations_externes.py` (conversion et application), `src/cal_iut/api/occupations_externes_routes.py` (écran),
+`GET /api/v1/occupations-externes` (cf. [API.md](API.md)). Tests : `tests/test_occupations_externes_2026_10_01.py`.

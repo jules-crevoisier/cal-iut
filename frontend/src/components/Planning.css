@@ -729,3 +729,14 @@
     font-weight: 600;
   }
 }
+
+/* Occupé ailleurs dans Celcat (01/10/2026) : bande hachurée, discrète. */
+.jour-bande--externe {
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, transparent 6px 12px);
+  border: 1px dashed var(--border-strong);
+}
+
+.bandeau-occupations-celcat {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+}

@@ -240,6 +240,16 @@ def _controler_placement(state: object, session: object, placement: object, forc
     # capture à l'appui — c'était le seul endroit de l'application à traiter
     # une indispo comme un verrou définitif, et c'est celui qu'on emprunte
     # pour changer d'enseignant sans déplacer la séance.
+    # Enseignant déjà programmé ailleurs dans Celcat (relevé du sidecar) :
+    # même classement que `main._conflits_deplacement` — forçable, sauf
+    # mode strict. Couvre la durée de la séance d'un seul appel.
+    from cal_iut.api import occupations_externes
+
+    externes = occupations_externes.conflits_enseignant(state, session, placement.week, placement.day, placement.slot)
+    if externes and occupations_externes.strict():
+        institutional += externes
+    else:
+        indispo += externes
     pedago = _pedagogical_order_violations(
         placement.week, placement.day, placement.slot, extra_blocked_pedago, allowed_weeks
     )
@@ -291,6 +301,14 @@ def _controler_placement(state: object, session: object, placement: object, forc
         groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(room_id, set()) if room_id else None,
     )
+    stricts_salle = occupations_externes.appliquer_salle(
+        state, session, room_id, placement.week, placement.day, placement.slot, validation
+    )
+    if stricts_salle:
+        raise HTTPException(409, detail={
+            "message": "Modification impossible", "hard_conflicts": stricts_salle,
+            "blocking_conflicts": stricts_salle, "soft_warnings": [], "suggestions": [], "suggestions_note": None,
+        })
     if not validation.valid and not force:
         raise HTTPException(
             409,
