@@ -284,10 +284,16 @@ curl --compressed -H "Authorization: Bearer $CLE" \
 #### `GET /api/v1/enseignants` · `/enseignants/{code}` · `/enseignants/{code}/seances`
 
 ```json
-{"code": "KBR", "nom": "KYLLIAN BRESSON", "email": "kyllian.bresson@univ-reims.fr",
+{"code": "KBR", "nom": "KYLLIAN BRESSON", "prenom": "Kyllian", "nom_famille": "BRESSON",
+ "type": "enseignant", "email": "kyllian.bresson@univ-reims.fr",
  "nb_seances": 153, "cours": ["WR107", "WR110", "WR119"]}
 ```
 
+- `code` : le diminutif, identifiant de l'enseignant partout.
+- `nom` : le nom complet affiché dans l'appli. Il devient « Prénom NOM » si un prénom ou un nom a été corrigé.
+- `prenom`, `nom_famille` : le nom découpé (nom de famille en capitales). Vides si seul le code est connu.
+- `type` : `enseignant`, `vacataire`, ou `null` (« à préciser »). Saisi dans **Référence → Enseignants & vacataires**.
+- Pas de téléphone : il n'est jamais dans v1 (voir plus bas).
 - `email` : adresse de **contact** de l'enseignant, pas celle d'un compte.
 - La liste comprend aussi les enseignants sans séance (`nb_seances: 0`), dont les intervenants ajoutés dans l'appli.
 - `cours` n'apparaît que sur la fiche `/enseignants/{code}`.
@@ -866,6 +872,7 @@ Volontairement hors de v1 :
 | Donnée | Pourquoi |
 |---|---|
 | Comptes, rôles, clés API | Administration et données personnelles |
+| Téléphone des enseignants | Donnée personnelle : seulement dans l'appli, pour les rôles `edit` et `admin` (`GET /reference/enseignants`) |
 | Auteur d'une tâche ou d'une image | C'est l'adresse mail d'un compte |
 | Journal Celcat détaillé, correspondances, relevé, plan de saisie | Données de travail de l'écran Celcat ; seul l'état synthétique est exposé |
 | Sauvegardes | Fichiers d'état complets (admin) |

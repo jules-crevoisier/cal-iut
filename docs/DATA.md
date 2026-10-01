@@ -103,7 +103,7 @@ Colonne « Effet » : ce qu'il faut faire pour qu'une modification compte (déta
 | `custom_rooms.json` | Salles créées dans l'appli, et case « placement auto » de toute salle | appli | Immédiat |
 | `custom_sessions.json` | Séances créées dans l'appli (hors maquette) | appli | Immédiat |
 | `session_overrides.json` | Retouches d'une séance de maquette (enseignant, type, durée) | appli | Immédiat |
-| `references.json` | Mails, noms, intitulés corrigés et intervenants créés dans l'appli | appli | Immédiat |
+| `references.json` | Mails, noms, prénoms, téléphones, types d'enseignant, intitulés saisis dans l'appli ; intervenants créés dans l'appli | appli | Immédiat |
 | `celcat_mappings.json` | Codes Celcat saisis dans l'appli, « sans code (voulu) » de l'appli | appli | Immédiat (worker compris) |
 | `forced_pending.json` | Placements forcés hors ordre pédagogique, en attente de validation | appli | Immédiat |
 | `celcat_file/` | File d'attente Celcat : un fichier par écriture à faire | appli + worker | Immédiat |
@@ -328,8 +328,9 @@ Les séances déjà placées sur une journée nouvellement réservée apparaisse
 
 **Dans l'appli (administrateurs) — recommandé :**
 
-1. Cliquer sur **Nouvel intervenant** (Vue Enseignant, ou **Référence → Codes Celcat → Enseignants**).
-2. Saisir nom, trigramme, code Celcat et mail.
+1. Cliquer sur **Nouvel intervenant** (Vue Enseignant, **Référence → Enseignants & vacataires**,
+   ou **Référence → Codes Celcat → Enseignants**).
+2. Saisir nom, trigramme, code Celcat, mail, et au besoin téléphone et type.
 
 Il est enregistré dans `data/state/references.json` ; son code Celcat dans `data/state/celcat_mappings.json`.
 Procédure complète : [ADMIN.md](ADMIN.md) et [GUIDE.md](../GUIDE.md).
@@ -784,6 +785,37 @@ APH:
 - Seul `nom` est lu. `code_celcat` est un rappel : le vrai code va dans `celcat.yaml`.
 - Ordre de priorité pour le nom : feuille officielle > ce fichier > intervenant créé dans l'appli.
   Un nom corrigé dans l'appli passe devant tout.
+
+### Prénom, nom, type et téléphone d'un enseignant
+
+Onglet **Référence → Enseignants & vacataires**. Une seule source, pas de nouveau fichier :
+
+| Donnée | D'où vient la valeur | Où va une saisie |
+|---|---|---|
+| Liste des enseignants | Celle de l'annuaire : feuille des contraintes, maquette, [`enseignants_supplementaires.yaml`](#enseignants_supplementairesyaml), intervenants créés | — |
+| Diminutif | Le trigramme (KBR) | Ne se modifie pas |
+| Prénom, Nom | Tirés du nom complet affiché (règle ci-dessous) | `references.json` : `prenom`, `nom_famille` |
+| Mail | [`teacher_contacts.yaml`](#teacher_contactsyaml) | `references.json` : `email` |
+| Type | Aucun fichier : « à préciser » | `references.json` : `type` (`enseignant` ou `vacataire`) |
+| Téléphone | Aucun fichier : vide | `references.json` : `telephone` (format `+33612345678`) |
+| Code Celcat | [`celcat.yaml`](#celcatyaml) | `celcat_mappings.json` (admins) |
+
+**Règle prénom / nom** (la même côté serveur et côté écran) :
+
+- des mots en capitales et d'autres non : les capitales sont le nom (« Thomas CASTELLENGO », « Barthélémy TOMASINA ») ;
+- sinon, le premier mot est le prénom, le reste le nom (« KYLLIAN BRESSON », « Anne-Laure Perrone », « Alexia Petit-Halajko ») ;
+- le prénom est écrit en casse normale (« Kyllian »), le nom en capitales (« BRESSON »).
+
+Sans correction, le nom affiché partout reste le nom complet du fichier.
+Dès qu'un prénom ou un nom est corrigé, le nom affiché devient « Prénom NOM » :
+annuaire, fiche, « Nouvelle séance », Liens & partage, flux `.ics`, API v1.
+Ressaisir le nom complet d'un bloc (fiche) efface un prénom ou un nom corrigés avant lui.
+
+Chaque saisie garde qui, quand, la valeur d'avant et celle du fichier (journal de `references.json`).
+« Revenir à la valeur du fichier » retire la saisie. Pour le type et le téléphone, cela revient à « à préciser » / vide.
+
+Le téléphone n'est jamais dans `/app-state` ni dans l'API v1 : seulement dans `GET /reference/enseignants`,
+pour les rôles `edit` et `admin` (cf. [ADMIN.md](ADMIN.md)).
 
 ### `additional_courses.yaml`
 

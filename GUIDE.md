@@ -122,11 +122,13 @@ Raccourcis : Maj+← et Maj+→ changent de semaine, T revient à aujourd'hui.
 Sans enseignant choisi, l'écran montre l'**annuaire** des enseignants.
 On peut le filtrer (nom, code, adresse) et le trier.
 Le filtre **Afficher** montre par exemple **Adresse mail manquante** ou **Contrainte non respectée**.
+Le filtre **Type** garde les **Enseignants**, les **Vacataires** ou le **Type à préciser**.
 Cliquer sur un nom ouvre sa **fiche**.
 
 La fiche d'un enseignant contient :
 
-- son nom, son code (ex. KBR), son mail et ses heures ;
+- son nom, son code (ex. KBR), son type (**Enseignant** ou **Vacataire**), son mail et ses heures ;
+- son téléphone, seulement pour les comptes qui peuvent modifier (voir [section 10](#enseignants--vacataires)) ;
 - **En cours** ou **Prochain cours**, avec **Voir dans la grille** ;
 - la grille de la semaine et, au-dessus, les heures de chaque semaine ;
 - à droite, **Contrainte déclarée** (le texte qu'il a écrit, ses indisponibilités,
@@ -296,7 +298,7 @@ Détails : [docs/ICS.md](docs/ICS.md).
 
 ## 10. Référence
 
-**Référence** regroupe les données de base, en six onglets :
+**Référence** regroupe les données de base, en sept onglets :
 
 - **Salles** : capacité, type, équipement, nombre de séances. Tableau filtrable et triable.
 - **Cours** : toutes les matières de la maquette, filtrables par parcours et semestre.
@@ -306,10 +308,52 @@ Détails : [docs/ICS.md](docs/ICS.md).
   Pour les autres rôles, cet onglet est en lecture seule ;
   la saisie par les administrateurs est expliquée dans [docs/ADMIN.md](docs/ADMIN.md).
 - **Calendrier** : vacances, jours fériés, rentrées et évènements, avec le délai (« dans 3 semaines »).
+- **Enseignants & vacataires** : tous les enseignants et vacataires, avec leurs coordonnées
+  (voir [ci-dessous](#enseignants--vacataires)).
 - **Liens & partage** : les deux liens publics, puis le lien personnel et le **Lien agenda**
   de chaque enseignant et groupe. Boutons **Copier**, **Copier tous les liens**, **Annuaire (.csv)**.
   **Envoyer les liens par mail…** est réservé aux administrateurs.
 - **Notifications** : les mails envoyés quand le planning change (réglage par un administrateur).
+
+### Enseignants & vacataires
+
+Cet onglet liste toutes les personnes qui enseignent dans l'outil.
+Pour chacune : **Type**, **Prénom**, **Nom**, **Diminutif** (ex. KBR), **Code Celcat**,
+**E-mail**, **Téléphone**, nombre de **Séances**, et **Voir la fiche**.
+
+Ce sont les mêmes données que l'annuaire de la Vue Enseignant, la fiche,
+**Liens & partage** et « Nouvelle séance ». Une correction faite ici se voit partout.
+
+En haut, des compteurs : **Enseignants**, **Vacataires**, **À préciser**, **Sans mail**, **Sans téléphone**.
+Cliquer sur un compteur filtre la liste. Cliquer de nouveau retire le filtre.
+
+Trouver une personne :
+
+1. Taper un nom, un prénom, un diminutif ou une adresse dans le champ de recherche.
+2. Choisir au besoin **Tous**, **Enseignants**, **Vacataires** ou **À préciser**.
+3. Cliquer sur un en-tête de colonne pour trier. Le tri est gardé sur cet ordinateur.
+
+Modifier une information (comptes « édition » et administrateurs) :
+
+1. Survoler la cellule, puis cliquer sur le crayon (ou **Ajouter** si elle est vide).
+2. Saisir la nouvelle valeur. Pour le **Type**, choisir **Enseignant**, **Vacataire** ou **À préciser**.
+3. Appuyer sur **Entrée** pour enregistrer, ou **Échap** pour annuler.
+4. « Enregistré » s'affiche. En cas d'erreur, le message apparaît sous le champ.
+
+À savoir :
+
+- Le **Diminutif** ne se modifie pas : c'est l'identifiant de la personne partout dans l'outil.
+- Le **Téléphone** accepte « 06 12 34 56 78 », « 06.12.34.56.78 » ou « +33 6 12 34 56 78 ».
+  Un numéro étranger s'écrit avec « + » et l'indicatif. Vider le champ retire le numéro.
+- Le **Nom** est rangé en capitales. Le nom affiché partout devient alors « Prénom NOM ».
+- Une valeur corrigée porte la marque **modifiée**. Sa bulle propose **Revenir à la valeur du fichier**.
+- Le **Code Celcat** se saisit seulement par un administrateur, comme dans **Codes Celcat**.
+  S'il manque, le lien **Codes Celcat →** ouvre la bonne ligne.
+- **Annuaire (.csv)** télécharge les lignes affichées. Le téléphone n'y est que pour les comptes qui le voient.
+- **Nouvel intervenant** (administrateurs) ajoute une personne, avec son téléphone et son type.
+
+> **Données personnelles :** en lecture seule, le téléphone est masqué (« — »).
+> Il n'apparaît jamais sur un lien public ni dans l'API. Voir [docs/ADMIN.md](docs/ADMIN.md).
 
 ## 11. Contraintes
 

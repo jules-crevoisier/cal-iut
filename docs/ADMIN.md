@@ -39,6 +39,7 @@ Chaque compte a un seul rôle. Un admin le choisit à l'activation (écran **Com
 
 - **Lecture seule** consulte tout : planning, Référence, Contraintes, À traiter, Tâches.
 - **Édition** peut aussi déplacer et placer des séances, gérer les tâches, compléter ou corriger un mail, un nom, un intitulé.
+  Elle voit et modifie aussi le prénom, le nom, le téléphone et le type (enseignant ou vacataire) d'un enseignant.
 - **Admin** a en plus **Comptes**, **Celcat**, **Sauvegardes** et **Trafic**.
   Lui seul saisit les codes Celcat, ajoute un intervenant, bloque un client, lance un lissage.
   Lui seul envoie les liens par mail, règle les notifications, crée une salle, ouvre la page historique `/legacy` ([§ 7](#7-liens-par-mail-notifications-salles--les-autres-gestes-admin)).
@@ -219,13 +220,15 @@ On arrive aussi sur la bonne ligne depuis **À traiter → Données à compléte
 
 Pour un vacataire que la feuille des contraintes ne connaît pas encore. Sans cela, on ne peut pas lui créer de séance.
 
-1. Ouvrir **Vue Enseignant**, ou **Référence → Codes Celcat → Enseignants**.
+1. Ouvrir **Vue Enseignant**, **Référence → Enseignants & vacataires**, ou **Référence → Codes Celcat → Enseignants**.
 2. Cliquer sur **Nouvel intervenant**.
 3. Remplir :
    - **Nom complet** (« Prénom Nom », obligatoire) ;
    - **Code** (2 à 4 lettres, le trigramme du planning, obligatoire ; un code libre est proposé) ;
    - **Code Celcat (facultatif)** : le nombre affiché dans Celcat ;
-   - **Mail (facultatif)** : pour lui envoyer son lien personnel.
+   - **Mail (facultatif)** : pour lui envoyer son lien personnel ;
+   - **Téléphone (facultatif)** : « 06 12 34 56 78 » ou « +33 6 12 34 56 78 » ;
+   - **Type** : **Enseignant**, **Vacataire** ou **À préciser**.
 4. Lire l'encadré **À corriger avant de créer** / **À vérifier avant de créer**, puis cliquer sur **Créer**.
 
 Sa fiche s'ouvre (« Intervenant créé »). Il apparaît partout : annuaire, **Nouvelle séance**, filtres, Codes Celcat, API.
@@ -258,13 +261,41 @@ Rôle **Édition** ou **Admin**.
 - La valeur corrigée passe devant celle du fichier et porte la marque **modifiée**.
   Au survol de la marque : la valeur du fichier et le bouton **Revenir à la valeur du fichier**.
 
-Où : annuaire des enseignants, fiche d'un enseignant, fiche d'une salle (bloc **À compléter**), **Référence → Liens & partage**, **À traiter → Données à compléter**.
+Où : annuaire des enseignants, fiche d'un enseignant, fiche d'une salle (bloc **À compléter**),
+**Référence → Enseignants & vacataires**, **Référence → Liens & partage**, **À traiter → Données à compléter**.
 Une adresse déjà attribuée à un autre enseignant est refusée.
 La correspondance Celcat (salle, enseignant, code module d'un cours) reste réservée aux admins : voir [§ 4](#4-les-codes-celcat).
 En lecture seule, le manque et la marque restent affichés, sans bouton.
 
 Ce qui est saisi est gardé dans le volume (`data/state/references.json`) et survit aux déploiements.
 L'appli garde qui l'a saisi, quand, et la valeur remplacée.
+
+### Enseignants & vacataires : qui fait quoi
+
+L'onglet **Référence → Enseignants & vacataires** réunit tout ce qui décrit une personne.
+
+| Information | Qui la voit | Qui la modifie |
+|---|---|---|
+| Prénom, Nom, Type, E-mail | Tous les comptes | **Édition** et **Admin** |
+| Téléphone | **Édition** et **Admin** seulement | **Édition** et **Admin** |
+| Code Celcat | Tous les comptes | **Admin** (comme dans **Codes Celcat**) |
+| Diminutif (ex. KBR) | Tous les comptes | Personne : c'est l'identifiant |
+
+Aucun fichier ne donne le type ni le téléphone. Au départ, tout le monde est donc « à préciser ».
+Il suffit de les saisir une fois dans l'onglet.
+
+### Données personnelles : le téléphone
+
+Le téléphone est plus sensible que le mail. Il est protégé ainsi :
+
+- **Lecture seule** : le téléphone est masqué (« — »). Le serveur ne l'envoie pas.
+- **Lien public** (lien personnel, Vue Promo publique) : jamais de téléphone, ni de type.
+- **Accès API** : rien, ni par l'appli ni par une clé.
+- **API v1** (`/api/v1/enseignants`) : jamais de téléphone. Le type y est, pour un compte connecté.
+- **Annuaire (.csv)** : la colonne **Téléphone** n'existe que pour les comptes qui le voient.
+
+Le numéro est gardé dans `data/state/references.json`, avec qui l'a saisi et quand.
+Vider le champ le retire. La sauvegarde du volume dans Dokploy le contient : la protéger comme le reste.
 
 ---
 
