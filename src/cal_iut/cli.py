@@ -1019,6 +1019,165 @@ def cmd_celcat_reseau(args: argparse.Namespace) -> int:
     return 0 if diagnostic else 1
 
 
+def cmd_celcat_essai_regle(args: argparse.Namespace) -> int:
+    """Essai d'une règle d'envoi (celcat.yaml::regles_envoi) contre Celcat.
+
+    Simulation par défaut (lecture seule, même sur URCA_2026) ; `--ecrire`
+    crée, relit et supprime UN évènement dans la base d'ENTRAÎNEMENT, jamais
+    ailleurs. Fait pour être lancé avec le VPN (conteneur du robot Celcat ou
+    poste de l'administrateur) : docs/CELCAT.md § 5, docs/A-TESTER-SUR-CELCAT.md.
+    """
+    import json as _json
+
+    from dotenv import load_dotenv
+
+    from cal_iut.celcat import essai_regle as essai
+    from cal_iut.celcat import navigateur as nav
+    from cal_iut.celcat import reseau
+
+    load_dotenv()
+    base = args.base
+    if args.ecrire and base != nav.BASE_ENTRAINEMENT:
+        print(
+            f"REFUSÉ : --ecrire n'écrit que dans {nav.BASE_ENTRAINEMENT} (base d'entraînement), "
+            f"jamais dans {base}. Sans --ecrire, la simulation lit {base} sans rien y écrire.",
+            file=sys.stderr,
+        )
+        return 2
+    if bool(args.cours) == bool(args.type):
+        print("Préciser --cours COURS (ex. WR100BU) ou --type TYPE (ex. PTUT), l'un ou l'autre.", file=sys.stderr)
+        return 2
+
+    from cal_iut.api.main import charger_etat_applicatif
+    from cal_iut.api.state import get_state
+    from cal_iut.celcat.etat import worker_en_pause
+    from cal_iut.celcat.mapping import entrees_pour_state, load_celcat_config
+    from cal_iut.celcat.nuit import _masque_pour
+    from cal_iut.celcat.rpc_config import charger_methodes
+
+    charger_etat_applicatif()
+    state = get_state()
+    cfg = load_celcat_config(state.config_dir)
+    cle = (args.cours or args.type).strip().upper()
+    regle = (cfg.regles_cours if args.cours else cfg.regles_types).get(cle)
+    if regle is None:
+        print(f"Aucune règle d'envoi pour {'le cours' if args.cours else 'le type'} {cle} dans celcat.yaml.", file=sys.stderr)
+        return 2
+    entrees = entrees_pour_state(state)
+    if args.cours:
+        toutes = [e for e in entrees.values() if e.course_code.upper() == cle]
+    else:
+        toutes = [e for e in entrees.values() if e.type_seance_nom.upper() == cle]
+    envoyees = [e for e in toutes if e.regle == cle]
+    print(f"Règle {regle.portee} {cle} : catégorie {regle.categorie!r}, remarque {regle.remarque!r}, "
+          f"département {regle.departement!r}, module {regle.module!r}, enseignants {', '.join(regle.enseignants) or 'tous'}")
+    print(f"Séances placées : {len(toutes)} — envoyées par la règle : {len(envoyees)} "
+          f"(dont sans module : {sum(1 for e in envoyees if e.sans_module)}), autres : {len(toutes) - len(envoyees)}")
+    for e in toutes:
+        if e.regle != cle:
+            print(f"  non envoyée par cette règle : {e.session_id} — {e.non_envoyee or '; '.join(e.bloquants) or e.regle_libelle}")
+    try:
+        if args.type and args.comme_type:
+            if not args.seance:
+                print("--comme-type exige --seance <identifiant d'une séance placée>.", file=sys.stderr)
+                return 2
+            entree = essai.entree_comme_type(state, args.seance, cle)
+            print(f"Séance de démonstration : {args.seance} traitée COMME une séance {cle} (essai seulement).")
+        else:
+            entree = essai.choisir_entree(
+                entrees, cours=args.cours or "", type_seance=args.type or "", seance=args.seance or ""
+            )
+    except LookupError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(f"Séance essayée : {entree.session_id} — {entree.nom_groupe_celcat}, salle {entree.salle}, "
+          f"enseignant {entree.code_enseignant}, lundi {entree.lundi} jour {entree.jour} "
+          f"{entree.heure_debut}-{entree.heure_fin}, {entree.regle_libelle or 'hors règle'}, "
+          f"module {entree.code_module or 'aucun'}")
+    if not entree.regle:
+        print(f"Cette séance ne part pas sous la règle {cle} : {entree.non_envoyee or '; '.join(entree.bloquants)}",
+              file=sys.stderr)
+        return 2
+    if entree.bloquants:
+        print(f"  ATTENTION, bloquants côté appli : {'; '.join(entree.bloquants)}")
+    masque = _masque_pour(entree)
+
+    url = os.environ.get("CELCAT_URL", "")
+    if not url:
+        print("CELCAT_URL absent (.env).", file=sys.stderr)
+        return 2
+    if not worker_en_pause():
+        print("ATTENTION : le robot Celcat n'est pas en pause. Mettez-le en pause dans l'écran Celcat "
+              "pendant l'essai (VPN et compte partagés).")
+    methodes = charger_methodes(Path(state.config_dir))
+
+    from playwright.sync_api import sync_playwright
+
+    role = nav.ROLE_ECRITURE if args.ecrire else nav.ROLE_LECTURE
+    from contextlib import ExitStack
+
+    # Le VPN est rendu en sortant (`reseau.acces`), y compris sur erreur.
+    pile = ExitStack()
+    try:
+        diag = pile.enter_context(reseau.acces(url, monter_le_vpn=args.vpn))
+    except reseau.AccesIndisponible as exc:
+        print(f"Celcat injoignable : {exc}", file=sys.stderr)
+        return 3
+    with pile:
+        print(f"Accès à Celcat : {diag.detail}")
+        with sync_playwright() as p:
+            navigateur = p.chromium.launch(headless=True)
+            page = navigateur.new_page(viewport={"width": 1920, "height": 1080})
+            try:
+                print(f"Connexion {base}, rôle {role}…")
+                nav.connexion(page, base=base, role=role)
+                res = essai.preparer(page, entree, base=base, masque=masque, group_id=args.group_id)
+                print(f"Groupe : {res.groupe_lu or '?'}")
+                print(f"Identifiants résolus : {res.ids}")
+                if not res.ok:
+                    print(f"BLOQUÉ — {res.erreur}")
+                    print("Le robot bloquerait cette séance pour la même raison : rien ne serait envoyé.")
+                    return 1
+                print("Charge qui serait envoyée (udlTimetables.save) :")
+                print(_json.dumps(res.charge, ensure_ascii=False, indent=2, default=str))
+                if not args.ecrire:
+                    print("SIMULATION — rien n'a été écrit. `--ecrire` crée puis supprime un évènement "
+                          f"dans {nav.BASE_ENTRAINEMENT}.")
+                    return 0
+
+                def _attendre(r) -> None:
+                    if args.attendre:
+                        input(f"Évènement {r.event_id} créé dans {base}. Vérifiez-le dans Celcat "
+                              "(onglets Détails et « Remarques et personnaliser »), puis Entrée pour le supprimer… ")
+
+                res = essai.ecrire_relire_supprimer(
+                    page, res, methode=methodes.methode_ecriture,
+                    methode_suppression=methodes.methode_suppression, avant_suppression=_attendre,
+                )
+                print(f"Créé : event_id {res.event_id}")
+                print("Relu dans Celcat :")
+                for cle, valeur in res.relu.items():
+                    print(f"  {cle:28} {valeur}")
+                print(f"Suppression : {res.detail_suppression}")
+                if args.json:
+                    Path(args.json).write_text(
+                        _json.dumps({"charge": res.charge, "relu": res.relu, "event_id": res.event_id,
+                                     "suppression": res.detail_suppression}, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                if not res.supprime:
+                    print(f"À SUPPRIMER À LA MAIN dans {base} : event_id {res.event_id}, group_id {res.group_id}.",
+                          file=sys.stderr)
+                    return 1
+                return 0 if res.ok else 1
+            finally:
+                try:
+                    nav.deconnexion(page)
+                except Exception as exc:  # noqa: BLE001 — la déconnexion ne doit pas masquer le résultat
+                    print(f"(déconnexion de Celcat en échec : {exc})", file=sys.stderr)
+                navigateur.close()
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
     from dotenv import load_dotenv
@@ -1573,6 +1732,32 @@ def main() -> int:
         help="tenter de monter le VPN (identifiants VPN_* du .env) avant de vérifier",
     )
     reseau_parser.set_defaults(func=cmd_celcat_reseau)
+
+    essai_parser = sub.add_parser(
+        "celcat-essai-regle",
+        aliases=["celcat-essai-sans-module"],
+        help="Essayer une règle d'envoi de celcat.yaml (WR100BU, PTUT) : simulation, ou canari en base d'entraînement",
+    )
+    essai_parser.add_argument("--cours", default="", help="règle d'un cours (ex. WR100BU)")
+    essai_parser.add_argument("--type", default="", help="règle d'un type de séance (ex. PTUT)")
+    essai_parser.add_argument("--seance", default="", help="identifiant de séance (défaut : la première envoyée par la règle)")
+    essai_parser.add_argument(
+        "--comme-type", action="store_true",
+        help="avec --type et --seance : essayer cette séance COMME si elle était de ce type (aucune séance du type placée)",
+    )
+    essai_parser.add_argument(
+        "--base", default="URCA_FORMATION",
+        help="base Celcat (défaut URCA_FORMATION ; URCA_2026 accepté en simulation seulement)",
+    )
+    essai_parser.add_argument(
+        "--ecrire", action="store_true",
+        help="créer, relire puis supprimer UN évènement — base d'entraînement seulement",
+    )
+    essai_parser.add_argument("--vpn", action="store_true", help="monter le VPN si Celcat n'est pas joignable en direct")
+    essai_parser.add_argument("--group-id", type=int, default=None, help="group_id Celcat à utiliser (sinon celcat_groupes.yaml)")
+    essai_parser.add_argument("--attendre", action="store_true", help="attendre Entrée avant de supprimer l'évènement")
+    essai_parser.add_argument("--json", default=None, help="écrire la charge et la relecture dans ce fichier")
+    essai_parser.set_defaults(func=cmd_celcat_essai_regle)
 
     serve_parser = sub.add_parser("serve", help="Démarrer l'API FastAPI")
     serve_parser.add_argument("--host", default="127.0.0.1")

@@ -4258,6 +4258,18 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
     for e in plan.non_envoyees:
         non_envoi[e.non_envoyee] = non_envoi.get(e.non_envoyee, 0) + 1
 
+    # Règles d'envoi (01/10/2026, `celcat.yaml::regles_envoi`) : ce qui part
+    # sous une règle, compté à part pour qu'on voie d'un coup d'œil que la
+    # visite de la BU et les PTUT partent bien, et sous quelle forme.
+    par_regle: dict[str, int] = {}
+    for e in plan.a_creer + plan.a_modifier + plan.inchangees + plan.bloquees:
+        if e.regle:
+            cle = (
+                f"{e.regle_libelle} : catégorie {e.categorie_celcat}, remarque {e.remarque}, "
+                f"département {e.departement}"
+            )
+            par_regle[cle] = par_regle.get(cle, 0) + 1
+
     action_par_id = {}
     for e in plan.non_envoyees:
         action_par_id[e.session_id] = "non_envoyee"
@@ -4288,12 +4300,16 @@ def celcat_plan(semaines: str = "", limite: int = 200) -> CelcatPlanResponse:
         motifs_blocage=dict(sorted(motifs.items(), key=lambda kv: -kv[1])),
         non_envoyees=len(plan.non_envoyees),
         motifs_non_envoi=dict(sorted(non_envoi.items(), key=lambda kv: -kv[1])),
+        regles_envoi=dict(sorted(par_regle.items(), key=lambda kv: -kv[1])),
         entrees=[
             CelcatEntreeResponse(
                 session_id=e.session_id, course_code=e.course_code, semaine=e.semaine,
                 jour=e.jour, heure_debut=e.heure_debut, heure_fin=e.heure_fin,
                 salle=e.salle, groupe=e.groupe,
                 action=action_par_id[e.session_id], bloquants=e.bloquants,
+                regle=e.regle_libelle, module=e.code_module or "",
+                categorie=e.categorie_celcat, remarque=e.notes_celcat if e.regle else "",
+                motif_non_envoi=e.non_envoyee,
             )
             for e in toutes[:max(0, limite)]
         ],
@@ -4610,51 +4626,20 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     from cal_iut.celcat.etat import charger as charger_celcat
     from cal_iut.celcat.instantane import lire
     from cal_iut.celcat.lecture import indice_depuis_lundi
-    from cal_iut.celcat.mapping import libelle_groupe_celcat, load_celcat_config
     from cal_iut.celcat.nuit import PREMIERE_SEMAINE_CELCAT
-    from cal_iut.celcat.planification import journal_event_ids
+    from cal_iut.celcat.planification import contexte, journal_event_ids
 
     state = get_state()
     releve = lire()
 
-    # Les DEUX tables de correspondance, celles-là mêmes qui servent à
-    # l'écriture : comparer avec d'autres règles que celles qui écrivent
-    # ferait diverger les deux sens. `h018` s'appelle « Amphi 3 MMI » chez
-    # Celcat — sans cette table, tous les CM en amphi ressortaient en écart.
-    cfg = load_celcat_config(state.config_dir)
-    # Le nom Celcat d'un groupe s'écrit « BUT MMI S1 CM » : le semestre vient
-    # de la SÉANCE, pas du `Group` — qui n'a tout simplement pas cet
-    # attribut. Le construire depuis le groupe donnait « BUT MMI  CM », qui
-    # ne correspond à rien : la comparaison rendait alors ZÉRO « identique »
-    # sur une semaine entière, chaque séance ressortant à la fois « absente »
-    # et « en trop » (constaté en production le 08/09/2026).
-    #
-    # Indexé par `session_id` et non par groupe, puisque c'est la séance qui
-    # porte le semestre. Même construction que `ops._group_id_celcat`, la
-    # source qui sert à l'écriture.
-    libelles_groupes = {g.id: g.label for g in state.groups}
-    groupes_celcat: dict[str, str] = {}
-    # Le TYPE de séance (CM/TD/TP), pour comparer la catégorie d'évènement
-    # Celcat. Signalé par David Annebicque le 05/09/2026 : « les TD sont
-    # aléatoirement indiqués en TD ou en CM ». Il vient de la SÉANCE — le
-    # placement ne le porte pas — et il est passé explicitement plutôt que
-    # déduit du `session_id`, qui n'a aucune obligation de le contenir.
-    types_seance: dict[str, str] = {}
-    for placement in state.timetable:
-        session = state.sessions_by_id.get(placement.session_id)
-        type_seance = str(
-            getattr(getattr(session, "session_type", None), "value", "") or ""
-        ).strip()
-        if type_seance:
-            types_seance[placement.session_id] = type_seance.upper()
-        semestre = str(getattr(session, "semestre", "") or "").strip()
-        ids = list(getattr(placement, "group_ids", None) or [])
-        if not semestre or not ids:
-            continue
-        label = str(libelles_groupes.get(ids[0], ids[0]))
-        groupes_celcat[placement.session_id] = (
-            f"BUT MMI {semestre} {libelle_groupe_celcat(label)}"
-        )
+    # LE MÊME CONTEXTE QUE LE ROBOT (`planification.contexte`) : tables de
+    # salles et de groupes de l'écriture, type de chaque séance, séances
+    # envoyées par une règle d'envoi. Cet écran construisait le sien à la
+    # main, et chaque nouvelle règle de comparaison devait être écrite deux
+    # fois — la garantie qu'un jour les deux divergent. Les raisons de chaque
+    # table (« Amphi 3 MMI », « BUT MMI S1 CM » construit depuis la séance,
+    # type pour la catégorie) sont dans `planification.contexte`.
+    ctx = contexte(state)
 
     lundis = state.calendar.teaching_mondays
     semaine_celcat = (
@@ -4671,10 +4656,11 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
             evenements=list(releve.evenements),
             semaine=semaine,
             semaine_celcat=semaine_celcat,
-            groupes_celcat=groupes_celcat,
-            salles_celcat=cfg.salles,
-            codes_celcat=set(cfg.modules),
-            types_seance=types_seance,
+            groupes_celcat=ctx.groupes_celcat,
+            salles_celcat=ctx.salles_celcat,
+            codes_celcat=ctx.codes_celcat,
+            types_seance=ctx.types_seance,
+            categories_regle=ctx.categories_regle,
             # Ce que NOUS avons ecrit, et ou. Sans cette table, deux seances
             # de meme matiere, meme groupe et meme jour peuvent echanger leur
             # evenement d'un releve a l'autre — et l'ecran montrerait alors

@@ -71,7 +71,14 @@ const FILTRES: { id: Filtre; label: string }[] = [
 
 type CleTri = "cle" | "libelle" | "semestre" | "parcours" | "type" | "capacite" | "nb" | "code" | "origine";
 
-const ORDRE_ORIGINE: Record<LigneCodeCelcat["origine"], number> = { manquant: 0, appli: 1, voulu: 2, maquette: 3, fichier: 4 };
+const ORDRE_ORIGINE: Record<LigneCodeCelcat["origine"], number> = {
+  manquant: 0,
+  appli: 1,
+  voulu: 2,
+  regle: 3,
+  maquette: 4,
+  fichier: 5,
+};
 
 const VALEURS: Record<CleTri, (l: LigneCodeCelcat) => string | number> = {
   cle: (l) => l.cle,
@@ -525,6 +532,16 @@ export function CelluleCode({
     );
   }
   if (l.origine === "voulu") return <span className="ref-zero">—</span>;
+  if (l.origine === "regle") {
+    // « Envoi sans module » : pas de code, et ce n'est pas un manque — la
+    // note dit ce qui part (catégorie, remarque, département).
+    return (
+      <>
+        <span className="ref-doux">sans module</span>
+        {complements}
+      </>
+    );
+  }
   return (
     <>
       <span className={`pill dot ${l.nb_seances > 0 ? "bad" : "warn"}`}>manquant</span>
@@ -573,6 +590,7 @@ function Actions({
       {famille !== "groupes" && l.origine === "voulu" && !l.peut_retirer_sans_code && (
         <span className="codes-celcat-qui">se retire dans celcat.yaml</span>
       )}
+      {l.origine === "regle" && <span className="codes-celcat-qui">se règle dans celcat.yaml</span>}
     </span>
   );
 }
@@ -602,6 +620,15 @@ function Origine({ ligne: l, admin }: { ligne: LigneCodeCelcat; admin: boolean }
             ? "décidé dans celcat.yaml"
             : `saisi dans l’appli${admin && l.saisi_par ? ` par ${l.saisi_par}` : ""}${l.saisi_le ? ` le ${dateCourte(l.saisi_le)}` : ""}`}
         </span>
+      </span>
+    );
+  }
+  if (l.origine === "regle") {
+    return (
+      <span className="codes-celcat-origine">
+        <span className="pill dot good">envoi sans module (règle)</span>
+        {l.motif_sans_code && <span className="codes-celcat-motif">{l.motif_sans_code}</span>}
+        <span className="codes-celcat-qui">décidé dans celcat.yaml</span>
       </span>
     );
   }

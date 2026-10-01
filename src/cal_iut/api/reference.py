@@ -381,8 +381,12 @@ def _calculer_manques(state: object) -> list[ManqueV1]:
     for entree in entrees_pour_state(state).values():
         if entree.course_code.upper() in voulus.get("cours", {}):
             continue
-        code_module = cfg.modules.get(entree.course_code.upper())
-        if not code_module or code_module.strip().upper() not in matieres_connues:
+        # Règle d'envoi : une séance sans matière l'est par décision (WR100BU,
+        # PTUT d'un cours sans code) — rien à compléter côté module (le
+        # groupe, lui, compte toujours).
+        sans_module = entree.sans_module or cfg.regle_sans_module(entree.course_code) is not None
+        code_module = None if sans_module else cfg.modules.get(entree.course_code.upper())
+        if not sans_module and (not code_module or code_module.strip().upper() not in matieres_connues):
             modules_manquants[entree.course_code] += 1
         # Plusieurs groupes : bloqué pour une autre raison (un seul onglet
         # Celcat à la fois), pas faute d'identifiant.

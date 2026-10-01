@@ -39,6 +39,13 @@ def main(argv: list[str] | None = None) -> int:
     data = yaml.safe_load((config_dir / "celcat.yaml").read_text(encoding="utf-8")) or {}
     modules = {str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v}
     voulus = {str(k).upper() for k in ((data.get("sans_code_voulu") or {}).get("cours") or {})}
+    # Cours envoyés SANS module par une règle (`regles_envoi.cours`, `module:
+    # aucun`) : pas de code module non plus, par décision.
+    voulus |= {
+        str(k).upper()
+        for k, v in (((data.get("regles_envoi") or {}).get("cours")) or {}).items()
+        if isinstance(v, dict) and str(v.get("module") or "").strip().lower() == "aucun"
+    }
     confirmer = (data.get("codes_a_confirmer") or {}).get("cours") or {}
     releve = codes_maquette.releve_des_matieres(config_dir)
     retenus, manquants, exclus = codes_maquette.calculer(

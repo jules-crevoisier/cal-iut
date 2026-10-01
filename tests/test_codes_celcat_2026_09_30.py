@@ -457,7 +457,9 @@ def test_la_config_reelle_preenregistre_la_maquette_et_les_voulus() -> None:
     config = Path(__file__).resolve().parents[1] / "data" / "config"
     data = yaml.safe_load((config / "celcat.yaml").read_text(encoding="utf-8"))
     voulus = set(data["sans_code_voulu"]["cours"])
-    assert voulus == {"WS1PJ", "WS3PJ", "WSA3PRJ", "WS5PJ", "WSA5PRJ", "COR", "PCA", "PRP", "RC", "RN", "RRI", "WR100BU"}
+    # WR100BU a quitté « sans code (voulu) » le 01/10/2026 : il part sans
+    # module, par la règle `regles_envoi.cours` (Kyllian Bresson).
+    assert voulus == {"WS1PJ", "WS3PJ", "WSA3PRJ", "WS5PJ", "WSA5PRJ", "COR", "PCA", "PRP", "RC", "RN", "RRI"}
     maquette = codes_maquette.lire(config)
     releve = codes_maquette.releve_des_matieres(config)
     fichier = {str(v).upper() for v in data["modules"].values()}
@@ -469,7 +471,8 @@ def test_la_config_reelle_preenregistre_la_maquette_et_les_voulus() -> None:
     cfg = load_celcat_config(config)
     assert (cfg.modules["WR201"], cfg.origines["cours"]["WR201"]) == ("TSBZ2M01", "maquette")
     assert (cfg.modules["WRA401M"], cfg.origines["cours"]["WRA401M"]) == ("TSBZD01C", "maquette (corrigé M→C)")
-    assert "WR100BU" not in cfg.modules and "WR100BU" in cfg.sans_code["cours"]
+    assert "WR100BU" not in cfg.modules and "WR100BU" not in cfg.sans_code["cours"]
+    assert cfg.regle_sans_module("WR100BU") is not None and "WR100BU" not in maquette
     # Exclus par prudence (un code repris est verrouillé) : restent manquants.
     exclus = codes_maquette.lire_exclus(config)
     assert set(exclus) == {"WRA410C", "WSA611C", "WS103", "WS104", "WS105"}

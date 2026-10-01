@@ -633,6 +633,12 @@ def _cle_ressources(entree: Any) -> tuple:
         getattr(entree, "salle", None),
         getattr(entree, "code_enseignant", None),
         getattr(entree, "type_seance_nom", None),
+        # Règle d'envoi : la catégorie et le département viennent de la
+        # règle, pas du type — deux TD l'un ordinaire, l'autre sous règle, ne
+        # se résolvent pas pareil.
+        getattr(entree, "regle", ""),
+        getattr(entree, "categorie_celcat", ""),
+        getattr(entree, "departement", ""),
     )
 
 
@@ -651,7 +657,9 @@ def _ids_pour(page: Any, entree: Any) -> tuple[dict, str | None]:
     try:
         state = get_state()
         carte = charger_carte(state.config_dir)
-        categorie = carte.categorie(entree.type_seance_nom)
+        # Règle d'envoi : la catégorie est celle de la règle (« TD0 »,
+        # « Projet »), jamais celle du type (« [TD] »).
+        categorie = getattr(entree, "categorie_celcat", "") or carte.categorie(entree.type_seance_nom)
         return resoudre_ids(page, entree, categorie=categorie), None
     except Exception as exc:  # noqa: BLE001
         return {}, f"{type(exc).__name__} : {exc}"
@@ -698,11 +706,14 @@ def motif_non_saisissable(entree: Any) -> str:
     qui s'écrivent très bien aujourd'hui avec le premier déclaré. Signaler
     n'est pas empêcher.
     """
+    # Règle d'envoi : une séance sans matière l'est par décision (WR100BU,
+    # PTUT d'un cours sans code) — ce n'est pas un manque.
+    sans_module = bool(getattr(entree, "regle", ""))
     manquants = [
         nom
         for nom, valeur in (
             ("enseignant", getattr(entree, "code_enseignant", None)),
-            ("matière", getattr(entree, "code_module", None)),
+            ("matière", "(règle sans module)" if sans_module else getattr(entree, "code_module", None)),
             ("salle", getattr(entree, "salle", None)),
         )
         if not valeur

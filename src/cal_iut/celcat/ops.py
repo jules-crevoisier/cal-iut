@@ -110,6 +110,24 @@ def _placement_pour(session_id: str) -> Any:
     return None
 
 
+def _enseignants_de(session: Any) -> list[str]:
+    """Les enseignants de la séance, dans l'ordre — le premier est celui que
+    Celcat recevra. Le placement d'abord (il porte une réaffectation), la
+    séance à défaut."""
+    placement = _placement_pour(str(getattr(session, "id", "") or getattr(session, "session_id", "") or ""))
+    codes = list(getattr(placement, "teacher_codes", None) or []) if placement is not None else []
+    return codes or list(getattr(session, "teacher_codes", None) or [])
+
+
+def _regle(session: Any, cfg: Any) -> tuple[Any, str]:
+    """La règle d'envoi de la séance (`mapping.regle_pour`), même décision
+    que le plan et le worker."""
+    from cal_iut.celcat.mapping import regle_pour
+
+    type_seance = str(getattr(getattr(session, "session_type", None), "value", "") or "")
+    return regle_pour(cfg, str(getattr(session, "course_code", "") or ""), type_seance, _enseignants_de(session))
+
+
 def _sans_code_celcat(session: Any) -> str | None:
     if session is None:
         return None
@@ -117,6 +135,11 @@ def _sans_code_celcat(session: Any) -> str | None:
     cfg = load_celcat_config(state.config_dir)
     code = str(getattr(session, "course_code", "") or "").upper()
     if not code:
+        return None
+    if any(_regle(session, cfg)):
+        # Règle d'envoi : la matière n'est pas exigée (WR100BU, PTUT d'un
+        # cours sans code). Un refus d'enseignant est dit par
+        # `_non_envoye_voulu`.
         return None
     if not cfg.modules.get(code):
         return f"{getattr(session, 'course_code', code)} sans code Celcat"
@@ -131,6 +154,14 @@ def _non_envoye_voulu(session: Any) -> str | None:
         return None
     code = str(getattr(session, "course_code", "") or "").upper()
     cfg = load_celcat_config(get_state().config_dir)
+    regle, refus = _regle(session, cfg)
+    if refus:
+        # Règle d'envoi : seules les interventions des enseignants de la
+        # règle partent ; les autres ne partent pas, par décision.
+        return refus
+    if regle is not None:
+        # Une règle passe devant « sans code (voulu) » (PTUT).
+        return None
     if not code or cfg.modules.get(code):
         return None
     voulu = (cfg.sans_code.get("cours") or {}).get(code)

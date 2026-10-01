@@ -37,7 +37,7 @@ from __future__ import annotations
 from typing import Any
 
 from cal_iut.celcat.comparaison import comparer
-from cal_iut.celcat.mapping import libelle_groupe_celcat, load_celcat_config
+from cal_iut.celcat.mapping import libelle_groupe_celcat, load_celcat_config, regle_pour
 
 
 class ContexteComparaison:
@@ -48,7 +48,7 @@ class ContexteComparaison:
     autant de balayages que de semaines.
     """
 
-    __slots__ = ("groupes_celcat", "salles_celcat", "codes_celcat", "types_seance")
+    __slots__ = ("categories_regle", "codes_celcat", "groupes_celcat", "salles_celcat", "types_seance")
 
     def __init__(
         self,
@@ -57,11 +57,16 @@ class ContexteComparaison:
         salles_celcat: dict[str, str],
         codes_celcat: set[str],
         types_seance: dict[str, str],
+        categories_regle: dict[str, str] | None = None,
     ) -> None:
         self.groupes_celcat = groupes_celcat
         self.salles_celcat = salles_celcat
         self.codes_celcat = codes_celcat
         self.types_seance = types_seance
+        # `session_id -> catégorie Celcat` des séances qui partent sous une
+        # règle d'envoi (celcat.yaml::regles_envoi) : dans le périmètre même
+        # sans code module, catégorie imposée.
+        self.categories_regle = categories_regle or {}
 
 
 def contexte(state: Any) -> ContexteComparaison:
@@ -84,9 +89,17 @@ def contexte(state: Any) -> ContexteComparaison:
     libelles = {g.id: g.label for g in state.groups}
     groupes_celcat: dict[str, str] = {}
     types_seance: dict[str, str] = {}
+    categories_regle: dict[str, str] = {}
 
     for placement in state.timetable:
         session = state.sessions_by_id.get(placement.session_id)
+        regle, _refus = regle_pour(
+            cfg, str(placement.course_code or ""),
+            str(getattr(getattr(session, "session_type", None), "value", "") or ""),
+            list(placement.teacher_codes or []),
+        )
+        if regle is not None:
+            categories_regle[placement.session_id] = regle.categorie
         type_seance = str(
             getattr(getattr(session, "session_type", None), "value", "") or ""
         ).strip()
@@ -104,6 +117,7 @@ def contexte(state: Any) -> ContexteComparaison:
         salles_celcat=cfg.salles,
         codes_celcat=set(cfg.modules),
         types_seance=types_seance,
+        categories_regle=categories_regle,
     )
 
 
@@ -152,6 +166,7 @@ def lignes(
         codes_celcat=c.codes_celcat,
         types_seance=c.types_seance,
         journal=journal,
+        categories_regle=c.categories_regle,
     )
 
 

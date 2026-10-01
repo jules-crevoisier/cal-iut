@@ -59,6 +59,186 @@ class CelcatConfig:
     # connaisse : c'est ce qui permet d'avertir qu'un code « libre » est en
     # fait celui de quelqu'un d'autre dans Celcat.
     noms_fichier_enseignants: dict[str, str] = field(default_factory=dict)
+    # Règles d'envoi (01/10/2026, `celcat.yaml::regles_envoi`) : des séances
+    # qui partent avec une catégorie, une remarque et un département imposés,
+    # et un module choisi par la règle. Par COURS (« WR100BU », clé : notre
+    # code cours) et par TYPE de séance (« PTUT »).
+    regles_cours: dict[str, RegleEnvoi] = field(default_factory=dict)
+    regles_types: dict[str, RegleEnvoi] = field(default_factory=dict)
+
+    def regle_sans_module(self, cours: str) -> RegleEnvoi | None:
+        """La règle de COURS qui envoie ce cours sans aucun module, s'il y en
+        a une — c'est elle qui retire le cours des codes module."""
+        regle = self.regles_cours.get(str(cours or "").strip().upper())
+        return regle if regle is not None and regle.module == MODULE_AUCUN else None
+
+
+class ConfigCelcatInvalide(ValueError):
+    """`celcat.yaml` contradictoire : refusé au chargement, jamais deviné."""
+
+
+# Département des envois ordinaires (relevé le 31/08/2026, `celcat.yaml`) :
+# celui d'une règle qui n'en précise pas.
+DEPARTEMENT_PAR_DEFAUT = "T_MMI T29"
+
+# `module:` d'une règle d'envoi.
+MODULE_AUCUN = "aucun"   # aucune matière, jamais cherchée (WR100BU)
+MODULE_COURS = "cours"   # la matière du COURS si son code est connu, sinon aucune (PTUT)
+
+
+@dataclass(frozen=True)
+class RegleEnvoi:
+    """Une règle d'envoi de `celcat.yaml::regles_envoi`.
+
+    Deux demandes de Kyllian Bresson (01/10/2026) :
+    - la visite de la BU (WR100BU, code inventé, absent de Celcat) remonte
+      pour les interventions de Valérie Mariot : catégorie « TD0 »
+      (pondération 0), remarque « WR100BU », AUCUN module ;
+    - toute séance de TYPE « PTUT » remonte en catégorie « Projet »
+      (pondération 0), remarque « PTUT », avec le module du COURS quand il
+      est connu, sans module sinon — jamais un module « PTUT ».
+    La salle, le groupe et l'enseignant restent ceux de la séance.
+
+    Déclarative : le code ne connaît AUCUN cours ni type par son nom.
+    """
+
+    cle: str          # « WR100BU » (cours) ou « PTUT » (type)
+    portee: str       # « cours » ou « type »
+    module: str       # MODULE_AUCUN ou MODULE_COURS
+    categorie: str
+    departement: str
+    remarque: str
+    # Trigrammes dont les interventions partent. Vide = toutes.
+    enseignants: tuple[str, ...] = ()
+    motif: str = ""
+
+    def accepte(self, teacher_codes: list[str] | tuple[str, ...]) -> bool:
+        """Le PREMIER enseignant (celui que Celcat recevra) est-il visé ?"""
+        if not self.enseignants:
+            return True
+        return bool(teacher_codes) and str(teacher_codes[0]).strip().upper() in self.enseignants
+
+    def motif_refus(self) -> str:
+        return (
+            f"{self.cle} : seules les interventions de {', '.join(self.enseignants)} "
+            "sont envoyées (règle d'envoi de celcat.yaml)"
+        )
+
+    def libelle(self, code_module: str | None) -> str:
+        """Ce que le plan affiche à côté de l'action (« à créer — … »)."""
+        if self.module == MODULE_AUCUN:
+            return f"sans module (règle {self.cle})"
+        if code_module:
+            return f"module du cours (règle {self.cle})"
+        return f"sans module — cours sans code Celcat (règle {self.cle})"
+
+
+_CHAMPS_REGLE = {"enseignants", "module", "categorie", "remarque", "departement", "motif"}
+_TYPES_SEANCE = {"CM", "TD", "TP", "PTUT"}
+
+
+def _lire_regle(cle: str, table: str, valeur: object) -> RegleEnvoi:
+    ou = f"celcat.yaml : règle d'envoi `regles_envoi.{table}.{cle}`"
+    if not isinstance(valeur, dict):
+        raise ConfigCelcatInvalide(f"{ou} doit être une table (module, categorie, remarque…).")
+    inconnus = sorted(set(map(str, valeur)) - _CHAMPS_REGLE)
+    if inconnus:
+        raise ConfigCelcatInvalide(
+            f"{ou}, champ(s) inconnu(s) : {', '.join(inconnus)} (attendus : {', '.join(sorted(_CHAMPS_REGLE))})."
+        )
+    module = str(valeur.get("module") or "").strip().lower()
+    if module not in (MODULE_AUCUN, MODULE_COURS):
+        raise ConfigCelcatInvalide(
+            f"{ou} : `module` doit valoir « {MODULE_AUCUN} » (aucune matière) ou « {MODULE_COURS} » "
+            "(la matière du cours si son code est connu) — à écrire explicitement."
+        )
+    categorie = " ".join(str(valeur.get("categorie") or "").split())
+    if not categorie:
+        raise ConfigCelcatInvalide(f"{ou} sans `categorie` (nom exact de la catégorie d'évènement Celcat).")
+    departement = " ".join(str(valeur.get("departement") or DEPARTEMENT_PAR_DEFAUT).split())
+    enseignants = valeur.get("enseignants") or []
+    if isinstance(enseignants, str):
+        enseignants = [enseignants]
+    return RegleEnvoi(
+        cle=cle,
+        portee="cours" if table == "cours" else "type",
+        module=module,
+        categorie=categorie,
+        departement=departement,
+        remarque=" ".join(str(valeur.get("remarque") or cle).split()),
+        enseignants=tuple(str(t).strip().upper() for t in enseignants if str(t).strip()),
+        motif=" ".join(str(valeur.get("motif") or "").split()),
+    )
+
+
+def lire_regles_envoi(data: dict) -> tuple[dict[str, RegleEnvoi], dict[str, RegleEnvoi]]:
+    """La section `regles_envoi` de `celcat.yaml`, validée : `(par cours,
+    par type)`.
+
+    REFUSE plutôt que d'interpréter : une règle mal écrite enverrait des
+    séances avec une catégorie de paie choisie au hasard. Refusés :
+    - un cours aussi dans `sans_code_voulu.cours` (« jamais envoyé » ET
+      « envoyé par une règle » à la fois) ;
+    - un cours `module: aucun` qui a un code dans `modules` ;
+    - un type inconnu (attendus : CM, TD, TP, PTUT) ;
+    - `module` absent ou autre que « aucun » / « cours », catégorie vide ;
+    - un champ inconnu (faute de frappe : « categories »…).
+    """
+    brut = data.get("regles_envoi") or {}
+    if not isinstance(brut, dict) or set(map(str, brut)) - {"cours", "types"}:
+        raise ConfigCelcatInvalide(
+            "celcat.yaml : `regles_envoi` attend deux tables, `cours:` et/ou `types:`."
+        )
+    voulus = {str(k).strip().upper() for k in ((data.get("sans_code_voulu") or {}).get("cours") or {})}
+    modules = {str(k).strip().upper(): v for k, v in (data.get("modules") or {}).items() if v}
+    par_cours: dict[str, RegleEnvoi] = {}
+    par_type: dict[str, RegleEnvoi] = {}
+    for portee, cible in (("cours", par_cours), ("types", par_type)):
+        table = brut.get(portee) or {}
+        if not isinstance(table, dict):
+            raise ConfigCelcatInvalide(f"celcat.yaml : `regles_envoi.{portee}` doit être une table.")
+        for cle_brute, valeur in table.items():
+            cle = str(cle_brute).strip().upper()
+            regle = _lire_regle(cle, portee, valeur)
+            if portee == "cours":
+                if cle in voulus:
+                    raise ConfigCelcatInvalide(
+                        f"celcat.yaml : {cle} est à la fois dans `sans_code_voulu.cours` (jamais envoyé) et dans "
+                        "`regles_envoi.cours` (envoyé par une règle). Retirez-le de l'une des deux sections."
+                    )
+                if regle.module == MODULE_AUCUN and cle in modules:
+                    raise ConfigCelcatInvalide(
+                        f"celcat.yaml : {cle} a un code module dans `modules` ({modules[cle]}) alors que sa règle "
+                        "d'envoi dit `module: aucun`. Retirez l'un des deux."
+                    )
+            elif cle not in _TYPES_SEANCE:
+                raise ConfigCelcatInvalide(
+                    f"celcat.yaml : `regles_envoi.types.{cle}` : type de séance inconnu "
+                    f"(attendus : {', '.join(sorted(_TYPES_SEANCE))})."
+                )
+            cible[cle] = regle
+    return par_cours, par_type
+
+
+def regle_pour(
+    cfg: CelcatConfig, course_code: str, session_type: str, teacher_codes: list[str] | tuple[str, ...]
+) -> tuple[RegleEnvoi | None, str]:
+    """La règle d'envoi d'une séance : `(règle appliquée, motif de refus)`.
+
+    ORDRE DE PRIORITÉ : la règle du COURS d'abord ; elle décide seule pour
+    ses séances (y compris le refus d'un autre enseignant). Sinon la règle
+    du TYPE de séance. Une règle passe devant « sans code (voulu) » et devant
+    les codes module ordinaires : c'est le sens de « appliquées
+    systématiquement à toutes les séances PTUT » (Kyllian, 01/10/2026).
+    """
+    regle = cfg.regles_cours.get(str(course_code or "").strip().upper()) or cfg.regles_types.get(
+        str(session_type or "").strip().upper()
+    )
+    if regle is None:
+        return None, ""
+    if not regle.accepte(list(teacher_codes or [])):
+        return None, regle.motif_refus()
+    return regle, ""
 
 
 _RE_LIGNE_ENSEIGNANT = re.compile(r"""^\s+["']?([A-Za-z]{1,6})["']?\s*:\s*["']?([^"'#\s]*)["']?\s*(?:#\s*(.*))?$""")
@@ -133,8 +313,12 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
     }
     salles = {str(k): str(v) for k, v in (data.get("salles") or {}).items() if v}
     modules = {str(k).upper(): str(v) for k, v in (data.get("modules") or {}).items() if v}
+    regles_cours, regles_types = lire_regles_envoi(data)
+    # Cours envoyés SANS module par décision (`module: aucun`) : retirés de
+    # tout ce qui pourrait leur donner un code module.
+    regles = {c for c, r in regles_cours.items() if r.module == MODULE_AUCUN}
     origines: dict[str, dict[str, str]] = {
-        "cours": dict.fromkeys(modules, "fichier"),
+        "cours": {**dict.fromkeys(modules, "fichier"), **dict.fromkeys(regles, "regle")},
         "salles": dict.fromkeys(salles, "fichier"),
         "enseignants": dict.fromkeys(enseignants, "fichier"),
     }
@@ -150,6 +334,10 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
     for famille_surcouche, entrees in mappings.sans_code_voulus().items():
         famille = _FAMILLE_ONGLET[famille_surcouche]
         for cle, entree in entrees.items():
+            if famille == "cours" and cle in regles:
+                # La règle du fichier a le dernier mot : un « sans code »
+                # saisi dans l'appli avant elle ne l'annule pas en silence.
+                continue
             sans_code[famille].setdefault(cle, {
                 "motif": str(entree.get("motif") or ""), "source": "appli",
                 "ajoute_le": str(entree.get("ajoute_le") or ""), "ajoute_par": str(entree.get("ajoute_par") or ""),
@@ -159,7 +347,7 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
     # APRÈS le fichier, qui garde le dernier mot, et jamais pour un cours
     # « sans code (voulu) ».
     for cours, entree in codes_maquette.lire(config_dir).items():
-        if cours not in modules and cours not in sans_code["cours"]:
+        if cours not in modules and cours not in sans_code["cours"] and cours not in regles:
             modules[cours] = entree["code"]
             origines["cours"][cours] = entree["origine"]
     connus = {"cours": dict(modules), "salles": dict(salles), "enseignants": dict(enseignants)}
@@ -176,6 +364,10 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
         salles[cle] = valeur
         origines["salles"][cle] = "appli"
     for cle, valeur in mappings.table("matieres").items():
+        if cle.upper() in regles:
+            # Envoyé SANS module par décision : un code saisi avant la règle
+            # ne doit pas faire chercher une matière qui n'existe pas.
+            continue
         modules[cle.upper()] = valeur
         origines["cours"][cle.upper()] = "appli"
 
@@ -191,6 +383,8 @@ def load_celcat_config(config_dir: Path) -> CelcatConfig:
             **{str(k).upper(): str(k).upper() for k in (data.get("enseignants") or {})},
             **noms_commentes(texte),
         },
+        regles_cours=regles_cours,
+        regles_types=regles_types,
     )
 
 
@@ -249,6 +443,35 @@ class EntreeCelcat:
     # « Sans code (voulu) » (30/09/2026) : la séance n'est PAS envoyée, et
     # ce n'est pas un blocage à corriger. Le motif dit pourquoi.
     non_envoyee: str = ""
+    # Règle d'envoi (01/10/2026, `celcat.yaml::regles_envoi`) : sa clé
+    # (« WR100BU », « PTUT »), ce que le plan en dit, et ce qu'elle impose
+    # côté Celcat. Vide = séance ordinaire : catégorie déduite du type,
+    # matière obligatoire. Sous une règle, `code_module` peut être vide —
+    # c'est voulu (`sans_module`).
+    regle: str = ""
+    regle_libelle: str = ""      # « sans module (règle WR100BU) »
+    categorie_celcat: str = ""   # libellé Celcat exact (« TD0 », « Projet »)
+    departement: str = ""        # libellé Celcat exact (« T_MMI T29 »)
+    remarque: str = ""           # onglet « Remarques et personnaliser »
+
+    @property
+    def notes_celcat(self) -> str:
+        """Le champ `notes` de l'évènement Celcat — sa « Remarque ».
+
+        D'ordinaire notre `session_id`, seul. Avec une remarque imposée par
+        une règle : « WR100BU — WR100BU-S1-TD-1-but1-td-ab ». La remarque
+        voulue vient EN TÊTE (c'est elle que l'équipe lit dans Celcat), et
+        l'identifiant reste dans le même champ, derrière le dernier « — » :
+        `session_id_depuis_notes` le retrouve dans les deux formes.
+        """
+        if self.remarque:
+            return f"{self.remarque}{SEPARATEUR_REMARQUE}{self.session_id}"
+        return self.session_id
+
+    @property
+    def sans_module(self) -> bool:
+        """Part sans aucune matière, par décision d'une règle."""
+        return bool(self.regle) and not self.code_module
 
     @property
     def prete(self) -> bool:
@@ -271,13 +494,30 @@ class EntreeCelcat:
         être corrigée dans Celcat. Volontairement SANS les libellés
         d'affichage (`course_code`), qui peuvent changer sans qu'il y ait
         quoi que ce soit à modifier là-bas."""
-        return "|".join(
+        base = "|".join(
             str(x) for x in (
                 self.semaine, self.jour, self.heure_debut, self.heure_fin,
                 self.code_enseignant, self.salle, self.code_module,
                 self.type_seance, self.groupe,
             )
         )
+        if not self.regle:
+            # Inchangée pour toutes les séances ordinaires : une signature
+            # qui bouge ferait re-saisir tout le journal.
+            return base
+        return f"{base}|regle:{self.categorie_celcat}|{self.departement}|{self.remarque}"
+
+
+# Entre la remarque imposée et notre identifiant, dans `notes`.
+SEPARATEUR_REMARQUE = " — "
+
+
+def session_id_depuis_notes(notes: str) -> str:
+    """Notre `session_id` dans le champ `notes` d'un évènement Celcat, quelle
+    que soit sa forme : « WR101-S1-TD-1-but1-td-ab » (séance ordinaire) ou
+    « WR100BU — WR100BU-S1-TD-1-but1-td-ab » (remarque imposée par une règle
+    d'envoi). Un identifiant ne contient jamais « — »."""
+    return str(notes or "").rsplit(SEPARATEUR_REMARQUE, 1)[-1].strip()
 
 
 def _salle_celcat(cfg: CelcatConfig, room_id: str | None) -> tuple[str | None, str | None]:
@@ -346,20 +586,34 @@ def entree_pour_placement(
     if motif_salle:
         bloquants.append(motif_salle)
 
-    code_module = cfg.modules.get(course_code.upper())
-    non_envoyee = ""
-    voulu = (cfg.sans_code.get("cours") or {}).get(course_code.upper())
-    if not code_module and voulu:
-        non_envoyee = f"module {course_code} sans code Celcat, voulu : {voulu.get('motif') or 'sans motif'}"
-    elif not code_module:
-        bloquants.append(f"module {course_code} sans code Celcat")
+    # Règle d'envoi (01/10/2026, `celcat.yaml::regles_envoi`) : catégorie,
+    # remarque et département imposés ; module selon la règle — « aucun »
+    # (WR100BU : rien n'est cherché, le code est inventé) ou « cours » (PTUT :
+    # le module du cours s'il est connu, AUCUN sinon, jamais un module
+    # « PTUT »). Une règle passe devant « sans code (voulu) ».
+    regle_appliquee, non_envoyee = regle_pour(cfg, course_code, session_type, teacher_codes)
+    code_module: str | None = None
+    if regle_appliquee is not None:
+        if regle_appliquee.module == MODULE_COURS:
+            code_module = cfg.modules.get(course_code.upper())
+    elif not non_envoyee:
+        code_module = cfg.modules.get(course_code.upper())
+        voulu = (cfg.sans_code.get("cours") or {}).get(course_code.upper())
+        if not code_module and voulu:
+            non_envoyee = f"module {course_code} sans code Celcat, voulu : {voulu.get('motif') or 'sans motif'}"
+        elif not code_module:
+            bloquants.append(f"module {course_code} sans code Celcat")
 
     type_nom = session_type.strip().upper()
     type_celcat = cfg.types_seance.get(type_nom)
     # L'index numérique (TD=4, TP=6) est un héritage des `.bat`. Le pilote
     # désigne la catégorie par son LIBELLÉ (`[CM]`, `[TD]`, `[TP]`), relevé
     # le 01/09/2026. Un CM n'a pas d'index et n'en a plus besoin.
-    if not type_nom:
+    # Sous une règle d'envoi, la catégorie est celle de la règle : le type
+    # de la séance n'en décide plus (PTUT n'a pas de catégorie ordinaire).
+    if regle_appliquee is not None:
+        pass
+    elif not type_nom:
         bloquants.append("type de séance manquant")
     elif type_celcat is None and type_nom != "CM":
         bloquants.append(f"type de séance {session_type} sans code Celcat")
@@ -396,6 +650,11 @@ def entree_pour_placement(
         course_code=course_code,
         bloquants=bloquants,
         non_envoyee=non_envoyee or ens_voulu,
+        regle=regle_appliquee.cle if regle_appliquee else "",
+        regle_libelle=regle_appliquee.libelle(code_module) if regle_appliquee else "",
+        categorie_celcat=regle_appliquee.categorie if regle_appliquee else "",
+        departement=regle_appliquee.departement if regle_appliquee else "",
+        remarque=regle_appliquee.remarque if regle_appliquee else "",
     )
 
 

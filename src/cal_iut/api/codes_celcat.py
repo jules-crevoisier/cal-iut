@@ -90,7 +90,7 @@ router = APIRouter(prefix="/reference/codes-celcat", tags=["reference"])
 
 FamilleCode = Literal["cours", "salles", "enseignants", "groupes"]
 FAMILLES_CODE: tuple[str, ...] = ("cours", "salles", "enseignants", "groupes")
-Origine = Literal["fichier", "maquette", "appli", "manquant", "voulu"]
+Origine = Literal["fichier", "maquette", "appli", "manquant", "voulu", "regle"]
 
 # Famille de l'onglet -> famille de la surcouche (`celcat/mappings.py`).
 # `groupes` n'y est pas : lecture seule (cf. docstring du module).
@@ -111,7 +111,21 @@ EXEMPLE: dict[str, str] = {"cours": "TSBZ1M01", "salles": "H.104", "enseignants"
 
 NOTE_GROUPES = "Se règle dans data/config/celcat_groupes.yaml (identifiant interne relevé dans Celcat, puis déploiement)."
 
-LIBELLE_ORIGINE = {"fichier": "fichier de configuration (celcat.yaml)", "maquette": "maquette"}
+LIBELLE_ORIGINE = {
+    "fichier": "fichier de configuration (celcat.yaml)",
+    "maquette": "maquette",
+    "regle": "envoi sans module (règle)",
+}
+
+
+def note_regle(regle) -> str:
+    """Ce que fait une règle d'envoi de cours sans module, en une phrase."""
+    qui = ", ".join(regle.enseignants) if regle.enseignants else "tous les enseignants"
+    return (
+        f"Envoyé sans module : catégorie {regle.categorie}, remarque « {regle.remarque} », "
+        f"département {regle.departement} ; interventions de {qui}"
+        + (f". {regle.motif}" if regle.motif else ".")
+    )
 
 
 # ── Modèles ─────────────────────────────────────────────────────────────
@@ -155,6 +169,7 @@ class FamilleCodesCelcat(BaseModel):
     sans_code_bloquants: int = Field(description="Manquants avec des séances placées : bloque Celcat.")
     saisis: int
     voulus: int = Field(default=0, description="« Sans code (voulu) ».")
+    sans_module: int = Field(default=0, description="Envoyés sans module par une règle de celcat.yaml.")
     maquette: int = Field(default=0, description="Codes préenregistrés depuis la maquette.")
     suggestions: list[str] = Field(description="Codes relevés dans Celcat, proposés à la saisie.")
     lignes: list[LigneCodeCelcat]
@@ -302,6 +317,19 @@ def _exiger_modifiable(cfg, famille: str, cle: str) -> None:
             f"{cle} est marqué « sans code (voulu) » ({voulu.get('motif') or 'sans motif'}) : "
             "retirez d'abord ce statut pour saisir un code.",
         )
+    _refuser_si_regle(cfg, famille, cle)
+
+
+def _refuser_si_regle(cfg, famille: str, cle: str) -> None:
+    """Un cours envoyé sans module par une règle (celcat.yaml) ne prend ni
+    code module ni « sans code (voulu) » dans l'appli : la règle du fichier
+    décide."""
+    if famille == "cours" and cfg.regle_sans_module(cle) is not None:
+        raise HTTPException(
+            409,
+            f"{cle} est envoyé à Celcat sans module (règle de celcat.yaml, « regles_envoi ») : "
+            "il ne prend pas de code module. La règle se modifie dans ce fichier.",
+        )
 
 
 def _codes_fichier_seul(cfg, famille: str) -> set[str]:
@@ -430,6 +458,7 @@ def marquer_sans_code(state: object, famille: str, cle: str, motif: str, *, par:
         raise HTTPException(400, "Le motif est obligatoire : dites en quelques mots pourquoi il n'y a pas de code.")
     with _verrou:
         cfg = _config(Path(state.config_dir))
+        _refuser_si_regle(cfg, famille, cle_propre)
         effectif = {"cours": cfg.modules, "salles": cfg.salles, "enseignants": cfg.enseignants}[famille].get(cle_propre)
         if effectif:
             raise HTTPException(
@@ -521,7 +550,23 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
         saisie = (surcouche.get(_FAMILLE_SURCOUCHE[famille]) or {}).get(cle)
         voulu = (cfg.sans_code.get(famille) or {}).get(cle) if not effectif else None
         origine_brute = (cfg.origines.get(famille) or {}).get(cle, "")
+        regle = cfg.regle_sans_module(cle) if famille == "cours" else None
         avertissement = None
+        if regle is not None:
+            # Envoi sans module (règle) : ni code, ni manque, ni « non envoyé ».
+            # Ce qui part est décrit par la règle — rien ne se saisit ici.
+            reste = {k: v for k, v in champs.items() if k not in ("note", "alerte")}
+            return LigneCodeCelcat(
+                cle=cle,
+                code=None,
+                code_connu=None,
+                origine="regle",
+                origine_detail=LIBELLE_ORIGINE["regle"],
+                motif_sans_code=regle.motif or None,
+                note=note_regle(regle),
+                modifiable=False,
+                **reste,
+            )
         if saisie and connu:
             # Saisie antérieure au verrou : appliquée, en lecture seule.
             origine: str = "maquette" if cle not in _codes_fichier_seul(cfg, famille) else "fichier"
@@ -672,6 +717,7 @@ def lister(state: object, *, admin: bool) -> CodesCelcat:
             sans_code_bloquants=sum(1 for l in lignes if l.origine == "manquant" and l.nb_seances > 0),
             saisis=sum(1 for l in lignes if l.origine == "appli"),
             voulus=sum(1 for l in lignes if l.origine == "voulu"),
+            sans_module=sum(1 for l in lignes if l.origine == "regle"),
             maquette=sum(1 for l in lignes if l.origine == "maquette"),
             suggestions=suggestions[famille],
             lignes=lignes,

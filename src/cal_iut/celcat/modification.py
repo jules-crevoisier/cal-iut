@@ -266,10 +266,17 @@ def fusionner_deltas(
     fusionne["event_cat_id"] = _id(ids, "event_cat_id")
     fusionne["dept_id"] = _id(ids, "dept_id")
     id_evenement = brut.get("event_id")
-    fusionne["modules"] = _ressource_fusionnee(
-        page, brut.get("modules"), cle_id="module_id", valeur=_id(ids, "module_id"),
-        event_id=id_evenement,
-    )
+    if entree.sans_module:
+        # Règle d'envoi sans module : aucune matière ne doit rester. Celles que
+        # l'évènement porterait (saisi à la main avec une matière) sont
+        # RETIRÉES, par la même convention que les salles — signe moins sur
+        # chaque composant de la clé.
+        fusionne["modules"] = _modules_retires(brut.get("modules"), event_id=id_evenement)
+    else:
+        fusionne["modules"] = _ressource_fusionnee(
+            page, brut.get("modules"), cle_id="module_id", valeur=_id(ids, "module_id"),
+            event_id=id_evenement,
+        )
     # LA SALLE SE REMPLACE EN RETIRANT L'ANCIENNE, jamais en posant seulement
     # la nouvelle : `save` FUSIONNE la liste des salles, il ne la remplace
     # pas. Poser `rooms: [nouvelle]` laisse l'ancienne en place et le cours se
@@ -287,8 +294,22 @@ def fusionner_deltas(
     fusionne["groups"] = _ressource_fusionnee(
         page, brut.get("groups"), cle_id="group_id", valeur=group_id, event_id=id_evenement,
     )
-    fusionne["notes"] = entree.session_id
+    fusionne["notes"] = entree.notes_celcat
     return fusionne
+
+
+def _modules_retires(brut_liste: object, *, event_id: int | None) -> list[dict]:
+    """Retraits `{"-event_id", "-module_id", "_type_": "Module"}` de toutes
+    les matières d'un évènement — liste vide s'il n'en a pas."""
+    retraits: list[dict] = []
+    for m in brut_liste if isinstance(brut_liste, list) else []:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("module_id") or m.get("id")
+        if mid is None or event_id is None:
+            continue
+        retraits.append({"-event_id": event_id, "-module_id": int(mid), "_type_": "Module"})
+    return retraits
 
 
 def modifier_evenement(
@@ -308,7 +329,10 @@ def modifier_evenement(
     `modifier_manquants` qui encaisse un échec isolé."""
     brut = localiser_evenement(page, event_id, group_ids=[group_id])
     fusionne = fusionner_deltas(page, brut, entree=entree, ids=ids, group_id=group_id, masque=masque)
-    verifier_charge_categorie(fusionne, type_seance_nom=entree.type_seance_nom)
+    verifier_charge_categorie(
+        fusionne, type_seance_nom=entree.type_seance_nom, categorie_regle=entree.categorie_celcat,
+        sans_module=entree.sans_module,
+    )
     verifier_avant_envoi(fusionne, base=base, production_autorisee=production_autorisee)
     retour = enregistrer_evenement(page, fusionne, methode=methode)
     confirme = event_id_retour(retour)

@@ -803,6 +803,16 @@ class CelcatEntreeResponse(BaseModel):
     groupe: str = ""
     action: str  # "creer" | "modifier" | "inchangee" | "bloquee" | "non_envoyee"
     bloquants: list[str] = []
+    # Règle d'envoi (celcat.yaml::regles_envoi) : « sans module (règle
+    # WR100BU) », « module du cours (règle PTUT) », « sans module — cours sans
+    # code Celcat (règle PTUT) » ; la catégorie imposée (« TD0 », « Projet »)
+    # et la remarque telle qu'elle partira. Vides pour une séance ordinaire.
+    regle: str = ""
+    module: str = ""
+    categorie: str = ""
+    remarque: str = ""
+    # Pourquoi la séance ne part pas, quand action == "non_envoyee".
+    motif_non_envoi: str = ""
 
 
 class CelcatPlanResponse(BaseModel):
@@ -821,6 +831,9 @@ class CelcatPlanResponse(BaseModel):
     # « Sans code (voulu) » (30/09/2026) : jamais envoyées, pas à corriger.
     non_envoyees: int = 0
     motifs_non_envoi: dict[str, int] = {}
+    # Règle d'envoi (libellé, catégorie, remarque, département) -> nombre de
+    # séances qui partent par elle.
+    regles_envoi: dict[str, int] = {}
     entrees: list[CelcatEntreeResponse] = []
     # Le pilote réel est-il utilisable (Playwright installé, URL renseignée) ?
     pilote_pret: bool = False

@@ -1701,8 +1701,10 @@ export function fetchAnomaliesSae(): Promise<AnomalieSae[]> {
 
 export type FamilleCodeCelcat = "cours" | "salles" | "enseignants" | "groupes";
 /** `fichier` et `maquette` : code CONNU, verrouillé ; `appli` : saisi ici ;
- *  `voulu` : « sans code (voulu) », rien ne part ; `manquant` : à saisir. */
-export type OrigineCodeCelcat = "fichier" | "maquette" | "appli" | "manquant" | "voulu";
+ *  `voulu` : « sans code (voulu) », rien ne part ; `manquant` : à saisir ;
+ *  `regle` : cours « envoi sans module » (celcat.yaml) — part sans matière,
+ *  catégorie / remarque / département imposés par la règle (`note`). */
+export type OrigineCodeCelcat = "fichier" | "maquette" | "appli" | "manquant" | "voulu" | "regle";
 
 export interface LigneCodeCelcat {
   cle: string;
@@ -1748,6 +1750,8 @@ export interface FamilleCodesCelcat {
   sans_code_bloquants: number;
   saisis: number;
   voulus: number;
+  /** Cours envoyés sans module par une règle de celcat.yaml. */
+  sans_module?: number;
   maquette: number;
   suggestions: string[];
   lignes: LigneCodeCelcat[];

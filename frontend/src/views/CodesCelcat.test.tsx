@@ -53,7 +53,7 @@ function donnees(admin: boolean): DonneesCodes {
   // Droits calculés comme le serveur (`api/codes_celcat.py::lister`).
   const droits = (l: LigneCodeCelcat, famille: string): LigneCodeCelcat => ({
     ...l,
-    modifiable: m && famille !== "groupes" && l.code_connu === null && l.origine !== "voulu",
+    modifiable: m && famille !== "groupes" && l.code_connu === null && l.origine !== "voulu" && l.origine !== "regle",
     peut_revenir: m && l.origine === "appli",
     peut_marquer_sans_code: m && famille !== "groupes" && l.origine === "manquant",
     peut_retirer_sans_code: m && l.origine === "voulu" && l.origine_detail === "appli",
@@ -85,6 +85,17 @@ function donnees(admin: boolean): DonneesCodes {
           ligne({ cle: "WRA401M", libelle: "Anglais S4", semestre: "S4", parcours: "BUT2-CREACOM-FC", code: "TSBZD01C", code_connu: "TSBZD01C", origine: "maquette", origine_detail: "maquette (corrigé M→C)", code_maquette: "TSBZD01M" }),
           ligne({ cle: "WRX99", libelle: "Atelier", semestre: "S1", parcours: "BUT1", nb_seances: 4 }),
           ligne({ cle: "WRX98", libelle: "Atelier 2", semestre: "S2", parcours: "BUT1", code_maquette: "TSBZ2M01", note: "Code de la maquette non repris : à faire confirmer (à redemander)." }),
+          ligne({
+            cle: "WRBU2",
+            libelle: "Visite BU 2",
+            semestre: "S1",
+            parcours: "BUT1",
+            nb_seances: 12,
+            origine: "regle",
+            origine_detail: "envoi sans module (règle)",
+            motif_sans_code: "Visite de la BU en TD0 (Kyllian)",
+            note: "Envoyé sans module : catégorie TD0, remarque « WRBU2 », département T_MMI T29 ; interventions de VMA.",
+          }),
         ],
         ["TSBZ1M01", "TSBZ2M01"],
       ),
@@ -173,6 +184,23 @@ describe("Référence — Codes Celcat", () => {
     expect(screen.getByText("Visite de la BU")).toBeInTheDocument();
     expect(screen.getByText("décidé dans celcat.yaml")).toBeInTheDocument();
     expect(screen.queryByText("WRX99")).not.toBeInTheDocument();
+  });
+
+  it("un cours « envoi sans module » montre sa règle, sans saisie possible", async () => {
+    stubFetch(true);
+    rendre("admin");
+    const ligneRegle = (await screen.findByText("WRBU2")).closest("tr")!;
+    expect(within(ligneRegle).getByText("envoi sans module (règle)")).toBeInTheDocument();
+    expect(within(ligneRegle).getByText("sans module")).toBeInTheDocument();
+    expect(within(ligneRegle).getByText(/catégorie TD0, remarque « WRBU2 », département T_MMI T29/)).toBeInTheDocument();
+    expect(within(ligneRegle).getByText("se règle dans celcat.yaml")).toBeInTheDocument();
+    expect(within(ligneRegle).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(ligneRegle).queryByText(/manquant/)).not.toBeInTheDocument();
+    // Ni dans « Sans code », ni dans « Sans code (voulu) ».
+    fireEvent.click(screen.getByRole("button", { name: /^Sans code\d/ }));
+    expect(screen.queryByText("WRBU2")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Sans code \(voulu\)\d/ }));
+    expect(screen.queryByText("WRBU2")).not.toBeInTheDocument();
   });
 
   it("un code connu (fichier, maquette) est verrouillé : pas de crayon", async () => {

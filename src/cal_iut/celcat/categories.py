@@ -28,6 +28,18 @@ CATEGORIE_IDS: dict[str, int] = {
     "TP": 435,
 }
 
+# Catégories RÉSERVÉES aux règles d'envoi (`celcat.yaml::regles_envoi`),
+# par LIBELLÉ Celcat. « TD0 » (pondération 0) : 465,
+# relevé dans le même catalogue que [TD]/[TP] ci-dessus. L'écriture ne s'en
+# sert PAS pour choisir : elle résout la catégorie par son nom dans la base
+# ouverte (`ecriture._resoudre_ids_regle`). « Projet » (règle PTUT) n'a pas
+# d'identifiant relevé : il n'est contrôlé que par son nom. Cet identifiant sert de
+# contre-vérification — un nom qui renverrait autre chose est refusé — et à
+# refuser TD0 sur toute séance ordinaire.
+CATEGORIE_IDS_REGLES: dict[str, int] = {
+    "TD0": 465,
+}
+
 LIBELLES: dict[str, str] = {
     "CM": "[CM]",
     "TD": "[TD]",
@@ -59,17 +71,48 @@ def categorie_live_coherente(type_seance_nom: str, ev_cat_name: str | None) -> b
     return vu == voulu
 
 
-def verifier_charge_categorie(charge: dict, *, type_seance_nom: str) -> None:
+def verifier_charge_categorie(
+    charge: dict, *, type_seance_nom: str, categorie_regle: str = "", sans_module: bool = True
+) -> None:
     """Refuse d'envoyer un CM/TD/TP sans catégorie, et un CM hors id [CM].
 
     Ne remplace pas `resoudre_ids` : c'est le filet avant `save`.
     Types hors CM/TD/TP : pas de filet (inconnu ≠ forcer [TP]).
+
+    `categorie_regle` (« TD0 », « Projet ») : la séance part sous une règle
+    d'envoi (`celcat.yaml::regles_envoi`). Le type n'en décide plus ; on
+    exige alors une catégorie renseignée, l'identifiant connu de ce libellé
+    s'il l'est, jamais celui d'un CM/TD/TP, et — `sans_module` — AUCUNE
+    matière. Une catégorie réservée aux règles (TD0) sur une séance
+    ordinaire est refusée : seules ces entrées-là y ont droit.
     """
+    cat_id = charge.get("event_cat_id")
+    if categorie_regle:
+        libelle = categorie_regle.strip()
+        if cat_id in (None, 0, "0", ""):
+            raise CategorieRefusee(f"règle d'envoi : catégorie « {libelle} » exigée, reçu vide")
+        connu = CATEGORIE_IDS_REGLES.get(libelle.upper())
+        if connu is not None and int(cat_id) != connu:
+            raise CategorieRefusee(
+                f"règle d'envoi : « {libelle} » attend event_cat_id={connu}, reçu {cat_id}"
+            )
+        if int(cat_id) in CATEGORIE_IDS.values():
+            raise CategorieRefusee(
+                f"règle d'envoi : event_cat_id={cat_id} est celui d'un CM/TD/TP, pas de « {libelle} »"
+            )
+        modules = [m for m in (charge.get("modules") or []) if isinstance(m, dict) and m.get("module_id")]
+        if modules and sans_module:
+            raise CategorieRefusee("règle d'envoi sans module : la charge porte une matière, elle ne doit en avoir aucune")
+        return
+    if cat_id not in (None, 0, "0", "") and int(cat_id) in CATEGORIE_IDS_REGLES.values():
+        raise CategorieRefusee(
+            f"event_cat_id={cat_id} est réservé aux règles d'envoi "
+            "(celcat.yaml) : refusé sur une séance ordinaire"
+        )
     cle = (type_seance_nom or "").strip().upper()
     if cle not in LIBELLES:
         return
     libelle = LIBELLES[cle]
-    cat_id = charge.get("event_cat_id")
     if cat_id in (None, 0, "0", ""):
         raise CategorieRefusee(
             f"{cle} exige event_cat_id pour {libelle} — reçu vide "

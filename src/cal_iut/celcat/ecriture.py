@@ -8,7 +8,7 @@ from pathlib import Path
 
 from cal_iut.celcat.categories import verifier_charge_categorie
 from cal_iut.celcat.driver import SemainesNonRestreintes
-from cal_iut.celcat.mapping import EntreeCelcat
+from cal_iut.celcat.mapping import DEPARTEMENT_PAR_DEFAUT, EntreeCelcat
 from cal_iut.celcat.navigateur import (
     BASE_ENTRAINEMENT,
     BASE_PRODUCTION,
@@ -92,7 +92,10 @@ def charge_utile(
         "weeks": masque,
         "event_cat_id": _id(ids, "event_cat_id"),
         "dept_id": _id(ids, "dept_id"),
-        "modules": [{"module_id": _id(ids, "module_id")}],
+        # Règle d'envoi sans module (WR100BU ; PTUT d'un cours sans code) :
+        # AUCUNE matière, par décision. Une liste vide, pas un module vide :
+        # `{"module_id": None}` serait une ressource fantôme.
+        "modules": [] if e.sans_module else [{"module_id": _id(ids, "module_id")}],
         "rooms": [{"room_id": _id(ids, "room_id", "salle_id")}],
         "staff": [{"staff_id": _id(ids, "staff_id")}],
         "groups": [{"group_id": group_id}],
@@ -100,7 +103,10 @@ def charge_utile(
         "suspended": "N",
         "global_event": "N",
         "break_mins": 0,
-        "notes": e.session_id,
+        # La « Remarque » de l'évènement (onglet « Remarques et
+        # personnaliser »). Notre identifiant y reste toujours, seul ou
+        # derrière la remarque imposée par une règle (`EntreeCelcat.notes_celcat`).
+        "notes": e.notes_celcat,
     }
     if event_id:
         charge["event_id"] = event_id
@@ -300,8 +306,69 @@ def _exiger(enreg: dict | None, libelle: str, *cles: str) -> int:
     return identifiant
 
 
+def _normaliser_libelle(texte: object) -> str:
+    return " ".join(str(texte or "").split()).casefold()
+
+
+def _trouver_exact(page, type_id: int, cible: str, message: str, *cles: str) -> int:
+    """L'enregistrement dont le NOM est exactement `cible` (espaces et casse
+    près), ou un refus nommé.
+
+    Plus strict que `_choisir`, qui accepte un préfixe : pour une catégorie
+    de paie, « TD0 » ne doit jamais accrocher « TD0 quelque chose », ni un
+    département voisin. Rien trouvé = la séance ne part pas.
+    """
+    voulu = _normaliser_libelle(cible)
+    if voulu:
+        for enreg in _catalogue(page, type_id):
+            for champ in ("unique_name", "name", "evCatName"):
+                if _normaliser_libelle(enreg.get(champ)) == voulu:
+                    return _exiger(enreg, message, *cles)
+    raise RessourceIntrouvable(message)
+
+
+def _resoudre_ids_regle(page, e: EntreeCelcat) -> dict:
+    """Règle d'envoi (`celcat.yaml::regles_envoi`) : salle et enseignant
+    comme d'habitude ; catégorie et département PAR LEUR NOM, tels que la
+    règle les déclare ; la matière SEULEMENT si la règle prend celle du
+    cours et que le cours a un code — résolue alors exactement comme pour
+    une séance ordinaire. Jamais de recherche d'une matière au nom de la
+    règle (« WR100BU », « PTUT »)."""
+    regle = e.regle
+    ids: dict = {} if e.sans_module else {
+        "module_id": _trouver(
+            page, TYPE_MATIERES, f"matière {e.code_module}", "module_id", unique_name=e.code_module or "",
+        ),
+    }
+    return ids | {
+        "room_id": _trouver(
+            page, TYPE_SALLES, f"salle {e.salle}", "room_id",
+            unique_name=e.salle or "", name=e.salle or "",
+        ),
+        "staff_id": _trouver(
+            page, TYPE_PERSONNEL, f"personnel {e.code_enseignant}", "staff_id",
+            unique_name=e.code_enseignant or "",
+        ),
+        "event_cat_id": _trouver_exact(
+            page, TYPE_CATEGORIES_EVENEMENT, e.categorie_celcat,
+            f"catégorie « {e.categorie_celcat} » introuvable dans Celcat (règle d'envoi {regle})",
+            "event_cat_id",
+        ),
+        "dept_id": _trouver_exact(
+            page, TYPE_DEPARTEMENTS, e.departement,
+            f"département « {e.departement} » introuvable dans Celcat (règle d'envoi {regle})",
+            "dept_id",
+        ),
+    }
+
+
 def resoudre_ids(page, e: EntreeCelcat, *, categorie: str) -> dict:
-    """Traduit codes cal-iut → IDs numériques de la base Celcat ouverte."""
+    """Traduit codes cal-iut → IDs numériques de la base Celcat ouverte.
+
+    `categorie` est ignorée pour une entrée sous règle d'envoi : c'est la
+    règle qui la fixe (`e.categorie_celcat`)."""
+    if e.regle:
+        return _resoudre_ids_regle(page, e)
     return {
         "module_id": _trouver(
             page,
@@ -338,8 +405,8 @@ def resoudre_ids(page, e: EntreeCelcat, *, categorie: str) -> dict:
             TYPE_DEPARTEMENTS,
             "département T_MMI",
             "dept_id",
-            unique_name="T_MMI T29",
-            name="T_MMI T29",
+            unique_name=DEPARTEMENT_PAR_DEFAUT,
+            name=DEPARTEMENT_PAR_DEFAUT,
             prefixe="T_MMI",
         ),
     }
@@ -375,7 +442,10 @@ def creer_manquants(
             charge = charge_utile(
                 e, group_id=group_id, ids=ids, masque=masque, event_id=event_id
             )
-            verifier_charge_categorie(charge, type_seance_nom=e.type_seance_nom)
+            verifier_charge_categorie(
+                charge, type_seance_nom=e.type_seance_nom, categorie_regle=e.categorie_celcat,
+                sans_module=e.sans_module,
+            )
             verifier_avant_envoi(
                 charge, base=base, production_autorisee=production_autorisee
             )

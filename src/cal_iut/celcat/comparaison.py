@@ -203,11 +203,27 @@ def _type_celcat(ev: dict) -> str:
     return m.group(1).strip().upper() if m else ""
 
 
+def meme_categorie(categorie_celcat: str, libelle: str) -> bool:
+    """La catégorie relevée est-elle `libelle` (« TD0 ») ?
+
+    Égalité aux espaces et à la casse près, plus le suffixe de pondération
+    que Celcat ajoute parfois (« TD0 0% », « TD0 [0%] ») : il ne dit rien
+    de la catégorie. « TD0 » ne vaut ni « [TD] » ni « TD01 »."""
+    vu = " ".join(str(categorie_celcat or "").split()).casefold()
+    voulu = " ".join(str(libelle or "").split()).casefold()
+    if not vu or not voulu:
+        return False
+    if vu == voulu:
+        return True
+    return vu.startswith(voulu + " ") and not vu[len(voulu) + 1 :].strip("[]%0123456789 ")
+
+
 def _ecarts(
     placement: Any,
     ev: dict,
     salles_celcat: dict[str, str],
     types_seance: dict[str, str] | None = None,
+    categories_regle: dict[str, str] | None = None,
 ) -> list[str]:
     ecarts: list[str] = []
     # LA CATÉGORIE D'ÉVÈNEMENT, signalée par David Annebicque le 05/09/2026 :
@@ -220,10 +236,20 @@ def _ecarts(
     # Ne rien dire quand on ne SAIT pas : un type de séance inconnu ou une
     # catégorie sans crochets ne produit aucun écart, plutôt qu'un écart
     # inventé.
-    notre_type = str((types_seance or {}).get(str(getattr(placement, "session_id", "")), "")).upper()
-    type_celcat = _type_celcat(ev)
-    if notre_type and type_celcat and notre_type != type_celcat:
-        ecarts.append("catégorie")
+    #
+    # « Envoi sans module » (01/10/2026) : la catégorie attendue est celle de
+    # la règle (« TD0 »), pas celle du type — sans quoi chaque visite de la
+    # BU ressortirait en écart « catégorie » face à son propre TD0.
+    categorie_regle = (categories_regle or {}).get(str(getattr(placement, "session_id", "")))
+    if categorie_regle:
+        vue = str(ev.get("categorie") or "").strip()
+        if vue and not meme_categorie(vue, categorie_regle):
+            ecarts.append("catégorie")
+    else:
+        notre_type = str((types_seance or {}).get(str(getattr(placement, "session_id", "")), "")).upper()
+        type_celcat = _type_celcat(ev)
+        if notre_type and type_celcat and notre_type != type_celcat:
+            ecarts.append("catégorie")
     # UN COURS SUR DEUX SALLES. Signalé par Kyllian Bresson le 08/09/2026 :
     # « Thomas Castellengo est sur deux salles ». Sur l'interface Celcat, une
     # salle glissée sans Maj s'AJOUTE à l'ancienne au lieu de la remplacer.
@@ -314,6 +340,7 @@ def _apparier(
     salles_celcat: dict[str, str],
     types_seance: dict[str, str],
     journal: dict[str, int],
+    categories_regle: dict[str, str] | None = None,
 ) -> dict[int, int]:
     """Qui va avec qui — rang de la seance -> rang de l'evenement.
 
@@ -377,7 +404,7 @@ def _apparier(
                 identifiant = int(ev.get("event_id") or 0)
             except (TypeError, ValueError):
                 identifiant = 0
-            score = (len(_ecarts(placement, ev, salles_celcat, types_seance)), identifiant)
+            score = (len(_ecarts(placement, ev, salles_celcat, types_seance, categories_regle)), identifiant)
             if meilleur is None or score < meilleur[0]:
                 meilleur = (score, rang_candidat)
         if meilleur is not None:
@@ -430,8 +457,15 @@ def comparer(
     codes_celcat: set[str] | None = None,
     types_seance: dict[str, str] | None = None,
     journal: dict[str, int] | None = None,
+    categories_regle: dict[str, str] | None = None,
 ) -> list[dict]:
     """Une ligne par séance, avec son verdict.
+
+    `categories_regle` : `session_id -> libellé de catégorie Celcat` des
+    séances envoyées sous une règle d'envoi
+    (`celcat.yaml::regles_envoi`). Elles sont dans le périmètre Celcat
+    bien que leur cours n'ait pas de code module, et leur catégorie se
+    compare à celle de la règle.
 
     `journal` est la table `session_id -> event_id` tenue par
     `celcat/sync.py` : ce que NOUS avons ecrit, et ou. Facultative, mais
@@ -491,6 +525,7 @@ def comparer(
         salles_celcat=salles_celcat or {},
         types_seance=types_seance or {},
         journal=journal or {},
+        categories_regle=categories_regle or {},
     )
 
     for rang_placement, placement in enumerate(du_planning):
@@ -503,7 +538,13 @@ def comparer(
             # « tout corriger » tenterait de les créer — ce que le worker
             # refuse à chaque passage (« WR100BU sans code Celcat »).
             code_seance = str(getattr(placement, "course_code", "") or "").strip().upper()
-            hors_perimetre = codes_celcat is not None and code_seance not in codes_celcat
+            hors_perimetre = (
+                codes_celcat is not None
+                and code_seance not in codes_celcat
+                # Envoyée sans module par une règle : elle a vocation à y
+                # être, son absence est un vrai manque.
+                and str(getattr(placement, "session_id", "")) not in (categories_regle or {})
+            )
             lignes.append(
                 {
                     "statut": "hors_celcat" if hors_perimetre else "absente_celcat",
@@ -515,7 +556,7 @@ def comparer(
                 }
             )
             continue
-        ecarts = _ecarts(placement, trouve, salles_celcat or {}, types_seance or {})
+        ecarts = _ecarts(placement, trouve, salles_celcat or {}, types_seance or {}, categories_regle or {})
         lignes.append(
             {
                 "statut": "ecart" if ecarts else "identique",

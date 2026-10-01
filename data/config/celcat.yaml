@@ -166,7 +166,8 @@ types_seance:
              # (event_cat_id 845) et « [CM Capacite] ». TD=4/TP=6 restent des
              # INDEX DE POSITION hérités des .bat, pas des event_cat_id.
              # L'écriture RPC n'utilise plus cet index.
-  PTUT: null # À CONFIRMER
+  PTUT: null # Pas de catégorie ordinaire : les PTUT partent par la règle
+             # d'envoi `regles_envoi.types.PTUT` (catégorie « Projet »).
 
 # --- Modules : notre code cours -> code module Celcat ---
 # Extrait de `export/Liste_modules_MMI.txt` (29/08/2026). La liste indexe
@@ -349,10 +350,10 @@ codes_a_confirmer:
 #
 # Utilisateur 05/09/2026 : "WR100BU est un code inventé, il n'existe pas
 # dans Celcat, c'est juste une visite de la BU" — pas une matière au sens
-# Celcat/paie, ne JAMAIS le pousser vers Celcat (ni chercher de matière
-# réelle en face). Catégorie « [TD bénévole] » (id=846, confirmée en
-# direct le 04/09/2026) sans objet tant que ce point tient.
-#   WR100BU
+# Celcat/paie : ne JAMAIS chercher de matière réelle en face.
+# REMPLACÉ le 01/10/2026 (demande de Kyllian Bresson) : les interventions de
+# Valérie Mariot partent désormais dans Celcat SANS matière, en catégorie
+# « TD0 » — voir `regles_envoi` en fin de fichier.
 
 # --- Sans code Celcat, VOULU (onglet « Codes Celcat », 30/09/2026) ---------
 # Les décisions ci-dessus, rendues lisibles par l'appli : ces entités ne sont
@@ -377,4 +378,53 @@ sans_code_voulu:
     RC: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
     RN: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
     RRI: "Ligne administrative : pas de matière, saisie dans Celcat non décidée (Kyllian, 04/09/2026)"
-    WR100BU: "Code inventé (visite de la BU), pas une matière Celcat ni de paie (utilisateur, 05/09/2026)"
+
+# --- Règles d'envoi (01/10/2026) -------------------------------------------
+# Des séances qui partent dans Celcat avec une catégorie, une remarque et un
+# département IMPOSÉS, et un module choisi par la règle. Deux portées :
+#   cours: par notre code cours (WR100BU) ;
+#   types: par type de séance, quel que soit le cours (PTUT).
+# La salle, le groupe et l'enseignant restent ceux de la séance (Celcat ne
+# reçoit qu'un enseignant : le premier de la séance).
+#
+#   module      : OBLIGATOIRE.
+#                 « aucun » : aucune matière, jamais cherchée (code inventé).
+#                 « cours » : la matière du COURS de la séance si son code est
+#                 connu (fichier, maquette, appli), résolue comme pour une
+#                 séance ordinaire ; sinon la séance part SANS matière (cours
+#                 manquant ou « sans code (voulu) »). Jamais une matière au
+#                 nom de la règle (« PTUT »).
+#   categorie   : OBLIGATOIRE. LIBELLÉ exact de la catégorie d'évènement
+#                 Celcat, cherché par son nom (catalogue 618) ; introuvable =
+#                 séance bloquée, jamais une autre catégorie. La pondération
+#                 est portée par la catégorie elle-même (« Projet [0%] »).
+#   remarque    : écrit en tête du champ « Remarques » (`notes`) de
+#                 l'évènement, suivi de notre identifiant de séance :
+#                 « WR100BU — WR100BU-S1-TD-1-but1-td-ab ». Défaut : la clé.
+#   departement : libellé exact du département Celcat. Défaut : T_MMI T29.
+#   enseignants : trigrammes dont les interventions partent ; vide = toutes.
+#                 Une séance d'un autre enseignant n'est pas envoyée (motif).
+#   motif       : qui l'a demandé, quand.
+#
+# PRIORITÉ : la règle du COURS d'abord (elle décide seule pour ses séances),
+# puis celle du TYPE. Une règle passe devant `sans_code_voulu` et devant les
+# codes module ordinaires. Refusé au chargement : un cours à la fois ici et
+# dans `sans_code_voulu`, ou en `module: aucun` avec un code dans `modules`.
+# Désactiver : retirer le bloc, redéployer. Essai sans risque :
+# `cal-iut celcat-essai-regle --cours WR100BU` / `--type PTUT`
+# (docs/CELCAT.md § 5, docs/A-TESTER-SUR-CELCAT.md).
+regles_envoi:
+  cours:
+    WR100BU:
+      enseignants: [VMA]       # Valérie Mariot (code Celcat 3696)
+      module: aucun            # code inventé : aucune matière Celcat
+      categorie: "TD0"         # pondération 0 — distincte de « [TD] »
+      remarque: "WR100BU"
+      departement: "T_MMI T29"
+      motif: "Visite de la BU, code inventé : remontée dans Celcat en TD0 (Kyllian Bresson, 01/10/2026)"
+  types:
+    PTUT:
+      module: cours            # « oui, on veut pouvoir mettre un module » (01/10/2026)
+      categorie: "Projet"      # pondération 0, portée par la catégorie — À CONFIRMER
+      remarque: "PTUT"
+      motif: "Séances PTUT : catégorie Projet, pondération 0, remarque PTUT (Kyllian Bresson, 01/10/2026)"
