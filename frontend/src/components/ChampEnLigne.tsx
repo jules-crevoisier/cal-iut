@@ -34,7 +34,7 @@ interface ChampEnLigneProps {
   libelleBouton?: string;
   /** Nom accessible du bouton ET du champ : « Adresse mail de Kyllian Bresson ». */
   libelleChamp: string;
-  type?: "email" | "text" | "number";
+  type?: "email" | "text" | "number" | "tel";
   /** Liste de choix : un `<select>` au lieu d'un champ libre. */
   options?: OptionChamp[];
   placeholder?: string;
@@ -219,7 +219,7 @@ export function ChampEnLigne({
             <input
               ref={champ}
               type={type}
-              inputMode={type === "number" ? "numeric" : type === "email" ? "email" : undefined}
+              inputMode={type === "number" ? "numeric" : type === "email" ? "email" : type === "tel" ? "tel" : undefined}
               aria-label={libelleChamp}
               placeholder={placeholder}
               value={valeur}

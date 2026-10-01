@@ -253,7 +253,23 @@ export interface AppPayload {
    *  `api/reference.py::intervenants_pour_payload`) : par qui, quand, et
    *  combien de séances (supprimable à 0). Vide sur un lien public. */
   intervenantsAppli?: Record<string, IntervenantAppli>;
+  /** Prénom, nom et type de chaque enseignant (onglet « Enseignants &
+   *  vacataires », 01/10/2026, `ingestion/identite_enseignants.py`). Vide
+   *  sur un lien public ; absent d'un serveur plus ancien : se déduit alors
+   *  de `teacherLabels` (`utils/identiteEnseignant.ts`). Jamais de
+   *  téléphone ici : il n'est servi qu'aux rôles edit / admin. */
+  teacherIdentites?: Record<string, IdentiteEnseignant>;
   courses: CourseCatalogEntry[];
+}
+
+export type TypeEnseignant = "enseignant" | "vacataire";
+
+export interface IdentiteEnseignant {
+  prenom: string;
+  /** Nom de famille, en capitales. */
+  nom: string;
+  /** `null` : à préciser. */
+  type: TypeEnseignant | null;
 }
 
 /** Un intervenant créé dans l'appli plutôt que dans la configuration. */
@@ -275,6 +291,17 @@ export interface SurchargeReference {
 }
 
 export interface SurchargesReference {
-  enseignants: Record<string, { email?: SurchargeReference; nom?: SurchargeReference }>;
+  enseignants: Record<
+    string,
+    {
+      email?: SurchargeReference;
+      nom?: SurchargeReference;
+      prenom?: SurchargeReference;
+      nom_famille?: SurchargeReference;
+      type?: SurchargeReference;
+      /** Jamais dans le payload : seulement dans `GET /reference/enseignants`. */
+      telephone?: SurchargeReference;
+    }
+  >;
   cours: Record<string, { intitule?: SurchargeReference }>;
 }

@@ -31,20 +31,45 @@ function estEnCapitales(mot: string): boolean {
   return /\p{L}/u.test(mot) && mot === mot.toLocaleUpperCase("fr") && mot !== mot.toLocaleLowerCase("fr");
 }
 
-export function nomCourt(libelle: string): string {
+/** Prénoms et noms d'un libellé, selon la règle ci-dessus. */
+function decouper(libelle: string): { prenoms: string[]; noms: string[] } {
   const mots = libelle.trim().split(/\s+/).filter(Boolean);
-  if (mots.length <= 1) return mots[0] ? casseNom(mots[0]) : "";
+  if (mots.length <= 1) return { prenoms: [], noms: mots };
   const capitales = mots.filter(estEnCapitales);
-  let prenoms: string[];
-  let noms: string[];
   if (capitales.length > 0 && capitales.length < mots.length) {
-    noms = capitales;
-    prenoms = mots.filter((m) => !estEnCapitales(m));
-  } else {
-    prenoms = [mots[0]!];
-    noms = mots.slice(1);
+    return { prenoms: mots.filter((m) => !estEnCapitales(m)), noms: capitales };
   }
+  return { prenoms: [mots[0]!], noms: mots.slice(1) };
+}
+
+export function nomCourt(libelle: string): string {
+  const { prenoms, noms } = decouper(libelle);
+  if (prenoms.length === 0) return noms[0] ? casseNom(noms[0]) : "";
   return `${prenoms.map(initiale).join(" ")} ${noms.map(casseNom).join(" ")}`;
+}
+
+/** Un prénom « KYLLIAN » ou « anne-laure » remis en casse normale ; un
+ *  prénom déjà en casse mixte (« McKenzie ») est gardé tel quel. */
+function cassePrenom(mot: string): string {
+  if (mot !== mot.toLocaleUpperCase("fr") && mot !== mot.toLocaleLowerCase("fr")) return mot;
+  return casseNom(mot);
+}
+
+/**
+ * Prénom et NOM d'un nom complet (onglet « Enseignants & vacataires »,
+ * 01/10/2026) — MÊME règle que le serveur
+ * (`ingestion/identite_enseignants.py::separer_nom`) : prénom en casse
+ * normale, nom en capitales. Un libellé qui n'est que le code rend deux
+ * chaînes vides.
+ */
+export function separerNom(libelle: string, code?: string): { prenom: string; nom: string } {
+  const propre = libelle.trim().split(/\s+/).filter(Boolean).join(" ");
+  if (!propre || (code && propre.toUpperCase() === code.trim().toUpperCase())) return { prenom: "", nom: "" };
+  const { prenoms, noms } = decouper(propre);
+  return {
+    prenom: prenoms.map(cassePrenom).join(" "),
+    nom: noms.join(" ").toLocaleUpperCase("fr"),
+  };
 }
 
 /** Nom complet lisible (casse normale), pour les infobulles et panneaux. */

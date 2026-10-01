@@ -33,6 +33,7 @@ import { decouperLibelleSemaine, formatHeures, pluriel } from "../utils/planning
 import { normalize } from "../utils/search";
 
 import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
+import { PastilleType } from "./EnseignantsVacataires";
 
 import "./annuaires.css";
 
@@ -106,6 +107,8 @@ function useOuvrirLigne(onOuvrir: (id: string) => void) {
 // ══════════════ Enseignants ══════════════
 
 type FiltreEnseignant = "tous" | "semaine" | "sans-mail" | "ecarts";
+/** Filtre par type (01/10/2026) : Enseignant / Vacataire / à préciser. */
+type FiltreTypeEnseignant = "" | "enseignant" | "vacataire" | "a-preciser";
 type CleEnseignant = "nom" | "code" | "semaine" | "semestre" | "matieres";
 
 const VALEURS_ENSEIGNANT: Record<CleEnseignant, (l: LigneEnseignant) => string | number> = {
@@ -126,18 +129,20 @@ export function AnnuaireEnseignants({
   const lignes = useMemo(() => annuaireEnseignants(payload, solver), [payload, solver]);
   const [recherche, setRecherche] = useState("");
   const [filtre, setFiltre] = useState<FiltreEnseignant>("tous");
+  const [filtreType, setFiltreType] = useState<FiltreTypeEnseignant>("");
   const q = normalize(recherche.trim());
   const visibles = useMemo(
     () =>
       lignes.filter(
         (l) =>
           correspond(q, l.nom, l.code, l.email) &&
+          (!filtreType || (filtreType === "a-preciser" ? l.type === null : l.type === filtreType)) &&
           (filtre === "tous" ||
             (filtre === "semaine" && l.heuresSemaine > 0) ||
             (filtre === "sans-mail" && !l.email) ||
             (filtre === "ecarts" && l.nEcarts > 0)),
       ),
-    [lignes, q, filtre],
+    [lignes, q, filtre, filtreType],
   );
   // Trié d'abord par heures de la semaine : on voit tout de suite qui
   // enseigne beaucoup. Un clic sur « Nom » revient à l'ordre alphabétique.
@@ -173,6 +178,15 @@ export function AnnuaireEnseignants({
             <option value="semaine">Avec cours en {titre.toLowerCase()}</option>
             <option value="sans-mail">Adresse mail manquante</option>
             <option value="ecarts">Contrainte non respectée</option>
+          </select>
+        </label>
+        <label>
+          Type
+          <select value={filtreType} onChange={(e) => setFiltreType(e.target.value as FiltreTypeEnseignant)}>
+            <option value="">Enseignants et vacataires</option>
+            <option value="enseignant">Enseignants</option>
+            <option value="vacataire">Vacataires</option>
+            <option value="a-preciser">Type à préciser</option>
           </select>
         </label>
         {actions && <ActionsDePage>{actions}</ActionsDePage>}
@@ -229,6 +243,7 @@ export function AnnuaireEnseignants({
                     <button type="button" className="annuaire-nom" onClick={() => onOuvrir(l.code)}>
                       {l.nom}
                     </button>
+                    {l.type && <PastilleType type={l.type} />}
                     {l.nNonPlacees > 0 && (
                       <span className="pill dot warn annuaire-pastille">
                         {pluriel(l.nNonPlacees, "non placée", "non placées")}

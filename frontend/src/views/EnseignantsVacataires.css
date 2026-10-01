@@ -1,0 +1,141 @@
+/* Référence → « Enseignants & vacataires » (01/10/2026). Jetons seulement :
+   clair « Lumière » et sombre « Nuit » suivent d'eux-mêmes. La carte-tableau
+   (styles/outils.css) défile d'elle-même ; au téléphone, la colonne « Nom »
+   reste collée à gauche pendant le défilement horizontal. */
+
+.ens-vac {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ev-tuiles {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+/* Type : un point plein (Enseignant), un anneau (Vacataire), le point
+   orange « à préciser » — la forme ET le mot, jamais la couleur seule. */
+.pill.dot.type-pill--enseignant::before {
+  background: var(--ink);
+}
+
+.pill.dot.type-pill--vacataire::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.ev-table td {
+  white-space: nowrap;
+}
+
+/* Poste de travail : des colonnes serrées, pour que tout tienne sans
+   défiler de côté (Séances et « Voir la fiche » compris). */
+.carte-tableau table.ev-table tbody td,
+.carte-tableau table.ev-table thead th {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.ev-nom {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.ev-code {
+  font-weight: 600;
+}
+
+.ev-note,
+.ev-origine {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  line-height: 1.2;
+}
+
+.ev-celcat {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.ev-celcat .ev-origine {
+  display: inline;
+}
+
+.ev-lien-codes {
+  font-size: 0.75rem;
+}
+
+/* Code manquant : « Saisir » puis, dessous, le lien vers Codes Celcat. */
+.ev-celcat--manquant {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ev-mail,
+.ev-tel {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.ev-mail {
+  display: inline-block;
+  max-width: 21ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.ev-mail:hover,
+.ev-tel:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ev-tel {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+}
+
+.ev-fiche {
+  white-space: nowrap;
+}
+
+/* Téléphone : le tableau défile dans sa carte ; le nom reste visible. */
+@media (max-width: 760px) {
+  .ev-carte {
+    max-height: none;
+  }
+
+  .ev-table--etroite th:first-child,
+  .ev-table--etroite td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface);
+    box-shadow: inset -1px 0 0 var(--border);
+  }
+
+  .ev-table--etroite thead th:first-child {
+    z-index: 2;
+  }
+
+  .ev-mail {
+    max-width: 22ch;
+  }
+}
+
+/* Ailleurs (annuaire de la Vue Enseignant) : la pastille suit le nom. */
+.annuaire-nom + .type-pill {
+  margin-left: 6px;
+}
+
+/* Une ligne de 36 px : la valeur et son crayon ne passent pas à la ligne
+   (le formulaire d'édition, lui, peut — l'erreur s'affiche dessous). */
+.ev-table .champ-en-ligne-hote,
+.ev-table .valeur-modifiable {
+  flex-wrap: nowrap;
+}

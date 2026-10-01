@@ -45,6 +45,9 @@ import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { EmailEnseignant, MailManquant, ModifierNomEnseignant } from "../components/ValeursReference";
 import { AnnuaireEnseignants } from "./Annuaires";
+import { PastilleType } from "./EnseignantsVacataires";
+import { useAnnuaireEnseignants } from "../hooks/useAnnuaireEnseignants";
+import { formaterTelephone, identiteDe } from "../utils/identiteEnseignant";
 
 import "../styles/outils.css";
 import "./fiches.css";
@@ -167,6 +170,8 @@ export function EnseignantView({
   // vue simple avec tous les lien de tous les prof ». Planification seule.
   const [showAllLinks, setShowAllLinks] = useState(false);
   const couleursParMatiere = usePreferences().couleursParMatiere;
+  // Téléphone (01/10/2026) : rôles edit / admin, fiche ouverte seulement.
+  const annuaire = useAnnuaireEnseignants(peutCompleter && !readOnly && Boolean(code));
 
   const allItems = useMemo(
     () => sessionsWithDates(payload, payload.rows.filter((r) => r.te.includes(code))),
@@ -284,6 +289,11 @@ export function EnseignantView({
 
   const nom = payload.teacherLabels[code] ?? code;
   const email = payload.teacherEmails[code] ?? "";
+  // Type et téléphone (01/10/2026) : même source que Référence →
+  // « Enseignants & vacataires ». Le téléphone n'est lu que par qui peut
+  // modifier (le serveur ne l'envoie pas aux autres).
+  const typeEns = identiteDe(payload, code).type;
+  const telephone = annuaire?.lignes.find((l) => l.code === code)?.telephone ?? null;
   const creeDansLAppli = payload.intervenantsAppli?.[code];
   const info = payload.teachers.find((t) => t.code === code);
   const manquantes = (payload.seancesNonPlacees ?? []).filter((s) => s.profs.includes(code));
@@ -393,6 +403,14 @@ export function EnseignantView({
         }
         faits={[
           <span className="mono">{code}</span>,
+          // Type : affiché quand il est connu ; « à préciser » seulement pour
+          // qui peut le renseigner (Référence → Enseignants & vacataires).
+          (typeEns || peutCompleter) && <PastilleType type={typeEns} />,
+          telephone && (
+            <a href={`tel:${telephone}`} className="fiche-telephone">
+              {formaterTelephone(telephone)}
+            </a>
+          ),
           // Nom complet inconnu de toutes les sources : le titre n'est que le
           // code. Complétable ici (29/09/2026), comme le mail juste après.
           nom === code &&

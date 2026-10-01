@@ -24,3 +24,18 @@ export function downloadDirectoryCsv(rows: CsvRow[]): void {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+/** Un tableau quelconque en CSV (séparateur « ; », BOM UTF-8 pour Excel). */
+export function csvDepuis(entetes: string[], lignes: (string | number)[][]): string {
+  const esc = (v: unknown) => `"${String(v).replace(/"/g, '""')}"`;
+  return "﻿" + [entetes, ...lignes].map((l) => l.map(esc).join(";")).join("\r\n");
+}
+
+export function telechargerCsv(nomFichier: string, contenu: string): void {
+  const blob = new Blob([contenu], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nomFichier;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}

@@ -6,6 +6,8 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
+import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
+
 import "./TriColonne.css";
 
 export interface EtatTri<K extends string> {
@@ -13,12 +15,30 @@ export interface EtatTri<K extends string> {
   sens: 1 | -1;
 }
 
+/**
+ * `cleStockage` (facultatif, 01/10/2026) : le tri choisi est retrouvé à la
+ * visite suivante, sur ce poste (`localStorage`).
+ */
 export function useTri<T, K extends string>(
   lignes: T[],
   valeurs: Record<K, (l: T) => string | number>,
   initial: EtatTri<K>,
+  cleStockage?: string,
 ) {
-  const [tri, setTri] = useState<EtatTri<K>>(initial);
+  const [tri, setTriEtat] = useState<EtatTri<K>>(() =>
+    cleStockage
+      ? lireLocal<EtatTri<K>>(cleStockage, initial, (v): v is EtatTri<K> => {
+          const e = v as Partial<EtatTri<K>> | null;
+          return !!e && typeof e.cle === "string" && e.cle in valeurs && (e.sens === 1 || e.sens === -1);
+        })
+      : initial,
+  );
+  const setTri = (maj: (t: EtatTri<K>) => EtatTri<K>) =>
+    setTriEtat((t) => {
+      const suivant = maj(t);
+      if (cleStockage) ecrireLocal(cleStockage, suivant);
+      return suivant;
+    });
   const triees = useMemo(() => {
     const f = valeurs[tri.cle];
     return [...lignes].sort((a, b) => {

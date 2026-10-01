@@ -466,7 +466,7 @@ export function CodesCelcat({ famille: familleRoute, cle: cleRoute, onFamille, o
   );
 }
 
-function CelluleCode({
+export function CelluleCode({
   ligne: l,
   famille,
   suggestions,

@@ -3,7 +3,9 @@
  * la possibilité de créer un intervenant »). Jusque-là : deux fichiers de
  * configuration et un déploiement.
  *
- * Quatre champs — nom, code, code Celcat, mail — validés en direct : le
+ * Six champs — nom, code, code Celcat, mail, téléphone et type (ces deux
+ * derniers depuis le 01/10/2026, onglet « Enseignants & vacataires ») —
+ * validés en direct : le
  * format ici, le reste par le serveur (`POST /reference/enseignants/verifier`,
  * la même règle que la création). Les garde-fous du serveur s'affichent tels
  * quels, avec un lien vers la personne existante :
@@ -27,6 +29,8 @@ import {
   type VerificationIntervenant,
 } from "../api/client";
 
+import { validerTelephone } from "../utils/identiteEnseignant";
+
 import "./NouvelIntervenantModal.css";
 
 interface Props {
@@ -36,7 +40,7 @@ interface Props {
   onVoirFiche: (code: string) => void;
 }
 
-type Champ = "nom" | "code" | "code_celcat" | "email";
+type Champ = "nom" | "code" | "code_celcat" | "email" | "telephone" | "type";
 
 /** Code tel que le serveur le rangera : sans espace, sans accent, en majuscules. */
 export function normaliserCode(brut: string): string {
@@ -48,7 +52,13 @@ export function normaliserCode(brut: string): string {
 }
 
 /** Les erreurs de FORME, sans attendre le serveur. */
-export function erreursDeSaisie(s: { nom: string; code: string; codeCelcat: string; email: string }): Partial<Record<Champ, string>> {
+export function erreursDeSaisie(s: {
+  nom: string;
+  code: string;
+  codeCelcat: string;
+  email: string;
+  telephone?: string;
+}): Partial<Record<Champ, string>> {
   const e: Partial<Record<Champ, string>> = {};
   const nom = s.nom.trim().replace(/\s+/g, " ");
   if (nom.length < 3 || !/\p{L}/u.test(nom)) e.nom = "Le nom complet est obligatoire (« Prénom Nom »).";
@@ -61,6 +71,11 @@ export function erreursDeSaisie(s: { nom: string; code: string; codeCelcat: stri
   if (email && !/^[^@\s<>(),;:"[\]]+@[^@\s<>(),;:"[\]]+\.[^@\s<>(),;:"[\].]{2,}$/.test(email.replace(/^mailto:/i, ""))) {
     e.email = "Adresse mail invalide (forme attendue : prenom.nom@univ-reims.fr).";
   }
+  const telephone = (s.telephone ?? "").trim();
+  if (telephone) {
+    const refus = validerTelephone(telephone);
+    if (refus) e.telephone = refus;
+  }
   return e;
 }
 
@@ -69,6 +84,8 @@ export function NouvelIntervenantModal({ onCreated, onCancel, onVoirFiche }: Pro
   const [code, setCode] = useState("");
   const [codeCelcat, setCodeCelcat] = useState("");
   const [email, setEmail] = useState("");
+  const [telephone, setTelephone] = useState("");
+  const [typeEns, setTypeEns] = useState("");
   const [touches, setTouches] = useState<Partial<Record<Champ, boolean>>>({});
   const [verif, setVerif] = useState<{ cle: string; v: VerificationIntervenant } | null>(null);
   // Avertissements rendus par un refus de création (si la vérification en
@@ -79,11 +96,18 @@ export function NouvelIntervenantModal({ onCreated, onCancel, onVoirFiche }: Pro
   const numero = useRef(0);
 
   const saisie = useMemo(
-    () => ({ nom: nom.trim(), code: normaliserCode(code), code_celcat: codeCelcat.trim(), email: email.trim() }),
-    [nom, code, codeCelcat, email],
+    () => ({
+      nom: nom.trim(),
+      code: normaliserCode(code),
+      code_celcat: codeCelcat.trim(),
+      email: email.trim(),
+      telephone: telephone.trim(),
+      type: typeEns,
+    }),
+    [nom, code, codeCelcat, email, telephone, typeEns],
   );
   const cle = JSON.stringify(saisie);
-  const locales = erreursDeSaisie({ nom, code, codeCelcat, email });
+  const locales = erreursDeSaisie({ nom, code, codeCelcat, email, telephone });
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -128,7 +152,7 @@ export function NouvelIntervenantModal({ onCreated, onCancel, onVoirFiche }: Pro
   const toucher = (champ: Champ) => setTouches((t) => ({ ...t, [champ]: true }));
 
   const creer = async () => {
-    setTouches({ nom: true, code: true, code_celcat: true, email: true });
+    setTouches({ nom: true, code: true, code_celcat: true, email: true, telephone: true, type: true });
     if (invalide) return;
     setEnCours(true);
     setErreur(null);
@@ -281,6 +305,40 @@ export function NouvelIntervenantModal({ onCreated, onCancel, onVoirFiche }: Pro
               onBlur={() => toucher("email")}
             />,
             "Pour lui envoyer son lien personnel.",
+          )}
+          {champ(
+            "telephone",
+            "Téléphone (facultatif)",
+            <input
+              id="nouvint-telephone"
+              type="tel"
+              inputMode="tel"
+              value={telephone}
+              maxLength={40}
+              autoComplete="off"
+              placeholder="06 12 34 56 78"
+              aria-invalid={!!erreurDe("telephone")}
+              aria-describedby={decrit("telephone")}
+              onChange={(e) => setTelephone(e.target.value)}
+              onBlur={() => toucher("telephone")}
+            />,
+            "Visible des comptes qui peuvent modifier, jamais sur un lien public.",
+          )}
+          {champ(
+            "type",
+            "Type",
+            <select
+              id="nouvint-type"
+              value={typeEns}
+              aria-invalid={!!erreurDe("type")}
+              aria-describedby={decrit("type")}
+              onChange={(e) => setTypeEns(e.target.value)}
+            >
+              <option value="">À préciser</option>
+              <option value="enseignant">Enseignant</option>
+              <option value="vacataire">Vacataire</option>
+            </select>,
+            "Enseignant ou vacataire.",
           )}
         </div>
 

@@ -37,10 +37,12 @@ import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { Onglets } from "../components/Onglets";
 import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
 import { CodesCelcat } from "./CodesCelcat";
+import { EnseignantsVacataires, PastilleType } from "./EnseignantsVacataires";
+import { identiteDe } from "../utils/identiteEnseignant";
 import "../styles/outils.css";
 import "./ReferenceView.css";
 
-type SubTab = "salles" | "cours" | "codes-celcat" | "calendrier" | "liens" | "notifications";
+type SubTab = "salles" | "cours" | "codes-celcat" | "calendrier" | "enseignants" | "liens" | "notifications";
 
 const ONGLETS: { id: SubTab; label: string }[] = [
   { id: "salles", label: "Salles" },
@@ -49,6 +51,9 @@ const ONGLETS: { id: SubTab; label: string }[] = [
   // pour les cours et les salles aussi » — tous les codes, avec leur origine.
   { id: "codes-celcat", label: "Codes Celcat" },
   { id: "calendrier", label: "Calendrier" },
+  // 01/10/2026 (Kyllian Bresson) : tous les enseignants et vacataires —
+  // prénom, nom, diminutif, code Celcat, mail, téléphone, type.
+  { id: "enseignants", label: "Enseignants & vacataires" },
   { id: "liens", label: "Liens & partage" },
   { id: "notifications", label: "Notifications" },
 ];
@@ -134,6 +139,7 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
     salles: payload.rooms.length,
     cours: new Set(payload.courses.map((c) => c.code)).size,
     calendrier: payload.institutionalCalendar.length,
+    enseignants: Object.keys(payload.teacherLabels).length,
   };
 
   return (
@@ -176,6 +182,9 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
           />
         )}
         {sub === "calendrier" && <CalendarTimeline payload={payload} />}
+        {sub === "enseignants" && (
+          <EnseignantsVacataires setRoute={setRoute} onNouvelIntervenant={() => setNouvelOuvert(true)} />
+        )}
         {sub === "liens" && <LinksDirectory payload={payload} />}
         {/* Sous-onglet À PART, pas au pied de l'annuaire des liens : sous un
             long tableau, le panneau était introuvable. */}
@@ -499,6 +508,9 @@ interface LigneAnnuaire {
   items: ReturnType<typeof sessionsWithDates>;
   link: string;
   mail: string;
+  /** Enseignant : son type (même source que l'onglet « Enseignants &
+   *  vacataires », `payload.teacherIdentites`), `null` s'il est à préciser. */
+  typeEns?: ReturnType<typeof identiteDe>["type"];
 }
 
 function LinksDirectory({ payload }: { payload: AppPayload }) {
@@ -541,6 +553,7 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
         items: sessionsWithDates(payload, payload.rows.filter((r) => r.te.includes(code))),
         link: buildLink({ vue: "prof", prof: code, mode: "prof", t: payload.teacherTokens[code] ?? "" }),
         mail: payload.teacherEmails[code] || "",
+        typeEns: identiteDe(payload, code).type,
       })),
     [payload, teacherCodes],
   );
@@ -567,7 +580,8 @@ function LinksDirectory({ payload }: { payload: AppPayload }) {
   );
 
   const q = normaliser(texte.trim());
-  const garde = (r: LigneAnnuaire) => !q || normaliser(`${r.label} ${r.code} ${r.mail}`).includes(q);
+  const garde = (r: LigneAnnuaire) =>
+    !q || normaliser(`${r.label} ${r.code} ${r.mail} ${r.typeEns ? (r.typeEns === "vacataire" ? "vacataire" : "enseignant") : ""}`).includes(q);
   const profsVisibles = teacherItems.filter(garde);
   const groupesVisibles = groupItems.filter(garde);
   const sansAdresse = teacherItems.filter((t) => !t.mail).length;
@@ -761,6 +775,12 @@ function DirectoryRow({
     <tr>
       <td>
         <strong className="ref-nom">{row.label}</strong> <span className="mono ref-code">{row.code}</span>
+        {row.typeEns && (
+          <>
+            {" "}
+            <PastilleType type={row.typeEns} />
+          </>
+        )}
       </td>
       <td className="num ref-optionnel">{row.items.length}</td>
       <td className="num ref-heures">{hours} h</td>

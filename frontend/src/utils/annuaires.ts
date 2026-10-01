@@ -10,7 +10,8 @@
  * sur `payload.rows` par annuaire.
  */
 
-import type { AppPayload, AppRow } from "../types/app";
+import type { AppPayload, AppRow, TypeEnseignant } from "../types/app";
+import { identiteDe } from "./identiteEnseignant";
 import { compareParcoursForDisplay } from "./years";
 import { heuresDe, HEURES_PAR_CRENEAU } from "./planning";
 import { occupationSalles } from "./sallesLibres";
@@ -48,6 +49,9 @@ export interface LigneEnseignant {
   contrainte: EtatContrainte;
   /** Indisponibilités déclarées non respectées (hors compromis SAE). */
   nEcarts: number;
+  /** Enseignant ou vacataire (`null` : à préciser) — même source que
+   *  Référence → « Enseignants & vacataires » (01/10/2026). */
+  type: TypeEnseignant | null;
 }
 
 export function annuaireEnseignants(payload: AppPayload, semaine: number | null): LigneEnseignant[] {
@@ -92,6 +96,7 @@ export function annuaireEnseignants(payload: AppPayload, semaine: number | null)
         nNonPlacees: nonPlacees.get(code) ?? 0,
         contrainte,
         nEcarts: ecarts,
+        type: identiteDe(payload, code).type,
       };
     })
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"));

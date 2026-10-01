@@ -124,7 +124,7 @@ describe("NouvelIntervenantModal", () => {
     fireEvent.click(creerQuandMeme);
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
-    expect(creations).toEqual([{ nom: "Anne Grenet", code: "AGR", code_celcat: "", email: "", confirmer: true }]);
+    expect(creations).toEqual([{ nom: "Anne Grenet", code: "AGR", code_celcat: "", email: "", telephone: "", type: "", confirmer: true }]);
   });
 
   it("sans avertissement : « Créer », sans confirmation", async () => {

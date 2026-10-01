@@ -1549,7 +1549,14 @@ export function completerContactEnseignant(code: string, email: string): Promise
 
 export function completerEnseignant(
   code: string,
-  body: { nom?: string; code_celcat?: string },
+  body: {
+    nom?: string;
+    code_celcat?: string;
+    prenom?: string;
+    nom_famille?: string;
+    telephone?: string;
+    type?: string;
+  },
 ): Promise<ReferenceEnregistree> {
   return request(`/reference/enseignants/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) });
 }
@@ -1561,10 +1568,13 @@ export interface SaisieIntervenant {
   code: string;
   code_celcat?: string;
   email?: string;
+  /** Facultatifs (01/10/2026). */
+  telephone?: string;
+  type?: string;
 }
 
 export interface ErreurIntervenant {
-  champ: "nom" | "code" | "code_celcat" | "email";
+  champ: "nom" | "code" | "code_celcat" | "email" | "telephone" | "type";
   statut: number;
   message: string;
   code_existant: string | null;
@@ -1587,6 +1597,8 @@ export interface VerificationIntervenant {
   nom: string;
   email: string | null;
   code_celcat: string | null;
+  telephone?: string | null;
+  type?: "enseignant" | "vacataire" | null;
   erreurs: ErreurIntervenant[];
   avertissements: AvertissementIntervenant[];
   suggestion_code: string | null;
@@ -1598,6 +1610,8 @@ export interface IntervenantCree {
   nom: string;
   email: string | null;
   code_celcat: string | null;
+  telephone?: string | null;
+  type?: "enseignant" | "vacataire" | null;
   cree_le: string;
   avertissements_confirmes: AvertissementIntervenant[];
   message: string;
@@ -1647,12 +1661,13 @@ export function completerCours(
 }
 
 /** « Revenir à la valeur du fichier » : retire une saisie faite dans l'appli
- *  (29/09/2026). `champ` : `contact` (mail) ou `nom` d'un enseignant,
- *  `intitule` d'une matière. */
+ *  (29/09/2026). `champ` : `contact` (mail), `nom` (complet), `prenom`,
+ *  `nom_famille`, `telephone` ou `type` d'un enseignant, `intitule` d'une
+ *  matière. */
 export function retablirValeurFichier(
   famille: "enseignants" | "cours",
   cle: string,
-  champ: "contact" | "nom" | "intitule",
+  champ: "contact" | "nom" | "intitule" | "prenom" | "nom_famille" | "telephone" | "type",
 ): Promise<ReferenceEnregistree> {
   return request(`/reference/${famille}/${encodeURIComponent(cle)}/${champ}`, { method: "DELETE" });
 }
@@ -1782,4 +1797,58 @@ export function marquerSansCodeCelcat(famille: FamilleCodeCelcat, cle: string, m
 export function retirerSansCodeCelcat(famille: FamilleCodeCelcat, cle: string): Promise<CodeCelcatEnregistre> {
   const q = new URLSearchParams({ famille, cle });
   return request<CodeCelcatEnregistre>(`/reference/codes-celcat/sans-code?${q.toString()}`, { method: "DELETE" });
+}
+
+// ── Onglet « Enseignants & vacataires » de Référence (01/10/2026) ──
+// `GET /reference/enseignants` : tous les enseignants, leur identité, leur
+// mail, leur code Celcat (la ligne même de l'onglet « Codes Celcat ») et —
+// rôles edit / admin seulement — leur téléphone.
+
+export interface SurchargeIdentite {
+  valeur: string | null;
+  origine: string | null;
+  modifie_le: string | null;
+  modifie_par: string;
+}
+
+export interface LigneAnnuaireEnseignant {
+  /** Le diminutif (« KBR ») : identifiant, non modifiable. */
+  code: string;
+  prenom: string;
+  /** Nom de famille, en capitales. */
+  nom: string;
+  /** Le nom affiché partout dans l'appli. */
+  nom_complet: string;
+  /** `null` : à préciser. */
+  type: "enseignant" | "vacataire" | null;
+  email: string | null;
+  /** E.164 ; `null` si absent OU masqué (lecture seule). */
+  telephone: string | null;
+  telephone_affiche: string | null;
+  nb_seances: number;
+  code_celcat: LigneCodeCelcat | null;
+  cree_dans_appli: boolean;
+  surcharges: Partial<Record<"email" | "nom" | "prenom" | "nom_famille" | "type" | "telephone", SurchargeIdentite>>;
+}
+
+export interface AnnuaireEnseignantsReponse {
+  revision: number;
+  peut_modifier: boolean;
+  admin: boolean;
+  telephone_visible: boolean;
+  compteurs: {
+    total: number;
+    enseignants: number;
+    vacataires: number;
+    a_preciser: number;
+    sans_mail: number;
+    /** `null` quand le téléphone est masqué. */
+    sans_telephone: number | null;
+    sans_code_celcat: number;
+  };
+  lignes: LigneAnnuaireEnseignant[];
+}
+
+export function fetchAnnuaireEnseignants(): Promise<AnnuaireEnseignantsReponse> {
+  return request<AnnuaireEnseignantsReponse>("/reference/enseignants");
 }
