@@ -474,7 +474,10 @@ export function PromoView({
   const colClass = (i: number) => {
     const pc = `pc${colGroupIdx[i] % 6}`;
     const isFirst = i === 0 || colGroupIdx[i] !== colGroupIdx[i - 1];
-    return isFirst ? `${pc} grp-first${i > 0 ? " grp-sep" : ""}` : pc;
+    // Filet fin entre deux TP d'un même parcours, filet marqué entre deux
+    // parcours (demande de Kyllian Bresson, 01/10/2026). Affichage seul.
+    if (!isFirst) return `${pc} tp-sep`;
+    return `${pc} grp-first${i > 0 ? " grp-sep" : ""}`;
   };
 
   const countByWeek = useMemo(() => {
@@ -1249,7 +1252,7 @@ export function PromoView({
                         <th
                           key={g.parcours}
                           colSpan={g.cols.length}
-                          className={`grp-band pc${gi % 6}`}
+                          className={`grp-band pc${gi % 6}${gi > 0 ? " grp-sep" : ""}`}
                           data-parcours={g.parcours}
                         >
                           {/* Cliquable seulement en édition : en lecture seule,

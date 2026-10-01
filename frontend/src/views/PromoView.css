@@ -519,6 +519,10 @@ button.promo-tuile:hover {
    Pas de quadrillage (maquette « Lumière ») : 6 px d'air entre les cartes
    (3 px de marge par case), un filet sous les en-têtes seulement. */
 table.promo-grid {
+  /* Filets entre colonnes (cf. `.tp-sep` / `.grp-sep`) : des jetons du
+     thème, donc justes en clair comme en sombre. */
+  --promo-sep-tp: var(--border-strong);
+  --promo-sep-parcours: var(--ink-faint);
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -657,12 +661,18 @@ table.promo-grid th.grp-col {
   color: var(--ink-soft);
 }
 
-/* Séparation entre promos : un filet fin (15 à 20 colonnes toutes années
-   confondues sont dures à suivre sans repère). */
-table.promo-grid .grp-sep {
-  border-left: 1px solid var(--border);
+/* Séparations verticales, en deux niveaux (demande de Kyllian Bresson,
+   01/10/2026) : un filet gris fin entre deux TP d'un même parcours, un filet
+   plus épais et plus foncé entre deux parcours. Purement visuel. */
+table.promo-grid .tp-sep {
+  border-left: 1px solid var(--promo-sep-tp);
 }
 
+table.promo-grid .grp-sep {
+  border-left: 2px solid var(--promo-sep-parcours);
+}
+
+table.promo-grid td.tp-sep,
 table.promo-grid td.grp-sep {
   border-radius: 0;
 }
