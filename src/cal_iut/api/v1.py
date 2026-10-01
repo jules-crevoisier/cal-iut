@@ -296,7 +296,7 @@ class SeancesV1(BaseModel):
 
 class OccupationV1(BaseModel):
     salle_id: str
-    motif: Literal["seance", "reservation", "salle_liee"]
+    motif: Literal["seance", "reservation", "celcat", "salle_liee"]
     seance_id: str | None = None
     cours_code: str | None = None
     detail: str | None = None
@@ -381,7 +381,7 @@ class SeancesNonPlaceesV1(BaseModel):
 
 
 class NatureATraiterV1(BaseModel):
-    id: Literal["non-placee", "sans-salle", "doublon", "regle", "contrainte", "sae-hors-journee", "compromis-sae", "trouee"]
+    id: Literal["non-placee", "sans-salle", "doublon", "regle", "contrainte", "occupation-externe", "sae-hors-journee", "compromis-sae", "trouee"]
     titre: str
     gravite: Literal["a_corriger", "a_revoir"]
     aide: str
@@ -1300,6 +1300,17 @@ def _salles_libres(semaine: int, jour: int, creneau: int, capacite_min: int) -> 
                 rid = str(resa.get("salle"))
                 occupe_directement.add(rid)
                 occupees.append(OccupationV1(salle_id=rid, motif="reservation", detail=str(resa.get("motif") or "")))
+    # Salles prises dans Celcat (relevé du sidecar) : même effet qu'une
+    # réservation — le serveur les refuse ou les signale au placement.
+    for o in (_payload().get("occupationsExternes") or {}).get("occupations") or []:
+        if o.get("t") == "salle" and o.get("w") == semaine and o.get("d") == jour and creneau in (o.get("s") or []):
+            rid = str(o.get("code"))
+            if rid in occupe_directement:
+                continue
+            occupe_directement.add(rid)
+            qui = f"département {o['dep']}" if o.get("dep") else "administration"
+            detail = f"Réservée dans Celcat ({qui}{', ' + o['lib'] if o.get('lib') else ''}, {o.get('debut')}–{o.get('fin')})"
+            occupees.append(OccupationV1(salle_id=rid, motif="celcat", detail=detail))
 
     conflits = build_manual_conflict_map(state.rooms)
     for rid in sorted(occupe_directement):
@@ -1758,7 +1769,8 @@ def a_traiter(
     enseignant: str | None = Query(None, description="Code enseignant."),
     gravite: Literal["a_corriger", "a_revoir"] | None = Query(None),
     nature: Literal[
-        "non-placee", "sans-salle", "doublon", "regle", "contrainte", "sae-hors-journee", "compromis-sae", "trouee",
+        "non-placee", "sans-salle", "doublon", "regle", "contrainte", "occupation-externe", "sae-hors-journee",
+        "compromis-sae", "trouee",
     ]
     | None = Query(None),
 ) -> Response:
@@ -1778,6 +1790,130 @@ def a_traiter(
         ),
         en_plus=("doublons" if avec_doublons else "sans-doublons",),
     )
+
+
+# ── Occupations hors MMI (Celcat) ───────────────────────────────────────
+
+
+class OccupationExterneV1(BaseModel):
+    type: Literal["salle", "enseignant"]
+    ressource: str = Field(description="Id de salle (`h018`) ou code enseignant (`AFR`).")
+    libelle: str = Field(description="Libellé de la salle ou nom de l'enseignant.")
+    date: str
+    debut: str = Field(description="Heure réelle de début dans Celcat (`10:00`).")
+    fin: str
+    semaine: int | None = Field(description="Index solveur ; `null` hors du planning chargé.")
+    numero_semaine: int | None
+    jour: int | None
+    jour_nom: str | None
+    creneaux: list[int] = Field(description="Nos créneaux (0 = 08:00 … 5 = 17:00) que l'occupation chevauche.")
+    departement: str = Field(description="Département Celcat abrégé (`TC`) ; vide = administration / hors département.")
+    categorie: str
+    intitule: str
+    event_id: int | None
+
+
+class ConflitOccupationExterneV1(BaseModel):
+    seance_id: str
+    cours_code: str
+    semaine: int
+    jour: int
+    creneau: int
+    type: Literal["salle", "enseignant"]
+    ressource: str
+    message: str
+
+
+class OccupationsExternesV1(BaseModel):
+    releve_le: str | None = Field(description="Horodatage du dernier relevé du sidecar ; `null` = aucun relevé.")
+    age_secondes: float | None
+    perime: bool = Field(description="Relevé absent ou plus ancien que `fraicheur_heures`.")
+    fraicheur_heures: float
+    strict: bool = Field(description="Vrai : conflit non forçable au placement manuel.")
+    erreur: str | None
+    total: int
+    occupations: list[OccupationExterneV1]
+    conflits: list[ConflitOccupationExterneV1] = Field(
+        description="Séances MMI déjà placées qui tombent sur une occupation externe."
+    )
+
+
+def _occupations_externes(type_: str | None, ressource: str | None, semaine: int | None) -> OccupationsExternesV1:
+    from cal_iut.api import occupations_externes as oe
+
+    main = _main()
+    state = main.get_state()
+    donnees = oe.pour_payload(state)
+    reperes = _reperes()
+    lundis = {w: r[0] for w, r in reperes.items()}
+    occupations = []
+    for e in oe.index().releve.evenements:
+        t = str(e.get("type") or "")
+        code = oe._cle_code(t, e.get("code"))
+        if type_ and t != type_:
+            continue
+        if ressource and code != oe._cle_code(t, ressource):
+            continue
+        quand = vues.semaine_de_date(lundis, str(e.get("date")))
+        w, d = (quand[0], quand[1]) if quand else (None, None)
+        if semaine is not None and w != semaine:
+            continue
+        q = _quand(reperes, w, d)
+        libelle = oe._libelle_salle(state, code) if t == "salle" else oe.nom_enseignant(state, code, e)
+        occupations.append(OccupationExterneV1(
+            type=t, ressource=code, libelle=libelle, date=str(e.get("date")), debut=str(e.get("debut") or ""),
+            fin=str(e.get("fin") or ""), semaine=w, numero_semaine=q["numero_semaine"], jour=d,
+            jour_nom=q["jour_nom"], creneaux=oe.creneaux_chevauches(str(e.get("debut") or ""), str(e.get("fin") or "")),
+            departement=str(e.get("departement") or ""), categorie=str(e.get("categorie") or ""),
+            intitule=str(e.get("intitule") or ""), event_id=e.get("event_id"),
+        ))
+    conflits = [
+        ConflitOccupationExterneV1(
+            seance_id=c["seance_id"], cours_code=c["course_code"], semaine=c["semaine"], jour=c["jour"],
+            creneau=c["creneau"], type=c["ressource_type"], ressource=c["ressource"], message=c["message"],
+        )
+        for c in donnees["conflits"]
+        if (not type_ or c["ressource_type"] == type_)
+        and (not ressource or oe._cle_code(c["ressource_type"], c["ressource"]) == oe._cle_code(c["ressource_type"], ressource))
+        and (semaine is None or c["semaine"] == semaine)
+    ]
+    return OccupationsExternesV1(
+        releve_le=donnees["releveLe"], age_secondes=donnees["ageSecondes"], perime=donnees["perime"],
+        fraicheur_heures=donnees["fraicheurHeures"], strict=donnees["strict"], erreur=donnees["erreur"],
+        total=len(occupations), occupations=occupations, conflits=conflits,
+    )
+
+
+_EXEMPLE_OCCUPATIONS = {
+    "releve_le": "2026-10-01T06:00:12+00:00", "age_secondes": 3600.0, "perime": False, "fraicheur_heures": 6.0,
+    "strict": False, "erreur": None, "total": 1,
+    "occupations": [
+        {"type": "enseignant", "ressource": "AFR", "libelle": "Anthony Froli", "date": "2026-10-05",
+         "debut": "10:00", "fin": "12:30", "semaine": 5, "numero_semaine": 41, "jour": 0, "jour_nom": "lundi",
+         "creneaux": [1, 2], "departement": "TC", "categorie": "[CM]", "intitule": "Marketing digital",
+         "event_id": 1950001},
+    ],
+    "conflits": [],
+}
+
+
+@router.get(
+    "/occupations-externes", response_model=OccupationsExternesV1, tags=_TAGS_CONTROLES,
+    summary="Occupations hors MMI relevées dans Celcat", responses=_exemple(_EXEMPLE_OCCUPATIONS),
+)
+def occupations_externes(
+    request: Request,
+    type: Literal["salle", "enseignant"] | None = Query(None, description="Ne garder qu'un type de ressource."),  # noqa: A002
+    ressource: str | None = Query(None, description="Id de salle (`h018`) ou code enseignant (`AFR`)."),
+    semaine: int | None = Query(None, ge=0, description="Index solveur."),
+) -> Response:
+    """Ce que le sidecar a relevé dans Celcat sur nos salles et nos
+    enseignants, HORS de nos propres évènements : cours d'autres
+    départements, réunions, réservations administratives. Ces occupations
+    sont des contraintes pour le générateur et un conflit au placement
+    manuel. `perime` : le relevé a plus de `fraicheur_heures` (il reste
+    appliqué tel quel). Compte actif uniquement (pas de lien public)."""
+    return _repondre(request, lambda _v: _occupations_externes(type, ressource, semaine))
 
 
 # ── Données de référence manquantes ─────────────────────────────────────

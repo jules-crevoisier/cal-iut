@@ -627,6 +627,13 @@ def _analyser_creneau(
         sessions_by_id=state.sessions_by_id, groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
     )
+    # Salle prise dans Celcat (relevé du sidecar) : même classement que le
+    # côté HTTP — forçable, ou bloquante en mode strict.
+    from cal_iut.api import occupations_externes
+
+    stricts_salle = occupations_externes.appliquer_salle(state, session, salle_id, week, day, slot, validation)
+    blocking.extend(stricts_salle)
+    hard.extend(stricts_salle)
     if not validation.valid:
         hard.extend(validation.hard_conflicts)
         soft.extend(validation.soft_warnings)

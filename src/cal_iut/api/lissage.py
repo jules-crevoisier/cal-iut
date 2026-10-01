@@ -331,9 +331,13 @@ def proposer(
     # disputent jamais une salle au même créneau.
     fige = [p for p in state.timetable if p.session_id not in ids_mobiles]
     carte_salles = build_manual_conflict_map(state.rooms)
-    occupation_figee = occupation_salles(
-        fige, state.sessions_by_id, state.rooms, getattr(state, "room_reservations", None)
-    )
+    # Réservations de tiers ET salles prises dans Celcat (relevé du sidecar,
+    # cf. `api/occupations_externes.py`) : une salle prise ailleurs n'est
+    # jamais proposée.
+    from cal_iut.api import occupations_externes
+
+    reservees = occupations_externes.reservations_effectives(state)
+    occupation_figee = occupation_salles(fige, state.sessions_by_id, state.rooms, reservees)
 
     # Jours SAE du parcours, vus depuis une RESSOURCE (WR*) : une séance de
     # SAE y est admise par les règles (« une SAE peut être placée un jour de
@@ -384,10 +388,14 @@ def proposer(
                         for c in cases
                     ):
                         continue
+                    # Enseignant programmé ailleurs dans Celcat : jamais une
+                    # cible du lissage (contrainte dure, comme au générateur).
+                    if occupations_externes.conflits_enseignant(state, s, w, d, sl):
+                        continue
                     salle = find_room_for_slot(
                         s, w, d, sl, fige, state.sessions_by_id, state.rooms, state.groups,
                         state.room_rules, prefer_room_id=getattr(actuel, "room_id", None),
-                        reserved=getattr(state, "room_reservations", None),
+                        reserved=reservees,
                         conflicts=carte_salles,
                         occupation=occupation_figee,
                     )
@@ -633,6 +641,7 @@ def verifier(state: Any, deplacements: list[Deplacement]) -> list[str]:
     c'est ici qu'on le verrait, avant d'écrire quoi que ce soit."""
     import dataclasses
 
+    from cal_iut.api import occupations_externes
     from cal_iut.api.main import _conflits_deplacement, build_manual_conflict_map
     from cal_iut.api.validation import validate_move
     from cal_iut.solver.rooms import find_room_for_slot
@@ -656,7 +665,7 @@ def verifier(state: Any, deplacements: list[Deplacement]) -> list[str]:
         salle = find_room_for_slot(
             seance, p.week, p.day, p.slot, simule, state.sessions_by_id, state.rooms, state.groups,
             state.room_rules, prefer_room_id=getattr(p, "room_id", None),
-            reserved=getattr(state, "room_reservations", None),
+            reserved=occupations_externes.reservations_effectives(state),
             conflicts=build_manual_conflict_map(state.rooms),
         )
         if salle is not None:
@@ -674,7 +683,8 @@ def verifier(state: Any, deplacements: list[Deplacement]) -> list[str]:
             room_id, sessions_by_id=state.sessions_by_id, groups=state.groups,
             conflicting_room_ids=build_manual_conflict_map(state.rooms).get(room_id, set()) if room_id else None,
         )
-        problemes = institutionnel + forcable + (validation.hard_conflicts if not validation.valid else [])
+        stricts_salle = occupations_externes.appliquer_salle(etat_simule, seance, room_id, p.week, p.day, p.slot, validation)
+        problemes = institutionnel + forcable + stricts_salle + (validation.hard_conflicts if not validation.valid else [])
         for motif in problemes:
             motifs.append(f"{m.course_code} {m.libelle_de} → {m.libelle_vers} : {motif}")
     return motifs

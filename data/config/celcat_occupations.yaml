@@ -1,0 +1,81 @@
+# Occupations HORS MMI relevées dans Celcat (salles et enseignants).
+#
+# Demande de Kyllian Bresson (01/10/2026) : « Lecture de Celcat pour vérifier
+# les disponibilités des salles et des enseignants ». Le sidecar `celcat-nuit`
+# lit Celcat (lecture seule, rôle 985_consultation) toutes les 2 h et à la
+# demande, et dépose `data/state/celcat_occupations_externes.json`. Le
+# backend en tire des indisponibilités : placement manuel, salles libres,
+# génération. Détail : docs/CELCAT.md § « Occupations hors MMI ».
+#
+# Fichier séparé de `celcat.yaml` (qui ne contient que de la correspondance
+# de codes) : ici, ce qu'on SURVEILLE et comment on le traite.
+
+# Couper la lecture : `actif: false` (redéploiement). Le backend continue
+# d'appliquer le dernier relevé déposé ; supprimer
+# `data/state/celcat_occupations_externes.json` lève toute contrainte
+# externe. Sans ce fichier (ou s'il est vide), rien ne change : ni le
+# générateur, ni le placement, ni les salles libres.
+# Lecture SEULE, toujours : rôle 985_consultation, udlResources.load et
+# udlTimetables.load uniquement — aucune écriture dans Celcat.
+actif: true
+
+# Salles surveillées : « toutes » = toutes nos salles qui ont un équivalent
+# Celcat (`celcat.yaml::salles` + saisies de l'appli), sinon une liste d'ids
+# (`h018`, `h103`…). Les prioritaires sont lues en premier, et TOUJOURS
+# surveillées : l'amphi MMI (H.018 = « Amphi 3 MMI ») et les deux amphis
+# partagés avec d'autres départements (« Amphi 1 TC/GEA », « Amphi 2
+# GMP/GEII »). Une salle n'est lue que si `celcat.yaml::salles` lui donne
+# un libellé Celcat.
+salles: toutes
+salles_prioritaires: [h018, amphi1_tc_gea, amphi2_gmp_geii]
+exclure_salles: []
+
+# Enseignants surveillés : « tous » = tous nos enseignants qui ont un code
+# Celcat (un enseignant peut intervenir dans un autre département), sinon une
+# liste de trigrammes.
+enseignants: tous
+exclure_enseignants: []
+
+# Période lue : « auto » = du lundi de la semaine courante au 31 juillet de
+# l'année universitaire en cours (semestre en cours + à venir).
+periode:
+  du: auto
+  au: auto
+
+# Ce qui est « à nous » (donc ignoré) : un évènement écrit par cal-iut
+# (journal de synchronisation, ou `notes` = identifiant de séance), un COURS
+# d'un groupe dont le nom commence par l'un de ces préfixes, ou un cours du
+# département MMI sans groupe.
+prefixes_groupes_mmi: ["BUT MMI"]
+departements_mmi: ["T_MMI"]
+
+# Libellé court affiché pour un département Celcat. Par défaut « T_TC T27 »
+# devient « TC » ; préciser ici si un nom ne suit pas cette forme.
+libelles_departements: {}
+
+# Catégories Celcat à ne jamais compter comme occupation (ex. « Réservation
+# BU » si elle ne bloque pas vraiment la salle).
+categories_ignorees: []
+
+# Placement manuel : false = conflit FORÇABLE avec un message fort (le relevé
+# peut être périmé de quelques heures) ; true = refus, comme une
+# indisponibilité « stricte ». Le générateur, lui, les traite toujours comme
+# des contraintes dures.
+strict: false
+
+# Au-delà de ce nombre d'heures, l'appli signale un relevé ancien (les
+# contraintes restent appliquées telles quelles).
+fraicheur_heures: 6
+
+# Cadence du relevé par le sidecar (même rythme que l'instantané Celcat).
+cadence_heures: 2
+
+# Lecture : identifiants par requête `udlTimetables.load` (un lot refusé est
+# coupé en deux), pause entre deux requêtes, clés de filtre essayées dans
+# l'ordre (« RoomIDs » employé par `scripts/verifier_conflit_h018.py` le
+# 06/09/2026, « StaffIDs » par `scripts/verifier_planning_huez.py` : tous deux
+# à reconfirmer, cf. docs/A-TESTER-SUR-CELCAT.md).
+lot: 10
+pause_s: 0.3
+cles_filtre_salles: [RoomIDs]
+cles_filtre_enseignants: [StaffIDs, StaffID]

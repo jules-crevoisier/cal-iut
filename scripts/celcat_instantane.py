@@ -23,6 +23,12 @@ session tenue est une session que personne d'autre ne peut ouvrir.
 
     python scripts/celcat_instantane.py --vpn
     python scripts/celcat_instantane.py --vpn --forcer   # ignore la cadence
+
+Le même passage relève aussi les OCCUPATIONS HORS MMI des salles et des
+enseignants surveillés (`celcat/occupations.py`, demande du 01/10/2026) :
+même session, même cadence de deux heures, même bouton « Relire » (drapeau
+`celcat_occupations_demande.json`). Un échec de ce relevé-là ne fait pas
+échouer l'instantané : il est noté dans son propre fichier.
 """
 
 from __future__ import annotations
@@ -38,6 +44,7 @@ RACINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RACINE / "src"))
 
 from cal_iut.celcat import navigateur as nav
+from cal_iut.celcat import occupations
 from cal_iut.celcat import reseau
 from cal_iut.celcat.ecriture import resoudre_groupe
 from cal_iut.celcat.etat import worker_en_pause
@@ -118,6 +125,26 @@ def _relever(page) -> tuple[list[dict], list[str]]:
     return evenements, groupes_lus
 
 
+occupations_ecrites = False
+
+
+def _relever_occupations(page, cfg) -> None:
+    """Occupations hors MMI, dans la MÊME session que l'instantané. Un échec
+    est noté dans le fichier des occupations (qui garde le relevé précédent)
+    et n'interrompt pas l'instantané."""
+    global occupations_ecrites
+    try:
+        res = occupations.executer(page, cfg=cfg, ecrire_fichier=True, base=nav.BASE_PRODUCTION,
+                                   sortie=lambda _ligne: None)
+        occupations_ecrites = True
+        print(f"occupations hors MMI : {len(res.evenements)} occurrence(s), "
+              f"{len(res.ressources)} ressource(s), {res.requetes} requête(s)")
+    except Exception as exc:  # noqa: BLE001
+        occupations.enregistrer_echec(f"{type(exc).__name__} : {exc}")
+        occupations_ecrites = True
+        print(f"occupations hors MMI : ÉCHEC {exc}", file=sys.stderr)
+
+
 def principal() -> int:
     parseur = argparse.ArgumentParser(description=__doc__)
     parseur.add_argument("--vpn", action="store_true")
@@ -132,10 +159,16 @@ def principal() -> int:
         print("worker en pause — VPN non monté")
         return 0
 
-    if not args.forcer and not releve_du():
+    faire_instantane = args.forcer or releve_du()
+    cfg_occupations = occupations.charger_config(RACINE / "data" / "config")
+    faire_occupations = cfg_occupations.actif and (args.forcer or occupations.releve_du(cfg_occupations))
+    if not faire_instantane and not faire_occupations:
         print("instantané encore frais — rien à faire")
         return 0
-    consommer_demande()
+    if faire_instantane:
+        consommer_demande()
+    if faire_occupations:
+        occupations.consommer_demande()
 
     try:
         from dotenv import load_dotenv
@@ -155,7 +188,10 @@ def principal() -> int:
         # garder la session du compte partagé (cf. `celcat/reseau.py`).
         with reseau.acces(url, monter_le_vpn=args.vpn) as diag:
             if not diag.joignable:
-                enregistrer([], groupes=[], erreur=f"Celcat injoignable : {diag.detail}")
+                if faire_instantane:
+                    enregistrer([], groupes=[], erreur=f"Celcat injoignable : {diag.detail}")
+                if faire_occupations:
+                    occupations.enregistrer_echec(f"Celcat injoignable : {diag.detail}")
                 print(f"Celcat injoignable : {diag.detail}", file=sys.stderr)
                 return 3
             with sync_playwright() as p:
@@ -164,7 +200,10 @@ def principal() -> int:
                 try:
                     print(f"Connexion {nav.BASE_PRODUCTION} rôle {nav.ROLE_LECTURE} (lecture)…")
                     nav.connexion(page, base=nav.BASE_PRODUCTION, role=nav.ROLE_LECTURE)
-                    evenements, groupes_lus = _relever(page)
+                    if faire_instantane:
+                        evenements, groupes_lus = _relever(page)
+                    if faire_occupations:
+                        _relever_occupations(page, cfg_occupations)
                 finally:
                     try:
                         nav.deconnexion(page)
@@ -174,12 +213,16 @@ def principal() -> int:
     except Exception as exc:  # noqa: BLE001
         # L'échec est ENREGISTRÉ, jamais avalé : un instantané vide sans
         # explication renverrait au silence que tout ce travail répare.
-        enregistrer([], groupes=[], erreur=f"{type(exc).__name__} : {exc}")
+        if faire_instantane:
+            enregistrer([], groupes=[], erreur=f"{type(exc).__name__} : {exc}")
+        if faire_occupations and not occupations_ecrites:
+            occupations.enregistrer_echec(f"{type(exc).__name__} : {exc}")
         print(f"relevé impossible : {exc}", file=sys.stderr)
         return 3
 
-    enregistrer(evenements, groupes=groupes_lus)
-    print(f"instantané : {len(evenements)} évènement(s) sur {len(groupes_lus)} groupe(s)")
+    if faire_instantane:
+        enregistrer(evenements, groupes=groupes_lus)
+        print(f"instantané : {len(evenements)} évènement(s) sur {len(groupes_lus)} groupe(s)")
     return 0
 
 

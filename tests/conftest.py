@@ -253,6 +253,20 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
             celcat_instantane, "_path_demande", lambda: tmp_path / "celcat_instantane_demande.json"
         )
 
+    # Occupations hors MMI (01/10/2026) : le relevé du sidecar et son
+    # drapeau de demande — un relevé réel posé dans `data/state/` imposerait
+    # sinon ses contraintes à tous les tests.
+    from cal_iut.api import occupations_externes as api_occupations
+    from cal_iut.celcat import occupations as celcat_occupations
+
+    monkeypatch.setattr(
+        celcat_occupations, "chemin_fichier", lambda: tmp_path / "celcat_occupations_externes.json"
+    )
+    monkeypatch.setattr(
+        celcat_occupations, "chemin_demande", lambda: tmp_path / "celcat_occupations_demande.json"
+    )
+    api_occupations.invalider()
+
     for nom_mod, fichier in (
         ("etat", "celcat_sync.json"),
         ("file_attente", "celcat_file_attente.json"),

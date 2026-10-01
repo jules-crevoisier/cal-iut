@@ -156,6 +156,15 @@ NATURES: list[dict[str, str]] = [
         "aide": "Une indisponibilité déclarée par l'enseignant tombe sur une de ses séances.",
     },
     {
+        # 01/10/2026 : séances déjà placées sur un créneau où l'enseignant ou
+        # la salle est pris AILLEURS dans Celcat (relevé du sidecar) — même
+        # liste que `payload.occupationsExternes.conflits`
+        # (`api/occupations_externes.py::seances_en_conflit`).
+        "id": "occupation-externe", "titre": "Occupés ailleurs dans Celcat", "gravite": "a_corriger",
+        "aide": "L'enseignant ou la salle est déjà pris dans Celcat (autre département, réunion, réservation) "
+                "sur le créneau d'une séance placée. À déplacer, ou à vérifier dans Celcat si le relevé est ancien.",
+    },
+    {
         # 29/09/2026 : même règle et même calcul que `/api/v1/sae`
         # (`v1._marquer`, champ `anomalie`) — cf. `points_depuis_sae`.
         "id": "sae-hors-journee", "titre": "Cours de SAE hors journée SAE", "gravite": "a_corriger",
@@ -276,6 +285,17 @@ def points_a_traiter(payload: dict) -> list[dict]:
     for c in payload.get("ruleChecks") or []:
         if c.get("status") == "fail":
             points.append(_point("regle", f"rg|{c['id']}", c["label"], c.get("detail") or "", regle=c["id"]))
+
+    # Occupés ailleurs dans Celcat (01/10/2026) — `todo.ts::buildTodoList`,
+    # même ordre, mêmes clés.
+    for c in (payload.get("occupationsExternes") or {}).get("conflits") or []:
+        points.append(_point(
+            "occupation-externe", f"oe|{c['seance_id']}|{c['ressource_type']}|{c['ressource']}",
+            f"{c['course_code']} — {c.get('nom') or c.get('type') or ''}", c["message"],
+            semaine=c["semaine"], jour=c["jour"], creneau=c["creneau"],
+            parcours=_parcours_des_groupes(payload, c.get("groupes") or []),
+            enseignants=list(c.get("enseignants") or []), seance_id=c["seance_id"],
+        ))
     return points
 
 
@@ -523,6 +543,13 @@ def occupation_salles(payload: dict) -> dict[str, set[tuple[int, int, int]]]:
             continue
         for s in resa.get("slots") or []:
             marquer_avec_liees(str(resa.get("salle")), quand[0], quand[1], int(s))
+    # Salles prises dans Celcat (relevé du sidecar, 01/10/2026) : comme une
+    # réservation de tiers.
+    for o in (payload.get("occupationsExternes") or {}).get("occupations") or []:
+        if o.get("t") != "salle":
+            continue
+        for s in o.get("s") or []:
+            marquer_avec_liees(str(o.get("code")), int(o["w"]), int(o["d"]), int(s))
     return cases
 
 

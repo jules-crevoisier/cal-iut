@@ -88,7 +88,11 @@ while true; do
   # d'activité. Le script se termine sans toucher au réseau tant que le
   # dernier relevé a moins de deux heures ET que personne n'a cliqué sur
   # « Rafraîchir » — cadence choisie pour ménager le VPN, partagé avec le
-  # compte Celcat de l'équipe (retour utilisateur 08/09/2026). --------------
+  # compte Celcat de l'équipe (retour utilisateur 08/09/2026). Le même
+  # passage relève aussi les OCCUPATIONS HORS MMI de nos salles et
+  # enseignants (autre département, administration — 01/10/2026,
+  # `celcat/occupations.py`), à la même cadence et sur « Relire maintenant ».
+  # ---------------------------------------------------------------------------
   if ! python3 scripts/celcat_instantane.py --vpn; then
     code=$?
     echo "[$(date -Is)] instantané Celcat — ÉCHEC (code ${code})"
