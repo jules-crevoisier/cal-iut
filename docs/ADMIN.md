@@ -155,6 +155,7 @@ Chaque ligne donne le nombre de séances placées, le code qui partira, et son *
 | **saisi dans l'appli** | Saisi par un admin (date, et auteur pour un admin) | Oui |
 | **manquant** (rouge : « manquant — bloque Celcat ») | Pas de code : ces séances ne partent pas vers Celcat | Oui : à saisir |
 | **sans code (voulu)** | Ne doit jamais aller dans Celcat, avec un motif | Retirer possible |
+| **envoi sans module (règle)** | Cours sans matière Celcat qui part quand même, catégorie imposée (WR100BU) | Non : `celcat.yaml` |
 
 Filtre en haut : **Sans code / Sans code (voulu) / Saisis dans l'appli / Tous**.
 La pastille d'un sous-onglet compte ses lignes sans code.
@@ -185,7 +186,7 @@ Refusé, avec un message sous le champ :
 
 ### Marquer « sans code (voulu) »
 
-Pour une entité qui ne doit jamais aller dans Celcat (projets encadrés WS1PJ…, lignes administratives COR, PCA…, visite de la BU WR100BU).
+Pour une entité qui ne doit jamais aller dans Celcat (projets encadrés WS1PJ…, lignes administratives COR, PCA…).
 
 1. Sur la ligne, cliquer sur **Sans code (voulu)…**.
 2. Écrire le motif (obligatoire, quelques mots).
@@ -194,6 +195,20 @@ Pour une entité qui ne doit jamais aller dans Celcat (projets encadrés WS1PJ�
 La ligne ne compte plus comme manquante. Ses séances ne sont **pas envoyées** à Celcat, sans bloquer le reste.
 Pour annuler : **Retirer « sans code »**.
 Celles décidées avec Kyllian sont écrites dans `celcat.yaml` (section `sans_code_voulu`) : elles portent « se retire dans celcat.yaml ».
+
+### Les règles d'envoi (WR100BU, PTUT)
+
+Certaines séances partent dans Celcat avec une catégorie, une remarque et un département imposés.
+
+- **WR100BU** (visite de la BU, code inventé) : les interventions de Valérie Mariot partent en catégorie **TD0**
+  (pondération 0), remarque **WR100BU**, département **T_MMI T29**, **sans matière**.
+- **Toute séance PTUT** : catégorie **Projet** (pondération 0), remarque **PTUT**, avec la matière du cours si son code est connu.
+
+Dans **Codes Celcat**, WR100BU affiche « sans module » et l'origine **envoi sans module (règle)**, avec ce qui part.
+Rien ne s'y saisit : les règles sont dans `celcat.yaml` (section `regles_envoi`, voir [DATA.md](DATA.md#envoyer-avec-une-règle-denvoi)).
+Une séance WR100BU d'un autre enseignant n'est pas envoyée, sans rien bloquer (motif dans le plan Celcat, `GET /celcat/plan`).
+Détails : [docs/CELCAT.md § 5](CELCAT.md#5-règles-denvoi--wr100bu-et-ptut).
+Ce qui reste à essayer avec le VPN : [docs/A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md).
 
 ### Les groupes : lecture seule
 

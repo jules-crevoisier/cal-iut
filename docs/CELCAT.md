@@ -10,6 +10,7 @@ Les codes Celcat (cours, salles, enseignants) se règlent dans **Référence →
 2. [Ce que vous voyez : l'écran Celcat](#2-ce-que-vous-voyez--lécran-celcat)
 3. [Que faire quand ça bloque](#3-que-faire-quand-ça-bloque)
 4. [Pour les techniciens](#4-pour-les-techniciens)
+5. [Règles d'envoi : WR100BU et PTUT](#5-règles-denvoi--wr100bu-et-ptut)
 
 ---
 
@@ -31,6 +32,7 @@ Un **robot d'envoi** la recopie ensuite dans Celcat, tout seul.
 | La séance a tous ses codes Celcat | Elle part. |
 | Un code manque (cours, salle, enseignant, groupe) | Elle est **bloquée** : elle ne part pas tant que le code n'est pas saisi. |
 | Le cours est marqué **sans code (voulu)** | Elle n'est **pas envoyée**, volontairement, sans rien bloquer. |
+| Une **règle d'envoi** la vise (WR100BU de Valérie Mariot, toute séance PTUT) | Elle part avec la catégorie, la remarque et le département de la règle ([§ 5](#5-règles-denvoi--wr100bu-et-ptut)). |
 | La semaine n'est pas encore ouverte dans Celcat par l'équipe | Les **créations attendent**. Un admin peut autoriser la semaine. |
 | Une séance est retirée de l'appli | Son évènement Celcat est supprimé aussi (jamais un jour férié ni un évènement protégé). |
 | Celcat a un évènement **en trop** (qui ne vient pas de l'appli) | Rien n'est supprimé automatiquement. Un admin décide, après vérification. |
@@ -221,6 +223,7 @@ Il n'existe pas de `udlTimetables.delete` (108 méthodes `udl*` recensées, `scr
 - Garde-fous avant tout envoi : catégorie vérifiée, masque d'une semaine, `--production` exigé pour écrire sur `URCA_2026` (sinon base d'entraînement), journal anti-doublon.
 
 **Catégories CM / TD / TP.** Libellés `[CM]`, `[TD]` (distinct de `TD0`), `[TP]` (`celcat_formulaire.yaml`).
+`TD0` (id 465) est réservée aux règles d'envoi ([§ 5](#5-règles-denvoi--wr100bu-et-ptut)) : refusée sur toute autre séance.
 Les catégories portent une pondération (`[CM]` 100, `[TD]` 100, `[CM bénévole]`, `[CM Capacite]`…) : c'est par là que passe la paie.
 L'id de `[CM]` est **430** : toute charge CM avec un autre `event_cat_id` est refusée (`celcat/categories.py`).
 L'ancien autoclicker enregistrait les CM en `[TP]`. Audit et correction :
@@ -313,3 +316,97 @@ Liste vide à la fin : la carte `celcat_formulaire.yaml` est complète. Fermer l
   Aucune trace de sa suppression dans le dépôt : **à vérifier dans Celcat**, puis supprimer à la main si besoin (« Évènement 2 de 2 », sans catégorie ni horaire).
   Le robot le reconnaît comme « fantôme » et refuse d'y toucher.
 - Codes Celcat des enseignants à `0` dans `celcat.yaml` : à compléter dans **Codes Celcat** quand ils sont connus.
+
+---
+
+## 5. Règles d'envoi : WR100BU et PTUT
+
+Certaines séances partent dans Celcat avec une **catégorie**, une **remarque** et un **département imposés**.
+Deux règles, demandées par Kyllian Bresson le 01/10/2026 :
+
+| Règle | Séances visées | Catégorie | Remarque | Matière (module) |
+|---|---|---|---|---|
+| **WR100BU** (visite de la BU) | celles de Valérie Mariot (VMA, code 3696) | **TD0** (pondération 0) | `WR100BU` | **aucune** : le code est inventé |
+| **PTUT** | **toutes** les séances de type PTUT, quel que soit le cours | **Projet** (pondération 0) | `PTUT` | celle **du cours** si son code est connu, sinon aucune |
+
+Pour les deux : département **T_MMI T29** ; salle, groupe (classe) et enseignant de la séance.
+
+### Ce qui part
+
+- **Remarque** (onglet « Remarques et personnaliser », champ `notes`) : la remarque, puis l'identifiant de la séance.
+  Exemple : `WR100BU — WR100BU-S1-TD-1-but1-td-ab`. L'identifiant relie l'évènement à l'appli.
+- **Matière.** WR100BU : jamais de matière, jamais cherchée.
+  PTUT : la matière du cours (code connu par le fichier, la maquette ou une saisie), cherchée comme pour une séance normale.
+  Cours sans code (manquant ou « sans code (voulu) ») : la séance PTUT part **sans matière** au lieu d'être bloquée.
+  Jamais une matière « PTUT ». **Point à faire confirmer** par Kyllian : module du cours plutôt qu'aucun.
+- **Catégorie et département** : cherchés **par leur nom** dans Celcat.
+  Introuvables : la séance est **bloquée** (« catégorie « TD0 » introuvable dans Celcat »), jamais envoyée avec une autre catégorie.
+- **Pondération 0** : elle est portée par la catégorie elle-même (« Projet [0%] » dans l'inspecteur). Aucun champ à part n'est écrit.
+- **Enseignant** : Celcat n'en reçoit qu'un, le premier de la séance (comme pour toute séance).
+- Une séance WR100BU d'un **autre** enseignant ne part pas. Motif : « WR100BU : seules les interventions de VMA sont envoyées ».
+- **Priorité** : la règle du cours d'abord (elle décide seule pour ses séances), puis celle du type.
+  Une règle passe devant « sans code (voulu) ».
+- Le plan Celcat (`GET /celcat/plan`) l'affiche par séance : « sans module (règle WR100BU) »,
+  « module du cours (règle PTUT) », « sans module — cours sans code Celcat (règle PTUT) ».
+- La comparaison ne signale pas d'écart de matière ni de catégorie sur ces évènements.
+  Un évènement au même créneau saisi à la main en « [TD] » ressort en écart **catégorie** : la correction le passe dans la catégorie de la règle.
+- Garde-fou : la catégorie TD0 (id 465) n'est acceptée que pour ces séances-là.
+
+Sur le planning actuel : 12 séances WR100BU, toutes de VMA (3 par groupe TD, S1) ; **aucune** séance PTUT.
+Avant cette règle, une séance PTUT était bloquée (« type de séance PTUT sans code Celcat »).
+
+### Activer, désactiver
+
+Les règles sont dans `data/config/celcat.yaml`, section `regles_envoi` ([DATA.md](DATA.md#envoyer-avec-une-règle-denvoi)).
+Elles s'appliquent au déploiement suivant.
+
+- **Désactiver** : retirer le bloc (`WR100BU:` sous `cours:`, ou `PTUT:` sous `types:`), redéployer.
+  Pour que WR100BU ne parte plus du tout, le remettre dans `sans_code_voulu.cours` (avec un motif).
+- Les évènements déjà créés dans Celcat y restent : les supprimer à la main si besoin.
+
+### L'essayer sans risque
+
+Commande : `cal-iut celcat-essai-regle` (`--cours WR100BU` ou `--type PTUT`). Elle demande le VPN.
+Pas à pas complet, et un prompt pour Claude Code : [docs/A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md).
+
+1. Écran **Celcat → Réglages → Robot d'envoi** : mettre en **pause** (VPN et compte partagés).
+2. **Simulation sur la vraie base** (lecture seule, rôle `985_consultation`, rien n'est écrit) :
+
+   ```bash
+   docker compose run --rm celcat-nuit \
+     cal-iut celcat-essai-regle --cours WR100BU --base URCA_2026 --vpn
+   ```
+
+3. **Canari en base d'entraînement** (crée UN évènement dans `URCA_FORMATION`, le relit, le supprime) :
+
+   ```bash
+   docker compose run --rm -it celcat-nuit \
+     cal-iut celcat-essai-regle --cours WR100BU --vpn --ecrire --attendre
+   ```
+
+4. Pour PTUT, sans séance PTUT au planning, prendre une vraie séance comme support :
+   `--type PTUT --seance <identifiant> --comme-type` (ex. `--seance WR101-S1-TD-1-but1-td-ab`).
+5. Remettre le robot en marche.
+
+Ce que la commande affiche :
+
+1. la règle et le compte des séances (« Séances placées : 12 — envoyées par la règle : 12 … ») ;
+2. la séance essayée : groupe, salle, enseignant, date, horaire, règle, module ;
+3. le groupe Celcat et les identifiants résolus (`room_id`, `staff_id`, `event_cat_id`, `dept_id`, et `module_id` seulement s'il y a une matière) ;
+4. la charge exacte qui serait envoyée (`udlTimetables.save`), après les garde-fous ;
+5. avec `--ecrire` : l'`event_id` créé, puis ce que Celcat a gardé — catégorie, pondération, département, remarque,
+   champs `custom1` à `custom3`, salles, groupes, enseignants, matières — et « supprimé, absent à la relecture ».
+
+| Option | Effet |
+|---|---|
+| `--cours` / `--type` | La règle à essayer (l'un ou l'autre). |
+| `--base` | `URCA_FORMATION` par défaut. `URCA_2026` accepté **seulement** sans `--ecrire`. |
+| `--ecrire` | Crée puis supprime un évènement, en base d'entraînement seulement. Refusé sur `URCA_2026`. |
+| `--attendre` | Avec `--ecrire` : attend **Entrée** avant de supprimer, pour regarder l'évènement dans Celcat. |
+| `--seance` | Identifiant de séance précis (sinon la première de la règle). |
+| `--comme-type` | Avec `--type` et `--seance` : traite cette séance comme si elle était de ce type (essai seulement). |
+| `--group-id` | Groupe Celcat imposé. En base d'entraînement, défaut : 47925 (groupe des canaris). |
+| `--json` | Écrit la charge et la relecture dans un fichier. |
+
+Codes de sortie : 0 réussi ; 1 bloqué (motif affiché) ou suppression à refaire à la main ; 2 refusé ; 3 Celcat injoignable.
+Ancien nom, toujours accepté : `celcat-essai-sans-module`.

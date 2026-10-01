@@ -88,7 +88,7 @@ Colonne « Effet » : ce qu'il faut faire pour qu'une modification compte (déta
 | [`sae_teacher_phases.yaml`](#sae_teacher_phasesyaml) | Quels jours chaque enseignant encadre une SAE | main | Redéploiement + nouveau calcul |
 | [`salles_reservees.yaml`](#salles_reserveesyaml) | Salles prises par un tiers (Direction…) | main | Redéploiement ; salles au prochain calcul |
 | [`evenements_supplementaires.yaml`](#evenements_supplementairesyaml) | Événements fixes absents du tableur officiel | main | **Rebuild** des contraintes + redéploiement |
-| [`celcat.yaml`](#celcatyaml) | Codes Celcat : enseignants, salles, modules, « sans code (voulu) » | main (+ appli) | Redéploiement |
+| [`celcat.yaml`](#celcatyaml) | Codes Celcat : enseignants, salles, modules, « sans code (voulu) », règles d'envoi | main (+ appli) | Redéploiement |
 | [`celcat_modules_maquette.yaml`](#celcat_modules_maquetteyaml) | Codes module Celcat repris de la maquette | généré | Redéploiement |
 | [`celcat_groupes.yaml`](#celcat_groupesyaml) | Identifiants Celcat des groupes | main (relevé) | Redéploiement |
 | [`celcat_matieres.yaml`](#celcat_matieresyaml) | Identifiants Celcat des matières | main (relevé) | Redéploiement |
@@ -393,6 +393,43 @@ Pour une entité qu'on n'envoie **jamais** à Celcat (projet enseignants, ligne 
   Ce marquage-là ne se retire qu'en éditant le fichier (l'appli l'indique : « se retire dans celcat.yaml »).
 
 L'entité n'apparaît plus comme « manquant » ni comme blocage. Le plan Celcat la compte « non envoyée (voulu) ».
+
+### Envoyer avec une règle d'envoi
+
+Pour des séances qui doivent partir dans Celcat avec une catégorie, une remarque et un département **imposés**.
+Exemples : WR100BU (visite de la BU, code inventé, sans matière Celcat) ; toutes les séances de type PTUT.
+
+Section `regles_envoi:` de [`celcat.yaml`](#celcatyaml), par **cours** ou par **type** de séance :
+
+```yaml
+regles_envoi:
+  cours:
+    WR100BU:
+      enseignants: [VMA]       # seules ces interventions partent ; absent = toutes
+      module: aucun            # aucune matière, jamais cherchée
+      categorie: "TD0"         # nom exact de la catégorie d'évènement Celcat
+      remarque: "WR100BU"      # écrit dans « Remarques » de l'évènement
+      departement: "T_MMI T29" # nom exact du département Celcat (défaut : T_MMI T29)
+      motif: "Visite de la BU (Kyllian Bresson, 01/10/2026)"
+  types:
+    PTUT:
+      module: cours            # la matière du cours si son code est connu, sinon aucune
+      categorie: "Projet"
+      remarque: "PTUT"
+      motif: "Séances PTUT (Kyllian Bresson, 01/10/2026)"
+```
+
+- `module` est **obligatoire** : `aucun` (jamais de matière) ou `cours` (celle du cours, cherchée comme d'habitude ;
+  aucune si le cours n'a pas de code). Jamais une matière au nom de la règle.
+- `categorie` est obligatoire. Elle et le département sont cherchés **par leur nom** dans Celcat ; introuvables : séance bloquée.
+- La pondération (0 pour TD0 et Projet) est portée par la catégorie : rien d'autre à écrire.
+- La salle, le groupe et l'enseignant restent ceux de la séance.
+- Une séance d'un enseignant hors `enseignants` n'est pas envoyée (motif affiché dans le plan Celcat).
+- Priorité : règle du **cours**, puis règle du **type**. Une règle passe devant `sans_code_voulu`.
+- Refusé au chargement : un cours à la fois dans `regles_envoi.cours` et `sans_code_voulu`,
+  un cours `module: aucun` qui a un code dans `modules`, un type inconnu (CM, TD, TP, PTUT), un champ inconnu.
+- Pour arrêter : retirer le bloc, redéployer.
+- Avant d'activer en production : essayer avec `cal-iut celcat-essai-regle` ([CELCAT.md](CELCAT.md#5-règles-denvoi--wr100bu-et-ptut)).
 
 ### Confirmer un code « à confirmer »
 
@@ -838,7 +875,8 @@ courses:
 - Même forme qu'une ligne de `maquette.json`.
 - `total` compte les séances **par étudiant** ; `profs[].td` compte les créneaux **de l'enseignant** (tous groupes).
 - Sans progression, l'ordre est CM, TD, TP.
-- WR100BU est un code inventé : il est marqué « sans code (voulu) » pour Celcat.
+- WR100BU est un code inventé, absent de Celcat. Il part dans Celcat **sans module**, en catégorie « TD0 »,
+  pour les interventions de VMA : voir [« Envoyer avec une règle d'envoi »](#envoyer-avec-une-règle-denvoi).
 
 ### `course_corrections.yaml`
 
@@ -1062,7 +1100,12 @@ codes_a_confirmer:
     WS103: "à redemander, pas supposé"
 sans_code_voulu:
   cours:
-    WR100BU: "Code inventé (visite de la BU)"
+    WS1PJ: "Projet Ens. : pas de code Celcat"
+regles_envoi:
+  cours:
+    WR100BU: {enseignants: [VMA], module: aucun, categorie: "TD0", remarque: "WR100BU", motif: "…"}
+  types:
+    PTUT: {module: cours, categorie: "Projet", remarque: "PTUT", motif: "…"}
 ```
 
 | Section | Sens |
@@ -1074,9 +1117,12 @@ sans_code_voulu:
 | `modules` | Code de cours → code module Celcat (`TSB…`) |
 | `codes_a_confirmer.cours` | Cours laissés « manquant » exprès, même si la maquette propose un code |
 | `sans_code_voulu.<famille>` | Entités jamais envoyées ; le motif est obligatoire |
+| `regles_envoi.cours` / `.types` | Catégorie, remarque, département et module imposés à un cours ou à un type ([détail](#envoyer-avec-une-règle-denvoi)) |
 
-Priorité pour un code de cours : « sans code (voulu) » > `celcat.yaml` > code de la maquette > saisie dans l'appli
-(qui ne complète que ce qui manque).
+Priorité pour un code de cours : règle d'envoi `module: aucun` > « sans code (voulu) » > `celcat.yaml` > code de la maquette
+> saisie dans l'appli (qui ne complète que ce qui manque). Un même cours dans `regles_envoi.cours` et `sans_code_voulu`
+(ou en `module: aucun` avec un code dans `modules`) est refusé au chargement.
+`types_seance: PTUT: null` : PTUT n'a pas de catégorie ordinaire, il part par sa règle d'envoi.
 
 Pièges :
 
