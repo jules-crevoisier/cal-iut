@@ -244,8 +244,27 @@ jour en entreprise d'un alternant, évènement officiel à cet horaire,
 indisponibilité stricte d'un enseignant.
 
 Forçable : salle, enseignant ou groupe déjà pris, indisponibilité déclarée d'un enseignant,
-ordre des séances d'un cours, semaine déjà commencée (« Semaine 6 non modifiable »).
+ordre des séances d'un cours, semaine déjà commencée (« Semaine 6 non modifiable »),
+enseignant ou salle **déjà pris dans Celcat** (voir ci-dessous).
 Toucher une date déjà passée demande une confirmation forte : **Oui, modifier le passé**.
+
+### Occupé ailleurs dans Celcat
+
+Un enseignant peut aussi donner cours dans un autre département, et l'amphi H.018 peut être réservé
+par l'administration. L'appli le sait : le robot Celcat relit ces occupations **toutes les 2 heures**.
+
+- Sur la grille (Vue Enseignant, Vue Salle), un bloc hachuré **Occupé ailleurs (TC)** ou
+  **Réservé dans Celcat** marque le créneau. Une séance posée dessus affiche **Conflit Celcat**.
+- En Vue Promo, pendant un placement, la case indique « AFR déjà occupé ailleurs (TC) ».
+- Au déplacement, le message dit pourquoi, par exemple :
+  « Enseignant indisponible — Anthony Froli est déjà programmé dans le département TC sur ce créneau
+  (lundi 28/09, 10h00–12h30, Celcat). »
+  ou « Salle indisponible — H.018 est réservée dans Celcat sur ce créneau (administration, Réunion,
+  mardi 29/09, 14h00–17h00). »
+- **Forcer** reste possible : la lecture de Celcat peut avoir quelques heures, une réunion a pu être annulée.
+  Vérifiez dans Celcat avant de forcer.
+- La génération automatique, elle, n'utilise jamais ces créneaux.
+- Si la dernière lecture est ancienne, un bandeau le dit (« Occupations Celcat relevées il y a 9 h »).
 
 ### Raccourcis clavier
 
@@ -270,6 +289,8 @@ Ces écrans marchent comme la Vue Enseignant : un **annuaire** filtrable, puis u
 - **Vue Salle** : l'occupation d'une salle (ex. H.104), son équipement et les cours qui y passent.
   On y arrive par la recherche ou par **Référence** → **Salles** → **Ouvrir la Vue Salle**.
   La case **Proposée au placement automatique** se règle par un administrateur.
+  Un créneau pris dans Celcat par un autre département ou l'administration s'affiche
+  **Réservé dans Celcat** (voir [Occupé ailleurs dans Celcat](#occupé-ailleurs-dans-celcat)).
 
 ## 8. Salles libres
 
@@ -279,6 +300,9 @@ On y arrive par le bouton **Salles libres par créneau** de la Vue Salle, ou par
 - Choisir le **Jour**.
 - Filtrer par **Capacité minimum** et **Type de salle**.
 - **Inclure les salles hors placement automatique** ajoute les salles réservées à un usage précis.
+
+Une salle réservée dans Celcat (autre département, administration) apparaît occupée (**Celcat**) :
+elle n'est pas proposée, ni ici, ni au placement automatique.
 
 ## 9. Partager un planning
 
@@ -379,6 +403,7 @@ Les catégories, de la plus grave à la moins grave :
 | Doublons salle / enseignant (H.201/H.203 et H.007/H.008 comptent pour une salle) | Vue Promo |
 | Règles globales en échec | Contraintes |
 | Indisponibilités enseignant non respectées | Vue Enseignant |
+| Occupés ailleurs dans Celcat (enseignant ou salle déjà pris dans Celcat sur une séance placée) | Vue Enseignant ou Vue Promo |
 | Cours de SAE hors journée SAE | Vue Promo |
 | Encadrement SAE le même jour (compromis accepté, à revoir si possible) | Vue Enseignant |
 | Journées trouées (au moins deux créneaux vides entre deux cours) | Vue TD / TP |
