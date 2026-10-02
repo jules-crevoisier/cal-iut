@@ -298,7 +298,12 @@ def test_la_reservation_de_l_amphi_par_mmi_n_est_pas_une_occupation_externe() ->
     assert occ.motif_a_nous(autre_departement, occ.ContexteNous(), cfg) is None
     sans_departement = {**reservation, "deptName": None, "dept_id": None, "notes": "Réunion expertise n°3"}
     assert occ.motif_a_nous(sans_departement, occ.ContexteNous(), cfg) is None
-    avec_enseignant = {**reservation, "staff": [{"staff_id": 1, "name": "X", "unique_name": "1"}]}
+    # Un évènement MMI avec un enseignant et une autre remarque est une vraie
+    # activité. (La réservation elle-même, reconnue par sa remarque, reste
+    # ignorée même avec un responsable : « en aucun cas ça nous bloque »,
+    # Jules, 02/10/2026 — `test_occupations_releve_reel_2026_10_02.py`.)
+    avec_enseignant = {**reservation, "notes": "Soutenances",
+                       "staff": [{"staff_id": 1, "name": "X", "unique_name": "1"}]}
     assert occ.motif_a_nous(avec_enseignant, occ.ContexteNous(), cfg) is None
 
     assert occ.motif_a_nous(reservation, occ.ContexteNous(), occ.ConfigOccupations(reservations_mmi_ignorees=False)) is None

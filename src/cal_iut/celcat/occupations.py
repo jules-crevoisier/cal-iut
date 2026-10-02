@@ -409,15 +409,19 @@ def motif_a_nous(brut: dict, ctx: ContexteNous, cfg: ConfigOccupations) -> str |
         if dept_mmi and not groupes:
             return "cours du département MMI"
     # MMI qui GARDE une salle (« Réservation Amphi H MMI », 8h00–20h00 sur 22
-    # semaines au relevé du 02/10/2026) : ni catégorie, ni groupe, ni
-    # enseignant, ni matière. Ce n'est pas une occupation hors MMI — comptée,
-    # elle interdisait l'amphi à nos propres CM. Une activité MMI saisie à la
-    # main (catégorie posée : Réunion, Conférence…) reste une occupation.
-    if (
-        cfg.reservations_mmi_ignorees and dept_mmi and not categorie.strip() and not groupes
-        and not brut.get("staff") and not brut.get("modules")
-    ):
-        return "réservation du département MMI"
+    # semaines au relevé du 02/10/2026). Jules Crevoisier, le même jour : « on
+    # a fait des réservations sur toutes les semaines pour que si d'autres
+    # parcours veulent réserver l'amphi, elles doivent demander. Mais il faut
+    # qu'en aucun cas ça nous bloque, nous. » Deux façons de la reconnaître,
+    # toujours dans le département MMI, sans groupe ni matière : rien d'autre
+    # n'est posé (ni catégorie ni enseignant), ou sa remarque commence par
+    # « Réservation » — pour qu'une catégorie ou un responsable ajoutés plus
+    # tard ne la transforment pas en occupation. Une activité MMI saisie à la
+    # main (Réunion, Conférence…) reste une occupation.
+    if cfg.reservations_mmi_ignorees and dept_mmi and not groupes and not brut.get("modules"):
+        remarque = _sans_accents(str(brut.get("notes") or ""))
+        if remarque.startswith("reservation") or (not categorie.strip() and not brut.get("staff")):
+            return "réservation du département MMI"
     return None
 
 

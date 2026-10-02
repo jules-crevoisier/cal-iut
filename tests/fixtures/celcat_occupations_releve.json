@@ -1,0 +1,1141 @@
+{
+ "_origine": "Relevé réel URCA_2026 du 02/10/2026 (rôle 985_consultation, udlResources.load et udlTimetables.load), réduit à quelques évènements par cas et anonymisé : personnel hors MMI remplacé, auteurs des saisies retirés.",
+ "ressources": {
+  "604": [
+   {
+    "room_id": 1604428,
+    "name": "Amphi 3 MMI",
+    "unique_name": "1700HR0AM3"
+   },
+   {
+    "room_id": 1604507,
+    "name": "Amphi 1 TC/GEA",
+    "unique_name": "1700BR0AM1"
+   },
+   {
+    "room_id": 1604505,
+    "name": "Amphi 2 GMP/GEII",
+    "unique_name": "1700BR0AM2"
+   }
+  ],
+  "603": [
+   {
+    "staff_id": 1610999,
+    "name": "FROLI Anthony",
+    "unique_name": "37948"
+   },
+   {
+    "staff_id": 9000001,
+    "name": "ENSEIGNANT 01",
+    "unique_name": "90001"
+   },
+   {
+    "staff_id": 9000002,
+    "name": "ENSEIGNANT 02",
+    "unique_name": "90002"
+   },
+   {
+    "staff_id": 9000003,
+    "name": "ENSEIGNANT 03",
+    "unique_name": "90003"
+   },
+   {
+    "staff_id": 9000004,
+    "name": "ENSEIGNANT 04",
+    "unique_name": "90004"
+   },
+   {
+    "staff_id": 9000005,
+    "name": "ENSEIGNANT 05",
+    "unique_name": "90005"
+   },
+   {
+    "staff_id": 9000006,
+    "name": "ENSEIGNANT 06",
+    "unique_name": "90006"
+   },
+   {
+    "staff_id": 9000007,
+    "name": "ENSEIGNANT 07",
+    "unique_name": "90007"
+   },
+   {
+    "staff_id": 9000008,
+    "name": "ENSEIGNANT 08",
+    "unique_name": "90008"
+   },
+   {
+    "staff_id": 9000009,
+    "name": "ENSEIGNANT 09",
+    "unique_name": "90009"
+   },
+   {
+    "staff_id": 9000010,
+    "name": "ENSEIGNANT 10",
+    "unique_name": "90010"
+   },
+   {
+    "staff_id": 9000011,
+    "name": "ENSEIGNANT 11",
+    "unique_name": "90011"
+   },
+   {
+    "staff_id": 9000012,
+    "name": "ENSEIGNANT 12",
+    "unique_name": "90012"
+   },
+   {
+    "staff_id": 9000013,
+    "name": "ENSEIGNANT 13",
+    "unique_name": "90013"
+   },
+   {
+    "staff_id": 9000014,
+    "name": "ENSEIGNANT 14",
+    "unique_name": "90014"
+   },
+   {
+    "staff_id": 9000015,
+    "name": "ENSEIGNANT 15",
+    "unique_name": "90015"
+   },
+   {
+    "staff_id": 9000016,
+    "name": "ENSEIGNANT 16",
+    "unique_name": "90016"
+   },
+   {
+    "staff_id": 9000017,
+    "name": "ENSEIGNANT 17",
+    "unique_name": "90017"
+   },
+   {
+    "staff_id": 9000018,
+    "name": "ENSEIGNANT 18",
+    "unique_name": "90018"
+   },
+   {
+    "staff_id": 9000019,
+    "name": "ENSEIGNANT 19",
+    "unique_name": "90019"
+   },
+   {
+    "staff_id": 9000020,
+    "name": "ENSEIGNANT 20",
+    "unique_name": "90020"
+   },
+   {
+    "staff_id": 9000021,
+    "name": "ENSEIGNANT 21",
+    "unique_name": "90021"
+   },
+   {
+    "staff_id": 9000022,
+    "name": "ENSEIGNANT 22",
+    "unique_name": "90022"
+   },
+   {
+    "staff_id": 9000023,
+    "name": "ENSEIGNANT 23",
+    "unique_name": "90023"
+   },
+   {
+    "staff_id": 9000024,
+    "name": "ENSEIGNANT 24",
+    "unique_name": "90024"
+   }
+  ],
+  "610": [
+   {
+    "dept_id": 1560566,
+    "name": "iut Troyes T00"
+   },
+   {
+    "dept_id": 1560608,
+    "name": "T_GEA T22"
+   },
+   {
+    "dept_id": 1560611,
+    "name": "T_GEII T25"
+   },
+   {
+    "dept_id": 1560615,
+    "name": "T_MMI T29"
+   },
+   {
+    "dept_id": 1560618,
+    "name": "T_TC T32"
+   },
+   {
+    "dept_id": 1560651,
+    "name": "T_ CJ T41"
+   }
+  ]
+ },
+ "evenements": [
+  {
+   "event_id": 1665591,
+   "day_of_week": 6,
+   "start_time": "1899-12-31T07:00:00.000Z",
+   "end_time": "1899-12-31T23:59:00.000Z",
+   "weeks": "NNNNNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNY",
+   "evCatName": "Jour férié",
+   "event_cat_id": 451,
+   "evCatWeighting": 0,
+   "deptName": null,
+   "dept_id": null,
+   "notes": null,
+   "event_name": null,
+   "global_event": "Y",
+   "suspended": "N",
+   "protected": "Y",
+   "break_mins": 0,
+   "rooms": [],
+   "staff": [],
+   "groups": [],
+   "modules": []
+  },
+  {
+   "event_id": 1665597,
+   "day_of_week": 4,
+   "start_time": "1899-12-31T07:00:00.000Z",
+   "end_time": "1899-12-31T23:59:00.000Z",
+   "weeks": "NNNNNNNNNNNNNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "Jour férié",
+   "event_cat_id": 451,
+   "evCatWeighting": 0,
+   "deptName": null,
+   "dept_id": null,
+   "notes": null,
+   "event_name": null,
+   "global_event": "Y",
+   "suspended": "N",
+   "protected": "Y",
+   "break_mins": 0,
+   "rooms": [],
+   "staff": [],
+   "groups": [],
+   "modules": []
+  },
+  {
+   "event_id": 1694154,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T08:00:00.000Z",
+   "end_time": "1899-12-31T12:00:00.000Z",
+   "weeks": "NNNNNNNNNNNNNNNNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TD]",
+   "event_cat_id": 433,
+   "evCatWeighting": 100,
+   "deptName": "T_ CJ T41",
+   "dept_id": 1560651,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000001,
+     "name": "ENSEIGNANT 01",
+     "unique_name": "90001"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1658480,
+     "name": "BUT CJ S5 TD AJ - 2024",
+     "unique_name": "6TD605TD01"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1582318,
+     "name": "JS501A English Week",
+     "unique_name": "TD60551A"
+    }
+   ]
+  },
+  {
+   "event_id": 1694156,
+   "day_of_week": 1,
+   "start_time": "1899-12-31T08:00:00.000Z",
+   "end_time": "1899-12-31T12:00:00.000Z",
+   "weeks": "NNNNNNNNNNNNNNNNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TD]",
+   "event_cat_id": 433,
+   "evCatWeighting": 100,
+   "deptName": "T_ CJ T41",
+   "dept_id": 1560651,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000001,
+     "name": "ENSEIGNANT 01",
+     "unique_name": "90001"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1658480,
+     "name": "BUT CJ S5 TD AJ - 2024",
+     "unique_name": "6TD605TD01"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1582318,
+     "name": "JS501A English Week",
+     "unique_name": "TD60551A"
+    }
+   ]
+  },
+  {
+   "event_id": 1903070,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T08:00:00.000Z",
+   "end_time": "1899-12-31T09:30:00.000Z",
+   "weeks": "NNNNNNNNNYNYNYYNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[CM]",
+   "event_cat_id": 430,
+   "evCatWeighting": 100,
+   "deptName": "T_GEA T22",
+   "dept_id": 1560608,
+   "notes": "Institutions publiques",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000002,
+     "name": "ENSEIGNANT 02",
+     "unique_name": "90002"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1659186,
+     "name": "BUT GEA CM S1 - 2024",
+     "unique_name": "6TD7Z1CM_1"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1594666,
+     "name": "SR102 Droit",
+     "unique_name": "TD7Z1M12"
+    }
+   ]
+  },
+  {
+   "event_id": 1748465,
+   "day_of_week": 3,
+   "start_time": "1899-12-31T14:00:00.000Z",
+   "end_time": "1899-12-31T18:00:00.000Z",
+   "weeks": "NNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": null,
+   "event_cat_id": null,
+   "evCatWeighting": null,
+   "deptName": null,
+   "dept_id": null,
+   "notes": "Réunion expertise n°3",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "Y",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [],
+   "groups": [],
+   "modules": []
+  },
+  {
+   "event_id": 1891738,
+   "day_of_week": 1,
+   "start_time": "1899-12-31T07:30:00.000Z",
+   "end_time": "1899-12-31T09:30:00.000Z",
+   "weeks": "NNNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "Réunion",
+   "event_cat_id": 461,
+   "evCatWeighting": 0,
+   "deptName": "iut Troyes T00",
+   "dept_id": 1560566,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "Y",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000003,
+     "name": "ENSEIGNANT 03",
+     "unique_name": "90003"
+    }
+   ],
+   "groups": [],
+   "modules": []
+  },
+  {
+   "event_id": 1967187,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T08:00:00.000Z",
+   "end_time": "1899-12-31T20:00:00.000Z",
+   "weeks": "NNNNNNNNNNNNNNNNNNNNNNNNYYYYYYYYYYYYYYYYYYYYYYNNNNNNNN",
+   "evCatName": null,
+   "event_cat_id": null,
+   "evCatWeighting": null,
+   "deptName": "T_MMI T29",
+   "dept_id": 1560615,
+   "notes": "Réservation Amphi H MMI",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "Y",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [],
+   "groups": [],
+   "modules": []
+  },
+  {
+   "event_id": 1967188,
+   "day_of_week": 1,
+   "start_time": "1899-12-31T08:00:00.000Z",
+   "end_time": "1899-12-31T20:00:00.000Z",
+   "weeks": "NNNNNNNNNNNNNNNNNNNNNNNNYYYYYYYYYYYYYYYYYYYYYYNNNNNNNN",
+   "evCatName": null,
+   "event_cat_id": null,
+   "evCatWeighting": null,
+   "deptName": "T_MMI T29",
+   "dept_id": 1560615,
+   "notes": "Réservation Amphi H MMI",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "Y",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [],
+   "groups": [],
+   "modules": []
+  },
+  {
+   "event_id": 1931709,
+   "day_of_week": 1,
+   "start_time": "1899-12-31T15:30:00.000Z",
+   "end_time": "1899-12-31T17:00:00.000Z",
+   "weeks": "NNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[CM]",
+   "event_cat_id": 430,
+   "evCatWeighting": 100,
+   "deptName": "T_MMI T29",
+   "dept_id": 1560615,
+   "notes": "WR116-S1-CM-1",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000004,
+     "name": "ENSEIGNANT 04",
+     "unique_name": "90004"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1661971,
+     "name": "BUT MMI S1 CM - 2024",
+     "unique_name": "6TSBZ1CM_1"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1585142,
+     "name": "WR116 Traitement Info",
+     "unique_name": "TSBZ1M16"
+    }
+   ]
+  },
+  {
+   "event_id": 1933217,
+   "day_of_week": 1,
+   "start_time": "1899-12-31T09:30:00.000Z",
+   "end_time": "1899-12-31T12:30:00.000Z",
+   "weeks": "NNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "Conférence",
+   "event_cat_id": 438,
+   "evCatWeighting": 0,
+   "deptName": "T_MMI T29",
+   "dept_id": 1560615,
+   "notes": "ÉCHANGE IA",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604428,
+     "name": "Amphi 3 MMI",
+     "unique_name": "1700HR0AM3"
+    }
+   ],
+   "staff": [],
+   "groups": [
+    {
+     "group_id": 1661971,
+     "name": "BUT MMI S1 CM - 2024",
+     "unique_name": "6TSBZ1CM_1"
+    }
+   ],
+   "modules": []
+  },
+  {
+   "event_id": 1949593,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T09:30:00.000Z",
+   "end_time": "1899-12-31T11:00:00.000Z",
+   "weeks": "NNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TD]",
+   "event_cat_id": 433,
+   "evCatWeighting": 100,
+   "deptName": "T_MMI T29",
+   "dept_id": 1560615,
+   "notes": "WR305D-S3-TD-1-but2-dev-fi-td-cd",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604465,
+     "name": "H.101",
+     "unique_name": "1700H10101"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 1610999,
+     "name": "FROLI Anthony",
+     "unique_name": "37948"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1660014,
+     "name": "BUT MMI S3 TD CD - 2024",
+     "unique_name": "6TSBZ3DTD2"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1583123,
+     "name": "WR305D Strat",
+     "unique_name": "TSBZ305D"
+    }
+   ]
+  },
+  {
+   "event_id": 1949609,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T14:00:00.000Z",
+   "end_time": "1899-12-31T15:30:00.000Z",
+   "weeks": "NNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TD]",
+   "event_cat_id": 433,
+   "evCatWeighting": 100,
+   "deptName": "T_MMI T29",
+   "dept_id": 1560615,
+   "notes": "WR305D-S3-TD-1-but2-dev-fi-td-ab",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604424,
+     "name": "H.104",
+     "unique_name": "1700H10104"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 1610999,
+     "name": "FROLI Anthony",
+     "unique_name": "37948"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1660012,
+     "name": "BUT MMI S3 TD AB - 2024",
+     "unique_name": "6TSBZ3DTD1"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1583123,
+     "name": "WR305D Strat",
+     "unique_name": "TSBZ305D"
+    }
+   ]
+  },
+  {
+   "event_id": 1702515,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T10:00:00.000Z",
+   "end_time": "1899-12-31T11:00:00.000Z",
+   "weeks": "NNNNYYYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[CM]",
+   "event_cat_id": 430,
+   "evCatWeighting": 100,
+   "deptName": "T_GEA T22",
+   "dept_id": 1560608,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604507,
+     "name": "Amphi 1 TC/GEA",
+     "unique_name": "1700BR0AM1"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000005,
+     "name": "ENSEIGNANT 05",
+     "unique_name": "90005"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1661610,
+     "name": "BUT GEA CM S3 - 2024",
+     "unique_name": "6TD7Z3CM_3"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1589376,
+     "name": "SR307 Diagnostic financ.",
+     "unique_name": "TD7Z3070"
+    }
+   ]
+  },
+  {
+   "event_id": 1702522,
+   "day_of_week": 3,
+   "start_time": "1899-12-31T08:30:00.000Z",
+   "end_time": "1899-12-31T09:30:00.000Z",
+   "weeks": "NNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[CM]",
+   "event_cat_id": 430,
+   "evCatWeighting": 100,
+   "deptName": "T_GEA T22",
+   "dept_id": 1560608,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604507,
+     "name": "Amphi 1 TC/GEA",
+     "unique_name": "1700BR0AM1"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000005,
+     "name": "ENSEIGNANT 05",
+     "unique_name": "90005"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1661610,
+     "name": "BUT GEA CM S3 - 2024",
+     "unique_name": "6TD7Z3CM_3"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1589376,
+     "name": "SR307 Diagnostic financ.",
+     "unique_name": "TD7Z3070"
+    }
+   ]
+  },
+  {
+   "event_id": 1704960,
+   "day_of_week": 2,
+   "start_time": "1899-12-31T08:00:00.000Z",
+   "end_time": "1899-12-31T10:00:00.000Z",
+   "weeks": "NNNNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[CM]",
+   "event_cat_id": 430,
+   "evCatWeighting": 100,
+   "deptName": "T_ CJ T41",
+   "dept_id": 1560651,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604505,
+     "name": "Amphi 2 GMP/GEII",
+     "unique_name": "1700BR0AM2"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000006,
+     "name": "ENSEIGNANT 06",
+     "unique_name": "90006"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1663605,
+     "name": "BUT CJ  S1 CM - 2024",
+     "unique_name": "6TD6Z1CM_1"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1581026,
+     "name": "JR106 Drt Pers./Famille",
+     "unique_name": "TD6Z1M06"
+    }
+   ]
+  },
+  {
+   "event_id": 1706288,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T09:30:00.000Z",
+   "end_time": "1899-12-31T11:00:00.000Z",
+   "weeks": "NNNYYYYYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[CM]",
+   "event_cat_id": 430,
+   "evCatWeighting": 100,
+   "deptName": "T_GEII T25",
+   "dept_id": 1560611,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604505,
+     "name": "Amphi 2 GMP/GEII",
+     "unique_name": "1700BR0AM2"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000007,
+     "name": "ENSEIGNANT 07",
+     "unique_name": "90007"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1660028,
+     "name": "GEII S1 CM - 2024",
+     "unique_name": "6TS9Z1CM01"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1596276,
+     "name": "XR107 Automatismes",
+     "unique_name": "TS9Z1107"
+    }
+   ]
+  },
+  {
+   "event_id": 1835622,
+   "day_of_week": 2,
+   "start_time": "1899-12-31T10:00:00.000Z",
+   "end_time": "1899-12-31T12:00:00.000Z",
+   "weeks": "NNNYNYNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TD]",
+   "event_cat_id": 433,
+   "evCatWeighting": 100,
+   "deptName": "T_TC T32",
+   "dept_id": 1560618,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604601,
+     "name": "E.213",
+     "unique_name": "1700E20213"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 1610999,
+     "name": "FROLI Anthony",
+     "unique_name": "37948"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1664016,
+     "name": "BUT TC S3 TD D ALT - 2025",
+     "unique_name": "6TD8ZCTD01"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1581182,
+     "name": "RRA313 ECC 3",
+     "unique_name": "TD8ZC130"
+    }
+   ]
+  },
+  {
+   "event_id": 1835623,
+   "day_of_week": 2,
+   "start_time": "1899-12-31T10:00:00.000Z",
+   "end_time": "1899-12-31T12:00:00.000Z",
+   "weeks": "NNNNNNNNNNNNNNYNYNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TP]",
+   "event_cat_id": 435,
+   "evCatWeighting": 100,
+   "deptName": "T_TC T32",
+   "dept_id": 1560618,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604601,
+     "name": "E.213",
+     "unique_name": "1700E20213"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 1610999,
+     "name": "FROLI Anthony",
+     "unique_name": "37948"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1664017,
+     "name": "BUT TC S3 BDMRC ALT TP D1 - 2025",
+     "unique_name": "6TD8ZCTP01"
+    },
+    {
+     "group_id": 1664018,
+     "name": "BUT TC S3 BDMRC ALT TP D2 - 2025",
+     "unique_name": "6TD8ZCTP02"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1581182,
+     "name": "RRA313 ECC 3",
+     "unique_name": "TD8ZC130"
+    }
+   ]
+  },
+  {
+   "event_id": 2000742,
+   "day_of_week": 0,
+   "start_time": "1899-12-31T17:00:00.000Z",
+   "end_time": "1899-12-31T18:30:00.000Z",
+   "weeks": "NNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "Réunion",
+   "event_cat_id": 461,
+   "evCatWeighting": 0,
+   "deptName": "T_TC T32",
+   "dept_id": 1560618,
+   "notes": "Réunion info alternants",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604585,
+     "name": "E.205",
+     "unique_name": "1700E20205"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 9000008,
+     "name": "ENSEIGNANT 08",
+     "unique_name": "90008"
+    },
+    {
+     "staff_id": 9000009,
+     "name": "ENSEIGNANT 09",
+     "unique_name": "90009"
+    },
+    {
+     "staff_id": 9000010,
+     "name": "ENSEIGNANT 10",
+     "unique_name": "90010"
+    },
+    {
+     "staff_id": 9000011,
+     "name": "ENSEIGNANT 11",
+     "unique_name": "90011"
+    },
+    {
+     "staff_id": 9000012,
+     "name": "ENSEIGNANT 12",
+     "unique_name": "90012"
+    },
+    {
+     "staff_id": 9000013,
+     "name": "ENSEIGNANT 13",
+     "unique_name": "90013"
+    },
+    {
+     "staff_id": 9000014,
+     "name": "ENSEIGNANT 14",
+     "unique_name": "90014"
+    },
+    {
+     "staff_id": 9000015,
+     "name": "ENSEIGNANT 15",
+     "unique_name": "90015"
+    },
+    {
+     "staff_id": 1610999,
+     "name": "FROLI Anthony",
+     "unique_name": "37948"
+    },
+    {
+     "staff_id": 9000016,
+     "name": "ENSEIGNANT 16",
+     "unique_name": "90016"
+    },
+    {
+     "staff_id": 9000017,
+     "name": "ENSEIGNANT 17",
+     "unique_name": "90017"
+    },
+    {
+     "staff_id": 9000018,
+     "name": "ENSEIGNANT 18",
+     "unique_name": "90018"
+    },
+    {
+     "staff_id": 9000019,
+     "name": "ENSEIGNANT 19",
+     "unique_name": "90019"
+    },
+    {
+     "staff_id": 9000020,
+     "name": "ENSEIGNANT 20",
+     "unique_name": "90020"
+    },
+    {
+     "staff_id": 9000021,
+     "name": "ENSEIGNANT 21",
+     "unique_name": "90021"
+    },
+    {
+     "staff_id": 9000022,
+     "name": "ENSEIGNANT 22",
+     "unique_name": "90022"
+    },
+    {
+     "staff_id": 9000023,
+     "name": "ENSEIGNANT 23",
+     "unique_name": "90023"
+    },
+    {
+     "staff_id": 9000024,
+     "name": "ENSEIGNANT 24",
+     "unique_name": "90024"
+    }
+   ],
+   "groups": [],
+   "modules": []
+  },
+  {
+   "event_id": 2034781,
+   "day_of_week": 3,
+   "start_time": "1899-12-31T09:00:00.000Z",
+   "end_time": "1899-12-31T11:00:00.000Z",
+   "weeks": "NNNNNNNNNNNNNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TD]",
+   "event_cat_id": 433,
+   "evCatWeighting": 100,
+   "deptName": "T_GEA T22",
+   "dept_id": 1560608,
+   "notes": "réseaux sociaux",
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604621,
+     "name": "E.003 salle TD",
+     "unique_name": "1700ER_007"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 1610999,
+     "name": "FROLI Anthony",
+     "unique_name": "37948"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1659190,
+     "name": "BUT GEA TD S1 D1 - 2024",
+     "unique_name": "6TD7Z1TD04"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1594720,
+     "name": "SR115 PPP",
+     "unique_name": "TD7Z1338"
+    }
+   ]
+  },
+  {
+   "event_id": 1924111,
+   "day_of_week": 3,
+   "start_time": "1899-12-31T15:30:00.000Z",
+   "end_time": "1899-12-31T17:00:00.000Z",
+   "weeks": "NNYNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+   "evCatName": "[TD]",
+   "event_cat_id": 433,
+   "evCatWeighting": 100,
+   "deptName": "T_MMI T29",
+   "dept_id": 1560615,
+   "notes": null,
+   "event_name": null,
+   "global_event": "N",
+   "suspended": "N",
+   "protected": "N",
+   "break_mins": 0,
+   "rooms": [
+    {
+     "room_id": 1604440,
+     "name": "H.005",
+     "unique_name": "1700HR_003"
+    }
+   ],
+   "staff": [
+    {
+     "staff_id": 1610999,
+     "name": "FROLI Anthony",
+     "unique_name": "37948"
+    }
+   ],
+   "groups": [
+    {
+     "group_id": 1662681,
+     "name": "BUT MMI S5 TD EF - 2024",
+     "unique_name": "6TSBZCDA01"
+    }
+   ],
+   "modules": [
+    {
+     "module_id": 1589128,
+     "name": "WRA504 PPP",
+     "unique_name": "TSBZE040"
+    }
+   ]
+  }
+ ]
+}

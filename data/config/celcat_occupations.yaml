@@ -68,7 +68,10 @@ categories_ignorees: []
 # 02/10/2026, Jules Crevoisier, après le premier relevé réel : les cinq
 # évènements « Réservation Amphi H MMI » (8h00–20h00, lundi à vendredi, 22
 # semaines) faisaient 110 des 129 occupations de H.018 et auraient interdit
-# l'amphi à nos propres CM. À confirmer par Kyllian Bresson.
+# l'amphi à nos propres CM. Confirmé par Jules le 02/10/2026 : ces
+# réservations obligent les autres parcours à demander l'amphi, elles ne
+# doivent en aucun cas nous bloquer. Reconnues aussi par leur remarque
+# (« Réservation… »), même avec une catégorie ou un responsable.
 # `false` : ces réservations comptent comme des occupations.
 reservations_mmi_ignorees: true
 
