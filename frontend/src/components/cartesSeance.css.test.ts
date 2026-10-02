@@ -9,8 +9,10 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-// Lu sur disque : Vitest ne charge pas le CSS (même en `?raw`).
-const lire = (chemin: string) => readFileSync(new URL(chemin, import.meta.url), "utf8");
+// Lu sur disque : Vitest ne charge pas le CSS (même en `?raw`). Fins de ligne
+// ramenées à `\n` : sous Windows (`core.autocrlf`), le fichier arrive en CRLF
+// et un sélecteur sur deux lignes n'était plus retrouvé (01/10/2026).
+const lire = (chemin: string) => readFileSync(new URL(chemin, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const promoCss = lire("../views/PromoView.css");
 const sessionGridCss = lire("./SessionGrid.css");
 const tdWeekGridCss = lire("./TdWeekGrid.css");

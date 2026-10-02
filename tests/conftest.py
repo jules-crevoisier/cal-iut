@@ -24,6 +24,19 @@ os.environ.setdefault("CAL_IUT_SECRET_KEY", "test-secret-key-not-for-prod")
 # `Secure`. `test_cookie_secure_2026_09_29.py` vérifie le cas par défaut.
 os.environ.setdefault("CAL_IUT_COOKIE_SECURE", "0")
 
+# Le `.env` du poste ne doit JAMAIS entrer dans les tests (01/10/2026). Les
+# commandes de `cli.py` appellent `load_dotenv()`, qui remonte depuis le
+# fichier appelant jusqu'au `.env` de la racine : un seul test passant par
+# `cli.main()` versait le mot de passe Celcat, la clé API de la production
+# et `CAL_IUT_PUBLIC_URL` dans l'environnement de tous les tests suivants
+# (`test_env_local_hors_tests_2026_10_01.py`). Invisible en CI, qui n'a pas
+# de `.env`. Neutralisé ICI, à l'import du conftest, donc avant que le
+# moindre module de test ou de l'appli ne fasse `from dotenv import
+# load_dotenv` — une fixture arriverait après la collecte.
+import dotenv  # noqa: E402
+
+dotenv.load_dotenv = lambda *args, **kwargs: False
+
 
 @pytest.fixture
 def auth_password() -> str:

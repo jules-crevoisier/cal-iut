@@ -315,6 +315,10 @@ def test_get_sauvegarde_par_date_404_si_absente(db_isole, etat_reel_minimal) -> 
 
 def test_get_sauvegarde_refuse_un_format_invalide_sans_toucher_le_disque(db_isole, etat_reel_minimal) -> None:
     creer_compte_actif_et_connecter(client, role="admin")
-    for cible in ("..", "pas-une-date", "2026-13-99"):
+    # `%2e%2e` et non `..` : le client de test normalise `/sauvegardes/..` en
+    # `/` avant l'envoi. La route n'était donc jamais atteinte, et le test
+    # échouait dès que `frontend/dist` existe (l'accueil répond 200) — constaté
+    # le 01/10/2026. Encodé, le serveur reçoit bien `jour == ".."`.
+    for cible in ("%2e%2e", "pas-une-date", "2026-13-99"):
         assert client.get(f"/sauvegardes/{cible}").status_code == 404
     client.cookies.clear()

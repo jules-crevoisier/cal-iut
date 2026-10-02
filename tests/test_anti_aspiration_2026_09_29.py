@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from cal_iut.api import anti_aspiration as aa
 from cal_iut.api import main
-from tests.conftest import creer_compte_actif_et_connecter
+from conftest import creer_compte_actif_et_connecter
 
 IP = "203.0.113.7"
 AUTRE_IP = "198.51.100.20"
