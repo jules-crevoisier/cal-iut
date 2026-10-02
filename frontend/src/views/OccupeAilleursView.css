@@ -94,6 +94,13 @@
   min-width: 0;
 }
 
+/* Sous 768 px, un champ à 16 px : en dessous, le téléphone zoome à la saisie.
+   Le sélecteur reprend les `:not()` du style global des champs (`app.css`),
+   très précis : sans eux, ces règles ne passent pas. */
+.view.occupe-ailleurs .occ-recherche input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  font-size: 16px;
+}
+
 .occ-corps {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -215,10 +222,15 @@
 
 /* ── Tactile : cibles de 44 px ── */
 @media (pointer: coarse) {
+  /* La seconde ligne passe devant la règle commune des boutons de tableau
+     (`outils.css` : 26 px pour tenir dans une ligne de 36 px). */
   .view.occupe-ailleurs .btn,
+  .view.occupe-ailleurs .carte-tableau table.ref td .btn,
   .view.occupe-ailleurs .pastille,
   .view.occupe-ailleurs .occ-annuaire-ligne,
-  .view.occupe-ailleurs .occ-select select {
+  .view.occupe-ailleurs .occ-select select,
+  .view.occupe-ailleurs .occ-recherche,
+  .view.occupe-ailleurs .occ-recherche input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
     min-height: 44px;
   }
 
@@ -294,6 +306,10 @@
 
   .occ-recherche {
     width: 240px;
+  }
+
+  .view.occupe-ailleurs .occ-recherche input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+    font-size: inherit;
   }
 
   .occ-select select {
