@@ -13,6 +13,8 @@ import {
   detailOccupation,
   libelleOccupation,
   libellesParCase,
+  lignesOccupation,
+  lignesParCase,
   occupationsParCase,
 } from "./occupationsExternes";
 import { sallesLibresAuCreneau } from "./sallesLibres";
@@ -152,8 +154,94 @@ describe("occupations hors MMI", () => {
       enseignants: ["AFR"],
       nombre: 1,
     });
-    expect(p!.sev).toBe("bad");
-    expect(NATURE_PAR_ID["occupation-externe"].sev).toBe("bad");
+    // 02/10/2026 soir : alerte molle, même gravité que « Encadrement SAE ».
+    expect(p!.sev).toBe("warn");
+    expect(NATURE_PAR_ID["occupation-externe"].sev).toBe("warn");
     expect(p!.route).toEqual({ vue: "prof", prof: "AFR", sem: 9 });
+  });
+});
+
+/**
+ * 02/10/2026 soir — occupations sur le planning, en grisé (retour de Jules).
+ *
+ * Contrat du module `utils/occupationsExternes.ts` :
+ *
+ *     interface LigneOccupation { qui: string; quoi: string; horaire: string; detail: string }
+ *     lignesOccupation(o: OccupationExterne): LigneOccupation
+ *     lignesParCase(parCase: Map<string, OccupationExterne[]>): Map<string, LigneOccupation[]>
+ *
+ *  - `qui`     : le département, « Administration » s'il est vide ;
+ *  - `quoi`    : l'intitulé, à défaut la catégorie ;
+ *  - `horaire` : « 09h00–11h00 » (début–fin, « : » devient « h ») ;
+ *  - `detail`  : texte complet pour `title` : catégorie, intitulé, horaire, département ;
+ *  - `lignesParCase` : mêmes clés « jour-créneau » que `occupationsParCase`,
+ *    une ligne par occupation, sans doublon.
+ *
+ * `SessionGrid.externes` devient `Map<string, LigneOccupation[]>`
+ * (cf. `components/SessionGrid.externes.test.tsx`).
+ */
+describe("occupations sur le planning (02/10/2026 soir)", () => {
+  const TD_TC: OccupationExterne = {
+    t: "enseignant",
+    code: "AFR",
+    w: 9,
+    d: 0,
+    s: [1],
+    date: "2026-11-09",
+    debut: "09:00",
+    fin: "11:00",
+    dep: "TC",
+    lib: "RR113 Numérique",
+    cat: "TD",
+  };
+
+  it("should name the department as qui and format the horaire when the occupation has a department", () => {
+    const ligne = lignesOccupation(TD_TC);
+    expect(ligne.qui).toBe("TC");
+    expect(ligne.quoi).toBe("RR113 Numérique");
+    expect(ligne.horaire).toBe("09h00–11h00");
+  });
+
+  it("should write Administration as qui when the department is empty", () => {
+    expect(lignesOccupation({ ...TD_TC, t: "salle", code: "h018", dep: "" }).qui).toBe("Administration");
+  });
+
+  it("should fall back to the category as quoi when the title is empty", () => {
+    expect(lignesOccupation({ ...TD_TC, lib: "", cat: "Réunion" }).quoi).toBe("Réunion");
+  });
+
+  it("should put category, title, horaire and department in the detail", () => {
+    const { detail } = lignesOccupation(TD_TC);
+    for (const morceau of ["TD", "RR113 Numérique", "09h00–11h00", "TC"]) expect(detail).toContain(morceau);
+  });
+
+  it("should give one line per occupation on each case of the week", () => {
+    const payload = emptyPayload({ occupationsExternes: oe({ occupations: [AFR, { ...TD_TC, s: [1, 2] }] }) });
+    const cases = lignesParCase(occupationsParCase(payload, "enseignant", "AFR", 9));
+    expect([...cases.keys()].sort()).toEqual(["0-1", "0-2"]);
+    expect(cases.get("0-1")?.map((l) => l.horaire)).toEqual(["10h00–12h30", "09h00–11h00"]);
+    expect(cases.get("0-2")).toHaveLength(2);
+  });
+
+  it("should give nothing when the resource has no occupation that week", () => {
+    const payload = emptyPayload({ occupationsExternes: oe() });
+    expect(lignesParCase(occupationsParCase(payload, "enseignant", "RHU", 9)).size).toBe(0);
+  });
+
+  it("should word « À traiter » as a soft alert, Pris ailleurs dans Celcat, when the nature is listed", () => {
+    const nature = NATURE_PAR_ID["occupation-externe"];
+    expect(nature.sev).toBe(NATURE_PAR_ID["compromis-sae"].sev);
+    expect(nature.titre).toBe("Pris ailleurs dans Celcat");
+    expect(nature.court).toBe("Pris ailleurs");
+    expect(nature.aide).toBe(
+      "L'enseignant ou la salle est aussi pris dans Celcat (autre département, réunion, réservation) sur le créneau d'une séance placée. À revoir : rien n'est bloqué.",
+    );
+  });
+
+  it("should flag the todo item as warn, not bad, when a placed session sits on an occupation", () => {
+    const items = buildTodoList(
+      emptyPayload({ groupParcours: { "but1-td-ab": "BUT1" }, occupationsExternes: oe({ conflits: [CONFLIT] }) }),
+    );
+    expect(items.find((i) => i.nature === "occupation-externe")?.sev).toBe("warn");
   });
 });

@@ -27,7 +27,7 @@ import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { annuaireSalles, CRENEAUX_SEMAINE, libelleTypeSalle } from "../utils/annuaires";
 import { sessionsWithDates } from "../utils/ics";
-import { libellesParCase, occupationsParCase } from "../utils/occupationsExternes";
+import { lignesParCase, occupationsParCase } from "../utils/occupationsExternes";
 import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
 import { SLOT_TIMES } from "../utils/slots";
 import { AnnuaireSalles, SEUIL_SATUREE } from "./Annuaires";
@@ -190,7 +190,7 @@ export function SalleView({ payload, route, setRoute, onOpenSearch }: SalleViewP
             onJour={c.setJour}
             titreImpression={`Salle ${room.label}`}
             videLibelle="Salle libre toute la semaine."
-            externes={libellesParCase(occupationsParCase(payload, "salle", room.id, c.solverWeek))}
+            externes={lignesParCase(occupationsParCase(payload, "salle", room.id, c.solverWeek))}
           />
         </div>
         <aside className="fiche-cote" aria-label="Fiche de la salle">

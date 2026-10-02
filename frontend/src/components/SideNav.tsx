@@ -18,7 +18,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   CalendarDays,
   CalendarRange,
-  CalendarX2,
   ChevronsLeft,
   ChevronsRight,
   ClipboardList,
@@ -74,7 +73,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: "reference", label: "Référence", icone: Library },
       { id: "contraintes", label: "Contraintes", icone: ShieldCheck },
-      { id: "occupations", label: "Occupé ailleurs", icone: CalendarX2 },
     ],
   },
   {

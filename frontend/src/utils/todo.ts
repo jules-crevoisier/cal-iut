@@ -123,10 +123,10 @@ export const NATURES: NatureInfo[] = [
     // (`api/occupations_externes.py::seances_en_conflit`), miroir
     // `v1_vues.py::points_a_traiter`.
     id: "occupation-externe",
-    titre: "Occupés ailleurs dans Celcat",
-    court: "Occupés ailleurs",
-    aide: "L'enseignant ou la salle est déjà pris dans Celcat (autre département, réunion, réservation) sur le créneau d'une séance placée. À déplacer, ou à vérifier dans Celcat si le relevé est ancien.",
-    sev: "bad",
+    titre: "Pris ailleurs dans Celcat",
+    court: "Pris ailleurs",
+    aide: "L'enseignant ou la salle est aussi pris dans Celcat (autre département, réunion, réservation) sur le créneau d'une séance placée. À revoir : rien n'est bloqué.",
+    sev: "warn",
     cible: "Vue Promo",
   },
   {
@@ -361,7 +361,7 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
   // que `v1_vues.py::points_a_traiter` (test de parité).
   for (const c of payload.occupationsExternes?.conflits ?? []) {
     items.push({
-      sev: "bad",
+      sev: "warn",
       nature: "occupation-externe",
       cle: `oe|${c.seance_id}|${c.ressource_type}|${c.ressource}`,
       title: `${c.course_code} — ${c.nom || c.type || ""}`,

@@ -373,8 +373,8 @@
   font-weight: 600;
 }
 
-/* Occupé ailleurs dans Celcat (autre département, réservation) : même
-   bande discrète que PAC, hachurée pour se distinguer d'un créneau MMI. */
+/* Occupé hors MMI (Celcat : autre département, réservation) : bloc grisé
+   plein, sans hachures ni pointillés, pour se distinguer d'une séance MMI. */
 .sessiongrid-externe {
   height: 100%;
   min-height: 48px;
@@ -382,22 +382,41 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   text-align: center;
   font-size: 0.7rem;
   color: var(--ink-soft);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 4px;
-  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, transparent 6px 12px);
+  /* Gris HACHURÉ : « pris ailleurs », comme dans un agenda. Le gris uni se
+     confondait avec les bandes SAE, l'ambre avec les cartes de CM
+     (contrôles visuels du 02/10/2026). */
+  background: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, var(--surface-2) 6px 12px);
 }
 
-/* Une séance posée SUR une occupation externe : le conflit se voit dans la
-   case même, sans attendre « À traiter ». */
+.sessiongrid-externe-tag {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.sessiongrid-externe-ligne {
+  display: flex;
+  flex-direction: column;
+}
+
+.sessiongrid-externe-qui {
+  font-weight: 600;
+}
+
+/* Une séance posée SUR une occupation externe : mention neutre sous la
+   carte, sans attendre « À traiter ». */
 .sessiongrid-externe-alerte {
   display: block;
   font-size: 0.66rem;
   font-weight: 600;
-  color: var(--bad, #b42318);
+  color: var(--warn-text);
   padding: 2px 4px 0;
 }
 

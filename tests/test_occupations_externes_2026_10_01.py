@@ -371,18 +371,18 @@ MESSAGE_AFR = (
 )
 
 
-def test_deplacer_sur_une_occupation_externe_est_signale_puis_forcable(client) -> None:
+def test_deplacer_sur_une_occupation_externe_passe_avec_un_avertissement(client) -> None:
+    """Jules, 02/10/2026 : « que ça se mette en contrainte molle, donc que ça
+    affiche si on veut changer et mettre un créneau qui est occupé ». Avant :
+    un conflit, refusé sans « Forcer »."""
     _ecrire_releve()
-    r = client.patch("/placements/td-afr", json={"week": SEMAINE, "day": 0, "slot": 1})
-    assert r.status_code == 409
-    assert MESSAGE_AFR in r.json()["detail"]["hard_conflicts"]
     v = client.post("/placements/td-afr/validate", json={"week": SEMAINE, "day": 0, "slot": 2}).json()
-    assert v["valid"] is False and MESSAGE_AFR in v["hard_conflicts"]
-    assert MESSAGE_AFR not in v["blocking_conflicts"], "forçable par défaut"
+    assert v["valid"] is True and MESSAGE_AFR in v["soft_warnings"]
+    assert MESSAGE_AFR not in v["hard_conflicts"] and MESSAGE_AFR not in v["blocking_conflicts"]
     # 8h-9h30 : aucune occupation, rien à signaler.
     v = client.post("/placements/td-afr/validate", json={"week": SEMAINE, "day": 0, "slot": 0}).json()
-    assert not any("Celcat" in m for m in v["hard_conflicts"])
-    r = client.patch("/placements/td-afr", json={"week": SEMAINE, "day": 0, "slot": 1, "force": True})
+    assert not any("Celcat" in m for m in v["hard_conflicts"] + v["soft_warnings"])
+    r = client.patch("/placements/td-afr", json={"week": SEMAINE, "day": 0, "slot": 1})  # sans forcer
     assert r.status_code == 200, r.text
 
 
@@ -396,21 +396,28 @@ def test_mode_strict_refuse_sans_forcer(client, monkeypatch) -> None:
 
 def test_salle_reservee_dans_celcat_au_placement(client) -> None:
     _ecrire_releve()
-    # Choix EXPLICITE de H.018 mardi 14h : conflit nommé, forçable.
-    r = client.patch("/placements/cm-kbr", json={"week": SEMAINE, "day": 1, "slot": 3, "room_id": "h018"})
-    assert r.status_code == 409
     attendu = (
         "Salle indisponible — H.018 est réservée dans Celcat sur ce créneau (administration, Conseil de "
         f"département, mardi {MARDI.strftime('%d/%m')}, 14h00–17h00)."
     )
-    assert attendu in r.json()["detail"]["hard_conflicts"]
-    # Changement de salle seul, au même créneau qu'une réunion : idem.
+    # Choix EXPLICITE de H.018 mardi 14h : un avertissement nommé, le placement passe.
+    cible = {"week": SEMAINE, "day": 1, "slot": 3, "room_id": "h018"}
+    v = client.post("/placements/cm-kbr/validate", json=cible).json()
+    assert v["valid"] is True and attendu in v["soft_warnings"] and attendu not in v["hard_conflicts"]
+    assert client.patch("/placements/cm-kbr", json=cible).status_code == 200
+    # Changement de salle seul, au même créneau qu'un cours TC : l'avertissement
+    # demande confirmation (comme une capacité insuffisante), puis passe.
     _ecrire_releve(evenements=[{
         "type": "salle", "code": "h018", "date": (LUNDI + timedelta(days=3)).isoformat(), "debut": "08:00",
         "fin": "09:30", "departement": "TC", "categorie": "[CM]", "intitule": "Marketing", "event_id": 1,
     }])
+    client.patch("/placements/cm-kbr", json={"week": SEMAINE, "day": 3, "slot": 0, "room_id": "h101"})
     r = client.patch("/placements/cm-kbr/salle", json={"room_id": "h018"})
-    assert r.status_code == 409 and any("Salle indisponible — H.018" in m for m in r.json()["detail"]["hard_conflicts"])
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert any("Salle indisponible — H.018" in m for m in detail["soft_warnings"])
+    assert not any("Celcat" in m for m in detail["hard_conflicts"])
+    assert client.patch("/placements/cm-kbr/salle", json={"room_id": "h018", "force": True}).status_code == 200
 
 
 def test_deplacement_sans_salle_imposee_change_de_salle(client, etat) -> None:
@@ -483,7 +490,7 @@ def test_a_traiter_et_parite_v1(client, etat) -> None:
     corps = client.get("/api/v1/a-traiter?nature=occupation-externe").json()
     assert [p["seance_id"] for p in corps["points"]] == ["td-afr"]
     point = corps["points"][0]
-    assert point["detail"] == MESSAGE_AFR and point["gravite"] == "a_corriger"
+    assert point["detail"] == MESSAGE_AFR and point["gravite"] == "a_revoir", "contrainte molle : à revoir, pas à corriger"
     assert point["cle"] == "oe|td-afr|enseignant|AFR" and point["titre"] == "WR101 — Culture numérique"
     nature = next(n for n in corps["natures"] if n["id"] == "occupation-externe")
     assert nature["nombre"] == 1
@@ -506,7 +513,7 @@ CONFLIT = {
 def test_forme_du_point_comme_le_frontend() -> None:
     payload = {"groupParcours": {"but1-td-ab": "BUT1"}, "occupationsExternes": {"conflits": [CONFLIT]}}
     assert v1_vues.points_a_traiter(payload) == [{
-        "nature": "occupation-externe", "gravite": "a_corriger", "cle": "oe|td-afr|enseignant|AFR",
+        "nature": "occupation-externe", "gravite": "a_revoir", "cle": "oe|td-afr|enseignant|AFR",
         "titre": "WR101 — Culture numérique", "detail": CONFLIT["message"], "semaine": 9, "jour": 0, "creneau": 1,
         "parcours": ["BUT1"], "enseignants": ["AFR"], "nombre": 1, "seance_id": "td-afr",
     }]
@@ -544,7 +551,7 @@ def test_fichier_perime_les_contraintes_restent(client) -> None:
     payload = client.get("/app-state").json()["occupationsExternes"]
     assert payload["perime"] is True and payload["absent"] is False
     r = client.post("/placements/td-afr/validate", json={"week": SEMAINE, "day": 0, "slot": 1}).json()
-    assert MESSAGE_AFR in r["hard_conflicts"]
+    assert MESSAGE_AFR in r["soft_warnings"], "relevé ancien : l'avertissement reste (contrainte molle depuis le 02/10/2026)"
 
 
 def test_ecran_admin_et_relire_maintenant(etat, db_isole) -> None:
@@ -694,3 +701,33 @@ def test_un_conflit_porte_ses_champs_separes(client, etat) -> None:
     assert (salle["ressource_type"], salle["ressource"]) == ("salle", "h018")
     assert {"date": MARDI.isoformat(), "debut": "14:00", "fin": "17:00", "departement": ""}.items() <= salle.items()
     assert salle["ressource_libelle"].startswith("H.018")
+
+
+def test_le_passe_est_ignore(client, etat, monkeypatch) -> None:
+    """Jules, 02/10/2026 : « on s'en fiche des choses qui sont passées ». Une
+    occupation d'hier ne s'affiche plus, ne prévient plus, ne compte plus."""
+    _ecrire_releve()
+    etat.timetable[0].day, etat.timetable[0].slot = 0, 1  # td-afr sur le cours TC d'AFR du lundi
+    etat.timetable[1].day, etat.timetable[1].slot = 1, 3  # cm-kbr en H.018 pendant la réunion du mardi
+    revision.incrementer("test")
+    avant = client.get("/app-state").json()["occupationsExternes"]
+    assert {c["seance_id"] for c in avant["conflits"]} == {"td-afr", "cm-kbr"}
+
+    monkeypatch.setattr(oe, "_aujourdhui", lambda: MARDI)  # le lundi est passé
+    oe.invalider()
+    revision.incrementer("test")
+    apres = client.get("/app-state").json()["occupationsExternes"]
+    assert {o["date"] for o in apres["occupations"]} == {MARDI.isoformat()}
+    assert {c["seance_id"] for c in apres["conflits"]} == {"cm-kbr"}
+    v = client.post("/placements/td-afr/validate", json={"week": SEMAINE, "day": 0, "slot": 2}).json()
+    assert not any("Celcat" in m for m in v["soft_warnings"] + v["hard_conflicts"])
+    assert client.get("/api/v1/occupations-externes").json()["total"] == 1
+
+
+def test_le_generateur_et_le_lissage_evitent_toujours_ces_creneaux(etat) -> None:
+    """Molle pour une personne qui place à la main ; les outils automatiques,
+    eux, continuent d'éviter un enseignant ou une salle pris ailleurs."""
+    _ecrire_releve()
+    dispos = {a.teacher_code: a for a in oe.disponibilites_avec_externes(etat, [])}
+    assert [r.date for r in dispos["AFR"].forbidden_date_slots] == [LUNDI.isoformat()]
+    assert {SEMAINE * 30 + 1 * 6 + s for s in (3, 4)} <= oe.reservations_effectives(etat)["h018"]

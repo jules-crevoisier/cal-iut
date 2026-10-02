@@ -730,10 +730,29 @@
   }
 }
 
-/* Occupé ailleurs dans Celcat (01/10/2026) : bande hachurée, discrète. */
+/* Occupé hors MMI dans Celcat (01/10/2026) : bande grisée pleine. */
 .jour-bande--externe {
-  background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, transparent 6px 12px);
-  border: 1px dashed var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  min-height: 48px;
+  justify-content: center;
+  /* Gris HACHURÉ : « pris ailleurs », comme dans un agenda. Le gris uni se
+     confondait avec les bandes SAE, l'ambre avec les cartes de CM
+     (contrôles visuels du 02/10/2026). */
+  background: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, var(--surface-2) 6px 12px);
+  color: var(--ink-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.jour-bande-externe-tag {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.jour-bande-externe-qui {
+  font-weight: 600;
 }
 
 .bandeau-occupations-celcat {

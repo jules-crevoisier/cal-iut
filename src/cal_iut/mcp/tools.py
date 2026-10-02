@@ -636,7 +636,9 @@ def _analyser_creneau(
     hard.extend(stricts_salle)
     if not validation.valid:
         hard.extend(validation.hard_conflicts)
-        soft.extend(validation.soft_warnings)
+    # Toujours : un placement valide peut porter un avertissement (enseignant
+    # ou salle pris ailleurs dans Celcat — contrainte molle, 02/10/2026).
+    soft.extend(validation.soft_warnings)
     return _marquer(item, blocking, hard, soft)
 
 

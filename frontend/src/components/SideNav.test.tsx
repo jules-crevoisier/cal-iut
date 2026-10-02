@@ -62,6 +62,13 @@ describe("SideNav groups", () => {
     expect(screen.queryByRole("button", { name: /salles libres/i })).not.toBeInTheDocument();
   });
 
+  it("should not offer an Occupé ailleurs entry in the nav", () => {
+    // 02/10/2026 soir : la vue disparaît, les occupations vivent sur le planning.
+    render(<SideNav {...baseProps} estAdmin />);
+    expect(screen.queryByRole("button", { name: /occupé ailleurs/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/occupé ailleurs/i)).not.toBeInTheDocument();
+  });
+
   it("should show Administration Celcat only when moi.role is admin", () => {
     const { rerender } = render(<SideNav {...baseProps} />);
     expect(screen.queryByRole("button", { name: /celcat/i })).not.toBeInTheDocument();

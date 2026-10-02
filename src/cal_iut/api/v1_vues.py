@@ -160,9 +160,11 @@ NATURES: list[dict[str, str]] = [
         # la salle est pris AILLEURS dans Celcat (relevé du sidecar) — même
         # liste que `payload.occupationsExternes.conflits`
         # (`api/occupations_externes.py::seances_en_conflit`).
-        "id": "occupation-externe", "titre": "Occupés ailleurs dans Celcat", "gravite": "a_corriger",
-        "aide": "L'enseignant ou la salle est déjà pris dans Celcat (autre département, réunion, réservation) "
-                "sur le créneau d'une séance placée. À déplacer, ou à vérifier dans Celcat si le relevé est ancien.",
+        # CONTRAINTE MOLLE depuis le 02/10/2026 (demande de Jules) : « à
+        # revoir », plus « à corriger ».
+        "id": "occupation-externe", "titre": "Pris ailleurs dans Celcat", "gravite": "a_revoir",
+        "aide": "L'enseignant ou la salle est aussi pris dans Celcat (autre département, réunion, réservation) "
+                "sur le créneau d'une séance placée. À revoir : rien n'est bloqué.",
     },
     {
         # 29/09/2026 : même règle et même calcul que `/api/v1/sae`

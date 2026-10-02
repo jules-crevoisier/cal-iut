@@ -139,6 +139,18 @@ def _revision_neuve():
 
 
 @pytest.fixture(autouse=True)
+def _occupations_a_date_fixe(monkeypatch):
+    """Les occupations hors MMI d'avant « aujourd'hui » sont écartées
+    (`api/occupations_externes.py::index`, 02/10/2026). Les tests posent des
+    dates de l'année 2026-2027 : avec la vraie date du jour, ils auraient
+    cessé de passer une fois ces dates derrière nous. « Aujourd'hui » est
+    donc fixé au 1er septembre 2026 ; un test du passé le déplace lui-même."""
+    from datetime import date
+
+    monkeypatch.setattr("cal_iut.api.occupations_externes._aujourdhui", lambda: date(2026, 9, 1))
+
+
+@pytest.fixture(autouse=True)
 def _limiteur_auth_vide():
     """Compteurs de débit des routes `/auth/*` (audit 29/09/2026, P1-3)
     remis à zéro entre deux tests : ils sont globaux au processus, et la

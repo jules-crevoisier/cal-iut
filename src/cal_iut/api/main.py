@@ -3335,14 +3335,12 @@ def _conflits_deplacement(
         forceable += _teacher_availability_violations(state, session, week, day, slot)
     # Enseignant déjà programmé AILLEURS dans Celcat (autre département,
     # réunion…), relevé par le sidecar (01/10/2026, cf.
-    # `api/occupations_externes.py`). Forçable par défaut — le relevé peut
-    # avoir deux heures — sauf `strict: true` dans `celcat_occupations.yaml`.
-    externes = occupations_externes.conflits_enseignant(state, session, week, day, slot)
-    if externes:
-        if occupations_externes.strict():
-            institutional = institutional + externes
-        else:
-            forceable += externes
+    # `api/occupations_externes.py`). CONTRAINTE MOLLE depuis le 02/10/2026
+    # (demande de Jules) : un avertissement, ajouté aux `soft_warnings` par
+    # `occupations_externes.appliquer_salle` — plus rien ici. Seul le mode
+    # `strict: true` de `celcat_occupations.yaml` en fait un blocage.
+    if occupations_externes.strict():
+        institutional = institutional + occupations_externes.conflits_enseignant(state, session, week, day, slot)
     return institutional, forceable
 
 
@@ -4020,11 +4018,15 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     if externes_salle and occupations_externes.strict():
         _refuser_si_salle_externe_stricte(externes_salle)
 
-    if (occupants or avertissements or verrous or externes_salle) and not body.force:
+    # Hors mode strict : un avertissement de plus (contrainte molle,
+    # 02/10/2026), confirmé comme une capacité insuffisante.
+    avertissements += externes_salle
+
+    if (occupants or avertissements or verrous) and not body.force:
         conflits = verrous + (
             [f"Conflit salle : {', '.join(sorted(set(occupants)))} occupe(nt) déjà {salle.label} à ce créneau."]
             if occupants else []
-        ) + externes_salle
+        )
         raise HTTPException(409, detail={
             "message": "Conflit",
             "hard_conflicts": conflits,

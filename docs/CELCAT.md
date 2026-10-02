@@ -50,8 +50,8 @@ Un **robot d'envoi** la recopie ensuite dans Celcat, tout seul.
 4. **Le verdict** : « concorde », « à traiter » ou « bloqué ».
 5. **À gauche** : les écarts séance par séance, puis les évènements en trop.
 6. **À droite** : la file d'attente (« File d'attente vide — tout est poussé. » quand tout est parti) et ce qui bloque.
-7. **En bas** : une ligne **Occupations hors MMI** (nombre d'occupations, date du relevé) qui ouvre la vue **Occupé ailleurs**
-   ([§ 6](#6-occupations-hors-mmi)) ; puis, repliés, **Activité récente** (créées, modifiées, supprimées, échecs) et **Réglages**.
+7. **En bas** : une ligne **Occupations hors MMI** (nombre d'occupations à venir, date du relevé, **Relire maintenant** —
+   [§ 6](#6-occupations-hors-mmi)) ; puis, repliés, **Activité récente** (créées, modifiées, supprimées, échecs) et **Réglages**.
 
 ### Corriger une semaine
 
@@ -461,11 +461,11 @@ L'appli relève ces occupations et les traite **comme une séance déjà placée
 | Où | Effet |
 |---|---|
 | Génération (`/solve`, régénération de semaine), lissage, suggestions, complétion | Créneau interdit à l'enseignant ; salle jamais attribuée |
-| Placement manuel (déplacer, échanger, placer, créer, modifier, changer de salle) | Conflit **forçable** avec le motif exact ; refus si `strict: true` |
-| Vue Enseignant, Vue Salle | Bloc hachuré **Occupé ailleurs (TC)** / **Réservé dans Celcat** ; **Conflit Celcat** sur une séance déjà posée |
+| Placement manuel (déplacer, échanger, placer, créer, modifier, changer de salle) | **Avertissement** avec le motif exact, le placement passe (un changement de salle seul demande confirmation) ; refus si `strict: true` |
+| Vue Enseignant, Vue Salle | Bloc gris hachuré **hors MMI** (qui, quoi, horaire) ; « Aussi pris ailleurs » sous une séance déjà posée |
 | Vue Promo (placement en cours) | « AFR déjà occupé ailleurs (TC) » dans la case |
 | Salles libres (écran et `/api/v1/salles/libres`) | Salle occupée (**Celcat**) |
-| À traiter (écran et `/api/v1/a-traiter`) | Catégorie **Occupés ailleurs dans Celcat** (à corriger) : séances MMI déjà placées sur une occupation externe |
+| À traiter (écran et `/api/v1/a-traiter`) | Catégorie **Pris ailleurs dans Celcat** (à revoir) : séances MMI déjà placées sur une occupation externe |
 
 Messages au placement :
 
@@ -473,8 +473,9 @@ Messages au placement :
 >
 > Salle indisponible — H.018 est réservée dans Celcat sur ce créneau (administration, Conseil de département, mardi 29/09, 14h00–17h00).
 
-**Forçable par défaut** : le relevé a jusqu'à deux heures, une réunion a pu être annulée entre-temps.
-Le générateur, lui, ne force jamais. `strict: true` dans `data/config/celcat_occupations.yaml` rend le placement manuel impossible.
+**Contrainte molle** (depuis le 02/10/2026) : à la main, l'appli prévient et laisse faire — le relevé a jusqu'à deux heures,
+une réunion a pu être annulée entre-temps. Les outils automatiques (génération, lissage, choix d'une salle) continuent d'éviter ces créneaux.
+`strict: true` dans `data/config/celcat_occupations.yaml` rend le placement manuel impossible.
 
 ### D'où ça vient
 
@@ -502,21 +503,23 @@ et convertit chaque occurrence en **créneaux chevauchés** : 10h00-12h30 bloque
 ### Fréquence
 
 - **Toutes les 2 h** (`cadence_heures`), dans le même passage et la même session que l'instantané Celcat.
-- **À la demande** (administrateur) : vue **Occupé ailleurs**, carte **Relevé Celcat**, **Relire maintenant** (prise en compte au passage suivant du robot, moins d'une minute).
+- **À la demande** (administrateur) : écran **Celcat**, ligne **Occupations hors MMI**, **Relire maintenant** (prise en compte au passage suivant du robot, moins d'une minute).
 - **À la main** dans le conteneur : `cal-iut celcat occupations --ecrire-fichier --vpn` (voir [A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md)).
 - Robot en **pause** : rien n'est relu ; le dernier relevé reste appliqué.
 
-### Ce que montre l'écran
+### Où ça se voit
 
-La vue **Occupé ailleurs** (navigation, groupe Référentiel, à côté de **Contraintes**) est ouverte à toute l'équipe.
-Jusqu'au 02/10/2026, ces informations étaient un bloc replié de l'écran Celcat, réservé aux administrateurs.
+Pas d'écran à part (une vue « Occupé ailleurs » a existé quelques heures le 02/10/2026 ; retirée le soir même, à la demande de Jules).
 
-| Bloc | Contenu |
+| Où | Ce qu'on voit |
 |---|---|
-| Chiffres en tête | Séances en conflit, salles prises ailleurs, enseignants pris ailleurs, âge du dernier relevé. Les tuiles « salles » et « enseignants » filtrent la liste. |
-| Séances placées sur une occupation | Un tableau : la séance, quand, ce qui bloque (salle ou enseignant), qui l'occupe. **Ouvrir** mène à la séance. |
-| Salles et enseignants pris ailleurs | L'annuaire des ressources avec leur nombre d'occupations, et la liste filtrable (texte, type, ressource). |
-| Relevé Celcat (administrateur) | Date, période et base du relevé, **Relire maintenant**, ressources **introuvables dans Celcat**, ce qui a été écarté du relevé. |
+| **Vue Enseignant**, **Vue Salle** | Un bloc **gris hachuré** « hors MMI » dans la case : qui occupe (TC, CJ, « Administration »), quoi, et l'horaire réel. Il passe devant les bandes PAC et SAE. |
+| Une séance déjà posée sur une occupation | Sous la carte : « Aussi pris ailleurs : TC, 09h00–11h00 ». |
+| En posant ou en déplaçant une séance | Un **avertissement** nomme l'enseignant ou la salle pris ailleurs ; le placement passe. |
+| **À traiter** | « Pris ailleurs dans Celcat », parmi les points **à revoir**. |
+| Écran **Celcat** (administrateur) | Une ligne : nombre d'occupations à venir, date du relevé, **Relire maintenant**. |
+
+**Le passé n'est pas affiché** : seules comptent les occupations d'aujourd'hui et d'après.
 
 - **Aucun relevé** : rien n'est appliqué ; l'écran le dit.
 - **Relevé ancien** (plus de `fraicheur_heures`, 6 h par défaut) : les contraintes restent appliquées telles quelles,

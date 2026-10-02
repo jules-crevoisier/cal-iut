@@ -39,7 +39,7 @@ import { buildLink } from "../hooks/useHashRoute";
 import type { AppPayload, IntervenantAppli, TeacherInfo } from "../types/app";
 import { sessionsWithDates, subscribeUrl } from "../utils/ics";
 import { mailtoForTeacher } from "../utils/mailto";
-import { libellesParCase, occupationsParCase } from "../utils/occupationsExternes";
+import { lignesParCase, occupationsParCase } from "../utils/occupationsExternes";
 import { decouperLibelleSemaine, formatHeures, heuresDe, jourCourt, pluriel } from "../utils/planning";
 import { confirmAsync } from "../utils/confirmDialog";
 import { marquerIntervenantCree, oublierIntervenantCree, vientDEtreCree } from "../utils/intervenantCree";
@@ -318,8 +318,8 @@ export function EnseignantView({
   const nMatieres = new Set(allItems.map((it) => it.c)).size;
 
   // Occupé AILLEURS dans Celcat (autre département, réunion…), relevé par le
-  // sidecar : blocs discrets « Occupé ailleurs (TC) » sur la grille.
-  const externes = libellesParCase(occupationsParCase(payload, "enseignant", code, c.solverWeek));
+  // sidecar : blocs grisés « hors MMI » sur la grille.
+  const externes = lignesParCase(occupationsParCase(payload, "enseignant", code, c.solverWeek));
   const grille = (
     <>
       <BandeauOccupationsCelcat payload={payload} />

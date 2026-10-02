@@ -1089,7 +1089,8 @@ cles_filtre_enseignants: [StaffIDs, StaffID]
   y compris une réunion MMI saisie seulement dans Celcat.
 - **Conversion** : heure réelle → nos créneaux chevauchés (10h00-12h30 bloque 9h30-11h et 11h-12h30 ; tolérance 5 min).
 - **Effet** : générateur et lissage → contrainte dure ; affectation et recherche de salle → salle exclue ;
-  placement manuel → conflit **forçable** (ou refus si `strict: true`) ; « À traiter » → catégorie **Occupés ailleurs dans Celcat**.
+  placement manuel → **avertissement**, le placement passe (ou refus si `strict: true`) ; « À traiter » → catégorie **Pris ailleurs dans Celcat** (à revoir).
+- **Passé** : une occupation d'avant aujourd'hui n'est ni affichée ni comptée.
 - Fichier d'état **absent** : aucune contrainte externe. **Ancien** (> `fraicheur_heures`) : contraintes gardées, bandeau.
 - Détail technique et marche à suivre si une occupation est fausse : [CELCAT.md](CELCAT.md#6-occupations-hors-mmi).
 

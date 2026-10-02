@@ -684,7 +684,14 @@ def verifier(state: Any, deplacements: list[Deplacement]) -> list[str]:
             conflicting_room_ids=build_manual_conflict_map(state.rooms).get(room_id, set()) if room_id else None,
         )
         stricts_salle = occupations_externes.appliquer_salle(etat_simule, seance, room_id, p.week, p.day, p.slot, validation)
-        problemes = institutionnel + forcable + stricts_salle + (validation.hard_conflicts if not validation.valid else [])
+        # Molle pour qui place à la main (02/10/2026), pas pour le lissage :
+        # il ne déplace jamais une séance sur un enseignant ou une salle
+        # pris ailleurs dans Celcat.
+        externes = occupations_externes.conflits_enseignant(etat_simule, seance, p.week, p.day, p.slot)
+        externes += occupations_externes.conflits_salle(etat_simule, seance, room_id, p.week, p.day, p.slot)
+        problemes = institutionnel + forcable + stricts_salle + externes + (
+            validation.hard_conflicts if not validation.valid else []
+        )
         for motif in problemes:
             motifs.append(f"{m.course_code} {m.libelle_de} → {m.libelle_vers} : {motif}")
     return motifs
