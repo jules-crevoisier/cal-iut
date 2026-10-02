@@ -1197,6 +1197,12 @@
   margin-left: auto;
 }
 
+.celcat-occupations-message,
+.celcat-occupations-aide {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 @media (pointer: coarse) {
   .celcat-occupations-resume .btn {
     min-height: 44px;

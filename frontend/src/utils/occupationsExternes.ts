@@ -59,7 +59,45 @@ export function occupationsParCase(
   return parCase;
 }
 
-/** Libellés par case, prêts pour la grille (`SessionGrid.externes`). */
+/** Une occupation, prête à être lue sur le planning (grille et vue Semaine). */
+export interface LigneOccupation {
+  /** Le département, « Administration » s'il est vide. */
+  qui: string;
+  /** L'intitulé, à défaut la catégorie. */
+  quoi: string;
+  /** « 09h00–11h00 ». */
+  horaire: string;
+  /** Texte complet pour `title` : catégorie, intitulé, horaire, département. */
+  detail: string;
+}
+
+export function lignesOccupation(o: OccupationExterne): LigneOccupation {
+  const h = (x: string) => (x || "").replace(":", "h");
+  const horaire = `${h(o.debut)}–${h(o.fin)}`;
+  const qui = o.dep || "Administration";
+  return {
+    qui,
+    quoi: o.lib || o.cat,
+    horaire,
+    detail: [o.cat, o.lib, horaire, qui].filter(Boolean).join(" · "),
+  };
+}
+
+/** Lignes par case « jour-créneau », prêtes pour `SessionGrid.externes`. */
+export function lignesParCase(parCase: Map<string, OccupationExterne[]>): Map<string, LigneOccupation[]> {
+  const sortie = new Map<string, LigneOccupation[]>();
+  for (const [cle, liste] of parCase) {
+    const lignes: LigneOccupation[] = [];
+    for (const o of liste) {
+      const l = lignesOccupation(o);
+      if (!lignes.some((x) => x.detail === l.detail)) lignes.push(l);
+    }
+    sortie.set(cle, lignes);
+  }
+  return sortie;
+}
+
+/** Libellés par case (ancien format de la grille, conservé pour ses tests). */
 export function libellesParCase(parCase: Map<string, OccupationExterne[]>): Map<string, string[]> {
   const sortie = new Map<string, string[]>();
   for (const [cle, liste] of parCase) {
@@ -86,5 +124,5 @@ export function bandeauFraicheur(
   const heures = (maintenant.getTime() - releve) / 3_600_000;
   if (heures <= (oe.fraicheurHeures || 6)) return null;
   const texte = heures >= 48 ? `il y a ${Math.floor(heures / 24)} jours` : `il y a ${Math.floor(heures)} h`;
-  return `Occupations Celcat relevées ${texte} — les blocs « Occupé ailleurs » et « Réservé dans Celcat » peuvent ne plus être à jour.`;
+  return `Occupations Celcat relevées ${texte} — les blocs « hors MMI » peuvent ne plus être à jour.`;
 }

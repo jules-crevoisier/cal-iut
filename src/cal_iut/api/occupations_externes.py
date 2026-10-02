@@ -34,6 +34,7 @@ l'écran signale l'âge (`fraicheur_heures`).
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import threading
 from dataclasses import dataclass, field
@@ -98,15 +99,30 @@ class Index:
     signature: tuple | None = None
 
 
+def _aujourdhui() -> date:
+    """Date LOCALE du serveur, comme `calendar/academic.py::week_status`."""
+    return date.today()  # noqa: DTZ011
+
+
 def index() -> Index:
-    """Le relevé courant, indexé — recalculé seulement si le fichier change."""
+    """Le relevé courant, indexé — recalculé seulement si le fichier change,
+    ou si le jour change.
+
+    LE PASSÉ EST ÉCARTÉ ICI (Jules, 02/10/2026 : « on s'en fiche des choses
+    qui sont passées ») : une occupation d'avant aujourd'hui n'est plus
+    affichée, ne prévient plus au placement, ne compte plus dans « À
+    traiter ». Tous les lecteurs passent par cet index."""
     chemin = occ.chemin_fichier()
-    sig = _signature(chemin)
+    aujourdhui = _aujourdhui().isoformat()
+    sig = (_signature(chemin), aujourdhui)
     with _verrou:
         courant = _cache.get("index")
         if courant is not None and courant.signature == sig:
             return courant
     releve = occ.lire(chemin)
+    releve = dataclasses.replace(
+        releve, evenements=[e for e in releve.evenements if str(e.get("date") or "") >= aujourdhui]
+    )
     idx = Index(releve=releve, signature=sig)
     for e in releve.evenements:
         cle = (str(e.get("type") or ""), _cle_code(e.get("type"), e.get("code")))
@@ -332,16 +348,24 @@ def strict() -> bool:
 
 
 def appliquer_salle(state, session, room_id: str | None, week: int, day: int, slot: int, validation) -> list[str]:
-    """Ajoute le conflit « salle prise dans Celcat » au résultat de
-    `validate_move` (forçable, comme un conflit de salle) — ou, en mode
-    `strict`, le RENVOIE pour que l'appelant refuse sans appel."""
-    messages = conflits_salle(state, session, room_id, week, day, slot) if session is not None else []
-    if not messages:
+    """Ajoute au résultat de `validate_move` les AVERTISSEMENTS « enseignant
+    occupé ailleurs » et « salle prise dans Celcat » — ou, en mode `strict`,
+    RENVOIE ceux de la salle pour que l'appelant refuse sans appel (ceux de
+    l'enseignant sont alors déjà bloquants, `main._conflits_deplacement`).
+
+    CONTRAINTE MOLLE (Jules, 02/10/2026 : « que ça se mette en contrainte
+    molle, donc que ça affiche si on veut changer et mettre un créneau qui
+    est occupé ») : `soft_warnings`, le placement reste valide. Jusque-là
+    c'était un conflit, refusé sans « Forcer ». Les outils automatiques
+    (génération, lissage, choix d'une salle) continuent, eux, d'éviter ces
+    créneaux : `disponibilites_avec_externes`, `reservations_effectives`."""
+    if session is None:
         return []
+    salle = conflits_salle(state, session, room_id, week, day, slot)
     if strict():
-        return messages
-    validation.hard_conflicts.extend(messages)
-    validation.valid = False
+        return salle
+    messages = conflits_enseignant(state, session, week, day, slot) + salle
+    validation.soft_warnings.extend(m for m in messages if m not in validation.soft_warnings)
     return []
 
 

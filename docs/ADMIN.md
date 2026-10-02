@@ -23,9 +23,9 @@ Pour l'usage courant du planning, voir [GUIDE.md](../GUIDE.md).
 
 L'écran **Celcat** (envoi du planning dans Celcat) a son propre document : [docs/CELCAT.md](CELCAT.md).
 Son bouton **Corriger** ne supprime jamais rien dans Celcat.
-La vue **Occupé ailleurs** (navigation, à côté de **Contraintes**) montre ce que Celcat contient d'autre sur nos salles
-et nos enseignants (autre département, administration) : ces créneaux sont interdits à la génération et signalés au placement
-([CELCAT.md § 6](CELCAT.md#6-occupations-hors-mmi)). Sa carte **Relevé Celcat**, réservée aux administrateurs,
+Ce que Celcat contient d'autre sur nos salles et nos enseignants (autre département, administration) apparaît en **gris hachuré**
+dans les Vues Enseignant et Salle. La génération évite ces créneaux ; à la main, l'appli prévient et laisse faire
+([CELCAT.md § 6](CELCAT.md#6-occupations-hors-mmi)). Sur l'écran Celcat, la ligne **Occupations hors MMI**
 porte **Relire maintenant**, qui demande une relecture au robot.
 Ce qui reste à vérifier sur le vrai Celcat : [A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md).
 
@@ -593,7 +593,7 @@ Côté poste seulement : `CAL_IUT_PROD_URL`, `CAL_IUT_PROD_API_KEY` (ou `CAL_IUT
 | Une clé API ne marche plus | Compte désactivé, clé révoquée, ou compte **Accès API** qui appelle autre chose que `/api/v1/`. |
 | « Limite de 5 clés API actives atteinte » | Révoquer une clé inutile. |
 | Des séances ne partent pas dans Celcat | **Référence → Codes Celcat**, filtre **Sans code**. Puis l'écran **Celcat** : [docs/CELCAT.md](CELCAT.md). |
-| « Enseignant indisponible — … déjà programmé dans le département TC … (Celcat) » alors qu'il est libre | L'occupation vient de Celcat. Vue **Occupé ailleurs** : vérifier la date du relevé, **Relire maintenant** (administrateur), ou **Forcer** si la réunion est annulée. Détail : [CELCAT.md § 6](CELCAT.md#6-occupations-hors-mmi). |
+| « Enseignant indisponible — … déjà programmé dans le département TC … (Celcat) » alors qu'il est libre | L'occupation vient de Celcat. C'est un avertissement, le placement passe. Écran **Celcat**, ligne **Occupations hors MMI** : vérifier la date du relevé, **Relire maintenant**. Détail : [CELCAT.md § 6](CELCAT.md#6-occupations-hors-mmi). |
 | Un de nos cours ressort « occupé ailleurs dans Celcat » | Il n'est pas reconnu comme MMI. Faire vérifier par un technicien : [A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md). |
 | Un utilisateur légitime reçoit « Accès refusé. » | **Trafic** → carte **Blocages** : débloquer son adresse. |
 | Le serveur est saturé par un robot | **Trafic** → **Bloquer…**. Si l'écran ne répond plus : [docs/ANTI-ASPIRATION.md](ANTI-ASPIRATION.md), section urgence. |

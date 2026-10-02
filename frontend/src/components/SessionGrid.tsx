@@ -23,6 +23,7 @@ import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
 import { groupLabelWithParcours } from "../utils/years";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { horaireSeance, jourAujourdhuiDansSemaine } from "../utils/planning";
+import type { LigneOccupation } from "../utils/occupationsExternes";
 
 const SLOT_COUNT = 6;
 const ALL_DAYS = [0, 1, 2, 3, 4];
@@ -75,10 +76,10 @@ interface SessionGridProps {
   /** Absent = grille en lecture seule (comportement historique). */
   edition?: EditionGrille;
   /** Occupations HORS MMI relevées dans Celcat, par case « jour-créneau »
-   *  (`utils/occupationsExternes.ts::libellesParCase`) : bloc discret
-   *  « Occupé ailleurs (TC) » / « Réservé dans Celcat » dans une case vide,
-   *  alerte dans une case qui a déjà une séance (conflit). */
-  externes?: Map<string, string[]>;
+   *  (`utils/occupationsExternes.ts::lignesParCase`) : bloc grisé « hors MMI »
+   *  dans une case vide, mention « Aussi pris ailleurs » dans une case qui a
+   *  déjà une séance. */
+  externes?: Map<string, LigneOccupation[]>;
 }
 
 export function SessionGrid({
@@ -261,8 +262,12 @@ export function SessionGrid({
                             <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} edition={edition} />
                           ))}
                           {externesCase?.length ? (
-                            <span className="sessiongrid-externe-alerte" role="note">
-                              Conflit Celcat : {externesCase.join(", ")}
+                            <span
+                              className="sessiongrid-externe-alerte"
+                              role="note"
+                              title={externesCase.map((e) => e.detail).join("\n")}
+                            >
+                              Aussi pris ailleurs : {externesCase.map((e) => `${e.qui}, ${e.horaire}`).join(" ; ")}
                             </span>
                           ) : null}
                         </div>
@@ -293,6 +298,25 @@ export function SessionGrid({
                         <div className="sessiongrid-holiday">
                           <span className="title">{holiday.kind === "vacances" ? "Vacances" : "Férié"}</span>
                           <span className="label">{holiday.label}</span>
+                        </div>
+                      </td>
+                    );
+                  }
+                  // Une occupation RÉELLE de la salle ou de l'enseignant passe devant
+                  // les bandes MMI (PAC, SAE, évènements) : en semaine de SAE, la Vue
+                  // Salle d'A.018 affichait « SAE » partout et cachait ses 14
+                  // occupations (contrôle visuel du 02/10/2026).
+                  if (externesCase?.length) {
+                    return (
+                      <td key={d} {...propsCase(d, s)}>
+                        <div className="sessiongrid-externe">
+                          <span className="sessiongrid-externe-tag">hors MMI</span>
+                          {externesCase.map((e) => (
+                            <div key={e.detail} className="sessiongrid-externe-ligne" title={e.detail}>
+                              <span className="sessiongrid-externe-qui">{e.qui}</span>
+                              <span className="sessiongrid-externe-quoi">{`${e.quoi} · ${e.horaire}`}</span>
+                            </div>
+                          ))}
                         </div>
                       </td>
                     );
@@ -332,19 +356,6 @@ export function SessionGrid({
                       <td key={d} {...propsCase(d, s)}>
                         <div className="sessiongrid-event">
                           {dayEvent.map((e) => (
-                            <span key={e} className="label">
-                              {e}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (externesCase?.length) {
-                    return (
-                      <td key={d} {...propsCase(d, s)}>
-                        <div className="sessiongrid-externe">
-                          {externesCase.map((e) => (
                             <span key={e} className="label">
                               {e}
                             </span>

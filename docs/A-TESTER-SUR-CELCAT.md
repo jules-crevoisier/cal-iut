@@ -391,7 +391,7 @@ Salles surveillées en priorité : H.018 (« Amphi 3 MMI »), « Amphi 1 TC/GEA 
 qui ont un libellé Celcat ; enseignants : tous ceux qui ont un code Celcat.
 
 **Activé le 02/10/2026** après les essais (`actif: true` dans `data/config/celcat_occupations.yaml`). Pour couper : `actif: false`,
-puis redéployer. Après un déploiement : vue **Occupé ailleurs → Relevé Celcat → Relire maintenant**, et vérifier l'écran.
+puis redéployer. Après un déploiement : écran **Celcat → Occupations hors MMI → Relire maintenant**, puis ouvrir la Vue Salle de H.018.
 
 ### 1. Se placer là où Celcat est joignable
 
@@ -447,7 +447,7 @@ cal-iut celcat occupations --ecrire-fichier --vpn
 ```
 
 (`--ecrire-fichier` est ignoré avec `--ressource` : un relevé partiel effacerait les autres ressources.)
-Sinon, le robot l'écrit tout seul dans les 2 h, ou tout de suite après **Occupé ailleurs → Relevé Celcat → Relire maintenant**.
+Sinon, le robot l'écrit tout seul dans les 2 h, ou tout de suite après **Celcat → Occupations hors MMI → Relire maintenant**.
 
 ### 3. Ce qu'on doit voir
 
@@ -468,8 +468,8 @@ Ignorés (à nous, ou non pertinents) : cours d'un groupe MMI × 40, écrit par 
   l'enseignant dans Celcat, rôle consultation) ;
 - **aucun de nos cours MMI** n'apparaît dans la liste (il doit être compté dans « Ignorés ») ;
 - le **département** affiché est le bon sigle (« TC », « GEA »…) ; sinon, le noter pour `libelles_departements` ;
-- dans l'appli, après `--ecrire-fichier` : la vue **Occupé ailleurs** affiche la date du relevé et les mêmes nombres,
-  et la Vue Enseignant d'AFR montre les blocs « Occupé ailleurs (TC) ».
+- dans l'appli, après `--ecrire-fichier` : l'écran **Celcat** affiche la date du relevé,
+  et la Vue Enseignant d'AFR montre les blocs gris « hors MMI ».
 
 ### 4. Ce qui est incertain (jamais vu sur le vrai Celcat)
 
@@ -532,7 +532,7 @@ Déconnecte-toi de Celcat à la fin de chaque essai (session_lecture le fait).
 
 Critères de réussite : H.018, les deux amphis partagés et AFR trouvés ; leurs occupations hors MMI correspondent à Celcat (jour, heure
 réelle, département) ; aucun de nos évènements dans la liste ; `cal-iut celcat occupations --ecrire-fichier`
-produit un fichier que la vue « Occupé ailleurs » affiche ; tests verts ; aucun appel d'écriture.
+produit un fichier que les Vues Enseignant et Salle affichent ; tests verts ; aucun appel d'écriture.
 Commits en français au style du dépôt (`add | …`, `fix | …`).
 ```
 
@@ -571,7 +571,7 @@ Premier relevé de production (02/10, 12h20) : 5 réservations écartées, H.018
 **11 séances** en conflit avec une occupation hors MMI, toutes plausibles —
 A.018 prise par CJ ou TC en même temps qu'un CM (7), H.018 prise par CJ le lundi 11/01 (1),
 Régis Huez (2), Kyllian Bresson (1) et Anthony Froli (1) programmés dans un autre département.
-Elles apparaîtront dans **À traiter → Occupés ailleurs dans Celcat**. Les 255 séances créées dans l'appli
+Elles apparaissent dans **À traiter → Pris ailleurs dans Celcat** (à revoir). Les 255 séances créées dans l'appli
 (hors maquette) n'ont pas pu être simulées.
 
 **23 enseignants n'ont pas de fiche dans le personnel de `URCA_2026`** (ni par code, ni par nom) :

@@ -37,7 +37,6 @@ export const TITRES_VUES: Record<RouteView, [string, string, string?]> = {
   "salles-libres": ["Salles libres", "Qui occupe quelle salle, créneau par créneau."],
   reference: ["Référence", "Salles, cours, calendrier institutionnel, liens de partage et notifications."],
   contraintes: ["Contraintes", "Chaque règle, avec son verdict recalculé sur le planning actuel."],
-  occupations: ["Occupé ailleurs", "Salles et enseignants pris hors MMI, d'après Celcat."],
   apf: ["À traiter", "Ce qui demande une décision : séances non placées, doublons, violations, journées trouées."],
   aplacer: ["À placer", "Les séances que le solveur n'a pas su placer."],
   taches: ["Tâches", "Le suivi de l'équipe : absences signalées, déplacements à faire, points à suivre.", "Le suivi de l'équipe"],

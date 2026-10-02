@@ -120,7 +120,6 @@ export const ECRANS: SearchHit[] = [
   { kind: "Écran", label: "Salles libres", sub: "Occupation des salles", route: { vue: "salles-libres" } },
   { kind: "Écran", label: "Référence", sub: "Salles, cours, calendrier, liens", route: { vue: "reference" } },
   { kind: "Écran", label: "Contraintes", sub: "Règles et verdicts", route: { vue: "contraintes" } },
-  { kind: "Écran", label: "Occupé ailleurs", sub: "Salles et enseignants pris hors MMI", route: { vue: "occupations" } },
   { kind: "Écran", label: "À traiter", sub: "Non placées, doublons, violations", route: { vue: "apf" } },
   { kind: "Écran", label: "Tâches", sub: "Suivi de l'équipe", route: { vue: "taches" } },
   { kind: "Écran", label: "Séances à placer", sub: "Vue Promo", route: { vue: "promo", panel: "aplacer" } },

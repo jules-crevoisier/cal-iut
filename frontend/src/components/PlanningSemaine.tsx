@@ -24,6 +24,7 @@ import {
   pluriel,
   semaineDeReprise,
 } from "../utils/planning";
+import type { LigneOccupation } from "../utils/occupationsExternes";
 import { usePreferences } from "../utils/preferences";
 import { DAY_LABELS } from "../utils/slots";
 import { dateForWeekDay } from "../utils/weekDates";
@@ -55,7 +56,7 @@ interface PlanningSemaineProps {
   exclureProf?: string;
   /** Occupations hors MMI (Celcat) par case « jour-créneau » — cf.
    *  `SessionGrid.externes`. */
-  externes?: Map<string, string[]>;
+  externes?: Map<string, LigneOccupation[]>;
 }
 
 export function PlanningSemaine({
@@ -144,7 +145,7 @@ interface ListeJoursProps {
   exclureProf?: string;
   jour: number;
   onJour: (jour: number) => void;
-  externes?: Map<string, string[]>;
+  externes?: Map<string, LigneOccupation[]>;
 }
 
 const JOUR_LONG = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -187,12 +188,12 @@ export function ListeJours({
     ),
   );
   const evenementsJour = payload.eventRows.filter((e) => e.w === week && e.d === jour).flatMap((e) => e.labels);
-  // Occupations hors MMI du jour (Celcat) : une bande par libellé et créneaux.
-  const externesJour: string[] = [];
+  // Occupations hors MMI du jour (Celcat) : une bande grisée par occupation
+  // (la même occupation sur deux créneaux n'en fait qu'une).
+  const externesJour: LigneOccupation[] = [];
   for (let s = 0; s < 6; s += 1) {
-    for (const libelle of externes?.get(`${jour}-${s}`) ?? []) {
-      const texte = `${libelle} — ${["8h", "9h30", "11h", "14h", "15h30", "17h"][s]}`;
-      if (!externesJour.includes(texte)) externesJour.push(texte);
+    for (const ligne of externes?.get(`${jour}-${s}`) ?? []) {
+      if (!externesJour.some((x) => x.detail === ligne.detail)) externesJour.push(ligne);
     }
   }
   const matin = duJour.filter((r) => r.s < 3);
@@ -300,8 +301,10 @@ export function ListeJours({
           </p>
         ))}
         {externesJour.map((e) => (
-          <p key={e} className="jour-bande jour-bande--externe">
-            {e}
+          <p key={e.detail} className="jour-bande jour-bande--externe" title={e.detail}>
+            <span className="jour-bande-externe-tag">hors MMI</span>
+            <span className="jour-bande-externe-qui">{e.qui}</span>
+            <span>{`${e.quoi} · ${e.horaire}`}</span>
           </p>
         ))}
 

@@ -75,10 +75,13 @@ categories_ignorees: []
 # `false` : ces réservations comptent comme des occupations.
 reservations_mmi_ignorees: true
 
-# Placement manuel : false = conflit FORÇABLE avec un message fort (le relevé
-# peut être périmé de quelques heures) ; true = refus, comme une
-# indisponibilité « stricte ». Le générateur, lui, les traite toujours comme
-# des contraintes dures.
+# Placement manuel : false = CONTRAINTE MOLLE — l'appli prévient et laisse
+# faire (le relevé peut être périmé de quelques heures) ; true = refus, comme
+# une indisponibilité « stricte ». Les outils automatiques (génération,
+# lissage, choix d'une salle) évitent toujours ces créneaux.
+# 02/10/2026, Jules Crevoisier : « que ça se mette en contrainte molle, donc
+# que ça affiche si on veut changer et mettre un créneau qui est occupé ».
+# Jusque-là, false donnait un conflit à « Forcer ».
 strict: false
 
 # Au-delà de ce nombre d'heures, l'appli signale un relevé ancien (les

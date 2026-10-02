@@ -67,7 +67,6 @@ import type {
 import type { AppPayload } from "./types/app";
 import { DEFAULT_YEARS } from "./utils/years";
 import { ContraintesView } from "./views/ContraintesView";
-import { OccupeAilleursView } from "./views/OccupeAilleursView";
 import { CoursView } from "./views/CoursView";
 import { EnseignantView } from "./views/EnseignantView";
 import { GroupeView } from "./views/GroupeView";
@@ -1040,9 +1039,6 @@ export function App() {
         )}
         {activeTab === "contraintes" && appPayload && !readOnlyTarget && (
           <ContraintesView payload={appPayload} setRoute={setRoute} />
-        )}
-        {activeTab === "occupations" && appPayload && !readOnlyTarget && (
-          <OccupeAilleursView payload={appPayload} setRoute={setRoute} estAdmin={moi?.role === "admin"} />
         )}
         {activeTab === "apf" && appPayload && !readOnlyTarget && <TodoView payload={appPayload} setRoute={setRoute} />}
         {activeTab === "taches" && appPayload && !readOnlyTarget && (

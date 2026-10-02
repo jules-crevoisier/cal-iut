@@ -480,7 +480,7 @@ Les trois endpoints SAE sont décrits au [§ 6](#6-les-sae-simplement).
 | `doublon` | Doublons salle / enseignant | `a_corriger` |
 | `regle` | Règles globales en échec | `a_corriger` |
 | `contrainte` | Indisponibilités enseignant non respectées | `a_corriger` |
-| `occupation-externe` | Occupés ailleurs dans Celcat : séance placée sur un créneau où l'enseignant ou la salle est pris hors MMI (`detail` = message du placement) | `a_corriger` |
+| `occupation-externe` | Pris ailleurs dans Celcat : séance placée sur un créneau où l'enseignant ou la salle est pris hors MMI (`detail` = message du placement). Le passé n'est pas listé. | `a_revoir` |
 | `sae-hors-journee` | Cours de SAE placés hors journée SAE (les `anomalies` de `/api/v1/sae`) | `a_corriger` |
 | `compromis-sae` | Encadrement SAE le même jour (compromis accepté) | `a_revoir` |
 | `trouee` | Journées trouées (≥ 2 créneaux vides entre deux cours d'un groupe) | `a_revoir` |

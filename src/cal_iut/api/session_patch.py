@@ -245,11 +245,12 @@ def _controler_placement(state: object, session: object, placement: object, forc
     # mode strict. Couvre la durée de la séance d'un seul appel.
     from cal_iut.api import occupations_externes
 
-    externes = occupations_externes.conflits_enseignant(state, session, placement.week, placement.day, placement.slot)
-    if externes and occupations_externes.strict():
-        institutional += externes
-    else:
-        indispo += externes
+    # Contrainte molle depuis le 02/10/2026 : hors mode strict, c'est
+    # `appliquer_salle` (plus bas) qui l'ajoute aux avertissements.
+    if occupations_externes.strict():
+        institutional += occupations_externes.conflits_enseignant(
+            state, session, placement.week, placement.day, placement.slot
+        )
     pedago = _pedagogical_order_violations(
         placement.week, placement.day, placement.slot, extra_blocked_pedago, allowed_weeks
     )

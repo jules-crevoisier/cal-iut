@@ -19,7 +19,6 @@ export type RouteView =
   | "promo"
   | "reference"
   | "contraintes"
-  | "occupations"
   | "apf"
   | "taches"
   | "aplacer"
@@ -149,10 +148,15 @@ function canonicalize(route: Route): Route {
   return route;
 }
 
+const VUES_RETIREES: ReadonlySet<string> = new Set(["occupations"]);
+
 function readHash(): Route {
   const raw = (window.location.hash || "").replace(/^#/, "");
   const params = new URLSearchParams(raw);
-  const vue = (params.get("vue") as RouteView) || "";
+  // Vues retirées : un ancien lien (`#vue=occupations`, vue « Occupé ailleurs »
+  // supprimée le 02/10/2026) retombe sur l'accueil au lieu d'une page vide.
+  const brut = params.get("vue") ?? "";
+  const vue = (VUES_RETIREES.has(brut) ? "" : brut) as RouteView | "";
   return canonicalize({
     vue,
     prof: params.get("prof") || "",
