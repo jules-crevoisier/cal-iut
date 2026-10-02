@@ -400,7 +400,9 @@ sans_code_voulu:
 #                 est portée par la catégorie elle-même (« Projet [0%] »).
 #   remarque    : écrit en tête du champ « Remarques » (`notes`) de
 #                 l'évènement, suivi de notre identifiant de séance :
-#                 « WR100BU — WR100BU-S1-TD-1-but1-td-ab ». Défaut : la clé.
+#                 « WR100BU - WR100BU-S1-TD-1-but1-td-ab ». Défaut : la clé.
+#                 SANS accent ni caractère spécial : Celcat les abîme à
+#                 l'écriture (canari du 02/10/2026).
 #   departement : libellé exact du département Celcat. Défaut : T_MMI T29.
 #   enseignants : trigrammes dont les interventions partent ; vide = toutes.
 #                 Une séance d'un autre enseignant n'est pas envoyée (motif).

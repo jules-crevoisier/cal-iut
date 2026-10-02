@@ -25,7 +25,7 @@ Ce que ces tests protègent :
 - l'entrée Celcat : pas de module, catégorie TD0, remarque, département ;
 - la charge RPC, construite sans AUCUNE recherche de matière ; catégorie et
   département résolus par leur NOM, refus nommé s'ils manquent ;
-- notre identifiant de séance reste lisible dans `notes` (« WR100BU — <id> »),
+- notre identifiant de séance reste lisible dans `notes` (« WR100BU - <id> »),
   et la comparaison / la suppression reconnaissent l'évènement ;
 - une séance WR100BU d'un autre enseignant n'est pas envoyée, motif dit ;
 - le plan, le worker, le hook immédiat, le garde-fou de catégorie, l'onglet
@@ -280,7 +280,7 @@ def test_l_entree_part_sans_module_en_td0_avec_remarque_et_departement() -> None
     )
     assert e.sans_module
     assert (e.code_enseignant, e.salle, e.nom_groupe_celcat) == ("3696", "H.101", "BUT MMI S1 TD AB")
-    assert e.notes_celcat == "WR100BU — WR100BU-S1-TD-1-but1-td-ab"
+    assert e.notes_celcat == "WR100BU - WR100BU-S1-TD-1-but1-td-ab"
     # La règle entre dans la signature : la changer re-saisit la séance.
     assert e.signature().endswith("|regle:TD0|T_MMI T29|WR100BU")
 
@@ -311,7 +311,7 @@ def test_une_ptut_d_un_cours_avec_code_part_en_projet_avec_le_module_du_cours() 
         "PTUT", "module du cours (règle PTUT)", "TSBZ1M01", False
     )
     assert (e.categorie_celcat, e.remarque, e.departement) == ("Projet", "PTUT", "T_MMI T29")
-    assert e.notes_celcat == "PTUT — WR101-S1-PTUT-1-but1-tp-a"
+    assert e.notes_celcat == "PTUT - WR101-S1-PTUT-1-but1-tp-a"
 
 
 def test_une_ptut_d_un_cours_sans_code_part_sans_module_au_lieu_d_etre_bloquee() -> None:
@@ -353,7 +353,7 @@ def test_la_charge_est_construite_sans_aucune_recherche_de_matiere(catalogues) -
     assert charge["event_cat_id"] == 465 and charge["dept_id"] == 29
     assert charge["rooms"] == [{"room_id": 601}] and charge["staff"] == [{"staff_id": 501}]
     assert charge["groups"] == [{"group_id": 1661972}]
-    assert charge["notes"] == "WR100BU — WR100BU-S1-TD-1-but1-td-ab"
+    assert charge["notes"] == "WR100BU - WR100BU-S1-TD-1-but1-td-ab"
     verifier_charge_categorie(charge, type_seance_nom="TD", categorie_regle="TD0")
 
 
@@ -382,7 +382,7 @@ def test_une_ptut_cherche_la_matiere_du_cours_jamais_ptut(catalogues) -> None:
     assert ids == {"module_id": 1590001, "room_id": 601, "staff_id": 502, "event_cat_id": 700, "dept_id": 29}
     assert catalogues.matieres == ["TSBZ1M01"]
     charge = ecriture.charge_utile(e, group_id=1661972, ids=ids, masque="N" * 5 + "Y" + "N" * 48, event_id=0)
-    assert charge["modules"] == [{"module_id": 1590001}] and charge["notes"] == "PTUT — WR101-S1-PTUT-1"
+    assert charge["modules"] == [{"module_id": 1590001}] and charge["notes"] == "PTUT - WR101-S1-PTUT-1"
     verifier_charge_categorie(charge, type_seance_nom="PTUT", categorie_regle="Projet", sans_module=False)
 
 
@@ -498,7 +498,7 @@ def test_la_suppression_accepte_un_evenement_td0_sans_matiere(monkeypatch) -> No
         "event_id": 777, "day_of_week": 1, "start_time": "15:30", "end_time": "17:00",
         "weeks": "N" * 5 + "Y" + "N" * 48, "evCatName": "TD0", "modules": [],
         "rooms": [{"name": "H.101"}], "groups": [{"name": "BUT MMI S1 TD AB - 2024", "id": 1661972}],
-        "protected": "N", "notes": "WR100BU — WR100BU-S1-TD-1-but1-td-ab",
+        "protected": "N", "notes": "WR100BU - WR100BU-S1-TD-1-but1-td-ab",
     }
     supprimes: list[int] = []
     monkeypatch.setattr(suppression, "localiser_evenement", lambda page, eid, group_ids: brut)
@@ -595,7 +595,7 @@ def test_le_plan_montre_la_seance_a_creer_sans_module(bu) -> None:
     par_id = {e["session_id"]: e for e in corps["entrees"]}
     assert par_id["bu-vma"]["action"] == "creer"
     assert par_id["bu-vma"]["regle"] == "sans module (règle WR100BU)"
-    assert (par_id["bu-vma"]["categorie"], par_id["bu-vma"]["remarque"]) == ("TD0", "WR100BU — bu-vma")
+    assert (par_id["bu-vma"]["categorie"], par_id["bu-vma"]["remarque"]) == ("TD0", "WR100BU - bu-vma")
     assert par_id["bu-mri"]["action"] == "non_envoyee"
     assert "seules les interventions de VMA" in par_id["bu-mri"]["motif_non_envoi"]
     assert par_id["wr101-td"]["regle"] == ""
@@ -610,7 +610,7 @@ def test_le_plan_montre_la_seance_a_creer_sans_module(bu) -> None:
     assert (par_id["ptut-avec"]["action"], par_id["ptut-avec"]["regle"], par_id["ptut-avec"]["module"]) == (
         "creer", "module du cours (règle PTUT)", "TSBZ1M01"
     )
-    assert (par_id["ptut-avec"]["categorie"], par_id["ptut-avec"]["remarque"]) == ("Projet", "PTUT — ptut-avec")
+    assert (par_id["ptut-avec"]["categorie"], par_id["ptut-avec"]["remarque"]) == ("Projet", "PTUT - ptut-avec")
     assert (par_id["ptut-sans"]["action"], par_id["ptut-sans"]["regle"], par_id["ptut-sans"]["module"]) == (
         "creer", "sans module — cours sans code Celcat (règle PTUT)", ""
     )
@@ -642,11 +642,11 @@ def test_le_worker_cree_td0_et_projet_et_ecarte_l_autre_enseignant(bu, catalogue
     assert set(envoyees) == {"bu-vma", "ptut-avec", "ptut-sans"}, envoyees
     bu_vma, avec, sans = envoyees["bu-vma"], envoyees["ptut-avec"], envoyees["ptut-sans"]
     assert (bu_vma["event_cat_id"], bu_vma["dept_id"], bu_vma["modules"]) == (465, 29, [])
-    assert bu_vma["notes"] == "WR100BU — bu-vma"
+    assert bu_vma["notes"] == "WR100BU - bu-vma"
     # PTUT : catégorie Projet, module DU COURS quand il est connu, aucun sinon.
     assert (avec["event_cat_id"], avec["dept_id"], avec["modules"]) == (700, 29, [{"module_id": 1590001}])
-    assert avec["notes"] == "PTUT — ptut-avec"
-    assert (sans["event_cat_id"], sans["modules"], sans["notes"]) == (700, [], "PTUT — ptut-sans")
+    assert avec["notes"] == "PTUT - ptut-avec"
+    assert (sans["event_cat_id"], sans["modules"], sans["notes"]) == (700, [], "PTUT - ptut-sans")
     # Jamais un module « PTUT » ni « WR100BU » : seul le code du cours WR101.
     assert catalogues.matieres == ["TSBZ1M01"]
     assert {sid for sid in ("bu-vma", "ptut-avec", "ptut-sans") if journal().get(sid, {}).get("event_id")} == {
@@ -718,7 +718,7 @@ def test_l_essai_peut_traiter_une_vraie_seance_comme_une_ptut(bu) -> None:
     from cal_iut.celcat import essai_regle as essai
 
     e = essai.entree_comme_type(get_state(), "wr101-td", "PTUT")
-    assert (e.regle, e.categorie_celcat, e.code_module, e.notes_celcat) == ("PTUT", "Projet", "TSBZ1M01", "PTUT — wr101-td")
+    assert (e.regle, e.categorie_celcat, e.code_module, e.notes_celcat) == ("PTUT", "Projet", "TSBZ1M01", "PTUT - wr101-td")
     assert entrees_pour_state(get_state())["wr101-td"].regle == ""
     with pytest.raises(LookupError, match="--comme-type"):
         essai.choisir_entree({}, type_seance="PTUT")
@@ -795,7 +795,7 @@ def test_l_essai_simule_puis_cree_relit_et_supprime_en_formation(catalogues, mon
     res = essai.ecrire_relire_supprimer(page, res, methode="udlTimetables.save", methode_suppression="udlTimetables.save")
     assert res.event_id == 5150 and supprimes == [5150] and res.supprime is True
     assert res.relu["categorie"] == "TD0" and res.relu["departement"] == "T_MMI T29"
-    assert res.relu["remarque (notes)"] == "WR100BU — WR100BU-S1-TD-1-but1-td-ab"
+    assert res.relu["remarque (notes)"] == "WR100BU - WR100BU-S1-TD-1-but1-td-ab"
     assert res.relu["session_id lu dans notes"] == e.session_id
     assert res.relu["matieres"] == [] and res.relu["salles"] == ["H.101"]
 

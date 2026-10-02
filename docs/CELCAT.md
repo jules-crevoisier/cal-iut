@@ -349,7 +349,7 @@ sur les **deux** services, `backend` et `celcat-nuit` (`docker-compose.yml` : `$
 ### Ce qui part
 
 - **Remarque** (onglet « Remarques et personnaliser », champ `notes`) : la remarque, puis l'identifiant de la séance.
-  Exemple : `WR100BU — WR100BU-S1-TD-1-but1-td-ab`. L'identifiant relie l'évènement à l'appli.
+  Exemple : `WR100BU - WR100BU-S1-TD-1-but1-td-ab`. L'identifiant relie l'évènement à l'appli.
 - **Matière.** WR100BU : jamais de matière, jamais cherchée.
   PTUT : la matière du cours (code connu par le fichier, la maquette ou une saisie), cherchée comme pour une séance normale.
   Cours sans code (manquant ou « sans code (voulu) ») : la séance PTUT part **sans matière** au lieu d'être bloquée.
@@ -387,6 +387,10 @@ Elles ne s'appliquent qu'avec `CAL_IUT_REGLES_ENVOI=on` (voir ci-dessus).
 
 Commande : `cal-iut celcat-essai-regle` (`--cours WR100BU` ou `--type PTUT`). Elle demande le VPN.
 Pas à pas complet, et un prompt pour Claude Code : [docs/A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md).
+Essais du 02/10/2026 : sur `URCA_2026`, « TD0 » (id 465), « Projet » (id 456) et « T_MMI T29 » sont trouvés par leur nom ;
+le canari WR100BU est passé dans `URCA_FORMATION` (évènement sans matière accepté). Le canari PTUT reste à faire.
+La remarque s'écrit avec un tiret simple (`WR100BU - <identifiant>`) : Celcat abîme les caractères hors ASCII à l'écriture.
+Pas d'accent ni de caractère spécial dans `remarque:`.
 
 1. Écran **Celcat → Réglages → Robot d'envoi** : mettre en **pause** (VPN et compte partagés).
 2. **Simulation sur la vraie base** (lecture seule, rôle `985_consultation`, rien n'est écrit) :
@@ -431,9 +435,8 @@ Codes de sortie : 0 réussi ; 1 bloqué (motif affiché) ou suppression à refai
 Ancien nom, toujours accepté : `celcat-essai-sans-module`.
 ## 6. Occupations hors MMI
 
-> **Coupé par défaut.** `data/config/celcat_occupations.yaml` est livré avec `actif: false` :
-> le robot ne relève rien et rien ne change tant que les essais ([A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md#occupations-hors-mmi))
-> ne sont pas faits. Pour l'allumer : `actif: true`, redéployer, puis **Celcat → Occupations hors MMI → Relire maintenant**.
+> **Activé le 02/10/2026**, après les essais sur le vrai Celcat ([A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md#occupations-hors-mmi)) :
+> `actif: true` dans `data/config/celcat_occupations.yaml`. Pour couper : `actif: false`, puis redéployer.
 
 ### À quoi ça sert
 
@@ -470,9 +473,13 @@ Le backend ne joint pas Celcat (§ 4.1). C'est le service **celcat-nuit** qui li
 1. il résout l'identifiant Celcat de chaque ressource surveillée — **salles** : celles de `celcat.yaml`, en premier H.018 et les amphis partagés « Amphi 1 TC/GEA » et « Amphi 2 GMP/GEII » ;
    **enseignants** : tous ceux qui ont un code Celcat — avec deux catalogues (`udlResources.load` 604 et 603), plus les départements (610) ;
 2. il charge leurs évènements par **lots** de 10 identifiants (`udlTimetables.load` avec `{"RoomIDs": [...]}` puis `{"StaffIDs": [...]}`) :
-   une vingtaine de requêtes en tout, jamais une par créneau ; un lot refusé est coupé en deux ;
-3. il écarte **nos** évènements : `event_id` au journal de synchronisation, `notes` = identifiant de séance cal-iut,
-   cours d'un groupe « BUT MMI … », cours du département MMI sans groupe ; puis les fériés, évènements globaux, suspendus ou sans horaire ;
+   une dizaine de requêtes en tout (11 pour 97 ressources, relevé du 02/10/2026), jamais une par créneau ; un lot refusé est coupé en deux ;
+3. il écarte **nos** évènements : `event_id` au journal de synchronisation, `notes` = identifiant de séance cal-iut
+   (seul, ou après la remarque d'une règle d'envoi : « WR100BU - <identifiant> »),
+   cours d'un groupe « BUT MMI … », cours du département MMI sans groupe, **salle gardée par MMI**
+   (« Réservation Amphi H MMI » : évènement du département MMI sans catégorie, groupe, enseignant ni matière —
+   `reservations_mmi_ignorees`) ; puis les fériés et évènements globaux
+   (Celcat les renvoie avec chaque lot : comptés une fois), suspendus ou sans horaire ;
 4. il déplie le masque `weeks` en dates, du lundi de la semaine courante au 31 juillet, avec l'**heure réelle**
    (le décalage historique de Paris, +00:09:21, est retiré) ;
 5. il écrit **atomiquement** `data/state/celcat_occupations_externes.json` : horodatage, période, ressources surveillées
@@ -506,7 +513,7 @@ liste filtrable (texte, type, ressource), bouton **Relire maintenant**.
 | Une occupation n'existe plus dans Celcat (réunion annulée) | **Relire maintenant**. En attendant, **Forcer** le placement. |
 | Un de NOS cours apparaît comme « occupé ailleurs » | Il n'a été reconnu ni par le journal, ni par ses `notes`, ni par son groupe. Le vérifier avec `cal-iut celcat occupations --ressource AFR --details`, puis ajuster `prefixes_groupes_mmi` / `departements_mmi`. |
 | Une salle n'est jamais relue (« introuvable dans Celcat ») | Son libellé Celcat est faux dans `celcat.yaml` (`salles:`). Le corriger dans **Codes Celcat** ou le fichier. |
-| Un enseignant n'est jamais relu | Pas de code Celcat (`0`), ou code faux : **Codes Celcat**. |
+| Un enseignant n'est jamais relu | Pas de code Celcat (`0`), ou code faux : **Codes Celcat**. Ou pas de fiche dans le personnel de la base Celcat de l'année (23 enseignants le 02/10/2026) : la faire créer dans Celcat. |
 | Le département s'affiche mal (« Direction IUT » au lieu d'un sigle) | `libelles_departements` dans `celcat_occupations.yaml`. |
 | Une catégorie ne devrait pas bloquer (ex. « Réservation BU ») | `categories_ignorees`. |
 | Tout couper | `actif: false` (plus de relecture) ; supprimer `data/state/celcat_occupations_externes.json` lève toutes les contraintes. |

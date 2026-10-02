@@ -558,11 +558,13 @@ def test_ecran_admin_et_relire_maintenant(etat, db_isole) -> None:
     assert {(r["code"], r["nombre"]) for r in corps["ressources"]} == {("AFR", 1), ("h018", 1)}
     assert corps["demandeEnCours"] is False
     assert admin.post("/celcat/occupations-externes/rafraichir").json()["demande"] is True
-    # Livré coupé (`actif: false`) : la demande est notée mais le robot ne relit pas.
-    assert corps["lectureActive"] is False and not occ.releve_du()
+    # Activé le 02/10/2026, après les essais sur le vrai Celcat
+    # (docs/A-TESTER-SUR-CELCAT.md) : la demande est prise au passage suivant.
+    assert corps["lectureActive"] is True and occ.demande_en_cours() and occ.releve_du()
     import dataclasses
 
-    assert occ.demande_en_cours() and occ.releve_du(dataclasses.replace(occ.charger_config(), actif=True))
+    # Coupé (`actif: false`) : la demande reste notée mais le robot ne relit pas.
+    assert not occ.releve_du(dataclasses.replace(occ.charger_config(), actif=False))
     assert occ.consommer_demande() and not occ.demande_en_cours()
 
 

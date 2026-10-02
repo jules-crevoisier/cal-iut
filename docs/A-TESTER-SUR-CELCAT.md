@@ -1,6 +1,7 @@
 # À tester sur Celcat
 
 Ce document liste ce qui n'a **pas pu être essayé** contre le vrai Celcat pendant le développement (pas de VPN de l'université).
+**Essais faits le 02/10/2026** : voir « Résultats » en fin de chaque section. Restent le canari PTUT et l'activation des règles d'envoi dans Dokploy.
 Il est pour l'administrateur qui fera les essais, avec le VPN.
 Chaque section est indépendante : une fonctionnalité, ses essais, ce qu'on doit voir, et un prompt prêt pour Claude Code.
 
@@ -30,7 +31,7 @@ Les interventions de Valérie Mariot doivent quand même partir dans Celcat, ain
 | Salle | celle de la séance dans l'appli (H.101 sur le planning actuel) |
 | Classe (groupe) | le groupe de la séance (ex. « BUT MMI S1 TD AB - 2024 ») |
 | Matière | **aucune** |
-| Remarque | `WR100BU — <identifiant de séance>`, ex. `WR100BU — WR100BU-S1-TD-1-but1-td-ab` |
+| Remarque | `WR100BU - <identifiant de séance>`, ex. `WR100BU - WR100BU-S1-TD-1-but1-td-ab` |
 | Département | **T_MMI T29** |
 
 Fonctionnement complet : [CELCAT.md § 5](CELCAT.md#5-règles-denvoi--wr100bu-et-ptut).
@@ -112,7 +113,7 @@ Simulation (1 et 2) :
 - « Identifiants résolus » : `room_id`, `staff_id`, `event_cat_id`, `dept_id` — **pas** de `module_id` ;
 - `event_cat_id` = **465** (TD0). Un autre nombre est refusé par le garde-fou, avec un message ;
 - la séance : « sans module (règle WR100BU), module aucun » ;
-- la charge : `"modules": []`, `"notes": "WR100BU — WR100BU-S1-TD-1-but1-td-ab"`, une seule semaine (`weeks` avec un seul `Y`) ;
+- la charge : `"modules": []`, `"notes": "WR100BU - WR100BU-S1-TD-1-but1-td-ab"`, une seule semaine (`weeks` avec un seul `Y`) ;
 - « SIMULATION — rien n'a été écrit ».
 
 Canari (3), bloc « Relu dans Celcat » :
@@ -122,7 +123,7 @@ Canari (3), bloc « Relu dans Celcat » :
 | `categorie` | `TD0` (éventuellement suivi d'une pondération) |
 | `ponderation` | 0 (portée par la catégorie) |
 | `departement` | `T_MMI T29` |
-| `remarque (notes)` | `WR100BU — WR100BU-S1-TD-1-but1-td-ab` |
+| `remarque (notes)` | `WR100BU - WR100BU-S1-TD-1-but1-td-ab` |
 | `session_id lu dans notes` | `WR100BU-S1-TD-1-but1-td-ab` |
 | `enseignants` | Valérie Mariot (code 3696) |
 | `salles` | `H.101` (ou la salle de la séance) |
@@ -136,14 +137,14 @@ Dans l'inspecteur Celcat (pendant `--attendre`) :
 
 - **Détails** : catégorie **TD0**, département **T_MMI T29** ;
 - **Ressources** : la salle, le groupe, Valérie Mariot, **Matières [0]** ;
-- **Remarques et personnaliser** : `WR100BU — WR100BU-S1-TD-1-but1-td-ab` dans « Remarques ».
+- **Remarques et personnaliser** : `WR100BU - WR100BU-S1-TD-1-but1-td-ab` dans « Remarques ».
 
 ### 4. Points incertains à vérifier dans Celcat
 
 1. **Le champ de la Remarque.** L'appli écrit dans `notes` (le seul champ texte de l'évènement prouvé en écriture, canari du 01/09/2026).
    À confirmer : c'est bien la zone « Remarques » de l'onglet « Remarques et personnaliser ».
    Si Kyllian attend `WR100BU` dans un champ « personnaliser » (`custom1`…), le dire : la relecture affiche `custom1` à `custom3`.
-2. **La forme de la Remarque.** `WR100BU — <identifiant>` et non `WR100BU` seul : l'identifiant y relie l'évènement à l'appli.
+2. **La forme de la Remarque.** `WR100BU - <identifiant>` et non `WR100BU` seul : l'identifiant y relie l'évènement à l'appli.
    À faire valider par Kyllian.
 3. **Le libellé « TD0 ».** Cherché par son nom exact dans le catalogue des catégories. Identifiant relevé : 465 (audit du 07/09/2026 sur `URCA_2026`).
    À confirmer dans `URCA_FORMATION` aussi : sinon le garde-fou refuse le canari (message « attend event_cat_id=465 »).
@@ -163,7 +164,7 @@ VPN de l'université CONNECTÉ, fichier .env rempli (CELCAT_URL, CELCAT_UTILISAT
 
 But : finir la mise au point de « l'envoi sans module » de WR100BU (visite de la BU, Valérie Mariot,
 code Celcat 3696), demandé par Kyllian Bresson le 01/10/2026. Dans Celcat, chaque séance doit avoir :
-enseignant 3696, catégorie TD0, salle et groupe de la séance, AUCUNE matière, remarque « WR100BU — <id> »,
+enseignant 3696, catégorie TD0, salle et groupe de la séance, AUCUNE matière, remarque « WR100BU - <id> »,
 département T_MMI T29.
 
 À lire d'abord : docs/A-TESTER-SUR-CELCAT.md (section « Envoi sans module »), docs/CELCAT.md § 5,
@@ -194,7 +195,7 @@ Les règles sont inactives (CAL_IUT_REGLES_ENVOI=off) : ne pas les activer ; la 
 Critères de réussite :
 - simulation URCA_2026 : event_cat_id de TD0 et dept_id de T_MMI T29 résolus par leur nom, aucun module_id,
   aucun appel de recherche de matière ;
-- canari URCA_FORMATION : relu avec catégorie TD0, département T_MMI T29, remarque « WR100BU — <id> »
+- canari URCA_FORMATION : relu avec catégorie TD0, département T_MMI T29, remarque « WR100BU - <id> »
   visible dans l'onglet « Remarques et personnaliser », enseignant 3696, salle et groupe de la séance,
   aucune matière, une seule semaine ; puis « supprimé, absent à la relecture » ;
 - aucune écriture dans URCA_2026 ; tests verts.
@@ -203,7 +204,41 @@ Commits en français, préfixe « add | ». Ne pas pousser sur main.
 
 ### Résultats
 
-_À remplir après les essais : date, base, sortie de la commande, captures de l'inspecteur, décision de Kyllian sur la forme de la Remarque._
+**Essais du 02/10/2026.** Conteneur du robot lancé sur le poste de Jules (image `cal-iut-celcat`, VPN OpenConnect),
+robot de production en pause, planning de la base locale.
+
+| Étape | Résultat |
+|---|---|
+| 1. Simulation sur `URCA_2026` (lecture seule) | **Conforme.** 12 séances, 12 sous la règle. `event_cat_id` **465** (TD0), `dept_id` 1560615 (T_MMI T29), `room_id` 1604465 (H.101), `staff_id` 1607660 (code 3696), groupe 1661972. Pas de `module_id`, `"modules": []`, un seul `Y`. |
+| 2. Simulation sur `URCA_FORMATION` | **Conforme.** TD0 = 465 là aussi ; `dept_id` 936, `room_id` 100907, `staff_id` 2660 ; groupe des canaris 47925. |
+| 3. Canari dans `URCA_FORMATION` (sans `--attendre`) | **Conforme**, après un correctif (ci-dessous). Évènement 1523419 créé, relu : catégorie TD0, pondération 0, département T_MMI T29, salle H.101, groupe « BUT MMI S1 TD AB - 2024 », enseignante MARIOT Valerie, `matieres` `[]`, une semaine. Puis « supprimé, absent à la relecture ». Code 0. |
+
+**Le canari a montré un défaut, corrigé.** La remarque était d'abord écrite `WR100BU — <identifiant>`, avec un tiret long.
+Celcat l'a gardée sous la forme `WR100BU â€” <identifiant>` : il abîme les caractères hors ASCII à l'écriture,
+et l'appli ne retrouvait plus son identifiant dans la remarque. La remarque s'écrit maintenant
+**`WR100BU - <identifiant>`** (tiret simple), relue telle quelle, et l'identifiant est lu comme le dernier mot.
+Conséquence pour `celcat.yaml` : **pas d'accent ni de caractère spécial dans `remarque:`**.
+
+Points incertains du § 4 :
+
+- **3 levé** : « TD0 » porte l'identifiant 465 dans les deux bases.
+- **4 levé** : « T_MMI T29 » est trouvé par son nom (1560615 dans `URCA_2026`, 936 dans `URCA_FORMATION`).
+- **5 levé** : Celcat accepte un évènement sans matière.
+- **6 confirmé** : en base d'entraînement, le groupe pris est bien celui des canaris.
+- **1 et 2 restent ouverts** : personne n'a regardé l'onglet « Remarques et personnaliser » de l'inspecteur
+  (le canari a tourné sans `--attendre`), et Kyllian doit dire si `WR100BU - <identifiant>` lui convient
+  (sa demande disait « Remarque : WR100BU »). `custom1` à `custom3` sont relus vides.
+
+**Reste à faire pour que les séances partent** : poser `CAL_IUT_REGLES_ENVOI=on` sur les services **backend** et **celcat-nuit**
+dans Dokploy, puis redéployer (étape 5 du § 2). Tant que ce n'est pas fait, rien ne part.
+
+À savoir pour refaire l'essai :
+
+- Celcat était lent ce jour-là (page d'accueil en 30 à 45 s). La connexion échouait une fois sur trois ;
+  elle recharge maintenant l'accueil et attend l'affichage du rôle.
+- Avec le code monté dans le conteneur (`-v "$PWD:/app"`), `data/state` est **vide** : l'image y déclare un volume.
+  Ajouter `-v "$PWD/data/state:/app/data/state"`, ou le volume du backend comme au § 1.
+- Le message « le robot Celcat n'est pas en pause » lit l'état **local**, pas celui de la production : sans objet sur un PC.
 
 ---
 
@@ -218,7 +253,7 @@ Demande de Kyllian Bresson (01/10/2026) : **toutes** les séances de type PTUT, 
 | Salle | celle de la séance |
 | Classe (groupe) | le groupe de la séance |
 | Matière | celle **du cours** si son code Celcat est connu ; **aucune** sinon. Jamais une matière « PTUT » |
-| Remarque | `PTUT — <identifiant de séance>` |
+| Remarque | `PTUT - <identifiant de séance>` |
 | Département | **T_MMI T29** |
 
 « Oui, on veut pouvoir mettre un module » (réponse du 01/10/2026) : d'où la matière du cours.
@@ -269,7 +304,7 @@ Dernière étape, commune aux deux règles : activer avec `CAL_IUT_REGLES_ENVOI=
 | `categorie` | `Projet` (éventuellement `Projet [0%]`) |
 | `ponderation` | 0 |
 | `departement` | `T_MMI T29` |
-| `remarque (notes)` | `PTUT — WR101-S1-TD-1-but1-td-ab` |
+| `remarque (notes)` | `PTUT - WR101-S1-TD-1-but1-td-ab` |
 | `matieres` | la matière du cours (WR101 Anglais / TSBZ1M01), ou `[]` pour le cours sans code |
 | `salles`, `groupes`, `enseignants` | ceux de la séance support |
 
@@ -292,7 +327,7 @@ Puis « supprimé, absent à la relecture ».
 ```text
 Contexte : dépôt cal-iut, PC avec VPN de l'université CONNECTÉ, .env rempli (CELCAT_URL, CELCAT_UTILISATEUR,
 CELCAT_MOT_DE_PASSE). But : finir la mise au point de la règle d'envoi PTUT (Kyllian Bresson, 01/10/2026) :
-toute séance de type PTUT part dans Celcat en catégorie « Projet » (pondération 0), remarque « PTUT — <id> »,
+toute séance de type PTUT part dans Celcat en catégorie « Projet » (pondération 0), remarque « PTUT - <id> »,
 département T_MMI T29, enseignant/salle/groupe de la séance, et la matière DU COURS si son code est connu
 (aucune sinon ; jamais une matière « PTUT »).
 
@@ -317,14 +352,31 @@ Les règles sont inactives (CAL_IUT_REGLES_ENVOI=off) : ne pas les activer ; la 
 6. Mettre à jour docs/A-TESTER-SUR-CELCAT.md (résultats, date) et docs/CELCAT.md.
 
 Critères de réussite : catégorie Projet résolue par son nom ; pondération relue = 0 ; module_id présent pour le cours
-avec code et absent sinon ; aucune recherche de matière « PTUT » ; remarque « PTUT — <id> » visible dans l'onglet
+avec code et absent sinon ; aucune recherche de matière « PTUT » ; remarque « PTUT - <id> » visible dans l'onglet
 « Remarques et personnaliser » ; évènement supprimé à la relecture ; aucune écriture dans URCA_2026 ; tests verts.
 Commits en français, préfixe « add | ». Ne pas pousser sur main.
 ```
 
 ### Résultats (PTUT)
 
-_À remplir après les essais._
+**Essais du 02/10/2026**, mêmes conditions que pour WR100BU.
+
+| Étape | Résultat |
+|---|---|
+| Catalogue des catégories de `URCA_2026` | 38 catégories. **« Projet » existe sous ce nom exact, id 456.** |
+| Simulation sur `URCA_2026`, cours avec code (WR101) | **Conforme.** `event_cat_id` 456, `dept_id` 1560615, `module_id` 1585129 (TSBZ1M01), un seul `Y`. |
+| Simulation, cours sans code | **Pas faisable** : aucune des 2 384 séances placées n'appartient à un cours sans code Celcat. Le cas reste couvert par les tests ; l'envoi sans matière, lui, est prouvé par le canari WR100BU. |
+| Simulation sur `URCA_FORMATION` | **Bloquée** : « introuvable dans Celcat : matière TSBZ1M01 ». La matière de WR101 n'existe pas en base d'entraînement. |
+| Canari | **Pas fait.** Avec WR101 il serait bloqué pour la même raison : prendre comme support une séance dont la matière existe dans `URCA_FORMATION`. |
+
+Points incertains du § 4 :
+
+- **1 levé** pour `URCA_2026` : le libellé est « Projet », rien à corriger dans `celcat.yaml`.
+  L'id 456 n'a **pas** été ajouté à `categories.CATEGORIE_IDS_REGLES` : on ne sait pas s'il est le même en base d'entraînement.
+- **2 reste ouvert** : la pondération de « Projet » n'a pas été relue (pas de canari).
+- **3, 4 et 5** : confirmations de Kyllian. La remarque s'écrit `PTUT - <identifiant>` (tiret simple, voir WR100BU).
+
+Le planning n'a aucune séance PTUT : la règle ne fait rien pour l'instant, même activée.
 
 ---
 
@@ -338,9 +390,8 @@ ne jamais écrire dans `URCA_2026` pendant ces essais.
 Salles surveillées en priorité : H.018 (« Amphi 3 MMI »), « Amphi 1 TC/GEA », « Amphi 2 GMP/GEII » ; puis toutes nos salles
 qui ont un libellé Celcat ; enseignants : tous ceux qui ont un code Celcat.
 
-**Coupé en production** : `data/config/celcat_occupations.yaml` est livré avec `actif: false` (le robot ne relève rien).
-La commande `cal-iut celcat occupations` marche quand même. Une fois les essais concluants : passer `actif: true`,
-redéployer, puis **Celcat → Occupations hors MMI → Relire maintenant** et vérifier l'écran.
+**Activé le 02/10/2026** après les essais (`actif: true` dans `data/config/celcat_occupations.yaml`). Pour couper : `actif: false`,
+puis redéployer. Après un déploiement : **Celcat → Occupations hors MMI → Relire maintenant**, et vérifier l'écran.
 
 ### 1. Se placer là où Celcat est joignable
 
@@ -487,4 +538,46 @@ Commits en français au style du dépôt (`add | …`, `fix | …`).
 
 ### Résultats (occupations)
 
-_À remplir après les essais._
+**Essais du 02/10/2026**, mêmes conditions. Lecture seule : `udlResources.load` et `udlTimetables.load` uniquement.
+**La lecture est activée depuis ce jour** (`actif: true`).
+
+Relevé complet (`--ecrire-fichier`, dans le conteneur) : **97 ressources, 74 trouvées, 11 requêtes, 61 s** de lecture
+(111 s connexion comprise), fichier de 350 Ko, aucune erreur.
+**799 occupations hors MMI** une fois la réservation de l'amphi par MMI écartée (909 avant).
+
+| Point du § 4 | Constat |
+|---|---|
+| 1. Clé de filtre des enseignants | **`StaffIDs` fonctionne. `StaffID` n'existe pas** (« There is no property named 'StaffID' ») : le repli de la configuration ne sert à rien, sans gêner. |
+| 2. Plusieurs identifiants par appel | **Accepté** : lots de 10, salles comme enseignants. `lot: 10` peut rester. |
+| 3. Contenu d'un évènement | **Confirmé** : `deptName` et `dept_id` ; `room_id` dans `rooms[]`, `staff_id` dans `staff[]` ; `unique_name` du personnel = notre code Celcat. |
+| 4. Heures | **Justes dans le conteneur** (`08:00:00.000Z`, sans décalage). Le cas d'un PC réglé sur Paris (décalage de 9 min 21) n'a pas été essayé. |
+| 5. Reconnaissance de nos évènements | **Corrigée.** Les identifiants portant des minuscules et les remarques de règle n'étaient pas reconnus par les `notes`. Après correctif : 3 414 évènements reconnus par la remarque, 493 par le journal, 58 par leur groupe MMI. |
+| 6. Départements | `T_TC T32` → TC, `T_GEA T22` → GEA, `R_CS R14` → CS. **Corrigé** : `T_ CJ T41` (écrit avec une espace dans Celcat) → CJ. Restent tels quels : `CCC_DROI N01`, `CCC_LET N02`, `CCC_SESG N04`, `droit D00`, `iut Troyes T00`, `EISINE F00` — à abréger dans `libelles_departements` si besoin. |
+| 7. Évènements à date unique | Pas rencontré. |
+| 8. Volume | Voir ci-dessus. Le plus chargé : 142 occupations pour un seul enseignant. |
+
+**La réservation de l'amphi par MMI n'est plus comptée.** Cinq évènements « Réservation Amphi H MMI »
+(département T_MMI T29, sans catégorie, groupe, enseignant ni matière, 8h00–20h00, lundi à vendredi, 22 semaines)
+faisaient 110 des 129 occupations de H.018 : l'amphi aurait été interdit à nos propres CM.
+Règle retenue (`reservations_mmi_ignorees: true` dans `celcat_occupations.yaml`) : un évènement du département MMI
+sans catégorie, groupe, enseignant ni matière est une salle gardée par MMI, pas une occupation.
+Une activité MMI saisie à la main avec une catégorie (Réunion, Conférence…) compte toujours. **À confirmer par Kyllian.**
+
+**Effet sur le planning de production**, simulé avant l'activation (2 557 séances placées, lecture seule) :
+**11 séances** en conflit avec une occupation hors MMI, toutes plausibles —
+A.018 prise par CJ ou TC en même temps qu'un CM (7), H.018 prise par CJ le lundi 11/01 (1),
+Régis Huez (2), Kyllian Bresson (1) et Anthony Froli (1) programmés dans un autre département.
+Elles apparaîtront dans **À traiter → Occupés ailleurs dans Celcat**. Les 255 séances créées dans l'appli
+(hors maquette) n'ont pas pu être simulées.
+
+**23 enseignants n'ont pas de fiche dans le personnel de `URCA_2026`** (ni par code, ni par nom) :
+ABE, ADH, AGU, APA, CDE, CMA, CPI, ECO, ENO, GDO, GDR, GLS, JLA, JPI, JSL, MGL, MPI, PCA, RGY, SHN, THE, VDI, VNG.
+Leurs occupations ne peuvent pas être lues, et leurs séances ne peuvent pas partir dans Celcat. À signaler à Kyllian.
+
+Pas fait : la comparaison ligne à ligne avec l'emploi du temps **affiché** dans Celcat (étape 3 du prompt),
+l'écran **Occupations hors MMI** vu dans un navigateur avec un vrai relevé (ses données ont été calculées sans erreur),
+et le relevé réel anonymisé en fixture de test (étape 5).
+
+Corrigé au passage (tests : `tests/test_celcat_essais_reels_2026_10_02.py`) : `cal-iut celcat-reseau --connecter` annonçait
+« accès via le VPN : NON » sur un tunnel bon six secondes plus tard ; les jours fériés, que Celcat renvoie avec chaque lot,
+étaient comptés « non attribué × 88 » au lieu de « jour férié × 11 ».

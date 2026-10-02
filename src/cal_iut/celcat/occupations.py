@@ -74,8 +74,11 @@ NOM_DEMANDE = "celcat_occupations_demande.json"
 NOM_CONFIG = "celcat_occupations.yaml"
 
 # Identifiant de séance cal-iut (« WR106-S1-CM-1 », « WS301-S3-TD-2 »,
-# « WR118-S1-CUSTOM-… ») : ce que `charge_utile` écrit dans `notes`.
-_RE_SESSION_ID = re.compile(r"^[A-Z]{2}[A-Z0-9]*-S[1-6]-[A-Z0-9-]+$")
+# « WR118-S1-CUSTOM-… ») : ce que `charge_utile` écrit dans `notes`. La fin
+# porte le groupe EN MINUSCULES (« WR305D-S3-TD-1-but2-dev-fi-td-cd ») : sans
+# elles, la plupart de nos identifiants n'étaient pas reconnus (relevé réel
+# du 02/10/2026).
+_RE_SESSION_ID = re.compile(r"^[A-Z]{2}[A-Z0-9]*-S[1-6]-[A-Za-z0-9-]+$")
 
 # Fuseau HISTORIQUE de Paris (avant 1911) : Celcat range ses horaires sur le
 # 31/12/1899 ; un navigateur réglé sur Paris les sérialise en UTC avec
@@ -126,6 +129,10 @@ class ConfigOccupations:
     # règle automatique ne suffit pas.
     libelles_departements: dict[str, str] = field(default_factory=dict)
     categories_ignorees: list[str] = field(default_factory=list)
+    # Une salle GARDÉE par MMI (« Réservation Amphi H MMI » : évènement du
+    # département MMI sans catégorie, groupe, enseignant ni matière) n'est
+    # pas une occupation hors MMI.
+    reservations_mmi_ignorees: bool = True
     # Placement manuel : faux = conflit FORÇABLE (message fort), vrai = refus.
     strict: bool = False
     # Au-delà, l'écran signale un relevé ancien (les contraintes restent).
@@ -165,7 +172,7 @@ def charger_config(config_dir: Path | None = None) -> ConfigOccupations:
         return cfg
     if not isinstance(data, dict):
         return cfg
-    for cle in ("actif", "strict"):
+    for cle in ("actif", "strict", "reservations_mmi_ignorees"):
         if cle in data:
             setattr(cfg, cle, bool(data[cle]))
     for cle in ("fraicheur_heures", "cadence_heures", "pause_s"):
@@ -296,14 +303,15 @@ def _sans_accents(texte: str) -> str:
 
 
 def libelle_departement(nom: str, cfg: ConfigOccupations | None = None) -> str:
-    """« T_TC T27 » -> « TC » ; « T_MMI T29 » -> « MMI ». Un nom inconnu reste
-    tel quel ; la configuration peut le préciser."""
+    """« T_TC T27 » -> « TC » ; « T_MMI T29 » -> « MMI » ; « T_ CJ T41 » (saisi
+    avec une espace dans Celcat) -> « CJ ». Un nom inconnu reste tel quel ; la
+    configuration peut le préciser."""
     nom = str(nom or "").strip()
     if not nom:
         return ""
     if cfg and nom in cfg.libelles_departements:
         return cfg.libelles_departements[nom]
-    m = re.match(r"^[A-Z]_([A-Za-z0-9]+)\b", nom)
+    m = re.match(r"^[A-Z]_ ?([A-Za-z0-9]+)\b", nom)
     if m:
         return m.group(1)
     return nom
@@ -379,23 +387,37 @@ def motif_a_nous(brut: dict, ctx: ContexteNous, cfg: ConfigOccupations) -> str |
         event_id = 0
     if event_id and event_id in ctx.event_ids:
         return "écrit par cal-iut (journal)"
-    notes = str(brut.get("notes") or "").strip()
+    # `session_id_depuis_notes` : une séance envoyée par une règle porte la
+    # remarque « WR100BU - <identifiant> », pas l'identifiant seul.
+    from cal_iut.celcat.mapping import session_id_depuis_notes
+
+    notes = session_id_depuis_notes(str(brut.get("notes") or ""))
     if notes and (notes in ctx.session_ids or _RE_SESSION_ID.match(notes)):
         return "écrit par cal-iut (notes)"
+    groupes = _noms(brut.get("groups"), "name", "unique_name")
+    dept = nom_departement(brut, ctx)
+    dept_mmi = any(dept.upper().startswith(p.upper()) for p in cfg.departements_mmi if dept)
+    try:
+        dept_mmi = dept_mmi or int(brut.get("dept_id")) in ctx.depts_mmi_ids
+    except (TypeError, ValueError):
+        pass
     if est_cours(ev):
-        groupes = _noms(brut.get("groups"), "name", "unique_name")
         if any(
             _sans_accents(g).startswith(_sans_accents(p)) for g in groupes for p in cfg.prefixes_groupes_mmi
         ):
             return "cours d'un groupe MMI"
-        dept = nom_departement(brut, ctx)
-        dept_mmi = any(dept.upper().startswith(p.upper()) for p in cfg.departements_mmi if dept)
-        try:
-            dept_mmi = dept_mmi or int(brut.get("dept_id")) in ctx.depts_mmi_ids
-        except (TypeError, ValueError):
-            pass
         if dept_mmi and not groupes:
             return "cours du département MMI"
+    # MMI qui GARDE une salle (« Réservation Amphi H MMI », 8h00–20h00 sur 22
+    # semaines au relevé du 02/10/2026) : ni catégorie, ni groupe, ni
+    # enseignant, ni matière. Ce n'est pas une occupation hors MMI — comptée,
+    # elle interdisait l'amphi à nos propres CM. Une activité MMI saisie à la
+    # main (catégorie posée : Réunion, Conférence…) reste une occupation.
+    if (
+        cfg.reservations_mmi_ignorees and dept_mmi and not categorie.strip() and not groupes
+        and not brut.get("staff") and not brut.get("modules")
+    ):
+        return "réservation du département MMI"
     return None
 
 
@@ -686,6 +708,17 @@ def relever(
                 journal(f"  ÉCHEC {message}")
                 continue
             for brut in bruts:
+                # Évènements GLOBAUX (jours fériés) : Celcat les renvoie avec
+                # chaque chargement, sans salle ni enseignant. Comptés une
+                # fois, sous leur motif — pas « non attribué » une fois par
+                # lot (× 88 au relevé complet du 02/10/2026).
+                if str(brut.get("global_event") or "N").upper() == "Y":
+                    cle = (int(brut.get("event_id") or 0), "global", "")
+                    if cle not in vus:
+                        vus[cle] = False
+                        motif = motif_a_nous(brut, ctx, cfg) or "évènement global"
+                        res.ignores[motif] = res.ignores.get(motif, 0) + 1
+                    continue
                 concernees = [r for r in lot if _concerne(brut, r)]
                 if not concernees and len(lot) == 1:
                     concernees = list(lot)
@@ -919,7 +952,10 @@ class PageSimulee:
             return self._ok(lots)
         if methode == "udlTimetables.load":
             filtre = params[0] if params and isinstance(params[0], dict) else {}
-            sortie = []
+            # Comme Celcat : les évènements globaux (jours fériés) accompagnent
+            # chaque chargement, quel que soit le filtre (constaté le 02/10/2026).
+            sortie = [ev for ev in self.donnees.get("evenements") or []
+                      if str(ev.get("global_event") or "N").upper() == "Y"]
             for cle, cle_liste in (("RoomIDs", "rooms"), ("StaffIDs", "staff"), ("StaffID", "staff")):
                 ids = {int(i) for i in filtre.get(cle) or []}
                 if not ids:
