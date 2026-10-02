@@ -104,6 +104,16 @@ Sinon, attendre.
 
 Si l'écran dit « Relisez Celcat d'abord », la dernière lecture est trop ancienne : cliquer sur **Relire Celcat**, attendre, recommencer.
 
+### Une séance revient « À créer » après chaque correction, ou « se décale » dans Celcat
+
+Cause connue (WR312D, 02/10/2026) : deux séances étaient rattachées au **même** évènement Celcat,
+après un réaménagement du module qui avait renuméroté ses séances.
+Chaque correction déplaçait l'unique évènement vers l'une et le retirait à l'autre.
+
+Corrigé le 02/10/2026 : un évènement n'appartient plus qu'à une séance — la dernière écrite.
+L'autre n'a plus d'évènement : le robot lui en **crée** un, il ne déplace plus celui de la première.
+Rien à faire à la main. Si le cas revient, **Activité récente** montre le même numéro d'évènement écrit pour deux séances.
+
 ### Le robot ne passe pas, ou la file ne descend pas
 
 - « Le robot d'envoi n'est pas encore passé » depuis longtemps : vérifier qu'il n'est pas en pause (**Réglages**).

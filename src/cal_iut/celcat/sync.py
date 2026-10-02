@@ -86,6 +86,14 @@ def marquer_saisi(
     }
     if event_id is not None:
         ligne["event_id"] = str(event_id)
+        # L'évènement change de séance : l'ancienne le REND. Sans cela, les
+        # deux le revendiquaient et le robot le déplaçait de l'une à l'autre
+        # à chaque correction (WR312D, 02/10/2026 —
+        # `etat.journal_sans_doublons`). L'ancienne n'a plus d'évènement :
+        # elle sera créée.
+        for autre, row in list(journal_doc.items()):
+            if autre != entree.session_id and isinstance(row, dict) and str(row.get("event_id") or "") == str(event_id):
+                del journal_doc[autre]
     if group_id is not None:
         ligne["group_id"] = str(group_id)
     journal_doc[entree.session_id] = ligne
@@ -112,6 +120,7 @@ def reconcilier(lignes: list[dict]) -> tuple[int, int, list[str]]:
     fusionnees = 0
     deja_presentes = 0
     ignorees: list[str] = []
+    pris = {str(row.get("event_id")) for row in existant.values() if isinstance(row, dict) and row.get("event_id")}
     for ligne in lignes:
         sid = str(ligne.get("session_id") or "").strip()
         if not sid or ligne.get("event_id") in (None, ""):
@@ -120,6 +129,12 @@ def reconcilier(lignes: list[dict]) -> tuple[int, int, list[str]]:
         if sid in existant:
             deja_presentes += 1
             continue
+        if str(ligne["event_id"]) in pris:
+            # Évènement déjà rattaché à une autre séance : on ne comble pas
+            # un trou en créant un double rattachement.
+            ignorees.append(sid)
+            continue
+        pris.add(str(ligne["event_id"]))
         row: dict[str, str] = {
             "session_id": sid,
             "signature": str(ligne.get("signature") or ""),

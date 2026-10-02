@@ -69,8 +69,13 @@ def test_deux_processus_qui_journalisent_en_meme_temps_ne_perdent_aucune_ligne(t
         "p = Path(sys.argv[1])\n"
         "etat._path = lambda: p\n"
         "sys.stdin.readline()\n"
+        # Numéros d'évènement PROPRES à chaque processus : depuis le
+        # 02/10/2026, un évènement n'appartient qu'à une séance
+        # (`test_celcat_evenement_deux_seances_2026_10_02.py`) — deux séances
+        # sur le même numéro ne font plus deux lignes.
+        "base = 1000 if sys.argv[2] == 'nuit' else 0\n"
         "for i in range(40):\n"
-        "    sync.reconcilier([{'session_id': f'{sys.argv[2]}-{i}', 'event_id': i}])\n"
+        "    sync.reconcilier([{'session_id': f'{sys.argv[2]}-{i}', 'event_id': base + i}])\n"
     )
     procs = [_processus(code, str(fichier), tag) for tag in ("api", "nuit")]
     for p in procs:  # départ simultané

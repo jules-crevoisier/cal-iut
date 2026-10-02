@@ -82,6 +82,36 @@ def _migrer_v1(data: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
+def journal_sans_doublons(journal: dict[str, Any]) -> tuple[dict[str, Any], list[tuple[str, str]]]:
+    """Un évènement Celcat n'appartient qu'à UNE séance : quand plusieurs
+    lignes du journal portent le même `event_id`, seule la plus récemment
+    écrite (`saisi_le`) le garde. Les autres lignes sont retirées en entier —
+    ces séances n'ont plus d'évènement, elles seront CRÉÉES.
+
+    Production, 02/10/2026 (signalement de Kyllian Bresson sur WR312D) :
+    l'évènement 1945024 était rattaché à deux séances depuis le réaménagement
+    du module. Chaque correction le déplaçait vers l'une et le retirait à
+    l'autre : treize écritures en cinq jours, et la séance « se décalait ».
+
+    Rend (journal nettoyé, [(séance dépossédée, event_id)])."""
+    par_event: dict[str, list[str]] = {}
+    for session_id, row in journal.items():
+        if isinstance(row, dict) and row.get("event_id") not in (None, "", 0, "0"):
+            par_event.setdefault(str(row["event_id"]), []).append(str(session_id))
+    retires: list[tuple[str, str]] = []
+    for event_id, seances in par_event.items():
+        if len(seances) < 2:
+            continue
+        # La plus récente ; à date égale ou absente, l'ordre des identifiants
+        # (résultat stable d'un chargement à l'autre).
+        gardee = max(seances, key=lambda s: (str(journal[s].get("saisi_le") or ""), s))
+        retires += [(s, event_id) for s in sorted(seances) if s != gardee]
+    if not retires:
+        return journal, []
+    depossedees = {s for s, _ in retires}
+    return {s: row for s, row in journal.items() if str(s) not in depossedees}, sorted(retires)
+
+
 def _completer(data: dict[str, Any]) -> dict[str, Any]:
     doc = _vide()
     doc.update(data)
@@ -106,7 +136,10 @@ def _completer(data: dict[str, Any]) -> dict[str, Any]:
             row = dict(row)
             row["session_id"] = session_id
             journal[session_id] = row
-    doc["journal"] = journal
+    # Appliqué à CHAQUE chargement : tous les lecteurs (comparaison, robot,
+    # plan) voient un journal où un évènement n'a qu'une séance. Le fichier
+    # lui-même est nettoyé à la prochaine écriture.
+    doc["journal"] = journal_sans_doublons(journal)[0]
     if not isinstance(doc.get("ignores"), dict):
         doc["ignores"] = {}
     if not isinstance(doc.get("extras"), list):
