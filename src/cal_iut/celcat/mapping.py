@@ -498,9 +498,9 @@ class EntreeCelcat:
         """Le champ `notes` de l'évènement Celcat — sa « Remarque ».
 
         D'ordinaire notre `session_id`, seul. Avec une remarque imposée par
-        une règle : « WR100BU — WR100BU-S1-TD-1-but1-td-ab ». La remarque
+        une règle : « WR100BU - WR100BU-S1-TD-1-but1-td-ab ». La remarque
         voulue vient EN TÊTE (c'est elle que l'équipe lit dans Celcat), et
-        l'identifiant reste dans le même champ, derrière le dernier « — » :
+        l'identifiant reste dans le même champ, en dernier mot :
         `session_id_depuis_notes` le retrouve dans les deux formes.
         """
         if self.remarque:
@@ -547,16 +547,21 @@ class EntreeCelcat:
         return f"{base}|regle:{self.categorie_celcat}|{self.departement}|{self.remarque}"
 
 
-# Entre la remarque imposée et notre identifiant, dans `notes`.
-SEPARATEUR_REMARQUE = " — "
+# Entre la remarque imposée et notre identifiant, dans `notes`. EN ASCII :
+# Celcat abîme les caractères hors ASCII à l'écriture. Le tiret long d'abord
+# choisi (« — ») a été relu « â€” » au canari du 02/10/2026 (URCA_FORMATION),
+# et l'identifiant n'était plus retrouvé derrière lui.
+SEPARATEUR_REMARQUE = " - "
 
 
 def session_id_depuis_notes(notes: str) -> str:
     """Notre `session_id` dans le champ `notes` d'un évènement Celcat, quelle
     que soit sa forme : « WR101-S1-TD-1-but1-td-ab » (séance ordinaire) ou
-    « WR100BU — WR100BU-S1-TD-1-but1-td-ab » (remarque imposée par une règle
-    d'envoi). Un identifiant ne contient jamais « — »."""
-    return str(notes or "").rsplit(SEPARATEUR_REMARQUE, 1)[-1].strip()
+    « WR100BU - WR100BU-S1-TD-1-but1-td-ab » (remarque imposée par une règle
+    d'envoi). C'est le DERNIER MOT : un identifiant ne contient pas d'espace,
+    et la lecture ne dépend ainsi pas de ce que Celcat a fait du séparateur."""
+    mots = str(notes or "").split()
+    return mots[-1] if mots else ""
 
 
 def _salle_celcat(cfg: CelcatConfig, room_id: str | None) -> tuple[str | None, str | None]:

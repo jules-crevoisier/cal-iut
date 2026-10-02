@@ -1013,7 +1013,11 @@ def cmd_celcat_reseau(args: argparse.Namespace) -> int:
         montage = reseau.connecter()
         print(f"montage du VPN    : {montage.detail}")
         if montage:
-            diagnostic = reseau.verifier(url)
+            # Pas `verifier` : le DNS et les routes arrivent quelques secondes
+            # APRÈS le montage. Vérifier dans la foulée annonçait « NON »
+            # (code 1) sur un tunnel bon six secondes plus tard — essai du
+            # 02/10/2026 dans le conteneur du robot.
+            diagnostic = reseau.attendre_acces(url)
             print(f"accès via le VPN  : {'OK' if diagnostic else 'NON'} — {diagnostic.detail}")
 
     return 0 if diagnostic else 1

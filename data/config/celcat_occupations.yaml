@@ -18,12 +18,12 @@
 # Lecture SEULE, toujours : rôle 985_consultation, udlResources.load et
 # udlTimetables.load uniquement — aucune écriture dans Celcat.
 #
-# LIVRÉ À `false` : la lecture des champs Celcat (départements, personnel,
-# heures) n'a pas encore été vérifiée sur le vrai Celcat. Tant que c'est
-# `false`, le robot ne relève rien, aucun fichier n'est déposé, donc rien ne
-# change. La commande `cal-iut celcat occupations` marche quand même pour les
-# essais (docs/A-TESTER-SUR-CELCAT.md). Passer à `true` une fois validé.
-actif: false
+# ACTIVÉ le 02/10/2026 (Jules Crevoisier), après les essais sur le vrai
+# Celcat (docs/A-TESTER-SUR-CELCAT.md) : 97 ressources lues en 11 requêtes,
+# et, simulé sur le planning de production, 11 séances déjà placées en
+# conflit réel — pas de faux positif. Livré à `false` la veille, faute d'essai.
+# À `false`, le robot ne relève rien ; le dernier relevé déposé reste appliqué.
+actif: true
 
 # Salles surveillées : « toutes » = toutes nos salles qui ont un équivalent
 # Celcat (`celcat.yaml::salles` + saisies de l'appli), sinon une liste d'ids
@@ -62,6 +62,15 @@ libelles_departements: {}
 # Catégories Celcat à ne jamais compter comme occupation (ex. « Réservation
 # BU » si elle ne bloque pas vraiment la salle).
 categories_ignorees: []
+
+# Une salle GARDÉE par MMI n'est pas une occupation hors MMI : évènement du
+# département MMI sans catégorie, groupe, enseignant ni matière.
+# 02/10/2026, Jules Crevoisier, après le premier relevé réel : les cinq
+# évènements « Réservation Amphi H MMI » (8h00–20h00, lundi à vendredi, 22
+# semaines) faisaient 110 des 129 occupations de H.018 et auraient interdit
+# l'amphi à nos propres CM. À confirmer par Kyllian Bresson.
+# `false` : ces réservations comptent comme des occupations.
+reservations_mmi_ignorees: true
 
 # Placement manuel : false = conflit FORÇABLE avec un message fort (le relevé
 # peut être périmé de quelques heures) ; true = refus, comme une

@@ -697,6 +697,8 @@ def restreindre_semaines_formulaire(page, lundi: _dt.date) -> int | None:
 
 # --- Session --------------------------------------------------------------
 
+_ESSAIS_ACCUEIL = 3
+
 def connexion(page, base: str = BASE_PRODUCTION, role: str = ROLE_LECTURE,
               identifiant: str | None = None, mot_de_passe: str | None = None):
     """Base -> identifiants -> rôle -> OK.
@@ -705,8 +707,18 @@ def connexion(page, base: str = BASE_PRODUCTION, role: str = ROLE_LECTURE,
     qui les tient de l'appelant ; l'environnement ne sert que de repli pour
     une exploration lancée à la main.
     """
-    page.goto(os.environ["CELCAT_URL"], wait_until="networkidle", timeout=90_000)
-    attendre_texte(page, base, delai=45)
+    # Celcat lent, l'accueil se charge parfois SANS la liste des bases, et elle
+    # ne vient plus : cinq connexions perdues ainsi le 02/10/2026 (accueil en
+    # 30 à 45 s ce jour-là). Recharger suffit — aucune session n'est ouverte
+    # avant la saisie des identifiants, donc rien à rendre entre deux essais.
+    for essai in range(_ESSAIS_ACCUEIL):
+        page.goto(os.environ["CELCAT_URL"], wait_until="networkidle", timeout=90_000)
+        try:
+            attendre_texte(page, base, delai=45)
+            break
+        except TimeoutError:
+            if essai == _ESSAIS_ACCUEIL - 1:
+                raise
     cliquer_texte(page, base, exact=True, sauf="sur CELCAT-DB")
     cliquer_texte(page, "Connexion", exact=True, attendre=3500)
 
@@ -727,6 +739,12 @@ def connexion(page, base: str = BASE_PRODUCTION, role: str = ROLE_LECTURE,
             # repérable ; le déroulant s'ouvre sans elle.
             pass
         cliquer_texte(page, "par défaut", exact=True, attendre=1200)
+        # La liste des rôles n'est pas dans la page : le déroulant la demande
+        # au serveur (`login.getRoles`) quand il s'ouvre. Celcat lent, elle
+        # arrive après les 1,2 s ci-dessus, et le rôle était « introuvable à
+        # l'écran » — deux connexions sur trois le 02/10/2026 (accueil chargé
+        # en 44 s ce matin-là). On attend le rôle, pas une durée.
+        attendre_texte(page, role, delai=30, exact=True)
         cliquer_texte(page, role, exact=True, attendre=1000)
     cliquer_texte(page, "OK", exact=True, attendre=9000)
     return page

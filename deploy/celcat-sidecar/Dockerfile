@@ -17,6 +17,9 @@
 #          --env-file .env -v "$PWD:/app" -w /app cal-iut-celcat <commande>
 #      (le montage écrase ce que COPY a mis en place au build — sans effet
 #      de bord, `pip install -e .` se relance de toute façon au besoin)
+#      ATTENTION : `data/state` reste VIDE dans ce mode — le `VOLUME` plus bas
+#      y pose un volume anonyme par-dessus le montage (« Séances placées : 0 »
+#      le 02/10/2026). Ajouter `-v "$PWD/data/state:/app/data/state"`.
 #   2. Service permanent (drain nocturne, `docker-compose.yml::celcat-nuit`)
 #      — l'app est bakée dans l'image au build (comme le Dockerfile
 #      principal), le CMD ci-dessous tourne tout seul, `data/state/`

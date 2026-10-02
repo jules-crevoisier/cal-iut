@@ -65,13 +65,17 @@ def test_deux_appels_consecutifs_donnent_le_meme_resultat():
     assert premier == second
 
 
-def test_ne_touche_pas_au_planning_deja_charge():
+def test_ne_touche_pas_au_planning_deja_charge(monkeypatch):
     """Cette fonction ne construit QUE le contexte (règles, calendrier,
     salles) — `cmd_completer` reste seul responsable de charger les séances et
     le planning à compléter, propres à chaque fichier traité. Sans cette
     séparation, un appel répété pourrait écraser un planning en cours de
-    complétion."""
+    complétion.
+
+    `monkeypatch` : la sentinelle est retirée en sortant. Posée à la main,
+    elle restait dans le singleton, et `/placements/manquantes` répondait 500
+    dans `test_role_api_2026_09_29.py` (suite lancée comme la CI, 01/10/2026)."""
     etat = get_state()
-    etat.timetable = ["sentinelle"]
+    monkeypatch.setattr(etat, "timetable", ["sentinelle"])
     _construire_etat_pour_completion(ROOT)
     assert etat.timetable == ["sentinelle"]
