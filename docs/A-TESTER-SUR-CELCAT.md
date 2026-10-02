@@ -559,9 +559,13 @@ Relevé complet (`--ecrire-fichier`, dans le conteneur) : **97 ressources, 74 tr
 **La réservation de l'amphi par MMI n'est plus comptée.** Cinq évènements « Réservation Amphi H MMI »
 (département T_MMI T29, sans catégorie, groupe, enseignant ni matière, 8h00–20h00, lundi à vendredi, 22 semaines)
 faisaient 110 des 129 occupations de H.018 : l'amphi aurait été interdit à nos propres CM.
-Règle retenue (`reservations_mmi_ignorees: true` dans `celcat_occupations.yaml`) : un évènement du département MMI
-sans catégorie, groupe, enseignant ni matière est une salle gardée par MMI, pas une occupation.
-Une activité MMI saisie à la main avec une catégorie (Réunion, Conférence…) compte toujours. **À confirmer par Kyllian.**
+**Confirmé par Jules le 02/10/2026** : ces réservations couvrent toutes les semaines pour obliger les autres parcours
+à demander l'amphi ; elles ne doivent en aucun cas bloquer MMI.
+Règle (`reservations_mmi_ignorees: true` dans `celcat_occupations.yaml`) : un évènement du département MMI sans groupe ni matière
+est une salle gardée par MMI quand rien d'autre n'y est posé (ni catégorie ni enseignant), ou quand sa remarque commence
+par « Réservation » — pour qu'une catégorie ou un responsable ajoutés plus tard n'en fassent pas une occupation.
+Une activité MMI saisie à la main (Réunion, Conférence…) compte toujours.
+Premier relevé de production (02/10, 12h20) : 5 réservations écartées, H.018 passe de 129 à 19 occupations, toutes d'autres départements.
 
 **Effet sur le planning de production**, simulé avant l'activation (2 557 séances placées, lecture seule) :
 **11 séances** en conflit avec une occupation hors MMI, toutes plausibles —
@@ -574,9 +578,11 @@ Elles apparaîtront dans **À traiter → Occupés ailleurs dans Celcat**. Les 2
 ABE, ADH, AGU, APA, CDE, CMA, CPI, ECO, ENO, GDO, GDR, GLS, JLA, JPI, JSL, MGL, MPI, PCA, RGY, SHN, THE, VDI, VNG.
 Leurs occupations ne peuvent pas être lues, et leurs séances ne peuvent pas partir dans Celcat. À signaler à Kyllian.
 
-Pas fait : la comparaison ligne à ligne avec l'emploi du temps **affiché** dans Celcat (étape 3 du prompt),
-l'écran **Occupations hors MMI** vu dans un navigateur avec un vrai relevé (ses données ont été calculées sans erreur),
-et le relevé réel anonymisé en fixture de test (étape 5).
+**Fixture de test** (étape 5) : `tests/fixtures/celcat_occupations_releve.json`, 22 évènements du relevé réel
+(H.018, les deux amphis partagés, Anthony Froli), personnel des autres départements remplacé, auteurs des saisies retirés.
+`tests/test_occupations_releve_reel_2026_10_02.py` la rejoue sans réseau.
+
+Pas fait : la comparaison ligne à ligne avec l'emploi du temps **affiché** dans Celcat (étape 3 du prompt).
 
 Corrigé au passage (tests : `tests/test_celcat_essais_reels_2026_10_02.py`) : `cal-iut celcat-reseau --connecter` annonçait
 « accès via le VPN : NON » sur un tunnel bon six secondes plus tard ; les jours fériés, que Celcat renvoie avec chaque lot,
