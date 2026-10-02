@@ -106,16 +106,25 @@ def sonde_jour() -> object:
     return date.today()  # noqa: DTZ011
 
 
-def sonde_fichiers(motifs: Callable[[], Iterable[Path]], intervalle_s: float = 5.0) -> Callable[[], object]:
+# Délai entre deux relectures des fichiers sondés. `tests/conftest.py` le met
+# à 0 : chaque test a son dossier de configuration, et une empreinte gardée
+# 5 s faisait avancer la révision au milieu du test suivant (ETag changé,
+# 200 au lieu de 304 — CI du 02/10/2026).
+INTERVALLE_SONDE_FICHIERS_S = 5.0
+
+
+def sonde_fichiers(motifs: Callable[[], Iterable[Path]], intervalle_s: float | None = None) -> Callable[[], object]:
     """Empreinte (chemin, date de modification, taille) des fichiers donnés,
-    recalculée au plus toutes les `intervalle_s` secondes : relire ~20
-    `stat()` à chaque requête sondée serait inutilement coûteux pour des
-    fichiers qui ne changent qu'au déploiement ou à la main."""
+    recalculée au plus toutes les `intervalle_s` secondes (défaut :
+    `INTERVALLE_SONDE_FICHIERS_S`, lu à chaque appel) : relire ~20 `stat()` à
+    chaque requête sondée serait inutilement coûteux pour des fichiers qui ne
+    changent qu'au déploiement ou à la main."""
     cache: dict[str, object] = {"quand": 0.0, "valeur": None}
 
     def _sonde() -> object:
         maintenant = time.monotonic()
-        if cache["valeur"] is not None and maintenant - float(cache["quand"]) < intervalle_s:
+        delai = INTERVALLE_SONDE_FICHIERS_S if intervalle_s is None else intervalle_s
+        if cache["valeur"] is not None and maintenant - float(cache["quand"]) < delai:
             return cache["valeur"]
         empreinte = []
         for chemin in sorted(motifs()):

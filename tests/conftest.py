@@ -37,6 +37,13 @@ import dotenv  # noqa: E402
 
 dotenv.load_dotenv = lambda *args, **kwargs: False
 
+# La sonde de fichiers de la révision relit à CHAQUE appel pendant les tests
+# (`test_revision_stable_en_test_2026_10_02.py`) : temporisée, elle faisait
+# avancer la révision au milieu d'un test, selon l'horloge.
+from cal_iut.api import revision as _revision  # noqa: E402
+
+_revision.INTERVALLE_SONDE_FICHIERS_S = 0.0
+
 
 @pytest.fixture
 def auth_password() -> str:
