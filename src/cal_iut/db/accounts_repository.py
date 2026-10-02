@@ -191,16 +191,25 @@ class AccountRepository:
         `intervalle_s` et par clé — pour les routes générales et `/api/v1`,
         où une clé peut servir des centaines de fois par minute. UPDATE
         direct, sans charger d'objet : ne touche aucun objet déjà chargé
-        par l'appelant dans une autre session."""
+        par l'appelant dans une autre session.
+
+        La transaction est TOUJOURS refermée en sortant, et le verrou
+        d'écriture n'est pris que s'il y a une date à écrire. Un UPDATE qui ne
+        touche aucune ligne ouvre quand même une transaction d'écriture :
+        laissée ouverte, elle gardait le verrou de la base jusqu'à la fin de
+        la requête, et la requête suivante — authentifiée dans la boucle
+        d'évènements — figeait tout le serveur en l'attendant (production,
+        02/10/2026 : 9 requêtes simultanées avec une clé, 504 pour tous)."""
         maintenant = datetime.now(UTC)
-        seuil = maintenant - timedelta(seconds=intervalle_s)
-        n = (
-            self.db.query(McpKey)
-            .filter(
-                McpKey.id == key_id,
-                (McpKey.last_used_at.is_(None)) | (McpKey.last_used_at < seuil.replace(tzinfo=None)),
-            )
-            .update({McpKey.last_used_at: maintenant}, synchronize_session=False)
-        )
-        if n:
-            self.db.commit()
+        seuil = (maintenant - timedelta(seconds=intervalle_s)).replace(tzinfo=None)
+        perimee = (McpKey.last_used_at.is_(None)) | (McpKey.last_used_at < seuil)
+        try:
+            a_ecrire = self.db.query(McpKey.id).filter(McpKey.id == key_id, perimee).first() is not None
+            if a_ecrire:
+                self.db.query(McpKey).filter(McpKey.id == key_id, perimee).update(
+                    {McpKey.last_used_at: maintenant}, synchronize_session=False
+                )
+                self.db.commit()
+        finally:
+            # Rien à écrire, ou échec : on rend la connexion tout de suite.
+            self.db.rollback()

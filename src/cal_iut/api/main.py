@@ -489,10 +489,16 @@ def _user_depuis_cle_api(request: Request) -> User | None:
     # Dernière utilisation (affichée dans l'écran des clés) : dans une AUTRE
     # session, par un UPDATE direct, au plus une fois par minute et par clé
     # — `user` ci-dessus, chargé dans `repo`, n'est pas touché.
+    # Session REFERMÉE ici même, sans attendre la fin de la requête : ce code
+    # tourne dans la boucle d'évènements, et une session d'écriture qui
+    # traîne y fige tout le serveur (02/10/2026).
+    session_date = get_db(get_state().db_path)
     try:
-        _account_repo().touch_mcp_key_si_ancien(cle.id, 60)
+        AccountRepository(session_date).touch_mcp_key_si_ancien(cle.id, 60)
     except Exception:  # noqa: BLE001 — une date d'affichage ne doit jamais refuser une requête
         logger.exception("clé API : date de dernière utilisation non enregistrée")
+    finally:
+        session_date.close()
     # PAS de `touch_mcp_key` ici : ça commit(), qui EXPIRE tous les objets
     # de la session (dont `user`) — `require_role`, appelé bien plus tard
     # dans la requête, retomberait sur un `DetachedInstanceError` dès que
