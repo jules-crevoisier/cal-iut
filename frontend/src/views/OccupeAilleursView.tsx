@@ -34,6 +34,7 @@ import {
   trierOccupations,
   type LibelleRessource,
   type TypeRessource,
+  motifsEcartes,
 } from "../utils/occupeAilleurs";
 import "../styles/outils.css";
 import "./OccupeAilleursView.css";
@@ -357,7 +358,7 @@ function LigneConflit({
         </td>
       )}
       <td className="occ-action">
-        <button type="button" className="btn btn--sm" aria-label={`Ouvrir ${c.course_code}`} onClick={ouvrir}>
+        <button type="button" className="btn" aria-label={`Ouvrir ${c.course_code}`} onClick={ouvrir}>
           Ouvrir
         </button>
       </td>
@@ -405,7 +406,7 @@ function CarteReleve() {
   };
 
   const introuvables = (donnees?.ressources ?? []).filter((r) => !r.trouvee);
-  const ecartes = Object.entries(donnees?.ignores ?? {});
+  const ecartes = motifsEcartes(donnees?.ignores ?? {});
 
   return (
     <section className="panel occ-releve" aria-labelledby="occ-releve">
@@ -414,13 +415,13 @@ function CarteReleve() {
         <div className="carte-tete-actions">
           <button
             type="button"
-            className="btn btn--sm"
+            className="btn"
             onClick={() => void relire()}
             disabled={envoi || donnees?.demandeEnCours || donnees?.lectureActive === false}
           >
             {donnees?.demandeEnCours ? "Relecture demandée…" : "Relire maintenant"}
           </button>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void charger()}>
+          <button type="button" className="btn btn--ghost" onClick={() => void charger()}>
             Actualiser
           </button>
         </div>
@@ -497,10 +498,10 @@ function CarteReleve() {
                 </tr>
               </thead>
               <tbody>
-                {ecartes.map(([motif, n]) => (
-                  <tr key={motif}>
-                    <td>{motif}</td>
-                    <td className="num">{n}</td>
+                {ecartes.map(({ libelle, nombre }) => (
+                  <tr key={libelle}>
+                    <td>{libelle}</td>
+                    <td className="num">{nombre}</td>
                   </tr>
                 ))}
               </tbody>

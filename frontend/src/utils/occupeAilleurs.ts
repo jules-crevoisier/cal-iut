@@ -125,3 +125,30 @@ export function filtrerOccupations(occupations: OccupationExterne[], filtre: Fil
     return normaliser(`${libelle(o.t, o.code)} ${o.code} ${o.dep ?? ""} ${o.lib ?? ""}`).includes(q);
   });
 }
+
+/** Ce que le relevé a écarté, en mots de tous les jours (carte « Relevé
+ *  Celcat »). Les motifs viennent de `celcat/occupations.py::motif_a_nous` ;
+ *  un motif inconnu reste tel quel. Deux motifs qui disent la même chose
+ *  (nos séances reconnues par le journal ou par leur remarque) s'additionnent. */
+const LIBELLES_MOTIFS: Record<string, string> = {
+  "jour férié": "Jours fériés",
+  "évènement global": "Évènements communs à toute l'université",
+  suspendu: "Évènements suspendus dans Celcat",
+  "sans horaire": "Évènements sans horaire",
+  "catégorie ignorée": "Catégories à ne pas compter",
+  "écrit par cal-iut (journal)": "Nos séances, envoyées par le robot",
+  "écrit par cal-iut (notes)": "Nos séances, envoyées par le robot",
+  "cours d'un groupe MMI": "Cours de nos groupes saisis à la main dans Celcat",
+  "cours du département MMI": "Cours du département MMI sans groupe",
+  "réservation du département MMI": "Salles gardées par MMI (réservations)",
+  "non attribué": "Évènements sans salle ni enseignant suivis",
+};
+
+export function motifsEcartes(ignores: Record<string, number>): { libelle: string; nombre: number }[] {
+  const parLibelle = new Map<string, number>();
+  for (const [motif, nombre] of Object.entries(ignores)) {
+    const libelle = LIBELLES_MOTIFS[motif] ?? motif;
+    parLibelle.set(libelle, (parLibelle.get(libelle) ?? 0) + nombre);
+  }
+  return [...parLibelle].map(([libelle, nombre]) => ({ libelle, nombre })).sort((a, b) => b.nombre - a.nombre);
+}

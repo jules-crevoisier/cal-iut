@@ -191,13 +191,20 @@
   font-weight: 600;
 }
 
+/* Une liste de noms : en colonnes dès qu'il y a la place, pas une colonne
+   de vingt lignes. */
 .occ-introuvables {
-  display: grid;
-  gap: 4px;
+  columns: 220px;
+  column-gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
   font-size: 13px;
+}
+
+.occ-introuvables li {
+  break-inside: avoid;
+  padding: 2px 0;
 }
 
 .occ-ecartes {

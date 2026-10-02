@@ -251,3 +251,28 @@ describe("filtrerOccupations", () => {
     expect(filtrerOccupations(liste, { texte: "introuvable" })).toEqual([]);
   });
 });
+
+// Ajout du lead après le contrôle visuel (02/10/2026) : la carte « Relevé
+// Celcat » listait les motifs bruts du relevé (« écrit par cal-iut (notes) »).
+describe("motifsEcartes", () => {
+  it("dit les motifs en mots courants et additionne ceux qui disent la même chose", async () => {
+    const { motifsEcartes } = await import("./occupeAilleurs");
+    expect(
+      motifsEcartes({
+        "jour férié": 11,
+        "écrit par cal-iut (journal)": 1352,
+        "écrit par cal-iut (notes)": 2558,
+        "réservation du département MMI": 5,
+      }),
+    ).toEqual([
+      { libelle: "Nos séances, envoyées par le robot", nombre: 3910 },
+      { libelle: "Jours fériés", nombre: 11 },
+      { libelle: "Salles gardées par MMI (réservations)", nombre: 5 },
+    ]);
+  });
+
+  it("laisse un motif inconnu tel quel", async () => {
+    const { motifsEcartes } = await import("./occupeAilleurs");
+    expect(motifsEcartes({ "hors période": 4 })).toEqual([{ libelle: "hors période", nombre: 4 }]);
+  });
+});
