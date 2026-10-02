@@ -391,7 +391,7 @@ Salles surveillées en priorité : H.018 (« Amphi 3 MMI »), « Amphi 1 TC/GEA 
 qui ont un libellé Celcat ; enseignants : tous ceux qui ont un code Celcat.
 
 **Activé le 02/10/2026** après les essais (`actif: true` dans `data/config/celcat_occupations.yaml`). Pour couper : `actif: false`,
-puis redéployer. Après un déploiement : **Celcat → Occupations hors MMI → Relire maintenant**, et vérifier l'écran.
+puis redéployer. Après un déploiement : vue **Occupé ailleurs → Relevé Celcat → Relire maintenant**, et vérifier l'écran.
 
 ### 1. Se placer là où Celcat est joignable
 
@@ -447,7 +447,7 @@ cal-iut celcat occupations --ecrire-fichier --vpn
 ```
 
 (`--ecrire-fichier` est ignoré avec `--ressource` : un relevé partiel effacerait les autres ressources.)
-Sinon, le robot l'écrit tout seul dans les 2 h, ou tout de suite après **Celcat → Occupations hors MMI → Relire maintenant**.
+Sinon, le robot l'écrit tout seul dans les 2 h, ou tout de suite après **Occupé ailleurs → Relevé Celcat → Relire maintenant**.
 
 ### 3. Ce qu'on doit voir
 
@@ -468,7 +468,7 @@ Ignorés (à nous, ou non pertinents) : cours d'un groupe MMI × 40, écrit par 
   l'enseignant dans Celcat, rôle consultation) ;
 - **aucun de nos cours MMI** n'apparaît dans la liste (il doit être compté dans « Ignorés ») ;
 - le **département** affiché est le bon sigle (« TC », « GEA »…) ; sinon, le noter pour `libelles_departements` ;
-- dans l'appli, après `--ecrire-fichier` : **Celcat → Occupations hors MMI** affiche la date du relevé et les mêmes nombres,
+- dans l'appli, après `--ecrire-fichier` : la vue **Occupé ailleurs** affiche la date du relevé et les mêmes nombres,
   et la Vue Enseignant d'AFR montre les blocs « Occupé ailleurs (TC) ».
 
 ### 4. Ce qui est incertain (jamais vu sur le vrai Celcat)
@@ -532,7 +532,7 @@ Déconnecte-toi de Celcat à la fin de chaque essai (session_lecture le fait).
 
 Critères de réussite : H.018, les deux amphis partagés et AFR trouvés ; leurs occupations hors MMI correspondent à Celcat (jour, heure
 réelle, département) ; aucun de nos évènements dans la liste ; `cal-iut celcat occupations --ecrire-fichier`
-produit un fichier que l'écran Celcat → Occupations hors MMI affiche ; tests verts ; aucun appel d'écriture.
+produit un fichier que la vue « Occupé ailleurs » affiche ; tests verts ; aucun appel d'écriture.
 Commits en français au style du dépôt (`add | …`, `fix | …`).
 ```
 

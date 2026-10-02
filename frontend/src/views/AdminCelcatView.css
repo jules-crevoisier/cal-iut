@@ -1178,39 +1178,27 @@
   }
 }
 
-/* ── Occupations hors MMI (01/10/2026) ── */
+/* ── Occupations hors MMI : résumé d'une ligne (02/10/2026) ── */
 
-.celcat-occupations-outils,
-.celcat-occupations-filtres {
+.celcat-occupations-resume {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px 12px;
-  margin: 8px 0;
+  padding: 12px 16px;
 }
 
-.celcat-occupations-filtres label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 0.82rem;
+.celcat-occupations-resume h2 {
+  margin: 0;
+  font-size: 0.98rem;
 }
 
-.celcat-occupations-defile {
-  max-height: 50vh;
-  overflow: auto;
+.celcat-occupations-resume .btn {
+  margin-left: auto;
 }
 
-.celcat-occupations table {
-  width: 100%;
-}
-
-.celcat-occupations-conflits ul {
-  margin: 4px 0 12px;
-  padding-left: 18px;
-}
-
-.celcat-occupations h3 {
-  margin: 12px 0 4px;
-  font-size: 0.95rem;
+@media (pointer: coarse) {
+  .celcat-occupations-resume .btn {
+    min-height: 44px;
+  }
 }

@@ -262,8 +262,11 @@ def _creneaux_de(session, slot: int) -> list[int]:
     return [slot + k for k in range(duree) if 0 <= slot + k < len(_CRENEAUX_MIN)]
 
 
-def conflits_enseignant(state, session, week: int, day: int, slot: int, codes: list[str] | None = None) -> list[str]:
-    """Messages pour chaque enseignant de la séance occupé dans Celcat."""
+def occupations_enseignant(
+    state, session, week: int, day: int, slot: int, codes: list[str] | None = None
+) -> list[tuple[str, dict]]:
+    """(code, occupation Celcat) pour chaque enseignant de la séance occupé
+    ailleurs sur l'un de ses créneaux."""
     codes = list(codes if codes is not None else (getattr(session, "teacher_codes", None) or []))
     if not codes or not index().par_ressource:
         return []
@@ -271,12 +274,19 @@ def conflits_enseignant(state, session, week: int, day: int, slot: int, codes: l
     if d is None:
         return []
     iso = d.isoformat()
-    messages: list[str] = []
-    for code in codes:
-        evs = _uniques([e for s in _creneaux_de(session, slot) for e in occupations_a("enseignant", code, iso, s)])
-        for e in evs:
-            messages.append(message_enseignant(nom_enseignant(state, code, e), e))
-    return messages
+    return [
+        (code, e)
+        for code in codes
+        for e in _uniques([e for s in _creneaux_de(session, slot) for e in occupations_a("enseignant", code, iso, s)])
+    ]
+
+
+def conflits_enseignant(state, session, week: int, day: int, slot: int, codes: list[str] | None = None) -> list[str]:
+    """Messages pour chaque enseignant de la séance occupé dans Celcat."""
+    return [
+        message_enseignant(nom_enseignant(state, code, e), e)
+        for code, e in occupations_enseignant(state, session, week, day, slot, codes)
+    ]
 
 
 def _salles_liees(state, room_id: str) -> set[str]:
@@ -292,19 +302,27 @@ def _salles_liees(state, room_id: str) -> set[str]:
     return {room_id} | set(carte.get(room_id, set()))
 
 
-def conflits_salle(state, session, room_id: str | None, week: int, day: int, slot: int) -> list[str]:
-    """Messages si la salle (ou une salle liée : H.007 ↔ H.007-008) est prise
-    dans Celcat sur l'un des créneaux de la séance."""
+def occupations_salle(state, session, room_id: str | None, week: int, day: int, slot: int) -> list[dict]:
+    """Occupations Celcat de la salle (ou d'une salle liée : H.007 ↔
+    H.007-008) sur l'un des créneaux de la séance."""
     if not room_id or not index().par_ressource:
         return []
     d = _date_de(state, getattr(session, "semestre", None), week, day)
     if d is None:
         return []
     iso = d.isoformat()
-    evs = _uniques([
+    return _uniques([
         e for rid in sorted(_salles_liees(state, room_id)) for s in _creneaux_de(session, slot)
         for e in occupations_a("salle", rid, iso, s)
     ])
+
+
+def conflits_salle(state, session, room_id: str | None, week: int, day: int, slot: int) -> list[str]:
+    """Messages si la salle (ou une salle liée : H.007 ↔ H.007-008) est prise
+    dans Celcat sur l'un des créneaux de la séance."""
+    evs = occupations_salle(state, session, room_id, week, day, slot)
+    if not evs:
+        return []
     libelle = _libelle_salle(state, room_id)
     return [message_salle(libelle, e) for e in evs]
 
@@ -418,7 +436,8 @@ def reservations_effectives(state) -> dict[str, set[int]]:
 
 def seances_en_conflit(state) -> list[dict]:
     """Une entrée par (séance placée, ressource) en conflit avec une
-    occupation externe. Même fonction pour l'écran (payload) et l'API v1."""
+    occupation externe. Même fonction pour l'écran (payload) et l'API v1.
+    Chaque entrée porte la phrase (`message`) ET ses champs séparés."""
     if not index().par_ressource:
         return []
     sortie: list[dict] = []
@@ -433,13 +452,32 @@ def seances_en_conflit(state) -> list[dict]:
             "semaine": p.week, "jour": p.day, "creneau": p.slot,
             "groupes": list(p.group_ids or []), "enseignants": list(p.teacher_codes or []),
         }
-        for code in p.teacher_codes or []:
-            for m in conflits_enseignant(state, session, p.week, p.day, p.slot, codes=[code]):
-                sortie.append({**base, "ressource_type": "enseignant", "ressource": code, "message": m})
+        for code, e in occupations_enseignant(state, session, p.week, p.day, p.slot, codes=list(p.teacher_codes or [])):
+            nom = nom_enseignant(state, code, e)
+            sortie.append({**base, "ressource_type": "enseignant", "ressource": code,
+                           "message": message_enseignant(nom, e), **_detail_conflit(nom, e)})
         rid = getattr(p, "room_id", None)
-        for m in conflits_salle(state, session, rid, p.week, p.day, p.slot):
-            sortie.append({**base, "ressource_type": "salle", "ressource": rid, "message": m})
+        evs = occupations_salle(state, session, rid, p.week, p.day, p.slot)
+        if evs:
+            libelle = _libelle_salle(state, rid)
+            for e in evs:
+                sortie.append({**base, "ressource_type": "salle", "ressource": rid,
+                               "message": message_salle(libelle, e), **_detail_conflit(libelle, e)})
     return sortie
+
+
+def _detail_conflit(libelle: str, e: dict) -> dict:
+    """Les champs de la phrase, un par un : la vue « Occupé ailleurs » les met
+    en tableau (02/10/2026 — en phrases, la liste était illisible)."""
+    return {
+        "ressource_libelle": libelle,
+        "date": str(e.get("date") or ""),
+        "debut": str(e.get("debut") or ""),
+        "fin": str(e.get("fin") or ""),
+        "departement": str(e.get("departement") or ""),
+        "categorie": str(e.get("categorie") or ""),
+        "intitule": str(e.get("intitule") or ""),
+    }
 
 
 # ── Payload / écrans ─────────────────────────────────────────────────────

@@ -50,8 +50,8 @@ Un **robot d'envoi** la recopie ensuite dans Celcat, tout seul.
 4. **Le verdict** : « concorde », « à traiter » ou « bloqué ».
 5. **À gauche** : les écarts séance par séance, puis les évènements en trop.
 6. **À droite** : la file d'attente (« File d'attente vide — tout est poussé. » quand tout est parti) et ce qui bloque.
-7. **Repliés en bas** : **Occupations hors MMI** (ce que Celcat contient d'autre sur nos salles et enseignants, voir [§ 6](#6-occupations-hors-mmi)),
-   **Activité récente** (créées, modifiées, supprimées, échecs) et **Réglages**.
+7. **En bas** : une ligne **Occupations hors MMI** (nombre d'occupations, date du relevé) qui ouvre la vue **Occupé ailleurs**
+   ([§ 6](#6-occupations-hors-mmi)) ; puis, repliés, **Activité récente** (créées, modifiées, supprimées, échecs) et **Réglages**.
 
 ### Corriger une semaine
 
@@ -502,15 +502,21 @@ et convertit chaque occurrence en **créneaux chevauchés** : 10h00-12h30 bloque
 ### Fréquence
 
 - **Toutes les 2 h** (`cadence_heures`), dans le même passage et la même session que l'instantané Celcat.
-- **À la demande** : écran **Celcat → Occupations hors MMI → Relire maintenant** (prise en compte au passage suivant du robot, moins d'une minute).
+- **À la demande** (administrateur) : vue **Occupé ailleurs**, carte **Relevé Celcat**, **Relire maintenant** (prise en compte au passage suivant du robot, moins d'une minute).
 - **À la main** dans le conteneur : `cal-iut celcat occupations --ecrire-fichier --vpn` (voir [A-TESTER-SUR-CELCAT.md](A-TESTER-SUR-CELCAT.md)).
 - Robot en **pause** : rien n'est relu ; le dernier relevé reste appliqué.
 
 ### Ce que montre l'écran
 
-**Celcat → Occupations hors MMI** (replié) : date du dernier relevé et son âge, période, ressources surveillées
-(trouvées dans Celcat ou non) avec leur nombre d'occupations, séances déjà placées en conflit,
-liste filtrable (texte, type, ressource), bouton **Relire maintenant**.
+La vue **Occupé ailleurs** (navigation, groupe Référentiel, à côté de **Contraintes**) est ouverte à toute l'équipe.
+Jusqu'au 02/10/2026, ces informations étaient un bloc replié de l'écran Celcat, réservé aux administrateurs.
+
+| Bloc | Contenu |
+|---|---|
+| Chiffres en tête | Séances en conflit, salles prises ailleurs, enseignants pris ailleurs, âge du dernier relevé. Les tuiles « salles » et « enseignants » filtrent la liste. |
+| Séances placées sur une occupation | Un tableau : la séance, quand, ce qui bloque (salle ou enseignant), qui l'occupe. **Ouvrir** mène à la séance. |
+| Salles et enseignants pris ailleurs | L'annuaire des ressources avec leur nombre d'occupations, et la liste filtrable (texte, type, ressource). |
+| Relevé Celcat (administrateur) | Date, période et base du relevé, **Relire maintenant**, ressources **introuvables dans Celcat**, ce qui a été écarté du relevé. |
 
 - **Aucun relevé** : rien n'est appliqué ; l'écran le dit.
 - **Relevé ancien** (plus de `fraicheur_heures`, 6 h par défaut) : les contraintes restent appliquées telles quelles,

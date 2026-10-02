@@ -344,6 +344,19 @@ export interface ConflitOccupationExterne {
   ressource_type: "enseignant" | "salle";
   ressource: string;
   message: string;
+  /** Les champs de `message`, un par un (vue « Occupé ailleurs », 02/10/2026).
+   *  Absents d'un serveur plus ancien : la vue retombe alors sur `message`. */
+  /** « Anthony Froli », « H.018 (Amphi MMI) ». */
+  ressource_libelle?: string;
+  /** Date et heures RÉELLES de l'occupation dans Celcat (« 2026-10-08 », « 08:00 »). */
+  date?: string;
+  debut?: string;
+  fin?: string;
+  /** Département abrégé (« TC ») ; vide = administration / hors département. */
+  departement?: string;
+  /** Catégorie Celcat (« [CM] », « Réunion ») et intitulé (« JR307 Droit fiscal 1 »). */
+  categorie?: string;
+  intitule?: string;
 }
 
 export interface OccupationsExternesPayload {

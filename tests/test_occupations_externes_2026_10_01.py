@@ -672,3 +672,25 @@ def test_relire_maintenant_declenche_le_passage(monkeypatch, capsys) -> None:
     monkeypatch.setattr("sys.argv", ["celcat_instantane.py"])
     assert script.principal() == 2
     assert not occ.demande_en_cours(), "la demande est consommée"
+
+
+def test_un_conflit_porte_ses_champs_separes(client, etat) -> None:
+    """Retour de Jules du 02/10/2026 sur l'écran des occupations : « c'est
+    illisible ». Les conflits n'arrivaient qu'en une phrase ; la vue
+    « Occupé ailleurs » les met en tableau (quand, ce qui bloque, occupé par),
+    il lui faut les champs un par un. La phrase reste, pour « À traiter »."""
+    _ecrire_releve()
+    etat.timetable[0].day, etat.timetable[0].slot = 0, 1  # td-afr sur le cours TC d'AFR
+    etat.timetable[1].day, etat.timetable[1].slot = 1, 3  # cm-kbr en H.018 pendant la réunion
+    revision.incrementer("test")
+    conflits = {c["seance_id"]: c for c in client.get("/app-state").json()["occupationsExternes"]["conflits"]}
+    afr = conflits["td-afr"]
+    assert afr["message"] == MESSAGE_AFR
+    assert {
+        "ressource_libelle": "Anthony Froli", "date": LUNDI.isoformat(), "debut": "10:00", "fin": "12:30",
+        "departement": "TC", "categorie": "[CM]", "intitule": "Marketing digital",
+    }.items() <= afr.items()
+    salle = conflits["cm-kbr"]
+    assert (salle["ressource_type"], salle["ressource"]) == ("salle", "h018")
+    assert {"date": MARDI.isoformat(), "debut": "14:00", "fin": "17:00", "departement": ""}.items() <= salle.items()
+    assert salle["ressource_libelle"].startswith("H.018")
