@@ -300,6 +300,11 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
   const creationAutorisee = comparaison
     ? (etat.semaines_creation_autorisee ?? []).includes(comparaison.semaine_celcat)
     : false;
+  // Pastille n = indice solveur n-1 : la semaine affichée est cochée dans
+  // « Envoi par semaine », ce qui vaut autorisation côté robot (07/10/2026).
+  const creationParSelection = comparaison
+    ? (etat.semaines_validees ?? []).includes(comparaison.semaine + 1)
+    : false;
 
   return (
     <section className="view celcat">
@@ -371,6 +376,7 @@ export function AdminCelcatView({ cadence = {} }: { cadence?: CadenceCelcat } = 
               erreur={erreurFile}
               semaineCelcat={comparaison?.semaine_celcat ?? null}
               creationAutorisee={creationAutorisee}
+              creationParSelection={creationParSelection}
               onAutoriserCreation={(autorisee) => {
                 if (!comparaison) return;
                 void (async () => {

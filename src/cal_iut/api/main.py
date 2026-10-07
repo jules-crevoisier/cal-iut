@@ -4588,6 +4588,14 @@ def celcat_valider(body: CelcatValiderRequest) -> CelcatEtatResponse:
         doc["semaines_validees"] = [int(s) for s in body.semaines]
         doc["valide_le"] = datetime.now(UTC).isoformat()
         sauver(doc)
+    # Balayé TOUT DE SUITE quand l'écriture est active (signalement du
+    # 07/10/2026 : « s'il peut le faire au prochain passage directement,
+    # c'est mieux ») : les jobs partent au prochain tour du robot, sans
+    # attendre minuit. Écriture coupée, on enregistre seulement.
+    if doc.get("saisie_active"):
+        from cal_iut.celcat.nuit import executer_job_nuit
+
+        executer_job_nuit()
     return _celcat_etat_public()
 
 

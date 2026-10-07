@@ -105,6 +105,23 @@ describe("État de la file Celcat", () => {
     expect(clics).toEqual([false]);
   });
 
+  it("dit qu'une semaine cochée dans « Envoi par semaine » est déjà autorisée (signalement du 07/10/2026)", () => {
+    render(
+      <EtatFileCelcat
+        file={{ ...VIDE, en_attente: 4, differes: 4 }}
+        semaineCelcat={8}
+        creationAutorisee={false}
+        creationParSelection
+        onAutoriserCreation={() => {}}
+      />,
+    );
+    const bloc = screen.getByTestId("file-differes").textContent ?? "";
+    expect(bloc).toMatch(/Création autorisée/);
+    expect(bloc).toMatch(/Envoi par semaine/);
+    // L'autorisation vient de la sélection : c'est là qu'on la retire.
+    expect(screen.queryByRole("button", { name: /Autoriser la création|Retirer l’autorisation/ })).toBeNull();
+  });
+
   it("dit que l'état est indisponible au lieu de disparaître", () => {
     render(<EtatFileCelcat file={null} erreur="serveur injoignable" />);
     expect(screen.getByTestId("etat-file-celcat").textContent).toContain("serveur injoignable");

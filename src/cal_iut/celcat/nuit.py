@@ -589,9 +589,17 @@ def _ecarter_semaines_non_posees(
     # justement Celcat qui est vide (cf. `etat._vide`).
     from cal_iut.celcat.etat import charger as _charger_etat
 
-    autorisees = {int(s) for s in (_charger_etat().get("semaines_creation_autorisee") or [])}
+    doc_etat = _charger_etat()
+    autorisees = {int(s) for s in (doc_etat.get("semaines_creation_autorisee") or [])}
     posees = semaines_posees(releve.evenements, attendus=attendus) | autorisees
     presents = cours_par_semaine(releve.evenements)
+    # Une semaine cochée dans « Envoi par semaine » VAUT autorisation de
+    # création (signalement du 07/10/2026) : cocher puis enregistrer, c'est
+    # déjà dire « cette semaine-là, vas-y ». Sans ça, les 227 créations de la
+    # semaine du 12/10 attendaient un second geste — « Autoriser la création »
+    # dans la comparaison — que personne ne connaissait. Les pastilles (n)
+    # désignent l'indice solveur n-1, porté par `entree.semaine`.
+    cochees = {int(s) - 1 for s in (doc_etat.get("semaines_validees") or [])}
 
     retenus: list[dict[str, Any]] = []
     for job in jobs:
@@ -604,7 +612,7 @@ def _ecarter_semaines_non_posees(
         # différée : son sort est déjà décidé plus bas (« séance inconnue de
         # la maquette »), et l'écarter ici la ferait disparaître des
         # compteurs sans explication.
-        if indice is None or indice in posees:
+        if indice is None or indice in posees or getattr(entree, "semaine", None) in cochees:
             retenus.append(job)
             continue
         bilan.semaines_differees.add(int(indice))
