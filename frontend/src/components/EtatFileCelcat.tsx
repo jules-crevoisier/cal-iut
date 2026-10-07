@@ -40,6 +40,7 @@ export function EtatFileCelcat({
   erreur,
   semaineCelcat,
   creationAutorisee,
+  creationParSelection,
   onAutoriserCreation,
 }: {
   file: CelcatFile | null;
@@ -47,6 +48,9 @@ export function EtatFileCelcat({
   /** Indice du masque Celcat de la semaine affichée (`comparaison.semaine_celcat`). */
   semaineCelcat?: number | null;
   creationAutorisee?: boolean;
+  /** La semaine affichée est cochée dans « Envoi par semaine » : cela vaut
+   * autorisation (07/10/2026), et c'est là-bas qu'on la retire. */
+  creationParSelection?: boolean;
   onAutoriserCreation?: (autorisee: boolean) => void;
 }) {
   if (erreur) {
@@ -112,7 +116,11 @@ export function EtatFileCelcat({
             Dont <strong>{differes}</strong> en attente d’une semaine que Celcat n’a pas encore ouverte. Le robot
             d’envoi n’y crée rien tant que l’équipe ne l’a pas saisie — ou tant que vous ne l’autorisez pas ici.
           </p>
-          {semaineCelcat !== null && semaineCelcat !== undefined && onAutoriserCreation ? (
+          {creationParSelection ? (
+            <p className="celcat-file-autorisation">
+              <strong>Création autorisée</strong> : la semaine affichée est cochée dans « Envoi par semaine ».
+            </p>
+          ) : semaineCelcat !== null && semaineCelcat !== undefined && onAutoriserCreation ? (
             creationAutorisee ? (
               <p className="celcat-file-autorisation">
                 <strong>Création autorisée</strong> sur la semaine affichée.{" "}

@@ -42,7 +42,7 @@ type EtatPastille = "passée" | "lancée" | "enregistrée" | "retirée" | "coch�
 /** Ce que veut dire chaque mot, en légende au-dessus des semaines : six
  * états, c'était six couleurs à deviner. */
 const LEGENDE: Array<{ mot: Exclude<EtatPastille, null>; sens: string; ton: string }> = [
-  { mot: "enregistrée", sens: "balayée chaque nuit", ton: "good" },
+  { mot: "enregistrée", sens: "partira dès que l’écriture sera active", ton: "good" },
   { mot: "cochée", sens: "le sera une fois enregistrée", ton: "" },
   { mot: "retirée", sens: "sortira du balayage une fois enregistrée", ton: "warn" },
   { mot: "lancée", sens: "déjà envoyée", ton: "" },
@@ -153,7 +153,7 @@ export function ReglagesCelcat({
     <details className="panel celcat-reglages celcat-repliable" data-testid="reglages-celcat">
       <summary>
         <h2>Réglages</h2>
-        <span className="celcat-sous-texte">écriture, robot d’envoi, balayage de nuit, cours hors planning, file</span>
+        <span className="celcat-sous-texte">écriture, robot d’envoi, envoi par semaine, cours hors planning, file</span>
       </summary>
 
       {erreur ? (
@@ -240,10 +240,15 @@ export function ReglagesCelcat({
       </section>
 
       <section className="celcat-reglage" aria-labelledby="reglage-semaines">
-        <h3 id="reglage-semaines">Envoi par semaine — balayage de nuit</h3>
+        <h3 id="reglage-semaines">Envoi par semaine</h3>
         <p className="celcat-aide">
-          Chaque nuit, les semaines enregistrées sont comparées à Celcat et ce qui diverge est mis en file.
-          « Envoyer maintenant » fait ce balayage tout de suite.
+          « Enregistrer la sélection » compare tout de suite les semaines cochées à Celcat et met les écarts en
+          file : le robot d’envoi les écrit à son prochain passage, sans attendre la nuit. Cocher une semaine
+          autorise aussi la création des séances dans une semaine que Celcat n’a pas encore ouverte.
+        </p>
+        <p className="celcat-aide">
+          Écriture coupée, la sélection est seulement gardée : elle partira avec « Envoyer maintenant » une fois
+          l’écriture active, ou au balayage de la nuit.
         </p>
         <dl className="celcat-legende" aria-label="Légende des semaines">
           {LEGENDE.map((l) => (
@@ -292,8 +297,13 @@ export function ReglagesCelcat({
             disabled={enCours || !modifie}
             onClick={() =>
               void agir(async () => {
-                setEtat(await validerSemainesCelcat(brouillon));
-                setMessage("Sélection enregistrée pour le balayage de nuit.");
+                const nouvel = await validerSemainesCelcat(brouillon);
+                setEtat(nouvel);
+                setMessage(
+                  nouvel.saisie_active
+                    ? "Sélection enregistrée : les écarts sont en file, le robot les envoie à son prochain passage."
+                    : "Sélection enregistrée. Rien ne part tant que l’écriture dans Celcat est coupée.",
+                );
               })
             }
           >
