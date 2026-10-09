@@ -18,7 +18,7 @@ import {
   occupationsParCase,
 } from "./occupationsExternes";
 import { sallesLibresAuCreneau } from "./sallesLibres";
-import { buildTodoList, NATURE_PAR_ID } from "./todo";
+import { buildTodoList, compterATraiter, detailConflitCelcat, NATURE_PAR_ID, NATURES } from "./todo";
 
 const AFR: OccupationExterne = {
   t: "enseignant",
@@ -62,6 +62,13 @@ const CONFLIT: ConflitOccupationExterne = {
   ressource: "AFR",
   message:
     "Enseignant indisponible — Anthony Froli est déjà programmé dans le département TC sur ce créneau (lundi 09/11, 10h00–12h30, Celcat).",
+  ressource_libelle: "Anthony Froli",
+  date: "2026-11-09",
+  debut: "10:00",
+  fin: "12:30",
+  departement: "TC",
+  categorie: "[CM]",
+  intitule: "Marketing digital",
 };
 
 function oe(partiel: Partial<OccupationsExternesPayload> = {}): OccupationsExternesPayload {
@@ -145,8 +152,8 @@ describe("occupations hors MMI", () => {
     }).toEqual({
       nature: "occupation-externe",
       cle: "oe|td-afr|enseignant|AFR",
-      titre: "WR101 — Culture numérique",
-      detail: CONFLIT.message,
+      titre: "Anthony Froli",
+      detail: "Séance MMI : WR101 — Culture numérique · Dans Celcat : département TC, Marketing digital, 10h00–12h30",
       semaine: 9,
       jour: 0,
       creneau: 1,
@@ -154,9 +161,11 @@ describe("occupations hors MMI", () => {
       enseignants: ["AFR"],
       nombre: 1,
     });
-    // 02/10/2026 soir : alerte molle, même gravité que « Encadrement SAE ».
-    expect(p!.sev).toBe("warn");
-    expect(NATURE_PAR_ID["occupation-externe"].sev).toBe("warn");
+    // 09/10/2026 (tâche 15) : un conflit, à corriger, marqué Celcat.
+    expect(p!.sev).toBe("bad");
+    expect(NATURE_PAR_ID["occupation-externe"].sev).toBe("bad");
+    expect(p!.celcat).toBe(true);
+    expect(p!.typeDoublon).toBe("enseignant");
     expect(p!.route).toEqual({ vue: "prof", prof: "AFR", sem: 9 });
   });
 });
@@ -228,20 +237,45 @@ describe("occupations sur le planning (02/10/2026 soir)", () => {
     expect(lignesParCase(occupationsParCase(payload, "enseignant", "RHU", 9)).size).toBe(0);
   });
 
-  it("should word « À traiter » as a soft alert, Pris ailleurs dans Celcat, when the nature is listed", () => {
+  it("should list Celcat conflicts as « à corriger » right after the MMI doublons when the nature is listed", () => {
     const nature = NATURE_PAR_ID["occupation-externe"];
-    expect(nature.sev).toBe(NATURE_PAR_ID["compromis-sae"].sev);
-    expect(nature.titre).toBe("Pris ailleurs dans Celcat");
-    expect(nature.court).toBe("Pris ailleurs");
-    expect(nature.aide).toBe(
-      "L'enseignant ou la salle est aussi pris dans Celcat (autre département, réunion, réservation) sur le créneau d'une séance placée. À revoir : rien n'est bloqué.",
-    );
+    expect(nature.sev).toBe("bad");
+    expect(nature.titre).toBe("Conflits Celcat (salle / enseignant)");
+    expect(nature.court).toBe("Conflits Celcat");
+    const ids = NATURES.map((n) => n.id);
+    expect(ids.indexOf("occupation-externe")).toBe(ids.indexOf("doublon") + 1);
+    // Les doublons internes à MMI ne bougent pas.
+    expect(NATURE_PAR_ID["doublon"].titre).toBe("Doublons salle / enseignant");
   });
 
-  it("should flag the todo item as warn, not bad, when a placed session sits on an occupation", () => {
-    const items = buildTodoList(
-      emptyPayload({ groupParcours: { "but1-td-ab": "BUT1" }, occupationsExternes: oe({ conflits: [CONFLIT] }) }),
-    );
-    expect(items.find((i) => i.nature === "occupation-externe")?.sev).toBe("warn");
+  it("should name the room and the Celcat booking when a room is taken by the administration", () => {
+    const salle: ConflitOccupationExterne = {
+      ...CONFLIT,
+      ressource_type: "salle",
+      ressource: "h018",
+      ressource_libelle: "H.018",
+      departement: "",
+      categorie: "Réunion",
+      intitule: "",
+      debut: "14:00",
+      fin: "17:00",
+    };
+    const items = buildTodoList(emptyPayload({ occupationsExternes: oe({ conflits: [salle] }) }));
+    const p = items.find((i) => i.nature === "occupation-externe")!;
+    expect(p.title).toBe("H.018");
+    expect(p.typeDoublon).toBe("salle");
+    expect(p.sub).toBe("Séance MMI : WR101 — Culture numérique · Dans Celcat : administration, Réunion, 14h00–17h00");
+  });
+
+  it("should keep the server sentence when an older server sends no detailed fields", () => {
+    const { date: _d, ressource_libelle: _r, ...ancien } = CONFLIT;
+    expect(detailConflitCelcat(ancien)).toBe(CONFLIT.message);
+    const items = buildTodoList(emptyPayload({ occupationsExternes: oe({ conflits: [ancien] }) }));
+    expect(items.find((i) => i.nature === "occupation-externe")?.title).toBe("AFR");
+  });
+
+  it("should count Celcat conflicts in the « à corriger » badge", () => {
+    const payload = emptyPayload({ occupationsExternes: oe({ conflits: [CONFLIT] }) });
+    expect(compterATraiter(payload, 0).aCorriger).toBeGreaterThanOrEqual(1);
   });
 });

@@ -410,6 +410,8 @@ class PointATraiterV1(BaseModel):
     regle: str | None = None
     motif: str | None = None
     type_doublon: Literal["salle", "enseignant"] | None = None
+    source: Literal["celcat"] | None = Field(
+        default=None, description="« celcat » : conflit avec une occupation relevée dans Celcat (hors MMI).")
 
 
 class ATraiterV1(BaseModel):

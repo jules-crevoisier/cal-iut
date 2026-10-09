@@ -478,9 +478,9 @@ Les trois endpoints SAE sont décrits au [§ 6](#6-les-sae-simplement).
 | `non-placee` | Séances non placées (regroupées : `nombre: 5` = « ×5 ») | `a_corriger` |
 | `sans-salle` | Séances sans salle | `a_corriger` |
 | `doublon` | Doublons salle / enseignant | `a_corriger` |
+| `occupation-externe` | Conflits Celcat (salle / enseignant) : séance placée sur un créneau où l'enseignant ou la salle est pris hors MMI. `titre` = la salle ou l'enseignant, `type_doublon` = `salle` ou `enseignant`, `source` = `celcat`, `detail` = « Séance MMI : … · Dans Celcat : département TC, intitulé, 10h00–12h30 ». Le passé n'est pas listé. | `a_corriger` |
 | `regle` | Règles globales en échec | `a_corriger` |
 | `contrainte` | Indisponibilités enseignant non respectées | `a_corriger` |
-| `occupation-externe` | Pris ailleurs dans Celcat : séance placée sur un créneau où l'enseignant ou la salle est pris hors MMI (`detail` = message du placement). Le passé n'est pas listé. | `a_revoir` |
 | `sae-hors-journee` | Cours de SAE placés hors journée SAE (les `anomalies` de `/api/v1/sae`) | `a_corriger` |
 | `compromis-sae` | Encadrement SAE le même jour (compromis accepté) | `a_revoir` |
 | `trouee` | Journées trouées (≥ 2 créneaux vides entre deux cours d'un groupe) | `a_revoir` |
@@ -501,7 +501,8 @@ Les trois endpoints SAE sont décrits au [§ 6](#6-les-sae-simplement).
 
 - Les compteurs comptent des **occurrences** (un point « ×5 » compte 5), après filtres.
 - `cle` : identifiant stable d'un point, pour voir ce qui apparaît ou disparaît.
-- Champs selon la nature : `seance_id` (sans salle, occupation externe), `seances` et `type_doublon` (doublon), `groupe` (journée
+- Champs selon la nature : `seance_id` (sans salle, occupation externe), `seances` et `type_doublon` (doublon),
+  `type_doublon` et `source: "celcat"` (occupation externe), `groupe` (journée
   trouée), `regle` (règle), `motif` (contrainte, compromis SAE).
 - Tri : sans semaine, semaine en cours, semaines à venir, puis semaines passées (la plus récente d'abord).
   Avec `semaine=`, les points sans semaine restent inclus, comme à l'écran.

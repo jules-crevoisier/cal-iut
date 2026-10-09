@@ -571,7 +571,7 @@ Premier relevé de production (02/10, 12h20) : 5 réservations écartées, H.018
 **11 séances** en conflit avec une occupation hors MMI, toutes plausibles —
 A.018 prise par CJ ou TC en même temps qu'un CM (7), H.018 prise par CJ le lundi 11/01 (1),
 Régis Huez (2), Kyllian Bresson (1) et Anthony Froli (1) programmés dans un autre département.
-Elles apparaissent dans **À traiter → Pris ailleurs dans Celcat** (à revoir). Les 255 séances créées dans l'appli
+Elles apparaissent dans **À traiter → Conflits Celcat (salle / enseignant)** (à corriger depuis le 09/10/2026). Les 255 séances créées dans l'appli
 (hors maquette) n'ont pas pu être simulées.
 
 **23 enseignants n'ont pas de fiche dans le personnel de `URCA_2026`** (ni par code, ni par nom) :

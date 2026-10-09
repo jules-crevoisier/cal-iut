@@ -633,6 +633,7 @@ function ListePoints({
               <button type="button" className={`todo-ligne ${it.sev}`} onClick={() => setRoute(it.route)}>
                 <span className="todo-quand">{quand}</span>
                 <span className="todo-quoi">
+                  {it.celcat && <span className="todo-tag todo-tag--celcat">Celcat</span>}
                   {it.typeDoublon && <span className="todo-tag">{it.typeDoublon}</span>}
                   <strong>{it.title}</strong>
                   {it.n > 1 && <span className="todo-fois">×{it.n}</span>}
