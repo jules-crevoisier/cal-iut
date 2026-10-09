@@ -132,6 +132,10 @@ describe("texteTache — bouton Copier (28/09/2026)", () => {
     const texte = texteTache({ titre: "À trier", colonne: "a_faire" });
     expect(texte).toBe("À trier\nEmploi du temps · À faire");
   });
+
+  it("donne le numéro de la tâche, comme le rapport", () => {
+    expect(texteTache({ id: 7, titre: "À trier", colonne: "a_faire" })).toMatch(/^À trier \(#7\)\n/);
+  });
 });
 
 describe("rapportTaches", () => {

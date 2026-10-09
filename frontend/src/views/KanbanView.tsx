@@ -182,6 +182,9 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
       }
       if (!q) return true;
       const nomProf = t.enseignant_code ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code : "";
+      // « #7 » retrouve la tâche par son numéro ; « 7 » seul aussi, en plus du texte.
+      if (/^#\d+$/.test(q)) return `#${t.id}` === q;
+      if (/^\d+$/.test(q) && String(t.id) === q) return true;
       return normaliser([t.titre, t.description ?? "", t.concerne ?? "", nomProf, t.enseignant_code ?? ""].join(" ")).includes(q);
     });
   }, [taches, filtreConcerne, filtreTexte, payload.teacherLabels]);
@@ -747,6 +750,11 @@ function CarteTache({
       onDrop={onDrop}
     >
       <div className="kanban-card-tete">
+        {/* Numéro de la tâche, le même que dans le rapport copié (« (#7) ») :
+            on peut dire « la tâche 7 » (Jules, 09/10/2026). */}
+        <span className="kanban-card-num" aria-label={`Tâche numéro ${t.id}`}>
+          #{t.id}
+        </span>
         {peutModifier ? (
           <button type="button" className="kanban-card-titre" aria-label={`Modifier « ${t.titre} »`} onClick={onModifier}>
             {t.titre}
@@ -1136,7 +1144,7 @@ function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved, onIm
             Déposez les images pour les joindre à la tâche
           </div>
         )}
-        <h3 id="kanban-modal-titre">{tache ? "Modifier la tâche" : "Nouvelle tâche"}</h3>
+        <h3 id="kanban-modal-titre">{tache ? `Modifier la tâche #${tache.id}` : "Nouvelle tâche"}</h3>
 
         <div className="seancemodal-grille">
           <label className="newroom-field newroom-field--large">

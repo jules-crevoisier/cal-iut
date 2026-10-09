@@ -165,6 +165,20 @@
   gap: 8px;
 }
 
+.kanban-card-num {
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.7;
+}
+
+.kanban-card-tete > .kanban-card-titre {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .kanban-card-titre {
   margin: 0;
   padding: 0;

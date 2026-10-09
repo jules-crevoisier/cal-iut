@@ -264,6 +264,27 @@ describe("KanbanView", () => {
     expect(screen.getByLabelText("Ajouter une tâche dans À faire")).toHaveFocus();
   });
 
+  // Numéro de tâche visible (Jules, 09/10/2026 : « mettre les hashtags des
+  // tâches sur l'interface »), le même que dans le rapport copié.
+  it("shows the task number on each card and finds a card by #number", async () => {
+    stubFetch([
+      tache({ id: 7, titre: "Valérie Mariot dans Celcat" }),
+      tache({ id: 17, titre: "Vacances hachurées" }),
+    ]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Valérie Mariot dans Celcat")).toBeInTheDocument());
+    expect(screen.getByLabelText("Tâche numéro 7")).toHaveTextContent("#7");
+    expect(screen.getByLabelText("Tâche numéro 17")).toHaveTextContent("#17");
+
+    fireEvent.change(screen.getByLabelText("Filtrer les tâches"), { target: { value: "#7" } });
+    expect(screen.getByText("Valérie Mariot dans Celcat")).toBeInTheDocument();
+    expect(screen.queryByText("Vacances hachurées")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filtrer les tâches"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Modifier « Vacances hachurées »" }));
+    expect(screen.getByRole("heading", { name: "Modifier la tâche #17" })).toBeInTheDocument();
+  });
+
   it("filters cards by text and remembers who they are for", async () => {
     stubFetch([
       tache({ id: 1, titre: "Mapper WSA507D", concerne: "Jules" }),
@@ -288,7 +309,7 @@ describe("KanbanView", () => {
     render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Carte a modifier")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Modifier « Carte a modifier »" }));
-    expect(screen.getByRole("dialog", { name: "Modifier la tâche" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /^Modifier la tâche #\d+$/ })).toBeInTheDocument();
   });
 });
 

@@ -108,7 +108,7 @@ const payload = emptyPayload({ teacherLabels: {} });
 async function ouvrirModification(titre: string) {
   await waitFor(() => expect(screen.getByText(titre)).toBeInTheDocument());
   fireEvent.click(screen.getByRole("button", { name: `Modifier « ${titre} »` }));
-  return screen.getByRole("dialog", { name: "Modifier la tâche" });
+  return screen.getByRole("dialog", { name: /^Modifier la tâche #\d+$/ });
 }
 
 function envoisImages(appels: Appel[]) {
@@ -217,7 +217,7 @@ describe("KanbanView — images des tâches", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: /^Aperçu/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Modifier la tâche" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /^Modifier la tâche #\d+$/ })).toBeInTheDocument();
   });
 
   it("removes an image after a light confirmation", async () => {
