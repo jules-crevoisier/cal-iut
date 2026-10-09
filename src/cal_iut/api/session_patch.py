@@ -198,16 +198,17 @@ def _conflit_structure(exc: HTTPException) -> HTTPException:
 
 def _controler_placement(state: object, session: object, placement: object, force: bool) -> None:
     from cal_iut.api.main import (
-        _hard_constraint_context,
+        _contexte_dur_detaille,
         _indisponibilites_strictes,
         _institutional_violations,
         _libelle_jour_ferme,
         _pedagogical_order_violations,
+        _sae_violations,
         _teacher_availability_violations,
         build_manual_conflict_map,
     )
 
-    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+    extra_blocked, jours_sae, extra_blocked_pedago, allowed_weeks = _contexte_dur_detaille(state, session)
     duree = max(1, int(session.duration_slots or 1))
     institutional: list[str] = []
     indispo: list[str] = []
@@ -222,6 +223,10 @@ def _controler_placement(state: object, session: object, placement: object, forc
         )
         # Indisponibilité FORTE (`stricte: true`, 22/09/2026) : non forçable,
         # y compris quand on réaffecte la séance sans la déplacer.
+        # Jour SAE : forçable (09/10/2026), comme dans `_conflits_deplacement`.
+        for motif in _sae_violations(placement.week, placement.day, sl, jours_sae, extra_blocked):
+            if motif not in indispo:
+                indispo.append(motif)
         strictes = _indisponibilites_strictes(state, session, placement.week, placement.day, sl)
         if strictes:
             institutional += strictes

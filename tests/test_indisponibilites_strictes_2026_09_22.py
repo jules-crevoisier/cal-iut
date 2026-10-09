@@ -74,26 +74,26 @@ def _seance(semestre: str = "S1", profs=("RDE",)):
 def _conflits(state, jour_iso: str, slot: int = 1, **kw):
     seance = _seance(**kw)
     w, j = _semaine_jour(state.calendar, seance.semestre, date.fromisoformat(jour_iso))
-    # `_hard_constraint_context` lit la maquette : neutralisé, seul l'enseignant compte ici.
+    # `_contexte_dur_detaille` lit la maquette : neutralisé, seul l'enseignant compte ici.
     return _conflits_deplacement(state, seance, w, j, slot)
 
 
 def test_une_date_forte_est_un_verrou_non_forcable(etat, monkeypatch) -> None:
-    monkeypatch.setattr("cal_iut.api.main._hard_constraint_context", lambda s, x: (set(), set(), None))
+    monkeypatch.setattr("cal_iut.api.main._contexte_dur_detaille", lambda s, x: (set(), {}, set(), None))
     bloquants, forcables = _conflits(etat, "2026-11-05")
     assert any("RDE indisponible le 05/11/2026" in m for m in bloquants), bloquants
     assert not any("Forcer" in m for m in forcables), "ne pas proposer de forcer ce qui est refusé"
 
 
 def test_une_indisponibilite_ordinaire_reste_forcable(etat, monkeypatch) -> None:
-    monkeypatch.setattr("cal_iut.api.main._hard_constraint_context", lambda s, x: (set(), set(), None))
+    monkeypatch.setattr("cal_iut.api.main._contexte_dur_detaille", lambda s, x: (set(), {}, set(), None))
     bloquants, forcables = _conflits(etat, "2026-11-12")
     assert not bloquants
     assert any("indisponible" in m for m in forcables)
 
 
 def test_un_autre_enseignant_n_est_pas_concerne(etat, monkeypatch) -> None:
-    monkeypatch.setattr("cal_iut.api.main._hard_constraint_context", lambda s, x: (set(), set(), None))
+    monkeypatch.setattr("cal_iut.api.main._contexte_dur_detaille", lambda s, x: (set(), {}, set(), None))
     bloquants, forcables = _conflits(etat, "2026-11-05", profs=("MRI",))
     assert not bloquants and not forcables
 
