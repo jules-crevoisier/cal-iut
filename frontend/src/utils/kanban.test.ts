@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyPayload, placedRow } from "../test/payloadFixture";
-import { texteTache, dateReelleRow, libelleDatesTache, routeVersSeance, seancesConcernees } from "./kanban";
+import { rapportTaches, texteTache, dateReelleRow, libelleDatesTache, routeVersSeance, seancesConcernees } from "./kanban";
 
 const payload = emptyPayload({
   weekRows: [
@@ -131,5 +131,62 @@ describe("texteTache — bouton Copier (28/09/2026)", () => {
   it("ne met pas de ligne vide pour ce qui n'est pas renseigné", () => {
     const texte = texteTache({ titre: "À trier", colonne: "a_faire" });
     expect(texte).toBe("À trier\nEmploi du temps · À faire");
+  });
+});
+
+describe("rapportTaches", () => {
+  const base = {
+    colonne: "a_faire",
+    categorie: "plateforme",
+    priorite: "normale",
+    concerne: null,
+    enseignant_code: null,
+    date_debut: null,
+    date_fin: null,
+    description: null,
+    cree_par: "jules@univ.fr",
+  };
+
+  it("lists every column with its tasks and details, in Markdown", () => {
+    const texte = rapportTaches(
+      [
+        {
+          id: "a_faire",
+          label: "À faire",
+          taches: [
+            {
+              ...base,
+              id: 3,
+              titre: "Bouton cassé",
+              priorite: "urgente",
+              concerne: "Jules",
+              description: "Ligne 1\n\nLigne 2",
+              images: [{ nom: "capture.png" }],
+            },
+          ],
+        },
+        { id: "en_cours", label: "En cours", taches: [] },
+        { id: "fait", label: "Fait", taches: [{ ...base, id: 4, titre: "Fini", colonne: "fait" }] },
+      ],
+      { categorie: "plateforme", filtres: ["pour Jules"], maintenant: new Date("2026-10-09T15:00:00") },
+    );
+    expect(texte).toContain("# Rapport des tâches — Plateforme");
+    expect(texte).toContain("2 tâches : À faire 1, En cours 0, Fait 1.");
+    expect(texte).toContain("Filtres actifs : pour Jules.");
+    expect(texte).toContain("### [Urgent] Bouton cassé (#3)");
+    expect(texte).toContain("- Pour : Jules");
+    expect(texte).toContain("- Images jointes (1) : capture.png");
+    expect(texte).toContain("> Ligne 1\n>\n> Ligne 2");
+    expect(texte).toContain("## En cours (0)\n\nAucune tâche.");
+    expect(texte).toContain("### Fini (#4)\n\n- Statut : Fait");
+  });
+
+  it("adds teacher and concerned sessions through the callbacks", () => {
+    const texte = rapportTaches(
+      [{ id: "a_faire", label: "À faire", taches: [{ ...base, id: 1, titre: "Absence", enseignant_code: "KBR" }] }],
+      { nomEnseignant: () => "Kyllian Bresson", seances: () => ["lun. 21 sept. · WR106"] },
+    );
+    expect(texte).toContain("- Enseignant : Kyllian Bresson");
+    expect(texte).toContain("- Séances concernées (1) :\n  - lun. 21 sept. · WR106");
   });
 });

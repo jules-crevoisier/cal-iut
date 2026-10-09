@@ -28,7 +28,7 @@
 
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Image as IconeImage, Plus } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ClipboardCopy, Image as IconeImage, Plus } from "lucide-react";
 
 import type { ImageTache, Tache, TacheCreateBody, TachePatchBody } from "../api/client";
 import {
@@ -43,7 +43,7 @@ import {
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { confirmAsync } from "../utils/confirmDialog";
-import { libelleDatesTache, routeVersSeance, seancesConcernees, texteTache } from "../utils/kanban";
+import { libelleDatesTache, rapportTaches, routeVersSeance, seancesConcernees, texteTache } from "../utils/kanban";
 import { ecrireOngletTaches, lireOngletTaches } from "../utils/kanbanTabPrefs";
 import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
@@ -77,6 +77,14 @@ const FMT_JOUR = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "shor
 function formatDateCourte(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime()) ? iso : FMT_COURT.format(d);
+}
+
+/** Une séance concernée sur une ligne — même libellé sur la carte, dans sa
+ * copie et dans le rapport de la page. */
+function libelleSeance(payload: AppPayload, { row, dateIso }: { row: AppPayload["rows"][number]; dateIso: string }): string {
+  return `${formatDateCourte(dateIso)} · ${SLOT_TIMES[row.s].label} · ${row.c} · ${row.g
+    .map((g) => payload.groupLabels[g] ?? g)
+    .join("/")}`;
 }
 
 /** Premières lignes d'une description — de quoi reconnaître la tâche ; le
@@ -155,6 +163,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   const [filtreTexte, setFiltreTexte] = useState("");
   // Carte tout juste copiée — confirmation brève (Jules, 28/09/2026).
   const [copiee, setCopiee] = useState<number | null>(null);
+  const [rapportCopie, setRapportCopie] = useState(false);
 
   // Personnes proposées : celles des cartes existantes, jamais une liste figée.
   const personnes = useMemo(
@@ -418,6 +427,28 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
 
   const filtreActif = filtreConcerne !== "tout" || filtreTexte.trim() !== "";
 
+  // Rapport de toute la page, à coller à Claude (Jules, 09/10/2026) : ce
+  // que l'écran montre (onglet + filtres), colonne « Fait » comprise même
+  // repliée.
+  const copierRapport = async () => {
+    const filtres: string[] = [];
+    if (filtreConcerne === "__sans__") filtres.push("non attribuées");
+    else if (filtreConcerne !== "tout") filtres.push(`pour ${filtreConcerne}`);
+    if (filtreTexte.trim()) filtres.push(`texte « ${filtreTexte.trim()} »`);
+    const texte = rapportTaches(
+      COLONNES.map((c) => ({ id: c.id, label: c.label, taches: parColonne[c.id] })),
+      {
+        categorie: categorieActive,
+        filtres,
+        nomEnseignant: (t) => (t.enseignant_code ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code : null),
+        seances: (t) => seancesConcernees(payload, t).map((sc) => libelleSeance(payload, sc)),
+      },
+    );
+    await copyToClipboard(texte);
+    setRapportCopie(true);
+    window.setTimeout(() => setRapportCopie(false), 2000);
+  };
+
   return (
     <section className="view kanban-view">
       <div className="page-outils kanban-barre">
@@ -468,6 +499,16 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
             Réinitialiser
           </button>
         )}
+        {/* Visible aussi en lecture seule : copier ne modifie rien. */}
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm kanban-rapport"
+          onClick={() => void copierRapport()}
+          title="Copie toutes les tâches de cet onglet (filtres appliqués) en Markdown, prêtes à coller"
+        >
+          <ClipboardCopy size={14} aria-hidden="true" />
+          <span aria-live="polite">{rapportCopie ? "Rapport copié" : "Copier le rapport"}</span>
+        </button>
         {peutModifier && (
           <ActionsDePage>
             <button
@@ -688,10 +729,6 @@ function CarteTache({
   const seances = t.enseignant_code && t.date_debut ? seancesConcernees(payload, t) : null;
   const desc = t.description ? premieresLignes(t.description) : null;
   const nbImages = t.images?.length ?? 0;
-  const libelleSeance = ({ row, dateIso }: { row: AppPayload["rows"][number]; dateIso: string }) =>
-    `${formatDateCourte(dateIso)} · ${SLOT_TIMES[row.s].label} · ${row.c} · ${row.g
-      .map((g) => payload.groupLabels[g] ?? g)
-      .join("/")}`;
 
   return (
     <li
@@ -745,7 +782,7 @@ function CarteTache({
               {seances.map((s) => (
                 <li key={s.row.id}>
                   <button type="button" className="kanban-seance-lien" onClick={() => setRoute(routeVersSeance(s.row))}>
-                    {libelleSeance(s)}
+                    {libelleSeance(payload, s)}
                   </button>
                 </li>
               ))}
@@ -826,7 +863,11 @@ function CarteTache({
             className="kanban-texte"
             aria-label={`Copier toutes les informations de « ${t.titre} »`}
             onClick={() =>
-              onCopier(texteTache(t, { nomEnseignant: nomProf, seances: seances ?? [], libelleSeance }))
+              onCopier(texteTache(t, {
+                  nomEnseignant: nomProf,
+                  seances: seances ?? [],
+                  libelleSeance: (sc) => libelleSeance(payload, sc),
+                }))
             }
           >
             {copiee ? "Copié" : "Copier"}
