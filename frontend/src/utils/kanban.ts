@@ -130,6 +130,7 @@ const LIBELLE_CATEGORIE: Record<string, string> = {
  */
 export function texteTache(
   tache: {
+    id?: number;
     titre: string;
     description?: string | null;
     colonne: string;
@@ -145,7 +146,7 @@ export function texteTache(
 ): string {
   const lignes: string[] = [];
   const urgent = tache.priorite === "urgente" ? "[Urgent] " : "";
-  lignes.push(`${urgent}${tache.titre}`);
+  lignes.push(`${urgent}${tache.titre}${tache.id != null ? ` (#${tache.id})` : ""}`);
 
   const situation = [
     LIBELLE_CATEGORIE[tache.categorie ?? "edt"] ?? tache.categorie,
