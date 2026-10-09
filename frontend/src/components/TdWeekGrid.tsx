@@ -160,16 +160,24 @@ export function TdWeekGrid({
     return byDay;
   }, [payload, displayWeek, parcours]);
 
-  const grid = useMemo(() => {
+  const { grid, pause } = useMemo(() => {
     const cells: CellEvent[][][] = Array.from({ length: SLOT_COUNT }, () =>
       Array.from({ length: DAY_COUNT }, () => []),
     );
+    // Évènements de la pause méridienne (`midi`) : dans la ligne 12h30-14h,
+    // jamais dans la case 14h-15h30 où ils sont STOCKÉS (tâche 16,
+    // 07/10/2026 : « ne s'est pas correctement placé pendant la pause »).
+    const pauseParJour: CellEvent[][] = Array.from({ length: DAY_COUNT }, () => []);
 
     for (const p of placements) {
       if (p.week !== displayWeek) continue;
       const event = classify(p, tdGroupId, tpA, tpB);
       if (!event) continue;
       if (p.day < 0 || p.day >= DAY_COUNT || p.slot < 0 || p.slot >= SLOT_COUNT) continue;
+      if (p.midi) {
+        pauseParJour[p.day].push(event);
+        continue;
+      }
       // Retour utilisateur (27/08/2026) : « affiche-le comme 2 blocs de
       // 1h30 » — pas UNE cellule fusionnée (`rowSpan`), mais le MÊME chip
       // répété sur chacun de ses créneaux (`duration_slots`), exactement le
@@ -179,7 +187,7 @@ export function TdWeekGrid({
         cells[p.slot + k][p.day].push(event);
       }
     }
-    return cells;
+    return { grid: cells, pause: pauseParJour };
   }, [placements, displayWeek, tdGroupId, tpA, tpB]);
 
   if (!tpPair) {
@@ -248,7 +256,19 @@ export function TdWeekGrid({
                 <tr className="sessiongrid-pause">
                   <td className="td-grid-slotlabel">12h30–14h</td>
                   {days.map((day) => (
-                    <td key={day} colSpan={2} />
+                    <td key={day} colSpan={2} className={pause[day].length ? "td-grid-cell td-grid-cell--span" : undefined}>
+                      {pause[day].map((ev) => (
+                        <SessionBlock
+                          key={ev.placement.session_id}
+                          event={{ ...ev, span: true }}
+                          groupLabels={groupLabels}
+                          teacherLabels={teacherLabels}
+                          selected={selectedId === ev.placement.session_id}
+                          onSelect={onSelect}
+                          onHover={setHover}
+                        />
+                      ))}
+                    </td>
                   ))}
                 </tr>
               )}

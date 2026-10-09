@@ -257,10 +257,20 @@ class ModifierSeancePersonnaliseeRequest(BaseModel):
     # réel d'un évènement déjà créé (ex. corriger 13h15 en 13h30).
     heure_debut: str | None = None
     heure_fin: str | None = None
+    # Évènement seulement (tâche 16, 07/10/2026, Kyllian Bresson : « rouvrir
+    # et modifier un évènement existant [...] avec les mêmes champs que lors
+    # de sa création »). `libelle` et `semestre` étaient figés à la création ;
+    # `sans_horaire` retire l'horaire libre pour revenir au créneau choisi
+    # (l'absence de `heure_debut`/`heure_fin` veut dire « inchangé »).
+    libelle: str | None = Field(default=None, min_length=1, max_length=120)
+    semestre: str | None = Field(default=None, min_length=1, max_length=10)
+    sans_horaire: bool = False
 
     @model_validator(mode="after")
     def _verifier_horaire(self) -> "ModifierSeancePersonnaliseeRequest":
         _valider_horaire_libre(self.heure_debut, self.heure_fin)
+        if self.sans_horaire and self.heure_debut is not None:
+            raise ValueError("« sans_horaire » et un horaire libre s'excluent.")
         return self
 
 
@@ -407,6 +417,10 @@ class PlacementResponse(BaseModel):
     # STOCKAGE (créneau 3) ; sans ce champ, rien n'y écrirait son horaire
     # RÉEL. Absent/`None` sur toute séance normale.
     hor: str | None = None
+    # `hor` tombe dans la pause méridienne (12h30-14h) : stocké sur le
+    # créneau 3, mais à rendre dans la ligne « pause » (tâche 16, 07/10/2026 :
+    # la Vue Semaine l'affichait dans la case 14h-15h30).
+    midi: bool = False
 
 
 class NotificationConfigRequest(BaseModel):

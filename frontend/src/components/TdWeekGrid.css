@@ -141,6 +141,12 @@
   border-bottom: 1px dashed var(--border-strong);
 }
 
+/* Évènement de la pause méridienne (tâche 16) : même marge qu'une case. */
+.td-grid .sessiongrid-pause td.td-grid-cell {
+  height: auto;
+  padding: 3px;
+}
+
 /* ── Séance : aplat pastel du type ── */
 .td-block {
   --c-bg: var(--td-bg);

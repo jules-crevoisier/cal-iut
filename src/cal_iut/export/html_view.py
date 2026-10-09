@@ -1303,6 +1303,22 @@ def build_payload(
                 # au moins l'heure vraie à côté du créneau de stockage.
                 **({"hor": _libelle_horaire_export(session.metadata["horaire"])} if session.metadata.get("horaire") else {}),
                 **({"midi": True} if session.metadata.get("pause_midi") else {}),
+                # Évènement hors maquette (tâche 16, 07/10/2026) : ce qu'il
+                # faut pour rouvrir « Nouvel évènement » pré-rempli en Vue
+                # Promo — absent sur toute autre séance.
+                **(
+                    {
+                        "evt": {
+                            "sem": session.semestre,
+                            "note": session.metadata.get("note") or "",
+                            **(
+                                {"hd": session.metadata["horaire"]["debut"], "hf": session.metadata["horaire"]["fin"]}
+                                if session.metadata.get("horaire") else {}
+                            ),
+                        }
+                    }
+                    if session.metadata.get("evenement") else {}
+                ),
             }
         )
 

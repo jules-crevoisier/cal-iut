@@ -152,4 +152,69 @@ describe("CreerEvenementModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /créer et placer/i }));
     await waitFor(() => expect(onCree).toHaveBeenCalledWith(placement));
   });
+
+  it("should fill 12h30–14h when « Pause méridienne » is picked as the slot", () => {
+    render(<CreerEvenementModal payload={payload} onCree={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Créneau"), { target: { value: "midi" } });
+    expect(screen.getByLabelText(/heure de début/i)).toHaveValue("12:30");
+    expect(screen.getByLabelText(/heure de fin/i)).toHaveValue("14:00");
+  });
+
+  it("should select « Pause méridienne » by itself for a 13h30 start", () => {
+    render(<CreerEvenementModal payload={payload} onCree={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/heure de début/i), { target: { value: "13:30" } });
+    expect(screen.getByLabelText("Créneau")).toHaveValue("midi");
+  });
+
+  describe("modification d'un évènement existant (tâche 16)", () => {
+    const row = {
+      id: "evenement-1", w: 10, d: 3, s: 3, c: "PRESENTATION-PAC", n: "Présentation PAC", t: "CM",
+      g: ["but1-promo"], te: [], r: "H.018", ev: false, dur: 1, locked: false, custom: true,
+      hor: "13h15–14h", midi: true, evt: { sem: "S1", note: "Amphi plein", hd: "13:15", hf: "14:00" },
+    };
+    const existant = { placement: { ...placement, week: 10 }, row };
+
+    function corpsPatch(): Record<string, unknown> {
+      const appel = vi.mocked(fetch).mock.calls.find((c) => String(c[0]).includes("/placements/personnalisees/"));
+      return JSON.parse(String(appel?.[1]?.body ?? "{}")) as Record<string, unknown>;
+    }
+
+    it("should open pre-filled with the event's own fields", () => {
+      render(<CreerEvenementModal payload={payload} evenementExistant={existant} onCree={vi.fn()} onCancel={vi.fn()} />);
+      expect(screen.getByRole("heading", { name: "Modifier l'évènement" })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/présentation pac/i)).toHaveValue("Présentation PAC");
+      expect(screen.getByLabelText("Promo BUT1")).toBeChecked();
+      expect(screen.getByLabelText(/note/i)).toHaveValue("Amphi plein");
+      expect(screen.getByLabelText(/heure de début/i)).toHaveValue("13:15");
+      expect(screen.getByLabelText("Créneau")).toHaveValue("midi");
+    });
+
+    it("should PATCH the event instead of creating a new one", async () => {
+      const onCree = vi.fn();
+      render(<CreerEvenementModal payload={payload} evenementExistant={existant} onCree={onCree} onCancel={vi.fn()} />);
+      fireEvent.change(screen.getByPlaceholderText(/présentation pac/i), { target: { value: "Réunion PAC" } });
+      fireEvent.change(screen.getByLabelText(/heure de début/i), { target: { value: "13:30" } });
+      fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+      await waitFor(() => expect(onCree).toHaveBeenCalled());
+      const corps = corpsPatch();
+      expect(corps.libelle).toBe("Réunion PAC");
+      expect(corps.heure_debut).toBe("13:30");
+      expect(corps.heure_fin).toBe("14:00");
+      expect(vi.mocked(fetch).mock.calls.some((c) => String(c[0]).endsWith("/placements/evenements"))).toBe(false);
+    });
+
+    it("should ask the server to drop the free time when a regular slot is chosen", async () => {
+      const onCree = vi.fn();
+      render(<CreerEvenementModal payload={payload} evenementExistant={existant} onCree={onCree} onCancel={vi.fn()} />);
+      fireEvent.change(screen.getByLabelText("Créneau"), { target: { value: "1" } });
+      fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+      await waitFor(() => expect(onCree).toHaveBeenCalled());
+      const corps = corpsPatch();
+      expect(corps.sans_horaire).toBe(true);
+      expect(corps.slot).toBe(1);
+      expect(corps.heure_debut).toBeUndefined();
+    });
+  });
 });

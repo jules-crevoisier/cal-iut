@@ -16,6 +16,9 @@ export interface Placement {
   /** Évènement à horaire libre (retour Jules 23/09/2026) — libellé français
    * de l'horaire RÉEL, ex. "13h15–14h". Absent sur toute séance normale. */
   hor?: string | null;
+  /** `hor` tombe dans la pause méridienne (12h30-14h) : stocké sur le
+   * créneau 3, rendu dans la ligne « pause » des grilles. */
+  midi?: boolean;
 }
 
 export interface Quality {

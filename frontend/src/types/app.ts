@@ -36,6 +36,11 @@ export interface AppRow {
    * Vue Promo doit alors l'exclure de la cellule normale du créneau 3 et la
    * rendre dans la ligne "pause" à la place. Absent/`false` sinon. */
   midi?: boolean;
+  /** Évènement hors maquette (« Nouvel évènement ») : ce qu'il faut pour
+   * rouvrir sa fenêtre pré-remplie (tâche 16, 07/10/2026). `hd`/`hf` = son
+   * horaire libre "HH:MM", absents s'il suit un créneau. Absent sur toute
+   * autre séance. */
+  evt?: { sem: string; note: string; hd?: string; hf?: string };
 }
 
 export interface WeekRow {
