@@ -14,18 +14,27 @@
   gap: 12px;
 }
 
-/* Poste de travail : la vue occupe la hauteur de la fenêtre sous la barre
-   supérieure (64 px) et les marges de `.app-main` (20 + 40 px) ; seule la
-   grille défile. Pas sur le lien public, qui a son propre bandeau. */
+/* Poste de travail : la vue prend toute la hauteur que la fenêtre laisse
+   sous la barre supérieure et les bandeaux éventuels ; seule la grille
+   défile, et seulement si la fenêtre est vraiment trop basse.
+   Hauteur MESURÉE par la mise en page (flex), plus devinée : l'ancien
+   `calc(100dvh - 124px)` supposait une barre de 64 px et aucun bandeau ; un
+   bandeau (panne, notice) ou une barre plus haute faisait défiler toute la
+   page, et 8h ou 17h sortait de l'écran (tâche 12, écran ASUS 27"). `.app`
+   fait déjà au moins la hauteur de la fenêtre et `.app-main` y prend le
+   reste : il suffit d'en faire une colonne dont la vue occupe tout.
+   Pas sur le lien public, qui a son propre bandeau. */
 @media (min-width: 1024px) {
-  .view.promo {
-    height: calc(100dvh - 124px);
-    min-height: 560px;
+  .app:not(.read-only-mode) .app-main:has(> .view.promo) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding-bottom: 16px;
   }
 
-  .read-only-mode .view.promo {
-    height: auto;
-    min-height: 0;
+  .app:not(.read-only-mode) .view.promo {
+    flex: 1 1 auto;
+    min-height: 480px;
   }
 }
 
@@ -508,6 +517,24 @@ button.promo-tuile:hover {
     height: max(64px, calc((100cqh - 78px) / 6));
   }
 
+  /* Fenêtre basse (portable, fenêtre réduite) : cartes resserrées et
+     plancher abaissé, pour que 8h → 18h30 tienne encore sans défiler. */
+  @media (max-height: 700px) {
+    .app:not(.read-only-mode) table.promo-grid {
+      --promo-carte-h: calc(3 * 0.75rem * 1.15 + 6px);
+    }
+
+    .app:not(.read-only-mode) table.promo-grid .promo-chip {
+      gap: 0;
+      padding: 2px 6px;
+      line-height: 1.15;
+    }
+
+    .app:not(.read-only-mode) table.promo-grid td.promocell {
+      height: max(52px, calc((100cqh - 78px) / 6));
+    }
+  }
+
   .read-only-mode .promo-grille-defil {
     position: static;
   }
@@ -523,6 +550,9 @@ table.promo-grid {
      thème, donc justes en clair comme en sombre. */
   --promo-sep-tp: var(--border-strong);
   --promo-sep-parcours: var(--ink-faint);
+  /* Hauteur d'une carte de séance (3 lignes de 0,75rem × 1,3, 10 px de
+     marge, 2 px de bord, 2 px d'écart) : les bandes SAE/férié s'y alignent. */
+  --promo-carte-h: calc(3 * 0.75rem * 1.3 + 15px);
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -1038,11 +1068,14 @@ table.promo-grid td.promocell--placeable:focus-visible {
 }
 
 /* Bandes jour (férié, SAE, évènement) — même contenu que `SessionGrid`,
-   ramené à la hauteur de la grille. */
+   à la hauteur d'une carte de séance (tâche 12) : la bande remplissait toute
+   la case, deux fois plus haute qu'une carte sur un grand écran
+   (`--promo-carte-h`, posé sur la grille). */
 table.promo-grid .sessiongrid-holiday,
 table.promo-grid .sessiongrid-sae,
 table.promo-grid .sessiongrid-event {
-  min-height: 38px;
+  height: auto;
+  min-height: var(--promo-carte-h);
 }
 
 /* ── Pied de grille : repères de défilement, légende, raccourcis ── */
