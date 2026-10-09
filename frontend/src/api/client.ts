@@ -1046,6 +1046,10 @@ export interface LigneComparaison {
     /** Toutes les salles de l'évènement. Un cours posé sur deux salles à la
      *  fois est un écart, et l'écran doit pouvoir dire lesquelles. */
     salles: string[] | null;
+    /** Tous les enseignants de l'évènement. Un enseignant remplacé chez
+     *  nous restait à côté du nouveau (tâche 19) : l'écran doit dire qui.
+     *  Absent des relevés antérieurs. */
+    enseignants?: string[] | null;
     categorie: string | null;
     module: string | null;
     groupe: string | null;

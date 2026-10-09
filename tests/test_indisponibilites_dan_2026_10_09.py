@@ -80,6 +80,9 @@ def etat(monkeypatch):
     state.teacher_availability = [_dan_fusionne()[0]]
     # `_hard_constraint_context` lit la maquette : neutralisé, seul l'enseignant compte ici.
     monkeypatch.setattr("cal_iut.api.main._hard_constraint_context", lambda s, x: (set(), set(), None))
+    # Le placement manuel passe désormais par `_contexte_dur_detaille` (jours
+    # SAE forçables, #201) : neutralisé de même.
+    monkeypatch.setattr("cal_iut.api.main._contexte_dur_detaille", lambda s, x: (set(), {}, set(), None))
     yield state
     state.calendar, state.teacher_availability = ancien
 

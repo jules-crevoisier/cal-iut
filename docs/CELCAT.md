@@ -224,12 +224,14 @@ Il n'existe pas de `udlTimetables.delete` (108 méthodes `udl*` recensées, `scr
 | **Modifier** | Recharger l'enregistrement **complet** (`udlTimetables.load`), le cloner, n'écraser que les champs voulus, renvoyer | `modification.py` |
 | **Supprimer** | Enregistrement minimal `{"-event_id": <id>, "_type_": "Event"}` | `suppression.py` |
 | **Changer de salle** | Dans le même appel : retirer l'ancienne `{"-event_id": E, "-room_id": R, "_type_": "Room"}` et poser la nouvelle | `modification.py` |
+| **Changer d'enseignant** | Même chose : retirer l'ancien `{"-event_id": E, "-staff_id": S, "_type_": "Staff"}` et poser le nouveau | `modification.py` |
 
 À savoir :
 
 - Un objet reconstruit à la main (quelques champs + `event_id`) fait échouer une modification : « Cannot locate a record using only a partial key ». Il faut la forme complète.
 - Le signe moins devant **tous** les composants de la clé veut dire « retirer ». L'association évènement↔salle se repère par le couple `(event_id, room_id)`.
 - `save` **ajoute** une salle au lieu de la remplacer : sans le retrait, le cours se retrouve sur deux salles.
+- Idem pour les enseignants (tâche 19, 09/10/2026) : sans le retrait, un enseignant remplacé dans cal-iut restait à côté du nouveau (WR112, WR117, WR311D). La comparaison signale désormais « enseignants multiples » (plusieurs enseignants sur l'évènement) et « enseignant » (pas celui de cal-iut) ; « Corriger » sur la semaine les renvoie en modification, qui retire l'enseignant en trop. Les relevés antérieurs n'ont pas ces champs : l'écart n'apparaît qu'après un nouveau relevé. Vérification sur la base d'entraînement : `python scripts/essayer_changement_enseignant_celcat.py --vpn`.
 - Pour une nouvelle ressource (salle, enseignant, matière), on recharge son vrai enregistrement (`udlResources.load`), jamais l'ancien sous-objet avec un nouvel id.
 - `suspended: "Y"` ne supprime pas (l'évènement reste visible). Un masque `weeks` tout à `N` est refusé par le serveur (contrainte `CK_EVENT_WKLEN`).
 - Avant une suppression, l'évènement est **relu** : un jour férié, un évènement protégé (`protected=Y`) ou un « fantôme » est refusé, même si le job a été mis en file avant.
