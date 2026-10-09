@@ -58,4 +58,18 @@ describe("TdWeekGrid — horaire réel d'un évènement à horaire libre", () =>
     // Carte « Lumière » : code + type, nom de la matière, salle · enseignant.
     expect(bloc?.textContent).toBe("WR101TDCours normalsans salle");
   });
+
+  it("place un évènement de la pause méridienne dans la ligne 12h30–14h, pas dans la case 14h", () => {
+    render(
+      <TdWeekGrid
+        placements={[placement({ hor: "13h30–14h", midi: true })]}
+        displayWeek={0}
+        tdGroupId="but1-td-ab"
+        groups={GROUPS}
+        groupLabels={{}}
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByText("Présentation PAC").closest("tr")).toHaveClass("sessiongrid-pause");
+  });
 });

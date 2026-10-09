@@ -219,8 +219,11 @@ Vérifier, puis **Valider ce placement** ou **Revenir en arrière (retirer du pl
   puis **Semaine**, **Jour**, **Créneau** et **Salle** (**Automatique** par défaut).
   Cliquer **Créer et placer**, ou **Créer et en ajouter une autre**.
 - L'icône calendrier **Nouvel évènement** ajoute une réunion, une conférence, une présentation…
-  sans matière. **Heure de début** et **Heure de fin** sont facultatives :
-  une heure entre 12h30 et 14h s'affiche dans la pause de midi.
+  sans matière. **Heure de début** et **Heure de fin** sont facultatives.
+  Pour la pause de midi, choisir **Pause méridienne** dans **Créneau** (12h30–14h, à ajuster) :
+  l'évènement s'affiche alors entre le matin et l'après-midi, dans toutes les vues.
+- Pour modifier un évènement, cliquer le crayon sur sa carte en **Vue Promo** (ou double-cliquer la carte).
+  La même fenêtre s'ouvre, déjà remplie, avec **Enregistrer** et **Supprimer**.
 
 ### Annuler
 

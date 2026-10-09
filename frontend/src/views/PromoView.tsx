@@ -24,7 +24,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Plus, X } from "lucide-react";
+import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Pencil, Plus, X } from "lucide-react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
@@ -57,7 +57,7 @@ import { lettresGroupe } from "../utils/years";
 import { nomComplet } from "../utils/nomEnseignant";
 import { NewRoomModal } from "../components/NewRoomModal";
 import { CreerSeanceModal } from "../components/CreerSeanceModal";
-import { CreerEvenementModal } from "../components/CreerEvenementModal";
+import { CreerEvenementModal, type EvenementExistant } from "../components/CreerEvenementModal";
 import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 import { ActionsDePage } from "../components/TopBar";
 import { WeekBar } from "../components/WeekBar";
@@ -251,8 +251,15 @@ export function PromoView({
   const [modaleSeance, setModaleSeance] = useState<"creer" | Placement | null>(null);
   const seanceModaleEnabled = roomEditEnabled;
   // Évènement hors maquette (réunion, conférence...) — retour utilisateur
-  // 07/09/2026, avec horaire réel optionnel depuis le 23/09/2026.
-  const [modaleEvenement, setModaleEvenement] = useState(false);
+  // 07/09/2026, avec horaire réel optionnel depuis le 23/09/2026. `"creer"`
+  // = formulaire vide ; un évènement existant = sa modification (tâche 16,
+  // 07/10/2026 : ils n'étaient plus modifiables une fois créés).
+  const [modaleEvenement, setModaleEvenement] = useState<"creer" | EvenementExistant | null>(null);
+  const modifierSeanceOuEvenement = (row: AppRow, source: Placement | undefined) => {
+    if (!source) return;
+    if (row.evt) setModaleEvenement({ placement: source, row });
+    else setModaleSeance(source);
+  };
 
   const appliquerSalle = async (sessionId: string, roomId: string, ancienne?: string | null) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
@@ -1071,7 +1078,7 @@ export function PromoView({
             <button
               type="button"
               className="btn btn--icon"
-              onClick={() => setModaleEvenement(true)}
+              onClick={() => setModaleEvenement("creer")}
               aria-label="Nouvel évènement"
               title="Nouvel évènement (réunion, conférence…) hors maquette"
             >
@@ -1156,11 +1163,25 @@ export function PromoView({
       {modaleEvenement && (
         <CreerEvenementModal
           payload={payload}
+          evenementExistant={modaleEvenement === "creer" ? null : modaleEvenement}
           suggestion={{ week: solverWeek ?? undefined, day }}
-          onCancel={() => setModaleEvenement(false)}
+          onCancel={() => setModaleEvenement(null)}
+          onSupprimer={
+            modaleEvenement === "creer"
+              ? undefined
+              : () => {
+                  const { placement, row } = modaleEvenement;
+                  setModaleEvenement(null);
+                  void supprimerSeance(placement.session_id, row.n || row.c);
+                }
+          }
           onCree={(placement) => {
-            setModaleEvenement(false);
-            signaler(`${placement.course_code} créé ${quand(placement.week, placement.day, placement.slot)}.`);
+            setModaleEvenement(null);
+            signaler(
+              modaleEvenement === "creer"
+                ? `${placement.course_code} créé ${quand(placement.week, placement.day, placement.slot)}.`
+                : `${placement.course_name || placement.course_code} modifié.`,
+            );
             allerA(placement.week, placement.day);
             onPlacementUpdated?.(placement);
             onSeanceChangee?.();
@@ -1313,23 +1334,46 @@ export function PromoView({
                                   colSpan={largeur > 1 ? largeur : undefined}
                                   className={`promocell pause-cell ${colClass(i)}${largeur > 1 ? " promocell--fusion" : ""}`}
                                 >
-                                  {entries.map((r) => (
-                                    <div
-                                      key={r.id}
-                                      className="promo-chip promo-chip--midi"
-                                      title={`${r.n || r.c} — pause méridienne, hors des six créneaux fixes`}
-                                    >
-                                      <div className="promo-chip__l1">
-                                        <span className="code">{r.n || r.c}</span>
+                                  {entries.map((r) => {
+                                    // Modifiable comme une carte normale (tâche
+                                    // 16) : double-clic ou crayon.
+                                    const source = placements?.find((p) => p.session_id === r.id);
+                                    const modifiable = seanceModaleEnabled && Boolean(source);
+                                    return (
+                                      <div
+                                        key={r.id}
+                                        className={`promo-chip promo-chip--midi${modifiable ? " promo-chip--actions" : ""}`}
+                                        title={`${r.n || r.c} — pause méridienne, hors des six créneaux fixes`}
+                                        onDoubleClick={modifiable ? () => modifierSeanceOuEvenement(r, source) : undefined}
+                                      >
+                                        <div className="promo-chip__l1">
+                                          <span className="code">{r.n || r.c}</span>
+                                        </div>
+                                        <div className="promo-chip__l2">
+                                          <span className="ty">
+                                            {r.hor ?? ""}
+                                            {r.r ? ` · ${r.r}` : ""}
+                                          </span>
+                                        </div>
+                                        {modifiable && (
+                                          <span className="promo-chip__actions">
+                                            <button
+                                              type="button"
+                                              className="promo-chip__action"
+                                              title="Modifier cet évènement"
+                                              aria-label={`Modifier ${r.n || r.c}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                modifierSeanceOuEvenement(r, source);
+                                              }}
+                                            >
+                                              <Pencil size={13} aria-hidden="true" />
+                                            </button>
+                                          </span>
+                                        )}
                                       </div>
-                                      <div className="promo-chip__l2">
-                                        <span className="ty">
-                                          {r.hor ?? ""}
-                                          {r.r ? ` · ${r.r}` : ""}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </td>
                               );
                             })}
@@ -1491,7 +1535,7 @@ export function PromoView({
                                             : undefined
                                         }
                                         echangeHandlers={echangeHandlers(r.id)}
-                                        onModifier={() => source && setModaleSeance(source)}
+                                        onModifier={() => modifierSeanceOuEvenement(r, source)}
                                         onRetirer={() => void retirerDuPlanning(r.id, r.c)}
                                         onSupprimer={() => void supprimerSeance(r.id, `${r.c} (${r.t})`)}
                                         onOuvrirSalle={() => setSalleEnEdition(cleEditionSalle)}

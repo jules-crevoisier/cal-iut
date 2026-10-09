@@ -31,4 +31,13 @@ describe("SessionGrid — horaire réel d'un évènement à horaire libre", () =
     // Le bloc porte code/type/groupe, jamais un horaire libre inexistant.
     expect(bloc?.textContent).toBe("Cours normalA100WR101 · TD");
   });
+
+  it("place un évènement de la pause méridienne dans la ligne 12h30–14h, pas dans la case 14h", () => {
+    const row = placedRow({
+      id: "evenement-1", d: 0, s: 3, c: "REUNION", n: "Réunion", t: "CM", hor: "13h30–14h", midi: true,
+    });
+    render(<SessionGrid payload={PAYLOAD} rows={[row]} week={0} />);
+    const ligne = screen.getByText("Réunion").closest("tr");
+    expect(ligne).toHaveClass("sessiongrid-pause");
+  });
 });

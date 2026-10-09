@@ -196,8 +196,11 @@ export function ListeJours({
       if (!externesJour.some((x) => x.detail === ligne.detail)) externesJour.push(ligne);
     }
   }
-  const matin = duJour.filter((r) => r.s < 3);
-  const apresMidi = duJour.filter((r) => r.s >= 3);
+  // Évènement de la pause méridienne (`midi`, stocké sur le créneau 3) :
+  // listé entre le matin et l'après-midi, à son heure réelle (tâche 16).
+  const midi = duJour.filter((r) => r.midi);
+  const matin = duJour.filter((r) => r.s < 3 && !r.midi);
+  const apresMidi = duJour.filter((r) => r.s >= 3 && !r.midi);
   const prochainJourAvecCours = [1, 2, 3, 4].map((k) => jour + k).find((d) => d <= 4 && parJour[d].length > 0);
 
   const carte = (r: AppRow) => {
@@ -320,7 +323,8 @@ export function ListeJours({
         ) : (
           <>
             {matin.length > 0 && <ul className="jour-liste">{matin.map(carte)}</ul>}
-            {matin.length > 0 && apresMidi.length > 0 && <p className="jour-pause">Pause déjeuner</p>}
+            {midi.length > 0 && <ul className="jour-liste">{midi.map(carte)}</ul>}
+            {midi.length === 0 && matin.length > 0 && apresMidi.length > 0 && <p className="jour-pause">Pause déjeuner</p>}
             {apresMidi.length > 0 && <ul className="jour-liste">{apresMidi.map(carte)}</ul>}
           </>
         )}

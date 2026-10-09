@@ -143,7 +143,14 @@ export function SessionGrid({
   const byCell = new Map<string, AppRow[]>();
   const byCellLeft = new Map<string, AppRow[]>();
   const byCellRight = new Map<string, AppRow[]>();
+  // Évènements de la pause méridienne (`midi`) : dans la ligne 12h30-14h,
+  // jamais dans la case 14h-15h30 où ils sont STOCKÉS (tâche 16, 07/10/2026).
+  const pauseByDay = new Map<number, AppRow[]>();
   for (const r of rows) {
+    if (r.midi) {
+      pauseByDay.set(r.d, [...(pauseByDay.get(r.d) ?? []), r]);
+      continue;
+    }
     const dur = Math.max(1, r.dur || 1);
     for (let k = 0; k < dur; k++) {
       const key = `${r.d}-${r.s + k}`;
@@ -225,9 +232,23 @@ export function SessionGrid({
                       sous tout le tableau (retour utilisateur 28/08/2026,
                       relayé depuis Discord : « pourquoi le texte "Pause
                       déjeuner" est en bas, au lieu d'être au centre ? »). */}
-                  <td colSpan={days.length} className="sessiongrid-pause-label">
-                    Pause déjeuner
-                  </td>
+                  {pauseByDay.size === 0 ? (
+                    <td colSpan={days.length} className="sessiongrid-pause-label">
+                      Pause déjeuner
+                    </td>
+                  ) : (
+                    days.map((d) => (
+                      <td key={d} className="sessiongrid-cell">
+                        {pauseByDay.get(d)?.length ? (
+                          <div className="sessiongrid-cell-inner">
+                            {pauseByDay.get(d)!.map((r) => (
+                              <SessionBlock key={r.id} row={r} payload={payload} showPromo={showPromo} onSelect={onSelect} onHover={setHover} />
+                            ))}
+                          </div>
+                        ) : null}
+                      </td>
+                    ))
+                  )}
                 </tr>
               )}
               <tr>

@@ -829,6 +829,11 @@ export interface ModifierSeanceBody {
   force?: boolean;
   heure_debut?: string | null;
   heure_fin?: string | null;
+  /** Évènement seulement (tâche 16) : libellé, semestre, et retrait de
+   * l'horaire libre pour revenir au créneau choisi. */
+  libelle?: string;
+  semestre?: string;
+  sans_horaire?: boolean;
 }
 
 export function modifierSeancePersonnalisee(sessionId: string, body: ModifierSeanceBody): Promise<Placement> {

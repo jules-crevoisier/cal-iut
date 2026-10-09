@@ -6414,6 +6414,12 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         nouvelle_matiere = _reference_cours(
             state, body.course_code, body.group_ids if body.group_ids is not None else seance.group_ids,
         )
+    # Libellé et semestre d'un évènement (tâche 16, 07/10/2026) : jusque-là
+    # figés, il fallait supprimer puis recréer. Le code suit le libellé comme
+    # à la création (`_code_evenement`) ; l'id, opaque, ne change pas.
+    est_evenement = bool(seance.metadata.get("evenement"))
+    if (body.libelle is not None or body.semestre is not None or body.sans_horaire) and not est_evenement:
+        raise HTTPException(400, "Libellé, semestre et horaire libre ne se modifient que sur un évènement.")
 
     placement = next((p for p in state.timetable if p.session_id == session_id), None)
     avant = {
@@ -6467,6 +6473,11 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         seance.is_eval = body.is_eval
     if body.note is not None:
         seance.metadata["note"] = body.note.strip()
+    if body.libelle is not None and body.libelle.strip():
+        seance.course_name = body.libelle.strip()
+        seance.course_code = _code_evenement(body.libelle)
+    if body.semestre is not None and body.semestre.strip():
+        seance.semestre = body.semestre.strip()
 
     # Horaire réel modifié (les deux champs vont toujours ensemble, cf.
     # `_valider_horaire_libre`) — recalcule `pause_midi` depuis le nouvel
@@ -6481,6 +6492,10 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
             seance.metadata["pause_midi"] = True
         else:
             seance.metadata.pop("pause_midi", None)
+    elif body.sans_horaire:
+        nouveau_pause_midi = False
+        seance.metadata.pop("horaire", None)
+        seance.metadata.pop("pause_midi", None)
 
     if placement is not None:
         placement.group_ids = list(seance.group_ids)
@@ -6550,10 +6565,10 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
         raise
 
     custom_sessions.update_custom_session(seance)
-    # Matière changée : le code est aussi dans la ligne du placement en base,
-    # que le démarrage relit — sans cette écriture, l'ancienne matière
-    # revenait au redémarrage suivant.
-    if nouvelle_matiere is not None and state.current_run_id:
+    # Matière (ou libellé d'évènement) changée : le code est aussi dans la
+    # ligne du placement en base, que le démarrage relit — sans cette
+    # écriture, l'ancienne matière revenait au redémarrage suivant.
+    if seance.course_code != avant["course_code"] and state.current_run_id:
         courant = _find_placement(state, session_id)
         if courant is not None:
             courant.course_code = seance.course_code
@@ -7239,6 +7254,7 @@ def _to_placement(p: PlacedSessionWithRoom, sessions_by_id: dict[str, SessionToP
         locked=s.locked if s else False,
         duration_slots=max(1, s.duration_slots) if s else 1,
         hor=_libelle_horaire(s.metadata["horaire"]) if s and s.metadata.get("horaire") else None,
+        midi=bool(s and s.metadata.get("pause_midi")),
     )
 
 

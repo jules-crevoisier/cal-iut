@@ -29,6 +29,38 @@
   }
 }
 
+/* Nouvel évènement (tâche 16, 07/10/2026 : « toutes les informations
+   peuvent tenir sur une fenêtre un peu plus large horizontalement ») :
+   évènement | groupes | quand et où, trois blocs côte à côte dès que la
+   place le permet ; deux, puis un seul, en dessous. */
+.seancemodal.evenementmodal {
+  width: min(1180px, 100%);
+}
+
+@media (min-width: 820px) {
+  .evenementmodal-corps {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .evenementmodal-corps > .seancemodal-bloc:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1180px) {
+  .evenementmodal-corps {
+    grid-template-columns: 1fr 1.15fr 1fr;
+  }
+
+  .evenementmodal-corps > .seancemodal-bloc:last-child {
+    grid-column: auto;
+  }
+}
+
+.evenementmodal .confirmmodal-actions .btn--danger {
+  margin-right: auto;
+}
+
 .seancemodal-bloc {
   margin: 0;
   padding: 10px 12px 12px;
