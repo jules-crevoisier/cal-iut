@@ -150,6 +150,14 @@
   flex: 1 1 auto;
 }
 
+/* Semaine fermée (vacances, pause pédagogique) : grisé hachuré, comme
+   les occupations hors MMI (tâche #17). */
+.empty-state.semaine-fermee {
+  background: var(--hachures);
+  border-style: solid;
+  color: var(--ink-soft);
+}
+
 /* ── Grille + colonne de droite ── */
 .semaine-layout {
   flex: 1 1 auto;

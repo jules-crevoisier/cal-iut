@@ -286,7 +286,7 @@ export function ListeJours({
         </p>
 
         {ferie && (
-          <p className="jour-bande">
+          <p className="jour-bande jour-bande--ferie">
             <strong>{ferie.kind === "vacances" ? "Vacances" : "Férié"}</strong> — {ferie.label}
           </p>
         )}

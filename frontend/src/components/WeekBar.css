@@ -60,13 +60,21 @@
   box-shadow: 0 0 0 2px var(--accent) inset;
 }
 
-/* Semaine fermée (vacances) : hachures = « rien à placer ici ». */
-.weekbar-bar.blocked {
-  background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 3px, var(--border) 3px, var(--border) 5px);
+/* Semaine fermée (vacances, pause pédagogique) : grisé hachuré, le même
+   que les occupations hors MMI (tâche #17). Sélecteur renforcé : les
+   variantes « fine » (Vue Semaine) et `.navsemaine` (Vue Enseignant)
+   repeignaient le fond, et la barre grise pleine hauteur faisait croire à
+   une semaine chargée. */
+.weekbar-wrap .weekbar .weekbar-bar.blocked {
+  background: var(--hachures);
 }
 
-.weekbar-bar.blocked .bar {
-  background: transparent;
+.weekbar-wrap .weekbar .weekbar-bar.blocked:not(.active) {
+  box-shadow: 0 0 0 1px var(--border) inset;
+}
+
+.weekbar-wrap .weekbar .weekbar-bar.blocked .bar {
+  display: none;
 }
 
 /* Glisser une séance au-dessus de la barre : chaque semaine devient une

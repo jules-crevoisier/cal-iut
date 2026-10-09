@@ -228,7 +228,8 @@
 .planning-bloque {
   padding: 32px 20px;
   text-align: center;
-  background: var(--surface);
+  /* Vacances / pause pédagogique : grisé hachuré (tâche #17). */
+  background: var(--hachures);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
@@ -465,6 +466,13 @@
   border-radius: var(--radius);
   font-size: 0.85rem;
   color: var(--ink-soft);
+}
+
+/* Férié / vacances sur téléphone : grisé hachuré (tâche #17). */
+.jour-bande--ferie {
+  background: var(--hachures);
+  border-style: solid;
+  border-color: var(--border);
 }
 
 .jour-vide {
@@ -739,7 +747,7 @@
   /* Gris HACHURÉ : « pris ailleurs », comme dans un agenda. Le gris uni se
      confondait avec les bandes SAE, l'ambre avec les cartes de CM
      (contrôles visuels du 02/10/2026). */
-  background: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, var(--surface-2) 6px 12px);
+  background: var(--hachures);
   color: var(--ink-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius);
