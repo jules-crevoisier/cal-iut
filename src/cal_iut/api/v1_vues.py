@@ -148,23 +148,24 @@ NATURES: list[dict[str, str]] = [
                 "H.201/H.203 et H.007/H.008 comptent comme une seule salle.",
     },
     {
+        # 01/10/2026 : séances déjà placées sur un créneau où l'enseignant ou
+        # la salle est pris AILLEURS dans Celcat (relevé du sidecar) — même
+        # liste que `payload.occupationsExternes.conflits`
+        # (`api/occupations_externes.py::seances_en_conflit`).
+        # 09/10/2026 (tâche 15, Kyllian Bresson) : des CONFLITS, « à
+        # corriger », juste après les doublons internes. Le placement à la
+        # main reste un avertissement (contrainte molle, 02/10/2026).
+        "id": "occupation-externe", "titre": "Conflits Celcat (salle / enseignant)", "gravite": "a_corriger",
+        "aide": "Une salle ou un enseignant d'une séance MMI est déjà pris dans Celcat (autre département, réunion, "
+                "réservation) sur le même créneau. Relevé automatique de Celcat ; le placement n'est pas bloqué.",
+    },
+    {
         "id": "regle", "titre": "Règles globales en échec", "gravite": "a_corriger",
         "aide": "Le détail de chaque règle est dans l'onglet Contraintes.",
     },
     {
         "id": "contrainte", "titre": "Indisponibilités enseignant non respectées", "gravite": "a_corriger",
         "aide": "Une indisponibilité déclarée par l'enseignant tombe sur une de ses séances.",
-    },
-    {
-        # 01/10/2026 : séances déjà placées sur un créneau où l'enseignant ou
-        # la salle est pris AILLEURS dans Celcat (relevé du sidecar) — même
-        # liste que `payload.occupationsExternes.conflits`
-        # (`api/occupations_externes.py::seances_en_conflit`).
-        # CONTRAINTE MOLLE depuis le 02/10/2026 (demande de Jules) : « à
-        # revoir », plus « à corriger ».
-        "id": "occupation-externe", "titre": "Pris ailleurs dans Celcat", "gravite": "a_revoir",
-        "aide": "L'enseignant ou la salle est aussi pris dans Celcat (autre département, réunion, réservation) "
-                "sur le créneau d'une séance placée. À revoir : rien n'est bloqué.",
     },
     {
         # 29/09/2026 : même règle et même calcul que `/api/v1/sae`
@@ -288,17 +289,32 @@ def points_a_traiter(payload: dict) -> list[dict]:
         if c.get("status") == "fail":
             points.append(_point("regle", f"rg|{c['id']}", c["label"], c.get("detail") or "", regle=c["id"]))
 
-    # Occupés ailleurs dans Celcat (01/10/2026) — `todo.ts::buildTodoList`,
-    # même ordre, mêmes clés.
+    # Conflits Celcat (01/10/2026) — `todo.ts::buildTodoList`, même ordre,
+    # mêmes clés, même texte.
     for c in (payload.get("occupationsExternes") or {}).get("conflits") or []:
         points.append(_point(
             "occupation-externe", f"oe|{c['seance_id']}|{c['ressource_type']}|{c['ressource']}",
-            f"{c['course_code']} — {c.get('nom') or c.get('type') or ''}", c["message"],
+            c.get("ressource_libelle") or c["ressource"], detail_conflit_celcat(c),
             semaine=c["semaine"], jour=c["jour"], creneau=c["creneau"],
             parcours=_parcours_des_groupes(payload, c.get("groupes") or []),
             enseignants=list(c.get("enseignants") or []), seance_id=c["seance_id"],
+            type_doublon=c["ressource_type"], source="celcat",
         ))
     return points
+
+
+def detail_conflit_celcat(c: dict) -> str:
+    """`todo.ts::detailConflitCelcat` — « Séance MMI : WR101 — Culture
+    numérique · Dans Celcat : département TC, Marketing digital, 10h00–12h30 ».
+    Sans les champs détaillés (relevé ancien), la phrase du serveur."""
+    if not c.get("date"):
+        return c.get("message") or ""
+    dep = str(c.get("departement") or "").strip()
+    qui = f"département {dep}" if re.fullmatch(r"[A-Z0-9]{1,8}", dep) else (dep or "administration")
+    quoi = str(c.get("intitule") or c.get("categorie") or "").strip()
+    horaire = f"{str(c.get('debut') or '').replace(':', 'h', 1)}–{str(c.get('fin') or '').replace(':', 'h', 1)}"
+    seance = f"{c['course_code']} — {c.get('nom') or c.get('type') or ''}".strip()
+    return f"Séance MMI : {seance} · Dans Celcat : {', '.join(m for m in (qui, quoi, horaire) if m)}"
 
 
 def _js(valeur: object) -> str:

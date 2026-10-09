@@ -256,6 +256,14 @@
   color: var(--ink-soft);
 }
 
+/* Conflit relevé dans Celcat (hors MMI) : la source se lit avant la ressource. */
+.todo-tag--celcat {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .todo-fois {
   font-size: 12px;
   color: var(--ink-soft);

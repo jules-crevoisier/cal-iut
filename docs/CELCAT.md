@@ -465,7 +465,7 @@ L'appli relève ces occupations et les traite **comme une séance déjà placée
 | Vue Enseignant, Vue Salle | Bloc gris hachuré **hors MMI** (qui, quoi, horaire) ; « Aussi pris ailleurs » sous une séance déjà posée |
 | Vue Promo (placement en cours) | « AFR déjà occupé ailleurs (TC) » dans la case |
 | Salles libres (écran et `/api/v1/salles/libres`) | Salle occupée (**Celcat**) |
-| À traiter (écran et `/api/v1/a-traiter`) | Catégorie **Pris ailleurs dans Celcat** (à revoir) : séances MMI déjà placées sur une occupation externe |
+| À traiter (écran et `/api/v1/a-traiter`) | Catégorie **Conflits Celcat (salle / enseignant)** (à corriger, juste après les doublons internes) : séances MMI déjà placées sur une occupation externe |
 
 Messages au placement :
 
@@ -516,7 +516,7 @@ Pas d'écran à part (une vue « Occupé ailleurs » a existé quelques heures l
 | **Vue Enseignant**, **Vue Salle** | Un bloc **gris hachuré** « hors MMI » dans la case : qui occupe (TC, CJ, « Administration »), quoi, et l'horaire réel. Il passe devant les bandes PAC et SAE. |
 | Une séance déjà posée sur une occupation | Sous la carte : « Aussi pris ailleurs : TC, 09h00–11h00 ». |
 | En posant ou en déplaçant une séance | Un **avertissement** nomme l'enseignant ou la salle pris ailleurs ; le placement passe. |
-| **À traiter** | « Pris ailleurs dans Celcat », parmi les points **à revoir**. |
+| **À traiter** | « Conflits Celcat (salle / enseignant) », parmi les points **à corriger** (depuis le 09/10/2026 ; avant : « Pris ailleurs », à revoir). |
 | Écran **Celcat** (administrateur) | Une ligne : nombre d'occupations à venir, date du relevé, **Relire maintenant**. |
 
 **Le passé n'est pas affiché** : seules comptent les occupations d'aujourd'hui et d'après.

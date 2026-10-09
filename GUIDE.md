@@ -401,9 +401,9 @@ Les catégories, de la plus grave à la moins grave :
 | Séances non placées | Vue Promo, **Séances à placer** |
 | Séances sans salle | Vue Promo |
 | Doublons salle / enseignant (H.201/H.203 et H.007/H.008 comptent pour une salle) | Vue Promo |
+| Conflits Celcat (salle / enseignant) : la salle ou l'enseignant d'une séance placée est déjà pris dans Celcat (autre département, réunion, réservation). La ligne porte l'étiquette **Celcat**, nomme la salle ou l'enseignant, et dit ce qui l'occupe dans Celcat avec l'horaire | Vue Enseignant ou Vue Promo |
 | Règles globales en échec | Contraintes |
 | Indisponibilités enseignant non respectées | Vue Enseignant |
-| Occupés ailleurs dans Celcat (enseignant ou salle déjà pris dans Celcat sur une séance placée) | Vue Enseignant ou Vue Promo |
 | Cours de SAE hors journée SAE | Vue Promo |
 | Encadrement SAE le même jour (compromis accepté, à revoir si possible) | Vue Enseignant |
 | Journées trouées (au moins deux créneaux vides entre deux cours) | Vue TD / TP |

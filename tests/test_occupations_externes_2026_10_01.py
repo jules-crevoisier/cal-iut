@@ -490,8 +490,12 @@ def test_a_traiter_et_parite_v1(client, etat) -> None:
     corps = client.get("/api/v1/a-traiter?nature=occupation-externe").json()
     assert [p["seance_id"] for p in corps["points"]] == ["td-afr"]
     point = corps["points"][0]
-    assert point["detail"] == MESSAGE_AFR and point["gravite"] == "a_revoir", "contrainte molle : à revoir, pas à corriger"
-    assert point["cle"] == "oe|td-afr|enseignant|AFR" and point["titre"] == "WR101 — Culture numérique"
+    # 09/10/2026 (tâche 15) : un conflit Celcat est « à corriger », nommé par
+    # la ressource prise, et dit ce qui l'occupe dans Celcat.
+    assert point["gravite"] == "a_corriger" and point["source"] == "celcat" and point["type_doublon"] == "enseignant"
+    assert point["cle"] == "oe|td-afr|enseignant|AFR" and point["titre"] == "Anthony Froli"
+    assert point["detail"] == (
+        "Séance MMI : WR101 — Culture numérique · Dans Celcat : département TC, Marketing digital, 10h00–12h30")
     nature = next(n for n in corps["natures"] if n["id"] == "occupation-externe")
     assert nature["nombre"] == 1
     payload = client.get("/app-state").json()
@@ -507,16 +511,41 @@ CONFLIT = {
     "ressource_type": "enseignant", "ressource": "AFR",
     "message": "Enseignant indisponible — Anthony Froli est déjà programmé dans le département TC sur ce créneau "
                "(lundi 09/11, 10h00–12h30, Celcat).",
+    "ressource_libelle": "Anthony Froli", "date": "2026-11-09", "debut": "10:00", "fin": "12:30",
+    "departement": "TC", "categorie": "[CM]", "intitule": "Marketing digital",
 }
 
 
 def test_forme_du_point_comme_le_frontend() -> None:
     payload = {"groupParcours": {"but1-td-ab": "BUT1"}, "occupationsExternes": {"conflits": [CONFLIT]}}
     assert v1_vues.points_a_traiter(payload) == [{
-        "nature": "occupation-externe", "gravite": "a_revoir", "cle": "oe|td-afr|enseignant|AFR",
-        "titre": "WR101 — Culture numérique", "detail": CONFLIT["message"], "semaine": 9, "jour": 0, "creneau": 1,
+        "nature": "occupation-externe", "gravite": "a_corriger", "cle": "oe|td-afr|enseignant|AFR",
+        "titre": "Anthony Froli",
+        "detail": "Séance MMI : WR101 — Culture numérique · Dans Celcat : département TC, Marketing digital, 10h00–12h30",
+        "semaine": 9, "jour": 0, "creneau": 1,
         "parcours": ["BUT1"], "enseignants": ["AFR"], "nombre": 1, "seance_id": "td-afr",
+        "type_doublon": "enseignant", "source": "celcat",
     }]
+
+
+def test_detail_d_un_conflit_celcat_salle_administration_et_releve_ancien() -> None:
+    """Tâche 15 (09/10/2026) : la salle et le créneau Celcat se lisent dans la
+    ligne ; un serveur plus ancien (sans champs détaillés) garde sa phrase."""
+    salle = {**CONFLIT, "ressource_type": "salle", "ressource": "h018", "ressource_libelle": "H.018",
+             "departement": "", "categorie": "Réunion", "intitule": "", "debut": "14:00", "fin": "17:00"}
+    assert v1_vues.detail_conflit_celcat(salle) == (
+        "Séance MMI : WR101 — Culture numérique · Dans Celcat : administration, Réunion, 14h00–17h00")
+    ancien = {k: v for k, v in CONFLIT.items() if k not in {"date", "ressource_libelle"}}
+    assert v1_vues.detail_conflit_celcat(ancien) == CONFLIT["message"]
+    (point,) = v1_vues.points_a_traiter({"occupationsExternes": {"conflits": [ancien]}})
+    assert point["titre"] == "AFR" and point["detail"] == CONFLIT["message"]
+
+
+def test_conflits_celcat_juste_apres_les_doublons_internes() -> None:
+    ids = [n["id"] for n in v1_vues.NATURES]
+    assert ids.index("occupation-externe") == ids.index("doublon") + 1
+    doublon = next(n for n in v1_vues.NATURES if n["id"] == "doublon")
+    assert doublon["titre"] == "Doublons salle / enseignant" and doublon["gravite"] == "a_corriger"
 
 
 def test_api_v1_occupations_externes_etag(client) -> None:

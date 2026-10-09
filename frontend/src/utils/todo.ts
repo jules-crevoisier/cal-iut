@@ -14,7 +14,7 @@
 
 import type { AnomalieSae, Doublon, DoublonHebdoRun } from "../api/client";
 import type { Route } from "../hooks/useHashRoute";
-import type { AppPayload } from "../types/app";
+import type { AppPayload, ConflitOccupationExterne } from "../types/app";
 import { estNouveau } from "./controleDoublonsHebdo";
 import { coursEnConflit, routeVersDoublon } from "./doublons";
 import { DAY_LABELS, SLOT_TIMES } from "./slots";
@@ -55,6 +55,8 @@ export interface TodoItem {
   nouveau?: boolean;
   /** Type de doublon (salle / enseignant). */
   typeDoublon?: "salle" | "enseignant";
+  /** Conflit relevé dans Celcat (hors MMI), pas dans notre planning. */
+  celcat?: boolean;
 }
 
 export interface NatureInfo {
@@ -101,6 +103,24 @@ export const NATURES: NatureInfo[] = [
     cible: "Vue Promo",
   },
   {
+    // 01/10/2026 : séances déjà placées sur un créneau où l'enseignant ou la
+    // salle est pris AILLEURS dans Celcat (relevé du sidecar) — la liste
+    // `payload.occupationsExternes.conflits`, calculée par le serveur
+    // (`api/occupations_externes.py::seances_en_conflit`), miroir
+    // `v1_vues.py::points_a_traiter`.
+    // 09/10/2026 (tâche 15, Kyllian Bresson) : « ces conflits ne sont pas
+    // affichés dans À traiter ». Rangés « à revoir » sous « Pris ailleurs »,
+    // ils passaient inaperçus : ce sont des CONFLITS, à corriger, juste
+    // après les doublons internes à MMI (inchangés). Le placement à la main,
+    // lui, reste un simple avertissement (02/10/2026).
+    id: "occupation-externe",
+    titre: "Conflits Celcat (salle / enseignant)",
+    court: "Conflits Celcat",
+    aide: "Une salle ou un enseignant d'une séance MMI est déjà pris dans Celcat (autre département, réunion, réservation) sur le même créneau. Relevé automatique de Celcat ; le placement n'est pas bloqué.",
+    sev: "bad",
+    cible: "Planning",
+  },
+  {
     id: "regle",
     titre: "Règles globales en échec",
     court: "Règles en échec",
@@ -115,19 +135,6 @@ export const NATURES: NatureInfo[] = [
     aide: "Une indisponibilité déclarée par l'enseignant tombe sur une de ses séances.",
     sev: "bad",
     cible: "Vue Enseignant",
-  },
-  {
-    // 01/10/2026 : séances déjà placées sur un créneau où l'enseignant ou la
-    // salle est pris AILLEURS dans Celcat (relevé du sidecar) — la liste
-    // `payload.occupationsExternes.conflits`, calculée par le serveur
-    // (`api/occupations_externes.py::seances_en_conflit`), miroir
-    // `v1_vues.py::points_a_traiter`.
-    id: "occupation-externe",
-    titre: "Pris ailleurs dans Celcat",
-    court: "Pris ailleurs",
-    aide: "L'enseignant ou la salle est aussi pris dans Celcat (autre département, réunion, réservation) sur le créneau d'une séance placée. À revoir : rien n'est bloqué.",
-    sev: "warn",
-    cible: "Vue Promo",
   },
   {
     // 29/09/2026 : la liste `anomalies` de `GET /api/v1/sae` — le serveur
@@ -357,15 +364,17 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
     }
   }
 
-  // Occupés ailleurs dans Celcat (01/10/2026) — mêmes clés et même ordre
-  // que `v1_vues.py::points_a_traiter` (test de parité).
+  // Conflits Celcat (01/10/2026, « à corriger » depuis le 09/10/2026) —
+  // mêmes clés, même ordre et même texte que `v1_vues.py::points_a_traiter`
+  // (test de parité). La ligne nomme la ressource prise (salle ou
+  // enseignant) ; le détail dit la séance MMI et ce qui l'occupe dans Celcat.
   for (const c of payload.occupationsExternes?.conflits ?? []) {
     items.push({
-      sev: "warn",
+      sev: "bad",
       nature: "occupation-externe",
       cle: `oe|${c.seance_id}|${c.ressource_type}|${c.ressource}`,
-      title: `${c.course_code} — ${c.nom || c.type || ""}`,
-      sub: c.message,
+      title: c.ressource_libelle || c.ressource,
+      sub: detailConflitCelcat(c),
       route:
         c.ressource_type === "enseignant"
           ? { vue: "prof", prof: c.ressource, sem: c.semaine }
@@ -376,10 +385,25 @@ export function buildTodoList(payload: AppPayload): TodoItem[] {
       parcours: parcoursDesGroupes(payload, c.groupes),
       enseignants: [...c.enseignants],
       n: 1,
+      typeDoublon: c.ressource_type,
+      celcat: true,
     });
   }
 
   return items;
+}
+
+/** « Séance MMI : WR101 — Culture numérique · Dans Celcat : département TC,
+ * Marketing digital, 10h00–12h30 » — miroir `v1_vues.py::detail_conflit_celcat`.
+ * Un serveur plus ancien n'envoie que la phrase (`message`) : on la reprend. */
+export function detailConflitCelcat(c: ConflitOccupationExterne): string {
+  if (!c.date) return c.message;
+  const dep = (c.departement ?? "").trim();
+  const qui = /^[A-Z0-9]{1,8}$/.test(dep) ? `département ${dep}` : dep || "administration";
+  const quoi = (c.intitule || c.categorie || "").trim();
+  const horaire = `${(c.debut ?? "").replace(":", "h")}–${(c.fin ?? "").replace(":", "h")}`;
+  const seance = `${c.course_code} — ${c.nom || c.type || ""}`.trim();
+  return `Séance MMI : ${seance} · Dans Celcat : ${[qui, quoi, horaire].filter(Boolean).join(", ")}`;
 }
 
 /** Doublons (`GET /controles/doublons`) au format commun. */
