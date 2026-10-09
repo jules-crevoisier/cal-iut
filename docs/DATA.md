@@ -1281,7 +1281,7 @@ En mode décomposé, plusieurs poids mous sont fixés dans `solver/decomposed.py
 | FC : aucun cours avant la rentrée exacte du parcours | Dur | Refusé | `10_dates_fixes.json` (événement « Rentrée ») |
 | FC : cours seulement les semaines de présence à l'IUT | Dur | Refusé | `03_calendrier_alternance_officiel.json` |
 | FI : jeudi 14h-18h30 réservé aux PAC | Dur | Refusé | Code (`enforce_thursday_pac_lock`) |
-| Journées SAE : aucun cours classique du parcours (ou des groupes visés) | Dur | Refusé (sauf séance SAE) | `09_dates_sae.json`, `sae_corrections.yaml` (`enforce_sae_sanctuarization`) |
+| Journées SAE : aucun cours classique du parcours (ou des groupes visés) | Dur | Forçable à la main, avec avertissement « Semaine/Journée de SAE » (toujours respecté par la génération, les suggestions et la complétion) ; libre pour une séance SAE | `09_dates_sae.json`, `sae_corrections.yaml` (`enforce_sae_sanctuarization`) |
 | Événements fixes : créneaux bloqués pour les parcours listés | Dur | Refusé | `10_dates_fixes.json`, `evenements_supplementaires.yaml` (`enforce_planning_events`) |
 | Horizon : FI jusqu'à l'index 18 (29 janvier 2027), FC jusqu'à l'index 23 | Dur | Refusé (fin de semestre FI) | Options `--weeks 24 --fi-max-week 18` (`fi_max_week`) |
 | Semaine passée ou en cours | — | Forçable, confirmation forte | Date du jour |

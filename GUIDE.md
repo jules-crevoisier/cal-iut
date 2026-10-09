@@ -478,7 +478,10 @@ Au premier passage, l'appli demande l'affichage préféré :
 
 **Pourquoi mon déplacement est-il refusé ?**
 Le message dit pourquoi. « Impossible (non forçable) » : une règle de l'IUT l'interdit
-(PAC, SAE, férié…), il faut un autre créneau. Sinon, **Forcer le déplacement** est possible.
+(PAC, férié…), il faut un autre créneau. Sinon, **Forcer le déplacement** est possible.
+Un créneau réservé à une SAE affiche « ⚠ Semaine de SAE » (ou « Journée de SAE ») :
+**Forcer le placement** y pose quand même la séance. La génération automatique, elle,
+n'y place jamais de cours classique.
 Voir [Conflits et « Forcer »](#conflits-et--forcer-).
 
 **On me demande de forcer alors que le créneau semble libre.**
