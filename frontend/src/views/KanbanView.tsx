@@ -24,11 +24,15 @@
  * Images jointes (30/09/2026) : bouton, collage (Ctrl V) et glisser-déposer
  * dans la modale ; compteur sur la carte, qui ouvre l'aperçu — y compris en
  * lecture seule (cf. `components/ImagesTache.tsx`).
+ *
+ * Archive (09/10/2026, Jules) : une tâche faite depuis plus de deux
+ * semaines quitte la colonne « Fait » et le rapport copié ; le bouton
+ * « Archive » de la barre la retrouve (cf. `utils/kanban.ts::estArchivee`).
  */
 
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ClipboardCopy, Image as IconeImage, Plus } from "lucide-react";
+import { Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ClipboardCopy, Image as IconeImage, Plus } from "lucide-react";
 
 import type { ImageTache, Tache, TacheCreateBody, TachePatchBody } from "../api/client";
 import {
@@ -43,7 +47,7 @@ import {
 import type { Route } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
 import { confirmAsync } from "../utils/confirmDialog";
-import { libelleDatesTache, rapportTaches, routeVersSeance, seancesConcernees, texteTache } from "../utils/kanban";
+import { ARCHIVE_APRES_JOURS, estArchivee, libelleDatesTache, rapportTaches, routeVersSeance, seancesConcernees, texteTache } from "../utils/kanban";
 import { ecrireOngletTaches, lireOngletTaches } from "../utils/kanbanTabPrefs";
 import { copyToClipboard } from "../utils/clipboard";
 import { SLOT_TIMES } from "../utils/slots";
@@ -130,6 +134,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [survolColonne, setSurvolColonne] = useState<Tache["colonne"] | null>(null);
   const [faitDeplie, setFaitDeplie] = useState(false);
+  const [voirArchive, setVoirArchive] = useState(false);
   // Aperçu des images d'une carte, ouvert depuis son compteur.
   const [apercu, setApercu] = useState<{ tacheId: number; index: number } | null>(null);
 
@@ -198,9 +203,18 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     return compte;
   }, [filtrees]);
 
-  const parColonne = useMemo(() => {
+  // Faites depuis plus de deux semaines : hors du tableau (et du rapport),
+  // rangées dans l'archive, la plus récemment faite en tête.
+  const { parColonne, archivees } = useMemo(() => {
+    const maintenant = new Date();
     const map: Record<Tache["colonne"], Tache[]> = { a_faire: [], en_cours: [], fait: [] };
-    for (const t of filtrees) if (t.categorie === categorieActive) map[t.colonne].push(t);
+    const archive: Tache[] = [];
+    for (const t of filtrees) {
+      if (t.categorie !== categorieActive) continue;
+      if (estArchivee(t, maintenant)) archive.push(t);
+      else map[t.colonne].push(t);
+    }
+    archive.sort((a, b) => (b.fait_le ?? "").localeCompare(a.fait_le ?? ""));
     // Urgente en tête de sa colonne (marqueur TEXTE sur la carte) — à égalité,
     // ordre habituel.
     for (const c of COLONNES) {
@@ -210,7 +224,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
         return urgenceA - urgenceB || a.ordre - b.ordre;
       });
     }
-    return map;
+    return { parColonne: map, archivees: archive };
   }, [filtrees, categorieActive]);
 
   /** Lot de correctifs appliqué de façon optimiste ; retour arrière COMPLET si
@@ -432,7 +446,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
 
   // Rapport de toute la page, à coller à Claude (Jules, 09/10/2026) : ce
   // que l'écran montre (onglet + filtres), colonne « Fait » comprise même
-  // repliée.
+  // repliée — mais jamais l'archive.
   const copierRapport = async () => {
     const filtres: string[] = [];
     if (filtreConcerne === "__sans__") filtres.push("non attribuées");
@@ -502,6 +516,19 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
             Réinitialiser
           </button>
         )}
+        {/* Archive : tâches faites depuis plus de deux semaines. */}
+        <button
+          type="button"
+          className={`btn btn--ghost btn--sm kanban-archive-bouton${voirArchive ? " actif" : ""}`}
+          aria-pressed={voirArchive}
+          aria-controls="kanban-board"
+          onClick={() => setVoirArchive((v) => !v)}
+          title={`Tâches faites il y a plus de ${ARCHIVE_APRES_JOURS / 7} semaines`}
+        >
+          <Archive size={14} aria-hidden="true" />
+          Archive
+          <span className="kanban-archive-nb">{archivees.length}</span>
+        </button>
         {/* Visible aussi en lecture seule : copier ne modifie rien. */}
         <button
           type="button"
@@ -538,6 +565,64 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
         </p>
       )}
 
+      {voirArchive ? (
+        <section
+          className="kanban-archive"
+          id="kanban-board"
+          role="tabpanel"
+          aria-labelledby={`kanban-onglet-${categorieActive}`}
+        >
+          <header className="kanban-archive-tete">
+            <h3>Archive</h3>
+            <p className="muted small">
+              Faites il y a plus de {ARCHIVE_APRES_JOURS / 7} semaines, la plus récente en tête. Rien n'est supprimé,
+              et l'archive n'entre pas dans le rapport copié.
+            </p>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setVoirArchive(false)}>
+              Retour au tableau
+            </button>
+          </header>
+          {archivees.length === 0 ? (
+            <p className="kanban-column-vide">Aucune tâche archivée.</p>
+          ) : (
+            <ul className="kanban-cards kanban-archive-liste">
+              {archivees.map((t) => (
+                <CarteTache
+                  key={t.id}
+                  t={t}
+                  index={0}
+                  nbDansColonne={1}
+                  idxColonne={COLONNES.findIndex((c) => c.id === t.colonne)}
+                  payload={payload}
+                  peutModifier={peutModifier}
+                  deplie={depliees.has(t.id)}
+                  copiee={copiee === t.id}
+                  enTrain={false}
+                  glissable={false}
+                  onDragStart={() => undefined}
+                  onDragEnd={() => undefined}
+                  onDragOver={() => undefined}
+                  onDrop={() => undefined}
+                  onBasculer={() => basculerDeplie(t.id)}
+                  onModifier={() => ouvrirEdition(t)}
+                  onVoirImages={() => setApercu({ tacheId: t.id, index: 0 })}
+                  onSupprimer={() => void supprimer(t)}
+                  onColonne={(sens) => deplacerColonne(t, sens)}
+                  onOrdre={() => undefined}
+                  onCopier={(texte) => {
+                    void (async () => {
+                      await copyToClipboard(texte);
+                      setCopiee(t.id);
+                      window.setTimeout(() => setCopiee((id) => (id === t.id ? null : id)), 2000);
+                    })();
+                  }}
+                  setRoute={setRoute}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
       <div className="kanban-board" id="kanban-board" role="tabpanel" aria-labelledby={`kanban-onglet-${categorieActive}`}>
         {COLONNES.map((colonne, idxCol) => {
           const liste = parColonne[colonne.id];
@@ -653,6 +738,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
           );
         })}
       </div>
+      )}
 
       {modaleOuverte && (
         <TacheModal
@@ -702,6 +788,8 @@ interface CarteTacheProps {
   onOrdre: (sens: -1 | 1) => void;
   onCopier: (texte: string) => void;
   setRoute: (patch: Partial<Route>) => void;
+  /** Faux dans l'archive : pas de colonne où déposer. */
+  glissable?: boolean;
 }
 
 function CarteTache({
@@ -726,6 +814,7 @@ function CarteTache({
   onOrdre,
   onCopier,
   setRoute,
+  glissable = true,
 }: CarteTacheProps) {
   const nomProf = t.enseignant_code ? payload.teacherLabels[t.enseignant_code] ?? t.enseignant_code : null;
   const datesLabel = libelleDatesTache(t.date_debut, t.date_fin);
@@ -736,9 +825,9 @@ function CarteTache({
   return (
     <li
       className={`kanban-card${enTrain ? " dragging" : ""}${t.priorite === "urgente" ? " urgente" : ""}`}
-      draggable={peutModifier}
+      draggable={peutModifier && glissable}
       onDragStart={
-        peutModifier
+        peutModifier && glissable
           ? (e) => {
               e.dataTransfer.effectAllowed = "move";
               onDragStart();
