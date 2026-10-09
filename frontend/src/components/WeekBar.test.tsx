@@ -88,6 +88,24 @@ describe("WeekBar drop onto another week", () => {
     expect(onDropWeek).not.toHaveBeenCalled();
   });
 
+  it("should draw no load bar on a blocked week, only the hatched background", () => {
+    // Tâche #17 : une barre pleine hauteur sur les vacances se lisait comme
+    // une semaine chargée de cours.
+    render(
+      <WeekBar
+        {...baseProps}
+        selected={0}
+        weekRows={[
+          semaines[0],
+          { monday: "2026-10-26", label: "Vacances de la Toussaint", blocked: true, weekIndex: null },
+        ]}
+      />,
+    );
+    const vacances = screen.getByRole("button", { name: /vacances/i });
+    expect(vacances.className).toContain("blocked");
+    expect((vacances.querySelector(".bar") as HTMLElement).style.height).toBe("0%");
+  });
+
   it("should still select another week after a drop on a different week", () => {
     const onDropWeek = vi.fn();
     const onSelect = vi.fn();

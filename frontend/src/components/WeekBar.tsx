@@ -99,7 +99,10 @@ export function WeekBar({
           // une semaine VRAIMENT vide difficile à distinguer d'une semaine
           // peu chargée. Une semaine à 0 créneau (non bloquée) est
           // maintenant à 0 % — seul le remplissage réel compte.
-          const barHeight = wr.blocked ? 100 : count === 0 ? 0 : (count / max) * 100;
+          // Semaine bloquée (vacances, pause pédagogique) : AUCUNE barre, les
+          // hachures seules. Une barre pleine hauteur se lisait comme une
+          // semaine très chargée (tâche #17, Kyllian Bresson, 07/10/2026).
+          const barHeight = wr.blocked ? 0 : count === 0 ? 0 : (count / max) * 100;
           const accepteDepot = Boolean(onDropWeek) && !wr.blocked && wr.weekIndex !== null;
           return (
             <button
