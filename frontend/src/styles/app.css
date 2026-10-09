@@ -24,6 +24,10 @@
   --surface: #fdfdfc;
   --surface-2: #f4f4f2;
   --surface-3: #ececea;
+  /* Gris HACHURÉ « pas une séance MMI » : occupations hors MMI (Celcat),
+     vacances, pauses pédagogiques et fériés. Défini une fois ici et résolu
+     sur `:root`, donc suit les thèmes clair et sombre (tâche #17). */
+  --hachures: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, var(--surface-2) 6px 12px);
   --ink: #222226;
   --ink-soft: #5c5c64;
   --ink-faint: #8b8b94;

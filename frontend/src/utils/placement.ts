@@ -8,8 +8,9 @@
  * Même logique que le glisser-déposer (`moveSession.ts::performMove`) :
  * essai normal, et seulement si ça bute sur un conflit RESSOURCE /
  * forçable (ordre pédagogique, indispo enseignant), popup de confirmation
- * puis nouvel essai avec `force`. Les verrous institutionnels (PAC, SAE
- * pour WR*, férié…) restent NON contournables — le serveur les met dans
+ * puis nouvel essai avec `force`. Le jour SAE se force aussi depuis le
+ * 09/10/2026, avec sa popup dédiée (`texteEtOptionsForcage`). Les verrous
+ * institutionnels (PAC, férié…) restent NON contournables — le serveur les met dans
  * `blocking_conflicts` ; dans ce cas la popup Forcer ne s'affiche pas.
  */
 
@@ -98,6 +99,25 @@ export function estDatePassee(conflits: string[]): boolean {
   return conflits.some((m) => m.startsWith(PREFIXE_DATE_PASSEE));
 }
 
+// ── Semaine / journée de SAE (tâches 14 et 18, 09/10/2026) ──
+// Une séance classique sur un créneau réservé à une SAE se force à la main,
+// après un avertissement dédié. Le serveur préfixe ces motifs EXACTEMENT
+// (cf. `api/main.py::PREFIXE_SEMAINE_SAE` / `PREFIXE_JOURNEE_SAE`).
+const PREFIXE_SEMAINE_SAE = "Semaine de SAE : ";
+const PREFIXE_JOURNEE_SAE = "Journée de SAE : ";
+const SUFFIXE_SAE = " Placement possible en forçant.";
+const QUESTION_SAE = "Voulez-vous malgré tout placer cette séance sur ce créneau ?";
+
+function estMotifSae(m: string): boolean {
+  return m.startsWith(PREFIXE_SEMAINE_SAE) || m.startsWith(PREFIXE_JOURNEE_SAE);
+}
+
+/** « Semaine de SAE : ce créneau… forçant. » → « Ce créneau… ». */
+function phraseSae(m: string): string {
+  const corps = m.replace(PREFIXE_SEMAINE_SAE, "").replace(PREFIXE_JOURNEE_SAE, "").replace(SUFFIXE_SAE, "");
+  return corps.charAt(0).toUpperCase() + corps.slice(1);
+}
+
 export interface OptionsForcage {
   title?: string;
   confirmLabel: string;
@@ -120,6 +140,18 @@ export function texteEtOptionsForcage(
   confirmLabelDefaut: string,
 ): { texte: string; options: OptionsForcage } {
   const forcables = hard.filter((m) => !blocking.includes(m));
+  if (!estDatePassee(forcables) && forcables.some(estMotifSae)) {
+    const sae = forcables.filter(estMotifSae);
+    const autres = forcables.filter((m) => !estMotifSae(m));
+    const blocs = [sae.map(phraseSae).join("\n"), QUESTION_SAE];
+    if (autres.length) blocs.push(`Forçable aussi :\n${autres.join("\n")}`);
+    if (soft.length) blocs.push(`Avertissement :\n${soft.join("\n")}`);
+    const semaine = sae.some((m) => m.startsWith(PREFIXE_SEMAINE_SAE));
+    return {
+      texte: blocs.join("\n\n"),
+      options: { title: semaine ? "⚠ Semaine de SAE" : "⚠ Journée de SAE", confirmLabel: "Forcer le placement" },
+    };
+  }
   if (!estDatePassee(forcables)) {
     const blocs: string[] = [];
     if (forcables.length) blocs.push(`Forçable :\n${forcables.join("\n")}`);

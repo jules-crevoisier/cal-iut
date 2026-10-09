@@ -2964,7 +2964,36 @@ def _resolve_room(state: object, session: object, week: int, day: int, slot: int
 def _hard_constraint_context(
     state: object, session: object
 ) -> tuple[set[tuple[int, int, int]], set[tuple[int, int, int]], set[int]]:
+    """`(extra_blocked, extra_blocked_pedago, allowed_weeks)`, jours SAE
+    COMPRIS dans `extra_blocked` : c'est ce que lisent les suggestions, la
+    complétion automatique et le lissage, qui ne posent jamais une séance
+    classique un jour de SAE. Seul le placement manuel confirmé
+    (`_conflits_deplacement`) distingue le jour SAE, devenu forçable le
+    09/10/2026, via `_contexte_dur_detaille`."""
+    hors_sae, jours_sae, extra_blocked_pedago, allowed_weeks = _contexte_dur_detaille(state, session)
+    extra_blocked = set(hors_sae)
+    for w, d in jours_sae:
+        for slot in range(6):
+            extra_blocked.add((w, d, slot))
+    return extra_blocked, extra_blocked_pedago, allowed_weeks
+
+
+def _contexte_dur_detaille(
+    state: object, session: object
+) -> tuple[set[tuple[int, int, int]], dict[tuple[int, int], list[str]], set[tuple[int, int, int]], set[int]]:
     """
+    `(extra_blocked_hors_sae, jours_sae, extra_blocked_pedago, allowed_weeks)`
+    — même calcul que `_hard_constraint_context`, mais les jours SAE
+    sanctuarisés sont rendus À PART (`(semaine, jour)` → codes des SAE
+    concernées) au lieu d'être fondus dans les verrous institutionnels.
+
+    Demandes de Kyllian Bresson (tâches 14 et 18, 06 et 09/10/2026) :
+    pouvoir « replacer exceptionnellement une séance MMI pendant une semaine
+    normalement réservée aux SAE », après un avertissement et une
+    confirmation. La génération, elle, continue de respecter ces jours.
+
+    Description historique, valable pour les deux fonctions :
+
     `(extra_blocked, extra_blocked_pedago, allowed_weeks)` pour une séance
     donnée — verrou jeudi PAC, jours SAE sanctuarisés, événements du planning
     officiel à horaire précis, ordre pédagogique. Réutilisé à la fois pour
@@ -2978,7 +3007,9 @@ def _hard_constraint_context(
     sans qu'aucun garde-fou serveur ne l'empêche).
 
     `extra_blocked` (PAC, fin de semestre FI, présence alternant FC,
-    événement planning officiel, SAE sanctuarisée) reste JAMAIS contournable.
+    événement planning officiel) reste JAMAIS contournable. Le jour SAE
+    sanctuarisé, lui, se force à la main depuis le 09/10/2026
+    (`_sae_violations`).
     `extra_blocked_pedago`/`allowed_weeks` (ordre pédagogique CM/TD/TP) sont
     séparés depuis le 28/08/2026 (retour utilisateur : « on veut que si on
     appuie sur forcer cela soit bon et que le placement se fasse ») — un
@@ -3005,6 +3036,7 @@ def _hard_constraint_context(
     n_weeks = (max((p.week for p in state.timetable), default=-1)) + 1
 
     extra_blocked: set[tuple[int, int, int]] = set()
+    jours_sae: dict[tuple[int, int], list[str]] = {}
 
     # Jours FÉRIÉS et fermetures (vacances, journées bloquées). Le solveur
     # les respecte depuis toujours (`constraints.py::
@@ -3102,9 +3134,14 @@ def _hard_constraint_context(
             )
             for gid in session.group_ids:
                 blocked_days |= blocked_by_group.get(gid, set())
+        # Codes des SAE du parcours de la séance, pour NOMMER la SAE dans
+        # l'avertissement (« WS501C ») plutôt qu'un « jour de SAE » vague.
+        codes_parcours = {s.course_code for s in state.sessions if s.parcours == session.parcours}
         for w, d in blocked_days:
-            for slot in range(6):
-                extra_blocked.add((w, d, slot))
+            jours_sae[(w, d)] = sorted(
+                code for code, jours in sae_days_by_course.items()
+                if (w, d) in jours and code in codes_parcours
+            )
 
     # Ordre pédagogique : mêmes bornes que la régénération ciblée
     # (`_movable_bounds`, déjà utilisé par `api/regen.py`) — ne jamais
@@ -3159,7 +3196,7 @@ def _hard_constraint_context(
                 if day * _SPD + slot >= seuil:
                     extra_blocked_pedago.add((hi, day, slot))
 
-    return extra_blocked, extra_blocked_pedago, allowed_weeks
+    return extra_blocked, jours_sae, extra_blocked_pedago, allowed_weeks
 
 
 def _libelle_jour_ferme(state: object, semestre: str, week: int, day: int) -> str | None:
@@ -3187,7 +3224,7 @@ def _institutional_violations(
     """
     Violations JAMAIS contournables via `force` (verrous institutionnels durs :
     jeudi PAC, fin de semestre FI, présence IUT d'un alternant FC, événement
-    du planning officiel à horaire précis, journée SAE sanctuarisée) —
+    du planning officiel à horaire précis) —
     distinct des conflits de ressources groupe/enseignant/salle (force-ables,
     un humain peut avoir une bonne raison de les outrepasser ponctuellement)
     ET de l'ordre pédagogique (`_pedagogical_order_violations`, lui aussi
@@ -3204,12 +3241,50 @@ def _institutional_violations(
             libelle_calendrier
             or (
                 "Créneau institutionnellement bloqué (jeudi après-midi PAC, fin de semestre, "
-                "journée SAE sanctuarisée pour les cours classiques WR*, événement du planning "
-                "officiel à cet horaire précis, ou présence IUT d'un alternant) — non modifiable, "
-                "même en forçant. Exception : une séance SAE (code WS*) peut être placée un jour de SAE."
+                "événement du planning officiel à cet horaire précis, ou présence IUT d'un "
+                "alternant) — non modifiable, même en forçant."
             )
         )
     return violations
+
+
+# Préfixes EXACTS lus par le front (`frontend/src/utils/placement.ts`,
+# `PREFIXE_SAE`) pour afficher la popup « ⚠ Semaine de SAE ».
+PREFIXE_SEMAINE_SAE = "Semaine de SAE : "
+PREFIXE_JOURNEE_SAE = "Journée de SAE : "
+
+
+def _sae_violations(
+    week: int, day: int, slot: int,
+    jours_sae: dict[tuple[int, int], list[str]],
+    extra_blocked_hors_sae: set[tuple[int, int, int]],
+) -> list[str]:
+    """
+    Jour réservé à une SAE pour une séance classique — FORÇABLE depuis le
+    09/10/2026 (tâches 14 et 18 de Kyllian Bresson : « pouvoir replacer
+    exceptionnellement une séance MMI pendant une semaine normalement
+    réservée aux SAE, tout en étant averti »). Seul le placement manuel
+    confirmé force : la génération, les suggestions, la complétion et le
+    lissage lisent toujours ces jours comme bloqués
+    (`_hard_constraint_context`).
+
+    « Semaine de SAE » quand les cinq jours de la semaine sont réservés,
+    « Journée de SAE » sinon. Rien quand le créneau est DÉJÀ bloqué par un
+    verrou plus fort (férié, PAC...) : on n'invite pas à forcer ce qui
+    restera refusé.
+    """
+    if (week, day) not in jours_sae or (week, day, slot) in extra_blocked_hors_sae:
+        return []
+    codes = jours_sae[(week, day)]
+    nom = f" ({', '.join(codes)})" if codes else ""
+    if all((week, d) in jours_sae for d in range(5)):
+        return [
+            f"{PREFIXE_SEMAINE_SAE}ce créneau se situe pendant une semaine réservée à une SAE{nom}. "
+            "Placement possible en forçant."
+        ]
+    return [
+        f"{PREFIXE_JOURNEE_SAE}ce créneau est dédié à une SAE{nom}. Placement possible en forçant."
+    ]
 
 
 def _pedagogical_order_violations(
@@ -3297,12 +3372,13 @@ def _conflits_deplacement(
     divergence silencieuse entre les deux surfaces (HTTP et MCP).
 
     Rend `(institutional, forceable)` :
-    - `institutional` — verrous JAMAIS contournables via `force` (PAC, SAE,
+    - `institutional` — verrous JAMAIS contournables via `force` (PAC,
       fin de semestre, événement du planning officiel).
-    - `forceable` — ordre pédagogique + indisponibilité enseignant
-      déclarée : signalés systématiquement, mais `force=True` les lève.
+    - `forceable` — jour SAE (09/10/2026), ordre pédagogique +
+      indisponibilité enseignant déclarée : signalés systématiquement,
+      mais `force=True` les lève.
     """
-    extra_blocked, extra_blocked_pedago, allowed_weeks = _hard_constraint_context(state, session)
+    extra_blocked, jours_sae, extra_blocked_pedago, allowed_weeks = _contexte_dur_detaille(state, session)
     # Un évènement hors maquette (`metadata["evenement"]`, cf.
     # `POST /placements/evenements`) est exempté du verrou institutionnel —
     # retour utilisateur 07/09/2026 : « il faut créer un faux cours pour
@@ -3325,7 +3401,8 @@ def _conflits_deplacement(
             week, day, slot, extra_blocked,
             _libelle_jour_ferme(state, session.semestre, week, day),
         )
-    forceable = _pedagogical_order_violations(week, day, slot, extra_blocked_pedago, allowed_weeks)
+    forceable = _sae_violations(week, day, slot, jours_sae, extra_blocked)
+    forceable += _pedagogical_order_violations(week, day, slot, extra_blocked_pedago, allowed_weeks)
     strictes = _indisponibilites_strictes(state, session, week, day, slot)
     if strictes:
         # Déjà refusé sans appel : inutile d'ajouter le message « Forcer peut

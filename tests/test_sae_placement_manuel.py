@@ -186,3 +186,61 @@ def test_should_return_blocking_and_forceable_together_on_validate(client, monke
     assert corps["valid"] is False
     assert corps["blocking_conflicts"]
     assert any("indisponible" in m.lower() for m in corps["hard_conflicts"])
+
+
+def _jours_sae(monkeypatch, jours: set[tuple[int, int]]) -> None:
+    """Fenêtre SAE WS101 sur `jours` pour le parcours BUT1, tout le reste de
+    la maquette neutralisé."""
+    monkeypatch.setattr("cal_iut.ingestion.planning_loader.load_mmi_planning", lambda *_a, **_k: object())
+    monkeypatch.setattr(
+        "cal_iut.ingestion.planning_loader.planning_event_blocked_slots_by_parcours", lambda *_a, **_k: {}
+    )
+    monkeypatch.setattr(
+        "cal_iut.ingestion.planning_loader.sae_windows_as_week_days", lambda *_a, **_k: {"WS101": set(jours)}
+    )
+    monkeypatch.setattr("cal_iut.ingestion.planning_loader.sae_group_labels_by_course", lambda *_a, **_k: {})
+    monkeypatch.setattr(
+        "cal_iut.solver.constraints.sae_blocked_days_by_parcours", lambda *_a, **_k: {"BUT1": set(jours)}
+    )
+    monkeypatch.setattr("cal_iut.solver.constraints.sae_blocked_days_by_group", lambda *_a, **_k: {})
+    etat = get_state()
+    ws = _seance("ws101")
+    ws.course_code = "WS101"
+    etat.sessions = list(etat.sessions) + [ws]
+
+
+def test_journee_sae_avertit_puis_se_force(monkeypatch, client) -> None:
+    """Tâche 18 (Kyllian Bresson, 09/10/2026) : une ressource WR sur une
+    journée bloquée par une SAE est signalée, mais forçable à la main."""
+    _jours_sae(monkeypatch, {(12, 1)})
+
+    corps = client.post("/placements/placee/validate", json={"week": 12, "day": 1, "slot": 1}).json()
+    assert corps["valid"] is False
+    assert corps["blocking_conflicts"] == []
+    assert any(m.startswith("Journée de SAE : ") and "WS101" in m for m in corps["hard_conflicts"])
+
+    refus = client.patch("/placements/placee", json={"week": 12, "day": 1, "slot": 1})
+    assert refus.status_code == 409, refus.text
+
+    force = client.patch("/placements/placee", json={"week": 12, "day": 1, "slot": 1, "force": True})
+    assert force.status_code == 200, force.text
+    p = next(p for p in get_state().timetable if p.session_id == "placee")
+    assert (p.week, p.day, p.slot) == (12, 1, 1)
+
+
+def test_semaine_sae_est_nommee_semaine(monkeypatch, client) -> None:
+    """Tâche 14 (06/10/2026) : les cinq jours réservés → « Semaine de SAE »."""
+    _jours_sae(monkeypatch, {(12, d) for d in range(5)})
+
+    corps = client.post("/placements/placee/validate", json={"week": 12, "day": 2, "slot": 0}).json()
+    assert corps["blocking_conflicts"] == []
+    assert any(m.startswith("Semaine de SAE : ") for m in corps["hard_conflicts"])
+
+
+def test_generation_et_suggestions_respectent_toujours_le_jour_sae(monkeypatch, client) -> None:
+    """Ce que lisent les suggestions et la complétion automatique : le jour
+    SAE y reste bloqué, seul le placement manuel confirmé force."""
+    _jours_sae(monkeypatch, {(12, 1)})
+    etat = get_state()
+    bloque, _, _ = _hard_constraint_context(etat, etat.sessions_by_id["placee"])
+    assert all((12, 1, slot) in bloque for slot in range(6))

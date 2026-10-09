@@ -186,8 +186,8 @@ Repères : `day` 0 = lundi … 4 = vendredi ; `slot` 0 = 8h, 1 = 9h30, 2 = 11h, 
 ## 8. Précautions
 
 1. **Toujours** passer par `plan`, montrer le résultat, obtenir un accord explicite, **puis** `apply`.
-2. Ne jamais forcer un élément `blocked` (SAE, indisponibilité déclarée, contrainte institutionnelle).
-   `forceable` ne se force qu'avec l'accord d'un humain.
+2. Ne jamais forcer un élément `blocked` (indisponibilité forte, contrainte institutionnelle).
+   `forceable` (dont « Semaine de SAE » / « Journée de SAE ») ne se force qu'avec l'accord d'un humain.
 3. Un `apply` s'exécute élément par élément. Si le 3e échoue, les deux premiers restent appliqués.
 4. Ne jamais mettre une clé dans un chat, un commit, une capture d'écran ou un fichier partagé.
 5. Une clé agit avec les droits de son compte. Prévoir une clé par usage, et révoquer celle qui ne sert plus.

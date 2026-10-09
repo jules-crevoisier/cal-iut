@@ -852,7 +852,7 @@ export function App() {
                   {placements.length === 0 ? (
                     <EtatPlanningVide etat={panne ? "echec" : etatPlanning} />
                   ) : solverWeek === null ? (
-                    <div className="empty-state">
+                    <div className="empty-state semaine-fermee">
                       <p>Semaine fermée (vacances). Choisissez une autre semaine.</p>
                     </div>
                   ) : viewMode === "teacher" && !teacherCode ? (
