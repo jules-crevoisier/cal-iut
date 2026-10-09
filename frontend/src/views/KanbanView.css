@@ -33,6 +33,54 @@
   gap: 8px;
 }
 
+/* Bouton « Archive » : enfoncé quand l'archive remplace le tableau. */
+.kanban-archive-bouton.actif {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+.kanban-archive-nb {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Archive (tâches faites depuis plus de deux semaines) ── */
+.kanban-archive {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kanban-archive-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 2px 2px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.kanban-archive-tete h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.kanban-archive-tete p {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
+/* Trois cartes par ligne comme le tableau, une seule sur mobile. */
+.kanban-cards.kanban-archive-liste {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 20px;
+  align-items: start;
+}
+
 /* ── Colonnes ── */
 .kanban-board {
   display: grid;
@@ -412,7 +460,8 @@ button.kanban-card-titre:hover {
 }
 
 @media (max-width: 900px) {
-  .kanban-board {
+  .kanban-board,
+  .kanban-cards.kanban-archive-liste {
     grid-template-columns: minmax(0, 1fr);
   }
 

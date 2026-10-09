@@ -283,3 +283,26 @@ export function rapportTaches<
   }
   return `${lignes.join("\n")}\n`;
 }
+
+/**
+ * Délai après lequel une tâche faite quitte la colonne « Fait » pour
+ * l'archive (Jules, 09/10/2026 : « au bout de deux semaines, ça dégage de
+ * fait [...] dans une archive »). Rien n'est supprimé : la tâche reste en
+ * base, seulement rangée à part.
+ */
+export const ARCHIVE_APRES_JOURS = 14;
+
+/**
+ * Vrai si la tâche est faite depuis plus de `ARCHIVE_APRES_JOURS` jours,
+ * d'après sa date « Faite le ». Une tâche faite sans date connue reste dans
+ * la colonne : on ne range pas ce qu'on ne sait pas dater.
+ */
+export function estArchivee(
+  tache: { colonne: string; fait_le?: string | null },
+  maintenant: Date = new Date(),
+): boolean {
+  if (tache.colonne !== "fait" || !tache.fait_le) return false;
+  const faite = new Date(tache.fait_le).getTime();
+  if (Number.isNaN(faite)) return false;
+  return maintenant.getTime() - faite > ARCHIVE_APRES_JOURS * 24 * 60 * 60 * 1000;
+}

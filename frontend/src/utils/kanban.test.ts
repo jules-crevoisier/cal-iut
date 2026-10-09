@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyPayload, placedRow } from "../test/payloadFixture";
-import { rapportTaches, texteTache, dateReelleRow, libelleDatesTache, routeVersSeance, seancesConcernees } from "./kanban";
+import { estArchivee, rapportTaches, texteTache, dateReelleRow, libelleDatesTache, routeVersSeance, seancesConcernees } from "./kanban";
 
 const payload = emptyPayload({
   weekRows: [
@@ -192,5 +192,23 @@ describe("rapportTaches", () => {
     );
     expect(texte).toContain("- Enseignant : Kyllian Bresson");
     expect(texte).toContain("- Séances concernées (1) :\n  - lun. 21 sept. · WR106");
+  });
+});
+
+describe("estArchivee", () => {
+  const maintenant = new Date("2026-10-09T12:00:00");
+
+  it("archives a task done more than two weeks ago", () => {
+    expect(estArchivee({ colonne: "fait", fait_le: "2026-09-24T10:00:00" }, maintenant)).toBe(true);
+  });
+
+  it("keeps a task done less than two weeks ago in the column", () => {
+    expect(estArchivee({ colonne: "fait", fait_le: "2026-09-26T10:00:00" }, maintenant)).toBe(false);
+  });
+
+  it("never archives a task that is not done, or done without a date", () => {
+    expect(estArchivee({ colonne: "en_cours", fait_le: "2026-01-01T10:00:00" }, maintenant)).toBe(false);
+    expect(estArchivee({ colonne: "fait", fait_le: null }, maintenant)).toBe(false);
+    expect(estArchivee({ colonne: "fait", fait_le: "pas une date" }, maintenant)).toBe(false);
   });
 });
