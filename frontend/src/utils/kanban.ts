@@ -178,3 +178,107 @@ export function texteTache(
   return lignes.join("\n");
 }
 
+
+const FMT_HORODATAGE = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" });
+
+/**
+ * Toute la page des tâches en Markdown, à coller tel quel à Claude comme
+ * rapport (Jules, 09/10/2026 : « copier toute la page d'un coup [...] te
+ * coller le rapport [...] que toi tu regardes »). Les tâches reçues sont
+ * celles de l'écran (onglet et filtres appliqués), regroupées par colonne
+ * dans l'ordre affiché — y compris la colonne « Fait » repliée à l'écran.
+ *
+ * Markdown plutôt que texte brut : titres et listes se relisent aussi bien
+ * par un humain que par un assistant, et la description reste un bloc à
+ * part entière (citée, pour ne pas casser la structure si elle contient
+ * elle-même des titres).
+ */
+export function rapportTaches<
+  T extends {
+    id: number;
+    titre: string;
+    description?: string | null;
+    colonne: string;
+    categorie?: string | null;
+    priorite?: string | null;
+    concerne?: string | null;
+    enseignant_code?: string | null;
+    date_debut?: string | null;
+    date_fin?: string | null;
+    cree_par?: string;
+    cree_le?: string;
+    maj_le?: string;
+    fait_le?: string | null;
+    images?: { nom: string }[];
+  },
+>(
+  colonnes: { id: string; label: string; taches: T[] }[],
+  options: {
+    categorie?: string | null;
+    filtres?: string[];
+    maintenant?: Date;
+    nomEnseignant?: (t: T) => string | null;
+    seances?: (t: T) => string[];
+  } = {},
+): string {
+  const horodatage = (iso: string | null | undefined): string | null => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : FMT_HORODATAGE.format(d);
+  };
+
+  const lignes: string[] = [];
+  const categorie = options.categorie ? LIBELLE_CATEGORIE[options.categorie] ?? options.categorie : null;
+  lignes.push(`# Rapport des tâches${categorie ? ` — ${categorie}` : ""}`);
+  lignes.push("");
+  lignes.push(`Copié le ${FMT_HORODATAGE.format(options.maintenant ?? new Date())}.`);
+  const total = colonnes.reduce((n, c) => n + c.taches.length, 0);
+  lignes.push(
+    `${total} tâche${total > 1 ? "s" : ""} : ${colonnes.map((c) => `${c.label} ${c.taches.length}`).join(", ")}.`,
+  );
+  if (options.filtres?.length) lignes.push(`Filtres actifs : ${options.filtres.join(", ")}.`);
+
+  for (const colonne of colonnes) {
+    lignes.push("");
+    lignes.push(`## ${colonne.label} (${colonne.taches.length})`);
+    if (colonne.taches.length === 0) {
+      lignes.push("");
+      lignes.push("Aucune tâche.");
+      continue;
+    }
+    for (const t of colonne.taches) {
+      lignes.push("");
+      lignes.push(`### ${t.priorite === "urgente" ? "[Urgent] " : ""}${t.titre} (#${t.id})`);
+      lignes.push("");
+      const details: string[] = [];
+      details.push(`Statut : ${LIBELLE_COLONNE[t.colonne] ?? t.colonne}`);
+      details.push(`Priorité : ${t.priorite === "urgente" ? "urgente" : "normale"}`);
+      details.push(`Pour : ${t.concerne || "non attribuée"}`);
+      const nomProf = options.nomEnseignant?.(t) ?? t.enseignant_code;
+      if (nomProf) details.push(`Enseignant : ${nomProf}`);
+      const dates = libelleDatesTache(t.date_debut ?? null, t.date_fin ?? null);
+      if (dates) details.push(`Dates : ${dates}`);
+      const creee = [t.cree_par ? `par ${t.cree_par}` : null, horodatage(t.cree_le) ? `le ${horodatage(t.cree_le)}` : null]
+        .filter(Boolean)
+        .join(" ");
+      if (creee) details.push(`Créée ${creee}`);
+      const maj = horodatage(t.maj_le);
+      if (maj && maj !== horodatage(t.cree_le)) details.push(`Modifiée le ${maj}`);
+      const faite = horodatage(t.fait_le);
+      if (faite) details.push(`Faite le ${faite}`);
+      const images = t.images ?? [];
+      if (images.length) details.push(`Images jointes (${images.length}) : ${images.map((i) => i.nom).join(", ")}`);
+      for (const d of details) lignes.push(`- ${d}`);
+      const seances = options.seances?.(t) ?? [];
+      if (seances.length) {
+        lignes.push(`- Séances concernées (${seances.length}) :`);
+        for (const s of seances) lignes.push(`  - ${s}`);
+      }
+      if (t.description?.trim()) {
+        lignes.push("");
+        for (const l of t.description.trim().split(/\r?\n/)) lignes.push(l.trim() ? `> ${l}` : ">");
+      }
+    }
+  }
+  return `${lignes.join("\n")}\n`;
+}
