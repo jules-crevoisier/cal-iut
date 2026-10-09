@@ -283,6 +283,35 @@ teachers:
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
 
+  # --- David Annebicque : indisponibilités ajoutées le 09/10/2026 ----------
+  # Tâche #13 (Kyllian Bresson, 06/10/2026). S'AJOUTENT à ses contraintes de
+  # la feuille officielle (`contraintes/05_enseignants_contraintes.json`,
+  # inchangée) : la fusion fait l'union des deux sources.
+  #
+  # « À partir de 11h00 » = créneaux 2 (11h-12h30) à 5 (17h-18h30).
+  # Indisponibilité ordinaire (pas `stricte`) : le placement manuel signale
+  # le conflit et reste forçable, comme pour tout enseignant.
+  - teacher_code: DAN  # David Annebicque
+    forbidden_date_slots:
+      - date: "2026-10-15"   # jeudi
+        slots: [2, 3, 4, 5]
+        note: "Indisponible à partir de 11h00 (tâche #13, 06/10/2026)"
+      - date: "2026-10-16"   # vendredi
+        slots: [2, 3, 4, 5]
+        note: "Indisponible à partir de 11h00 (tâche #13, 06/10/2026)"
+      - date: "2026-10-22"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
+      - date: "2026-10-23"   # vendredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
+      - date: "2026-12-02"   # mercredi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
+      - date: "2026-12-03"   # jeudi
+        slots: [0, 1, 2, 3, 4, 5]
+        note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
+
 # Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
   gap_penalty: 100
