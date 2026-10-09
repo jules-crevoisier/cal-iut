@@ -148,6 +148,11 @@ export function DetailComparaisonCelcat({ donnees }: { donnees: CelcatComparaiso
                             lundi={donnees.lundi}
                             ecarts={l.ecarts}
                           />
+                          {l.celcat.enseignants?.length && l.ecarts.some((e) => e.startsWith("enseignant")) ? (
+                            <div className="celcat-sous-texte">
+                              <span className="celcat-diff">{l.celcat.enseignants.join(" + ")}</span>
+                            </div>
+                          ) : null}
                           {l.celcat.event_id ? (
                             <div className="celcat-seance-id">évènement n° {l.celcat.event_id}</div>
                           ) : null}

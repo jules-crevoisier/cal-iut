@@ -129,50 +129,74 @@ def _salles_fusionnees(
     Retrait ET pose dans le MÊME appel : vérifié en direct, `[A.018]` devient
     `[05_U07M_Info]`, une seule salle.
     """
+    return _liste_remplacee(
+        page, brut_liste, cle_id="room_id", type_rpc="Room", valeur=valeur, event_id=event_id
+    )
+
+
+def _id_ressource(r: dict, cle_id: str) -> int | None:
+    brut = r.get(cle_id) or r.get("id")
+    if brut is None:
+        return None
+    try:
+        return int(brut)
+    except (TypeError, ValueError):
+        return None
+
+
+def _liste_remplacee(
+    page, brut_liste: object, *, cle_id: str, type_rpc: str, valeur: int | None, event_id: int | None
+) -> list[dict]:
+    """Remplace TOUTE la liste d'une ressource par la seule `valeur` :
+    retire chaque ressource posée qui n'est pas la voulue (convention du
+    signe moins, cf. `_salles_fusionnees`), garde la voulue si elle est déjà
+    là, l'ajoute sinon. Commun aux salles et aux enseignants."""
     actuelles = [r for r in (brut_liste or []) if isinstance(r, dict)] if isinstance(brut_liste, list) else []
     if valeur is None:
-        # Aucune salle voulue : on ne touche à rien plutôt que de retirer
+        # Aucune ressource voulue : on ne touche à rien plutôt que de retirer
         # celle qui est là — une séance sans salle vaut mieux qu'une séance
         # dont on efface la salle sans savoir pourquoi.
         return [dict(r) for r in actuelles]
 
     a_retirer = [
         r for r in actuelles
-        if (r.get("room_id") or r.get("id")) is not None
-        and int(r.get("room_id") or r.get("id")) != int(valeur)
+        if _id_ressource(r, cle_id) is not None and _id_ressource(r, cle_id) != int(valeur)
     ]
-    deja_la = any(
-        (r.get("room_id") or r.get("id")) is not None
-        and int(r.get("room_id") or r.get("id")) == int(valeur)
-        for r in actuelles
-    )
+    deja_la = any(_id_ressource(r, cle_id) == int(valeur) for r in actuelles)
 
-    sortie: list[dict] = [
-        {"-event_id": event_id, "-room_id": int(r.get("room_id") or r.get("id")), "_type_": "Room"}
-        for r in a_retirer
-    ]
+    # Un retrait par id DISTINCTE : la même ressource rendue deux fois par
+    # le relevé ne doit pas partir en deux retraits identiques.
+    retirees: set[int] = set()
+    sortie: list[dict] = []
+    for r in a_retirer:
+        rid = _id_ressource(r, cle_id)
+        if rid in retirees:
+            continue
+        retirees.add(rid)
+        sortie.append({"-event_id": event_id, f"-{cle_id}": rid, "_type_": type_rpc})
     if deja_la:
-        # La bonne salle est déjà posée : on garde son sous-objet CHARGÉ —
-        # c'est la seule forme prouvée quand l'id ne change pas — en posant
-        # `room_id` explicitement, certains relevés ne portant que la clé
+        # La bonne ressource est déjà posée : on garde son sous-objet CHARGÉ
+        # — c'est la seule forme prouvée quand l'id ne change pas — en posant
+        # la clé typée explicitement, certains relevés ne portant que la clé
         # générique `id` (cf. `lecture._premier_id`, qui lit les deux).
         for r in actuelles:
-            if int(r.get("room_id") or r.get("id") or -1) == int(valeur):
+            if _id_ressource(r, cle_id) == int(valeur):
                 garde = dict(r)
-                garde["room_id"] = valeur
+                garde[cle_id] = valeur
                 if "id" in garde:
                     garde["id"] = valeur
                 sortie.append(garde)
+                break
         return sortie
 
-    reel = _ressource_reelle(page, _TYPE_RESSOURCE_ID["room_id"], valeur)
+    reel = _ressource_reelle(page, _TYPE_RESSOURCE_ID[cle_id], valeur)
     if reel is None:
         raise EvenementIntrouvable(
-            f"ressource room_id={valeur} introuvable via udlResources.load"
+            f"ressource {cle_id}={valeur} introuvable via udlResources.load"
         )
     sortie.append(
         {
-            "room_id": valeur,
+            cle_id: valeur,
             "event_id": event_id,
             "dept_id": reel.get("dept_id"),
             "unique_name": reel.get("unique_name"),
@@ -181,6 +205,39 @@ def _salles_fusionnees(
         }
     )
     return sortie
+
+
+def _enseignants_fusionnes(
+    page, brut_liste: object, *, valeur: int | None, event_id: int | None
+) -> list[dict]:
+    """Les enseignants de l'évènement fusionné — en RETIRANT les anciens.
+
+    Même piège que les salles : `save` FUSIONNE la liste `staff`. Poser
+    `staff: [nouvel enseignant]` ajoutait le nouveau et gardait l'ancien —
+    la séance se retrouvait avec deux enseignants dans Celcat, et deux
+    heures à payer. Signalé par Kyllian Bresson le 09/10/2026 (tâche 19),
+    constaté sur WR112, WR117 et WR311D.
+
+    Même remède, même convention de retrait :
+
+        {"-event_id": E, "-staff_id": X, "_type_": "Staff"}
+
+    Un enseignant déjà juste mais ACCOMPAGNÉ d'un second (le doublon laissé
+    par l'ancien comportement) est réparé au passage : tout ce qui n'est pas
+    l'enseignant voulu est retiré.
+
+    Relevé sans aucun identifiant d'enseignant (seulement un nom) : rien à
+    retirer de façon sûre, on retombe sur l'ancien chemin plutôt que
+    d'inventer une clé.
+    """
+    actuelles = [r for r in brut_liste if isinstance(r, dict)] if isinstance(brut_liste, list) else []
+    if valeur is not None and actuelles and all(_id_ressource(r, "staff_id") is None for r in actuelles):
+        return _ressource_fusionnee(
+            page, brut_liste, cle_id="staff_id", valeur=valeur, event_id=event_id
+        )
+    return _liste_remplacee(
+        page, brut_liste, cle_id="staff_id", type_rpc="Staff", valeur=valeur, event_id=event_id
+    )
 
 
 def _ressource_fusionnee(
@@ -287,9 +344,10 @@ def fusionner_deltas(
     fusionne["rooms"] = _salles_fusionnees(
         page, brut.get("rooms"), valeur=salle_voulue, event_id=id_evenement
     )
-    fusionne["staff"] = _ressource_fusionnee(
-        page, brut.get("staff"), cle_id="staff_id", valeur=_id(ids, "staff_id"),
-        event_id=id_evenement,
+    # L'ENSEIGNANT SE REMPLACE DE MÊME (tâche 19, 09/10/2026) : sans retrait
+    # explicite, l'ancien restait à côté du nouveau.
+    fusionne["staff"] = _enseignants_fusionnes(
+        page, brut.get("staff"), valeur=_id(ids, "staff_id"), event_id=id_evenement,
     )
     fusionne["groups"] = _ressource_fusionnee(
         page, brut.get("groups"), cle_id="group_id", valeur=group_id, event_id=id_evenement,

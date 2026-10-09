@@ -37,6 +37,12 @@ class EvenementCelcat:
     # code de rapprochement s'en sert et le changer d'un coup le ferait
     # diverger — mais un cours posé sur DEUX salles doit pouvoir se voir.
     salles: list[str] = field(default_factory=list)
+    # TOUS les enseignants, même raison (tâche 19, 09/10/2026) : un
+    # enseignant remplacé chez nous restait dans Celcat à côté du nouveau.
+    # `enseignants_codes` porte les `unique_name` — le code Celcat de
+    # `celcat.yaml::enseignants` —, `enseignants` les noms lisibles.
+    enseignants: list[str] = field(default_factory=list)
+    enseignants_codes: list[str] = field(default_factory=list)
 
     @property
     def indice_semaine(self) -> int | None:
@@ -197,6 +203,8 @@ def evenement_depuis_rpc(
         dept_id=int(brut["dept_id"]) if brut.get("dept_id") is not None else None,
         suspended=str(brut.get("suspended") or "N"),
         salles=_tous_les_noms(brut.get("rooms"), "name", "unique_name"),
+        enseignants=_tous_les_noms(brut.get("staff"), "name", "unique_name"),
+        enseignants_codes=_tous_les_noms(brut.get("staff"), "unique_name"),
     )
 
 

@@ -4743,6 +4743,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
             types_seance=ctx.types_seance,
             categories_regle=ctx.categories_regle,
             non_envoyees=ctx.non_envoyees,
+            enseignants_celcat=ctx.enseignants_celcat,
             # Ce que NOUS avons ecrit, et ou. Sans cette table, deux seances
             # de meme matiere, meme groupe et meme jour peuvent echanger leur
             # evenement d'un releve a l'autre — et l'ecran montrerait alors

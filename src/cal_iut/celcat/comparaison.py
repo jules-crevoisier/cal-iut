@@ -224,6 +224,7 @@ def _ecarts(
     salles_celcat: dict[str, str],
     types_seance: dict[str, str] | None = None,
     categories_regle: dict[str, str] | None = None,
+    enseignants_celcat: dict[str, str] | None = None,
 ) -> list[str]:
     ecarts: list[str] = []
     # LA CATÉGORIE D'ÉVÈNEMENT, signalée par David Annebicque le 05/09/2026 :
@@ -264,6 +265,20 @@ def _ecarts(
     salles = ev.get("salles")
     if isinstance(salles, list) and len(salles) > 1:
         ecarts.append("salles multiples")
+    # L'ENSEIGNANT, tâche 19 (Kyllian Bresson, 09/10/2026) : un enseignant
+    # remplacé dans cal-iut était AJOUTÉ dans Celcat à côté de l'ancien —
+    # WR112, WR117, WR311D. Jamais comparé jusque-là : ces séances
+    # ressortaient « identique ».
+    #
+    # Comme pour les salles, des relevés antérieurs n'ont pas ces champs :
+    # ne pas savoir n'est pas constater une faute.
+    codes = [str(c).strip() for c in (ev.get("enseignants_codes") or []) if str(c).strip()]
+    noms = ev.get("enseignants")
+    if len(codes) > 1 or (isinstance(noms, list) and len(noms) > 1):
+        ecarts.append("enseignants multiples")
+    attendu = str((enseignants_celcat or {}).get(str(getattr(placement, "session_id", ""))) or "").strip()
+    if attendu and codes and attendu not in codes:
+        ecarts.append("enseignant")
     heure = _heure_du_slot(getattr(placement, "slot", None))
     heure_ev = str(ev.get("heure_debut") or "")
     if heure and heure_ev and not meme_creneau(heure_ev, heure):
@@ -297,6 +312,9 @@ def _vue_celcat(ev: dict) -> dict:
         # signale : « écart (salles multiples) » sans dire lesquelles
         # obligerait à rouvrir Celcat pour savoir de quoi on parle.
         "salles": ev.get("salles") if isinstance(ev.get("salles"), list) else None,
+        # Idem pour les enseignants : « enseignants multiples » doit dire
+        # lesquels.
+        "enseignants": ev.get("enseignants") if isinstance(ev.get("enseignants"), list) else None,
         "categorie": ev.get("categorie"),
         "module": ev.get("module"),
         "groupe": ev.get("groupe"),
@@ -459,6 +477,7 @@ def comparer(
     journal: dict[str, int] | None = None,
     categories_regle: dict[str, str] | None = None,
     non_envoyees: set[str] | None = None,
+    enseignants_celcat: dict[str, str] | None = None,
 ) -> list[dict]:
     """Une ligne par séance, avec son verdict.
 
@@ -468,7 +487,10 @@ def comparer(
     bien que leur cours n'ait pas de code module, et leur catégorie se
     compare à celle de la règle. `non_envoyees` : séances visées par une
     règle mais qui ne partent pas (interrupteur coupé, autre enseignant) —
-    hors périmètre, jamais « absentes » à créer.
+    hors périmètre, jamais « absentes » à créer. `enseignants_celcat` :
+    `session_id -> code Celcat de l'enseignant voulu` ; un évènement qui ne
+    le porte pas, ou qui en porte plusieurs, est un écart. Il ne sert pas à
+    l'appariement, qui reste celui d'avant.
 
     `journal` est la table `session_id -> event_id` tenue par
     `celcat/sync.py` : ce que NOUS avons ecrit, et ou. Facultative, mais
@@ -559,7 +581,10 @@ def comparer(
                 }
             )
             continue
-        ecarts = _ecarts(placement, trouve, salles_celcat or {}, types_seance or {}, categories_regle or {})
+        ecarts = _ecarts(
+            placement, trouve, salles_celcat or {}, types_seance or {}, categories_regle or {},
+            enseignants_celcat or {},
+        )
         lignes.append(
             {
                 "statut": "ecart" if ecarts else "identique",

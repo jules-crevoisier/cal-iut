@@ -117,6 +117,11 @@ def _relever(page) -> tuple[list[dict], list[str]]:
                     "salles": ev.salles,
                     "categorie": ev.categorie,
                     "enseignant": ev.enseignant,
+                    # TOUS les enseignants, noms et codes Celcat : un
+                    # enseignant remplacé restait à côté du nouveau
+                    # (tâche 19, 09/10/2026).
+                    "enseignants": ev.enseignants,
+                    "enseignants_codes": ev.enseignants_codes,
                     "module": ev.module_nom,
                     "semaine": ev.indice_semaine,
                     "protected": ev.protected,

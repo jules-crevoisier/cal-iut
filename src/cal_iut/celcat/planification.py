@@ -49,7 +49,7 @@ class ContexteComparaison:
     """
 
     __slots__ = (
-        "categories_regle", "codes_celcat", "groupes_celcat", "non_envoyees", "salles_celcat", "types_seance",
+        "categories_regle", "codes_celcat", "enseignants_celcat", "groupes_celcat", "non_envoyees", "salles_celcat", "types_seance",
     )
 
     def __init__(
@@ -61,6 +61,7 @@ class ContexteComparaison:
         types_seance: dict[str, str],
         categories_regle: dict[str, str] | None = None,
         non_envoyees: set[str] | None = None,
+        enseignants_celcat: dict[str, str] | None = None,
     ) -> None:
         self.groupes_celcat = groupes_celcat
         self.salles_celcat = salles_celcat
@@ -74,6 +75,9 @@ class ContexteComparaison:
         # `CAL_IUT_REGLES_ENVOI` coupé, autre enseignant) : hors périmètre,
         # jamais « absentes de Celcat » à créer.
         self.non_envoyees = non_envoyees or set()
+        # `session_id -> code Celcat` de l'enseignant voulu (tâche 19,
+        # 09/10/2026) : ce que `staff` doit porter, et rien d'autre.
+        self.enseignants_celcat = enseignants_celcat or {}
 
 
 def contexte(state: Any) -> ContexteComparaison:
@@ -98,6 +102,7 @@ def contexte(state: Any) -> ContexteComparaison:
     types_seance: dict[str, str] = {}
     categories_regle: dict[str, str] = {}
     non_envoyees: set[str] = set()
+    enseignants_celcat: dict[str, str] = {}
 
     for placement in state.timetable:
         session = state.sessions_by_id.get(placement.session_id)
@@ -110,6 +115,14 @@ def contexte(state: Any) -> ContexteComparaison:
             categories_regle[placement.session_id] = regle.categorie
         elif refus:
             non_envoyees.add(placement.session_id)
+        # Le même enseignant que celui que l'écriture enverrait
+        # (`mapping.entree_pour_placement`) : le premier, s'il est seul et a
+        # un code. Un duo ou un code « 0 » ne part pas — rien à comparer.
+        enseignants = [str(t).strip().upper() for t in (placement.teacher_codes or []) if str(t).strip()]
+        if len(enseignants) == 1:
+            code_ens = str(cfg.enseignants.get(enseignants[0]) or "").strip()
+            if code_ens and code_ens != "0":
+                enseignants_celcat[placement.session_id] = code_ens
         type_seance = str(
             getattr(getattr(session, "session_type", None), "value", "") or ""
         ).strip()
@@ -129,6 +142,7 @@ def contexte(state: Any) -> ContexteComparaison:
         types_seance=types_seance,
         categories_regle=categories_regle,
         non_envoyees=non_envoyees,
+        enseignants_celcat=enseignants_celcat,
     )
 
 
@@ -179,6 +193,7 @@ def lignes(
         journal=journal,
         categories_regle=c.categories_regle,
         non_envoyees=c.non_envoyees,
+        enseignants_celcat=c.enseignants_celcat,
     )
 
 

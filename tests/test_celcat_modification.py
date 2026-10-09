@@ -186,10 +186,14 @@ def test_should_fetch_the_real_target_room_record_when_fusionner_deltas_changes_
     )
 
     # Le VRAI enseignant 7002 est repris tel quel (nom, dept_id…), pas
-    # l'ancien avec juste l'id changée.
-    assert fusionne["staff"][0]["staff_id"] == 7002
-    assert fusionne["staff"][0]["name"] == "SANSON Jean"
-    assert fusionne["staff"][0]["dept_id"] == 500001
+    # l'ancien avec juste l'id changée. L'ancien, lui, est RETIRÉ (tâche 19,
+    # 09/10/2026) : sans retrait, `save` gardait les deux.
+    poses = [s for s in fusionne["staff"] if "staff_id" in s]
+    assert len(poses) == 1
+    assert poses[0]["staff_id"] == 7002
+    assert poses[0]["name"] == "SANSON Jean"
+    assert poses[0]["dept_id"] == 500001
+    assert {"-event_id": brut["event_id"], "-staff_id": 7001, "_type_": "Staff"} in fusionne["staff"]
 
 
 def test_should_raise_evenement_introuvable_when_fusionner_deltas_targets_a_room_id_that_udlresources_load_does_not_return() -> None:
