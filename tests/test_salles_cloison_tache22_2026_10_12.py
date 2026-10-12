@@ -79,3 +79,20 @@ def test_la_meme_salle_reste_refusee_meme_pour_un_duo():
 
 def test_une_autre_salle_sans_cloison_n_est_pas_concernee():
     assert _valider("h007", "h101", "WR112", "WR117", ["X"], ["Y"]).valid
+
+
+def test_les_salles_regroupees_ne_sont_plus_choisies_par_la_generation():
+    """Jules, 12/10/2026 : H.007-008 et H.201-203 sortent aussi de la
+    génération automatique (`placement_auto: false`), et aucune règle ne
+    les nomme pour passer outre."""
+    from cal_iut.ingestion.config_loader import load_room_assignment_rules
+    from cal_iut.solver.rooms import _auto_eligible
+
+    salles = load_rooms(CONFIG)
+    fusionnees = {r.id for r in salles if r.combines}
+    assert fusionnees == {"h007_h008", "h201_h203"}
+    assert not {r.id for r in _auto_eligible(salles, None)} & fusionnees
+    for regle in load_room_assignment_rules(CONFIG):
+        assert not set(regle.get("preferred_room_ids") or []) & fusionnees
+        assert "combined" not in (regle.get("preferred_room_types") or [])
+        assert "combined" not in (regle.get("fallback_room_types") or [])
