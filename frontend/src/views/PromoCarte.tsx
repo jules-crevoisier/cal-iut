@@ -20,6 +20,7 @@ import type { AppRow, RoomCatalogEntry } from "../types/app";
 import { useDroits } from "../contexts/Droits";
 import { couleursMatiere } from "../utils/couleursMatiere";
 import { nomComplet, nomCourt } from "../utils/nomEnseignant";
+import { sallesChoisissables } from "../utils/sallesLibres";
 
 /** « H.103 (Anglais) » -> « H.103 » : la précision reste dans l'infobulle. */
 export function salleCourte(libelle: string): string {
@@ -162,7 +163,7 @@ export function PromoCarte({
             <option value="">— choisir une salle —</option>
             {/* Créer une salle : réservé aux administrateurs côté serveur. */}
             {estAdmin && <option value="__new__">+ Créer une salle…</option>}
-            {salles.map((s2) => (
+            {sallesChoisissables(salles, salleSelectionnee).map((s2) => (
               <option key={s2.id} value={s2.id}>
                 {s2.label} ({s2.capacity} pl.)
               </option>

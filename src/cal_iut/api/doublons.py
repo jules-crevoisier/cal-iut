@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from cal_iut.api.validation import _duration_of, _est_pause_midi
+from cal_iut.api.validation import _duration_of, _est_pause_midi, enseignants_distincts
 from cal_iut.solver.rooms import build_manual_conflict_map
 
 
@@ -56,7 +56,7 @@ def _seance_dict(p: object) -> dict[str, object]:
     }
 
 
-def _duo_dans_deux_moities(seances: list) -> bool:
+def _duo_dans_deux_moities(seances: list, moities: set[str] | None = None) -> bool:
     """Deux MOITIÉS d'une salle divisible occupées par le MÊME module : voulu,
     pas un doublon.
 
@@ -72,10 +72,22 @@ def _duo_dans_deux_moities(seances: list) -> bool:
     La même salle occupée deux fois (pas deux moitiés) reste TOUJOURS un
     doublon, même pour un seul module : deux groupes ne tiennent pas dans la
     même pièce.
+
+    Tâche 22 (11/10/2026) : l'exception exige aussi « deux enseignants
+    différents » — une moitié sans enseignant, ou le même enseignant des
+    deux côtés, n'est pas un duo. `moities` (ids des salles individuelles
+    d'une salle à cloison) écarte la salle fusionnée H.007-008 / H.201-203 :
+    elle recouvre physiquement ses deux moitiés, ce n'est jamais un duo.
     """
     salles = {getattr(pp, "room_id", None) for pp in seances}
     modules = {getattr(pp, "course_code", None) for pp in seances}
-    return len(salles) == len(seances) and len(modules) == 1
+    if moities is not None and not salles <= moities:
+        return False
+    return (
+        len(salles) == len(seances)
+        and len(modules) == 1
+        and enseignants_distincts([getattr(pp, "teacher_codes", None) for pp in seances])
+    )
 
 
 def doublons(state: object, semaine: int | None = None) -> list[dict[str, object]]:
@@ -103,6 +115,7 @@ def doublons(state: object, semaine: int | None = None) -> list[dict[str, object
     sessions_by_id = getattr(state, "sessions_by_id", None) or {}
     conflict_map = build_manual_conflict_map(rooms)
     room_label_by_id = {r.id: r.label for r in rooms}
+    moities = {partie for r in rooms for partie in (getattr(r, "combines", None) or [])}
 
     def classe_salle(room_id: str) -> frozenset:
         return frozenset({room_id}) | conflict_map.get(room_id, set())
@@ -145,7 +158,7 @@ def doublons(state: object, semaine: int | None = None) -> list[dict[str, object
         if len(uniques) < 2:
             continue
         seances = sorted(uniques.values(), key=lambda pp: pp.session_id)
-        if _duo_dans_deux_moities(seances):
+        if _duo_dans_deux_moities(seances, moities):
             continue
         salles_reelles = sorted({
             room_label_by_id.get(getattr(pp, "room_id", None), getattr(pp, "room_id", None))

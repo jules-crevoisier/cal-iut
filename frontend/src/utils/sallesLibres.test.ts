@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { catalogRoom, emptyPayload, placedRow } from "../test/payloadFixture";
-import { occupationSalles, sallesLibresAuCreneau } from "./sallesLibres";
+import { occupationSalles, sallesChoisissables, sallesLibresAuCreneau } from "./sallesLibres";
 
 describe("occupationSalles", () => {
   it("should mark a slot occupied for a duration-1 session", () => {
@@ -180,5 +180,22 @@ describe("sallesLibresAuCreneau", () => {
     const libres = sallesLibresAuCreneau(payload, 0, 0, 0, { inclureHorsAuto: true });
 
     expect(libres.map((r) => r.id)).toContain("bu");
+  });
+});
+
+describe("sallesChoisissables (tâche 22)", () => {
+  const salles = [
+    { id: "h007", combines: [] },
+    { id: "h008", combines: [] },
+    { id: "h007_h008", combines: ["h007", "h008"] },
+    { id: "h201_h203", combines: ["h201", "h203"] },
+  ];
+
+  it("retire les salles regroupées du menu", () => {
+    expect(sallesChoisissables(salles).map((s) => s.id)).toEqual(["h007", "h008"]);
+  });
+
+  it("garde la salle regroupée encore portée par la séance", () => {
+    expect(sallesChoisissables(salles, "h007_h008").map((s) => s.id)).toEqual(["h007", "h008", "h007_h008"]);
   });
 });

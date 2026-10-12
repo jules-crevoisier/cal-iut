@@ -167,3 +167,19 @@ export function sallesLibresAuCreneau(
     .filter((room) => !occupation.get(room.id)?.[slot])
     .sort((a, b) => a.capacity - b.capacity || a.label.localeCompare(b.label, "fr"));
 }
+
+/**
+ * Salles proposées dans les menus de choix de salle (tâche 22, Kyllian
+ * Bresson 11/10/2026 : « les entrées H.007-008 et H.201-203 apparaissent
+ * encore dans le menu déroulant. Il faut les supprimer et conserver
+ * uniquement les salles individuelles »). Une salle fusionnée
+ * (`combines` non vide) n'est plus proposée — sauf si c'est la salle
+ * ACTUELLE de la séance (`actuelle`), pour que le menu n'affiche pas une
+ * autre salle que celle réellement enregistrée.
+ */
+export function sallesChoisissables<T extends { id: string; combines?: string[] }>(
+  rooms: T[],
+  actuelle?: string | null,
+): T[] {
+  return rooms.filter((r) => !r.combines?.length || r.id === actuelle);
+}

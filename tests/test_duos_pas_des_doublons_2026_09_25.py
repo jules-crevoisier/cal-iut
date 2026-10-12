@@ -16,8 +16,13 @@ from types import SimpleNamespace
 from cal_iut.api.doublons import _duo_dans_deux_moities
 
 
-def _p(session_id: str, room_id: str, course_code: str):
-    return SimpleNamespace(session_id=session_id, room_id=room_id, course_code=course_code)
+def _p(session_id: str, room_id: str, course_code: str, teachers: list[str] | None = None):
+    # Un enseignant distinct par séance par défaut : c'est le duo
+    # synchronisé (tâche 22, 11/10/2026 : « deux enseignants différents »).
+    return SimpleNamespace(
+        session_id=session_id, room_id=room_id, course_code=course_code,
+        teacher_codes=[f"T_{session_id}"] if teachers is None else teachers,
+    )
 
 
 def test_meme_module_dans_les_deux_moities_nest_pas_un_doublon() -> None:
@@ -37,3 +42,21 @@ def test_trois_seances_dont_un_intrus_reste_un_doublon() -> None:
     assert not _duo_dans_deux_moities(
         [_p("a", "h201", "WR112"), _p("b", "h203", "WR112"), _p("c", "h201_h203", "WR308D")]
     )
+
+
+def test_meme_enseignant_des_deux_cotes_nest_pas_un_duo() -> None:
+    """Tâche 22 : l'exception exige deux enseignants DIFFÉRENTS."""
+    assert not _duo_dans_deux_moities(
+        [_p("a", "h007", "WR112", ["X"]), _p("b", "h008", "WR112", ["X"])]
+    )
+
+
+def test_une_moitie_sans_enseignant_nest_pas_un_duo() -> None:
+    assert not _duo_dans_deux_moities([_p("a", "h201", "WR112"), _p("b", "h203", "WR112", [])])
+
+
+def test_salle_fusionnee_et_une_moitie_nest_jamais_un_duo() -> None:
+    """H.007-008 recouvre physiquement H.007 : pas deux moitiés."""
+    moities = {"h007", "h008", "h201", "h203"}
+    assert not _duo_dans_deux_moities([_p("a", "h007_h008", "WR112"), _p("b", "h007", "WR112")], moities)
+    assert _duo_dans_deux_moities([_p("a", "h007", "WR112"), _p("b", "h008", "WR112")], moities)

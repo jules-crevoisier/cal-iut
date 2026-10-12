@@ -5,6 +5,7 @@ import { deposerPlacement } from "../api/client";
 import type { Placement } from "../types";
 import type { AppPayload } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { sallesChoisissables } from "../utils/sallesLibres";
 import {
   creerSeanceAvecConfirmation,
   modifierSeanceMaquetteAvecConfirmation,
@@ -442,7 +443,7 @@ export function CreerSeanceModal({
                 Salle
                 <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
                   <option value="">Automatique</option>
-                  {payload.rooms.map((r) => (
+                  {sallesChoisissables(payload.rooms, roomId).map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.label}
                     </option>
