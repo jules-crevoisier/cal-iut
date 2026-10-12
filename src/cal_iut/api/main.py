@@ -1503,6 +1503,20 @@ def _calculer_payload_app_state() -> dict[str, object]:
         # son raccourci APH » — dès sa première séance.
         if libelles.get(code, code) == code:
             libelles[code] = nom
+    # Les intervenants de la maquette, même sans séance ni ligne dans la
+    # feuille des contraintes. Signalement du 12/10/2026 : Sébastien Loizon
+    # (SLO, WS501D en TP/PTUT seulement) n'apparaissait pas dans
+    # « Enseignants & vacataires », alors que « Nouvel intervenant » refusait
+    # de le créer — le code est pris dès qu'il est dans la maquette
+    # (`codes_celcat.enseignants_connus`). La liste suit la même règle.
+    for course in getattr(state, "courses", None) or []:
+        for t in [bloc.teacher for bloc in course.profs or []] + [course.lead]:
+            code = str(getattr(t, "code", "") or "").strip().upper()
+            if not code:
+                continue
+            nom = f"{t.prenom or ''} {t.nom or ''}".strip() or code
+            if libelles.get(code, code) == code:
+                libelles[code] = nom
     # Nom corrigé dans l'appli (29/09/2026) : il a le dernier mot, y compris
     # sur le nom que donnent les séances de la maquette.
     for code, nom in surcharges_reference.valeurs("enseignants", "nom").items():
