@@ -513,8 +513,35 @@ button.promo-tuile:hover {
     container-type: size;
   }
 
+  .app:not(.read-only-mode) table.promo-grid {
+    --promo-creneau-h: max(64px, calc((100cqh - 78px) / 6));
+  }
+
   .app:not(.read-only-mode) table.promo-grid td.promocell {
-    height: max(64px, calc((100cqh - 78px) / 6));
+    height: var(--promo-creneau-h);
+  }
+
+  /* Blocs à pleine hauteur (tâche 20) : le contenu d'une case occupe toute
+     la hauteur du créneau, recalculée avec la fenêtre (même `100cqh`). Une
+     seule carte (ou bande SAE/férié/évènement) remplit la case ; plusieurs
+     cartes se la partagent. Le pourcentage de hauteur d'une cellule de
+     tableau n'est pas fiable d'un navigateur à l'autre : la hauteur est donc
+     reprise du créneau lui-même, moins la marge de la case (2 × 3 px). */
+  .app:not(.read-only-mode) table.promo-grid .promocell-pile {
+    min-height: calc(var(--promo-creneau-h) - 6px);
+  }
+
+  /* Première et dernière rangées : 8 px de marge au lieu de 3 côté bord. */
+  .app:not(.read-only-mode) table.promo-grid tbody tr:first-child .promocell-pile,
+  .app:not(.read-only-mode) table.promo-grid tbody tr:last-child .promocell-pile {
+    min-height: calc(var(--promo-creneau-h) - 11px);
+  }
+
+  .app:not(.read-only-mode) table.promo-grid .promocell-pile > .promo-chip,
+  .app:not(.read-only-mode) table.promo-grid .promocell-pile > .sessiongrid-sae,
+  .app:not(.read-only-mode) table.promo-grid .promocell-pile > .sessiongrid-holiday,
+  .app:not(.read-only-mode) table.promo-grid .promocell-pile > .sessiongrid-event {
+    flex: 1 1 auto;
   }
 
   /* Fenêtre basse (portable, fenêtre réduite) : cartes resserrées et
@@ -530,8 +557,8 @@ button.promo-tuile:hover {
       line-height: 1.15;
     }
 
-    .app:not(.read-only-mode) table.promo-grid td.promocell {
-      height: max(52px, calc((100cqh - 78px) / 6));
+    .app:not(.read-only-mode) table.promo-grid {
+      --promo-creneau-h: max(52px, calc((100cqh - 78px) / 6));
     }
   }
 
@@ -626,6 +653,18 @@ table.promo-grid tbody tr:first-child > * {
 
 table.promo-grid tbody tr:last-child > * {
   padding-bottom: 8px;
+}
+
+/* Contenu d'une case : colonne dont les cartes s'étirent (cf. « Blocs à
+   pleine hauteur » plus haut). */
+.promocell-pile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.promocell-pile > .promo-chip + .promo-chip {
+  margin-top: 0;
 }
 
 table.promo-grid td.promocell {
