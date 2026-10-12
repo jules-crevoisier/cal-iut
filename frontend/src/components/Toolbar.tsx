@@ -17,7 +17,7 @@ import type { ViewMode, YearMeta } from "../types";
 import type { GroupMeta, RoomMeta } from "../types";
 import type { WeekRow } from "../types/app";
 import { nomComplet } from "../utils/nomEnseignant";
-import { indexSemaineCourante } from "../utils/semaineCourante";
+import { indexSemaineAujourdhui } from "../utils/semaineCourante";
 import { DEFAULT_YEARS } from "../utils/years";
 import { WeekBar } from "./WeekBar";
 import "./Toolbar.css";
@@ -130,7 +130,7 @@ export function Toolbar(props: ToolbarProps) {
       const suivante = props.displayWeek + (e.key === "ArrowLeft" ? -1 : 1);
       if (suivante >= 0 && suivante < props.weekRows.length) props.onWeekChange(suivante);
     } else if (!e.shiftKey && (e.key === "t" || e.key === "T")) {
-      props.onWeekChange(indexSemaineCourante(props.weekRows));
+      props.onWeekChange(indexSemaineAujourdhui(props.weekRows));
     }
   };
   useEffect(() => {

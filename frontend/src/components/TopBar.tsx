@@ -18,7 +18,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Menu, Search } from "lucide-rea
 
 import type { RouteView } from "../hooks/useHashRoute";
 import type { AppPayload } from "../types/app";
-import { indexSemaineCourante } from "../utils/semaineCourante";
+import { indexSemaineAujourdhui, indexSemaineCourante } from "../utils/semaineCourante";
 import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { TITRES_VUES } from "./PageHeader";
 import "./TopBar.css";
@@ -164,6 +164,8 @@ function NavigationSemaine({
 }) {
   const rows = payload.weekRows;
   const courante = indexSemaineCourante(rows);
+  // Cible du bouton « Aujourd'hui » : le week-end, le lundi suivant (#21).
+  const cible = indexSemaineAujourdhui(rows);
   const ligne = rows[semaine];
   const calendaire = semaineCalendaireDepuisLundi(ligne?.monday);
   const [ouverte, setOuverte] = useState(false);
@@ -240,8 +242,8 @@ function NavigationSemaine({
       <button
         type="button"
         className="topbar-aujourdhui"
-        onClick={() => onSemaine(courante)}
-        disabled={semaine === courante}
+        onClick={() => onSemaine(cible)}
+        disabled={semaine === cible}
         title="Revenir à la semaine en cours (T)"
       >
         Aujourd'hui

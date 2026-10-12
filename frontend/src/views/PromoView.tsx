@@ -27,7 +27,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Pencil, Plus, X } from "lucide-react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
+import { indexSemaineAujourdhui, indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
 import {
   changerSalle,
   deposerPlacement,
@@ -360,7 +360,9 @@ export function PromoView({
   }, [route?.parcours]);
 
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
-  const indexAujourdhui = indexSemaineCourante(payload.weekRows);
+  // Le week-end, « Aujourd'hui » mène au lundi suivant (#21) ; le repère du
+  // jour en cours n'en dépend pas (aucun jour ouvré le week-end).
+  const indexAujourdhui = indexSemaineAujourdhui(payload.weekRows);
   const jourAujourdhui = jourOuvreAujourdhui();
   // Jour réellement en cours (samedi/dimanche : aucun).
   const jourReel = new Date().getDay();
