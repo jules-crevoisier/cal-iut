@@ -370,6 +370,8 @@ sur les **deux** services, `backend` et `celcat-nuit` (`docker-compose.yml` : `$
   Introuvables : la séance est **bloquée** (« catégorie « [TD bénévole] » introuvable dans Celcat »), jamais envoyée avec une autre catégorie.
 - **Pondération 0** : elle est portée par la catégorie elle-même (« Projet [0%] » dans l'inspecteur). Aucun champ à part n'est écrit.
 - **Enseignant** : Celcat n'en reçoit qu'un, le premier de la séance (comme pour toute séance).
+  PTUT (`enseignant: facultatif`, 12/10/2026) : une séance PTUT **sans enseignant** part sans personnel au lieu d'être bloquée
+  (« une séance de ptut a par défaut pas de prof », Jules). Une PTUT dont l'enseignant n'a pas de code Celcat reste bloquée.
 - Une séance WR100BU d'un **autre** enseignant ne part pas. Motif : « WR100BU : seules les interventions de VMA sont envoyées ».
 - **Priorité** : la règle du cours d'abord (elle décide seule pour ses séances), puis celle du type.
   Une règle passe devant « sans code (voulu) ».

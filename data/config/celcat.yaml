@@ -429,6 +429,7 @@ regles_envoi:
   types:
     PTUT:
       module: cours            # « oui, on veut pouvoir mettre un module » (01/10/2026)
+      enseignant: facultatif   # « une séance de ptut a par défaut pas de prof » (Jules, 12/10/2026) : part sans personnel
       categorie: "Projet"      # pondération 0, portée par la catégorie — À CONFIRMER
       remarque: "PTUT"
       motif: "Séances PTUT : catégorie Projet, pondération 0, remarque PTUT (Kyllian Bresson, 01/10/2026)"

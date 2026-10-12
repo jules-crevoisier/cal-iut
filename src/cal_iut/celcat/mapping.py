@@ -89,6 +89,13 @@ DEPARTEMENT_PAR_DEFAUT = "T_MMI T29"
 MODULE_AUCUN = "aucun"   # aucune matière, jamais cherchée (WR100BU)
 MODULE_COURS = "cours"   # la matière du COURS si son code est connu, sinon aucune (PTUT)
 
+# `enseignant:` d'une règle d'envoi. « facultatif » : une séance SANS
+# enseignant part quand même, sans personnel dans Celcat (PTUT : « une séance
+# de ptut a par défaut pas de prof », Jules 12/10/2026). « obligatoire » par
+# défaut, comme toute séance.
+ENSEIGNANT_OBLIGATOIRE = "obligatoire"
+ENSEIGNANT_FACULTATIF = "facultatif"
+
 
 @dataclass(frozen=True)
 class RegleEnvoi:
@@ -116,6 +123,8 @@ class RegleEnvoi:
     # Trigrammes dont les interventions partent. Vide = toutes.
     enseignants: tuple[str, ...] = ()
     motif: str = ""
+    # Une séance sans enseignant part quand même (`enseignant: facultatif`).
+    enseignant_facultatif: bool = False
 
     def accepte(self, teacher_codes: list[str] | tuple[str, ...]) -> bool:
         """Le PREMIER enseignant (celui que Celcat recevra) est-il visé ?"""
@@ -138,7 +147,7 @@ class RegleEnvoi:
         return f"sans module — cours sans code Celcat (règle {self.cle})"
 
 
-_CHAMPS_REGLE = {"enseignants", "module", "categorie", "remarque", "departement", "motif"}
+_CHAMPS_REGLE = {"enseignants", "enseignant", "module", "categorie", "remarque", "departement", "motif"}
 _TYPES_SEANCE = {"CM", "TD", "TP", "PTUT"}
 
 
@@ -161,6 +170,11 @@ def _lire_regle(cle: str, table: str, valeur: object) -> RegleEnvoi:
     if not categorie:
         raise ConfigCelcatInvalide(f"{ou} sans `categorie` (nom exact de la catégorie d'évènement Celcat).")
     departement = " ".join(str(valeur.get("departement") or DEPARTEMENT_PAR_DEFAUT).split())
+    enseignant = str(valeur.get("enseignant") or ENSEIGNANT_OBLIGATOIRE).strip().lower()
+    if enseignant not in (ENSEIGNANT_OBLIGATOIRE, ENSEIGNANT_FACULTATIF):
+        raise ConfigCelcatInvalide(
+            f"{ou} : `enseignant` doit valoir « {ENSEIGNANT_OBLIGATOIRE} » ou « {ENSEIGNANT_FACULTATIF} »."
+        )
     enseignants = valeur.get("enseignants") or []
     if isinstance(enseignants, str):
         enseignants = [enseignants]
@@ -173,6 +187,7 @@ def _lire_regle(cle: str, table: str, valeur: object) -> RegleEnvoi:
         remarque=" ".join(str(valeur.get("remarque") or cle).split()),
         enseignants=tuple(str(t).strip().upper() for t in enseignants if str(t).strip()),
         motif=" ".join(str(valeur.get("motif") or "").split()),
+        enseignant_facultatif=enseignant == ENSEIGNANT_FACULTATIF,
     )
 
 
@@ -493,6 +508,9 @@ class EntreeCelcat:
     categorie_celcat: str = ""   # libellé Celcat exact (« TD0 », « Projet »)
     departement: str = ""        # libellé Celcat exact (« T_MMI T29 »)
     remarque: str = ""           # onglet « Remarques et personnaliser »
+    # Part SANS enseignant, par décision d'une règle (`enseignant:
+    # facultatif`) : la séance n'en a pas, et ce n'est pas un manque.
+    sans_enseignant: bool = False
 
     @property
     def notes_celcat(self) -> str:
@@ -605,10 +623,17 @@ def entree_pour_placement(
     # Un seul enseignant côté Celcat : le premier déclaré. Une séance à
     # plusieurs intervenants (duo) est signalée plutôt que tronquée en
     # silence — c'est à un humain de décider qui est saisi.
+    # Règle d'envoi calculée d'abord : elle peut rendre l'enseignant
+    # facultatif (PTUT, 12/10/2026).
+    regle_appliquee, refus_regle = regle_pour(cfg, course_code, session_type, teacher_codes)
     code_ens: str | None = None
     ens_voulu = ""
+    sans_enseignant = False
     if not teacher_codes:
-        bloquants.append("aucun enseignant")
+        if regle_appliquee is not None and regle_appliquee.enseignant_facultatif:
+            sans_enseignant = True
+        else:
+            bloquants.append("aucun enseignant")
     else:
         trigramme = teacher_codes[0].upper()
         code_ens = cfg.enseignants.get(trigramme)
@@ -636,7 +661,6 @@ def entree_pour_placement(
     # (WR100BU : rien n'est cherché, le code est inventé) ou « cours » (PTUT :
     # le module du cours s'il est connu, AUCUN sinon, jamais un module
     # « PTUT »). Une règle passe devant « sans code (voulu) ».
-    regle_appliquee, refus_regle = regle_pour(cfg, course_code, session_type, teacher_codes)
     non_envoyee = refus_regle
     code_module: str | None = None
     if regle_appliquee is not None:
@@ -697,10 +721,14 @@ def entree_pour_placement(
         bloquants=bloquants,
         non_envoyee=non_envoyee or ens_voulu,
         regle=regle_appliquee.cle if regle_appliquee else "",
-        regle_libelle=regle_appliquee.libelle(code_module) if regle_appliquee else "",
+        regle_libelle=(
+            regle_appliquee.libelle(code_module) + (", sans enseignant" if sans_enseignant else "")
+            if regle_appliquee else ""
+        ),
         categorie_celcat=regle_appliquee.categorie if regle_appliquee else "",
         departement=regle_appliquee.departement if regle_appliquee else "",
         remarque=regle_appliquee.remarque if regle_appliquee else "",
+        sans_enseignant=sans_enseignant,
     )
 
 
