@@ -29,6 +29,19 @@ def _code_module(session_id: str, sessions_by_id: dict[str, object] | None) -> s
     return getattr(sessions_by_id.get(session_id), "course_code", None)
 
 
+def enseignants_distincts(listes: list[list[str] | None]) -> bool:
+    """Chaque séance a au moins un enseignant, et aucun n'est commun à deux
+    séances — condition du duo synchronisé dans deux moitiés d'une salle à
+    cloison (tâche 22, 11/10/2026). Partagé avec `api/doublons.py`."""
+    vus: set[str] = set()
+    for codes in listes:
+        codes_set = set(codes or [])
+        if not codes_set or not vus.isdisjoint(codes_set):
+            return False
+        vus |= codes_set
+    return True
+
+
 def _est_pause_midi(session_id: str, sessions_by_id: dict[str, object] | None) -> bool:
     """Un évènement à horaire libre (`metadata["pause_midi"]`, retour Jules
     23/09/2026 : présentation PAC 13h15-14h) est STOCKÉ sur le créneau 3
@@ -170,12 +183,19 @@ def validate_move(
 
         if room_id and getattr(placement, "room_id", None) in ({room_id} | (conflicting_room_ids or set())):
             # Deux MOITIÉS d'une salle divisible (H.007/H.008, H.201/H.203)
-            # occupées par le MÊME module : c'est le duo synchronisé, voulu
-            # (cf. `api/doublons.py::_duo_dans_deux_moities`). Seule la MÊME
-            # salle, ou deux modules différents, restent un conflit.
+            # occupées par le MÊME module, assuré en parallèle par deux
+            # enseignants DIFFÉRENTS : c'est le duo synchronisé, voulu (cf.
+            # `api/doublons.py::_duo_dans_deux_moities`). Tâche 22 (Kyllian
+            # Bresson, 11/10/2026) : « autoriser une exception uniquement si
+            # les deux séances concernent le même code module et sont
+            # assurées en parallèle par deux enseignants différents ». La
+            # MÊME salle, deux modules différents, ou une séance sans
+            # enseignant restent un conflit.
             autre_salle = getattr(placement, "room_id", None)
             meme_module = placement.course_code == _code_module(session_id, sessions_by_id)
-            if autre_salle != room_id and meme_module:
+            if autre_salle != room_id and meme_module and enseignants_distincts(
+                [teacher_codes, placement.teacher_codes]
+            ):
                 continue
             hard.append(f"Conflit salle : {placement.course_code} occupe déjà cette salle")
 

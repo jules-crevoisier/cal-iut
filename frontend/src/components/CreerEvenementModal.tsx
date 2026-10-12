@@ -4,6 +4,7 @@ import type { CreerEvenementBody, ModifierSeanceBody } from "../api/client";
 import type { Placement } from "../types";
 import type { AppPayload, AppRow } from "../types/app";
 import { DAY_LABELS, SLOT_TIMES } from "../utils/slots";
+import { sallesChoisissables } from "../utils/sallesLibres";
 import { creerEvenementAvecConfirmation, modifierSeancePersonnaliseeAvecConfirmation } from "../utils/placement";
 import { lireDernierWeekDay } from "../utils/creerSeancePrefs";
 import { TeacherPicker } from "./TeacherPicker";
@@ -358,7 +359,7 @@ export function CreerEvenementModal({
                 Salle
                 <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
                   <option value="">Automatique</option>
-                  {payload.rooms.map((r) => (
+                  {sallesChoisissables(payload.rooms, roomId).map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.label}
                     </option>
