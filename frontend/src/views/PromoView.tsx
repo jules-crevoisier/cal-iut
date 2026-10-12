@@ -1475,93 +1475,97 @@ export function PromoView({
                             if (entries.length) {
                               return (
                                 <td key={c} {...tdProps}>
-                                  {poser}
-                                  {busyHint}
-                                  {entries.map((r) => {
-                                    // Clé d'édition de salle UNIQUE PAR CASE : un
-                                    // CM est rendu dans toutes les colonnes de sa
-                                    // promo, et un `<select autoFocus>` par copie
-                                    // se volaient le focus (seuls les TP restaient
-                                    // modifiables).
-                                    const cleEditionSalle = `${i}-${s}-${r.id}`;
-                                    const source = placements?.find((p) => p.session_id === r.id);
-                                    const draggableHere = dragEnabled && !!source && !source.locked;
-                                    // Salle : l'état VIVANT des placements prime sur
-                                    // `payload.rows`, rechargé plus tard (retour
-                                    // utilisateur 31/08/2026 : « l'ancienne est
-                                    // toujours là »). `payload.rows` reste la
-                                    // source quand les deux s'accordent : lui seul
-                                    // porte le suffixe « (Évaluation) ».
-                                    const salleDuPayload = sallesTriees.find(
-                                      (s2) => s2.label === (r.r ?? "").replace(/\s*\([^)]*\)\s*$/, ""),
-                                    );
-                                    const salleAffichee =
-                                      !source || source.room_id === (salleDuPayload?.id ?? null)
-                                        ? r.r
-                                        : (source.room_label ?? "");
-                                    return (
-                                      <PromoCarte
-                                        key={r.id}
-                                        row={r}
-                                        source={source}
-                                        teacherLabels={payload.teacherLabels}
-                                        salles={sallesTriees}
-                                        salleAffichee={salleAffichee}
-                                        highlighted={Boolean(teacherFilter) && r.te.includes(teacherFilter)}
-                                        draggable={draggableHere}
-                                        dragging={draggingId === r.id}
-                                        swapTarget={cibleEchange === r.id}
-                                        actions={seanceModaleEnabled && Boolean(source)}
-                                        salleModifiable={roomEditEnabled}
-                                        salleEnEdition={salleEnEdition === cleEditionSalle}
-                                        salleEnCours={salleEnCours}
-                                        salleSelectionnee={source?.room_id ?? salleDuPayload?.id ?? ""}
-                                        onDragStart={
-                                          draggableHere
-                                            ? (e) => {
-                                                e.dataTransfer.effectAllowed = "move";
-                                                setDraggingId(r.id);
-                                                setSalleEnEdition(null);
-                                              }
-                                            : undefined
-                                        }
-                                        onDragEnd={
-                                          draggableHere
-                                            ? () => {
-                                                setDraggingId(null);
-                                                setCibleEchange(null);
-                                                setDropTarget(null);
-                                              }
-                                            : undefined
-                                        }
-                                        echangeHandlers={echangeHandlers(r.id)}
-                                        onModifier={() => modifierSeanceOuEvenement(r, source)}
-                                        onRetirer={() => void retirerDuPlanning(r.id, r.c)}
-                                        onSupprimer={() => void supprimerSeance(r.id, `${r.c} (${r.t})`)}
-                                        onOuvrirSalle={() => setSalleEnEdition(cleEditionSalle)}
-                                        onChoisirSalle={(roomId) => {
-                                          if (roomId === "__new__") {
-                                            setCreationSallePour(r.id);
-                                            setSalleEnEdition(null);
-                                            return;
+                                  <div className="promocell-pile">
+                                    {poser}
+                                    {busyHint}
+                                    {entries.map((r) => {
+                                      // Clé d'édition de salle UNIQUE PAR CASE : un
+                                      // CM est rendu dans toutes les colonnes de sa
+                                      // promo, et un `<select autoFocus>` par copie
+                                      // se volaient le focus (seuls les TP restaient
+                                      // modifiables).
+                                      const cleEditionSalle = `${i}-${s}-${r.id}`;
+                                      const source = placements?.find((p) => p.session_id === r.id);
+                                      const draggableHere = dragEnabled && !!source && !source.locked;
+                                      // Salle : l'état VIVANT des placements prime sur
+                                      // `payload.rows`, rechargé plus tard (retour
+                                      // utilisateur 31/08/2026 : « l'ancienne est
+                                      // toujours là »). `payload.rows` reste la
+                                      // source quand les deux s'accordent : lui seul
+                                      // porte le suffixe « (Évaluation) ».
+                                      const salleDuPayload = sallesTriees.find(
+                                        (s2) => s2.label === (r.r ?? "").replace(/\s*\([^)]*\)\s*$/, ""),
+                                      );
+                                      const salleAffichee =
+                                        !source || source.room_id === (salleDuPayload?.id ?? null)
+                                          ? r.r
+                                          : (source.room_label ?? "");
+                                      return (
+                                        <PromoCarte
+                                          key={r.id}
+                                          row={r}
+                                          source={source}
+                                          teacherLabels={payload.teacherLabels}
+                                          salles={sallesTriees}
+                                          salleAffichee={salleAffichee}
+                                          highlighted={Boolean(teacherFilter) && r.te.includes(teacherFilter)}
+                                          draggable={draggableHere}
+                                          dragging={draggingId === r.id}
+                                          swapTarget={cibleEchange === r.id}
+                                          actions={seanceModaleEnabled && Boolean(source)}
+                                          salleModifiable={roomEditEnabled}
+                                          salleEnEdition={salleEnEdition === cleEditionSalle}
+                                          salleEnCours={salleEnCours}
+                                          salleSelectionnee={source?.room_id ?? salleDuPayload?.id ?? ""}
+                                          onDragStart={
+                                            draggableHere
+                                              ? (e) => {
+                                                  e.dataTransfer.effectAllowed = "move";
+                                                  setDraggingId(r.id);
+                                                  setSalleEnEdition(null);
+                                                }
+                                              : undefined
                                           }
-                                          void appliquerSalle(r.id, roomId, source?.room_id);
-                                        }}
-                                        onFermerSalle={() => setSalleEnEdition(null)}
-                                      />
-                                    );
-                                  })}
+                                          onDragEnd={
+                                            draggableHere
+                                              ? () => {
+                                                  setDraggingId(null);
+                                                  setCibleEchange(null);
+                                                  setDropTarget(null);
+                                                }
+                                              : undefined
+                                          }
+                                          echangeHandlers={echangeHandlers(r.id)}
+                                          onModifier={() => modifierSeanceOuEvenement(r, source)}
+                                          onRetirer={() => void retirerDuPlanning(r.id, r.c)}
+                                          onSupprimer={() => void supprimerSeance(r.id, `${r.c} (${r.t})`)}
+                                          onOuvrirSalle={() => setSalleEnEdition(cleEditionSalle)}
+                                          onChoisirSalle={(roomId) => {
+                                            if (roomId === "__new__") {
+                                              setCreationSallePour(r.id);
+                                              setSalleEnEdition(null);
+                                              return;
+                                            }
+                                            void appliquerSalle(r.id, roomId, source?.room_id);
+                                          }}
+                                          onFermerSalle={() => setSalleEnEdition(null)}
+                                        />
+                                      );
+                                    })}
+                                  </div>
                                 </td>
                               );
                             }
                             if (holiday) {
                               return (
                                 <td key={c} {...tdProps}>
-                                  {poser}
-                                  {busyHint}
-                                  <div className="sessiongrid-holiday">
-                                    <span className="title">{holiday.kind === "vacances" ? "Vacances" : "Férié"}</span>
-                                    <span className="label">{holiday.label}</span>
+                                  <div className="promocell-pile">
+                                    {poser}
+                                    {busyHint}
+                                    <div className="sessiongrid-holiday">
+                                      <span className="title">{holiday.kind === "vacances" ? "Vacances" : "Férié"}</span>
+                                      <span className="label">{holiday.label}</span>
+                                    </div>
                                   </div>
                                 </td>
                               );
@@ -1569,11 +1573,13 @@ export function PromoView({
                             if (sae) {
                               return (
                                 <td key={c} {...tdProps}>
-                                  {poser}
-                                  {busyHint}
-                                  <div className="sessiongrid-sae">
-                                    <span className="title">SAE</span>
-                                    <span className="codes">{sae.codes.join(", ")}</span>
+                                  <div className="promocell-pile">
+                                    {poser}
+                                    {busyHint}
+                                    <div className="sessiongrid-sae">
+                                      <span className="title">SAE</span>
+                                      <span className="codes">{sae.codes.join(", ")}</span>
+                                    </div>
                                   </div>
                                 </td>
                               );
@@ -1582,22 +1588,26 @@ export function PromoView({
                             if (libellesEvenement) {
                               return (
                                 <td key={c} {...tdProps}>
-                                  {poser}
-                                  {busyHint}
-                                  <div className="sessiongrid-event">
-                                    {libellesEvenement.map((e) => (
-                                      <span key={e} className="label">
-                                        {e}
-                                      </span>
-                                    ))}
+                                  <div className="promocell-pile">
+                                    {poser}
+                                    {busyHint}
+                                    <div className="sessiongrid-event">
+                                      {libellesEvenement.map((e) => (
+                                        <span key={e} className="label">
+                                          {e}
+                                        </span>
+                                      ))}
+                                    </div>
                                   </div>
                                 </td>
                               );
                             }
                             return (
                               <td key={c} {...tdProps}>
-                                {poser}
-                                {busyHint}
+                                <div className="promocell-pile">
+                                  {poser}
+                                  {busyHint}
+                                </div>
                               </td>
                             );
                           })}
