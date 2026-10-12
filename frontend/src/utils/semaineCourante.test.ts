@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { indexSemaineCourante, jourOuvreAujourdhui } from "./semaineCourante";
+import { indexSemaineAujourdhui, indexSemaineCourante, jourOuvreAujourdhui } from "./semaineCourante";
 
 const SEMAINES = [
   { monday: "2026-08-31", label: "Semaine 1", blocked: false, weekIndex: 0 },
@@ -77,5 +77,33 @@ describe("jourOuvreAujourdhui", () => {
     // sur le premier jour de la semaine qu'on s'apprête à préparer.
     expect(jourOuvreAujourdhui(new Date("2026-09-12T10:00:00"))).toBe(0); // samedi
     expect(jourOuvreAujourdhui(new Date("2026-09-13T10:00:00"))).toBe(0); // dimanche
+  });
+});
+
+describe("indexSemaineAujourdhui (tâche #21)", () => {
+  const OCTOBRE = [
+    { monday: "2026-10-05", label: "Semaine 6", blocked: false, weekIndex: 5 },
+    { monday: "2026-10-12", label: "Semaine 7", blocked: false, weekIndex: 6 },
+    { monday: "2026-10-19", label: "Semaine 8", blocked: false, weekIndex: 7 },
+  ];
+
+  it("garde la semaine du jour du lundi au vendredi", () => {
+    expect(indexSemaineAujourdhui(OCTOBRE, new Date("2026-10-05T08:00:00"))).toBe(0); // lundi
+    expect(indexSemaineAujourdhui(OCTOBRE, new Date("2026-10-09T18:00:00"))).toBe(0); // vendredi
+  });
+
+  it("passe au lundi suivant le samedi et le dimanche", () => {
+    // Exemple de Kyllian : samedi 10 ou dimanche 11 octobre -> lundi 12.
+    expect(indexSemaineAujourdhui(OCTOBRE, new Date("2026-10-10T10:00:00"))).toBe(1);
+    expect(indexSemaineAujourdhui(OCTOBRE, new Date("2026-10-11T23:30:00"))).toBe(1);
+  });
+
+  it("tombe sur les vacances si le lundi suivant en fait partie", () => {
+    // Samedi 24 octobre : le lundi 26 ouvre la Toussaint.
+    expect(indexSemaineAujourdhui(SEMAINES, new Date("2026-10-24T10:00:00"))).toBe(3);
+  });
+
+  it("reste sur la dernière semaine après la fin de l'année", () => {
+    expect(indexSemaineAujourdhui(OCTOBRE, new Date("2026-10-24T10:00:00"))).toBe(2);
   });
 });

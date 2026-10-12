@@ -20,7 +20,7 @@ import type { ReactNode } from "react";
 
 import type { WeekRow } from "../types/app";
 import { decouperLibelleSemaine } from "../utils/planning";
-import { indexSemaineCourante } from "../utils/semaineCourante";
+import { indexSemaineAujourdhui, indexSemaineCourante } from "../utils/semaineCourante";
 import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import { WeekBar } from "./WeekBar";
 
@@ -70,6 +70,8 @@ export function NavSemaine({
 }: NavSemaineProps) {
   const barreGlobale = useSemaineGlobale() !== null;
   const courante = indexSemaineCourante(weekRows);
+  // Cible du bouton « Aujourd'hui » : le week-end, le lundi suivant (#21).
+  const cible = indexSemaineAujourdhui(weekRows);
   const semaine = weekRows[selected];
   const { titre, dates } = decouperLibelleSemaine(semaine?.label ?? `Semaine ${selected + 1}`);
   const semaineCal = semaineCalendaireDepuisLundi(semaine?.monday);
@@ -78,8 +80,8 @@ export function NavSemaine({
 
   // Dernières valeurs lues par l'écouteur clavier sans le réabonner à
   // chaque rendu.
-  const etat = useRef({ selected, courante, onSelect, onAujourdhui, n: weekRows.length });
-  etat.current = { selected, courante, onSelect, onAujourdhui, n: weekRows.length };
+  const etat = useRef({ selected, cible, onSelect, onAujourdhui, n: weekRows.length });
+  etat.current = { selected, cible, onSelect, onAujourdhui, n: weekRows.length };
 
   useEffect(() => {
     if (sansRaccourcis) return;
@@ -97,7 +99,7 @@ export function NavSemaine({
         s.onSelect(s.selected + 1);
       } else if (e.key === "t" || e.key === "T") {
         e.preventDefault();
-        s.onSelect(s.courante);
+        s.onSelect(s.cible);
         s.onAujourdhui?.();
       }
     };
@@ -165,10 +167,10 @@ export function NavSemaine({
           type="button"
           className="btn btn--sm navsemaine-auj"
           onClick={() => {
-            onSelect(courante);
+            onSelect(cible);
             onAujourdhui?.();
           }}
-          disabled={selected === courante && !onAujourdhui}
+          disabled={selected === cible && !onAujourdhui}
           title="Revenir à la semaine en cours (T)"
         >
           Aujourd'hui

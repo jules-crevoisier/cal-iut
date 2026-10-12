@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { useSemaineGlobale } from "../contexts/SemaineGlobale";
 
 import type { WeekRow } from "../types/app";
-import { indexSemaineCourante } from "../utils/semaineCourante";
+import { indexSemaineAujourdhui } from "../utils/semaineCourante";
 import { semaineCalendaireDepuisLundi } from "../utils/weekDisplay";
 import "./WeekStepper.css";
 
@@ -67,7 +67,7 @@ export function WeekStepper({
 }: WeekStepperProps) {
   const barreGlobale = useSemaineGlobale() !== null;
   const ligne = weekRows[selected];
-  const indexAujourdhui = indexSemaineCourante(weekRows);
+  const indexAujourdhui = indexSemaineAujourdhui(weekRows);
   const surAujourdhui = estAujourdhui ?? selected === indexAujourdhui;
   const [nom, dates] = decouper(ligne?.label ?? `Semaine ${selected + 1}`);
   const semaineCal = semaineCalendaireDepuisLundi(ligne?.monday);

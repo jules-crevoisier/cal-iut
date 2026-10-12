@@ -53,3 +53,22 @@ export function jourOuvreAujourdhui(aujourdhui: Date = new Date()): number {
   if (jour === 0 || jour === 6) return 0;
   return jour - 1;
 }
+
+
+/** Index de la semaine où mène le bouton « Aujourd'hui » (et la touche T).
+ *
+ * Tâche #21 (Kyllian, 11/10/2026) : MMI n'a pas cours le week-end. Du lundi
+ * au vendredi, c'est la semaine qui contient la date du jour ; le samedi ou
+ * le dimanche, c'est la semaine du lundi suivant — celle qu'on prépare.
+ * Exemple : samedi 10 ou dimanche 11 octobre 2026 -> lundi 12 octobre.
+ *
+ * Seul ce bouton change : l'ouverture de l'application et le repère
+ * « cette semaine » restent sur la semaine calendaire (`indexSemaineCourante`).
+ */
+export function indexSemaineAujourdhui(semaines: WeekRow[], aujourdhui: Date = new Date()): number {
+  const jour = aujourdhui.getDay(); // 0 = dimanche
+  if (jour !== 0 && jour !== 6) return indexSemaineCourante(semaines, aujourdhui);
+  const lundi = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), aujourdhui.getDate());
+  lundi.setDate(lundi.getDate() + (jour === 6 ? 2 : 1));
+  return indexSemaineCourante(semaines, lundi);
+}
