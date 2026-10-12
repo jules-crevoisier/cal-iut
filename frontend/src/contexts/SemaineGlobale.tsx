@@ -17,6 +17,9 @@ import { createContext, useContext } from "react";
 export interface SemaineGlobale {
   index: number;
   setIndex: (index: number) => void;
+  /** Compteur des clics sur « Aujourd'hui » : chaque vue y réagit en
+   *  revenant au jour en cours, même quand la semaine affichée ne change pas. */
+  aujourdhui?: number;
 }
 
 export const ContexteSemaine = createContext<SemaineGlobale | null>(null);

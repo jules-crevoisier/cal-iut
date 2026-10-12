@@ -48,6 +48,24 @@ describe("TopBar", () => {
     expect(p.onSemaine).toHaveBeenCalledWith(0);
   });
 
+  it("keeps « Aujourd'hui » active on the current week and brings the view back to today", () => {
+    // Retour de Jules (12/10/2026) : sur la semaine en cours, le bouton
+    // était grisé et ne ramenait plus au jour d'aujourd'hui.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-30T10:00:00")); // mercredi, semaine 6
+    try {
+      const onAujourdhui = vi.fn();
+      const p = barre({ semaine: 1, onAujourdhui });
+      const bouton = screen.getByRole("button", { name: "Aujourd'hui" });
+      expect(bouton).toBeEnabled();
+      fireEvent.click(bouton);
+      expect(p.onSemaine).toHaveBeenCalledWith(1);
+      expect(onAujourdhui).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("should hide the week navigation on screens without a week", () => {
     barre({ vue: "reference" });
     expect(screen.queryByRole("button", { name: "Semaine suivante" })).not.toBeInTheDocument();

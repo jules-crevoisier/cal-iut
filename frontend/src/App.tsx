@@ -138,6 +138,7 @@ export function App() {
   const [year, setYear] = useState(1);
   const [parcours, setParcours] = useState(DEFAULT_PARCOURS);
   const [displayWeek, setDisplayWeek] = useState(0);
+  const [retourAujourdhui, setRetourAujourdhui] = useState(0);
   // Une seule fois, au premier planning reçu : ouvrir sur la semaine EN
   // COURS plutôt que sur la première de l'année (retour utilisateur
   // 08/09/2026). Un drapeau plutôt qu'un effet sur `appPayload` : sans lui,
@@ -682,7 +683,7 @@ export function App() {
     <ContextePreferences.Provider value={prefs}>
     {/* Semaine partagée par toutes les vues (barre supérieure) — absente sur
         un lien public, où chaque page garde sa propre navigation. */}
-    <ContexteSemaine.Provider value={readOnlyTarget ? null : { index: displayWeek, setIndex: setDisplayWeek }}>
+    <ContexteSemaine.Provider value={readOnlyTarget ? null : { index: displayWeek, setIndex: setDisplayWeek, aujourdhui: retourAujourdhui }}>
     {/* Qui peut compléter une donnée manquante (mail, nom, salle, Celcat) :
         aucun rôle sur un lien public, donc le manque s'y affiche sans
         bouton. Après une saisie, la révision est relue tout de suite. */}
@@ -737,6 +738,7 @@ export function App() {
               payload={appPayload}
               semaine={displayWeek}
               onSemaine={setDisplayWeek}
+              onAujourdhui={() => setRetourAujourdhui((n) => n + 1)}
               onOuvrirRecherche={() => setSearch(true)}
               onOuvrirNavigation={() => setNavOpen(true)}
             />
