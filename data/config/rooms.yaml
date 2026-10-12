@@ -81,6 +81,11 @@ rooms:
     capacity: 30
     room_type: combined
     combines: [h007, h008]
+    # Tâche 22 (Kyllian Bresson 11/10/2026, confirmé par Jules 12/10/2026) :
+    # plus jamais proposée — ni dans les menus, ni par la génération
+    # automatique. Gardée dans le catalogue pour les séances qui la portent
+    # encore et pour la règle de cloison entre ses deux moitiés.
+    placement_auto: false
     equipment: []
 
   - id: h009
@@ -165,6 +170,11 @@ rooms:
     capacity: 70
     room_type: combined
     combines: [h201, h203]
+    # Tâche 22 (Kyllian Bresson 11/10/2026, confirmé par Jules 12/10/2026) :
+    # plus jamais proposée — ni dans les menus, ni par la génération
+    # automatique. Gardée dans le catalogue pour les séances qui la portent
+    # encore et pour la règle de cloison entre ses deux moitiés.
+    placement_auto: false
     equipment: []
 
   - id: h205
@@ -234,12 +244,13 @@ room_assignment_rules:
 
   - session_types: [TD]
     preferred_room_types: [standard]
-    # `combined` (H.007-008/H.201-203) et `tp_vr_reseaux` (H.205) en TOUT
-    # dernier recours (retour utilisateur 28/08/2026) : jamais préférées à
-    # une vraie salle standard/TP libre, seulement quand rien d'autre ne
-    # convient — H.205 reste par ailleurs prioritaire pour les cours
-    # VR/réseaux/dev via la règle `["*D"]` plus bas, indépendante de celle-ci.
-    fallback_room_types: [tp_standard, tp_mac, combined, tp_vr_reseaux]
+    # `tp_vr_reseaux` (H.205) en TOUT dernier recours (retour utilisateur
+    # 28/08/2026) : jamais préférée à une vraie salle standard/TP libre,
+    # seulement quand rien d'autre ne convient — H.205 reste par ailleurs
+    # prioritaire pour les cours VR/réseaux/dev via la règle `["*D"]` plus
+    # bas, indépendante de celle-ci. `combined` (H.007-008/H.201-203) retiré
+    # le 12/10/2026 (tâche 22) : ces salles sont `placement_auto: false`.
+    fallback_room_types: [tp_standard, tp_mac, tp_vr_reseaux]
 
   - session_types: [TP]
     preferred_room_types: [tp_standard, standard]
