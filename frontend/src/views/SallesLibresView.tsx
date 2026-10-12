@@ -70,6 +70,11 @@ export function SallesLibresView({ payload, route, setRoute, readOnly }: SallesL
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.sem]);
   const [day, setDay] = useState(() => (route.jour !== null && route.jour !== undefined ? route.jour : jourOuvreAujourdhui()));
+  // « Aujourd'hui » dans la barre supérieure : retour au jour en cours.
+  const clicsAujourdhui = globale?.aujourdhui ?? 0;
+  useEffect(() => {
+    if (clicsAujourdhui > 0) setDay(jourOuvreAujourdhui());
+  }, [clicsAujourdhui]);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60_000);
