@@ -97,7 +97,9 @@ def charge_utile(
         # `{"module_id": None}` serait une ressource fantôme.
         "modules": [] if e.sans_module else [{"module_id": _id(ids, "module_id")}],
         "rooms": [{"room_id": _id(ids, "room_id", "salle_id")}],
-        "staff": [{"staff_id": _id(ids, "staff_id")}],
+        # Règle `enseignant: facultatif` (PTUT sans prof) : AUCUN personnel,
+        # une liste vide comme pour les matières.
+        "staff": [] if e.sans_enseignant else [{"staff_id": _id(ids, "staff_id")}],
         "groups": [{"group_id": group_id}],
         "protected": "N",
         "suspended": "N",
@@ -349,7 +351,8 @@ def _trouver_exact(page, type_id: int, cible: str, message: str, *cles: str) -> 
 
 def _resoudre_ids_regle(page, e: EntreeCelcat) -> dict:
     """Règle d'envoi (`celcat.yaml::regles_envoi`) : salle et enseignant
-    comme d'habitude ; catégorie et département PAR LEUR NOM, tels que la
+    comme d'habitude (aucun enseignant pour une séance qui n'en a pas sous
+    `enseignant: facultatif`) ; catégorie et département PAR LEUR NOM, tels que la
     règle les déclare ; la matière SEULEMENT si la règle prend celle du
     cours et que le cours a un code — résolue alors exactement comme pour
     une séance ordinaire. Jamais de recherche d'une matière au nom de la
@@ -360,14 +363,16 @@ def _resoudre_ids_regle(page, e: EntreeCelcat) -> dict:
             page, TYPE_MATIERES, f"matière {e.code_module}", "module_id", unique_name=e.code_module or "",
         ),
     }
+    if not e.sans_enseignant:
+        # PTUT sans prof (`enseignant: facultatif`) : aucun personnel cherché.
+        ids["staff_id"] = _trouver(
+            page, TYPE_PERSONNEL, f"personnel {e.code_enseignant}", "staff_id",
+            unique_name=e.code_enseignant or "",
+        )
     return ids | {
         "room_id": _trouver(
             page, TYPE_SALLES, f"salle {e.salle}", "room_id",
             unique_name=e.salle or "", name=e.salle or "",
-        ),
-        "staff_id": _trouver(
-            page, TYPE_PERSONNEL, f"personnel {e.code_enseignant}", "staff_id",
-            unique_name=e.code_enseignant or "",
         ),
         "event_cat_id": _trouver_exact(
             page, TYPE_CATEGORIES_EVENEMENT, e.categorie_celcat,

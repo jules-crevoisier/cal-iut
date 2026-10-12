@@ -416,6 +416,7 @@ regles_envoi:
   types:
     PTUT:
       module: cours            # la matière du cours si son code est connu, sinon aucune
+      enseignant: facultatif   # sans enseignant, la séance part sans personnel (défaut : obligatoire)
       categorie: "Projet"
       remarque: "PTUT"
       motif: "Séances PTUT (Kyllian Bresson, 01/10/2026)"
@@ -426,6 +427,8 @@ regles_envoi:
 - `categorie` est obligatoire. Elle et le département sont cherchés **par leur nom** dans Celcat ; introuvables : séance bloquée.
 - La pondération (0 pour TD0 et Projet) est portée par la catégorie : rien d'autre à écrire.
 - La salle, le groupe et l'enseignant restent ceux de la séance.
+- `enseignant: facultatif` : une séance sans enseignant part sans personnel au lieu d'être bloquée (PTUT, 12/10/2026).
+  Absent ou `obligatoire` : « aucun enseignant » bloque, comme pour toute séance.
 - Une séance d'un enseignant hors `enseignants` n'est pas envoyée (motif affiché dans le plan Celcat).
 - Priorité : règle du **cours**, puis règle du **type**. Une règle passe devant `sans_code_voulu`.
 - Refusé au chargement : un cours à la fois dans `regles_envoi.cours` et `sans_code_voulu`,

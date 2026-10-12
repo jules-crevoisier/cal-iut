@@ -249,7 +249,7 @@ Demande de Kyllian Bresson (01/10/2026) : **toutes** les séances de type PTUT, 
 | Champ Celcat | Valeur attendue |
 |---|---|
 | Type d'évènement (catégorie) | **Projet**, pondération 0 (portée par la catégorie : « Projet [0%] ») |
-| Enseignant | celui de la séance (Celcat n'en reçoit qu'un : le premier) |
+| Enseignant | celui de la séance (Celcat n'en reçoit qu'un : le premier) ; **aucun** si la séance n'en a pas (12/10/2026) |
 | Salle | celle de la séance |
 | Classe (groupe) | le groupe de la séance |
 | Matière | celle **du cours** si son code Celcat est connu ; **aucune** sinon. Jamais une matière « PTUT » |
@@ -321,6 +321,8 @@ Puis « supprimé, absent à la relecture ».
 4. **Plusieurs enseignants ou plusieurs groupes.** Celcat ne reçoit qu'un enseignant (le premier) ; une séance à plusieurs groupes reste bloquée,
    comme toute séance. À signaler si des PTUT en ont.
 5. Le champ de la Remarque : mêmes questions que pour WR100BU ([§ 4 ci-dessus](#4-points-incertains-à-vérifier-dans-celcat)).
+6. **PTUT sans enseignant** (12/10/2026) : l'évènement part avec `staff: []`. Jamais essayé en canari : si Celcat le refuse,
+   le motif apparaît dans les échecs de l'écran Celcat.
 
 ### 5. Prompt pour Claude Code (sur le PC, VPN connecté)
 

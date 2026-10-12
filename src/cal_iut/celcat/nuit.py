@@ -720,7 +720,11 @@ def motif_non_saisissable(entree: Any) -> str:
     manquants = [
         nom
         for nom, valeur in (
-            ("enseignant", getattr(entree, "code_enseignant", None)),
+            (
+                "enseignant",
+                "(règle sans enseignant)" if getattr(entree, "sans_enseignant", False)
+                else getattr(entree, "code_enseignant", None),
+            ),
             ("matière", "(règle sans module)" if sans_module else getattr(entree, "code_module", None)),
             ("salle", getattr(entree, "salle", None)),
         )
