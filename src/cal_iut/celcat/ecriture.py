@@ -278,22 +278,42 @@ def _choisir(
     name: str = "",
     prefixe: str = "",
 ) -> dict | None:
+    """L'enregistrement EXACT d'abord (code ou nom), sur TOUT le catalogue ;
+    un nom qui n'est qu'un début de libellé ensuite, s'il est seul à
+    commencer ainsi.
+
+    Avant le 12/10/2026, le premier enregistrement qui commençait par le nom
+    l'emportait, même si le nom exact existait plus loin : la salle « A.123 »
+    (la BU) partait en « A.123b », une autre salle (Jules : « BU = A.123,
+    mais pas A.123.b attention »). Un nom qui en ouvre plusieurs est un
+    refus, jamais le premier venu.
+    """
     uniques = unique_name.strip().upper()
     nom = name.strip().upper()
     pref = prefixe.strip().upper()
+
+    def _code(enreg: dict) -> str:
+        return str(enreg.get("unique_name") or "").strip().upper()
+
+    def _libelle(enreg: dict) -> str:
+        return str(enreg.get("name") or enreg.get("evCatName") or "").strip().upper()
+
     for enreg in lots:
-        code = str(enreg.get("unique_name") or "").strip().upper()
-        libelle = str(
-            enreg.get("name") or enreg.get("evCatName") or ""
-        ).strip().upper()
-        if uniques and code == uniques:
+        if (uniques and _code(enreg) == uniques) or (nom and _libelle(enreg) == nom):
             return enreg
-        if nom and libelle == nom:
-            return enreg
-        if nom and libelle.startswith(nom) and "BENEVOLE" not in libelle and "CAPACITE" not in libelle:
-            return enreg
-        if pref and (libelle.startswith(pref) or pref in libelle):
-            return enreg
+    if nom:
+        debuts = [
+            e for e in lots
+            if _libelle(e).startswith(nom) and "BENEVOLE" not in _libelle(e) and "CAPACITE" not in _libelle(e)
+        ]
+        if len(debuts) == 1:
+            return debuts[0]
+        if debuts:
+            return None
+    if pref:
+        for enreg in lots:
+            if _libelle(enreg).startswith(pref) or pref in _libelle(enreg):
+                return enreg
     return None
 
 
