@@ -96,8 +96,9 @@ class RegleEnvoi:
 
     Deux demandes de Kyllian Bresson (01/10/2026) :
     - la visite de la BU (WR100BU, code inventé, absent de Celcat) remonte
-      pour les interventions de Valérie Mariot : catégorie « TD0 »
-      (pondération 0), remarque « WR100BU », AUCUN module ;
+      pour les interventions de Valérie Mariot : catégorie « [TD bénévole] »
+      (TD 0 %, Jules 12/10/2026 ; « TD0 » avant), remarque « WR100BU »,
+      AUCUN module ;
     - toute séance de TYPE « PTUT » remonte en catégorie « Projet »
       (pondération 0), remarque « PTUT », avec le module du COURS quand il
       est connu, sans module sinon — jamais un module « PTUT ».

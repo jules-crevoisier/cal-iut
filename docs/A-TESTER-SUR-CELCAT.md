@@ -27,7 +27,7 @@ Les interventions de Valérie Mariot doivent quand même partir dans Celcat, ain
 | Champ Celcat | Valeur attendue |
 |---|---|
 | Enseignant | Valérie Mariot, code **3696** |
-| Type d'évènement (catégorie) | **TD0** (pondération 0), pas « [TD] » |
+| Type d'évènement (catégorie) | **[TD bénévole]** (TD 0 %), pas « [TD] » — **changé le 12/10/2026** (Jules), c'était TD0 lors des essais ci-dessous |
 | Salle | celle de la séance dans l'appli (H.101 sur le planning actuel) |
 | Classe (groupe) | le groupe de la séance (ex. « BUT MMI S1 TD AB - 2024 ») |
 | Matière | **aucune** |

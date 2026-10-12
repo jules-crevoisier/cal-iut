@@ -238,7 +238,7 @@ Il n'existe pas de `udlTimetables.delete` (108 méthodes `udl*` recensées, `scr
 - Garde-fous avant tout envoi : catégorie vérifiée, masque d'une semaine, `--production` exigé pour écrire sur `URCA_2026` (sinon base d'entraînement), journal anti-doublon.
 
 **Catégories CM / TD / TP.** Libellés `[CM]`, `[TD]` (distinct de `TD0`), `[TP]` (`celcat_formulaire.yaml`).
-`TD0` (id 465) est réservée aux règles d'envoi ([§ 5](#5-règles-denvoi--wr100bu-et-ptut)) : refusée sur toute autre séance.
+`TD0` (id 465) et `[TD bénévole]` (id 846) sont réservées aux règles d'envoi ([§ 5](#5-règles-denvoi--wr100bu-et-ptut)) : refusée sur toute autre séance.
 Les catégories portent une pondération (`[CM]` 100, `[TD]` 100, `[CM bénévole]`, `[CM Capacite]`…) : c'est par là que passe la paie.
 L'id de `[CM]` est **430** : toute charge CM avec un autre `event_cat_id` est refusée (`celcat/categories.py`).
 L'ancien autoclicker enregistrait les CM en `[TP]`. Audit et correction :
@@ -341,7 +341,7 @@ Deux règles, demandées par Kyllian Bresson le 01/10/2026 :
 
 | Règle | Séances visées | Catégorie | Remarque | Matière (module) |
 |---|---|---|---|---|
-| **WR100BU** (visite de la BU) | celles de Valérie Mariot (VMA, code 3696) | **TD0** (pondération 0) | `WR100BU` | **aucune** : le code est inventé |
+| **WR100BU** (visite de la BU) | celles de Valérie Mariot (VMA, code 3696) | **[TD bénévole]** (TD 0 %, depuis le 12/10/2026 ; TD0 avant) | `WR100BU` | **aucune** : le code est inventé |
 | **PTUT** | **toutes** les séances de type PTUT, quel que soit le cours | **Projet** (pondération 0) | `PTUT` | celle **du cours** si son code est connu, sinon aucune |
 
 Pour les deux : département **T_MMI T29** ; salle, groupe (classe) et enseignant de la séance.
@@ -367,7 +367,7 @@ sur les **deux** services, `backend` et `celcat-nuit` (`docker-compose.yml` : `$
   Cours sans code (manquant ou « sans code (voulu) ») : la séance PTUT part **sans matière** au lieu d'être bloquée.
   Jamais une matière « PTUT ». **Point à faire confirmer** par Kyllian : module du cours plutôt qu'aucun.
 - **Catégorie et département** : cherchés **par leur nom** dans Celcat.
-  Introuvables : la séance est **bloquée** (« catégorie « TD0 » introuvable dans Celcat »), jamais envoyée avec une autre catégorie.
+  Introuvables : la séance est **bloquée** (« catégorie « [TD bénévole] » introuvable dans Celcat »), jamais envoyée avec une autre catégorie.
 - **Pondération 0** : elle est portée par la catégorie elle-même (« Projet [0%] » dans l'inspecteur). Aucun champ à part n'est écrit.
 - **Enseignant** : Celcat n'en reçoit qu'un, le premier de la séance (comme pour toute séance).
 - Une séance WR100BU d'un **autre** enseignant ne part pas. Motif : « WR100BU : seules les interventions de VMA sont envoyées ».
@@ -377,7 +377,7 @@ sur les **deux** services, `backend` et `celcat-nuit` (`docker-compose.yml` : `$
   « module du cours (règle PTUT) », « sans module — cours sans code Celcat (règle PTUT) ».
 - La comparaison ne signale pas d'écart de matière ni de catégorie sur ces évènements.
   Un évènement au même créneau saisi à la main en « [TD] » ressort en écart **catégorie** : la correction le passe dans la catégorie de la règle.
-- Garde-fou : la catégorie TD0 (id 465) n'est acceptée que pour ces séances-là.
+- Garde-fou : les catégories TD0 (id 465) et [TD bénévole] (id 846) ne sont acceptées que pour ces séances-là.
 
 Sur le planning actuel : 12 séances WR100BU, toutes de VMA (3 par groupe TD, S1) ; **aucune** séance PTUT.
 Avant cette règle, une séance PTUT était bloquée (« type de séance PTUT sans code Celcat »).
