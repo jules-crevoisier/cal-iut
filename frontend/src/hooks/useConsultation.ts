@@ -31,6 +31,13 @@ export function useConsultation(payload: AppPayload, routeSem: number | null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSem]);
 
+  // « Aujourd'hui » dans la barre supérieure : retour au jour en cours,
+  // même si la semaine affichée était déjà la bonne.
+  const clicsAujourdhui = globale?.aujourdhui ?? 0;
+  useEffect(() => {
+    if (clicsAujourdhui > 0) setJour(jourOuvreAujourdhui());
+  }, [clicsAujourdhui]);
+
   const solverWeek = payload.weekRows[displayWeek]?.weekIndex ?? null;
 
   /** Affiche la semaine SOLVEUR `w` (et le jour `d` sur téléphone), puis

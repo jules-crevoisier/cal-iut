@@ -207,6 +207,12 @@ export function PromoView({
   // Le jour EN COURS plutôt que lundi (retour utilisateur 08/09/2026 : « on
   // veut arriver à la bonne semaine et au bon jour »).
   const [day, setDay] = useState(() => jourOuvreAujourdhui());
+  // « Aujourd'hui » dans la barre supérieure : retour au jour en cours,
+  // même si la semaine affichée était déjà la bonne.
+  const clicsAujourdhui = semaineGlobale?.aujourdhui ?? 0;
+  useEffect(() => {
+    if (clicsAujourdhui > 0) setDay(jourOuvreAujourdhui());
+  }, [clicsAujourdhui]);
   const [teacherFilter, setTeacherFilter] = useState(filtresInitiaux.enseignant);
   const [enCoursPlacement, setEnCoursPlacement] = useState<string | null>(null);
   const [erreurPlacement, setErreurPlacement] = useState<string | null>(null);

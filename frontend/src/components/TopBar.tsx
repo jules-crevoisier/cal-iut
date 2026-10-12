@@ -59,6 +59,8 @@ interface TopBarProps {
   payload: AppPayload | null;
   semaine: number;
   onSemaine: (index: number) => void;
+  /** Clic sur « Aujourd'hui » : la vue revient aussi au jour en cours. */
+  onAujourdhui?: () => void;
   /** Absent : pas de bouton de recherche (compte « Accès API »). */
   onOuvrirRecherche?: () => void;
   onOuvrirNavigation: () => void;
@@ -109,6 +111,7 @@ export function TopBar({
   payload,
   semaine,
   onSemaine,
+  onAujourdhui,
   onOuvrirRecherche,
   onOuvrirNavigation,
   titres,
@@ -133,7 +136,7 @@ export function TopBar({
       </div>
 
       {avecSemaine && payload && (
-        <NavigationSemaine payload={payload} semaine={semaine} onSemaine={onSemaine} />
+        <NavigationSemaine payload={payload} semaine={semaine} onSemaine={onSemaine} onAujourdhui={onAujourdhui} />
       )}
 
       <div className="topbar-droite">
@@ -157,10 +160,12 @@ function NavigationSemaine({
   payload,
   semaine,
   onSemaine,
+  onAujourdhui,
 }: {
   payload: AppPayload;
   semaine: number;
   onSemaine: (index: number) => void;
+  onAujourdhui?: () => void;
 }) {
   const rows = payload.weekRows;
   const courante = indexSemaineCourante(rows);
@@ -242,8 +247,12 @@ function NavigationSemaine({
       <button
         type="button"
         className="topbar-aujourdhui"
-        onClick={() => onSemaine(cible)}
-        disabled={semaine === cible}
+        // Toujours actif (retour de Jules, 12/10/2026) : déjà sur la bonne
+        // semaine, le clic ramène encore la vue au jour en cours.
+        onClick={() => {
+          onSemaine(cible);
+          onAujourdhui?.();
+        }}
         title="Revenir à la semaine en cours (T)"
       >
         Aujourd'hui
