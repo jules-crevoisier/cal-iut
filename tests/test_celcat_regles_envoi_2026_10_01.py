@@ -5,7 +5,7 @@ Valérie Mariot dans Celcat » : WR100BU est un code INVENTÉ, absent de
 Celcat. Ses séances étaient « sans code (voulu) », donc jamais envoyées.
 Elles doivent désormais partir avec :
 
-    Enseignant  Valérie Mariot (3696)      Type d'évènement  TD0 (pondération 0)
+    Enseignant  Valérie Mariot (3696)      Type d'évènement  [TD bénévole] (TD 0 %, Jules 12/10/2026 ; TD0 au départ)
     Salle       celle de la séance          Classe           le groupe de la séance
     Remarque    WR100BU                     Département      T_MMI T29
 
@@ -22,7 +22,7 @@ Ce que ces tests protègent :
   `types:`), chargées et validées ; un cours à la fois « sans code (voulu) »
   et sous règle est refusé au chargement ; la règle du cours passe avant
   celle du type ;
-- l'entrée Celcat : pas de module, catégorie TD0, remarque, département ;
+- l'entrée Celcat : pas de module, catégorie [TD bénévole], remarque, département ;
 - la charge RPC, construite sans AUCUNE recherche de matière ; catégorie et
   département résolus par leur NOM, refus nommé s'ils manquent ;
 - notre identifiant de séance reste lisible dans `notes` (« WR100BU - <id> »),
@@ -102,6 +102,8 @@ CATALOGUES = {
         {"name": "TD0 bis", "id": 999},
         {"name": "[TD]", "id": 433},
         {"name": "TD0", "id": 465},
+        {"name": "[TD bénévole] (ancien)", "id": 998},
+        {"name": "[TD bénévole]", "id": 846},
         {"name": "Projet", "id": 700},
     ],
     TYPE_DEPARTEMENTS: [
@@ -186,7 +188,7 @@ def test_les_regles_wr100bu_et_ptut_sont_chargees_depuis_la_config_reelle() -> N
     cfg = _cfg()
     regle = cfg.regles_cours["WR100BU"]
     assert (regle.portee, regle.module, regle.categorie, regle.remarque, regle.departement, regle.enseignants) == (
-        "cours", MODULE_AUCUN, "TD0", "WR100BU", "T_MMI T29", ("VMA",)
+        "cours", MODULE_AUCUN, "[TD bénévole]", "WR100BU", "T_MMI T29", ("VMA",)
     )
     assert "Kyllian" in regle.motif
     ptut = cfg.regles_types["PTUT"]
@@ -276,13 +278,13 @@ def test_l_entree_part_sans_module_en_td0_avec_remarque_et_departement() -> None
     assert e.prete, e.bloquants
     assert e.code_module is None
     assert (e.regle, e.regle_libelle, e.categorie_celcat, e.remarque, e.departement) == (
-        "WR100BU", "sans module (règle WR100BU)", "TD0", "WR100BU", "T_MMI T29"
+        "WR100BU", "sans module (règle WR100BU)", "[TD bénévole]", "WR100BU", "T_MMI T29"
     )
     assert e.sans_module
     assert (e.code_enseignant, e.salle, e.nom_groupe_celcat) == ("3696", "H.101", "BUT MMI S1 TD AB")
     assert e.notes_celcat == "WR100BU - WR100BU-S1-TD-1-but1-td-ab"
     # La règle entre dans la signature : la changer re-saisit la séance.
-    assert e.signature().endswith("|regle:TD0|T_MMI T29|WR100BU")
+    assert e.signature().endswith("|regle:[TD bénévole]|T_MMI T29|WR100BU")
 
 
 def test_une_seance_ordinaire_garde_sa_signature_et_ses_notes() -> None:
@@ -332,7 +334,7 @@ def test_une_ptut_d_un_cours_sans_code_voulu_part_quand_meme_sans_module() -> No
 
 def test_la_regle_du_cours_passe_avant_celle_du_type() -> None:
     vma = _entree("VMA", type_="PTUT")
-    assert (vma.regle, vma.categorie_celcat, vma.sans_module) == ("WR100BU", "TD0", True)
+    assert (vma.regle, vma.categorie_celcat, vma.sans_module) == ("WR100BU", "[TD bénévole]", True)
     # Elle décide seule : un autre enseignant n'est pas rattrapé par la règle PTUT.
     mri = _entree("MRI", type_="PTUT")
     assert not mri.regle and "seules les interventions de VMA" in mri.non_envoyee
@@ -346,15 +348,15 @@ def test_la_regle_du_cours_passe_avant_celle_du_type() -> None:
 def test_la_charge_est_construite_sans_aucune_recherche_de_matiere(catalogues) -> None:
     e = _entree()
     ids = ecriture.resoudre_ids(FaussePage(), e, categorie="[TD]")  # la règle passe devant
-    assert ids == {"room_id": 601, "staff_id": 501, "event_cat_id": 465, "dept_id": 29}
+    assert ids == {"room_id": 601, "staff_id": 501, "event_cat_id": 846, "dept_id": 29}
     assert catalogues.aucune_matiere
     charge = ecriture.charge_utile(e, group_id=1661972, ids=ids, masque="N" * 5 + "Y" + "N" * 48, event_id=0)
     assert charge["modules"] == []
-    assert charge["event_cat_id"] == 465 and charge["dept_id"] == 29
+    assert charge["event_cat_id"] == 846 and charge["dept_id"] == 29
     assert charge["rooms"] == [{"room_id": 601}] and charge["staff"] == [{"staff_id": 501}]
     assert charge["groups"] == [{"group_id": 1661972}]
     assert charge["notes"] == "WR100BU - WR100BU-S1-TD-1-but1-td-ab"
-    verifier_charge_categorie(charge, type_seance_nom="TD", categorie_regle="TD0")
+    verifier_charge_categorie(charge, type_seance_nom="TD", categorie_regle="[TD bénévole]")
 
 
 def test_creer_manquants_envoie_la_charge_td0(catalogues, monkeypatch) -> None:
@@ -372,7 +374,7 @@ def test_creer_manquants_envoie_la_charge_td0(catalogues, monkeypatch) -> None:
         methode="udlTimetables.save",
     )
     assert res.crees == [("WR100BU-S1-TD-1-but1-td-ab", 4242)], res.echecs
-    assert envoyees[0]["event_cat_id"] == 465 and envoyees[0]["modules"] == []
+    assert envoyees[0]["event_cat_id"] == 846 and envoyees[0]["modules"] == []
     assert catalogues.aucune_matiere
 
 
@@ -402,11 +404,11 @@ def test_projet_introuvable_bloque_la_ptut(catalogues, monkeypatch) -> None:
 
 
 def test_td0_introuvable_dans_celcat_bloque_avec_un_motif_nomme(catalogues, monkeypatch) -> None:
-    """Jamais une catégorie voisine : « TD0 bis » existe, « TD0 » non."""
-    monkeypatch.setitem(CATALOGUES, TYPE_CATEGORIES_EVENEMENT, [{"name": "TD0 bis", "id": 999}, {"name": "[TD]", "id": 433}])
+    """Jamais une catégorie voisine : « TD0 » et « [TD bénévole] (ancien) » existent, « [TD bénévole] » non."""
+    monkeypatch.setitem(CATALOGUES, TYPE_CATEGORIES_EVENEMENT, [{"name": "TD0", "id": 465}, {"name": "[TD bénévole] (ancien)", "id": 998}, {"name": "[TD]", "id": 433}])
     with pytest.raises(ecriture.RessourceIntrouvable) as exc:
         ecriture.resoudre_ids(FaussePage(), _entree(), categorie="")
-    assert "catégorie « TD0 » introuvable dans Celcat" in str(exc.value)
+    assert "catégorie « [TD bénévole] » introuvable dans Celcat" in str(exc.value)
 
 
 def test_departement_introuvable_bloque_sans_prendre_un_voisin(catalogues, monkeypatch) -> None:
@@ -595,12 +597,12 @@ def test_le_plan_montre_la_seance_a_creer_sans_module(bu) -> None:
     par_id = {e["session_id"]: e for e in corps["entrees"]}
     assert par_id["bu-vma"]["action"] == "creer"
     assert par_id["bu-vma"]["regle"] == "sans module (règle WR100BU)"
-    assert (par_id["bu-vma"]["categorie"], par_id["bu-vma"]["remarque"]) == ("TD0", "WR100BU - bu-vma")
+    assert (par_id["bu-vma"]["categorie"], par_id["bu-vma"]["remarque"]) == ("[TD bénévole]", "WR100BU - bu-vma")
     assert par_id["bu-mri"]["action"] == "non_envoyee"
     assert "seules les interventions de VMA" in par_id["bu-mri"]["motif_non_envoi"]
     assert par_id["wr101-td"]["regle"] == ""
     assert corps["regles_envoi"] == {
-        "sans module (règle WR100BU) : catégorie TD0, remarque WR100BU, département T_MMI T29": 1,
+        "sans module (règle WR100BU) : catégorie [TD bénévole], remarque WR100BU, département T_MMI T29": 1,
         "module du cours (règle PTUT) : catégorie Projet, remarque PTUT, département T_MMI T29": 1,
         "sans module — cours sans code Celcat (règle PTUT) : catégorie Projet, remarque PTUT, département T_MMI T29": 1,
     }
@@ -641,7 +643,7 @@ def test_le_worker_cree_td0_et_projet_et_ecarte_l_autre_enseignant(bu, catalogue
 
     assert set(envoyees) == {"bu-vma", "ptut-avec", "ptut-sans"}, envoyees
     bu_vma, avec, sans = envoyees["bu-vma"], envoyees["ptut-avec"], envoyees["ptut-sans"]
-    assert (bu_vma["event_cat_id"], bu_vma["dept_id"], bu_vma["modules"]) == (465, 29, [])
+    assert (bu_vma["event_cat_id"], bu_vma["dept_id"], bu_vma["modules"]) == (846, 29, [])
     assert bu_vma["notes"] == "WR100BU - bu-vma"
     # PTUT : catégorie Projet, module DU COURS quand il est connu, aucun sinon.
     assert (avec["event_cat_id"], avec["dept_id"], avec["modules"]) == (700, 29, [{"module_id": 1590001}])
@@ -676,14 +678,14 @@ def test_le_contexte_de_comparaison_porte_la_categorie_de_regle(bu) -> None:
     from cal_iut.celcat.planification import contexte
 
     ctx = contexte(get_state())
-    assert ctx.categories_regle == {"bu-vma": "TD0", "ptut-avec": "Projet", "ptut-sans": "Projet"}
+    assert ctx.categories_regle == {"bu-vma": "[TD bénévole]", "ptut-avec": "Projet", "ptut-sans": "Projet"}
 
 
 def test_l_onglet_codes_celcat_montre_l_origine_regle(bu) -> None:
     corps = bu.get("/reference/codes-celcat?famille=cours").json()
     ligne = next(l for l in corps["familles"]["cours"]["lignes"] if l["cle"] == "WR100BU")
     assert (ligne["origine"], ligne["origine_detail"], ligne["code"]) == ("regle", "envoi sans module (règle)", None)
-    assert "catégorie TD0" in ligne["note"] and "T_MMI T29" in ligne["note"] and "VMA" in ligne["note"]
+    assert "catégorie [TD bénévole]" in ligne["note"] and "T_MMI T29" in ligne["note"] and "VMA" in ligne["note"]
     assert ligne["modifiable"] is False and ligne["peut_marquer_sans_code"] is False
     assert corps["familles"]["cours"]["sans_module"] == 1
     # Ni manquant, ni « voulu ».
@@ -765,7 +767,7 @@ def test_l_essai_simule_puis_cree_relit_et_supprime_en_formation(catalogues, mon
     supprimes: list[int] = []
 
     def _enregistrer(p, charge, *, methode):
-        stock[5150] = {**charge, "event_id": 5150, "evCatName": "TD0", "deptName": "T_MMI T29",
+        stock[5150] = {**charge, "event_id": 5150, "evCatName": "[TD bénévole]", "deptName": "T_MMI T29",
                        "rooms": [{"name": "H.101"}], "groups": [{"name": "BUT MMI S1 TD AB - 2024"}],
                        "staff": [{"name": "MARIOT Valérie"}]}
         return 5150
@@ -788,13 +790,13 @@ def test_l_essai_simule_puis_cree_relit_et_supprime_en_formation(catalogues, mon
     res = essai.preparer(page, e, base=BASE_ENTRAINEMENT, masque="N" * 5 + "Y" + "N" * 48)
     assert res.ok, res.erreur
     assert res.group_id == essai.GROUPE_CANARI_FORMATION
-    assert res.charge["modules"] == [] and res.charge["event_cat_id"] == 465
+    assert res.charge["modules"] == [] and res.charge["event_cat_id"] == 846
     assert res.charge["_type_"] == "Event" and "event_id" not in res.charge
     assert catalogues.aucune_matiere
 
     res = essai.ecrire_relire_supprimer(page, res, methode="udlTimetables.save", methode_suppression="udlTimetables.save")
     assert res.event_id == 5150 and supprimes == [5150] and res.supprime is True
-    assert res.relu["categorie"] == "TD0" and res.relu["departement"] == "T_MMI T29"
+    assert res.relu["categorie"] == "[TD bénévole]" and res.relu["departement"] == "T_MMI T29"
     assert res.relu["remarque (notes)"] == "WR100BU - WR100BU-S1-TD-1-but1-td-ab"
     assert res.relu["session_id lu dans notes"] == e.session_id
     assert res.relu["matieres"] == [] and res.relu["salles"] == ["H.101"]
@@ -806,7 +808,7 @@ def test_l_essai_rend_le_blocage_quand_td0_manque(catalogues, monkeypatch) -> No
     monkeypatch.setitem(CATALOGUES, TYPE_CATEGORIES_EVENEMENT, [{"name": "[TD]", "id": 433}])
     monkeypatch.setattr(essai, "charger_ressources", lambda *a, **k: [])
     res = essai.preparer(FaussePage(), _entree(), base=BASE_PRODUCTION, masque="N" * 5 + "Y" + "N" * 48, group_id=1661972)
-    assert not res.ok and "catégorie « TD0 » introuvable dans Celcat" in res.erreur
+    assert not res.ok and "catégorie « [TD bénévole] » introuvable dans Celcat" in res.erreur
     assert res.charge == {}
 
 

@@ -38,6 +38,9 @@ CATEGORIE_IDS: dict[str, int] = {
 # refuser TD0 sur toute séance ordinaire.
 CATEGORIE_IDS_REGLES: dict[str, int] = {
     "TD0": 465,
+    # WR100BU depuis le 12/10/2026 (Jules : « un TD 0 % bénévole »), même
+    # catalogue. Clé en MAJUSCULES : la recherche fait `libelle.upper()`.
+    "[TD BÉNÉVOLE]": 846,
 }
 
 LIBELLES: dict[str, str] = {

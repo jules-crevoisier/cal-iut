@@ -205,8 +205,8 @@ Celles décidées avec Kyllian sont écrites dans `celcat.yaml` (section `sans_c
 
 Certaines séances partent dans Celcat avec une catégorie, une remarque et un département imposés.
 
-- **WR100BU** (visite de la BU, code inventé) : les interventions de Valérie Mariot partent en catégorie **TD0**
-  (pondération 0), remarque **WR100BU**, département **T_MMI T29**, **sans matière**.
+- **WR100BU** (visite de la BU, code inventé) : les interventions de Valérie Mariot partent en catégorie **[TD bénévole]**
+  (TD 0 %, depuis le 12/10/2026 ; avant : TD0), remarque **WR100BU**, département **T_MMI T29**, **sans matière**.
 - **Toute séance PTUT** : catégorie **Projet** (pondération 0), remarque **PTUT**, avec la matière du cours si son code est connu.
 
 > **À savoir :** ces règles sont **inactives** tant que la variable `CAL_IUT_REGLES_ENVOI` ne vaut pas `on`

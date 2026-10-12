@@ -409,7 +409,7 @@ regles_envoi:
     WR100BU:
       enseignants: [VMA]       # seules ces interventions partent ; absent = toutes
       module: aucun            # aucune matière, jamais cherchée
-      categorie: "TD0"         # nom exact de la catégorie d'évènement Celcat
+      categorie: "[TD bénévole]"  # nom exact de la catégorie d'évènement Celcat
       remarque: "WR100BU"      # écrit dans « Remarques » de l'évènement
       departement: "T_MMI T29" # nom exact du département Celcat (défaut : T_MMI T29)
       motif: "Visite de la BU (Kyllian Bresson, 01/10/2026)"
@@ -877,7 +877,7 @@ courses:
 - Même forme qu'une ligne de `maquette.json`.
 - `total` compte les séances **par étudiant** ; `profs[].td` compte les créneaux **de l'enseignant** (tous groupes).
 - Sans progression, l'ordre est CM, TD, TP.
-- WR100BU est un code inventé, absent de Celcat. Il part dans Celcat **sans module**, en catégorie « TD0 »,
+- WR100BU est un code inventé, absent de Celcat. Il part dans Celcat **sans module**, en catégorie « [TD bénévole] »,
   pour les interventions de VMA : voir [« Envoyer avec une règle d'envoi »](#envoyer-avec-une-règle-denvoi).
 
 ### `course_corrections.yaml`
@@ -1144,7 +1144,7 @@ sans_code_voulu:
     WS1PJ: "Projet Ens. : pas de code Celcat"
 regles_envoi:
   cours:
-    WR100BU: {enseignants: [VMA], module: aucun, categorie: "TD0", remarque: "WR100BU", motif: "…"}
+    WR100BU: {enseignants: [VMA], module: aucun, categorie: "[TD bénévole]", remarque: "WR100BU", motif: "…"}
   types:
     PTUT: {module: cours, categorie: "Projet", remarque: "PTUT", motif: "…"}
 ```

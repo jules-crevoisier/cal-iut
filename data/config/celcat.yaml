@@ -420,10 +420,10 @@ regles_envoi:
     WR100BU:
       enseignants: [VMA]       # Valérie Mariot (code Celcat 3696)
       module: aucun            # code inventé : aucune matière Celcat
-      categorie: "TD0"         # pondération 0 — distincte de « [TD] »
+      categorie: "[TD bénévole]"  # TD 0 % bénévole (Jules, 12/10/2026) — id 846, distincte de « [TD] » et de « TD0 »
       remarque: "WR100BU"
       departement: "T_MMI T29"
-      motif: "Visite de la BU, code inventé : remontée dans Celcat en TD0 (Kyllian Bresson, 01/10/2026)"
+      motif: "Visite de la BU, code inventé : remontée dans Celcat en TD bénévole, sans matière (Kyllian Bresson 01/10/2026, Jules 12/10/2026)"
   types:
     PTUT:
       module: cours            # « oui, on veut pouvoir mettre un module » (01/10/2026)
