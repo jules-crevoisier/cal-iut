@@ -11,12 +11,14 @@ from dataclasses import dataclass
 from datetime import UTC
 from datetime import date as _date
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from cal_iut.api import occupations_externes
 from cal_iut.api import (
@@ -28,6 +30,7 @@ from cal_iut.api import (
     custom_rooms,
     custom_sessions,
     doublons,
+    evaluations_validees,
     forced_pending,
     limiteur,
     mailer,
@@ -4145,6 +4148,30 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     resultat = _to_placement(match, state.sessions_by_id)
     _apres_ecriture_planning(session_id, "update")
     return resultat
+
+
+class ValidationEvaluationRequest(BaseModel):
+    decision: Literal["eval", "pas_eval"] | None = None
+
+
+@app.put(
+    "/reference/evaluations/{session_id}/validation",
+    dependencies=[Depends(accounts.require_role("edit"))],
+)
+def valider_evaluation(session_id: str, body: ValidationEvaluationRequest) -> dict[str, object]:
+    """Réponse de l'enseignant sur un dernier CM « à confirmer » (Référence →
+    Évaluations). `decision: null` annule. N'écrit dans AUCUN planning ni
+    Celcat : seule la liste des évaluations change (cf.
+    `api/evaluations_validees.py`)."""
+    state = get_state()
+    session = state.sessions_by_id.get(session_id)
+    if session is None or session.session_type.value != "CM":
+        raise HTTPException(404, "Séance inconnue ou qui n'est pas un CM.")
+    if body.decision is not None and session.is_eval:
+        raise HTTPException(409, "Ce CM est déjà marqué Éval dans la maquette.")
+    evaluations_validees.enregistrer(session_id, body.decision)
+    revision.incrementer("evaluation-validee")
+    return {"session_id": session_id, "decision": body.decision}
 
 
 @app.post("/rooms", response_model=RoomMeta, dependencies=[Depends(accounts.require_role("admin"))])
