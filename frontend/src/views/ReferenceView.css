@@ -253,3 +253,22 @@
 .ref-evaluations td:nth-child(3) {
   white-space: nowrap;
 }
+
+.ref-statut--confirmee {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ref-statut--ecartee {
+  color: var(--ink-faint);
+}
+
+.ref-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ref-actions .btn {
+  white-space: nowrap;
+}

@@ -434,3 +434,44 @@ def test_v1_evaluations_eval_derniers_cm_et_non_placees(client, etat) -> None:
     assert par_id["pas_placee"]["statut"] == "non_placee" and par_id["pas_placee"]["date"] is None
     assert (corps["nb_eval"], corps["nb_a_confirmer"], corps["nb_non_placees"]) == (1, 2, 1)
     assert [e["statut"] for e in corps["evaluations"]] == ["eval", "a_confirmer", "a_confirmer", "non_placee"]
+
+
+def test_valider_une_evaluation_confirme_ecarte_et_annule(client, etat, tmp_path, monkeypatch) -> None:
+    from cal_iut.api import evaluations_validees
+
+    monkeypatch.setattr(evaluations_validees, "_path", lambda: tmp_path / "evaluations_validees.json")
+    cm_fin = _cm("cm_fin", "WR101", "KBR")
+    etat.sessions = [*etat.sessions, cm_fin]
+    etat.sessions_by_id = {s.id: s for s in etat.sessions}
+    etat.timetable = [*etat.timetable, _place(cm_fin, 12, 0, 0)]
+
+    def statut() -> str:
+        corps = client.get("/api/v1/evaluations").json()
+        return next(e["statut"] for e in corps["evaluations"] if e["id"] == "cm_fin")
+
+    assert statut() == "a_confirmer"
+    assert client.put("/reference/evaluations/cm_fin/validation", json={"decision": "eval"}).status_code == 200
+    assert statut() == "confirmee"
+    assert client.get("/api/v1/evaluations").json()["nb_confirmees"] == 1
+    client.put("/reference/evaluations/cm_fin/validation", json={"decision": "pas_eval"})
+    assert statut() == "ecartee"
+    client.put("/reference/evaluations/cm_fin/validation", json={"decision": None})
+    assert statut() == "a_confirmer"
+    assert not (tmp_path / "evaluations_validees.json").read_text(encoding="utf-8").strip("{} \n")
+
+
+def test_valider_une_evaluation_refuse_td_inconnu_et_eval_deja_marquee(client, etat) -> None:
+    assert client.put("/reference/evaluations/td1/validation", json={"decision": "eval"}).status_code == 404
+    assert client.put("/reference/evaluations/zzz/validation", json={"decision": "eval"}).status_code == 404
+    marquee = _cm("marquee", "WR404", "KBR", eval_=True)
+    etat.sessions = [*etat.sessions, marquee]
+    etat.sessions_by_id = {s.id: s for s in etat.sessions}
+    assert client.put("/reference/evaluations/marquee/validation", json={"decision": "eval"}).status_code == 409
+
+
+def test_valider_une_evaluation_demande_le_role_edit(etat, db_isole) -> None:
+    from conftest import creer_compte_actif_et_connecter
+
+    lecteur = TestClient(app)
+    creer_compte_actif_et_connecter(lecteur, role="read")
+    assert lecteur.put("/reference/evaluations/cm1/validation", json={"decision": "eval"}).status_code == 403

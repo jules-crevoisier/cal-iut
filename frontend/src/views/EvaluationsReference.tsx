@@ -5,9 +5,9 @@
  * module non marqué est listé « À confirmer » — à demander à l'enseignant.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchEvaluations, type EvaluationLigne, type EvaluationsReponse } from "../api/client";
+import { fetchEvaluations, validerEvaluation, type EvaluationLigne, type EvaluationsReponse } from "../api/client";
 import { ChampRecherche } from "../components/ChampRecherche";
 import { TriColonne, useTri } from "../components/TriColonne";
 import { useDroits } from "../contexts/Droits";
@@ -17,11 +17,19 @@ type CleEval = "date" | "module" | "enseignant" | "statut";
 
 const LIBELLE_STATUT: Record<EvaluationLigne["statut"], string> = {
   eval: "Éval",
+  confirmee: "Éval confirmée",
   a_confirmer: "À confirmer",
   non_placee: "Non placée",
+  ecartee: "Pas une Éval",
 };
 
-const ORDRE_STATUT: Record<EvaluationLigne["statut"], number> = { eval: 0, a_confirmer: 1, non_placee: 2 };
+const ORDRE_STATUT: Record<EvaluationLigne["statut"], number> = {
+  eval: 0,
+  confirmee: 1,
+  a_confirmer: 2,
+  non_placee: 3,
+  ecartee: 4,
+};
 
 const VALEURS: Record<CleEval, (e: EvaluationLigne) => string | number> = {
   date: (e) => (e.date ? `${e.date} ${e.debut}` : "9999"),
@@ -45,34 +53,47 @@ function horaire(e: EvaluationLigne): string {
 }
 
 export function EvaluationsReference() {
-  const { revision } = useDroits();
+  const { revision, peutCompleter, apresEnregistrement } = useDroits();
   const [donnees, setDonnees] = useState<EvaluationsReponse | null>(null);
   const [erreur, setErreur] = useState(false);
   const [texte, setTexte] = useState("");
   const [statut, setStatut] = useState("");
+  const [enCours, setEnCours] = useState<string | null>(null);
+  const [echec, setEchec] = useState<string | null>(null);
 
-  useEffect(() => {
-    let annule = false;
-    fetchEvaluations()
+  const recharger = useCallback(() => {
+    return fetchEvaluations()
       .then((r) => {
-        if (annule) return;
         setErreur(false);
         setDonnees(r);
       })
-      .catch(() => {
-        if (!annule) setErreur(true);
-      });
-    return () => {
-      annule = true;
-    };
-  }, [revision]);
+      .catch(() => setErreur(true));
+  }, []);
+
+  useEffect(() => {
+    void recharger();
+  }, [revision, recharger]);
+
+  const decider = async (e: EvaluationLigne, decision: "eval" | "pas_eval" | null) => {
+    setEnCours(e.id);
+    setEchec(null);
+    try {
+      await validerEvaluation(e.id, decision);
+      await recharger();
+      apresEnregistrement();
+    } catch {
+      setEchec(`Réponse non enregistrée pour ${e.cours_code}. Réessayer.`);
+    } finally {
+      setEnCours(null);
+    }
+  };
 
   const lignes = useMemo(() => donnees?.evaluations ?? [], [donnees]);
   const filtrees = useMemo(() => {
     const q = normaliser(texte.trim());
     return lignes.filter(
       (e) =>
-        (!statut || e.statut === statut) &&
+        (statut ? e.statut === statut : e.statut !== "ecartee") &&
         (!q ||
           normaliser(
             `${e.cours_code} ${e.cours_nom} ${e.parcours} ${e.enseignants_noms.join(" ")} ${e.enseignants.join(" ")} ${e.groupes_libelles.join(" ")}`,
@@ -120,11 +141,13 @@ export function EvaluationsReference() {
         <select aria-label="Statut" value={statut} onChange={(e) => setStatut(e.target.value)}>
           <option value="">Tous les statuts</option>
           <option value="eval">Éval</option>
+          <option value="confirmee">Éval confirmée</option>
           <option value="a_confirmer">À confirmer</option>
           <option value="non_placee">Non placée</option>
+          <option value="ecartee">Pas une Éval</option>
         </select>
         <span className="ref-resume">
-          {donnees.nb_eval} Éval · {donnees.nb_a_confirmer} à confirmer
+          {donnees.nb_eval + (donnees.nb_confirmees ?? 0)} Éval · {donnees.nb_a_confirmer} à confirmer
           {donnees.nb_non_placees > 0 && ` · ${donnees.nb_non_placees} non placée${donnees.nb_non_placees > 1 ? "s" : ""}`}
         </span>
         <button type="button" className="btn" onClick={exporter} disabled={triees.length === 0}>
@@ -133,8 +156,13 @@ export function EvaluationsReference() {
       </div>
       <p className="ref-note">
         « Éval » : CM marqué Éval dans la maquette. « À confirmer » : dernier CM du module, pas marqué Éval — à demander à
-        l'enseignant.
+        l'enseignant ; sa réponse s'enregistre ici (sans modifier le planning).
       </p>
+      {echec && (
+        <p className="ref-vide" role="alert">
+          {echec}
+        </p>
+      )}
       <div className="panel carte-tableau carte-tableau--haute ref-tableau">
         <table className="ref ref-evaluations">
           <thead>
@@ -154,6 +182,7 @@ export function EvaluationsReference() {
               <TriColonne cle="enseignant" tri={tri} onTrier={trierPar}>
                 Enseignant
               </TriColonne>
+              {peutCompleter && <th>Réponse</th>}
             </tr>
           </thead>
           <tbody>
@@ -176,6 +205,27 @@ export function EvaluationsReference() {
                 <td>
                   {e.enseignants.length === 0 ? "—" : e.enseignants.map((c, i) => e.enseignants_noms[i] ?? c).join(", ")}
                 </td>
+                {peutCompleter && (
+                  <td>
+                    <div className="ref-actions">
+                      {e.statut === "a_confirmer" && (
+                        <>
+                          <button type="button" className="btn btn--sm" disabled={enCours === e.id} onClick={() => void decider(e, "eval")}>
+                            C'est une Éval
+                          </button>
+                          <button type="button" className="btn btn--ghost btn--sm" disabled={enCours === e.id} onClick={() => void decider(e, "pas_eval")}>
+                            Pas une Éval
+                          </button>
+                        </>
+                      )}
+                      {(e.statut === "confirmee" || e.statut === "ecartee") && (
+                        <button type="button" className="btn btn--ghost btn--sm" disabled={enCours === e.id} onClick={() => void decider(e, null)}>
+                          Annuler
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -311,9 +311,13 @@ class EvaluationV1(BaseModel):
     fin: str
     evaluation: bool = Field(description="CM marqué « Éval » (`is_eval`).")
     dernier_cm: bool = Field(description="Dernier CM placé de son module (même parcours).")
-    statut: Literal["eval", "a_confirmer", "non_placee"] = Field(
-        description="`eval` : CM marqué Éval ; `a_confirmer` : dernier CM du module non marqué Éval, "
-        "à confirmer auprès de l'enseignant ; `non_placee` : Éval pas encore placée."
+    validation: Literal["eval", "pas_eval"] | None = Field(
+        default=None, description="Réponse de l'enseignant enregistrée pour un dernier CM non marqué Éval."
+    )
+    statut: Literal["eval", "confirmee", "a_confirmer", "non_placee", "ecartee"] = Field(
+        description="`eval` : CM marqué Éval ; `confirmee` : dernier CM confirmé Éval par l'enseignant ; "
+        "`a_confirmer` : dernier CM du module non marqué Éval, sans réponse ; `non_placee` : Éval pas encore "
+        "placée ; `ecartee` : dernier CM dont l'enseignant a dit que ce n'est pas une Éval."
     )
 
 
@@ -322,6 +326,8 @@ class EvaluationsV1(BaseModel):
     nb_eval: int
     nb_a_confirmer: int
     nb_non_placees: int
+    nb_confirmees: int = 0
+    nb_ecartees: int = 0
     evaluations: list[EvaluationV1]
 
 
@@ -1450,13 +1456,22 @@ def seances_cours(
     return _repondre(request, _construire)
 
 
+def _statut_evaluation(marquee: bool, validation: str | None) -> str:
+    if marquee:
+        return "eval"
+    return {"eval": "confirmee", "pas_eval": "ecartee"}.get(validation or "", "a_confirmer")
+
+
 def _evaluations() -> EvaluationsV1:
     """CM « Éval » + dernier CM de chaque module (à confirmer), calculés en
     direct sur le planning courant. La case Éval vient de la maquette
     (`is_eval`) : un enseignant qui n'a pas coché « Éval » dans Previsio
     n'apparaît ici que par son dernier CM, d'où le statut « à confirmer »."""
+    from cal_iut.api import evaluations_validees
+
     main = _main()
     state = main.get_state()
+    validations = evaluations_validees.charger()
     cm = [x for x in _seances(_placements_filtres()) if x.type == "CM" and not x.evenement]
     derniers: dict[tuple[str, str], SeanceV1] = {}
     for x in cm:
@@ -1473,7 +1488,8 @@ def _evaluations() -> EvaluationsV1:
             groupes_libelles=x.groupes_libelles, enseignants=x.enseignants, enseignants_noms=x.enseignants_noms,
             salle_libelle=x.salle_libelle, placee=True, date=x.date, jour_nom=x.jour_nom, debut=x.debut, fin=x.fin,
             evaluation=x.evaluation, dernier_cm=x.id in ids_derniers,
-            statut="eval" if x.evaluation else "a_confirmer",
+            validation=None if x.evaluation else validations.get(x.id),  # type: ignore[arg-type]
+            statut=_statut_evaluation(x.evaluation, validations.get(x.id)),
         ))
     placees = {x.id for x in cm}
     noms = _libelles_enseignants()
@@ -1491,13 +1507,15 @@ def _evaluations() -> EvaluationsV1:
             evaluation=True, dernier_cm=False, statut="non_placee",
         ))
     # Éval d'abord (par date), puis les derniers CM à confirmer, puis les non placées.
-    ordre = {"eval": 0, "a_confirmer": 1, "non_placee": 2}
+    ordre = {"eval": 0, "confirmee": 1, "a_confirmer": 2, "non_placee": 3, "ecartee": 4}
     lignes.sort(key=lambda e: (ordre[e.statut], e.date or "9999", e.debut, e.cours_code))
     return EvaluationsV1(
         total=len(lignes),
         nb_eval=sum(e.statut == "eval" for e in lignes),
         nb_a_confirmer=sum(e.statut == "a_confirmer" for e in lignes),
         nb_non_placees=sum(e.statut == "non_placee" for e in lignes),
+        nb_confirmees=sum(e.statut == "confirmee" for e in lignes),
+        nb_ecartees=sum(e.statut == "ecartee" for e in lignes),
         evaluations=lignes,
     )
 

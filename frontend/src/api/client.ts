@@ -1944,7 +1944,8 @@ export interface EvaluationLigne {
   fin: string;
   evaluation: boolean;
   dernier_cm: boolean;
-  statut: "eval" | "a_confirmer" | "non_placee";
+  validation?: "eval" | "pas_eval" | null;
+  statut: "eval" | "confirmee" | "a_confirmer" | "non_placee" | "ecartee";
 }
 
 export interface EvaluationsReponse {
@@ -1952,11 +1953,25 @@ export interface EvaluationsReponse {
   nb_eval: number;
   nb_a_confirmer: number;
   nb_non_placees: number;
+  nb_confirmees?: number;
+  nb_ecartees?: number;
   evaluations: EvaluationLigne[];
 }
 
 export function fetchEvaluations(): Promise<EvaluationsReponse> {
   return request<EvaluationsReponse>("/api/v1/evaluations");
+}
+
+/** Réponse de l'enseignant sur un dernier CM : `null` annule. Ne touche ni au
+ * planning ni à Celcat. */
+export function validerEvaluation(
+  sessionId: string,
+  decision: "eval" | "pas_eval" | null,
+): Promise<{ session_id: string; decision: string | null }> {
+  return request(`/reference/evaluations/${encodeURIComponent(sessionId)}/validation`, {
+    method: "PUT",
+    body: JSON.stringify({ decision }),
+  });
 }
 
 export function fetchAnnuaireEnseignants(): Promise<AnnuaireEnseignantsReponse> {
