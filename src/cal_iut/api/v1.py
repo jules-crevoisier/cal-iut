@@ -294,6 +294,37 @@ class SeancesV1(BaseModel):
     seances: list[SeanceV1]
 
 
+class EvaluationV1(BaseModel):
+    id: str
+    cours_code: str
+    cours_nom: str
+    parcours: str
+    semestre: str
+    groupes_libelles: list[str]
+    enseignants: list[str]
+    enseignants_noms: list[str]
+    salle_libelle: str | None
+    placee: bool = Field(description="Faux pour une évaluation de la maquette pas encore placée (pas de date).")
+    date: str | None
+    jour_nom: str
+    debut: str
+    fin: str
+    evaluation: bool = Field(description="CM marqué « Éval » (`is_eval`).")
+    dernier_cm: bool = Field(description="Dernier CM placé de son module (même parcours).")
+    statut: Literal["eval", "a_confirmer", "non_placee"] = Field(
+        description="`eval` : CM marqué Éval ; `a_confirmer` : dernier CM du module non marqué Éval, "
+        "à confirmer auprès de l'enseignant ; `non_placee` : Éval pas encore placée."
+    )
+
+
+class EvaluationsV1(BaseModel):
+    total: int
+    nb_eval: int
+    nb_a_confirmer: int
+    nb_non_placees: int
+    evaluations: list[EvaluationV1]
+
+
 class OccupationV1(BaseModel):
     salle_id: str
     motif: Literal["seance", "reservation", "celcat", "salle_liee"]
@@ -1415,6 +1446,64 @@ def seances_cours(
         return _paginer(_seances(_placements_filtres(cours=code, semaine=semaine)), du, au, limite, decalage)
 
     return _repondre(request, _construire)
+
+
+def _evaluations() -> EvaluationsV1:
+    """CM « Éval » + dernier CM de chaque module (à confirmer), calculés en
+    direct sur le planning courant. La case Éval vient de la maquette
+    (`is_eval`) : un enseignant qui n'a pas coché « Éval » dans Previsio
+    n'apparaît ici que par son dernier CM, d'où le statut « à confirmer »."""
+    main = _main()
+    state = main.get_state()
+    cm = [x for x in _seances(_placements_filtres()) if x.type == "CM" and not x.evenement]
+    derniers: dict[tuple[str, str], SeanceV1] = {}
+    for x in cm:
+        cle = (x.cours_code, x.parcours)
+        if cle not in derniers or (x.date or "", x.debut) > (derniers[cle].date or "", derniers[cle].debut):
+            derniers[cle] = x
+    ids_derniers = {x.id for x in derniers.values()}
+    lignes: list[EvaluationV1] = []
+    for x in cm:
+        if not (x.evaluation or x.id in ids_derniers):
+            continue
+        lignes.append(EvaluationV1(
+            id=x.id, cours_code=x.cours_code, cours_nom=x.cours_nom, parcours=x.parcours, semestre=x.semestre,
+            groupes_libelles=x.groupes_libelles, enseignants=x.enseignants, enseignants_noms=x.enseignants_noms,
+            salle_libelle=x.salle_libelle, placee=True, date=x.date, jour_nom=x.jour_nom, debut=x.debut, fin=x.fin,
+            evaluation=x.evaluation, dernier_cm=x.id in ids_derniers,
+            statut="eval" if x.evaluation else "a_confirmer",
+        ))
+    placees = {x.id for x in cm}
+    noms = _libelles_enseignants()
+    libelles_groupes = _payload().get("groupLabels") or {}
+    for sess in state.sessions:
+        if not getattr(sess, "is_eval", False) or sess.id in placees:
+            continue
+        if sess.session_type.value != "CM" or (sess.metadata or {}).get("evenement"):
+            continue
+        lignes.append(EvaluationV1(
+            id=sess.id, cours_code=sess.course_code, cours_nom=sess.course_name, parcours=sess.parcours,
+            semestre=sess.semestre, groupes_libelles=[libelles_groupes.get(g, g) for g in sess.group_ids],
+            enseignants=list(sess.teacher_codes), enseignants_noms=[noms.get(c, c) for c in sess.teacher_codes],
+            salle_libelle=None, placee=False, date=None, jour_nom="", debut="", fin="",
+            evaluation=True, dernier_cm=False, statut="non_placee",
+        ))
+    # Éval d'abord (par date), puis les derniers CM à confirmer, puis les non placées.
+    ordre = {"eval": 0, "a_confirmer": 1, "non_placee": 2}
+    lignes.sort(key=lambda e: (ordre[e.statut], e.date or "9999", e.debut, e.cours_code))
+    return EvaluationsV1(
+        total=len(lignes),
+        nb_eval=sum(e.statut == "eval" for e in lignes),
+        nb_a_confirmer=sum(e.statut == "a_confirmer" for e in lignes),
+        nb_non_placees=sum(e.statut == "non_placee" for e in lignes),
+        evaluations=lignes,
+    )
+
+
+@router.get("/evaluations", response_model=EvaluationsV1, tags=_TAGS_SEANCES)
+def evaluations(request: Request) -> Response:
+    """CM « Éval » et dernier CM de chaque module (statut `a_confirmer`)."""
+    return _repondre(request, lambda _v: _evaluations())
 
 
 @router.get("/parcours", response_model=list[ParcoursV1], tags=_TAGS_REFERENTIEL)

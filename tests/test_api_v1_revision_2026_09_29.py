@@ -402,3 +402,35 @@ def test_v1_semaines_et_creneaux(client) -> None:
 def test_v1_ressource_inconnue_404(client) -> None:
     assert client.get("/api/v1/enseignants/ZZZ").status_code == 404
     assert client.get("/api/v1/groupes/inconnu/seances").status_code == 404
+
+
+def _cm(sid: str, code: str, prof: str, *, eval_: bool = False) -> SessionToPlace:
+    s = _seance(sid, "but1-promo", prof, SessionType.CM)
+    return s.model_copy(update={"course_code": code, "is_eval": eval_})
+
+
+def test_v1_evaluations_eval_derniers_cm_et_non_placees(client, etat) -> None:
+    # WR101 : cm1 (déjà là, 1re semaine 10) puis cm_fin non coché, en semaine 12 => dernier CM à confirmer.
+    cm_fin = _cm("cm_fin", "WR101", "KBR")
+    # WR202 : un CM Éval au milieu puis un dernier CM non coché plus tard.
+    ev = _cm("ev", "WR202", "MRI", eval_=True)
+    ev_fin = _cm("ev_fin", "WR202", "MRI")
+    # WR303 : Éval pas encore placée.
+    pas_placee = _cm("pas_placee", "WR303", "JSA", eval_=True)
+    nouvelles = [cm_fin, ev, ev_fin, pas_placee]
+    etat.sessions = [*etat.sessions, *nouvelles]
+    etat.sessions_by_id = {s.id: s for s in etat.sessions}
+    etat.timetable = [
+        *etat.timetable,
+        _place(cm_fin, 12, 0, 0), _place(ev, 11, 0, 0), _place(ev_fin, 13, 0, 0),
+    ]
+    corps = client.get("/api/v1/evaluations").json()
+    par_id = {e["id"]: e for e in corps["evaluations"]}
+    assert par_id["ev"]["statut"] == "eval" and par_id["ev"]["date"]
+    assert par_id["ev_fin"]["statut"] == "a_confirmer" and par_id["ev_fin"]["dernier_cm"]
+    assert par_id["cm_fin"]["statut"] == "a_confirmer"
+    assert "cm1" not in par_id, "cm1 n'est ni Éval ni le dernier CM de WR101"
+    assert "td1" not in par_id, "seuls les CM comptent"
+    assert par_id["pas_placee"]["statut"] == "non_placee" and par_id["pas_placee"]["date"] is None
+    assert (corps["nb_eval"], corps["nb_a_confirmer"], corps["nb_non_placees"]) == (1, 2, 1)
+    assert [e["statut"] for e in corps["evaluations"]] == ["eval", "a_confirmer", "a_confirmer", "non_placee"]

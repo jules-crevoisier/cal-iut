@@ -37,16 +37,20 @@ import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { Onglets } from "../components/Onglets";
 import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
 import { CodesCelcat } from "./CodesCelcat";
+import { EvaluationsReference } from "./EvaluationsReference";
 import { EnseignantsVacataires, PastilleType } from "./EnseignantsVacataires";
 import { identiteDe } from "../utils/identiteEnseignant";
 import "../styles/outils.css";
 import "./ReferenceView.css";
 
-type SubTab = "salles" | "cours" | "codes-celcat" | "calendrier" | "enseignants" | "liens" | "notifications";
+type SubTab = "salles" | "cours" | "evaluations" | "codes-celcat" | "calendrier" | "enseignants" | "liens" | "notifications";
 
 const ONGLETS: { id: SubTab; label: string }[] = [
   { id: "salles", label: "Salles" },
   { id: "cours", label: "Cours" },
+  // 19/10/2026 (Jules) : CM « Éval » + dernier CM de chaque module, pour
+  // sonder les enseignants surveillants.
+  { id: "evaluations", label: "Évaluations" },
   // 30/09/2026 : « un onglet [...] où on pouvait renseigner les codes Celcat
   // pour les cours et les salles aussi » — tous les codes, avec leur origine.
   { id: "codes-celcat", label: "Codes Celcat" },
@@ -156,6 +160,7 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
       <div id="ref-panneau" role="tabpanel" aria-labelledby={`ref-onglet-${sub}`} className="ref-panneau">
         {sub === "salles" && <RoomsTable payload={payload} setRoute={setRoute} />}
         {sub === "cours" && <CoursesTable payload={payload} setRoute={setRoute} />}
+        {sub === "evaluations" && <EvaluationsReference />}
         {sub === "codes-celcat" && (
           <CodesCelcat
             famille={route?.famille}
