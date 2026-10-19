@@ -36,6 +36,19 @@ export default defineConfig({
       "/reference": "http://127.0.0.1:8000",
       // API v1 (`api/v1.py`) — `useRevision` sonde `/api/v1/version`.
       "/api": "http://127.0.0.1:8000",
+      // Routes appelées par le front et absentes du proxy jusqu'au
+      // 19/10/2026 : Vite répondait index.html (200) et le bandeau « Serveur
+      // injoignable » s'affichait en local (Tâches, Comptes, Sauvegardes,
+      // Trafic, doublons, notifications, mail, salles, calendrier).
+      "/admin": "http://127.0.0.1:8000",
+      "/taches": "http://127.0.0.1:8000",
+      "/controles": "http://127.0.0.1:8000",
+      "/sauvegardes": "http://127.0.0.1:8000",
+      "/notifications": "http://127.0.0.1:8000",
+      "/mail": "http://127.0.0.1:8000",
+      "/rooms": "http://127.0.0.1:8000",
+      "/calendrier": "http://127.0.0.1:8000",
+      "/ics": "http://127.0.0.1:8000",
     },
   },
 });
