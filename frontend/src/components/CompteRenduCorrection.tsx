@@ -18,13 +18,23 @@ import type { CelcatCorrection } from "../api/client";
 import { pluriel } from "../utils/celcatStatut";
 
 export function CompteRenduCorrection({ correction }: { correction: CelcatCorrection }) {
-  const deja = correction.deja_en_file ?? 0;
-  const abandonnes = (correction.abandonnes ?? []).filter((a) => a.raison !== "suppression_epargnee");
-  const parExplication = new Map<string, string[]>();
-  for (const a of abandonnes) {
-    const cle = a.explication || a.raison;
-    parExplication.set(cle, [...(parExplication.get(cle) ?? []), a.session_id || `#${a.event_id}`]);
-  }
+  // « Déjà en file » ne veut pas dire « va partir » : un job bloqué ou refusé
+  // par le robot y reste. Ceux-là sont dits à part, avec leur motif (WS101,
+  // 19/10/2026 : « partent au prochain passage » alors qu'elles ne partaient pas).
+  const tous = (correction.abandonnes ?? []).filter((a) => a.raison !== "suppression_epargnee");
+  const enPanne = tous.filter((a) => a.raison.startsWith("en_file_"));
+  const abandonnes = tous.filter((a) => !a.raison.startsWith("en_file_"));
+  const deja = Math.max(0, (correction.deja_en_file ?? 0) - enPanne.length);
+  const grouper = (lignes: typeof tous) => {
+    const par = new Map<string, string[]>();
+    for (const a of lignes) {
+      const cle = a.explication || a.raison;
+      par.set(cle, [...(par.get(cle) ?? []), a.session_id || `#${a.event_id}`]);
+    }
+    return par;
+  };
+  const parExplication = grouper(abandonnes);
+  const parPanne = grouper(enPanne);
 
   return (
     <div className="celcat-compte-rendu" data-testid="compte-rendu-correction">
@@ -38,6 +48,24 @@ export function CompteRenduCorrection({ correction }: { correction: CelcatCorrec
           {pluriel(deja, "correction attendait", "corrections attendaient")} déjà d’être poussée
           {deja > 1 ? "s" : ""} — recliquer n’y change rien, elles partent au prochain passage du robot d’envoi.
         </p>
+      ) : null}
+      {parPanne.size > 0 ? (
+        <div data-testid="correction-en-panne" className="celcat-compte-rendu">
+          <p>
+            <strong>
+              {pluriel(enPanne.length, "correction est en file mais ne part pas", "corrections sont en file mais ne partent pas")}
+            </strong>{" "}
+            — recliquer n’y change rien :
+          </p>
+          <ul>
+            {[...parPanne.entries()].map(([explication, seances]) => (
+              <li key={explication}>
+                <strong>{seances.length}×</strong> {explication}
+                <div className="celcat-sous-texte">{seances.join(", ")}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {parExplication.size > 0 ? (
         <details data-testid="correction-abandonnes" className="celcat-repli">

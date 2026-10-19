@@ -211,3 +211,48 @@ def test_une_pause_deliberee_n_est_pas_une_panne() -> None:
     sauver(doc)
 
     assert client.get("/celcat/etat").json()["worker_ok"] is True
+
+
+def test_un_job_bloque_en_file_est_nomme_et_non_annonce_comme_partant() -> None:
+    """WS101, 19/10/2026 : quatre séances « À créer » après passage du robot,
+    et « elles partent au prochain passage » à chaque clic. Elles étaient
+    bien en file — mais en quarantaine, donc jamais retentées."""
+    from cal_iut.celcat.file_attente import marquer_bloque
+
+    instantane.enregistrer([_ev(heure_debut="13:50")], groupes=["BUT MMI S1 CM"])
+    assert _corriger().json()["total"] == 1
+    (job,) = lister()
+    marquer_bloque(job, "droits insuffisants sur une ressource")
+
+    reponse = _corriger().json()
+
+    assert reponse["total"] == 0
+    assert reponse["deja_en_file"] == 1
+    (panne,) = reponse["abandonnes"]
+    assert panne["raison"] == "en_file_bloquee"
+    assert "droits insuffisants" in panne["explication"]
+    assert "attendai" not in reponse["message"], reponse["message"]
+    assert "ne partent pas" in reponse["message"]
+    assert "droits insuffisants" in reponse["message"]
+
+
+def test_un_job_refuse_par_le_robot_dit_son_dernier_motif() -> None:
+    """Le refus du worker n'est rangé que dans le journal (hors droits) : le
+    compte rendu doit l'y retrouver, et une réussite postérieure l'efface."""
+    from cal_iut.celcat import logs
+
+    instantane.enregistrer([_ev(heure_debut="13:50")], groupes=["BUT MMI S1 CM"])
+    _corriger()
+    logs.append(kind="echec", session_id="WR116-S1-CM-1", motif="groupe Celcat introuvable : X")
+
+    reponse = _corriger().json()
+
+    (panne,) = reponse["abandonnes"]
+    assert panne["raison"] == "en_file_en_echec"
+    assert "groupe Celcat introuvable" in panne["explication"]
+    assert "ne partent pas" in reponse["message"]
+
+    logs.append(kind="created", session_id="WR116-S1-CM-1", event_id=1)
+    apres = _corriger().json()
+    assert apres["abandonnes"] == []
+    assert "attendai" in apres["message"]
