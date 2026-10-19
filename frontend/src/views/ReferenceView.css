@@ -207,3 +207,49 @@
   margin-left: 4px;
   vertical-align: middle;
 }
+
+/* ── Évaluations ── */
+.ref-note {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.ref-statut {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.ref-statut--eval {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ref-statut--a_confirmer {
+  border-color: var(--warn);
+  color: var(--ink);
+}
+
+.ref-statut--non_placee {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.ref-jour {
+  color: var(--ink-faint);
+}
+
+.ref-sous {
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+
+.ref-evaluations td:nth-child(2),
+.ref-evaluations td:nth-child(3) {
+  white-space: nowrap;
+}

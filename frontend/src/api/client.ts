@@ -1926,6 +1926,39 @@ export interface AnnuaireEnseignantsReponse {
   lignes: LigneAnnuaireEnseignant[];
 }
 
+/** Une ligne de `GET /api/v1/evaluations` (CM « Éval » + derniers CM). */
+export interface EvaluationLigne {
+  id: string;
+  cours_code: string;
+  cours_nom: string;
+  parcours: string;
+  semestre: string;
+  groupes_libelles: string[];
+  enseignants: string[];
+  enseignants_noms: string[];
+  salle_libelle: string | null;
+  placee: boolean;
+  date: string | null;
+  jour_nom: string;
+  debut: string;
+  fin: string;
+  evaluation: boolean;
+  dernier_cm: boolean;
+  statut: "eval" | "a_confirmer" | "non_placee";
+}
+
+export interface EvaluationsReponse {
+  total: number;
+  nb_eval: number;
+  nb_a_confirmer: number;
+  nb_non_placees: number;
+  evaluations: EvaluationLigne[];
+}
+
+export function fetchEvaluations(): Promise<EvaluationsReponse> {
+  return request<EvaluationsReponse>("/api/v1/evaluations");
+}
+
 export function fetchAnnuaireEnseignants(): Promise<AnnuaireEnseignantsReponse> {
   return request<AnnuaireEnseignantsReponse>("/reference/enseignants");
 }
