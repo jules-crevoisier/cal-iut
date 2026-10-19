@@ -4970,14 +4970,26 @@ def celcat_comparaison_corriger(
     # Ce qui attendait DÉJÀ se dit aussi. C'est la réponse à « j'ai cliqué
     # trois fois et rien ne bouge » : les corrections étaient parties du
     # premier coup, et les reclics n'ajoutaient rien.
+    en_panne = [a for a in abandonnes if str(a.get("raison") or "").startswith("en_file_")]
+    attendent = total_deja - len(en_panne)
     encore = (
-        f" {total_deja} attendai(en)t déjà d'être poussée(s)."
-        if total_deja
+        f" {attendent} attendai(en)t déjà d'être poussée(s)."
+        if attendent > 0
         else ""
     )
+    if en_panne:
+        encore += (
+            f" {len(en_panne)} déjà en file mais qui ne partent pas : "
+            + " ; ".join(dict.fromkeys(str(a.get("explication") or "") for a in en_panne))
+            + "."
+        )
     # Et ce qu'on n'a PAS su traduire, plutôt qu'un écart de compteurs
     # inexpliqué entre le tableau et le message.
-    bloques = [a for a in abandonnes if a.get("raison") != "suppression_epargnee"]
+    bloques = [
+        a for a in abandonnes
+        if a.get("raison") != "suppression_epargnee"
+        and not str(a.get("raison") or "").startswith("en_file_")
+    ]
     impossible = (
         f" {len(bloques)} écart(s) n'ont pas pu être traduits : "
         + " ; ".join(dict.fromkeys(str(a.get("explication") or "") for a in bloques))
@@ -5164,11 +5176,26 @@ def _enfiler_ecarts_semaine(
     annoncer « 12 corrections mises en file » quand aucun job n'avait bougé —
     et c'est ce compte rendu faux qui poussait à recliquer.
     """
-    from cal_iut.celcat.file_attente import enfiler
+    from cal_iut.celcat.file_attente import enfiler, est_bloque, obtenir
     from cal_iut.celcat.planification import jobs_depuis_lignes
 
     state = get_state()
     comparaison = celcat_comparaison(semaine)
+    from cal_iut.celcat import logs as journal_celcat
+
+    # Dernier refus journalisé par séance (le worker ne le range pas sur le
+    # job, hors « droits insuffisants ») ; une réussite postérieure l'efface.
+    dernier_refus: dict[str, str] = {}
+    for ligne_journal in journal_celcat.tous():
+        sid_j = str(ligne_journal.get("session_id") or "")
+        if ligne_journal.get("kind") in ("blocked", "echec"):
+            dernier_refus[sid_j] = str(ligne_journal.get("motif") or "")
+        elif ligne_journal.get("kind") == "created":
+            dernier_refus.pop(sid_j, None)
+    cours_par_seance = {
+        str(l.get("session_id") or ""): str(l.get("course_code") or "")
+        for l in comparaison.lignes
+    }
     compte = {"update": 0, "create": 0, "delete": 0}
     deja = {"update": 0, "create": 0, "delete": 0}
     abandonnes: list[dict] = []
@@ -5188,6 +5215,29 @@ def _enfiler_ecarts_semaine(
             compte[action] += 1
         else:
             deja[action] += 1
+            # « Déjà en file » ne veut pas dire « va partir » : un job mis en
+            # quarantaine ou qui échoue à chaque passage reste en file, et
+            # l'écran annonçait quand même « elles partent au prochain
+            # passage » (WS101, 19/10/2026 : quatre séances « À créer » après
+            # passage du robot). On dit POURQUOI il ne part pas.
+            sid = str(job.get("session_id") or "")
+            actuel = obtenir(job) or {}
+            bloque = est_bloque(actuel)
+            motif = str(actuel.get("dernier_motif") or "") or dernier_refus.get(sid, "")
+            if bloque or motif:
+                abandonnes.append({
+                    "statut": "absente_celcat" if action == "create" else action,
+                    "session_id": sid,
+                    "course_code": cours_par_seance.get(sid, ""),
+                    "event_id": job.get("event_id"),
+                    "groupe": None,
+                    "raison": "en_file_bloquee" if bloque else "en_file_en_echec",
+                    "explication": (
+                        f"en file mais bloquée, le robot ne la retente plus : {motif}"
+                        if bloque
+                        else f"en file, mais le robot l'a refusée au dernier passage : {motif}"
+                    ),
+                })
 
     epargnees = sum(1 for a in abandonnes if a.get("raison") == "suppression_epargnee")
     return compte, hors, epargnees, deja, abandonnes

@@ -337,6 +337,20 @@ describe("Corriger va jusqu'à la vérification", () => {
     );
   });
 
+  it("dit pourquoi une correction déjà en file ne part pas", async () => {
+    const panne = (sid: string) => ({
+      statut: "absente_celcat", session_id: sid, course_code: "WS101", event_id: null, groupe: null,
+      raison: "en_file_bloquee", explication: "en file mais bloquée, le robot ne la retente plus : droits insuffisants",
+    });
+    await ouvrir({ correction: { total: 0, deja_en_file: 2, abandonnes: [panne("s-1"), panne("s-2")] } });
+    fireEvent.click(screen.getByRole("button", { name: /corriger l’écart/i }));
+    const bloc = await screen.findByTestId("correction-en-panne");
+    expect(bloc.textContent).toContain("ne partent pas");
+    expect(bloc.textContent).toContain("droits insuffisants");
+    expect(bloc.textContent).toContain("s-1, s-2");
+    expect(screen.queryByTestId("correction-deja-en-file")).toBeNull();
+  });
+
   it("nomme les écarts non traduits, groupés par cause", async () => {
     const abandon = (sid: string) => ({
       statut: "ecart", session_id: sid, course_code: "WRA507D", event_id: null, groupe: null,
