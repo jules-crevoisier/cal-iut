@@ -394,7 +394,7 @@ def resoudre_ids(page, e: EntreeCelcat, *, categorie: str) -> dict:
     règle qui la fixe (`e.categorie_celcat`)."""
     if e.regle:
         return _resoudre_ids_regle(page, e)
-    return {
+    ids = {
         "module_id": _trouver(
             page,
             TYPE_MATIERES,
@@ -409,13 +409,6 @@ def resoudre_ids(page, e: EntreeCelcat, *, categorie: str) -> dict:
             "room_id",
             unique_name=e.salle or "",
             name=e.salle or "",
-        ),
-        "staff_id": _trouver(
-            page,
-            TYPE_PERSONNEL,
-            f"personnel {e.code_enseignant}",
-            "staff_id",
-            unique_name=e.code_enseignant or "",
         ),
         "event_cat_id": _trouver(
             page,
@@ -435,6 +428,17 @@ def resoudre_ids(page, e: EntreeCelcat, *, categorie: str) -> dict:
             prefixe="T_MMI",
         ),
     }
+    # Séance posée sans enseignant (`e.sans_enseignant`) : aucun personnel
+    # cherché, `charge_utile` écrit `staff: []`.
+    if not e.sans_enseignant:
+        ids["staff_id"] = _trouver(
+            page,
+            TYPE_PERSONNEL,
+            f"personnel {e.code_enseignant}",
+            "staff_id",
+            unique_name=e.code_enseignant or "",
+        )
+    return ids
 
 
 def resoudre_groupe(page, nom: str) -> int:

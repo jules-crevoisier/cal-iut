@@ -630,7 +630,12 @@ def entree_pour_placement(
     ens_voulu = ""
     sans_enseignant = False
     if not teacher_codes:
-        if regle_appliquee is not None and regle_appliquee.enseignant_facultatif:
+        # Une séance ajoutée à la main (`-CUSTOM` dans l'id) peut n'avoir ni
+        # enseignant ni module d'enseignant à poser : juste une salle (Jules,
+        # 20/10/2026, WS101 : quatre séances « aucun enseignant » retentées
+        # 14 586 fois). Les séances de la maquette, elles, restent bloquées :
+        # leur enseignant manquant est un oubli à signaler.
+        if (regle_appliquee is not None and regle_appliquee.enseignant_facultatif) or "-CUSTOM" in session_id:
             sans_enseignant = True
         else:
             bloquants.append("aucun enseignant")
