@@ -33,7 +33,10 @@
   }
 
   .app:not(.read-only-mode) .view.promo {
-    flex: 1 1 auto;
+    /* Base à 0 : la vue ne prend pas la hauteur de son contenu (la liste
+       « À placer » peut compter des centaines de lignes), seulement ce que
+       la fenêtre laisse. */
+    flex: 1 1 0;
     min-height: 480px;
   }
 }
@@ -1267,6 +1270,16 @@ table.promo-grid .sessiongrid-event {
   line-height: 16px;
   text-align: center;
   color: var(--ink);
+}
+
+/* Ordinateur : la liste « À placer » est une colonne à droite de la grille.
+   Une ligne `auto` prendrait la hauteur de toute la liste, et la grille
+   (`100cqh`, donc les blocs à pleine hauteur) l'épouserait ; la ligne est
+   bornée par le corps et la liste défile seule. */
+@media (min-width: 1024px) {
+  .promo--aplacer .promo-corps {
+    grid-template-rows: minmax(0, 1fr);
+  }
 }
 
 /* ── Tablette / téléphone ── */
