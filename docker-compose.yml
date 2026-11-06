@@ -52,6 +52,15 @@ services:
       # `off` tant que l'administrateur ne les a pas essayées
       # (docs/A-TESTER-SUR-CELCAT.md). MÊME valeur que pour `celcat-nuit`.
       CAL_IUT_REGLES_ENVOI: ${CAL_IUT_REGLES_ENVOI:-off}
+      # Avis par e-mail aux enseignants quand une séance change de date/heure
+      # (api/avis_enseignants.py). `off` par défaut : rien ne part.
+      CAL_IUT_MAIL_ENSEIGNANTS: ${CAL_IUT_MAIL_ENSEIGNANTS:-off}
+      CAL_IUT_SMTP_HOST: ${CAL_IUT_SMTP_HOST:-}
+      CAL_IUT_SMTP_PORT: ${CAL_IUT_SMTP_PORT:-587}
+      CAL_IUT_SMTP_USER: ${CAL_IUT_SMTP_USER:-}
+      CAL_IUT_SMTP_PASSWORD: ${CAL_IUT_SMTP_PASSWORD:-}
+      CAL_IUT_SMTP_FROM: ${CAL_IUT_SMTP_FROM:-}
+      CAL_IUT_SMTP_SECURITE: ${CAL_IUT_SMTP_SECURITE:-starttls}
     volumes:
       # `data/state/` SEULEMENT (pas `data/` en entier) — sépare la config
       # (rafraîchie à chaque déploiement, hors du volume) de l'état
