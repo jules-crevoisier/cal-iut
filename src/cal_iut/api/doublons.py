@@ -24,7 +24,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from cal_iut.api.validation import _duration_of, _est_pause_midi, enseignants_distincts
+from cal_iut.api.validation import (
+    _duration_of,
+    _est_pause_midi,
+    enseignants_distincts,
+    meme_code_en_salles_voisines,
+)
 from cal_iut.solver.rooms import build_manual_conflict_map
 
 
@@ -159,6 +164,13 @@ def doublons(state: object, semaine: int | None = None) -> list[dict[str, object
             continue
         seances = sorted(uniques.values(), key=lambda pp: pp.session_id)
         if _duo_dans_deux_moities(seances, moities):
+            continue
+        # Tâche 29 : même code simultané dans des salles voisines (config).
+        if meme_code_en_salles_voisines(
+            [getattr(pp, "course_code", None) for pp in seances],
+            [getattr(pp, "room_id", None) for pp in seances],
+            rooms,
+        ):
             continue
         salles_reelles = sorted({
             room_label_by_id.get(getattr(pp, "room_id", None), getattr(pp, "room_id", None))

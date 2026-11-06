@@ -3631,6 +3631,7 @@ def validate_placement(session_id: str, body: MoveSessionRequest) -> ValidationR
         sessions_by_id=state.sessions_by_id,
         groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+        rooms=state.rooms,
     )
     # Salle prise dans Celcat (relevé du sidecar) : forçable, ou bloquante
     # en mode strict (cf. `occupations_externes.appliquer_salle`).
@@ -3747,6 +3748,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         # d'atteindre `validate_move` — bug réel trouvé le 25/09/2026, retour
         # Kyllian Bresson, cf. `api/doublons.py`).
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(target_room_id, set()) if target_room_id else None,
+        rooms=state.rooms,
     )
     _refuser_si_salle_externe_stricte(
         occupations_externes.appliquer_salle(state, session, target_room_id, body.week, body.day, body.slot, validation)
@@ -4028,6 +4030,7 @@ def _controler_echange(
             sessions_by_id=state.sessions_by_id,
             groups=state.groups,
             conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle, set()) if salle else None,
+            rooms=state.rooms,
             ignore_session_ids=ignorees,
         )
         # Salle prise dans Celcat : forçable (ajoutée à `resultat`), ou
@@ -6163,6 +6166,7 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
         salle_id,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
+        rooms=state.rooms,
     )
     _refuser_si_salle_externe_stricte(
         occupations_externes.appliquer_salle(state, session, salle_id, body.week, body.day, body.slot, validation)

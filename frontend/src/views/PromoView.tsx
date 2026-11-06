@@ -52,6 +52,8 @@ import {
   type TeacherBusyHit,
 } from "../utils/teacherBusy";
 import { occupationsParCase } from "../utils/occupationsExternes";
+import { conflitsParSeance } from "../utils/conflitsSeances";
+import { fetchDoublons, type Doublon } from "../api/client";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { lettresGroupe } from "../utils/years";
@@ -377,6 +379,32 @@ export function PromoView({
   // Le week-end, « Aujourd'hui » mène au lundi suivant (#21) ; le repère du
   // jour en cours n'en dépend pas (aucun jour ouvré le week-end).
   const indexAujourdhui = indexSemaineAujourdhui(payload.weekRows);
+
+  // Tâche 25 : conflits de salle / doublons enseignant repérés sur les cartes.
+  // Même détection que « À traiter » ; en lecture seule (lien public) le
+  // contrôle serveur est réservé à l'édition, on garde alors le seul Celcat.
+  const [doublonsSemaine, setDoublonsSemaine] = useState<Doublon[]>([]);
+  useEffect(() => {
+    if (readOnly || solverWeek === null) {
+      setDoublonsSemaine([]);
+      return;
+    }
+    let annule = false;
+    fetchDoublons(solverWeek)
+      .then((liste) => {
+        if (!annule) setDoublonsSemaine(Array.isArray(liste) ? liste : []);
+      })
+      .catch(() => {
+        if (!annule) setDoublonsSemaine([]);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [readOnly, solverWeek, placements, payload.rows]);
+  const conflitsSeances = useMemo(
+    () => conflitsParSeance(doublonsSemaine, payload, solverWeek),
+    [doublonsSemaine, payload, solverWeek],
+  );
   const jourAujourdhui = jourOuvreAujourdhui();
   // Jour réellement en cours (samedi/dimanche : aucun).
   const jourReel = new Date().getDay();
@@ -1533,6 +1561,7 @@ export function PromoView({
                                           salleEnEdition={salleEnEdition === cleEditionSalle}
                                           salleEnCours={salleEnCours}
                                           salleSelectionnee={source?.room_id ?? salleDuPayload?.id ?? ""}
+                                          conflits={conflitsSeances.get(r.id)}
                                           disponibilites={
                                             salleEnEdition === cleEditionSalle
                                               ? disponibiliteSallesPourSeance(payload, r)

@@ -313,6 +313,7 @@ def _controler_placement(state: object, session: object, placement: object, forc
         sessions_by_id=state.sessions_by_id,
         groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(room_id, set()) if room_id else None,
+        rooms=state.rooms,
     )
     stricts_salle = occupations_externes.appliquer_salle(
         state, session, room_id, placement.week, placement.day, placement.slot, validation

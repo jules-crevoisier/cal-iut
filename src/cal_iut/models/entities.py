@@ -88,6 +88,12 @@ class Room(BaseModel):
     # fusion (`room_type == COMBINED`) — ex. h007_h008.combines = [h007, h008].
     # Vide sur une salle "normale". Cf. solver/rooms.py::_build_conflict_map.
     combines: list[str] = Field(default_factory=list)
+    # Salles VOISINES (tâche 29, Kyllian Bresson 03/11/2026) : ids des salles
+    # attenantes avec lesquelles le même module peut tourner en simultané sans
+    # que ce soit un conflit de salle (H.007/H.008, H.201/H.203, H.017/H.022).
+    # Déclaré dans rooms.yaml ; n'agit QUE sur la détection des conflits, jamais
+    # sur le placement automatique.
+    voisines: list[str] = Field(default_factory=list)
     # Proposée au placement AUTOMATIQUE (solveur + résolution API) — retour
     # utilisateur 22/09/2026 : « supprimer la BU du placement automatique des
     # salles car elle est utilisée pour un seul module, celui de Valérie
