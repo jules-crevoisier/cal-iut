@@ -200,7 +200,7 @@
 .sessiongrid-block.type-td { --c-bg: var(--td-bg); --c-fg: var(--td-fg); --c-bd: var(--td-bd); }
 .sessiongrid-block.type-tp { --c-bg: var(--tp-bg); --c-fg: var(--tp-fg); --c-bd: var(--tp-bd); }
 /* PTUT : aplat de TD en pointillé — un temps de projet, pas un cours. */
-.sessiongrid-block.type-ptut { --c-bg: var(--td-bg); --c-fg: var(--td-fg); --c-bd: var(--td-bd); border-style: dashed; }
+.sessiongrid-block.type-ptut { --c-bg: var(--ptut-bg); --c-fg: var(--ptut-fg); --c-bd: var(--ptut-bd); border-style: dashed; }
 .sessiongrid-block.eval { --c-bg: var(--ev-bg); --c-fg: var(--ev-fg); --c-bd: var(--ev-bd); }
 .sessiongrid-block.locked { opacity: 0.75; }
 

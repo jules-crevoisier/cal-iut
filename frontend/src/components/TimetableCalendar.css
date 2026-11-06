@@ -77,7 +77,7 @@
 }
 
 .session-event.type-cm .fc-custom-event,
-.session-event.type-ptut .fc-custom-event { --c-fg: var(--cm-fg); }
+.session-event.type-ptut .fc-custom-event { --c-fg: var(--ptut-fg); }
 .session-event.type-tp .fc-custom-event { --c-fg: var(--tp-fg); }
 .session-event.eval .fc-custom-event { --c-fg: var(--ev-fg); }
 

@@ -6,12 +6,12 @@ import { placementToDate, slotLabel } from "../utils/slots";
 // Aplats pastel de la direction « Lumière / Nuit » (mêmes jetons que les
 // cartes de la Vue Promo : `--cm-*`, `--td-*`, `--tp-*`, `--ev-*`), résolus
 // par le navigateur selon le thème. Le texte prend `--*-fg` via la classe
-// `type-*` (cf. `TimetableCalendar.css`). PTUT (propre à cette vue) : gris.
+// `type-*` (cf. `TimetableCalendar.css`). PTUT (propre à cette vue) : bleu.
 const TYPE_COLORS: Record<string, { bg: string; border: string }> = {
   CM: { bg: "var(--cm-bg)", border: "var(--cm-bd)" },
   TD: { bg: "var(--td-bg)", border: "var(--td-bd)" },
   TP: { bg: "var(--tp-bg)", border: "var(--tp-bd)" },
-  PTUT: { bg: "var(--cm-bg)", border: "var(--cm-bd)" },
+  PTUT: { bg: "var(--ptut-bg)", border: "var(--ptut-bd)" },
 };
 
 export function placementsToEvents(

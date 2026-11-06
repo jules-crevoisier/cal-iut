@@ -5,7 +5,7 @@
  * devient [...] semaine calendaire 40 ». Calculée depuis le lundi RÉEL de
  * `weekRows[displayWeek].monday`, jamais en reparsant le libellé.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PromoView } from "./PromoView";
@@ -34,5 +34,24 @@ describe("PromoView title shows the ISO calendar week", () => {
     expect(
       screen.getByRole("heading", { name: /semaine 6 \(28 sept\.–2 oct\. 2026\) · semaine calendaire 40/i }),
     ).toBeInTheDocument();
+  });
+
+  it("should show the colour selector (type/matière) and report the choice (#31)", () => {
+    const onCouleursChange = vi.fn();
+    render(
+      <PromoView
+        payload={payload}
+        route={testRoute({ vue: "promo", jour: 0, sem: 0 })}
+        placements={[]}
+        onPlacementUpdated={vi.fn()}
+        onError={vi.fn()}
+        setRoute={vi.fn()}
+        onCouleursChange={onCouleursChange}
+      />,
+    );
+    const selecteur = screen.getByRole("combobox", { name: "Couleurs" });
+    expect(selecteur).toHaveValue("type");
+    fireEvent.change(selecteur, { target: { value: "matiere" } });
+    expect(onCouleursChange).toHaveBeenCalledWith(true);
   });
 });

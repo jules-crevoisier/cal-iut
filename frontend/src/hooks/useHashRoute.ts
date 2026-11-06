@@ -191,11 +191,34 @@ export function buildLink(patch: Partial<Route>): string {
   return window.location.origin + window.location.pathname + toHash(patch);
 }
 
+/** Vrai si la page vient d'être RECHARGÉE (F5), faux pour un lien ouvert ou
+ *  collé. Tâche #24 : la semaine/le jour d'un clic passé (`#…&sem=21`)
+ *  restaient dans l'adresse et ramenaient la même semaine à chaque
+ *  rechargement, au lieu de la semaine du jour. Un lien partagé, lui, garde
+ *  sa semaine : on ne purge que sur rechargement. */
+function pageRechargee(): boolean {
+  try {
+    const nav = window.performance?.getEntriesByType?.("navigation")?.[0] as PerformanceNavigationTiming | undefined;
+    return nav?.type === "reload";
+  } catch {
+    return false;
+  }
+}
+
+export function routeInitiale(): Route {
+  if (typeof window === "undefined") return EMPTY_ROUTE;
+  const route = readHash();
+  if (!pageRechargee() || (route.sem === null && route.jour === null)) return route;
+  const purgee = { ...route, sem: null, jour: null };
+  window.history.replaceState(null, "", toHash(purgee));
+  return purgee;
+}
+
 export function useHashRoute(): {
   route: Route;
   setRoute: (patch: Partial<Route>) => void;
 } {
-  const [route, setRouteState] = useState<Route>(() => (typeof window === "undefined" ? EMPTY_ROUTE : readHash()));
+  const [route, setRouteState] = useState<Route>(routeInitiale);
 
   useEffect(() => {
     const onHashChange = () => setRouteState(readHash());

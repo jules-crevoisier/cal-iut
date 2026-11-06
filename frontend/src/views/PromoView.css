@@ -816,6 +816,7 @@ table.promo-grid td.promocell--fusion {
 
 .promo-chip:where(.type-cm) { --c-bg: var(--cm-bg); --c-fg: var(--cm-fg); --c-bd: var(--cm-bd); }
 .promo-chip:where(.type-tp) { --c-bg: var(--tp-bg); --c-fg: var(--tp-fg); --c-bd: var(--tp-bd); }
+.promo-chip:where(.type-ptut) { --c-bg: var(--ptut-bg); --c-fg: var(--ptut-fg); --c-bd: var(--ptut-bd); }
 .promo-chip:where(.eval) { --c-bg: var(--ev-bg); --c-fg: var(--ev-fg); --c-bd: var(--ev-bd); }
 
 .promo-chip__l1,
@@ -1384,6 +1385,16 @@ table.promo-grid .sessiongrid-event {
   table.promo-grid {
     width: max(100%, calc(48px + var(--nb-colonnes, 8) * 104px));
   }
+}
+
+/* Sélecteur « Couleurs » (même composant que la Vue semaine). */
+.promo-outils select.semaine-couleurs {
+  border-radius: 999px;
+  color: var(--ink-soft);
+  min-height: 28px;
+  height: 28px;
+  padding: 0 26px 0 11px;
+  font-size: 0.78rem;
 }
 
 /* ── Conflits sur les cartes (tâche 25) ──────────────────────────────────

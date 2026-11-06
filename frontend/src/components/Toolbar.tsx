@@ -18,6 +18,7 @@ import type { GroupMeta, RoomMeta } from "../types";
 import type { WeekRow } from "../types/app";
 import { nomComplet } from "../utils/nomEnseignant";
 import { indexSemaineAujourdhui } from "../utils/semaineCourante";
+import { SelecteurCouleurs } from "./SelecteurCouleurs";
 import { DEFAULT_YEARS } from "../utils/years";
 import { WeekBar } from "./WeekBar";
 import "./Toolbar.css";
@@ -252,17 +253,7 @@ export function Toolbar(props: ToolbarProps) {
         </div>
 
         <div className="page-outils-actions">
-          <select
-            aria-label="Couleurs"
-            className="semaine-couleurs"
-            value={props.couleursParMatiere ? "matiere" : "type"}
-            onChange={(e) => props.onCouleursChange(e.target.value === "matiere")}
-          >
-            {/* Mêmes libellés que le réglage des liens publics (`App.tsx`,
-                `ReglageCouleurs`) : un seul vocabulaire pour un seul réglage. */}
-            <option value="type">Couleurs par type</option>
-            <option value="matiere">Couleurs par matière</option>
-          </select>
+          <SelecteurCouleurs parMatiere={props.couleursParMatiere} onChange={props.onCouleursChange} />
         </div>
       </div>
 
