@@ -3,7 +3,7 @@
  * canonisation de #vue=aplacer, et conservation des liens personnels mode=.
  */
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useHashRoute } from "./useHashRoute";
 
@@ -109,5 +109,22 @@ describe("admin hash routing", () => {
     render(<RouteDumpAvecNav />);
     fireEvent.click(screen.getByText("go"));
     expect(dumpedRoute()).toMatchObject({ vue: "semaine", compte: "", statut: "", token: "" });
+  });
+
+  it("drops sem/jour from the address on a page reload, keeps them on an opened link (#24)", () => {
+    const spy = vi.spyOn(window.performance, "getEntriesByType");
+
+    spy.mockReturnValue([{ type: "navigate" } as unknown as PerformanceEntry]);
+    window.history.replaceState(null, "", "/#vue=promo&sem=21&jour=2");
+    const { unmount } = render(<RouteDump />);
+    expect(dumpedRoute()).toMatchObject({ vue: "promo", sem: 21, jour: 2 });
+    unmount();
+
+    spy.mockReturnValue([{ type: "reload" } as unknown as PerformanceEntry]);
+    window.history.replaceState(null, "", "/#vue=promo&sem=21&jour=2");
+    render(<RouteDump />);
+    expect(dumpedRoute()).toMatchObject({ vue: "promo", sem: null, jour: null });
+    expect(window.location.hash).toBe("#vue=promo");
+    spy.mockRestore();
   });
 });
