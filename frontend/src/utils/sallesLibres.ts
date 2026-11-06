@@ -47,6 +47,8 @@ export function occupationSalles(
   payload: AppPayload,
   week: number,
   day: number,
+  /** Identifiant d'une ligne à ne pas compter (la séance dont on choisit la salle). */
+  exclureRowId?: string,
 ): Map<string, CelluleOccupation[]> {
   const grille = new Map<string, CelluleOccupation[]>();
   for (const room of payload.rooms) {
@@ -76,7 +78,7 @@ export function occupationSalles(
   };
 
   for (const row of payload.rows) {
-    if (row.w !== week || row.d !== day || !row.r) continue;
+    if (row.w !== week || row.d !== day || !row.r || row.id === exclureRowId) continue;
     const room = parLibelle.get(normaliserLibelleSalle(row.r));
     if (!room) continue;
 
@@ -182,4 +184,35 @@ export function sallesChoisissables<T extends { id: string; combines?: string[] 
   actuelle?: string | null,
 ): T[] {
   return rooms.filter((r) => !r.combines?.length || r.id === actuelle);
+}
+
+/**
+ * Disponibilité de chaque salle pour UNE séance de la grille (tâche 28) :
+ * `true` = libre sur tous ses créneaux, `false` = déjà prise par une autre
+ * séance, une réservation ou une occupation Celcat. La séance elle-même ne
+ * compte pas. Pour un placement MANUEL, deux moitiés d'une salle à cloison
+ * (H.007 / H.008) sont « la même salle » : l'une occupée rend l'autre rouge,
+ * comme le refuse le serveur (`build_manual_conflict_map`).
+ */
+export function disponibiliteSallesPourSeance(
+  payload: AppPayload,
+  row: { id: string; w: number; d: number; s: number; dur: number },
+): Map<string, boolean> {
+  const grille = occupationSalles(payload, row.w, row.d, row.id);
+  const dur = Math.max(1, row.dur || 1);
+  const prise = (roomId: string) => {
+    const cases = grille.get(roomId);
+    if (!cases) return false;
+    for (let k = 0; k < dur; k++) if (cases[row.s + k]) return true;
+    return false;
+  };
+  const resultat = new Map<string, boolean>();
+  for (const room of payload.rooms) resultat.set(room.id, !prise(room.id));
+  for (const fusion of payload.rooms) {
+    if (!fusion.combines?.length) continue;
+    if (fusion.combines.some((partie) => prise(partie))) {
+      for (const partie of fusion.combines) resultat.set(partie, false);
+    }
+  }
+  return resultat;
 }

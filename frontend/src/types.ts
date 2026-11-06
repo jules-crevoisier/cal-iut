@@ -10,6 +10,8 @@ export interface Placement {
   teacher_codes: string[];
   room_id: string | null;
   room_label: string | null;
+  /** Rempli quand « Automatique » n'a trouvé aucune salle (séance « Sans salle »). */
+  salle_message?: string | null;
   is_eval: boolean;
   locked: boolean;
   duration_slots: number;

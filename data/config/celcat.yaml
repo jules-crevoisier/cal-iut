@@ -143,6 +143,10 @@ salles:
               # mais pas A.123.b attention ». Recherche EXACTE (cf. ecriture._choisir).
   amphi1_tc_gea: "Amphi 1 TC/GEA"  # nom identique dans Celcat (01/10/2026)
   amphi2_gmp_geii: "Amphi 2 GMP/GEII"  # nom identique dans Celcat (01/10/2026)
+  c001: "C.001"  # tâche 23 (03/11/2026) : libellé supposé identique, à vérifier au prochain relevé
+  b002: "B.002"  # tâche 23 (03/11/2026) : libellé supposé identique, à vérifier au prochain relevé
+  e201: "E.201"  # tâche 23 (03/11/2026) : libellé supposé identique, à vérifier au prochain relevé
+  e212: "E.212"  # tâche 23 (03/11/2026) : libellé supposé identique, à vérifier au prochain relevé
 
 # --- Groupes : convention de nommage Celcat ---
 # Relevée le 31/08/2026 (S1, S3, S5, en CM, TD et TP) :
