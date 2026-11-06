@@ -253,3 +253,18 @@ def test_merge_into_ne_perd_pas_une_seance_maquette_homonyme():
     sessions, by_id = custom_sessions.merge_into([reelle], {reelle.id: reelle})
     assert sessions == [reelle]
     assert by_id == {reelle.id: reelle}
+
+
+def test_la_note_d_une_seance_personnalisee_revient_dans_la_reponse(monter):
+    """Tâche #30 : sans `note` dans la réponse, le formulaire de modification
+    repartait d'une note vide et l'écrasait."""
+    a = _seance("a")
+    client = monter([(a, _place(a, 0, 0))])
+    cree = client.post("/placements/personnalisees", json={**_corps_creation(), "note": "Salle à confirmer"})
+    assert cree.status_code == 200, cree.text
+    assert cree.json()["note"] == "Salle à confirmer"
+    sid = cree.json()["session_id"]
+
+    r = client.patch(f"/placements/personnalisees/{sid}", json={"is_eval": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["note"] == "Salle à confirmer"

@@ -62,3 +62,5 @@ def apply_to(sessions_by_id: dict[str, SessionToPlace]) -> None:
                 continue
         if "is_eval" in champs:
             seance.is_eval = bool(champs["is_eval"])
+        if isinstance(champs.get("note"), str):
+            seance.metadata["note"] = champs["note"]

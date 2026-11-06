@@ -903,6 +903,7 @@ def ressources_depuis_config(
     dossier = Path(config_dir or (_racine() / "data" / "config"))
     cc = load_celcat_config(dossier)
     libelles: dict[str, str] = {}
+    data: dict = {}
     try:
         import yaml
 
@@ -912,6 +913,30 @@ def ressources_depuis_config(
                 libelles[str(salle["id"]).lower()] = str(salle.get("label") or salle["id"])
     except Exception:  # noqa: BLE001
         pass
+    # Toute salle CONFIGURÉE est lue, même sans entrée dans `celcat.yaml::salles`
+    # (tâche 23) : son libellé sert alors de libellé Celcat. Ajouter une salle
+    # (rooms.yaml ou « + Créer une salle ») suffit donc, sans toucher au code.
+    # Les salles combinées sont ignorées : pas d'équivalent Celcat.
+    salles_celcat = dict(cc.salles)
+    try:
+        from cal_iut.api.custom_rooms import load_custom_rooms
+
+        for extra in load_custom_rooms():
+            if not getattr(extra, "combines", None):
+                libelles.setdefault(extra.id.lower(), extra.label)
+    except Exception:  # noqa: BLE001
+        pass
+    combinees: set[str] = set()
+    try:
+        for salle in (data.get("rooms") or []):
+            if isinstance(salle, dict) and salle.get("combines"):
+                combinees.add(str(salle["id"]).lower())
+    except Exception:  # noqa: BLE001
+        pass
+    connus = {str(k).lower() for k in salles_celcat}
+    for rid, libelle in libelles.items():
+        if rid not in connus and rid not in combinees and libelle:
+            salles_celcat[rid] = libelle
     noms = {code: nom for code, nom in cc.noms_fichier_enseignants.items() if nom and nom != code}
     try:
         from cal_iut.ingestion.enseignants import enseignants_declares
@@ -920,7 +945,7 @@ def ressources_depuis_config(
     except Exception:  # noqa: BLE001
         pass
     return ressources_a_surveiller(
-        cfg, salles_celcat=cc.salles, enseignants_celcat=cc.enseignants,
+        cfg, salles_celcat=salles_celcat, enseignants_celcat=cc.enseignants,
         libelles_salles=libelles, noms_enseignants=noms, filtre=filtre,
     )
 

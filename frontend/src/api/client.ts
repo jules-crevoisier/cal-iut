@@ -852,6 +852,7 @@ export interface PatchSeanceMaquetteBody {
   slot?: number;
   room_id?: string;
   is_eval?: boolean;
+  note?: string;
   force?: boolean;
 }
 

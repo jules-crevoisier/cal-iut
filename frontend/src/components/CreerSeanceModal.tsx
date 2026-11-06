@@ -89,7 +89,7 @@ export function CreerSeanceModal({
   const [teacherCodes, setTeacherCodes] = useState<string[]>(seanceExistante?.teacher_codes ?? []);
   const [dureeSlots, setDureeSlots] = useState(seanceExistante?.duration_slots ?? 1);
   const [isEval, setIsEval] = useState(seanceExistante?.is_eval ?? false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(seanceExistante?.note ?? "");
   // Semaine/jour : la Vue Promo pré-remplit toujours depuis ce qu'elle
   // affiche (`suggestion`, prioritaire) — retour utilisateur (todo
   // département, Kyllian Bresson 22/09/2026) : « rester sur la semaine à
@@ -171,6 +171,7 @@ export function CreerSeanceModal({
         day,
         slot,
         ...(roomId !== salleOrigine ? { room_id: roomId } : {}),
+        ...(note.trim() !== (seanceExistante.note ?? "").trim() ? { note } : {}),
         ...(sessionType === "CM" || seanceExistante.is_eval ? { is_eval: sessionType === "CM" && isEval } : {}),
       });
       setEnCours(false);
@@ -450,7 +451,6 @@ export function CreerSeanceModal({
                   ))}
                 </select>
               </label>
-              {!modeMaquette && (
               <label className="newroom-field newroom-field--large">
                 Note (optionnel)
                 <textarea
@@ -460,7 +460,6 @@ export function CreerSeanceModal({
                   onChange={(e) => setNote(e.target.value)}
                 />
               </label>
-              )}
             </div>
           </fieldset>
         </div>

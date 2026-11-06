@@ -27,6 +27,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Pencil, Plus, X } from "lucide-react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
+import { disponibiliteSallesPourSeance } from "../utils/sallesLibres";
 import { indexSemaineAujourdhui, jourOuvreAujourdhui } from "../utils/semaineCourante";
 import { SelecteurCouleurs } from "../components/SelecteurCouleurs";
 import {
@@ -52,6 +53,8 @@ import {
   type TeacherBusyHit,
 } from "../utils/teacherBusy";
 import { occupationsParCase } from "../utils/occupationsExternes";
+import { conflitsParSeance } from "../utils/conflitsSeances";
+import { fetchDoublons, type Doublon } from "../api/client";
 import { usePreferences } from "../utils/preferences";
 import { dateForWeekDay, formatShortDate } from "../utils/weekDates";
 import { lettresGroupe } from "../utils/years";
@@ -274,9 +277,12 @@ export function PromoView({
 
   const appliquerSalle = async (sessionId: string, roomId: string, ancienne?: string | null) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
+    // « Sans salle » : le serveur retire la salle quand `room_id` est vide ;
+    // « Automatique » (`__auto__`) lance la recherche côté serveur.
+    const aEnvoyer = roomId === "__none__" ? "" : roomId;
     setSalleEnCours(true);
     try {
-      const maj = await changerSalle(sessionId, { room_id: roomId }).catch(async (e) => {
+      const maj = await changerSalle(sessionId, { room_id: aEnvoyer }).catch(async (e) => {
         const detail = detailConflit(e);
         if (!detail) throw e;
         // Salle occupée et/ou capacité insuffisante, montrés en forçage
@@ -293,13 +299,17 @@ export function PromoView({
           confirmLabel: "Mettre quand même cette salle",
         });
         if (!forcer) return null;
-        return changerSalle(sessionId, { room_id: roomId, force: true });
+        return changerSalle(sessionId, { room_id: aEnvoyer, force: true });
       });
       if (maj) {
         onPlacementUpdated(maj);
         setSalleEnEdition(null);
         signaler(
-          `${maj.course_code} : salle ${maj.room_label ?? roomId}.`,
+          maj.salle_message
+            ? `${maj.course_code} : sans salle. ${maj.salle_message}`
+            : maj.room_label
+              ? `${maj.course_code} : salle ${maj.room_label}${roomId === "__auto__" ? " (choisie automatiquement)" : ""}.`
+              : `${maj.course_code} : sans salle.`,
           ancienne
             ? async () => {
                 const remis = await changerSalle(sessionId, { room_id: ancienne, force: true });
@@ -374,6 +384,32 @@ export function PromoView({
   // Le week-end, « Aujourd'hui » mène au lundi suivant (#21) ; le repère du
   // jour en cours n'en dépend pas (aucun jour ouvré le week-end).
   const indexAujourdhui = indexSemaineAujourdhui(payload.weekRows);
+
+  // Tâche 25 : conflits de salle / doublons enseignant repérés sur les cartes.
+  // Même détection que « À traiter » ; en lecture seule (lien public) le
+  // contrôle serveur est réservé à l'édition, on garde alors le seul Celcat.
+  const [doublonsSemaine, setDoublonsSemaine] = useState<Doublon[]>([]);
+  useEffect(() => {
+    if (readOnly || solverWeek === null) {
+      setDoublonsSemaine([]);
+      return;
+    }
+    let annule = false;
+    fetchDoublons(solverWeek)
+      .then((liste) => {
+        if (!annule) setDoublonsSemaine(Array.isArray(liste) ? liste : []);
+      })
+      .catch(() => {
+        if (!annule) setDoublonsSemaine([]);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [readOnly, solverWeek, placements, payload.rows]);
+  const conflitsSeances = useMemo(
+    () => conflitsParSeance(doublonsSemaine, payload, solverWeek),
+    [doublonsSemaine, payload, solverWeek],
+  );
   const jourAujourdhui = jourOuvreAujourdhui();
   // Jour réellement en cours (samedi/dimanche : aucun).
   const jourReel = new Date().getDay();
@@ -1533,6 +1569,12 @@ export function PromoView({
                                           salleEnEdition={salleEnEdition === cleEditionSalle}
                                           salleEnCours={salleEnCours}
                                           salleSelectionnee={source?.room_id ?? salleDuPayload?.id ?? ""}
+                                          conflits={conflitsSeances.get(r.id)}
+                                          disponibilites={
+                                            salleEnEdition === cleEditionSalle
+                                              ? disponibiliteSallesPourSeance(payload, r)
+                                              : undefined
+                                          }
                                           onDragStart={
                                             draggableHere
                                               ? (e) => {

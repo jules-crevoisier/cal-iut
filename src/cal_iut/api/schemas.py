@@ -286,6 +286,9 @@ class PatchSeanceRequest(BaseModel):
     slot: int | None = None
     room_id: str | None = None
     is_eval: bool | None = None
+    # Note libre de la séance (tâche #30) : `None` = inchangée, chaîne vide
+    # = effacée. Valable pour toute séance de maquette.
+    note: str | None = Field(default=None, max_length=300)
     force: bool = False
 
 
@@ -400,6 +403,9 @@ class PlacementResponse(BaseModel):
     teacher_codes: list[str]
     room_id: str | None = None
     room_label: str | None = None
+    # Message à afficher quand une recherche automatique de salle n'a rien
+    # trouvé (« Automatique » -> « Sans salle », tâche 33). Absent sinon.
+    salle_message: str | None = None
     is_eval: bool = False
     locked: bool = False
     # Absent jusqu'au 27/08/2026 (retour utilisateur : « je vois des cours
@@ -421,6 +427,10 @@ class PlacementResponse(BaseModel):
     # créneau 3, mais à rendre dans la ligne « pause » (tâche 16, 07/10/2026 :
     # la Vue Semaine l'affichait dans la case 14h-15h30).
     midi: bool = False
+    # Note libre saisie sur la séance (tâche #30) ; `None` si aucune. Sans ce
+    # champ le formulaire de modification repartait d'une note vide et
+    # l'écrasait à l'enregistrement.
+    note: str | None = None
 
 
 class NotificationConfigRequest(BaseModel):

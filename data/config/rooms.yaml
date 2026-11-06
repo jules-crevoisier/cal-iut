@@ -59,12 +59,14 @@ rooms:
     capacity: 15
     room_type: tp_standard
     equipment: [cloison_amovible_h008]  # ouvrable -> 1 salle TD avec H.008
+    voisines: [h008]
 
   - id: h008
     label: H.008
     capacity: 15
     room_type: tp_standard
     equipment: [cloison_amovible_h007]
+    voisines: [h007]
 
   - id: h007_h008
     label: H.007-008
@@ -105,12 +107,14 @@ rooms:
     capacity: 20
     room_type: studio_av
     equipment: [camera, micro, montage, regie_av]
+    voisines: [h022]
 
   - id: h022
     label: H.022 (fantôme Studio)
     capacity: 16
     room_type: studio_av
     equipment: [rangement]  # salle "hack Celcat" jumelée à H.017 pour 2e prof
+    voisines: [h017]
 
   - id: h018
     label: H.018 (Amphi MMI)
@@ -155,12 +159,14 @@ rooms:
     capacity: 35
     room_type: standard
     equipment: [cloison_ouverte_h203]  # fusionnée en permanence avec H.203
+    voisines: [h203]
 
   - id: h203
     label: H.203
     capacity: 35
     room_type: standard
     equipment: [cloison_ouverte_h201]
+    voisines: [h201]
 
   - id: h201_h203
     label: H.201-203
@@ -221,6 +227,40 @@ rooms:
     label: Amphi 2 GMP/GEII
     capacity: 150
     room_type: amphi
+    placement_auto: false
+    equipment: []
+
+  # -- Salles d'autres départements (tâche 23, Kyllian Bresson 03/11/2026) --
+  # Ajoutées pour pouvoir y placer une séance MMI ; leur occupation est lue
+  # dans Celcat (lecture seule) comme celle de toutes les salles. Hors
+  # placement automatique (`placement_auto: false`) : ce sont des salles
+  # empruntées, choisies à la main ; passer à `true` pour les proposer au
+  # solveur et à « Automatique ».
+  - id: c001
+    label: C.001
+    capacity: 56
+    room_type: standard
+    placement_auto: false
+    equipment: []
+
+  - id: b002
+    label: B.002
+    capacity: 104
+    room_type: standard
+    placement_auto: false
+    equipment: []
+
+  - id: e201
+    label: E.201
+    capacity: 91
+    room_type: standard
+    placement_auto: false
+    equipment: []
+
+  - id: e212
+    label: E.212
+    capacity: 59
+    room_type: standard
     placement_auto: false
     equipment: []
 

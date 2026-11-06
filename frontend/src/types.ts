@@ -10,6 +10,8 @@ export interface Placement {
   teacher_codes: string[];
   room_id: string | null;
   room_label: string | null;
+  /** Rempli quand « Automatique » n'a trouvé aucune salle (séance « Sans salle »). */
+  salle_message?: string | null;
   is_eval: boolean;
   locked: boolean;
   duration_slots: number;
@@ -19,6 +21,8 @@ export interface Placement {
   /** `hor` tombe dans la pause méridienne (12h30-14h) : stocké sur le
    * créneau 3, rendu dans la ligne « pause » des grilles. */
   midi?: boolean;
+  /** Note libre de la séance (tâche #30), absente si aucune. */
+  note?: string | null;
 }
 
 export interface Quality {
