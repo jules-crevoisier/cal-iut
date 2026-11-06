@@ -626,6 +626,7 @@ def _analyser_creneau(
         salle_id,
         sessions_by_id=state.sessions_by_id, groups=state.groups,
         conflicting_room_ids=build_manual_conflict_map(state.rooms).get(salle_id, set()) if salle_id else None,
+        rooms=state.rooms,
     )
     # Salle prise dans Celcat (relevé du sidecar) : même classement que le
     # côté HTTP — forçable, ou bloquante en mode strict.

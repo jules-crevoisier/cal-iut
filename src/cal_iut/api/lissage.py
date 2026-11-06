@@ -682,6 +682,7 @@ def verifier(state: Any, deplacements: list[Deplacement]) -> list[str]:
             sid, p.week, p.day, p.slot, simule, list(seance.group_ids or []), list(seance.teacher_codes or []),
             room_id, sessions_by_id=state.sessions_by_id, groups=state.groups,
             conflicting_room_ids=build_manual_conflict_map(state.rooms).get(room_id, set()) if room_id else None,
+            rooms=state.rooms,
         )
         stricts_salle = occupations_externes.appliquer_salle(etat_simule, seance, room_id, p.week, p.day, p.slot, validation)
         # Molle pour qui place à la main (02/10/2026), pas pour le lissage :

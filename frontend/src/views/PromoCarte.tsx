@@ -13,13 +13,14 @@
  * toujours visibles au toucher. Double-clic sur la carte = modifier.
  */
 import type { CSSProperties, DragEvent as ReactDragEvent } from "react";
-import { Pencil, Trash2, Undo2 } from "lucide-react";
+import { DoorClosed, Pencil, Trash2, Undo2, UserRoundX } from "lucide-react";
 
 import type { Placement } from "../types";
 import type { AppRow, RoomCatalogEntry } from "../types/app";
 import { useDroits } from "../contexts/Droits";
 import { couleursMatiere } from "../utils/couleursMatiere";
 import { nomComplet, nomCourt } from "../utils/nomEnseignant";
+import type { ConflitsSeance } from "../utils/conflitsSeances";
 import { sallesChoisissables } from "../utils/sallesLibres";
 
 /** « H.103 (Anglais) » -> « H.103 » : la précision reste dans l'infobulle. */
@@ -53,6 +54,8 @@ interface PromoCarteProps {
   onOuvrirSalle: () => void;
   onChoisirSalle: (roomId: string) => void;
   onFermerSalle: () => void;
+  /** Conflits détectés sur cette séance (tâche 25) — affichage seul. */
+  conflits?: ConflitsSeance;
 }
 
 export function PromoCarte({
@@ -79,6 +82,7 @@ export function PromoCarte({
   onOuvrirSalle,
   onChoisirSalle,
   onFermerSalle,
+  conflits,
 }: PromoCarteProps) {
   const { estAdmin } = useDroits();
   const dur = r.dur || 1;
@@ -91,11 +95,15 @@ export function PromoCarte({
     [r.t, r.ev ? "évaluation" : "", durLabel].filter(Boolean).join(" · "),
     nomsComplets.join(", "),
     salleAffichee ? `Salle ${salleAffichee}` : "Salle à définir",
+    ...(conflits?.salle ?? []).map((m) => `⚠ Conflit de salle : ${m}`),
+    ...(conflits?.enseignant ?? []).map((m) => `⚠ Doublon enseignant : ${m}`),
     verrouillee ? "Verrouillée : ne peut pas être déplacée" : draggable ? "Glisser pour déplacer · double-clic pour modifier" : "",
   ]
     .filter(Boolean)
     .join("\n");
 
+  const conflitSalle = (conflits?.salle.length ?? 0) > 0;
+  const conflitEnseignant = (conflits?.enseignant.length ?? 0) > 0;
   const classes = [
     "promo-chip",
     `type-${r.t.toLowerCase()}`,
@@ -106,6 +114,9 @@ export function PromoCarte({
     actions ? "promo-chip--actions" : "",
     dragging ? "dragging" : "",
     swapTarget ? "swap-target" : "",
+    conflitSalle || conflitEnseignant ? "promo-chip--conflit" : "",
+    conflitSalle ? "promo-chip--conflit-salle" : "",
+    conflitEnseignant ? "promo-chip--conflit-prof" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -137,6 +148,32 @@ export function PromoCarte({
           {durLabel ? ` · ${durLabel}` : ""}
         </span>
         {swapTarget && <span className="promo-chip__echange">échanger</span>}
+        {(conflitSalle || conflitEnseignant) && (
+          <span className="promo-chip__conflits">
+            {conflitSalle && (
+              <span
+                className="promo-conflit promo-conflit--salle"
+                role="img"
+                aria-label={`Conflit de salle : ${conflits!.salle.join(" ; ")}`}
+                title={`Conflit de salle\n${conflits!.salle.join("\n")}`}
+              >
+                <DoorClosed size={11} aria-hidden="true" />
+                <span className="promo-conflit__txt">Salle</span>
+              </span>
+            )}
+            {conflitEnseignant && (
+              <span
+                className="promo-conflit promo-conflit--prof"
+                role="img"
+                aria-label={`Doublon enseignant : ${conflits!.enseignant.join(" ; ")}`}
+                title={`Doublon enseignant\n${conflits!.enseignant.join("\n")}`}
+              >
+                <UserRoundX size={11} aria-hidden="true" />
+                <span className="promo-conflit__txt">Prof</span>
+              </span>
+            )}
+          </span>
+        )}
       </div>
       {r.n && (
         <div className="promo-chip__nom" title={infobulle}>

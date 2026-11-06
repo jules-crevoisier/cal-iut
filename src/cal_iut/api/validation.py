@@ -42,6 +42,28 @@ def enseignants_distincts(listes: list[list[str] | None]) -> bool:
     return True
 
 
+def meme_code_en_salles_voisines(
+    codes_modules: list[str | None], salles: list[str | None], rooms: list[object] | None
+) -> bool:
+    """Même code (module, ressource ou SAE) en simultané dans des salles
+    VOISINES : ce n'est pas un conflit de salle (tâche 29, Kyllian Bresson
+    03/11/2026). Les paires voisines viennent de la configuration
+    (`Room.voisines`, rooms.yaml : H.007/H.008, H.201/H.203, H.017/H.022).
+
+    Exige deux salles distinctes ou plus, toutes deux à deux voisines, et un
+    code unique et connu. Le doublon ENSEIGNANT n'est pas concerné : il reste
+    signalé par sa propre détection.
+    """
+    if len(salles) < 2 or any(not s for s in salles) or len(set(salles)) != len(salles):
+        return False
+    if len(set(codes_modules)) != 1 or not codes_modules[0]:
+        return False
+    voisines = {
+        getattr(r, "id", None): set(getattr(r, "voisines", None) or []) for r in (rooms or [])
+    }
+    return all(b in voisines.get(a, set()) for i, a in enumerate(salles) for b in salles[i + 1 :])
+
+
 def _est_pause_midi(session_id: str, sessions_by_id: dict[str, object] | None) -> bool:
     """Un évènement à horaire libre (`metadata["pause_midi"]`, retour Jules
     23/09/2026 : présentation PAC 13h15-14h) est STOCKÉ sur le créneau 3
@@ -100,6 +122,8 @@ def validate_move(
     # entre deux séances du même groupe serait refusé, chacune voyant l'autre
     # exactement là où elle veut aller.
     ignore_session_ids: set[str] | None = None,
+    # Salles du catalogue : sert à lire `Room.voisines` (tâche 29).
+    rooms: list[object] | None = None,
 ) -> ValidationResult:
     """
     Vérifie qu'un déplacement manuel ne crée pas de conflit dur.
@@ -195,6 +219,14 @@ def validate_move(
             meme_module = placement.course_code == _code_module(session_id, sessions_by_id)
             if autre_salle != room_id and meme_module and enseignants_distincts(
                 [teacher_codes, placement.teacher_codes]
+            ):
+                continue
+            # Tâche 29 : même code dans deux salles VOISINES (configuration),
+            # quel que soit le nombre d'enseignants — pas un conflit de salle.
+            if meme_module and meme_code_en_salles_voisines(
+                [placement.course_code, _code_module(session_id, sessions_by_id)],
+                [autre_salle, room_id],
+                rooms,
             ):
                 continue
             hard.append(f"Conflit salle : {placement.course_code} occupe déjà cette salle")
