@@ -121,7 +121,7 @@ def test_placer_hors_presence_est_refuse_meme_en_forcant(client):
     ), reponse.json()
 
 
-def test_placer_pendant_la_presence_est_accepte(client):
+def test_placer_pendant_la_presence_est_accepte(client, date_du_jour_figee):
     """Le contrôle ne doit pas être trop large : les vrais jours de présence
     restent utilisables."""
     etat = get_state()
