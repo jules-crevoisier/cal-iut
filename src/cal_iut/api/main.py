@@ -7,6 +7,7 @@ import sys
 import threading
 import uuid
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import date as _date
@@ -3727,6 +3728,10 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
         })
 
     proposed = {"week": match.week, "day": match.day, "slot": match.slot}
+    avant_avis = {
+        **proposed,
+        "horaire": _horaire_avant_avis.get() or (dict(session.metadata["horaire"]) if session and session.metadata.get("horaire") else None),
+    }
     match.week, match.day, match.slot = body.week, body.day, body.slot
 
     if target_room_id:
@@ -3783,6 +3788,7 @@ def move_session(session_id: str, body: MoveSessionRequest) -> PlacementResponse
             )
 
     _notifier("deplacement", f"{match.course_code} → {_ou(match)}")
+    _prevenir_enseignants(state, session, avant_avis, match)
     resultat = _to_placement(match, state.sessions_by_id)
     _apres_ecriture_planning(session_id, "update")
     return resultat
@@ -6621,13 +6627,17 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
             })
     try:
         if repositionne:
-            resultat = move_session(
-                session_id,
-                MoveSessionRequest(
-                    week=body.week, day=body.day, slot=slot_cible,
-                    room_id=body.room_id, lock=False, force=body.force,
-                ),
-            )
+            jeton_avis = _horaire_avant_avis.set(avant["horaire"])
+            try:
+                resultat = move_session(
+                    session_id,
+                    MoveSessionRequest(
+                        week=body.week, day=body.day, slot=slot_cible,
+                        room_id=body.room_id, lock=False, force=body.force,
+                    ),
+                )
+            finally:
+                _horaire_avant_avis.reset(jeton_avis)
         else:
             # Date passée (item A, 22/09/2026) : PAS de contrôle ajouté ici —
             # ce chemin (position INCHANGÉE) ne passait déjà par AUCUN verrou
@@ -6649,6 +6659,14 @@ def modifier_seance_personnalisee(session_id: str, body: ModifierSeancePersonnal
             else:
                 match = _find_placement(state, session_id)
                 resultat = _to_placement(match, state.sessions_by_id)
+            if placement is not None and horaire_modifie:
+                # Horaire réel changé sans déplacement de créneau : `move_session`
+                # n'a pas tourné, on prévient ici (tâche #32).
+                _prevenir_enseignants(
+                    state, seance,
+                    {"week": placement.week, "day": placement.day, "slot": placement.slot, "horaire": avant["horaire"]},
+                    placement,
+                )
     except HTTPException as exc:
         restaurer()
         raise _conflit_structure(exc) from exc
@@ -7215,6 +7233,26 @@ def mail_teacher_links_send(body: SendTeacherMailsRequest) -> SendTeacherMailsRe
         except Exception as exc:  # noqa: BLE001 — un envoi individuel raté ne doit jamais interrompre les autres
             resultats.append(TeacherMailSendResultResponse(code=code, ok=False, error=str(exc)))
     return SendTeacherMailsResponse(results=resultats)
+
+
+_horaire_avant_avis: ContextVar = ContextVar("horaire_avant_avis", default=None)
+
+
+def _prevenir_enseignants(state: object, session: object | None, avant: dict, placement: object) -> None:
+    """E-mail aux enseignants si la date/l'heure a changé (tâche #32) —
+    désactivé par défaut, jamais bloquant (cf. `api/avis_enseignants.py`)."""
+    try:
+        from cal_iut.api import avis_enseignants
+
+        apres = {
+            "week": placement.week, "day": placement.day, "slot": placement.slot,
+            "horaire": (dict(session.metadata["horaire"]) if session and session.metadata.get("horaire") else None),
+        }
+        avis_enseignants.prevenir(
+            state, session, avant, apres, getattr(placement, "room_label", None), _noms_enseignants(state),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Avis enseignants : erreur ignorée")
 
 
 def _notifier(evenement: str, texte: str) -> None:

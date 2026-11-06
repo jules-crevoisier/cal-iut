@@ -556,6 +556,9 @@ Il survit aux déploiements. `data/config/` est hors du volume : il est mis à j
 |---|---|---|---|
 | `CAL_IUT_PUBLIC_URL` | backend | Oui, pour les mails | Adresse publique (ex. `https://cal-iut-mmi.srko.fr`), utilisée dans les liens envoyés par mail |
 | `RESEND_API_KEY`, `RESEND_FROM` | backend | Oui, pour les mails | Envoi des mails (confirmation, mot de passe, liens enseignants). Sans eux, chaque envoi échoue avec un message clair |
+| `CAL_IUT_MAIL_ENSEIGNANTS` | backend | Non (`off` par défaut) | `on` : un mail part à chaque enseignant dont une séance change de date ou d'heure (jamais pour une salle ou une note seule). Adresses prises dans la liste des enseignants |
+| `CAL_IUT_SMTP_HOST`, `CAL_IUT_SMTP_FROM` | backend | Oui, si l'avis est `on` | Serveur SMTP et adresse d'expédition. Sans eux, rien n'est envoyé (un avertissement est écrit dans les journaux) |
+| `CAL_IUT_SMTP_PORT`, `CAL_IUT_SMTP_USER`, `CAL_IUT_SMTP_PASSWORD`, `CAL_IUT_SMTP_SECURITE` | backend | Selon le serveur | Port (587 par défaut), identifiants, et `starttls` (défaut), `ssl` ou `aucune` |
 | `CAL_IUT_SECRET_KEY` | backend | Conseillé | Secret de signature des sessions. Sans lui, un secret est créé dans le volume |
 | `CAL_IUT_MCP_TOKEN` | backend | Non | Jeton MCP de secours (droits Édition). Sinon, chacun utilise sa clé |
 | `CAL_IUT_COOKIE_SECURE` | backend | Non | `0` seulement pour un serveur servi en http ailleurs que sur `localhost` |
