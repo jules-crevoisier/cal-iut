@@ -265,6 +265,16 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
     );
   };
 
+  const changerListe = (t: Tache) => {
+    const cible: Tache["categorie"] = t.categorie === "edt" ? "plateforme" : "edt";
+    const memeCase = (taches ?? []).filter((x) => x.categorie === cible && x.colonne === t.colonne);
+    const ordre = memeCase.length ? Math.max(...memeCase.map((x) => x.ordre)) + 1 : 0;
+    void appliquerLots(
+      [{ id: t.id, corps: { categorie: cible, ordre } }],
+      "Le changement de liste n'a pas pu être enregistré.",
+    );
+  };
+
   const reordonner = (t: Tache, sens: -1 | 1) => {
     const liste = parColonne[t.colonne];
     const idx = liste.findIndex((x) => x.id === t.id);
@@ -608,6 +618,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
                   onVoirImages={() => setApercu({ tacheId: t.id, index: 0 })}
                   onSupprimer={() => void supprimer(t)}
                   onColonne={(sens) => deplacerColonne(t, sens)}
+                  onListe={() => changerListe(t)}
                   onOrdre={() => undefined}
                   onCopier={(texte) => {
                     void (async () => {
@@ -679,6 +690,7 @@ export function KanbanView({ payload, role, setRoute }: KanbanViewProps) {
                       onVoirImages={() => setApercu({ tacheId: t.id, index: 0 })}
                       onSupprimer={() => void supprimer(t)}
                       onColonne={(sens) => deplacerColonne(t, sens)}
+                      onListe={() => changerListe(t)}
                       onOrdre={(sens) => reordonner(t, sens)}
                       onCopier={(texte) => {
                         void (async () => {
@@ -785,6 +797,7 @@ interface CarteTacheProps {
   onVoirImages: () => void;
   onSupprimer: () => void;
   onColonne: (sens: -1 | 1) => void;
+  onListe: () => void;
   onOrdre: (sens: -1 | 1) => void;
   onCopier: (texte: string) => void;
   setRoute: (patch: Partial<Route>) => void;
@@ -811,6 +824,7 @@ function CarteTache({
   onVoirImages,
   onSupprimer,
   onColonne,
+  onListe,
   onOrdre,
   onCopier,
   setRoute,
@@ -969,6 +983,16 @@ function CarteTache({
           >
             {copiee ? "Copié" : "Copier"}
           </button>
+          {peutModifier && (
+            <button
+              type="button"
+              className="kanban-texte"
+              aria-label={`Déplacer « ${t.titre} » vers ${t.categorie === "edt" ? "Plateforme" : "Emploi du temps"}`}
+              onClick={onListe}
+            >
+              {t.categorie === "edt" ? "Vers Plateforme" : "Vers EDT"}
+            </button>
+          )}
           {peutModifier && (
             <button
               type="button"

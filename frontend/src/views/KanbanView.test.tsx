@@ -141,6 +141,27 @@ describe("KanbanView", () => {
   // boutons qui seraient des onglets : entre les affaires par rapport à
   // l'emploi du temps [...] et les affaires à propos de la plateforme »).
 
+  it("moves a card to the other list with the « Vers Plateforme » button, keeping id and column", async () => {
+    const appels = stubFetch([tache({ id: 7, titre: "Bug export", colonne: "en_cours", categorie: "edt" })]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Bug export")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Déplacer « Bug export » vers Plateforme" }));
+
+    await waitFor(() => expect(appels.some((a) => a.method === "PATCH")).toBe(true));
+    const patch = appels.find((a) => a.method === "PATCH");
+    expect(patch?.url).toBe("/taches/7");
+    expect((patch?.body as { categorie?: string; colonne?: string }).categorie).toBe("plateforme");
+    expect((patch?.body as { colonne?: string }).colonne).toBeUndefined();
+    await waitFor(() => expect(screen.queryByText("Bug export")).not.toBeInTheDocument());
+  });
+
+  it("hides the list-move button for a read_only role", async () => {
+    stubFetch([tache({ id: 1, titre: "Lecture seule" })]);
+    render(<KanbanView payload={payload} role="read_only" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Lecture seule")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /vers Plateforme/ })).not.toBeInTheDocument();
+  });
+
   it("shows two tabs with role=tab/aria-selected and their counts, filtering the board", async () => {
     stubFetch([
       tache({ id: 1, titre: "Deplacer le TD", categorie: "edt" }),
