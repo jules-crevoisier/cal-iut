@@ -21,6 +21,8 @@ export interface Placement {
   /** `hor` tombe dans la pause méridienne (12h30-14h) : stocké sur le
    * créneau 3, rendu dans la ligne « pause » des grilles. */
   midi?: boolean;
+  /** Note libre de la séance (tâche #30), absente si aucune. */
+  note?: string | null;
 }
 
 export interface Quality {

@@ -74,7 +74,7 @@ describe("CreerSeanceModal maquette mode", () => {
     vi.restoreAllMocks();
   });
 
-  it("should show salle week and teacher search while hiding matiere groupes note", () => {
+  it("should show salle week and teacher search while hiding matiere groupes", () => {
     renderMaquette();
     expect(screen.getByText("Type")).toBeInTheDocument();
     expect(screen.getByText("Durée")).toBeInTheDocument();
@@ -87,7 +87,11 @@ describe("CreerSeanceModal maquette mode", () => {
     expect(screen.queryByText("Matière")).not.toBeInTheDocument();
     expect(screen.queryByText("Groupe(s)")).not.toBeInTheDocument();
     expect(screen.queryByText("Évaluation")).not.toBeInTheDocument();
-    expect(screen.queryByText(/note \(optionnel\)/i)).not.toBeInTheDocument();
+  });
+
+  it("should prefill the note of an existing maquette session", () => {
+    renderMaquette({ ...placement, note: "Rattrapage du 12/09" });
+    expect(screen.getByLabelText(/note \(optionnel\)/i)).toHaveValue("Rattrapage du 12/09");
   });
 
   it("should show evaluation checkbox when the maquette session is a CM", () => {
