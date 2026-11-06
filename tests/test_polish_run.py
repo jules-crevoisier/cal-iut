@@ -507,7 +507,7 @@ def test_trous_fc_par_jour_vide_quand_deja_contigu(etat):
     assert pr._trous_fc_total(etat) == 0
 
 
-def test_passe_liberation_trous_fc_deplace_le_cours_bloqueur(etat):
+def test_passe_liberation_trous_fc_deplace_le_cours_bloqueur(etat, date_du_jour_figee):
     """Trouvé le 27/08/2026 en vérifiant sur le run réel : le "trou" entre
     deux séances FC est presque toujours occupé par un AUTRE vrai cours du
     même groupe (BUT3-DEV-FC suit bien plus que WRA507D/WSA501D) — jamais un
@@ -536,7 +536,7 @@ def test_passe_liberation_trous_fc_deplace_le_cours_bloqueur(etat):
     assert positions["a1"][:2] == (8, 1) and positions["a2"][:2] == (8, 1)
 
 
-def test_passe_fermeture_trous_fc_rapproche_la_seance_isolee(etat):
+def test_passe_fermeture_trous_fc_rapproche_la_seance_isolee(etat, date_du_jour_figee):
     """La séance la plus tardive (a2, créneau 3) doit se rapprocher de a1
     (créneau 1) pour combler le trou — jamais changer de jour ni de semaine
     (`semaine_imposee`/`jour_impose` sur `relocaliser`)."""
