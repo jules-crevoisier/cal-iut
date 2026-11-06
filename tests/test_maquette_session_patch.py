@@ -235,3 +235,28 @@ def test_should_change_room_when_maquette_seance_is_patched(monter):
     assert reponse.status_code == 200, reponse.text
     assert reponse.json()["room_id"] == "h005"
     assert get_state().timetable[0].room_id == "h005"
+
+
+def test_should_persist_note_and_return_it_when_maquette_seance_is_patched(monter, tmp_path):
+    """Tâche #30 : la note d'une séance de maquette survit à l'enregistrement,
+    revient dans la réponse, est écrite sur disque et reprise au rechargement."""
+    from cal_iut.api import session_overrides
+
+    a = _seance("a")
+    client = monter([(a, _place(a, 0, 0))])
+    reponse = client.patch("/placements/a/seance", json={"note": "  Rattrapage du 12/09  "})
+    assert reponse.status_code == 200, reponse.text
+    assert reponse.json()["note"] == "Rattrapage du 12/09"
+    assert get_state().sessions_by_id["a"].metadata["note"] == "Rattrapage du 12/09"
+    assert json.loads((tmp_path / "session_overrides.json").read_text(encoding="utf-8"))["a"]["note"] == (
+        "Rattrapage du 12/09"
+    )
+
+    # Rechargement : séance neuve (sans note) + overlay relu depuis le disque.
+    neuve = _seance("a")
+    session_overrides.apply_to({"a": neuve})
+    assert neuve.metadata["note"] == "Rattrapage du 12/09"
+
+    # Une modification qui ne touche pas la note ne l'efface pas.
+    client.patch("/placements/a/seance", json={"teacher_codes": ["JSA"]})
+    assert get_state().sessions_by_id["a"].metadata["note"] == "Rattrapage du 12/09"

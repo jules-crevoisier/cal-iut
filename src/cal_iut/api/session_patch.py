@@ -55,6 +55,7 @@ def appliquer_patch_seance(
     slot: int | None = None,
     room_id: str | None = None,
     is_eval: bool | None = None,
+    note: str | None = None,
     force: bool = False,
 ) -> PlacementResponse:
     from cal_iut.api.main import _to_placement, changer_salle, move_session
@@ -66,7 +67,7 @@ def appliquer_patch_seance(
         or is_eval is not None
     )
     position = week is not None or day is not None or slot is not None
-    if not identite and not position and room_id is None:
+    if not identite and not position and room_id is None and note is None:
         raise HTTPException(400, "Au moins un champ à modifier (enseignant, type, durée, salle, semaine ou évaluation).")
     if duration_slots is not None and duration_slots not in (1, 2):
         raise HTTPException(400, "La durée n'accepte que 1 (1h30) ou 2 (3h).")
@@ -93,6 +94,7 @@ def appliquer_patch_seance(
     snapshot_type = session.session_type
     snapshot_duree = session.duration_slots
     snapshot_eval = session.is_eval
+    snapshot_note = session.metadata.get("note")
     placement = next((p for p in state.timetable if p.session_id == session_id), None)
     snapshot_placement_teachers = list(placement.teacher_codes) if placement is not None else []
 
@@ -106,12 +108,15 @@ def appliquer_patch_seance(
         session.duration_slots = duration_slots
     if is_eval is not None:
         session.is_eval = is_eval
+    if note is not None:
+        session.metadata["note"] = note.strip()
 
     def restaurer() -> None:
         session.teacher_codes = snapshot_teachers
         session.session_type = snapshot_type
         session.duration_slots = snapshot_duree
         session.is_eval = snapshot_eval
+        session.metadata["note"] = snapshot_note
         if placement is not None:
             placement.teacher_codes = snapshot_placement_teachers
 
@@ -169,6 +174,8 @@ def appliquer_patch_seance(
         overlay["duration_slots"] = duration_slots
     if is_eval is not None:
         overlay["is_eval"] = is_eval
+    if note is not None:
+        overlay["note"] = note.strip()
     if overlay:
         upsert_overlay(session_id, overlay)
 

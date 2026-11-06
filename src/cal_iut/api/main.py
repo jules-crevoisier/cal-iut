@@ -3818,6 +3818,7 @@ def patch_seance_maquette(session_id: str, body: PatchSeanceRequest) -> Placemen
         slot=body.slot,
         room_id=body.room_id,
         is_eval=body.is_eval,
+        note=body.note,
         force=body.force,
     )
     _apres_ecriture_planning(session_id, "update")
@@ -7347,6 +7348,7 @@ def _to_placement(p: PlacedSessionWithRoom, sessions_by_id: dict[str, SessionToP
         duration_slots=max(1, s.duration_slots) if s else 1,
         hor=_libelle_horaire(s.metadata["horaire"]) if s and s.metadata.get("horaire") else None,
         midi=bool(s and s.metadata.get("pause_midi")),
+        note=(s.metadata.get("note") or None) if s else None,
     )
 
 
