@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -247,6 +248,29 @@ def lire_regles_envoi(data: dict) -> tuple[dict[str, RegleEnvoi], dict[str, Regl
 VARIABLE_REGLES = "CAL_IUT_REGLES_ENVOI"
 MOTIF_REGLES_INACTIVES = f"non envoyée — règle d'envoi en attente d'activation ({VARIABLE_REGLES})"
 _REGLES_FORCEES: ContextVar[bool] = ContextVar("regles_envoi_forcees", default=False)
+
+
+# Report de la NOTE d'une séance dans la « Remarque » Celcat (tâche #30,
+# 06/11/2026) : DÉSACTIVÉ par défaut, comme les règles d'envoi. Tant qu'il
+# n'est pas posé, `notes` ne contient que ce qu'il contenait avant.
+VARIABLE_NOTES = "CAL_IUT_NOTES_ENVOI"
+LONGUEUR_MAX_NOTE_CELCAT = 200
+
+
+def notes_actives() -> bool:
+    """`CAL_IUT_NOTES_ENVOI=on` (ou `1`, `true`, `oui`) active le report des
+    notes. Absente, vide ou autre : inactif."""
+    return os.environ.get(VARIABLE_NOTES, "").strip().lower() in ("on", "1", "true", "oui", "yes")
+
+
+def note_pour_celcat(note: str | None) -> str:
+    """La note, prête à tenir dans `notes` : une seule ligne, en ASCII
+    (Celcat abîme les caractères hors ASCII à l'écriture, cf.
+    `SEPARATEUR_REMARQUE`), tronquée. Vide si le report est désactivé."""
+    if not note or not notes_actives():
+        return ""
+    ascii_ = unicodedata.normalize("NFKD", note).encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_.split())[:LONGUEUR_MAX_NOTE_CELCAT].strip()
 
 
 def regles_actives() -> bool:
@@ -511,6 +535,9 @@ class EntreeCelcat:
     # Part SANS enseignant, par décision d'une règle (`enseignant:
     # facultatif`) : la séance n'en a pas, et ce n'est pas un manque.
     sans_enseignant: bool = False
+    # Note libre de la séance, déjà normalisée par `note_pour_celcat` (vide si
+    # le report est désactivé) — onglet « Remarques et personnaliser ».
+    note: str = ""
 
     @property
     def notes_celcat(self) -> str:
@@ -522,9 +549,11 @@ class EntreeCelcat:
         l'identifiant reste dans le même champ, en dernier mot :
         `session_id_depuis_notes` le retrouve dans les deux formes.
         """
-        if self.remarque:
-            return f"{self.remarque}{SEPARATEUR_REMARQUE}{self.session_id}"
-        return self.session_id
+        # Remarque de règle, puis note, puis identifiant EN DERNIER : c'est
+        # lui que `session_id_depuis_notes` retrouve, d'où aucun doublon à la
+        # mise à jour (même évènement, même identifiant, seule la note change).
+        morceaux = [m for m in (self.remarque, self.note) if m]
+        return SEPARATEUR_REMARQUE.join([*morceaux, self.session_id])
 
     @property
     def sans_module(self) -> bool:
@@ -559,6 +588,10 @@ class EntreeCelcat:
                 self.type_seance, self.groupe,
             )
         )
+        if self.note:
+            # Une note modifiée doit être repérée comme un changement à
+            # pousser. Absente (ou report désactivé) : signature inchangée.
+            base = f"{base}|note:{self.note}"
         if not self.regle:
             # Inchangée pour toutes les séances ordinaires : une signature
             # qui bouge ferait re-saisir tout le journal.
@@ -607,6 +640,7 @@ def entree_pour_placement(
     groupe: str,
     semestre: str = "",
     lundi: str = "",
+    note: str | None = None,
 ) -> EntreeCelcat:
     """Traduit UN placement. `duration_slots` > 1 : l'heure de fin est celle
     du DERNIER créneau occupé — Celcat prend une plage, pas une répétition
@@ -734,6 +768,7 @@ def entree_pour_placement(
         departement=regle_appliquee.departement if regle_appliquee else "",
         remarque=regle_appliquee.remarque if regle_appliquee else "",
         sans_enseignant=sans_enseignant,
+        note=note_pour_celcat(note),
     )
 
 
@@ -786,5 +821,6 @@ def entrees_pour_state(state: object) -> dict[str, EntreeCelcat]:
             groupe=", ".join(libelle_groupe.get(g, g) for g in (p.group_ids or [])),
             semestre=semestre,
             lundi=_lundi_iso(state, semestre, p.week) if semestre else "",
+            note=(getattr(session, "metadata", None) or {}).get("note"),
         )
     return entrees
