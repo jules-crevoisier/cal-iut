@@ -27,6 +27,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Pencil, Plus, X } from "lucide-react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
+import { disponibiliteSallesPourSeance } from "../utils/sallesLibres";
 import { indexSemaineAujourdhui, indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
 import {
   changerSalle,
@@ -271,9 +272,12 @@ export function PromoView({
 
   const appliquerSalle = async (sessionId: string, roomId: string, ancienne?: string | null) => {
     if (!roomId || !onPlacementUpdated || !onError) return;
+    // « Sans salle » : le serveur retire la salle quand `room_id` est vide ;
+    // « Automatique » (`__auto__`) lance la recherche côté serveur.
+    const aEnvoyer = roomId === "__none__" ? "" : roomId;
     setSalleEnCours(true);
     try {
-      const maj = await changerSalle(sessionId, { room_id: roomId }).catch(async (e) => {
+      const maj = await changerSalle(sessionId, { room_id: aEnvoyer }).catch(async (e) => {
         const detail = detailConflit(e);
         if (!detail) throw e;
         // Salle occupée et/ou capacité insuffisante, montrés en forçage
@@ -290,13 +294,17 @@ export function PromoView({
           confirmLabel: "Mettre quand même cette salle",
         });
         if (!forcer) return null;
-        return changerSalle(sessionId, { room_id: roomId, force: true });
+        return changerSalle(sessionId, { room_id: aEnvoyer, force: true });
       });
       if (maj) {
         onPlacementUpdated(maj);
         setSalleEnEdition(null);
         signaler(
-          `${maj.course_code} : salle ${maj.room_label ?? roomId}.`,
+          maj.salle_message
+            ? `${maj.course_code} : sans salle. ${maj.salle_message}`
+            : maj.room_label
+              ? `${maj.course_code} : salle ${maj.room_label}${roomId === "__auto__" ? " (choisie automatiquement)" : ""}.`
+              : `${maj.course_code} : sans salle.`,
           ancienne
             ? async () => {
                 const remis = await changerSalle(sessionId, { room_id: ancienne, force: true });
@@ -1554,6 +1562,11 @@ export function PromoView({
                                           salleEnCours={salleEnCours}
                                           salleSelectionnee={source?.room_id ?? salleDuPayload?.id ?? ""}
                                           conflits={conflitsSeances.get(r.id)}
+                                          disponibilites={
+                                            salleEnEdition === cleEditionSalle
+                                              ? disponibiliteSallesPourSeance(payload, r)
+                                              : undefined
+                                          }
                                           onDragStart={
                                             draggableHere
                                               ? (e) => {

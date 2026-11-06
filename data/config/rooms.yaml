@@ -230,6 +230,40 @@ rooms:
     placement_auto: false
     equipment: []
 
+  # -- Salles d'autres départements (tâche 23, Kyllian Bresson 03/11/2026) --
+  # Ajoutées pour pouvoir y placer une séance MMI ; leur occupation est lue
+  # dans Celcat (lecture seule) comme celle de toutes les salles. Hors
+  # placement automatique (`placement_auto: false`) : ce sont des salles
+  # empruntées, choisies à la main ; passer à `true` pour les proposer au
+  # solveur et à « Automatique ».
+  - id: c001
+    label: C.001
+    capacity: 56
+    room_type: standard
+    placement_auto: false
+    equipment: []
+
+  - id: b002
+    label: B.002
+    capacity: 104
+    room_type: standard
+    placement_auto: false
+    equipment: []
+
+  - id: e201
+    label: E.201
+    capacity: 91
+    room_type: standard
+    placement_auto: false
+    equipment: []
+
+  - id: e212
+    label: E.212
+    capacity: 59
+    room_type: standard
+    placement_auto: false
+    equipment: []
+
 # Règles d'affectation salle. `_find_matching_rule` retient la DERNIÈRE règle qui
 # matche (session_types + course_code_patterns) -> règles génériques d'abord,
 # règles spécifiques par module ensuite pour qu'elles priment.

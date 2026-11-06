@@ -400,6 +400,9 @@ class PlacementResponse(BaseModel):
     teacher_codes: list[str]
     room_id: str | None = None
     room_label: str | None = None
+    # Message à afficher quand une recherche automatique de salle n'a rien
+    # trouvé (« Automatique » -> « Sans salle », tâche 33). Absent sinon.
+    salle_message: str | None = None
     is_eval: bool = False
     locked: bool = False
     # Absent jusqu'au 27/08/2026 (retour utilisateur : « je vois des cours

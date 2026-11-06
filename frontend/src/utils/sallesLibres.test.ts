@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { catalogRoom, emptyPayload, placedRow } from "../test/payloadFixture";
-import { occupationSalles, sallesChoisissables, sallesLibresAuCreneau } from "./sallesLibres";
+import { disponibiliteSallesPourSeance, occupationSalles, sallesChoisissables, sallesLibresAuCreneau } from "./sallesLibres";
 
 describe("occupationSalles", () => {
   it("should mark a slot occupied for a duration-1 session", () => {
@@ -197,5 +197,43 @@ describe("sallesChoisissables (tâche 22)", () => {
 
   it("garde la salle regroupée encore portée par la séance", () => {
     expect(sallesChoisissables(salles, "h007_h008").map((s) => s.id)).toEqual(["h007", "h008", "h007_h008"]);
+  });
+});
+
+describe("disponibiliteSallesPourSeance", () => {
+  const payload = emptyPayload({
+    rooms: [
+      catalogRoom("h101", { label: "H.101" }),
+      catalogRoom("h102", { label: "H.102" }),
+      catalogRoom("h007", { label: "H.007" }),
+      catalogRoom("h008", { label: "H.008" }),
+      catalogRoom("h007_h008", { label: "H.007-008", combines: ["h007", "h008"] }),
+    ],
+    rows: [
+      placedRow({ id: "moi", w: 0, d: 0, s: 2, dur: 1, r: "H.101", c: "WR1", t: "TD" }),
+      placedRow({ id: "autre", w: 0, d: 0, s: 2, dur: 1, r: "H.102", c: "WR2", t: "TD" }),
+      placedRow({ id: "cloison", w: 0, d: 0, s: 2, dur: 1, r: "H.007", c: "WR3", t: "TD" }),
+    ],
+  });
+
+  it("ne compte pas la séance elle-même, mais compte les autres", () => {
+    const dispo = disponibiliteSallesPourSeance(payload, { id: "moi", w: 0, d: 0, s: 2, dur: 1 });
+    expect(dispo.get("h101")).toBe(true);
+    expect(dispo.get("h102")).toBe(false);
+  });
+
+  it("traite les deux moitiés d'une salle à cloison comme une seule salle", () => {
+    const dispo = disponibiliteSallesPourSeance(payload, { id: "moi", w: 0, d: 0, s: 2, dur: 1 });
+    expect(dispo.get("h007")).toBe(false);
+    expect(dispo.get("h008")).toBe(false);
+  });
+
+  it("compte les occupations Celcat", () => {
+    const avecCelcat = {
+      ...payload,
+      occupationsExternes: { occupations: [{ t: "salle", w: 0, d: 0, s: [2], code: "h101", lib: "x", dep: "GEA" }] },
+    } as unknown as typeof payload;
+    const dispo = disponibiliteSallesPourSeance(avecCelcat, { id: "autre", w: 0, d: 0, s: 2, dur: 1 });
+    expect(dispo.get("h101")).toBe(false);
   });
 });

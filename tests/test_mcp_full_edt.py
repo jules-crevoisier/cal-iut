@@ -223,7 +223,7 @@ def test_should_place_unplaced_session_when_plan_is_applied(monter):
     assert (pose.week, pose.day, pose.slot) == (SEMAINE, 0, 5)
 
 
-def test_should_move_across_weeks_when_plan_is_applied(monter):
+def test_should_move_across_weeks_when_plan_is_applied(monter, date_du_jour_figee):
     seance = _etat_ara(monter)
     cible = SEMAINE - 2
     propose = plan(ops=[{

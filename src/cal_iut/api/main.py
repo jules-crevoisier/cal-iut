@@ -2953,7 +2953,34 @@ _DUO_SYNC_NOTE = (
 )
 
 
-def _resolve_room(state: object, session: object, week: int, day: int, slot: int, prefer_room_id: str | None) -> object | None:
+def _salles_voisines(state: object, session: object, week: int, day: int, slot: int) -> list[str]:
+    """Salles des séances qui touchent celle-ci le même jour (juste avant ou
+    juste après), pour le même groupe ou le même enseignant — son « parcours ».
+    Même cours d'abord, puis la plus proche. Sert à la continuité de salle."""
+    duree = max(1, getattr(session, "duration_slots", 1) or 1)
+    groupes = set(getattr(session, "group_ids", None) or [])
+    profs = set(getattr(session, "teacher_codes", None) or [])
+    trouvees: list[tuple[int, str]] = []
+    for p in state.timetable:
+        room_id = getattr(p, "room_id", None)
+        if not room_id or p.session_id == getattr(session, "id", None) or p.week != week or p.day != day:
+            continue
+        autre = state.sessions_by_id.get(p.session_id)
+        duree_autre = max(1, getattr(autre, "duration_slots", 1) or 1) if autre else 1
+        if p.slot + duree_autre != slot and p.slot != slot + duree:
+            continue
+        if not (groupes & set(p.group_ids or []) or profs & set(p.teacher_codes or [])):
+            continue
+        meme_cours = p.course_code == getattr(session, "course_code", None)
+        trouvees.append((0 if meme_cours else 1, room_id))
+    trouvees.sort(key=lambda t: t[0])
+    return list(dict.fromkeys(rid for _, rid in trouvees))
+
+
+def _resolve_room(
+    state: object, session: object, week: int, day: int, slot: int, prefer_room_id: str | None,
+    *, capacite_stricte: bool = False,
+) -> object | None:
     """Salle libre et adaptée à ce créneau (`find_room_for_slot`) — garde
     `prefer_room_id` si elle est encore libre, recalcule sinon plutôt que de
     bloquer sur un conflit de salle évitable (retour utilisateur : "si on
@@ -2975,7 +3002,15 @@ def _resolve_room(state: object, session: object, week: int, day: int, slot: int
         # Bresson, 25/09/2026). Avec la carte de l'affectation automatique,
         # la salle proposée ici était refusée juste après.
         conflicts=build_manual_conflict_map(state.rooms),
+        voisines=_salles_voisines(state, session, week, day, slot),
+        capacite_stricte=capacite_stricte,
     )
+
+
+_MSG_AUCUNE_SALLE = (
+    "Aucune salle libre et assez grande sur ce créneau (séances MMI et "
+    "réservations Celcat comprises) : la séance reste « Sans salle »."
+)
 
 
 def _hard_constraint_context(
@@ -4033,6 +4068,39 @@ def changer_salle(session_id: str, body: ChangeRoomRequest) -> PlacementResponse
     # donc joint aux conflits de salle, dans le même format : l'utilisateur
     # voit ce qui bloque et peut confirmer.
     verrous = _semaines_non_modifiables(state, session_id, match.week, match.week, force=body.force)
+
+    # « Automatique » (`__auto__`) : vraie recherche d'une salle libre pour CE
+    # créneau, avec continuité sur les séances voisines et capacité vérifiée.
+    # Aucune salle -> « Sans salle » et un message clair. Distinct du retrait
+    # de salle (`room_id` vide), qui ne cherche rien.
+    message_auto: str | None = None
+    if body.room_id.strip() == "__auto__":
+        if verrous:
+            raise HTTPException(409, detail={
+                "message": "Semaine non modifiable",
+                "hard_conflicts": verrous,
+                "soft_warnings": [],
+                "suggestions": [], "suggestions_note": None,
+            })
+        trouvee = _resolve_room(
+            state, session, match.week, match.day, match.slot, None, capacite_stricte=True,
+        ) if session is not None else None
+        if trouvee is None:
+            message_auto = _MSG_AUCUNE_SALLE
+            match.room_id, match.room_label = None, None
+        else:
+            match.room_id, match.room_label = trouvee.id, trouvee.label
+        if state.current_run_id:
+            get_repo().update_current_placement(
+                session_id, match.week, match.day, match.slot,
+                match.room_id, match.room_label,
+                session.locked if session else False,
+                run_id=state.current_run_id, course_code=match.course_code,
+            )
+        resultat = _to_placement(match, state.sessions_by_id)
+        resultat.salle_message = message_auto
+        _apres_ecriture_planning(session_id, "update")
+        return resultat
 
     # Retrait de salle : `room_id` vide. Aucun conflit ni capacité à vérifier
     # — on n'occupe plus rien.
@@ -6082,7 +6150,7 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
             # donc trop tard (constaté le 08/09/2026).
             raise HTTPException(404, f"Salle « {body.room_id} » inconnue")
     else:
-        salle = _resolve_room(state, session, body.week, body.day, body.slot, None)
+        salle = _resolve_room(state, session, body.week, body.day, body.slot, None, capacite_stricte=True)
 
     salle_id = getattr(salle, "id", None)
     validation = validate_move(
@@ -6146,6 +6214,8 @@ def placer_seance(session_id: str, body: MoveSessionRequest) -> PlacementRespons
 
     _notifier("placement", f"{place.course_code} posée {_ou(place)}")
     resultat = _to_placement(place, state.sessions_by_id)
+    if salle_id is None:
+        resultat.salle_message = _MSG_AUCUNE_SALLE
     _apres_ecriture_planning(session_id, "create")
     return resultat
 

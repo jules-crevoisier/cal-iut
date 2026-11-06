@@ -150,6 +150,29 @@ def _occupations_a_date_fixe(monkeypatch):
     monkeypatch.setattr("cal_iut.api.occupations_externes._aujourdhui", lambda: date(2026, 9, 1))
 
 
+@pytest.fixture
+def date_du_jour_figee(monkeypatch):
+    """Fige « aujourd'hui » au 1er septembre 2026 pour le verrou de semaine
+    (`academic.current_relative_week`) et le contrôle « Date passée »
+    (`api.main._today`). Pour les tests qui placent des séances sur des
+    semaines de novembre 2026 : sans cela, ils cessent de passer dès que ces
+    semaines deviennent la semaine en cours."""
+    from datetime import date
+
+    from cal_iut.api import main
+    from cal_iut.calendar import academic
+
+    fixe = date(2026, 9, 1)
+    original = academic.current_relative_week
+    monkeypatch.setattr(
+        academic,
+        "current_relative_week",
+        lambda calendar, semestre, today=None: original(calendar, semestre, today or fixe),
+    )
+    monkeypatch.setattr(main, "_today", lambda: fixe)
+    return fixe
+
+
 @pytest.fixture(autouse=True)
 def _limiteur_auth_vide():
     """Compteurs de débit des routes `/auth/*` (audit 29/09/2026, P1-3)
