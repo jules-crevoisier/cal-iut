@@ -596,6 +596,16 @@ def find_room_for_slot(
     # centaines de créneaux contre le même planning figé (lissage). Doit
     # avoir été construite SANS la séance elle-même.
     occupation: dict[str, set[int]] | None = None,
+    # Salles des séances voisines du parcours (juste avant / juste après,
+    # mêmes groupes ou même enseignant), de la plus pertinente à la moins
+    # pertinente. Une voisine libre et assez grande est retenue en premier :
+    # continuité de salle (tâche 33). Sans effet si vide.
+    voisines: list[str] | None = None,
+    # `True` = jamais de salle plus petite que l'effectif : pas de repli
+    # « n'importe quelle salle libre ». Pour « Automatique », qui préfère
+    # dire « Sans salle » plutôt que de caser un groupe dans une salle trop
+    # petite.
+    capacite_stricte: bool = False,
 ) -> Room | None:
     """
     Trouve une salle libre et adaptée pour CETTE séance à UN (semaine, jour,
@@ -645,6 +655,17 @@ def find_room_for_slot(
     # =False`, sauf nommage explicite par la règle — cf. `_auto_eligible`.
     auto_rooms = _auto_eligible(rooms, rule)
 
+    for voisine_id in voisines or []:
+        voisine = next((r for r in rooms if r.id == voisine_id), None)
+        if (
+            voisine is not None
+            and voisine.id in room_schedule
+            and voisine.capacity >= needed
+            and not (reserve_amphi and voisine.room_type == RoomType.AMPHI)
+            and _is_free(room_schedule, conflicts, voisine.id, occupied_target)
+        ):
+            return voisine
+
     candidates = sorted(
         [
             r for r in auto_rooms
@@ -654,7 +675,7 @@ def find_room_for_slot(
         ],
         key=lambda r: _room_priority(r, preferred, fallback),
     )
-    if not candidates:
+    if not candidates and not capacite_stricte:
         candidates = sorted(
             [r for r in auto_rooms if _is_free(room_schedule, conflicts, r.id, occupied_target)],
             key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),

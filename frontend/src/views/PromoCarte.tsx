@@ -44,6 +44,9 @@ interface PromoCarteProps {
   salleEnEdition: boolean;
   salleEnCours: boolean;
   salleSelectionnee: string;
+  /** Salle libre (`true`) ou occupée (`false`) sur le créneau de cette séance,
+   *  calculée seulement quand le menu est ouvert. */
+  disponibilites?: Map<string, boolean>;
   onDragStart?: (e: ReactDragEvent) => void;
   onDragEnd?: () => void;
   echangeHandlers: Record<string, unknown>;
@@ -70,6 +73,7 @@ export function PromoCarte({
   salleEnEdition,
   salleEnCours,
   salleSelectionnee,
+  disponibilites,
   onDragStart,
   onDragEnd,
   echangeHandlers,
@@ -160,14 +164,29 @@ export function PromoCarte({
             onChange={(e) => onChoisirSalle(e.target.value)}
             onBlur={onFermerSalle}
           >
-            <option value="">— choisir une salle —</option>
+            <option value="" disabled hidden>
+              — choisir une salle —
+            </option>
+            {/* Deux choix distincts : « Automatique » cherche une salle libre
+                (continuité avec les séances voisines, capacité) ; « Sans
+                salle » retire la salle sans rien chercher. */}
+            <option value="__auto__">Automatique (chercher une salle libre)</option>
+            <option value="__none__">Sans salle</option>
             {/* Créer une salle : réservé aux administrateurs côté serveur. */}
             {estAdmin && <option value="__new__">+ Créer une salle…</option>}
-            {sallesChoisissables(salles, salleSelectionnee).map((s2) => (
-              <option key={s2.id} value={s2.id}>
-                {s2.label} ({s2.capacity} pl.)
-              </option>
-            ))}
+            {sallesChoisissables(salles, salleSelectionnee).map((s2) => {
+              const libre = disponibilites?.get(s2.id);
+              return (
+                <option
+                  key={s2.id}
+                  value={s2.id}
+                  title={libre === undefined ? undefined : libre ? "Salle disponible" : "Salle occupée sur ce créneau"}
+                >
+                  {libre === undefined ? "" : libre ? "🟢 " : "🔴 "}
+                  {s2.label} ({s2.capacity} pl.){libre === false ? " — occupée" : ""}
+                </option>
+              );
+            })}
           </select>
         ) : salleModifiable ? (
           <button
