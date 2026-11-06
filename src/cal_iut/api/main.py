@@ -4481,6 +4481,7 @@ def _entrees_celcat(state) -> list:
             # Celcat s'identifie par ses dates. `_date_iso` applique déjà le
             # décalage de semestre, que `p.week` seul n'intègre pas.
             lundi=_date_iso(state, semestre, p.week, 0) if semestre else "",
+            note=(getattr(session, "metadata", None) or {}).get("note"),
         ))
     return entrees
 
