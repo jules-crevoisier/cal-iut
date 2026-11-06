@@ -1046,6 +1046,11 @@ function messageDe(e: unknown, repli: string): string {
 
 function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved, onImagesChange }: TacheModalProps) {
   const [titre, setTitre] = useState(tache?.titre ?? "");
+  // Tâche #26 : on ne ferme sur le fond que si le clic COMMENCE et FINIT sur
+  // le fond. Agrandir le champ Description à la souris et relâcher hors de
+  // la fenêtre produisait un `click` sur le fond, donc une fermeture et une
+  // rédaction perdue.
+  const appuiSurFond = useRef(false);
   const [description, setDescription] = useState(tache?.description ?? "");
   const [colonne, setColonne] = useState<Tache["colonne"]>(tache?.colonne ?? "a_faire");
   const [categorie, setCategorie] = useState<Tache["categorie"]>(tache?.categorie ?? categorieParDefaut);
@@ -1213,7 +1218,14 @@ function TacheModal({ payload, tache, categorieParDefaut, onClose, onSaved, onIm
     <div
       className="confirmmodal-overlay"
       role="presentation"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        appuiSurFond.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        const fermer = appuiSurFond.current && e.target === e.currentTarget;
+        appuiSurFond.current = false;
+        if (fermer) onClose();
+      }}
       // Une image lâchée à côté de la fenêtre ne doit pas remplacer la page.
       onDragOver={(e) => {
         if (fichiersGlisses(e)) e.preventDefault();

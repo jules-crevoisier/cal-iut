@@ -27,7 +27,8 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { CalendarPlus, Keyboard, ListTodo, MoveHorizontal, Pencil, Plus, X } from "lucide-react";
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { indexSemaineAujourdhui, indexSemaineCourante, jourOuvreAujourdhui } from "../utils/semaineCourante";
+import { indexSemaineAujourdhui, jourOuvreAujourdhui } from "../utils/semaineCourante";
+import { SelecteurCouleurs } from "../components/SelecteurCouleurs";
 import {
   changerSalle,
   deposerPlacement,
@@ -102,6 +103,9 @@ interface PromoViewProps {
   /** Lien public « Vue Promo » (retour utilisateur 31/08/2026) — coupe
    * TOUTE écriture, même si l'appelant passe les callbacks d'édition. */
   readOnly?: boolean;
+  /** Change « couleurs par type / par matière » (même réglage que la Vue
+   *  semaine). Absent : le sélecteur n'est pas affiché. */
+  onCouleursChange?: (parMatiere: boolean) => void;
 }
 
 const JOURS_COURTS = ["lun.", "mar.", "mer.", "jeu.", "ven."];
@@ -190,6 +194,7 @@ export function PromoView({
   setRoute,
   onAPlacerRefresh,
   readOnly = false,
+  onCouleursChange,
 }: PromoViewProps) {
   const filtresInitiaux = useMemo(lireFiltres, []);
   const [choixAPlacer, setChoixAPlacer] = useState<SeanceAPlacer | null>(null);
@@ -342,7 +347,7 @@ export function PromoView({
     }
     if (!payload.weekRows?.length) return;
     semaineRecentree.current = true;
-    setDisplayWeek(indexSemaineCourante(payload.weekRows));
+    setDisplayWeek(indexSemaineAujourdhui(payload.weekRows));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payload.weekRows]);
 
@@ -1062,6 +1067,9 @@ export function PromoView({
             </button>
           )}
         </div>
+        {!readOnly && onCouleursChange && (
+          <SelecteurCouleurs parMatiere={couleursParMatiere} onChange={onCouleursChange} />
+        )}
         {!readOnly && (
           <button
             type="button"

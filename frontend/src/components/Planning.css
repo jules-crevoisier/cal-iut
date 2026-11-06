@@ -374,7 +374,7 @@
 }
 
 .jour-seance.type-td,
-.jour-seance.type-ptut { --c-bg: var(--td-bg); --c-fg: var(--td-fg); --c-bd: var(--td-bd); }
+.jour-seance.type-ptut { --c-bg: var(--ptut-bg); --c-fg: var(--ptut-fg); --c-bd: var(--ptut-bd); }
 .jour-seance.type-tp { --c-bg: var(--tp-bg); --c-fg: var(--tp-fg); --c-bd: var(--tp-bd); }
 .jour-seance.eval { --c-bg: var(--ev-bg); --c-fg: var(--ev-fg); --c-bd: var(--ev-bd); }
 

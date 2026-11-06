@@ -48,7 +48,7 @@ import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
 import { SauvegardesView } from "./views/SauvegardesView";
 import { TraficView } from "./views/TraficView";
-import { indexSemaineCourante } from "./utils/semaineCourante";
+import { indexSemaineAujourdhui } from "./utils/semaineCourante";
 import { compterATraiter } from "./utils/todo";
 import type { RouteView } from "./hooks/useHashRoute";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -260,7 +260,7 @@ export function App() {
       setEtatPlanning("charge");
       if (!semaineInitialisee.current && recu?.weekRows?.length) {
         semaineInitialisee.current = true;
-        setDisplayWeek(indexSemaineCourante(recu.weekRows));
+        setDisplayWeek(indexSemaineAujourdhui(recu.weekRows));
       }
     } catch (e) {
       // Un état DÉJÀ affiché est gardé tel quel (jamais `setAppPayload(null)`) :
@@ -1020,6 +1020,8 @@ export function App() {
                   placements: promoPlacements,
                   onPlacementUpdated: handlePlacementUpdated,
                   onError: (msg: string) => setNotice(msg),
+                  onCouleursChange: (parMatiere: boolean) =>
+                    setPrefs(ecrirePreferences({ couleursParMatiere: parMatiere, repondu: true })),
                   onSeanceChangee: () => {
                     void refreshAppState();
                     void loadPromoTimetable();

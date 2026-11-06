@@ -191,8 +191,8 @@
 .td-block:where(.type-tp) { --c-bg: var(--tp-bg); --c-fg: var(--tp-fg); --c-bd: var(--tp-bd); }
 .td-block:where(.eval) { --c-bg: var(--ev-bg); --c-fg: var(--ev-fg); --c-bd: var(--ev-bd); }
 
-/* PTUT : catégorie propre à cette vue, en gris neutre. */
-.td-block:where(.type-ptut) { --c-bg: var(--cm-bg); --c-fg: var(--cm-fg); --c-bd: var(--cm-bd); }
+/* PTUT : catégorie propre à cette vue, en bleu (couleur Celcat). */
+.td-block:where(.type-ptut) { --c-bg: var(--ptut-bg); --c-fg: var(--ptut-fg); --c-bd: var(--ptut-bd); }
 
 .td-block.locked {
   border-style: dashed;

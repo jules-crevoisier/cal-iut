@@ -62,8 +62,9 @@ export function jourOuvreAujourdhui(aujourdhui: Date = new Date()): number {
  * le dimanche, c'est la semaine du lundi suivant — celle qu'on prépare.
  * Exemple : samedi 10 ou dimanche 11 octobre 2026 -> lundi 12 octobre.
  *
- * Seul ce bouton change : l'ouverture de l'application et le repère
- * « cette semaine » restent sur la semaine calendaire (`indexSemaineCourante`).
+ * Tâche #24 : l'ouverture (ou le rechargement) de l'application suit la même
+ * règle. Le repère « cette semaine » reste, lui, sur la semaine calendaire
+ * (`indexSemaineCourante`).
  */
 export function indexSemaineAujourdhui(semaines: WeekRow[], aujourdhui: Date = new Date()): number {
   const jour = aujourdhui.getDay(); // 0 = dimanche

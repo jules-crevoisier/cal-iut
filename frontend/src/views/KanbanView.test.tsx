@@ -332,5 +332,27 @@ describe("KanbanView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Modifier « Carte a modifier »" }));
     expect(screen.getByRole("dialog", { name: /^Modifier la tâche #\d+$/ })).toBeInTheDocument();
   });
+
+  it("keeps the new-task dialog open when a drag starts inside and ends on the backdrop (#26)", async () => {
+    stubFetch([]);
+    render(<KanbanView payload={payload} role="edit" setRoute={vi.fn()} />);
+    await waitFor(() => expect(screen.getAllByText("Aucune tâche.").length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("button", { name: "Nouvelle tâche" }));
+    const dialogue = screen.getByRole("dialog");
+    const fond = dialogue.parentElement as HTMLElement;
+
+    // Redimensionnement du champ : appui dans la fenêtre, relâché sur le fond
+    // -> le navigateur émet un `click` sur l'ancêtre commun (le fond).
+    fireEvent.mouseDown(screen.getByPlaceholderText("Détails, contexte…"));
+    fireEvent.mouseUp(fond);
+    fireEvent.click(fond);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // Appui ET relâché sur le fond : on ferme.
+    fireEvent.mouseDown(fond);
+    fireEvent.mouseUp(fond);
+    fireEvent.click(fond);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });
 

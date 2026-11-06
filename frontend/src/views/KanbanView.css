@@ -426,6 +426,17 @@ button.kanban-card-titre:hover {
   position: relative;
 }
 
+/* Tâche #26 : sur ordinateur, fenêtre plus large et Description confortable. */
+@media (min-width: 900px) {
+  .seancemodal.kanban-modal {
+    width: min(760px, 100%);
+  }
+
+  .seancemodal.kanban-modal .newroom-field--large textarea {
+    min-height: 180px;
+  }
+}
+
 .kanban-modal-depot {
   position: absolute;
   inset: 6px;
