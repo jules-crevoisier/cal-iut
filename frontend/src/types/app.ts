@@ -208,6 +208,9 @@ export interface SeanceNonPlacee {
 }
 
 export interface AppPayload {
+  /** Présent seulement quand le payload est celui d'un brouillon en
+   *  relecture (`GET /brouillons/{id}/app-state`). */
+  brouillon?: { run_id: number; groupe: string | null; libelle: string; cree_le: string | null; placements: number };
   status: string | null;
   seancesNonPlacees?: SeanceNonPlacee[];
   objective: number | null;

@@ -357,7 +357,7 @@ app.add_middleware(
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
     "/admin", "/api", "/app-state", "/calendrier", "/celcat", "/controles", "/corrections", "/diff", "/exceptions", "/export",
-    "/feedback", "/generations", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
+    "/feedback", "/generations", "/brouillons", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
     "/reference", "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
@@ -587,7 +587,7 @@ app.middleware("http")(mcp_bearer_middleware)
 # (`/celcat/extras/{id}/ajouter`) passe par `creer_seance_personnalisee`,
 # donc par `_apres_ecriture_planning`, qui avance la révision lui-même.
 _ECRITURES_SANS_EFFET_VISIBLE = (
-    "/auth/", "/admin", "/celcat", "/mail", "/notifications", "/sauvegardes", "/generations", "/controles",
+    "/auth/", "/admin", "/celcat", "/mail", "/notifications", "/sauvegardes", "/generations", "/brouillons", "/controles",
 )
 
 
@@ -1469,8 +1469,10 @@ def payload_app_state() -> dict[str, object]:
         return payload
 
 
-def _calculer_payload_app_state() -> dict[str, object]:
-    state = get_state()
+def _calculer_payload_app_state(state: object | None = None) -> dict[str, object]:
+    """Par défaut, le planning en service. `state` : un autre état, pour
+    relire un brouillon (`api/brouillons.py`) sans toucher à celui-là."""
+    state = state or get_state()
     ctx = _build_app_context(state)
     from cal_iut.export.html_view import build_payload
     from cal_iut.ingestion.config_loader import load_teacher_contacts
@@ -2416,9 +2418,12 @@ def get_timetable(
 
 
 def _calculer_timetable(
-    group_id: str | None, teacher_code: str | None, room_id: str | None, week: int | None
+    group_id: str | None, teacher_code: str | None, room_id: str | None, week: int | None,
+    state: object | None = None,
 ) -> TimetableResponse:
-    state = get_state()
+    """`state` : un autre état que celui en service (relecture d'un
+    brouillon, `api/brouillons.py`)."""
+    state = state or get_state()
     if not state.timetable:
         raise HTTPException(404, "No timetable — run POST /solve first")
 
@@ -7598,6 +7603,11 @@ app.include_router(_router_occupations_externes)
 from cal_iut.api.generations_routes import router as _router_generations
 
 app.include_router(_router_generations)
+
+# Relire un brouillon avant de le publier (16/11/2026, cf. `api/brouillons.py`).
+from cal_iut.api.brouillons import router as _router_brouillons
+
+app.include_router(_router_brouillons)
 
 # Onglet « Codes Celcat » de Référence (30/09/2026, cf. `api/codes_celcat.py`)
 # — même préfixe `/reference`, donc même protection.

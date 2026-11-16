@@ -316,6 +316,11 @@ p.generation-brouillon {
   text-align: right;
 }
 
+.generation-actions-ligne {
+  display: inline-flex;
+  gap: 6px;
+}
+
 .generation-historique .btn[aria-pressed="true"] {
   border-color: var(--pri-bg);
 }

@@ -206,7 +206,7 @@ class PlanningRepository:
                 )
             )
 
-    def publier_run(self, run_id: int) -> PlanningRun:
+    def publier_run(self, run_id: int, libelles_salles: dict[str, str] | None = None) -> PlanningRun:
         """Met un brouillon en service : ses placements calculés remplacent
         le planning des mêmes semestres. Lève `ValueError` si le run
         n'existe pas ou n'est pas un brouillon."""
@@ -223,6 +223,10 @@ class PlanningRepository:
                 "slot": s.slot,
                 "course_code": s.course_code,
                 "room_id": s.room_id,
+                # Le calcul ne garde que l'identifiant de la salle : son
+                # libellé vient de `libelles_salles` (`rooms.yaml`), à
+                # défaut de l'identifiant.
+                "room_label": (libelles_salles or {}).get(s.room_id, s.room_id) if s.room_id else None,
             }
             for s in self.db.query(SolverPlacement).filter(SolverPlacement.run_id == run.id)
         ]
@@ -233,6 +237,61 @@ class PlanningRepository:
         self.db.commit()
         self.db.refresh(run)
         return run
+
+    def brouillons(self) -> list[tuple[PlanningRun, int]]:
+        """Les brouillons, le plus récent d'abord, avec leur nombre de
+        séances placées."""
+        runs = (
+            self.db.query(PlanningRun)
+            .filter(PlanningRun.etat == ETAT_BROUILLON)
+            .order_by(PlanningRun.id.desc())
+            .all()
+        )
+        return [
+            (run, self.db.query(SolverPlacement).filter(SolverPlacement.run_id == run.id).count())
+            for run in runs
+        ]
+
+    def get_brouillon(self, run_id: int) -> PlanningRun | None:
+        run = self.db.get(PlanningRun, run_id)
+        return run if run is not None and run.etat == ETAT_BROUILLON else None
+
+    def placements_calcules(self, run_id: int) -> list[SolverPlacement]:
+        return list(self.db.query(SolverPlacement).filter(SolverPlacement.run_id == run_id))
+
+    def supprimer_brouillon(self, run_id: int) -> bool:
+        """Supprime un brouillon et ses placements calculés. Un run en
+        service n'est jamais supprimé par ici."""
+        run = self.get_brouillon(run_id)
+        if run is None:
+            return False
+        self.db.query(SolverPlacement).filter(SolverPlacement.run_id == run_id).delete(
+            synchronize_session=False
+        )
+        self.db.delete(run)
+        self.db.commit()
+        return True
+
+    def runs_en_service(self) -> list[tuple[PlanningRun, int]]:
+        """Les runs qui portent des placements en service (un par groupe de
+        semestres, en pratique), le plus récent d'abord, avec leur nombre
+        de séances."""
+        from sqlalchemy import func
+
+        comptes = dict(
+            self.db.query(CurrentPlacement.run_id, func.count())
+            .group_by(CurrentPlacement.run_id)
+            .all()
+        )
+        if not comptes:
+            return []
+        runs = (
+            self.db.query(PlanningRun)
+            .filter(PlanningRun.id.in_(list(comptes)))
+            .order_by(PlanningRun.id.desc())
+            .all()
+        )
+        return [(run, int(comptes[run.id])) for run in runs]
 
     def get_latest_run(
         self,
