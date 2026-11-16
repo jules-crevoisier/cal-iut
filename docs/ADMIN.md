@@ -689,6 +689,24 @@ qu'il a relevé :
 La liste est relue après chaque récupération depuis MMI Prévi. Pendant une
 génération, elle n'est pas affichée.
 
+### Réglages saisis depuis l'interface
+
+Référence → **Réglages** (administrateurs) remplace, pour deux réglages du
+quotidien, le passage par un fichier du dépôt :
+
+- **Salles réservées** (complète `data/config/salles_reservees.yaml`) ;
+- **Indisponibilités datées des enseignants** (complète les
+  `forbidden_date_slots` de `teacher_availability.yaml`).
+
+Ce qui est saisi va dans `data/state/reglages.json` (volume persistant, donc
+conservé d'un déploiement à l'autre) : des ajouts, et les retraits d'entrées
+livrées avec l'application. Les fichiers du dépôt ne sont jamais modifiés, et
+une entrée qu'on y ajoute plus tard reste prise en compte.
+
+Effet immédiat sur le planning en service (salles proposées, contrôle des
+déplacements) et lu par la prochaine génération. Aucune séance déjà placée
+n'est déplacée.
+
 ### Deux semestres en service en même temps
 
 Dès que le semestre impair (S1, S3, S5) et le semestre pair (S2, S4, S6) ont chacun un planning en service, l'appli charge les deux :

@@ -242,6 +242,10 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
     from cal_iut.ingestion import surcharges_reference
 
     monkeypatch.setattr(surcharges_reference, "_path", lambda: tmp_path / "references.json")
+    # Réglages saisis depuis l'interface (lot 6, 16/11/2026).
+    from cal_iut.ingestion import reglages
+
+    monkeypatch.setattr(reglages, "_path", lambda config_dir: tmp_path / "reglages.json")
     monkeypatch.setattr(celcat_mappings, "_path", lambda: tmp_path / "celcat_mappings.json")
     # Overlay maquette (PATCH /placements/{id}/seance) — le module n'existe
     # pas encore au moment du TDD ; dès qu'il est là, l'isoler comme le reste.

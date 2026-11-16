@@ -1,0 +1,199 @@
+"""Réglages du quotidien modifiables depuis l'interface (lot 6 du chantier
+« Nouveau semestre depuis l'interface », 16/11/2026).
+
+Jusque-là, réserver une salle pour la Direction ou noter qu'un enseignant
+est absent un matin demandait un développeur : un fichier de
+`data/config/`, une PR, un déploiement. Et ce dossier fait partie de
+l'image Docker : rien de ce qu'on y écrirait depuis le serveur ne
+survivrait au déploiement suivant.
+
+Ici, ce que l'administrateur saisit va dans `data/state/reglages.json`
+(volume persistant, sauvegardé). Le fichier ne REMPLACE pas ceux du dépôt,
+il les complète :
+
+- `ajouts`   : les entrées saisies à l'écran ;
+- `retraits` : les clés des entrées livrées avec l'application qu'on a
+  retirées à l'écran.
+
+Une entrée ajoutée plus tard dans le dépôt reste donc prise en compte.
+
+Les chargeurs de `config_loader.py` appliquent ces réglages : le serveur,
+l'audit, la génération et le solveur lisent la même chose sans rien savoir
+de ce fichier.
+
+Deux réglages pour commencer :
+
+- `salles_reservees`  : complète `salles_reservees.yaml` ;
+- `indisponibilites`  : indisponibilités d'un enseignant à une date et des
+  créneaux précis, complète les `forbidden_date_slots` de
+  `teacher_availability.yaml`.
+"""
+
+from __future__ import annotations
+
+import threading
+import uuid
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
+
+NOMS = ("salles_reservees", "indisponibilites")
+NB_CRENEAUX = 6
+
+_verrou = threading.RLock()
+
+
+def _path(config_dir: Path) -> Path:
+    return config_dir.parents[1] / "data" / "state" / "reglages.json"
+
+
+def _lire(config_dir: Path) -> dict[str, dict]:
+    brut = lire_json_etat(_path(config_dir), {}, types=dict)
+    sortie: dict[str, dict] = {}
+    for nom in NOMS:
+        bloc = brut.get(nom) if isinstance(brut.get(nom), dict) else {}
+        sortie[nom] = {
+            "ajouts": [a for a in bloc.get("ajouts") or [] if isinstance(a, dict)],
+            "retraits": [str(r) for r in bloc.get("retraits") or []],
+        }
+    return sortie
+
+
+def _creneaux(valeur: object) -> list[int]:
+    return sorted({int(s) for s in (valeur or []) if 0 <= int(s) < NB_CRENEAUX})
+
+
+# ── Clés : ce qui identifie une entrée livrée avec l'application ──────
+
+
+def cle_reservation(entree: dict) -> str:
+    creneaux = "".join(str(s) for s in _creneaux(entree.get("slots")))
+    return f"{str(entree.get('salle')).strip().lower()}|{entree.get('date')}|{creneaux}"
+
+
+def cle_indisponibilite(code: str, regle: dict) -> str:
+    creneaux = "".join(str(s) for s in _creneaux(regle.get("slots")))
+    return f"{code}|{regle.get('date')}|{creneaux}"
+
+
+# ── Lecture : ce que les chargeurs appliquent ─────────────────────────
+
+
+def reservations(config_dir: Path, livrees: list[dict] | None) -> list[dict]:
+    """Les réservations de salles en vigueur : celles du dépôt, moins celles
+    retirées à l'écran, plus celles saisies à l'écran. Chaque entrée porte
+    `cle` et `origine` (« livree » ou « ajoutee »)."""
+    bloc = _lire(config_dir)["salles_reservees"]
+    retraits = set(bloc["retraits"])
+    sortie = []
+    for entree in livrees or []:
+        cle = cle_reservation(entree)
+        if cle not in retraits:
+            sortie.append({**entree, "cle": cle, "origine": "livree"})
+    sortie += [{**a, "cle": a["id"], "origine": "ajoutee"} for a in bloc["ajouts"] if a.get("id")]
+    return sortie
+
+
+def indisponibilites_ajoutees(config_dir: Path) -> list[dict]:
+    return [a for a in _lire(config_dir)["indisponibilites"]["ajouts"] if a.get("id")]
+
+
+def indisponibilites_retirees(config_dir: Path) -> set[str]:
+    return set(_lire(config_dir)["indisponibilites"]["retraits"])
+
+
+def appliquer_aux_enseignants(config_dir: Path, enseignants: list[dict]) -> list[dict]:
+    """Applique les indisponibilités saisies à l'écran aux entrées BRUTES de
+    `teacher_availability.yaml` (avant validation)."""
+    bloc = _lire(config_dir)["indisponibilites"]
+    if not bloc["ajouts"] and not bloc["retraits"]:
+        return enseignants
+    retraits = set(bloc["retraits"])
+    sortie = []
+    par_code: dict[str, dict] = {}
+    for brut in enseignants:
+        entree = dict(brut)
+        code = str(entree.get("teacher_code"))
+        regles = entree.get("forbidden_date_slots") or []
+        if regles:
+            entree["forbidden_date_slots"] = [
+                r for r in regles if cle_indisponibilite(code, r) not in retraits
+            ]
+        sortie.append(entree)
+        par_code.setdefault(code, entree)
+    for ajout in bloc["ajouts"]:
+        code = str(ajout.get("teacher_code") or "")
+        if not code or not ajout.get("id"):
+            continue
+        entree = par_code.get(code)
+        if entree is None:
+            entree = {"teacher_code": code}
+            par_code[code] = entree
+            sortie.append(entree)
+        entree["forbidden_date_slots"] = [
+            *(entree.get("forbidden_date_slots") or []),
+            {"date": ajout["date"], "slots": _creneaux(ajout.get("slots")), "note": ajout.get("motif")},
+        ]
+    return sortie
+
+
+# ── Écriture ──────────────────────────────────────────────────────────
+
+
+class ReglageInvalide(ValueError):
+    """Saisie refusée, avec un message à afficher tel quel."""
+
+
+def _valider_date(valeur: str) -> str:
+    try:
+        return date.fromisoformat(str(valeur)).isoformat()
+    except ValueError as exc:
+        raise ReglageInvalide("La date n'est pas valide.") from exc
+
+
+def ajouter(config_dir: Path, nom: str, entree: dict, par: str) -> dict:
+    """Enregistre une entrée saisie à l'écran et la renvoie avec son `id`."""
+    if nom not in NOMS:
+        raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
+    creneaux = _creneaux(entree.get("slots"))
+    if not creneaux:
+        raise ReglageInvalide("Choisissez au moins un créneau.")
+    motif = str(entree.get("motif") or "").strip()
+    if not motif:
+        raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+    propre = {
+        **{k: v for k, v in entree.items() if k not in ("id", "slots", "date", "motif")},
+        "id": uuid.uuid4().hex[:12],
+        "date": _valider_date(entree.get("date")),
+        "slots": creneaux,
+        "motif": motif[:300],
+        "demande_par": par,
+        "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        tout[nom]["ajouts"].append(propre)
+        ecrire_json(_path(config_dir), tout)
+    return propre
+
+
+def retirer(config_dir: Path, nom: str, cle: str, *, livree: bool) -> bool:
+    """Retire une entrée : supprime un ajout, ou note le retrait d'une entrée
+    livrée avec l'application. Faux si rien ne correspond."""
+    if nom not in NOMS:
+        raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout[nom]
+        if livree:
+            if cle in bloc["retraits"]:
+                return False
+            bloc["retraits"].append(cle)
+        else:
+            reste = [a for a in bloc["ajouts"] if a.get("id") != cle]
+            if len(reste) == len(bloc["ajouts"]):
+                return False
+            bloc["ajouts"] = reste
+        ecrire_json(_path(config_dir), tout)
+    return True

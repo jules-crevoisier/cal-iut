@@ -1,0 +1,128 @@
+/* Référence → Réglages (lot 6, 16/11/2026). */
+.reglages {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.reglages-intro {
+  margin: 0;
+  max-width: 78ch;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.reglages-message {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--good) 35%, transparent);
+  border-radius: 8px;
+  background: var(--good-soft);
+  color: var(--good-text);
+  font-size: 13.5px;
+}
+
+.reglages-famille {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.reglages-famille header h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.reglages-famille header p,
+.reglages-famille > p {
+  margin: 0;
+  max-width: 78ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.reglages-famille table.ref tbody th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.reglages-passee {
+  opacity: 0.65;
+}
+
+.reglages-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.reglages-passees {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.reglages-ajout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.reglages-ajout h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reglages-champs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.reglages-champs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.reglages-champs select {
+  min-width: 220px;
+}
+
+.reglages-motif {
+  flex: 1 1 280px;
+}
+
+.reglages-creneaux {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 13.5px;
+}
+
+.reglages-creneaux legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.reglages-creneaux label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
