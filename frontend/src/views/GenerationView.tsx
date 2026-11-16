@@ -21,11 +21,13 @@ import {
   lireGeneration,
   listBrouillons,
   listGenerations,
+  publierBrouillon,
   supprimerBrouillon,
   type EtapeGeneration,
   type GenerationDetail,
   type GenerationResume,
   type GenerationsReponse,
+  type BrouillonsReponse,
   type RunResume,
   type StatutGeneration,
 } from "../api/client";
@@ -263,8 +265,16 @@ function Resultat({ generation, libelleGroupe }: { generation: GenerationDetail;
   );
 }
 
-export function GenerationView({ onRelire }: { onRelire?: (runId: number) => void }) {
+export function GenerationView({
+  onRelire,
+  onPublie,
+}: {
+  onRelire?: (runId: number) => void;
+  /** Un brouillon vient d'être mis en service : recharger le planning. */
+  onPublie?: () => void;
+}) {
   const [brouillons, setBrouillons] = useState<RunResume[]>([]);
+  const [enService, setEnService] = useState<BrouillonsReponse["en_service"]>([]);
   const [donnees, setDonnees] = useState<GenerationsReponse | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -282,7 +292,10 @@ export function GenerationView({ onRelire }: { onRelire?: (runId: number) => voi
       setDonnees(r);
       // Les brouillons : un complément, jamais de quoi bloquer l'écran.
       listBrouillons()
-        .then((b) => setBrouillons(Array.isArray(b?.brouillons) ? b.brouillons : []))
+        .then((b) => {
+          setBrouillons(Array.isArray(b?.brouillons) ? b.brouillons : []);
+          setEnService(Array.isArray(b?.en_service) ? b.en_service : []);
+        })
         .catch(() => undefined);
       setErreur(null);
       // Le calcul vient de se terminer : on montre son résultat.
@@ -372,6 +385,31 @@ export function GenerationView({ onRelire }: { onRelire?: (runId: number) => voi
       await recharger();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Le lancement a échoué");
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  // Le semestre en cours est celui que le serveur sert par défaut.
+  const groupeEnCours = enService.find((r) => r.en_cours)?.groupe ?? null;
+
+  const publier = async (b: RunResume) => {
+    const remplace = enService.find((r) => r.groupe === b.groupe);
+    const question = remplace
+      ? `Publier le brouillon n° ${b.run_id} (${b.libelle}) ? Il REMPLACE le planning en service de ce semestre (${NOMBRE.format(remplace.placements)} séances, modifications comprises). Une copie de la base est faite avant.`
+      : `Publier le brouillon n° ${b.run_id} (${b.libelle}) ? Il devient l’emploi du temps de ce semestre, visible par tous. Le semestre en cours ne change pas.`;
+    if (!window.confirm(question)) return;
+    setEnvoi(true);
+    setErreur(null);
+    try {
+      const publie = await publierBrouillon(b.run_id);
+      setMessage(
+        `${publie.libelle} : en service. Choisissez ce semestre avec le sélecteur Impair / Pair, en haut de la barre latérale.`,
+      );
+      await recharger();
+      onPublie?.();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "La publication a échoué");
     } finally {
       setEnvoi(false);
     }
@@ -572,6 +610,19 @@ export function GenerationView({ onRelire }: { onRelire?: (runId: number) => voi
                           Relire
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="btn btn--sm"
+                        disabled={envoi || b.groupe === null || b.groupe === groupeEnCours}
+                        title={
+                          b.groupe !== null && b.groupe === groupeEnCours
+                            ? "Le semestre en cours ne se remplace pas depuis l’interface : corrigez-le dans les vues."
+                            : "Mettre ce brouillon en service"
+                        }
+                        onClick={() => void publier(b)}
+                      >
+                        Publier
+                      </button>
                       <button type="button" className="btn btn--sm" disabled={envoi} onClick={() => void supprimer(b)}>
                         Supprimer
                       </button>

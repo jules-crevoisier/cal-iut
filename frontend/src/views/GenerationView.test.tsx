@@ -91,7 +91,9 @@ const BROUILLON = {
   placements: 1899,
 };
 
-function stubFetch(options: { active?: unknown; generations?: unknown[]; brouillons?: unknown[] } = {}) {
+function stubFetch(
+  options: { active?: unknown; generations?: unknown[]; brouillons?: unknown[]; enService?: unknown[] } = {},
+) {
   const appels: { url: string; init?: RequestInit }[] = [];
   let active = options.active ?? null;
   vi.stubGlobal(
@@ -104,9 +106,16 @@ function stubFetch(options: { active?: unknown; generations?: unknown[]; brouill
           options.brouillons = [];
           return Promise.resolve({ ok: true, json: async () => ({ supprime: 16 }) });
         }
+        if (init?.method === "POST" && chemin.endsWith("/publier")) {
+          options.brouillons = [];
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ publie: 16, groupe: "even", libelle: BROUILLON.libelle, remplace: null }),
+          });
+        }
         return Promise.resolve({
           ok: true,
-          json: async () => ({ brouillons: options.brouillons ?? [], en_service: [] }),
+          json: async () => ({ brouillons: options.brouillons ?? [], en_service: options.enService ?? [] }),
         });
       }
       if (init?.method === "POST" && chemin.endsWith("/annuler")) {
@@ -207,5 +216,33 @@ describe("GenerationView", () => {
     fireEvent.click(within(ligne).getByRole("button", { name: "Supprimer" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: /Brouillons/ })).not.toBeInTheDocument());
     expect(appels.some((a) => a.init?.method === "DELETE" && a.url.endsWith("/brouillons/16"))).toBe(true);
+  });
+
+  it("publie un brouillon après confirmation et recharge le planning", async () => {
+    const appels = stubFetch({ generations: [RESUME_TERMINEE], brouillons: [BROUILLON] });
+    const confirmer = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onPublie = vi.fn();
+    render(<GenerationView onPublie={onPublie} />);
+
+    const carte = await screen.findByRole("region", { name: /Brouillons/ });
+    fireEvent.click(within(carte).getByRole("button", { name: "Publier" }));
+
+    await waitFor(() => expect(onPublie).toHaveBeenCalled());
+    expect(confirmer.mock.calls[0][0]).toMatch(/Le semestre en cours ne change pas/);
+    expect(appels.some((a) => a.init?.method === "POST" && a.url.endsWith("/brouillons/16/publier"))).toBe(true);
+    expect(await screen.findByText(/en service\. Choisissez ce semestre/)).toBeInTheDocument();
+  });
+
+  it("ne propose pas de publier un brouillon du semestre en cours", async () => {
+    stubFetch({
+      generations: [RESUME_TERMINEE],
+      brouillons: [BROUILLON],
+      enService: [{ ...BROUILLON, run_id: 12, affiche: false, en_cours: true }],
+    });
+    render(<GenerationView />);
+
+    const carte = await screen.findByRole("region", { name: /Brouillons/ });
+
+    expect(within(carte).getByRole("button", { name: "Publier" })).toBeDisabled();
   });
 });

@@ -34,10 +34,65 @@ déposé par le sidecar. C'est ce qui le rend testable sans VPN.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from cal_iut.celcat.comparaison import comparer
 from cal_iut.celcat.mapping import libelle_groupe_celcat, load_celcat_config, regle_pour
+
+
+_SEMESTRE_DU_GROUPE = re.compile(r"\bS([1-6])\b")
+
+
+def semestres_du_planning(state: Any) -> set[str]:
+    """Les semestres que porte ce planning : ceux de son groupe (S1/S3/S5 ou
+    S2/S4/S6), sinon son semestre unique. Vide si rien ne le dit."""
+    from cal_iut.ingestion.pipeline import SEMESTRE_GROUPS
+
+    groupe = getattr(state, "semestre_group", None)
+    if groupe in SEMESTRE_GROUPS:
+        return set(SEMESTRE_GROUPS[groupe])
+    seul = getattr(state, "filter_semestre", None)
+    return {str(seul)} if seul else set()
+
+
+def evenements_du_planning(state: Any, evenements: list[dict]) -> list[dict]:
+    """Les évènements Celcat que ce planning a vocation à porter.
+
+    Le relevé contient TOUTE l'année, les six semestres. Un évènement dont
+    le groupe Celcat (« BUT MMI S2 TD AB ») est d'un semestre que ce
+    planning ne porte pas n'a rien à faire dans la comparaison : il y
+    ressortirait « en trop dans Celcat », c'est-à-dire à SUPPRIMER, alors
+    qu'il appartient à l'autre semestre (16/11/2026, deux semestres en
+    service). Un évènement sans semestre lisible reste, comme avant."""
+    portes = semestres_du_planning(state)
+    if not portes:
+        return list(evenements)
+    gardes: list[dict] = []
+    for ev in evenements:
+        vu = _SEMESTRE_DU_GROUPE.search(str(ev.get("groupe") or "").upper())
+        if vu is None or f"S{vu.group(1)}" in portes:
+            gardes.append(ev)
+    return gardes
+
+
+def comparaison_prise_en_charge(state: Any) -> bool:
+    """La comparaison avec Celcat sait-elle lire ce planning ?
+
+    Elle prend la semaine d'une séance pour un indice du calendrier annuel
+    (`lundis[semaine]`, pastilles « Envoi par semaine »). C'est vrai pour
+    S1/S3/S5, dont la semaine 0 est la première de l'année. Les semaines de
+    S2/S4/S6 se comptent depuis LEUR début (février) : les comparer telles
+    quelles rapprocherait leurs séances des cours de septembre, et proposerait
+    de supprimer ceux qui ne correspondent pas. Tant que cette conversion
+    n'est pas écrite et vérifiée, rien n'est comparé ni envoyé pour elles."""
+    from cal_iut.calendar.academic import semester_week_offset
+
+    portes = semestres_du_planning(state)
+    calendrier = getattr(state, "calendar", None)
+    if not portes or calendrier is None:
+        return True
+    return all(semester_week_offset(calendrier, s) == 0 for s in portes)
 
 
 class ContexteComparaison:
@@ -180,10 +235,12 @@ def lignes(
     la comparaison retombe sur la ressemblance seule — c'est ce que faisait
     tout le monde avant le 16/09/2026.
     """
+    if not comparaison_prise_en_charge(state):
+        return []
     c = ctx or contexte(state)
     return comparer(
         placements=list(state.timetable),
-        evenements=list(evenements),
+        evenements=evenements_du_planning(state, evenements),
         semaine=semaine,
         semaine_celcat=semaine_celcat,
         groupes_celcat=c.groupes_celcat,

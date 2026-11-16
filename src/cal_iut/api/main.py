@@ -5031,19 +5031,18 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
 
     # Sans relevé, toutes les séances paraîtraient absentes de Celcat : un
     # écran qui hurlerait au désastre alors qu'on n'a simplement rien lu.
+    # Par `planification.lignes`, comme le robot : mêmes garde-fous (les
+    # évènements d'un autre semestre ne sont pas « en trop », le semestre
+    # pair n'est pas encore comparé).
+    from cal_iut.celcat import planification as _planification
+
     lignes = (
-        comparer(
-            placements=list(state.timetable),
-            evenements=list(releve.evenements),
+        _planification.lignes(
+            state,
             semaine=semaine,
             semaine_celcat=semaine_celcat,
-            groupes_celcat=ctx.groupes_celcat,
-            salles_celcat=ctx.salles_celcat,
-            codes_celcat=ctx.codes_celcat,
-            types_seance=ctx.types_seance,
-            categories_regle=ctx.categories_regle,
-            non_envoyees=ctx.non_envoyees,
-            enseignants_celcat=ctx.enseignants_celcat,
+            evenements=list(releve.evenements),
+            ctx=ctx,
             # Ce que NOUS avons ecrit, et ou. Sans cette table, deux seances
             # de meme matiere, meme groupe et meme jour peuvent echanger leur
             # evenement d'un releve a l'autre — et l'ecran montrerait alors

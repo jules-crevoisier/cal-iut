@@ -1454,6 +1454,18 @@ def executer_job_nuit(
     passees = {int(n) - 1 for n in semaines_celcat_passees()}
     semaines = validees - deja_lancees - passees
     state = get_state()
+    from cal_iut.celcat.planification import comparaison_prise_en_charge
+
+    if not comparaison_prise_en_charge(state):
+        # Semestre pair : ni balayage ni semaine marquée « lancée » tant que
+        # la comparaison ne sait pas le lire (16/11/2026).
+        journaliser(
+            kind="echec",
+            session_id="(balayage)",
+            motif="semestre pair : la comparaison avec Celcat n'est pas encore prise en charge, rien n'est enfilé",
+            regrouper=True,
+        )
+        semaines = set()
     journal = doc.get("journal") if isinstance(doc.get("journal"), dict) else {}
 
     # LE BALAYAGE PASSE PAR LA COMPARAISON, jamais par le seul journal.

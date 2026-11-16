@@ -86,8 +86,8 @@ def test_la_liste_distingue_les_brouillons_de_ce_qui_est_en_service(admin, plann
     assert [(b["run_id"], b["groupe"], b["placements"]) for b in liste["brouillons"]] == [(brouillon, "even", 30)]
     assert liste["brouillons"][0]["libelle"] == "Semestre pair (S2, S4, S6)"
     assert liste["brouillons"][0]["cree_le"].endswith("+00:00")
-    assert [(r["run_id"], r["groupe"], r["placements"], r["affiche"]) for r in liste["en_service"]] == [
-        (en_service, "odd", 40, True)
+    assert [(r["run_id"], r["groupe"], r["placements"], r["affiche"], r["en_cours"]) for r in liste["en_service"]] == [
+        (en_service, "odd", 40, True, True)
     ]
 
 
@@ -193,11 +193,9 @@ def test_publier_un_brouillon_garde_le_nom_des_salles(planning):
     assert {(p.room_id, p.room_label) for p in publies} == {("h007", "H.007")}
 
 
-def test_aucune_route_ne_publie_encore_un_brouillon():
-    """Garde-fou : publier le semestre pair ferait disparaître l'automne de
-    l'application (elle ne sert qu'un run) et le sidecar Celcat y verrait des
-    séances à supprimer. À lever quand les deux semestres se chargent
-    ensemble."""
+def test_seule_la_route_de_publication_publie_un_brouillon():
+    """Un seul chemin met un brouillon en service : `brouillons.publier`, qui
+    refuse le semestre en cours et recharge les deux semestres."""
     from pathlib import Path
 
     racine = Path(__file__).resolve().parents[1] / "src" / "cal_iut"
@@ -206,4 +204,53 @@ def test_aucune_route_ne_publie_encore_un_brouillon():
         for f in racine.rglob("*.py")
         if "publier_run(" in f.read_text(encoding="utf-8") and f.name != "repository.py"
     ]
-    assert appelants == []
+    assert appelants == ["api/brouillons.py"]
+
+
+def test_publier_le_semestre_pair_le_met_en_service_a_cote_de_l_automne(admin, planning):
+    from cal_iut.api import state as etats
+
+    en_service, brouillon = planning
+    automne_avant = [c for c in _en_service_en_base() if c[0] == en_service]
+
+    reponse = admin.post(f"/brouillons/{brouillon}/publier")
+
+    assert reponse.status_code == 200, reponse.text
+    corps = reponse.json()
+    assert (corps["publie"], corps["groupe"], corps["remplace"]) == (brouillon, "even", None)
+    assert [s["groupe"] for s in corps["semestres_charges"]] == ["odd", "even"]
+    # L'automne n'a pas bougé, ni en base ni à l'écran ; le printemps est à côté.
+    get_repo().db.expire_all()
+    assert [c for c in _en_service_en_base() if c[0] == en_service] == automne_avant
+    assert sum(1 for c in _en_service_en_base() if c[0] == brouillon) == 30
+    try:
+        assert (get_state().semestre_group, get_state().current_run_id, len(get_state().timetable)) == (
+            "odd", en_service, 40,
+        )
+        printemps = admin.get("/app-state", headers={"X-Semestre-Groupe": "even"}).json()
+        assert (printemps["semestreGroupe"], len(printemps["rows"])) == ("even", 30)
+        with etats.pour_le_groupe("even"):
+            assert {p.room_label for p in get_state().timetable} == {"H.007"}
+        assert admin.get("/brouillons").json()["brouillons"] == []
+        assert admin.post(f"/brouillons/{brouillon}/publier").status_code == 404
+    finally:
+        etats.definir_secondaires({})
+
+
+def test_le_semestre_en_cours_ne_se_remplace_pas_depuis_l_interface(admin, planning):
+    en_service, _ = planning
+    etat = get_state()
+    seances = run_ingestion(etat.config_dir, semestre_group="odd").sessions[:10]
+    autre = get_repo().save_run(
+        parcours="MMI", semestre="ODD", status="FEASIBLE", objective_value=1, gap_penalty=0, weeks=24,
+        solver_placements=_placements(seances, 3), current_placements=[], etat=ETAT_BROUILLON,
+    )
+    base_avant = _en_service_en_base()
+
+    reponse = admin.post(f"/brouillons/{autre.id}/publier")
+
+    assert reponse.status_code == 409
+    assert "semestre en cours" in reponse.json()["detail"]
+    get_repo().db.expire_all()
+    assert _en_service_en_base() == base_avant
+    assert get_state().current_run_id == en_service

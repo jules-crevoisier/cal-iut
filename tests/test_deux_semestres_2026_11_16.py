@@ -215,3 +215,59 @@ def test_ce_qui_est_commun_suit_d_un_etat_a_l_autre(deux_semestres):
     automne = get_state()
     assert automne.rooms is printemps.rooms
     assert (len(automne.timetable), len(printemps.timetable)) == (40, 30)
+
+
+# ── Celcat : chaque semestre ne répond que de ses évènements ────────────
+
+
+def _evenement(groupe: str, event_id: int, semaine: int = 5) -> dict:
+    return {
+        "event_id": event_id, "semaine": semaine, "module": "WR999 Module", "groupe": groupe,
+        "jour": 0, "heure_debut": "08:00", "salle": "H.007",
+    }
+
+
+def test_un_evenement_celcat_de_l_autre_semestre_n_est_pas_en_trop(deux_semestres):
+    from cal_iut.celcat import planification
+
+    automne = get_state()
+    evenements = [_evenement("BUT MMI S2 TD AB", 1), _evenement("BUT MMI S1 TD AB", 2), _evenement("Réunion", 3)]
+
+    gardes = planification.evenements_du_planning(automne, evenements)
+    lignes = planification.lignes(automne, semaine=30, semaine_celcat=5, evenements=evenements)
+
+    assert [e["event_id"] for e in gardes] == [2, 3]
+    # Semaine 30 : aucune séance de l'automne. Le cours de S2 n'est pas
+    # proposé à la suppression ; celui de S1, si.
+    assert sorted(l["celcat"]["event_id"] for l in lignes if l["statut"] == "en_trop_celcat") == [2, 3]
+
+
+def test_le_semestre_pair_n_est_ni_compare_ni_envoye_a_celcat(deux_semestres, monkeypatch):
+    from cal_iut.celcat import planification
+
+    monkeypatch.setattr(main, "_today", lambda: date(2027, 2, 3))
+    charger_etat_applicatif()
+    printemps = get_state()
+    assert printemps.semestre_group == "even"
+    poses: list[dict] = []
+    monkeypatch.setattr(file_attente, "_migrer", lambda: None)
+    monkeypatch.setattr(file_attente, "_poser", lambda job: poses.append(job) or True)
+
+    assert planification.comparaison_prise_en_charge(printemps) is False
+    assert planification.lignes(
+        printemps, semaine=2, semaine_celcat=5, evenements=[_evenement("BUT MMI S1 TD AB", 2)]
+    ) == []
+    assert file_attente.enfiler({"action": "delete", "session_id": "x", "event_id": 2}) is False
+    assert poses == []
+
+
+def test_l_automne_reste_compare_et_envoye_comme_avant(deux_semestres, monkeypatch):
+    from cal_iut.celcat import planification
+
+    poses: list[dict] = []
+    monkeypatch.setattr(file_attente, "_migrer", lambda: None)
+    monkeypatch.setattr(file_attente, "_poser", lambda job: poses.append(job) or True)
+
+    assert planification.comparaison_prise_en_charge(get_state()) is True
+    assert file_attente.enfiler({"action": "create", "session_id": "y"}) is True
+    assert len(poses) == 1
