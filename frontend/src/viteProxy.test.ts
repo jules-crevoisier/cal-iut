@@ -10,7 +10,7 @@ const config = readFileSync("vite.config.ts", "utf-8");
 
 describe("proxy de dev Vite", () => {
   it.each([
-    "/admin", "/taches", "/controles", "/sauvegardes",
+    "/admin", "/taches", "/controles", "/sauvegardes", "/generations",
     "/notifications", "/mail", "/rooms", "/calendrier", "/ics",
   ])("relaie %s vers l'API", (prefixe) => {
     expect(config).toContain(`"${prefixe}": "http://127.0.0.1:8000"`);

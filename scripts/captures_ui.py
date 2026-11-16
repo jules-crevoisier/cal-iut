@@ -20,7 +20,7 @@ from pathlib import Path
 
 VUES = [
     "semaine", "prof", "promo", "groupe", "cours", "salle", "reference", "contraintes",
-    "apf", "taches", "comptes", "celcat", "sauvegardes", "mcp",
+    "apf", "taches", "generation", "comptes", "celcat", "sauvegardes", "mcp",
 ]
 LIENS_PUBLICS = {
     # `t` : le lien public ne lit l'état qu'avec ce paramètre (sa valeur

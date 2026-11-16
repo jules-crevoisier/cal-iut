@@ -28,6 +28,7 @@ export type RouteView =
   | "comptes"
   | "celcat"
   | "sauvegardes"
+  | "generation"
   | "trafic"
   | "mcp";
 

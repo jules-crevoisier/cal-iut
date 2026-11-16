@@ -31,6 +31,7 @@ import {
   Search,
   ShieldBan,
   ShieldCheck,
+  Sparkles,
   Users,
   UsersRound,
   X,
@@ -90,6 +91,7 @@ const NAV_GROUPS: NavGroup[] = [
 const GROUPE_ADMIN: NavGroup = {
   label: "Administration",
   items: [
+    { id: "generation", label: "Nouveau semestre", icone: Sparkles },
     { id: "comptes", label: "Comptes", icone: Users },
     { id: "celcat", label: "Celcat", icone: RefreshCcw },
     { id: "sauvegardes", label: "Sauvegardes", icone: DatabaseBackup },
