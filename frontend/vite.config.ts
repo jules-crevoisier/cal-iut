@@ -46,6 +46,7 @@ export default defineConfig({
       "/sauvegardes": "http://127.0.0.1:8000",
       "/generations": "http://127.0.0.1:8000",
       "/brouillons": "http://127.0.0.1:8000",
+      "/reglages": "http://127.0.0.1:8000",
       "/notifications": "http://127.0.0.1:8000",
       "/mail": "http://127.0.0.1:8000",
       "/rooms": "http://127.0.0.1:8000",

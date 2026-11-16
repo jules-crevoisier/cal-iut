@@ -38,12 +38,13 @@ import { Onglets } from "../components/Onglets";
 import { EmailEnseignant, MailManquant } from "../components/ValeursReference";
 import { CodesCelcat } from "./CodesCelcat";
 import { EvaluationsReference } from "./EvaluationsReference";
+import { ReglagesReference } from "./ReglagesReference";
 import { EnseignantsVacataires, PastilleType } from "./EnseignantsVacataires";
 import { identiteDe } from "../utils/identiteEnseignant";
 import "../styles/outils.css";
 import "./ReferenceView.css";
 
-type SubTab = "salles" | "cours" | "evaluations" | "codes-celcat" | "calendrier" | "enseignants" | "liens" | "notifications";
+type SubTab = "salles" | "cours" | "evaluations" | "codes-celcat" | "calendrier" | "enseignants" | "liens" | "notifications" | "reglages";
 
 const ONGLETS: { id: SubTab; label: string }[] = [
   { id: "salles", label: "Salles" },
@@ -60,6 +61,9 @@ const ONGLETS: { id: SubTab; label: string }[] = [
   { id: "enseignants", label: "Enseignants & vacataires" },
   { id: "liens", label: "Liens & partage" },
   { id: "notifications", label: "Notifications" },
+  // 16/11/2026 (lot 6) : salles réservées et indisponibilités datées,
+  // saisies ici plutôt que dans un fichier du dépôt. Administrateurs.
+  { id: "reglages", label: "Réglages" },
 ];
 
 const CLE_ONGLET = "cal-iut:reference:onglet:v1";
@@ -127,7 +131,7 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
   const { apresEnregistrement, estAdmin } = useDroits();
   // « Notifications » : réglage réservé aux administrateurs (le serveur refuse
   // aux autres) — l'onglet ne s'affiche que pour eux.
-  const onglets = estAdmin ? ONGLETS : ONGLETS.filter((o) => o.id !== "notifications");
+  const onglets = estAdmin ? ONGLETS : ONGLETS.filter((o) => o.id !== "notifications" && o.id !== "reglages");
   const subDemande: SubTab = route && estOnglet(route.onglet) ? route.onglet : subLocal;
   const sub: SubTab = onglets.some((o) => o.id === subDemande) ? subDemande : "salles";
   // « Nouvel intervenant » (30/09/2026) : aussi depuis Codes Celcat →
@@ -194,6 +198,7 @@ export function ReferenceView({ payload, setRoute, route }: ReferenceViewProps) 
         {/* Sous-onglet À PART, pas au pied de l'annuaire des liens : sous un
             long tableau, le panneau était introuvable. */}
         {sub === "notifications" && <NotificationsPanel />}
+        {sub === "reglages" && <ReglagesReference payload={payload} />}
       </div>
     </section>
   );

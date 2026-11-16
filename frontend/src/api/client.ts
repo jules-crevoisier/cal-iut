@@ -614,6 +614,51 @@ export async function revenirALaCopieLivree(groupe: string): Promise<{ source: S
   });
 }
 
+// ── Réglages du quotidien (16/11/2026, cf. api/reglages_routes.py) ──
+
+export interface ReglageDate {
+  cle: string;
+  /** « livree » : vient des fichiers livrés avec l'application. */
+  origine: "livree" | "ajoutee";
+  date: string;
+  slots: number[];
+  motif: string;
+  demande_par: string;
+}
+
+export interface SalleReservee extends ReglageDate {
+  salle: string;
+  salle_libelle: string;
+}
+
+export interface IndisponibiliteDatee extends ReglageDate {
+  teacher_code: string;
+}
+
+export interface ReglagesReponse {
+  creneaux: string[];
+  salles_reservees: SalleReservee[];
+  indisponibilites: IndisponibiliteDatee[];
+}
+
+export type FamilleDeReglage = "salles-reservees" | "indisponibilites";
+
+export async function lireReglages(): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>("/reglages");
+}
+
+export async function ajouterReglage(
+  famille: FamilleDeReglage,
+  entree: { salle?: string; teacher_code?: string; date: string; slots: number[]; motif: string },
+): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/${famille}`, { method: "POST", body: JSON.stringify(entree) });
+}
+
+export async function retirerReglage(famille: FamilleDeReglage, entree: ReglageDate): Promise<ReglagesReponse> {
+  const params = new URLSearchParams({ cle: entree.cle, origine: entree.origine });
+  return request<ReglagesReponse>(`/reglages/${famille}?${params.toString()}`, { method: "DELETE" });
+}
+
 /** « À régler avant de générer » (cf. generation/verification.py). */
 export interface ConstatAvantDeGenerer extends ConstatVerification {
   bloquant: boolean;

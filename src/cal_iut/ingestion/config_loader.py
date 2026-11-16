@@ -100,8 +100,23 @@ def load_groups(config_dir: Path) -> list[Group]:
 
 
 def load_teacher_availability(config_dir: Path) -> list[TeacherAvailability]:
+    from cal_iut.ingestion import reglages
+
     data = load_yaml(config_dir / "teacher_availability.yaml")
-    return [TeacherAvailability.model_validate(item) for item in data.get("teachers", [])]
+    # + les indisponibilités datées saisies depuis l'interface (volume
+    # persistant, cf. `ingestion/reglages.py`).
+    enseignants = reglages.appliquer_aux_enseignants(config_dir, data.get("teachers", []) or [])
+    return [TeacherAvailability.model_validate(item) for item in enseignants]
+
+
+def _reservations_en_vigueur(config_dir: Path) -> list[dict[str, object]]:
+    """`salles_reservees.yaml`, moins ce qui a été retiré depuis l'interface,
+    plus ce qui y a été saisi (volume persistant, cf. `ingestion/reglages.py`)."""
+    from cal_iut.ingestion import reglages
+
+    chemin = config_dir / "salles_reservees.yaml"
+    livrees = ((load_yaml(chemin) or {}).get("reservations") or []) if chemin.exists() else []
+    return reglages.reservations(config_dir, livrees)
 
 
 def load_room_reservations(
@@ -121,13 +136,11 @@ def load_room_reservations(
 
     from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY
 
-    chemin = config_dir / "salles_reservees.yaml"
-    if not chemin.exists() or calendar is None:
+    if calendar is None:
         return {}
-    data = load_yaml(chemin) or {}
     slots_per_week = DAYS_PER_WEEK * SLOTS_PER_DAY
     reserve: dict[str, set[int]] = {}
-    for entree in data.get("reservations", []) or []:
+    for entree in _reservations_en_vigueur(config_dir):
         mapped = calendar.date_to_week_day_any(_date.fromisoformat(str(entree["date"])))
         if mapped is None:
             continue
@@ -151,12 +164,8 @@ def load_room_reservation_entries(config_dir: Path) -> list[dict[str, object]]:
     Kyllian Bresson) : sans elles, l'amphi pris par la Direction apparaissait
     « libre » alors que l'affectation automatique, elle, le savait occupé.
     """
-    chemin = config_dir / "salles_reservees.yaml"
-    if not chemin.exists():
-        return []
-    data = load_yaml(chemin) or {}
     sortie: list[dict[str, object]] = []
-    for entree in data.get("reservations", []) or []:
+    for entree in _reservations_en_vigueur(config_dir):
         try:
             sortie.append({
                 "salle": str(entree["salle"]),

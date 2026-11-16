@@ -360,7 +360,7 @@ _PROTECTED_PREFIXES = (
     "/feedback", "/generations", "/brouillons", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
-    "/reference", "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
+    "/reference", "/regen", "/reglages", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
 )
 
 
@@ -1136,6 +1136,40 @@ def startup() -> None:
     _generations.surveiller_reprises()
 
 
+def charger_disponibilites(state: object) -> None:
+    """Calendrier, présences étudiantes et disponibilités des enseignants.
+    À part de `charger_etat_applicatif` pour être rejoué quand une
+    indisponibilité est saisie depuis l'interface (`api/reglages_routes.py`)."""
+    yaml_teachers = load_teacher_availability(CONFIG_DIR)
+    project_root = CONFIG_DIR.parents[1]
+    bundle = load_all_constraints(project_root)
+    state.calendar = bundle.calendar
+    state.student_presences = bundle.student_presences
+    state.teacher_availability = merge_teacher_availability(yaml_teachers, bundle.teachers)
+
+    # Référent SAE = très peu disponible ces jours-là pour un cours classique
+    # (retour utilisateur 11/08/2026, cf. docs/DATA.md §48.2/§49) — augmenté
+    # ICI, une seule fois au démarrage, pour que le glisser-déposer manuel
+    # (`_teacher_availability_violations`) en tienne compte exactement comme
+    # le solveur (même fonction `augment_teacher_availability_with_sae_supervision`).
+    # Sur TOUS les semestres connus (pas seulement le groupe actuellement
+    # chargé) : l'état applicatif peut changer de scope via `/ingest` sans
+    # redémarrage, cette augmentation doit rester valable dans tous les cas.
+    from cal_iut.ingestion.constraints_loader import (
+        augment_teacher_availability_with_sae_supervision as _augment_sae,
+    )
+    from cal_iut.ingestion.pipeline import SEMESTRE_GROUPS
+    from cal_iut.ingestion.planning_loader import (
+        load_mmi_planning_for_semestres,
+        sae_supervisor_dates_by_teacher,
+    )
+
+    all_semestres = sorted({s for group in SEMESTRE_GROUPS.values() for s in group})
+    planning_all = load_mmi_planning_for_semestres(project_root, all_semestres)
+    supervisor_dates = sae_supervisor_dates_by_teacher(planning_all)
+    state.teacher_availability = _augment_sae(state.teacher_availability, supervisor_dates)
+
+
 def charger_etat_applicatif() -> None:
     """Peuple l'état applicatif : maquette, groupes, salles, contraintes,
     calendrier, puis le dernier planning enregistré.
@@ -1169,34 +1203,7 @@ def charger_etat_applicatif() -> None:
     state.room_reservations = load_room_reservations(CONFIG_DIR, state.calendar)
     state.teacher_duos = load_teacher_duos(CONFIG_DIR)
 
-    yaml_teachers = load_teacher_availability(CONFIG_DIR)
-    project_root = CONFIG_DIR.parents[1]
-    bundle = load_all_constraints(project_root)
-    state.calendar = bundle.calendar
-    state.student_presences = bundle.student_presences
-    state.teacher_availability = merge_teacher_availability(yaml_teachers, bundle.teachers)
-
-    # Référent SAE = très peu disponible ces jours-là pour un cours classique
-    # (retour utilisateur 11/08/2026, cf. docs/DATA.md §48.2/§49) — augmenté
-    # ICI, une seule fois au démarrage, pour que le glisser-déposer manuel
-    # (`_teacher_availability_violations`) en tienne compte exactement comme
-    # le solveur (même fonction `augment_teacher_availability_with_sae_supervision`).
-    # Sur TOUS les semestres connus (pas seulement le groupe actuellement
-    # chargé) : l'état applicatif peut changer de scope via `/ingest` sans
-    # redémarrage, cette augmentation doit rester valable dans tous les cas.
-    from cal_iut.ingestion.constraints_loader import (
-        augment_teacher_availability_with_sae_supervision as _augment_sae,
-    )
-    from cal_iut.ingestion.pipeline import SEMESTRE_GROUPS
-    from cal_iut.ingestion.planning_loader import (
-        load_mmi_planning_for_semestres,
-        sae_supervisor_dates_by_teacher,
-    )
-
-    all_semestres = sorted({s for group in SEMESTRE_GROUPS.values() for s in group})
-    planning_all = load_mmi_planning_for_semestres(project_root, all_semestres)
-    supervisor_dates = sae_supervisor_dates_by_teacher(planning_all)
-    state.teacher_availability = _augment_sae(state.teacher_availability, supervisor_dates)
+    charger_disponibilites(state)
 
     repo = get_repo()
     db_weights = repo.weights_as_dict()
@@ -7699,6 +7706,11 @@ app.include_router(_router_generations)
 from cal_iut.api.brouillons import router as _router_brouillons
 
 app.include_router(_router_brouillons)
+
+# Réglages du quotidien saisis depuis l'interface (lot 6, 16/11/2026).
+from cal_iut.api.reglages_routes import router as _router_reglages  # noqa: E402
+
+app.include_router(_router_reglages)
 
 # Onglet « Codes Celcat » de Référence (30/09/2026, cf. `api/codes_celcat.py`)
 # — même préfixe `/reference`, donc même protection.
