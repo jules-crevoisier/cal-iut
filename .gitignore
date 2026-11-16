@@ -74,3 +74,6 @@ data/state/controle_doublons_hebdo.json
 # Liste de blocage anti-aspiration (IP de clients) : état de production,
 # jamais dans le dépôt (cf. docs/ANTI-ASPIRATION.md).
 data/state/blocages.json
+# Maquette et progression recuperees depuis MMI Previ (16/11/2026) : noms
+# d'enseignants et commentaires internes, jamais dans le depot.
+data/state/sources/

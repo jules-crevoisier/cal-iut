@@ -1,6 +1,5 @@
 """Pipeline d'ingestion complet."""
 
-import json
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
@@ -16,6 +15,7 @@ from cal_iut.ingestion.config_loader import (
     load_teacher_distributions,
     load_teacher_duos,
 )
+from cal_iut.ingestion import mmi_previ
 from cal_iut.ingestion.fetch import fetch_all_exports_sync
 from cal_iut.ingestion.merge import apply_teacher_corrections, merge_exports
 from cal_iut.ingestion.normalize import expand_all_sessions
@@ -81,18 +81,20 @@ def _load_cached_or_fetch(config_dir: Path) -> tuple[list[dict[str, object]], li
     `/app-state` entier sur un `group_id` que le fetch live ne reconnaissait
     plus (cf. `solver/rooms.py::_headcount_for_groups`, docs/DATA.md §52.1).
 
+    Depuis le 16/11/2026, les modules récupérés depuis MMI Prévi par l'écran
+    « Nouveau semestre » (`ingestion/mmi_previ.py`, copies rangées sur le
+    volume) remplacent ceux des mêmes semestres.
+
     Absence des deux fichiers cache (ex. environnement de dev sans
     `contraintes/` régénéré) = repli sur le fetch réseau, comportement
     inchangé.
     """
     root = config_dir.parents[1]
-    maquette_path = root / "contraintes" / "maquette.json"
-    progression_path = root / "contraintes" / "progression.json"
-    if maquette_path.exists() and progression_path.exists():
-        maquette = json.loads(maquette_path.read_text(encoding="utf-8"))
-        progression = json.loads(progression_path.read_text(encoding="utf-8"))
-        return maquette, progression
-    return fetch_all_exports_sync()
+    locales = mmi_previ.sources_en_vigueur(root)
+    if locales is not None:
+        return locales
+    maquette, progression = fetch_all_exports_sync()
+    return mmi_previ.appliquer_copies(root, maquette, progression)
 
 
 def run_ingestion(

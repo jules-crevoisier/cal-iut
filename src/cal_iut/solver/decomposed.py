@@ -148,13 +148,14 @@ def _cours_avec_progression_declaree(root: Path) -> frozenset[tuple[str, str]]:
     contrainte structurelle, quel que soit `definie`."""
     import json
 
-    chemin = root / "contraintes" / "progression.json"
-    if not chemin.exists():
+    # Même progression que l'ingestion : la copie livrée, corrigée par ce
+    # qui a été récupéré depuis MMI Prévi (`ingestion/mmi_previ.py`).
+    from cal_iut.ingestion import mmi_previ
+
+    sources = mmi_previ.sources_en_vigueur(root)
+    if sources is None:
         return frozenset()
-    try:
-        data = json.loads(chemin.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return frozenset()
+    data = sources[1]
     return frozenset(
         (str(item.get("code_matiere")), str(item.get("semestre")))
         for item in data
