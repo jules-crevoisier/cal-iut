@@ -10,7 +10,7 @@
  * Refonte v2 (29/09/2026) : une icône en tête de chaque bandeau, pour qu'on
  * les distingue d'un message ordinaire sans lire la couleur seule.
  */
-import { ServerCrash, WifiOff } from "lucide-react";
+import { FileClock, ServerCrash, WifiOff } from "lucide-react";
 
 import "./BandeauPanne.css";
 
@@ -40,6 +40,24 @@ export function BandeauServeurDegrade({ detail }: { detail?: string }) {
         vide ou incomplet : ne modifiez rien avant d'avoir corrigé la cause et redémarré le serveur.
         {detail ? <> Cause signalée : {detail}</> : null}
       </span>
+    </div>
+  );
+}
+
+/** Relecture d'un brouillon (16/11/2026) : les vues montrent un emploi du
+ *  temps calculé mais pas encore en service. Toujours visible, pour qu'on
+ *  ne le prenne jamais pour le planning réel. */
+export function BandeauBrouillon({ libelle, onQuitter }: { libelle: string | null; onQuitter: () => void }) {
+  return (
+    <div className="banner banner--warn bandeau-panne no-print" role="status">
+      <FileClock size={16} className="bandeau-icone" aria-hidden="true" />
+      <span className="bandeau-texte">
+        <strong>Brouillon{libelle ? ` : ${libelle}` : ""}.</strong> Vous relisez un emploi du temps qui n’est pas en
+        service : vous seul le voyez, et rien n’est modifiable ici.
+      </span>
+      <button type="button" className="btn btn--sm" onClick={onQuitter}>
+        Quitter la relecture
+      </button>
     </div>
   );
 }

@@ -19,11 +19,14 @@ import {
   annulerGeneration,
   lancerGeneration,
   lireGeneration,
+  listBrouillons,
   listGenerations,
+  supprimerBrouillon,
   type EtapeGeneration,
   type GenerationDetail,
   type GenerationResume,
   type GenerationsReponse,
+  type RunResume,
   type StatutGeneration,
 } from "../api/client";
 import { ActionsDePage } from "../components/TopBar";
@@ -65,6 +68,15 @@ function formatDuree(secondes: number | undefined): string {
   return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
 }
 
+/** « , commencé il y a 42 min » : un essai dure souvent plus d'une demi-heure
+ *  sans rien afficher d'autre. */
+function depuis(iso: string): string {
+  const debut = new Date(iso).getTime();
+  if (Number.isNaN(debut)) return "";
+  const secondes = Math.max(0, (Date.now() - debut) / 1000);
+  return `, commencé il y a ${formatDuree(secondes)}`;
+}
+
 function pluriel(n: number, singulier: string, plurielMot = `${singulier}s`): string {
   return `${NOMBRE.format(n)} ${n > 1 ? plurielMot : singulier}`;
 }
@@ -101,6 +113,7 @@ function Etapes({ generation }: { generation: GenerationDetail }) {
             {etape.cle === "calcul" && etape.statut === "en_cours" && essai ? (
               <span className="generation-etape-detail">
                 Essai {essai.numero} sur {generation.parametres.tentatives}
+                {depuis(essai.debut)}
                 {generation.meilleur
                   ? ` · meilleur résultat pour l’instant : ${pluriel(generation.meilleur.placees, "séance placée", "séances placées")}`
                   : ""}
@@ -250,7 +263,8 @@ function Resultat({ generation, libelleGroupe }: { generation: GenerationDetail;
   );
 }
 
-export function GenerationView() {
+export function GenerationView({ onRelire }: { onRelire?: (runId: number) => void }) {
+  const [brouillons, setBrouillons] = useState<RunResume[]>([]);
   const [donnees, setDonnees] = useState<GenerationsReponse | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -266,6 +280,10 @@ export function GenerationView() {
     try {
       const r = await listGenerations();
       setDonnees(r);
+      // Les brouillons : un complément, jamais de quoi bloquer l'écran.
+      listBrouillons()
+        .then((b) => setBrouillons(Array.isArray(b?.brouillons) ? b.brouillons : []))
+        .catch(() => undefined);
       setErreur(null);
       // Le calcul vient de se terminer : on montre son résultat.
       if (etaitActive.current && !r.active) setChoisie(null);
@@ -354,6 +372,21 @@ export function GenerationView() {
       await recharger();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Le lancement a échoué");
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  const supprimer = async (b: RunResume) => {
+    if (!window.confirm(`Supprimer le brouillon n° ${b.run_id} ? Il faudra relancer une génération pour en avoir un autre.`)) return;
+    setEnvoi(true);
+    setErreur(null);
+    try {
+      await supprimerBrouillon(b.run_id);
+      setMessage(`Brouillon n° ${b.run_id} supprimé.`);
+      await recharger();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "La suppression a échoué");
     } finally {
       setEnvoi(false);
     }
@@ -501,6 +534,54 @@ export function GenerationView() {
 
       {detail && detail.id !== activeId && (
         <Resultat generation={detail} libelleGroupe={libelleGroupe(detail.parametres.semestre_group)} />
+      )}
+
+      {brouillons.length > 0 && (
+        <section className="panel carte-tableau" aria-labelledby="generation-brouillons-titre">
+          <div className="carte-tete">
+            <h2 id="generation-brouillons-titre">
+              Brouillons <span className="carte-tete-nb">{brouillons.length}</span>
+            </h2>
+            <span className="carte-tete-note">à relire dans les vues habituelles, sans rien changer au planning en service</span>
+          </div>
+          <table className="ref generation-historique">
+            <thead>
+              <tr>
+                <th scope="col">Brouillon</th>
+                <th scope="col">Semestre</th>
+                <th scope="col">Calculé le</th>
+                <th scope="col" className="num">
+                  Séances placées
+                </th>
+                <th scope="col">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {brouillons.map((b) => (
+                <tr key={b.run_id}>
+                  <th scope="row">n° {b.run_id}</th>
+                  <td>{b.libelle}</td>
+                  <td>{formatDateHeure(b.cree_le)}</td>
+                  <td className="num">{NOMBRE.format(b.placements)}</td>
+                  <td className="generation-col-action">
+                    <span className="generation-actions-ligne">
+                      {onRelire && (
+                        <button type="button" className="btn btn--sm btn--primary" onClick={() => onRelire(b.run_id)}>
+                          Relire
+                        </button>
+                      )}
+                      <button type="button" className="btn btn--sm" disabled={envoi} onClick={() => void supprimer(b)}>
+                        Supprimer
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
 
       <section className="panel carte-tableau" aria-labelledby="generation-historique-titre">

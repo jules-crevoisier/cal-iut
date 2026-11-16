@@ -8,6 +8,7 @@ import {
   exportJson,
   extractTeachers,
   fetchAppState,
+  setBrouillonEnRelecture,
   fetchDiff,
   fetchDoublons,
   fetchFeedbackAnalysis,
@@ -21,7 +22,7 @@ import {
 } from "./api/client";
 import type { EtatSante, MoiResponse } from "./api/client";
 import { AccountPendingGate } from "./components/AccountPendingGate";
-import { BandeauPanne, BandeauServeurDegrade } from "./components/BandeauPanne";
+import { BandeauBrouillon, BandeauPanne, BandeauServeurDegrade } from "./components/BandeauPanne";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DayStrip, todayIndex } from "./components/DayStrip";
 import { DiffPanel } from "./components/DiffPanel";
@@ -181,7 +182,16 @@ export function App() {
   // `undefined` = statut pas encore connu (évite un flash du formulaire
   // avant la première réponse de `GET /auth/me`), `null` = pas de session,
   // sinon le compte connecté (actif ou non — `moi.status` distingue).
-  const [moi, setMoi] = useState<MoiResponse | null | undefined>(undefined);
+  const [moiReel, setMoi] = useState<MoiResponse | null | undefined>(undefined);
+  // Relecture d'un brouillon (lot 3, 16/11/2026) : les vues habituelles
+  // montrent le brouillon à la place du planning en service, et le compte
+  // est traité comme un lecteur — aucune fonction d'édition n'est proposée,
+  // puisqu'une écriture modifierait le planning en service, pas le brouillon.
+  const [brouillon, setBrouillon] = useState<number | null>(null);
+  const moi = useMemo<MoiResponse | null | undefined>(
+    () => (brouillon !== null && moiReel ? { ...moiReel, role: "read_only" } : moiReel),
+    [brouillon, moiReel],
+  );
   // Compte « Accès API » (29/09/2026, cf. `api/accounts.py::ROLE_API`) : aucun
   // écran de données, seulement ses clés. Rien du planning n'est chargé pour
   // lui — le serveur le refuserait de toute façon (403).
@@ -273,11 +283,22 @@ export function App() {
         if (e instanceof ErreurApi && e.genre !== "panne") return "refuse";
         return "echec";
       });
+      // Brouillon publié ou supprimé entre-temps : retour au planning en service.
+      if (brouillon !== null && e instanceof ErreurApi && e.status === 404) {
+        setBrouillonEnRelecture(null);
+        setBrouillon(null);
+      }
     }
-  }, []);
+  }, [brouillon]);
 
   const refreshDiff = useCallback(async () => {
     if (lienPublic) return;
+    if (brouillon !== null) {
+      // L'historique des déplacements est celui du planning en service.
+      setDiff(null);
+      setAnalysis(null);
+      return;
+    }
     try {
       const [d, a] = await Promise.all([fetchDiff(), fetchFeedbackAnalysis()]);
       setDiff(d);
@@ -285,7 +306,7 @@ export function App() {
     } catch {
       /* no diff yet */
     }
-  }, [lienPublic]);
+  }, [lienPublic, brouillon]);
 
   // Total des doublons salle/enseignant (retour Kyllian Bresson 25/09/2026,
   // cf. `api/doublons.py`) — chargé ICI (pas seulement dans `TodoView`, qui
@@ -305,7 +326,7 @@ export function App() {
       // Le badge garde son dernier total connu — jamais d'écran cassé pour
       // un chiffre secondaire.
     }
-  }, [lienPublic]);
+  }, [lienPublic, brouillon]);
 
   useEffect(() => {
     // Lien perso (readOnlyTarget) : le paramètre `t` fait le travail d'auth
@@ -335,7 +356,7 @@ export function App() {
     } catch {
       /* no timetable */
     }
-  }, [viewMode, groupId, teacherCode, roomId]);
+  }, [viewMode, groupId, teacherCode, roomId, brouillon]);
 
   // Comme `refreshAppState` ci-dessus : attendre un compte ACTIF. Parti au
   // montage, avant `/auth/me`, cet appel prenait un 401 et n'était jamais
@@ -355,7 +376,7 @@ export function App() {
     } catch {
       /* pas encore de planning */
     }
-  }, []);
+  }, [brouillon]);
 
   useEffect(() => {
     if (activeTab === "promo" && !readOnlyTarget) void loadPromoTimetable();
@@ -388,6 +409,19 @@ export function App() {
   useEffect(() => {
     void rafraichirSante();
   }, [rafraichirSante]);
+
+  const relireBrouillon = (runId: number) => {
+    semaineInitialisee.current = false;
+    setBrouillonEnRelecture(runId);
+    setBrouillon(runId);
+    setRoute({ vue: "promo" });
+  };
+  const quitterBrouillon = () => {
+    semaineInitialisee.current = false;
+    setBrouillonEnRelecture(null);
+    setBrouillon(null);
+    setRoute({ vue: "generation" });
+  };
 
   const toutRecharger = () => {
     void refreshAppState();
@@ -776,6 +810,12 @@ export function App() {
 
           {panne && <BandeauPanne onReessayer={reessayer} />}
           {estAdmin && sante?.status === "degraded" && <BandeauServeurDegrade detail={sante.detail} />}
+          {brouillon !== null && (
+            <BandeauBrouillon
+              libelle={appPayload?.brouillon?.run_id === brouillon ? appPayload.brouillon.libelle : null}
+              onQuitter={quitterBrouillon}
+            />
+          )}
 
           {/* `role="alert"` pour une erreur (annoncée immédiatement), `status` pour
               une information (annoncée sans interrompre). Sans eux, un message
@@ -1052,7 +1092,7 @@ export function App() {
         )}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
-        {activeTab === "generation" && !readOnlyTarget && moi?.role === "admin" && <GenerationView />}
+        {activeTab === "generation" && !readOnlyTarget && moi?.role === "admin" && <GenerationView onRelire={relireBrouillon} />}
         {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}
         {activeTab === "trafic" && !readOnlyTarget && moi?.role === "admin" && <TraficView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}

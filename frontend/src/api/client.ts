@@ -150,7 +150,43 @@ function messageApplicatif(body: unknown): boolean {
   return typeof b.message === "string" || (b.detail !== undefined && b.detail !== null);
 }
 
+// ── Relecture d'un brouillon (16/11/2026, cf. api/brouillons.py) ──
+// Pendant la relecture, les vues habituelles montrent le brouillon : les
+// lectures du planning vont chercher le sien, et AUCUNE écriture ne part.
+// Une écriture modifierait le planning en service, pas le brouillon affiché.
+// Posé ici plutôt que vue par vue : c'est le seul point de passage de toutes
+// les requêtes, donc le seul endroit où l'on ne peut pas en oublier une.
+let brouillonEnRelecture: number | null = null;
+
+export function setBrouillonEnRelecture(runId: number | null): void {
+  brouillonEnRelecture = runId;
+}
+
+export function getBrouillonEnRelecture(): number | null {
+  return brouillonEnRelecture;
+}
+
+export const MESSAGE_RELECTURE =
+  "Vous relisez un brouillon : rien n’est modifiable ici. Quittez la relecture pour modifier le planning en service.";
+
+/** Chemin d'une lecture du planning : celui du brouillon en relecture. */
+function cheminPlanning(chemin: string): string {
+  return brouillonEnRelecture === null ? chemin : `/brouillons/${brouillonEnRelecture}${chemin}`;
+}
+
+function estEcritureInterditeEnRelecture(url: string, init?: RequestInit): boolean {
+  if (brouillonEnRelecture === null) return false;
+  const methode = (init?.method ?? "GET").toUpperCase();
+  if (methode === "GET" || methode === "HEAD") return false;
+  const chemin = url.replace(/^https?:\/\/[^/]+/, "").replace(BASE, "");
+  // La session (déconnexion) et les brouillons eux-mêmes restent possibles.
+  return !chemin.startsWith("/auth/") && !chemin.startsWith("/brouillons");
+}
+
 async function executer<T>(url: string, init?: RequestInit, delaiMs: number | null = null): Promise<T> {
+  if (estEcritureInterditeEnRelecture(url, init)) {
+    throw new ErreurApi(MESSAGE_RELECTURE, 409, "refus");
+  }
   // Volontairement AUCUNE option `cache` : le mode par défaut laisse le
   // navigateur garder les réponses et les revalider lui-même (`If-None-Match`
   // sur l'ETag que pose le serveur, `Cache-Control: no-cache`). Tant que rien
@@ -634,7 +670,31 @@ export function fetchMeta(): Promise<MetaResponse> {
  * validé.
  */
 export function fetchAppState(): Promise<AppPayload> {
-  return request<AppPayload>("/app-state");
+  return request<AppPayload>(cheminPlanning("/app-state"));
+}
+
+// ── Brouillons (16/11/2026, cf. api/brouillons.py) — réservé admin. Un
+// brouillon se relit dans les vues habituelles : même forme que `/app-state`.
+
+export interface RunResume {
+  run_id: number;
+  groupe: string | null;
+  libelle: string;
+  cree_le: string | null;
+  placements: number;
+}
+
+export interface BrouillonsReponse {
+  brouillons: RunResume[];
+  en_service: (RunResume & { affiche: boolean })[];
+}
+
+export function listBrouillons(): Promise<BrouillonsReponse> {
+  return request<BrouillonsReponse>("/brouillons");
+}
+
+export async function supprimerBrouillon(runId: number): Promise<void> {
+  await request<unknown>(`/brouillons/${runId}`, { method: "DELETE" });
 }
 
 /** Révision de l'état côté serveur (`GET /api/v1/version`, cf.
@@ -661,7 +721,7 @@ export function fetchTimetable(params: {
   if (params.teacher_code) qs.set("teacher_code", params.teacher_code);
   if (params.room_id) qs.set("room_id", params.room_id);
   if (params.week !== undefined) qs.set("week", String(params.week));
-  return request<TimetableResponse>(`/timetable?${qs}`);
+  return request<TimetableResponse>(`${cheminPlanning("/timetable")}?${qs}`);
 }
 
 export function fetchDiff(): Promise<DiffResponse> {
@@ -1651,7 +1711,7 @@ export interface Doublon {
 
 export function fetchDoublons(semaine?: number | null): Promise<Doublon[]> {
   const q = semaine === null || semaine === undefined ? "" : `?semaine=${semaine}`;
-  return request<{ doublons: Doublon[] }>(`/controles/doublons${q}`).then((r) => r.doublons);
+  return request<{ doublons: Doublon[] }>(`${cheminPlanning("/controles/doublons")}${q}`).then((r) => r.doublons);
 }
 
 // ── Contrôle hebdomadaire des doublons (Jules Crevoisier, 25/09/2026) ──

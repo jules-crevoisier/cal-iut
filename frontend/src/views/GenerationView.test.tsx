@@ -83,7 +83,15 @@ const RESUME_TERMINEE = {
   non_placees: 1,
 };
 
-function stubFetch(options: { active?: unknown; generations?: unknown[] } = {}) {
+const BROUILLON = {
+  run_id: 16,
+  groupe: "even",
+  libelle: "Semestre pair (S2, S4, S6)",
+  cree_le: "2026-11-10T11:00:00+00:00",
+  placements: 1899,
+};
+
+function stubFetch(options: { active?: unknown; generations?: unknown[]; brouillons?: unknown[] } = {}) {
   const appels: { url: string; init?: RequestInit }[] = [];
   let active = options.active ?? null;
   vi.stubGlobal(
@@ -91,6 +99,16 @@ function stubFetch(options: { active?: unknown; generations?: unknown[] } = {}) 
     vi.fn((url: string, init?: RequestInit) => {
       appels.push({ url: String(url), init });
       const chemin = String(url);
+      if (chemin.includes("/brouillons")) {
+        if (init?.method === "DELETE") {
+          options.brouillons = [];
+          return Promise.resolve({ ok: true, json: async () => ({ supprime: 16 }) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ brouillons: options.brouillons ?? [], en_service: [] }),
+        });
+      }
       if (init?.method === "POST" && chemin.endsWith("/annuler")) {
         active = { ...EN_COURS, annulation_demandee: true };
         return Promise.resolve({ ok: true, json: async () => active });
@@ -171,5 +189,23 @@ describe("GenerationView", () => {
 
     const ligne = screen.getByRole("row", { name: /10 novembre/ });
     expect(within(ligne).getByText("1 899 sur 1 902")).toBeInTheDocument();
+  });
+
+  it("propose de relire ou de supprimer un brouillon", async () => {
+    const appels = stubFetch({ generations: [RESUME_TERMINEE], brouillons: [BROUILLON] });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onRelire = vi.fn();
+    render(<GenerationView onRelire={onRelire} />);
+
+    const carte = await screen.findByRole("region", { name: /Brouillons/ });
+    const ligne = within(carte).getByRole("row", { name: /n° 16/ });
+    expect(within(ligne).getByText("1 899")).toBeInTheDocument();
+
+    fireEvent.click(within(ligne).getByRole("button", { name: "Relire" }));
+    expect(onRelire).toHaveBeenCalledWith(16);
+
+    fireEvent.click(within(ligne).getByRole("button", { name: "Supprimer" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: /Brouillons/ })).not.toBeInTheDocument());
+    expect(appels.some((a) => a.init?.method === "DELETE" && a.url.endsWith("/brouillons/16"))).toBe(true);
   });
 });
