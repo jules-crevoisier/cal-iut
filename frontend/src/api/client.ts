@@ -614,6 +614,37 @@ export async function revenirALaCopieLivree(groupe: string): Promise<{ source: S
   });
 }
 
+/** Journées des SAE d'un groupe de semestres (cf. api/generations_routes.py). */
+export interface SaeDuSemestre {
+  code: string;
+  nom: string;
+  semestre: string;
+  parcours: string;
+  seances: number;
+  /** Fichier de l'établissement et corrections du dépôt : non modifiables ici. */
+  dates_officielles: string[];
+  dates_saisies: string[];
+  placee_par_le_calcul: boolean;
+}
+
+export interface DatesSaeReponse {
+  semestre_group: string;
+  /** Pourquoi les dates ne se modifient pas, ou `null`. */
+  verrouille: string | null;
+  sae: SaeDuSemestre[];
+}
+
+export async function lireDatesSae(groupe: string): Promise<DatesSaeReponse> {
+  return request<DatesSaeReponse>(`/generations/sae/${encodeURIComponent(groupe)}`);
+}
+
+export async function saisirDatesSae(groupe: string, code: string, dates: string[]): Promise<DatesSaeReponse> {
+  return request<DatesSaeReponse>(`/generations/sae/${encodeURIComponent(groupe)}/${encodeURIComponent(code)}`, {
+    method: "PUT",
+    body: JSON.stringify({ dates }),
+  });
+}
+
 // ── Réglages du quotidien (16/11/2026, cf. api/reglages_routes.py) ──
 
 export interface ReglageDate {

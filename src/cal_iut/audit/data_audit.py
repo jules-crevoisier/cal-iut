@@ -243,6 +243,18 @@ def audit_sae(
         return
 
     data = json.loads(path.read_text(encoding="utf-8"))
+    # Une SAE datée par une correction locale (`sae_corrections.yaml`) ou
+    # depuis l'interface (`ingestion/reglages.py`) a des dates : le fichier
+    # de l'établissement n'est pas la seule source.
+    from cal_iut.ingestion import reglages
+    from cal_iut.ingestion.planning_loader import load_sae_corrections
+
+    config_dir = data_root / "data" / "config"
+    datees_ailleurs = {c.upper() for c in reglages.dates_sae(config_dir)}
+    try:
+        datees_ailleurs |= {c.upper() for c in load_sae_corrections(config_dir)[0]}
+    except ValueError:
+        pass
     sans_dates: list[str] = []
     for entry in data.get("sae", []):
         volumes = entry.get("volumes_etudiant_seances") or {}
@@ -250,19 +262,20 @@ def audit_sae(
         code, semestre = str(entry.get("code_matiere")), str(entry.get("semestre"))
         if semestres is not None and semestre not in semestres:
             continue
-        if total and not entry.get("fenetres"):
+        if total and not entry.get("fenetres") and code.upper() not in datees_ailleurs:
             if (code.upper(), semestre) in scheduled:
                 continue  # planifiée par le solveur : c'est un choix documenté
             sans_dates.append(f"{code} ({semestre}) : {total} séance(s), aucune date")
     if sans_dates:
         report.add(Finding(
             Severity.ALERTE, "donnees.sae_sans_dates",
-            f"{len(sans_dates)} SAE ont des heures mais aucune date : elles ne sanctuarisent "
-            "rien, et leurs heures n'apparaîtront nulle part.",
+            (f"{len(sans_dates)} SAE ont des heures mais aucune date : elles ne sanctuarisent "
+             "rien, et leurs heures n'apparaîtront nulle part." if len(sans_dates) > 1 else
+             "1 SAE a des heures mais aucune date : elle ne sanctuarise rien, et ses heures "
+             "n'apparaîtront nulle part."),
             quoi_faire=(
-                "Soit renseigner les dates dans « DATES SAE », soit déclarer la SAE dans "
-                "`course_scheduling_rules.yaml::solver_scheduled_sae` pour que le solveur "
-                "la place lui-même."),
+                "Saisir leurs journées dans « Dates des SAE », sur l'écran Nouveau semestre. "
+                "Sans dates, les cours classiques pourront être placés ces jours-là."),
             ou="contraintes/09_dates_sae.json", details=sans_dates))
     else:
         report.ok("donnees.sae_sans_dates", "toute SAE à volume a des dates ou est planifiée")

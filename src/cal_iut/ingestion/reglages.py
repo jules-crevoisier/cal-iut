@@ -21,12 +21,15 @@ Les chargeurs de `config_loader.py` appliquent ces réglages : le serveur,
 l'audit, la génération et le solveur lisent la même chose sans rien savoir
 de ce fichier.
 
-Deux réglages pour commencer :
+Les réglages :
 
 - `salles_reservees`  : complète `salles_reservees.yaml` ;
 - `indisponibilites`  : indisponibilités d'un enseignant à une date et des
   créneaux précis, complète les `forbidden_date_slots` de
-  `teacher_availability.yaml`.
+  `teacher_availability.yaml` ;
+- `dates_sae`         : journées d'une SAE saisies à l'écran, ajoutées à
+  celles de `contraintes/09_dates_sae.json` (le fichier officiel ne date
+  pas les SAE de S2, S4 et S6).
 """
 
 from __future__ import annotations
@@ -38,7 +41,7 @@ from pathlib import Path
 
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
-NOMS = ("salles_reservees", "indisponibilites")
+NOMS = ("salles_reservees", "indisponibilites", "dates_sae")
 NB_CRENEAUX = 6
 
 _verrou = threading.RLock()
@@ -197,3 +200,44 @@ def retirer(config_dir: Path, nom: str, cle: str, *, livree: bool) -> bool:
             bloc["ajouts"] = reste
         ecrire_json(_path(config_dir), tout)
     return True
+
+
+# ── Dates des SAE ─────────────────────────────────────────────────────
+
+MAX_DATES_SAE = 80
+
+
+def dates_sae(config_dir: Path) -> dict[str, list[str]]:
+    """Journées SAE saisies à l'écran : `{CODE: [dates ISO triées]}`."""
+    sortie: dict[str, list[str]] = {}
+    for ajout in _lire(config_dir)["dates_sae"]["ajouts"]:
+        code = str(ajout.get("course_code") or "").strip().upper()
+        dates = sorted({str(d) for d in ajout.get("dates") or []})
+        if code and dates:
+            sortie[code] = dates
+    return sortie
+
+
+def definir_dates_sae(config_dir: Path, code: str, dates: list[str], par: str) -> list[str]:
+    """Remplace les journées saisies à l'écran pour cette SAE (liste vide :
+    plus aucune). Renvoie les dates enregistrées."""
+    code = str(code or "").strip().upper()
+    if not code:
+        raise ReglageInvalide("SAE inconnue.")
+    propres = sorted({_valider_date(d) for d in dates or []})
+    if len(propres) > MAX_DATES_SAE:
+        raise ReglageInvalide(f"Trop de dates pour une seule SAE (maximum {MAX_DATES_SAE}).")
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout["dates_sae"]
+        bloc["ajouts"] = [a for a in bloc["ajouts"] if str(a.get("course_code") or "").upper() != code]
+        if propres:
+            bloc["ajouts"].append({
+                "id": uuid.uuid4().hex[:12],
+                "course_code": code,
+                "dates": propres,
+                "demande_par": par,
+                "le": datetime.now(timezone.utc).date().isoformat(),
+            })
+        ecrire_json(_path(config_dir), tout)
+    return propres
