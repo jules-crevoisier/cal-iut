@@ -351,6 +351,36 @@ def assign_rooms(
     course_cm_room: dict[str, str] = dict(course_cm_room_seed or {})
     results: list[PlacedSessionWithRoom] = []
 
+    # Les deux moitiés d'une salle à cloison (H.007 / H.008, H.201 / H.203)
+    # restent réservables séparément, mais pas pour deux MODULES différents
+    # au même créneau (Kyllian Bresson, 25/09/2026 : « c'est en soi la même
+    # salle, donc il ne faut pas deux modules différents en même temps dans
+    # ces deux salles » ; tâche 29 : le même code y est permis). Les
+    # contrôles manuels le savaient déjà (`build_manual_conflict_map`,
+    # `api/doublons.py`) ; l'affectation automatique l'ignorait, et un
+    # emploi du temps tout juste généré sortait avec des dizaines de
+    # « doublons de salle » entre ces moitiés (65 sur le brouillon du
+    # semestre pair du 16/11/2026).
+    autre_moitie: dict[str, set[str]] = {}
+    for r in rooms:
+        for partie in r.combines:
+            autre_moitie.setdefault(partie, set()).update(x for x in r.combines if x != partie)
+    code_en_salle: dict[tuple[str, int], str] = {}
+
+    def _occuper(room_id: str, creneaux: list[int] | set[int], code: str) -> None:
+        room_schedule[room_id].update(creneaux)
+        for c in creneaux:
+            code_en_salle[(room_id, c)] = code
+
+    def _libre(room_id: str, creneaux: list[int] | set[int], code: str) -> bool:
+        if not _is_free(room_schedule, conflicts, room_id, creneaux):
+            return False
+        return all(
+            code_en_salle.get((moitie, c), code) == code
+            for moitie in autre_moitie.get(room_id, ())
+            for c in creneaux
+        )
+
     # Continuité de salle sur des créneaux CONSÉCUTIFS d'un même cours, pour
     # le même groupe et le même enseignant (retour utilisateur 08/08/2026 :
     # "c'est la même matière et le même prof à chaque heure consécutive, il
@@ -405,8 +435,8 @@ def assign_rooms(
             # plutôt que de garantir la salle de duo au prix d'un conflit
             # physique. Le duo perd alors sa salle dédiée — un désagrément —
             # là où le double-booking envoie deux groupes au même endroit.
-            if _is_free(room_schedule, conflicts, duo_room.id, duo_slots):
-                room_schedule[duo_room.id].update(duo_slots)
+            if _libre(duo_room.id, duo_slots, course_code):
+                _occuper(duo_room.id, duo_slots, course_code)
                 results.append(_with_room(placement, duo_room))
                 continue
 
@@ -438,8 +468,8 @@ def assign_rooms(
         if same_room and st_value == "CM" and not is_eval and course_code in course_cm_room:
             room_id = course_cm_room[course_code]
             room = next((r for r in rooms if r.id == room_id), None)
-            if room is not None and _is_free(room_schedule, conflicts, room.id, occupied):
-                room_schedule[room.id].update(occupied)
+            if room is not None and _libre(room.id, occupied, course_code):
+                _occuper(room.id, occupied, course_code)
                 results.append(_with_room(placement, room))
                 continue
 
@@ -479,7 +509,7 @@ def assign_rooms(
                     r
                     for r in auto_rooms
                     if r.capacity >= needed
-                    and _is_free(room_schedule, conflicts, r.id, window)
+                    and _libre(r.id, window, course_code)
                     and not (reserve_amphi and r.room_type == RoomType.AMPHI)
                 ],
                 key=lambda r: (_room_priority(r, preferred, fallback), r.capacity),
@@ -515,7 +545,7 @@ def assign_rooms(
             if st_value == "CM":
                 return []
             return sorted(
-                [r for r in auto_rooms if _is_free(room_schedule, conflicts, r.id, window)],
+                [r for r in auto_rooms if _libre(r.id, window, course_code)],
                 key=lambda r: (-r.capacity, _room_priority(r, preferred, fallback)),
             )
 
@@ -529,7 +559,7 @@ def assign_rooms(
             continue
 
         chosen = candidates[0]
-        room_schedule[chosen.id].update(span)
+        _occuper(chosen.id, span, course_code)
         if run_id is not None and span is not occupied:
             run_room[run_id] = chosen
 
