@@ -98,6 +98,60 @@
   color: var(--ink-faint);
 }
 
+/* Sélecteur semestre impair / pair : seulement quand les deux sont en
+   service (16/11/2026). */
+.sidenav-semestre {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.sidenav-semestre-choix {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sidenav-semestre-choix:hover {
+  color: var(--ink);
+}
+
+.sidenav-semestre-choix.is-actif {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.sidenav-semestre-nom {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.sidenav-semestre-detail {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.sidenav.is-repliee .sidenav-semestre {
+  grid-template-columns: 1fr;
+}
+
+.sidenav.is-repliee .sidenav-semestre-nom {
+  display: none;
+}
+
 .sidenav-tabs {
   display: flex;
   flex-direction: column;

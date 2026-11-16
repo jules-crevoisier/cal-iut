@@ -1,6 +1,9 @@
 """État application + accès base de données."""
 
-from dataclasses import dataclass, field
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from cal_iut.calendar.academic import AcademicCalendar, build_default_calendar_2026_2027
@@ -65,9 +68,94 @@ class AppState:
 
 _state = AppState()
 
+# ── Deux groupes de semestres chargés ensemble (16/11/2026) ────────────
+#
+# L'appli sert S1/S3/S5 (« odd ») et S2/S4/S6 (« even ») en même temps dès
+# que les deux ont un planning en service. Chaque groupe garde SON état
+# complet (séances, placements, run, semaines comptées depuis le début de
+# SON semestre) : tout le code qui raisonne sur un seul semestre reste
+# juste, il suffit de lui donner le bon état.
+#
+# `_state` reste l'état principal : celui du semestre en cours, servi à
+# toute lecture qui ne demande rien (flux .ics, Celcat, tâches de fond).
+# Les autres groupes sont dans `_secondaires`, et une requête en choisit un
+# avec l'en-tête `X-Semestre-Groupe` (cf. `GroupeDeLaRequete`).
+_secondaires: dict[str, AppState] = {}
+_groupe_demande: ContextVar[str | None] = ContextVar("cal_iut_groupe_demande", default=None)
+
+# Ce qui appartient à UN groupe. Tout le reste d'`AppState` (salles,
+# groupes, calendrier, disponibilités, poids…) est commun, cf.
+# `synchroniser_le_commun`.
+CHAMPS_PAR_GROUPE = frozenset({
+    "courses", "sessions", "sessions_by_id", "timetable", "corrections",
+    "filter_parcours", "filter_semestre", "semestre_group", "current_run_id",
+    "last_status", "last_objective_value", "last_gap_penalty", "restauration_erreur",
+})
+
 
 def get_state() -> AppState:
+    demande = _groupe_demande.get()
+    if demande:
+        secondaire = _secondaires.get(demande)
+        if secondaire is not None:
+            return secondaire
     return _state
+
+
+def etat_principal() -> AppState:
+    return _state
+
+
+def groupe_actif() -> str:
+    """Le groupe secondaire que sert la requête en cours, « "" » pour l'état
+    principal. Entre dans la clé de tous les caches par révision : la même
+    lecture ne donne pas la même réponse d'un groupe à l'autre."""
+    demande = _groupe_demande.get()
+    return demande if demande and demande in _secondaires else ""
+
+
+def etats_charges() -> list[AppState]:
+    """L'état principal d'abord, puis les autres groupes en service."""
+    return [_state, *_secondaires.values()]
+
+
+def groupes_charges() -> list[str]:
+    """Les groupes de semestres en service, celui du semestre en cours
+    d'abord. Vide pour un planning historique d'un seul parcours."""
+    principal = [_state.semestre_group] if _state.semestre_group else []
+    return [*principal, *_secondaires]
+
+
+def definir_secondaires(etats: dict[str, AppState]) -> None:
+    _secondaires.clear()
+    _secondaires.update(etats)
+
+
+@contextmanager
+def pour_le_groupe(groupe: str | None) -> Iterator[None]:
+    """Sert `get_state()` depuis l'état de ce groupe le temps du bloc. Un
+    groupe inconnu, ou celui de l'état principal, laisse l'état principal."""
+    jeton = _groupe_demande.set((groupe or "").strip().lower() or None)
+    try:
+        yield
+    finally:
+        _groupe_demande.reset(jeton)
+
+
+def synchroniser_le_commun(source: AppState | None = None) -> None:
+    """Recopie ce qui est commun (salles, groupes, calendrier…) de `source`
+    vers les autres états. Une écriture remplace ces listes sur l'état qui
+    l'a reçue (`state.rooms = …`) ; sans cela, l'autre groupe garderait
+    l'ancienne."""
+    if not _secondaires:
+        return
+    source = source or get_state()
+    for etat in etats_charges():
+        if etat is source:
+            continue
+        for champ in fields(AppState):
+            if champ.name not in CHAMPS_PAR_GROUPE:
+                setattr(etat, champ.name, getattr(source, champ.name))
 
 
 def get_repo() -> PlanningRepository:

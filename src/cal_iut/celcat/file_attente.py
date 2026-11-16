@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -48,6 +49,8 @@ from typing import Any
 
 from cal_iut.celcat.fichiers import ecrire_json
 from cal_iut.celcat.lecture import EvenementCelcat, est_fantome, est_ferie
+
+logger = logging.getLogger(__name__)
 
 _CONNUS: dict[int, EvenementCelcat] = {}
 
@@ -184,6 +187,16 @@ def enfiler(job: dict[str, Any]) -> bool:
     qui poussait à recliquer, à des heures différentes (retour utilisateur du
     16/09/2026).
     """
+    # Rien ne part vers Celcat depuis le groupe de semestres qui n'est PAS
+    # celui en cours (sélecteur impair / pair, 16/11/2026) : la comparaison
+    # avec Celcat ne sait lire qu'un semestre, celui de l'état principal.
+    # Tant que ce n'est pas vérifié pour l'autre, ses modifications restent
+    # dans l'appli.
+    from cal_iut.api.state import groupe_actif
+
+    if groupe_actif():
+        logger.info("Celcat : job %s ignoré, il vient du semestre qui n'est pas en cours", job.get("action"))
+        return False
     _migrer()
     return _poser(job)
 

@@ -672,3 +672,13 @@ python -c "import sqlite3; print(sqlite3.connect('data/state/cal-iut.db').execut
 - Sous le résultat, la carte **Brouillons** liste les brouillons enregistrés. **Relire** ouvre le brouillon dans les vues habituelles (Vue Promo, Vue Semaine, Vue Enseignant, À traiter…), avec un bandeau **Brouillon** en haut de l'écran. Vous seul le voyez. Rien n'est modifiable pendant la relecture : toute tentative est refusée avec un message. **Quitter la relecture** revient au planning en service. **Supprimer** efface le brouillon.
 - La publication d'un brouillon n'existe pas encore : l'application ne sait servir qu'un groupe de semestres à la fois, et publier le semestre pair ferait disparaître le semestre impair en cours.
 - Les fichiers de travail sont dans `data/state/generations/` (les dix dernières générations sont gardées).
+
+### Deux semestres en service en même temps
+
+Dès que le semestre impair (S1, S3, S5) et le semestre pair (S2, S4, S6) ont chacun un planning en service, l'appli charge les deux :
+
+- un sélecteur « Impair / Pair » apparaît en haut de la barre latérale. Sans choix, on voit le semestre en cours à la date du jour (le pair à partir de son premier lundi). Le choix est gardé sur le navigateur ;
+- les agendas `.ics` des enseignants et des groupes contiennent les deux semestres ;
+- Celcat ne suit que le semestre en cours : une modification faite dans l'autre semestre reste dans l'appli et n'est pas envoyée.
+
+Tant qu'un seul semestre est en service, rien ne change et le sélecteur n'apparaît pas.

@@ -2464,7 +2464,7 @@ def calendrier(request: Request, semaine: int | None = _Q_SEMAINE) -> Response:
 # ── SAE : journées et cours ─────────────────────────────────────────────
 
 
-_memo_config_sae: tuple[int, dict] | None = None
+_memo_config_sae: tuple[tuple[int, str], dict] | None = None
 
 
 def _config_sae() -> dict:
@@ -2473,7 +2473,9 @@ def _config_sae() -> dict:
     locales, phases d'encadrement, SAE que la génération place elle-même.
     Relue une fois par révision (ces fichiers sont des sondes de révision)."""
     global _memo_config_sae
-    numero = revision.actuelle().numero
+    from cal_iut.api.state import groupe_actif
+
+    numero = (revision.actuelle().numero, groupe_actif())
     if _memo_config_sae is not None and _memo_config_sae[0] == numero:
         return _memo_config_sae[1]
     config = _lire_config_sae()

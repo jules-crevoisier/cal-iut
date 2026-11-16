@@ -111,6 +111,15 @@ def serialiser_json(contenu: object) -> bytes:
     ).encode("utf-8")
 
 
+def _cle_du_groupe(cle: tuple) -> tuple:
+    """La clé, précédée du groupe de semestres servi quand ce n'est pas
+    l'état principal : inchangée tant qu'un seul groupe est en service."""
+    from cal_iut.api.state import groupe_actif
+
+    groupe = groupe_actif()
+    return (f"groupe:{groupe}", *cle) if groupe else cle
+
+
 class CacheParRevision:
     """Réponses déjà construites, par clé, pour la révision COURANTE
     seulement : dès que la révision avance, tout est jeté d'un coup — rien
@@ -162,6 +171,8 @@ class CacheParRevision:
         media_type: str = "application/json",
         entetes: dict[str, str] | None = None,
     ) -> EntreeCache:
+        # Une réponse par groupe de semestres (cf. `api/state.py`).
+        cle = _cle_du_groupe(cle)
         rev = revision.actuelle()
         entree = self._lire(cle, rev.numero)
         if entree is not None:
@@ -197,7 +208,7 @@ def repondre(
     """Le chemin complet d'une lecture cachée : 304 immédiat si le client a
     déjà la version courante (sans rien calculer), sinon le corps en cache,
     sinon calcul puis mise en cache."""
-    etag = etag_pour(revision.actuelle().numero, *cle)
+    etag = etag_pour(revision.actuelle().numero, *_cle_du_groupe(cle))
     if correspond(request, etag):
         return reponse_304(etag, cache_control)
     entree = cache.obtenir(cle, construire, media_type=media_type, entetes=entetes)
