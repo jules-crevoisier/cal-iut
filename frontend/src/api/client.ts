@@ -706,6 +706,88 @@ export async function retablirSeance(groupe: string, sessionId: string): Promise
   );
 }
 
+// ── Règles de modules du prochain semestre (lot 6) ──
+
+export interface ModuleRegle {
+  code: string;
+  nom: string;
+  semestre: string;
+  /** Nombre de séances par type : `{ CM: 2, TD: 8 }`. */
+  types: Record<string, number>;
+}
+
+export interface SeancesLongues {
+  /** `null` : règle livrée avec l'application, non modifiable ici. */
+  id: string | null;
+  origine: "livree" | "ajoutee";
+  code: string;
+  nom: string;
+  type: string;
+  creneaux: number;
+  /** « 3 h » ou « 4 h 30 ». */
+  duree: string;
+  motif: string;
+}
+
+export interface PeriodeModule {
+  id: string | null;
+  origine: "livree" | "ajoutee";
+  code: string;
+  nom: string;
+  /** `null` : toutes les séances du module. */
+  type: string | null;
+  /** Rangs des séances visées (règles livrées), vide : toutes. */
+  rangs: number[];
+  debut: string | null;
+  fin: string | null;
+  /** Dates précises (règles livrées). */
+  dates: string[];
+  motif: string;
+}
+
+export interface ReglesModulesReponse {
+  semestre_group: string;
+  verrouille: string | null;
+  modules: ModuleRegle[];
+  seances_longues: SeancesLongues[];
+  periodes: PeriodeModule[];
+}
+
+export async function lireReglesModules(groupe: string): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(`/generations/regles/${encodeURIComponent(groupe)}`);
+}
+
+export async function ajouterSeancesLongues(
+  groupe: string,
+  corps: { code: string; type: string; creneaux: number; motif: string },
+): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(`/generations/regles/${encodeURIComponent(groupe)}/seances-longues`, {
+    method: "POST",
+    body: JSON.stringify(corps),
+  });
+}
+
+export async function ajouterPeriodeModule(
+  groupe: string,
+  corps: { code: string; type: string | null; debut: string | null; fin: string | null; motif: string },
+): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(`/generations/regles/${encodeURIComponent(groupe)}/periodes`, {
+    method: "POST",
+    body: JSON.stringify(corps),
+  });
+}
+
+export async function retirerRegleModule(
+  groupe: string,
+  nom: "seances-longues" | "periodes",
+  id: string,
+): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(
+    `/generations/regles/${encodeURIComponent(groupe)}/${nom}/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
 // ── Réglages du quotidien (16/11/2026, cf. api/reglages_routes.py) ──
 
 export interface ReglageDate {

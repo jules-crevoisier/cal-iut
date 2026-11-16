@@ -31,7 +31,11 @@ Les réglages :
   celles de `contraintes/09_dates_sae.json` (le fichier officiel ne date
   pas les SAE de S2, S4 et S6) ;
 - `seances_annulees`  : séances qui n'auront pas lieu, complète
-  `seances_annulees.yaml`.
+  `seances_annulees.yaml` ;
+- `doubles_seances`   : séances d'un module regroupées en blocs de 3 h ou
+  4 h 30, complète `double_sessions.yaml` ;
+- `periodes_modules`  : période imposée aux séances d'un module, complète
+  les `session_date_windows` de `course_scheduling_rules.yaml`.
 """
 
 from __future__ import annotations
@@ -43,7 +47,7 @@ from pathlib import Path
 
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
-NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees")
+NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules")
 NB_CRENEAUX = 6
 
 _verrou = threading.RLock()
@@ -305,3 +309,73 @@ def retablir_seance(config_dir: Path, session_id: str, *, livree: bool) -> None:
         if livree and session_id not in bloc["retraits"]:
             bloc["retraits"].append(session_id)
         ecrire_json(_path(config_dir), tout)
+
+
+# ── Règles de modules ─────────────────────────────────────────────────
+
+REGLES_DE_MODULES = ("doubles_seances", "periodes_modules")
+TYPES_DE_SEANCE = ("CM", "TD", "TP")
+
+
+def regles_de_modules(config_dir: Path, nom: str) -> list[dict]:
+    """Les règles saisies à l'écran pour ce réglage."""
+    if nom not in REGLES_DE_MODULES:
+        raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
+    return [dict(a) for a in _lire(config_dir)[nom]["ajouts"] if a.get("course_code")]
+
+
+def _type_de_seance(valeur: object, *, obligatoire: bool) -> str | None:
+    texte = str(valeur or "").strip().upper()
+    if not texte and not obligatoire:
+        return None
+    if texte not in TYPES_DE_SEANCE:
+        raise ReglageInvalide("Choisissez le type de séance : CM, TD ou TP.")
+    return texte
+
+
+def ajouter_regle_de_module(config_dir: Path, nom: str, entree: dict, par: str) -> dict:
+    """Enregistre une règle saisie à l'écran et la renvoie avec son `id`.
+
+    `doubles_seances` : `course_code`, `session_type`, `slots_per_session`
+    (2 = 3 h, 3 = 4 h 30). `periodes_modules` : `course_code`, `semestre`,
+    `session_type` (facultatif), `debut` et/ou `fin`."""
+    if nom not in REGLES_DE_MODULES:
+        raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
+    code = str(entree.get("course_code") or "").strip()
+    if not code:
+        raise ReglageInvalide("Choisissez un module.")
+    motif = str(entree.get("motif") or "").strip()
+    if not motif:
+        raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+    propre: dict = {"id": uuid.uuid4().hex[:12], "course_code": code}
+    if nom == "doubles_seances":
+        propre["session_type"] = _type_de_seance(entree.get("session_type"), obligatoire=True)
+        try:
+            creneaux = int(entree.get("slots_per_session") or 0)
+        except (TypeError, ValueError):
+            creneaux = 0
+        if creneaux not in (2, 3):
+            raise ReglageInvalide("Une séance longue dure 3 h ou 4 h 30.")
+        propre["slots_per_session"] = creneaux
+    else:
+        propre["semestre"] = str(entree.get("semestre") or "").strip()
+        propre["session_type"] = _type_de_seance(entree.get("session_type"), obligatoire=False)
+        debut = _valider_date(entree["debut"]) if entree.get("debut") else None
+        fin = _valider_date(entree["fin"]) if entree.get("fin") else None
+        if not debut and not fin:
+            raise ReglageInvalide("Indiquez au moins une date : le début ou la fin de la période.")
+        if debut and fin and debut > fin:
+            raise ReglageInvalide("Le début de la période est après sa fin.")
+        propre["debut"], propre["fin"] = debut, fin
+    propre.update(motif=motif[:300], demande_par=par, le=datetime.now(timezone.utc).date().isoformat())
+    with _verrou:
+        tout = _lire(config_dir)
+        tout[nom]["ajouts"].append(propre)
+        ecrire_json(_path(config_dir), tout)
+    return propre
+
+
+def retirer_regle_de_module(config_dir: Path, nom: str, identifiant: str) -> bool:
+    if nom not in REGLES_DE_MODULES:
+        raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
+    return retirer(config_dir, nom, identifiant, livree=False)

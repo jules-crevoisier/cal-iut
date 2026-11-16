@@ -400,6 +400,218 @@ def retablir_une_seance(groupe: str, session_id: str) -> dict:
     return _annulations(groupe)
 
 
+# ── Règles de modules (lot 6) ─────────────────────────────────────────
+
+_DUREES = {2: "3 h", 3: "4 h 30"}
+
+
+class SeancesLonguesRequest(BaseModel):
+    code: str
+    type: str
+    creneaux: int = 2
+    motif: str = ""
+
+
+class PeriodeRequest(BaseModel):
+    code: str
+    type: str | None = None
+    debut: str | None = None
+    fin: str | None = None
+    motif: str = ""
+
+
+def _regles_verrouillees(groupe: str) -> str | None:
+    motif = _semestre_verrouille(groupe)
+    if motif and "en service" in motif:
+        return (
+            f"Le {taches.GROUPES[groupe]['libelle'].lower()} est déjà en service : ses règles de modules "
+            "ne se modifient pas depuis cet écran, ses séances changeraient sans nouveau calcul."
+        )
+    return motif
+
+
+def _modules_du_groupe(groupe: str) -> dict[str, dict]:
+    """Les modules du groupe, avec le nombre de séances de chaque type."""
+    modules: dict[str, dict] = {}
+    for s in _seances_du_groupe(groupe):
+        type_ = getattr(s.session_type, "value", str(s.session_type))
+        m = modules.setdefault(s.course_code, {
+            "code": s.course_code, "nom": s.course_name, "semestre": s.semestre, "types": {},
+        })
+        # Une séance par cohorte : on compte les rangs, pas les groupes.
+        m["types"].setdefault(type_, set()).add(s.sequence_order)
+    for m in modules.values():
+        m["types"] = {t: len(rangs) for t, rangs in sorted(m["types"].items())}
+    return modules
+
+
+def _regles(groupe: str) -> dict:
+    from cal_iut.ingestion import reglages
+    from cal_iut.ingestion.config_loader import load_double_sessions, load_session_date_windows
+
+    config = taches.RACINE / "data" / "config"
+    modules = _modules_du_groupe(groupe)
+    semestres = set(taches.GROUPES[groupe]["semestres"])
+    saisies_longues = {
+        (a["course_code"], str(a.get("session_type"))): a for a in reglages.regles_de_modules(config, "doubles_seances")
+    }
+    saisies_periodes = reglages.regles_de_modules(config, "periodes_modules")
+
+    longues = []
+    for r in load_double_sessions(config):
+        if r.course_code not in modules:
+            continue
+        # L'ajout refuse un module et un type déjà réglés : une règle saisie
+        # n'en double jamais une livrée.
+        saisie = saisies_longues.get((r.course_code, r.session_type.value))
+        longues.append({
+            "id": saisie["id"] if saisie else None,
+            "origine": "ajoutee" if saisie else "livree",
+            "code": r.course_code,
+            "nom": modules[r.course_code]["nom"],
+            "type": r.session_type.value,
+            "creneaux": r.slots_per_session,
+            "duree": _DUREES.get(r.slots_per_session, f"{r.slots_per_session} créneaux"),
+            "motif": str(r.note or "").strip(),
+        })
+
+    periodes = []
+    for r in load_session_date_windows(config, avec_saisies=False):
+        if r.semestre not in semestres:
+            continue
+        periodes.append({
+            "id": None,
+            "origine": "livree",
+            "code": r.course_code,
+            "nom": modules.get(r.course_code, {}).get("nom", ""),
+            "type": r.session_type.value if r.session_type else None,
+            "rangs": list(r.sequence_orders),
+            "debut": r.start_date,
+            "fin": r.end_date,
+            "dates": list(r.only_dates),
+            "motif": str(r.note or "").strip(),
+        })
+    for a in saisies_periodes:
+        if a.get("semestre") not in semestres:
+            continue
+        periodes.append({
+            "id": a["id"],
+            "origine": "ajoutee",
+            "code": a["course_code"],
+            "nom": modules.get(a["course_code"], {}).get("nom", ""),
+            "type": a.get("session_type"),
+            "rangs": [],
+            "debut": a.get("debut"),
+            "fin": a.get("fin"),
+            "dates": [],
+            "motif": str(a.get("motif") or ""),
+        })
+    return {
+        "semestre_group": groupe,
+        "verrouille": _regles_verrouillees(groupe),
+        "modules": sorted(modules.values(), key=lambda m: (m["semestre"], m["code"])),
+        "seances_longues": sorted(longues, key=lambda r: (r["code"], r["type"])),
+        "periodes": sorted(periodes, key=lambda r: (r["code"], r["debut"] or "", r["fin"] or "")),
+    }
+
+
+def _regles_changees() -> None:
+    """Le solveur garde les fenêtres de dates en mémoire."""
+    try:
+        from cal_iut.solver import decomposed
+
+        decomposed._session_date_windows.cache_clear()
+    except Exception:  # noqa: BLE001 — un cache qu'on ne peut pas vider ne doit pas refuser la saisie
+        pass
+
+
+def _auteur(request: Request) -> str:
+    return getattr(getattr(request.state, "user", None), "email", None) or "administrateur"
+
+
+@router.get("/regles/{groupe}")
+def regles_de_modules(groupe: str) -> dict:
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    return _regles(groupe)
+
+
+@router.post("/regles/{groupe}/seances-longues", status_code=201)
+def ajouter_des_seances_longues(groupe: str, body: SeancesLonguesRequest, request: Request) -> dict:
+    """Les séances de ce type, pour ce module, sont regroupées en blocs de
+    3 h ou 4 h 30. Refusé si le semestre est en service : ses séances
+    changeraient d'identifiant, donc de place."""
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    etat = _regles(groupe)
+    module = next((m for m in etat["modules"] if m["code"] == body.code), None)
+    type_ = body.type.strip().upper()
+    if module is None:
+        raise HTTPException(404, "Ce module n'appartient pas à ce semestre.")
+    if any(r["code"] == body.code and r["type"] == type_ for r in etat["seances_longues"]):
+        raise HTTPException(409, f"Les {type_} de {body.code} sont déjà regroupés. Retirez la règle pour la changer.")
+    if type_ in reglages.TYPES_DE_SEANCE and module["types"].get(type_, 0) < body.creneaux:
+        raise HTTPException(
+            422, f"{body.code} n'a pas assez de {type_} pour former un bloc de {_DUREES.get(body.creneaux, '?')}."
+        )
+    try:
+        reglages.ajouter_regle_de_module(
+            taches.RACINE / "data" / "config",
+            "doubles_seances",
+            {"course_code": body.code, "session_type": type_, "slots_per_session": body.creneaux, "motif": body.motif},
+            _auteur(request),
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _regles(groupe)
+
+
+@router.post("/regles/{groupe}/periodes", status_code=201)
+def ajouter_une_periode(groupe: str, body: PeriodeRequest, request: Request) -> dict:
+    """Les séances du module (ou d'un seul type) se placent dans cette
+    période, bornes comprises."""
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    module = _modules_du_groupe(groupe).get(body.code)
+    if module is None:
+        raise HTTPException(404, "Ce module n'appartient pas à ce semestre.")
+    type_ = (body.type or "").strip().upper() or None
+    if type_ and type_ in reglages.TYPES_DE_SEANCE and not module["types"].get(type_):
+        raise HTTPException(422, f"{body.code} n'a aucun {type_}.")
+    try:
+        reglages.ajouter_regle_de_module(
+            taches.RACINE / "data" / "config",
+            "periodes_modules",
+            {
+                "course_code": body.code, "semestre": module["semestre"], "session_type": type_,
+                "debut": body.debut, "fin": body.fin, "motif": body.motif,
+            },
+            _auteur(request),
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _regles_changees()
+    return _regles(groupe)
+
+
+@router.delete("/regles/{groupe}/{nom}/{identifiant}")
+def retirer_une_regle(groupe: str, nom: str, identifiant: str) -> dict:
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    reglage = {"seances-longues": "doubles_seances", "periodes": "periodes_modules"}.get(nom)
+    if reglage is None:
+        raise HTTPException(404, "Règle inconnue.")
+    etat = _regles(groupe)
+    if not any(r["id"] == identifiant for r in etat["seances_longues" if nom == "seances-longues" else "periodes"]):
+        raise HTTPException(404, "Cette règle n'existe pas dans ce semestre.")
+    reglages.retirer_regle_de_module(taches.RACINE / "data" / "config", reglage, identifiant)
+    _regles_changees()
+    return _regles(groupe)
+
+
 @router.get("/verification/{groupe}")
 def a_regler_avant_de_generer(groupe: str) -> dict:
     """Ce qu'il reste à régler dans les données de ce semestre avant de
