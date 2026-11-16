@@ -30,6 +30,11 @@ from cal_iut.api import main
 from cal_iut.api.state import get_state
 from cal_iut.calendar.academic import semester_week_offset
 
+# Ces tests placent des séances sur des semaines de l'automne 2026 : « aujourd'hui »
+# est figé (cf. `conftest.date_du_jour_figee`), sinon ils échouent dès que ces
+# semaines deviennent passées ou en cours (CI rouge le 16/11/2026).
+pytestmark = pytest.mark.usefixtures("date_du_jour_figee")
+
 SEMAINE = 10  # cf. test_placement_manuel : "placee" y est déjà, loin dans le futur réel.
 
 
