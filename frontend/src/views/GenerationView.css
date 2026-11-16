@@ -415,3 +415,96 @@ p.generation-brouillon {
     min-height: 44px;
   }
 }
+
+/* ── À régler avant de générer (lot 5) ── */
+.generation-aregler {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 760px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+p.generation-aregler {
+  flex-direction: row;
+  align-items: center;
+}
+
+p.generation-aregler--bon {
+  color: var(--good-text);
+  border-color: color-mix(in srgb, var(--good) 35%, transparent);
+  background: var(--good-soft);
+}
+
+.generation-aregler--bloquant {
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+}
+
+.generation-aregler h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.generation-aregler--bloquant h3 {
+  color: var(--bad-text);
+}
+
+.generation-aregler p {
+  margin: 0;
+}
+
+.generation-aregler-intro {
+  color: var(--ink-soft);
+}
+
+.generation-aregler-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generation-aregler-liste > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.generation-aregler-liste > li > .pill {
+  flex: none;
+  margin-top: 1px;
+}
+
+.generation-aregler-liste > li > div {
+  min-width: 0;
+}
+
+.generation-aregler-message {
+  color: var(--ink);
+}
+
+.generation-aregler-liste details {
+  margin-top: 2px;
+  color: var(--ink-soft);
+}
+
+.generation-aregler-liste details summary {
+  cursor: pointer;
+}
+
+.generation-aregler-liste details ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}

@@ -22,7 +22,7 @@ import traceback
 from collections import Counter
 from pathlib import Path
 
-from cal_iut.generation import taches
+from cal_iut.generation import taches, verification
 
 RACINE = taches.RACINE
 PREMIERE_GRAINE = 2027
@@ -132,20 +132,10 @@ class Ouvrier:
                 "Aucune séance à placer pour ce semestre : la maquette ne contient "
                 "aucun module pour " + ", ".join(taches.GROUPES[self.groupe]["semestres"]) + "."
             )
-        seances = json.dumps([s.model_dump() for s in resultat.sessions], ensure_ascii=False, indent=2)
-        (self.dossier / "sessions.json").write_text(seances, encoding="utf-8")
         # L'audit et `cal-iut solve` lisent aussi `data/generated/` : mêmes
         # fichiers que `cal-iut ingest`.
-        genere = RACINE / "data" / "generated"
-        genere.mkdir(parents=True, exist_ok=True)
-        (genere / "sessions.json").write_text(seances, encoding="utf-8")
-        (genere / "courses.json").write_text(
-            json.dumps([c.model_dump() for c in resultat.courses], ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        (genere / "stats.json").write_text(
-            json.dumps(resultat.stats, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        seances = verification.ecrire_les_fichiers_generes(RACINE, resultat)
+        (self.dossier / "sessions.json").write_text(seances, encoding="utf-8")
         self.etat["seances_total"] = len(resultat.sessions)
         # D'où vient la maquette de cette génération (cf. ingestion/mmi_previ.py).
         from cal_iut.ingestion import mmi_previ
@@ -164,44 +154,24 @@ class Ouvrier:
         if self.faite("verification"):
             return
         self.debut("verification")
-        from cal_iut.audit import run_audit
-
-        rapport = run_audit(
-            RACINE,
-            weeks=self.params["weeks"] or self._horizon(),
-            fi_max_week=self.params["fi_max_week"],
-            semestre_group=self.groupe,
-        ).as_dict()
-        # Constats gardés pour l'écran. Ils n'arrêtent pas le calcul à ce
-        # stade : l'écran « À régler avant de générer » viendra avec le lot
-        # suivant, et l'un des contrôles (date de modification des fichiers
-        # sources) n'a pas de sens dans une image Docker.
-        # Ce contrôle compare des dates de modification de fichiers : dans
-        # une image Docker elles sont toutes celles du déploiement, et la
-        # génération vient de relire les sources de toute façon.
-        ignores = [c for c in rapport["constats"] if c["controle"] == "donnees.sources_plus_recentes"]
-        if ignores:
-            rapport["constats"] = [c for c in rapport["constats"] if c not in ignores]
-            cles = {"erreur": "erreurs", "alerte": "alertes", "info": "infos"}
-            for constat in ignores:
-                cle = cles.get(constat["severite"])
-                if cle:
-                    rapport["resume"][cle] = max(0, rapport["resume"][cle] - 1)
+        rapport = verification.rapport_des_donnees(
+            RACINE, self.groupe, weeks=self.params["weeks"], fi_max_week=self.params["fi_max_week"]
+        )
         self.etat["verification"] = rapport
+        # Lancer des heures de calcul sur des données que l'audit prouve
+        # infaisables ne sert à rien : même refus qu'à l'écran.
+        restants = verification.bloquants(rapport)
+        if restants:
+            raise RuntimeError(
+                f"{len(restants)} point(s) à régler avant de générer : "
+                + " ; ".join(c["message"] for c in restants[:3])
+            )
         resume = rapport["resume"]
         self.fin(
             "verification",
             f"{resume['erreurs']} erreur(s), {resume['alertes']} alerte(s), "
             f"{resume['controles_ok']} contrôle(s) passé(s)",
         )
-
-    def _horizon(self) -> int:
-        from cal_iut.calendar.academic import default_horizon_weeks
-        from cal_iut.ingestion.constraints_loader import load_all_constraints
-        from cal_iut.ingestion.pipeline import SEMESTRE_GROUP_ANCHOR
-
-        calendrier = load_all_constraints(RACINE).calendar
-        return default_horizon_weeks(calendrier, SEMESTRE_GROUP_ANCHOR[self.groupe])
 
     # ── 3. Solveur, plusieurs graines, on garde le meilleur ───────────
 

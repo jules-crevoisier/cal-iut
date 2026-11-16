@@ -614,6 +614,24 @@ export async function revenirALaCopieLivree(groupe: string): Promise<{ source: S
   });
 }
 
+/** « À régler avant de générer » (cf. generation/verification.py). */
+export interface ConstatAvantDeGenerer extends ConstatVerification {
+  bloquant: boolean;
+}
+
+export interface VerificationAvantDeGenerer {
+  semestre_group: string;
+  seances: number;
+  bloquant: boolean;
+  erreurs: number;
+  alertes: number;
+  constats: ConstatAvantDeGenerer[];
+}
+
+export async function verifierAvantDeGenerer(groupe: string): Promise<VerificationAvantDeGenerer> {
+  return request<VerificationAvantDeGenerer>(`/generations/verification/${encodeURIComponent(groupe)}`);
+}
+
 export async function annulerGeneration(id: string): Promise<GenerationDetail> {
   return request<GenerationDetail>(`/generations/${encodeURIComponent(id)}/annuler`, { method: "POST" });
 }

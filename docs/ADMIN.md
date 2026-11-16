@@ -674,6 +674,21 @@ python -c "import sqlite3; print(sqlite3.connect('data/state/cal-iut.db').execut
 - Celcat et le semestre pair : la comparaison avec Celcat ne sait pas encore lire le semestre pair. Tant que ce n'est pas fait, rien n'est comparé ni envoyé pour lui, même quand il devient le semestre en cours.
 - Les fichiers de travail sont dans `data/state/generations/` (les dix dernières générations sont gardées).
 
+### À régler avant de générer
+
+Dès que le semestre est choisi, l'écran vérifie ses données (le même audit
+que `cal-iut audit`, une seconde environ, sans lancer le solveur) et liste ce
+qu'il a relevé :
+
+- **À régler** : le calcul ne peut pas aboutir (un enseignant sans assez de
+  créneaux, une maquette vide, une règle qui vise un cours inexistant…). Le
+  bouton « Générer » reste grisé, et le serveur refuse aussi la demande.
+- **À vérifier** : rien ne bloque, mais le résultat en dépend (SAE sans
+  dates, enseignant très contraint). On peut générer.
+
+La liste est relue après chaque récupération depuis MMI Prévi. Pendant une
+génération, elle n'est pas affichée.
+
 ### Deux semestres en service en même temps
 
 Dès que le semestre impair (S1, S3, S5) et le semestre pair (S2, S4, S6) ont chacun un planning en service, l'appli charge les deux :
