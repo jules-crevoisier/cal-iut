@@ -258,7 +258,7 @@ def load_double_sessions(config_dir: Path) -> list[DoubleSessionRule]:
     """Règles de fusion de séances collées (cf. double_sessions.yaml)."""
     path = config_dir / "double_sessions.yaml"
     if not path.exists():
-        return []
+        return _doubles_seances_saisies(config_dir, set())
     data = load_yaml(path) or {}
     rules: list[DoubleSessionRule] = []
     for item in data.get("rules", []):
@@ -272,14 +272,37 @@ def load_double_sessions(config_dir: Path) -> list[DoubleSessionRule]:
                 note=item.get("note"),
             )
         )
-    return rules
+    return rules + _doubles_seances_saisies(config_dir, {(r.course_code, r.session_type) for r in rules})
 
 
-def load_session_date_windows(config_dir: Path) -> list[SessionDateWindowRule]:
-    """Fenêtres de dates par séance (cf. course_scheduling_rules.yaml)."""
+def _doubles_seances_saisies(config_dir: Path, deja: set) -> list[DoubleSessionRule]:
+    """Les blocs saisis à l'écran (cf. `reglages`). Un module et un type déjà
+    réglés dans le fichier livré ne sont pas fusionnés une seconde fois."""
+    from cal_iut.ingestion import reglages
+
+    sortie: list[DoubleSessionRule] = []
+    for ajout in reglages.regles_de_modules(config_dir, "doubles_seances"):
+        try:
+            regle = DoubleSessionRule(
+                course_code=str(ajout["course_code"]),
+                session_type=SessionType(str(ajout.get("session_type"))),
+                slots_per_session=int(ajout.get("slots_per_session") or 2),
+                note=ajout.get("motif"),
+            )
+        except (ValueError, TypeError):
+            continue
+        if (regle.course_code, regle.session_type) not in deja:
+            deja.add((regle.course_code, regle.session_type))
+            sortie.append(regle)
+    return sortie
+
+
+def load_session_date_windows(config_dir: Path, *, avec_saisies: bool = True) -> list[SessionDateWindowRule]:
+    """Fenêtres de dates par séance (cf. course_scheduling_rules.yaml), et
+    périodes de modules saisies à l'écran (sauf `avec_saisies=False`)."""
     path = config_dir / "course_scheduling_rules.yaml"
     if not path.exists():
-        return []
+        return _periodes_saisies(config_dir) if avec_saisies else []
     data = load_yaml(path) or {}
     rules: list[SessionDateWindowRule] = []
     for item in data.get("session_date_windows", []):
@@ -296,7 +319,28 @@ def load_session_date_windows(config_dir: Path) -> list[SessionDateWindowRule]:
                 note=item.get("note"),
             )
         )
-    return rules
+    return rules + _periodes_saisies(config_dir) if avec_saisies else rules
+
+
+def _periodes_saisies(config_dir: Path) -> list[SessionDateWindowRule]:
+    """Les périodes de modules saisies à l'écran (cf. `reglages`)."""
+    from cal_iut.ingestion import reglages
+
+    sortie: list[SessionDateWindowRule] = []
+    for ajout in reglages.regles_de_modules(config_dir, "periodes_modules"):
+        try:
+            type_ = ajout.get("session_type")
+            sortie.append(SessionDateWindowRule(
+                course_code=str(ajout["course_code"]),
+                semestre=str(ajout.get("semestre") or ""),
+                session_type=SessionType(str(type_)) if type_ else None,
+                start_date=ajout.get("debut") or None,
+                end_date=ajout.get("fin") or None,
+                note=ajout.get("motif"),
+            ))
+        except (ValueError, TypeError):
+            continue
+    return sortie
 
 
 def load_course_teacher_orders(config_dir: Path) -> list[CourseTeacherOrderRule]:

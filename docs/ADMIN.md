@@ -713,6 +713,22 @@ module, la séance, donner le motif (obligatoire). « Rétablir » la remet dans
 les séances à placer. Cela vaut pour la prochaine génération : une fois le
 semestre en service, la liste reste visible mais ne se modifie plus ici.
 
+### Règles de modules
+
+Toujours sur l'écran « Nouveau semestre », le bloc **Règles de modules**
+couvre deux demandes courantes des enseignants :
+
+- **Séances longues** : les CM, TD ou TP d'un module sont regroupés en blocs
+  de 3 h ou de 4 h 30 (deux ou trois séances de 1 h 30 collées).
+- **Période imposée** : les séances d'un module (toutes, ou un seul type) ne
+  sont pas placées avant une date, ni après une autre. Une seule borne suffit.
+
+Le motif est obligatoire. Les règles livrées avec l'application sont affichées
+avec la mention « D'origine » et ne se retirent pas ici. Comme les autres
+réglages de cet écran, tout se verrouille une fois le semestre en service.
+Les autres règles (duos d'enseignants, répartition entre enseignants, phases
+des SAE) restent dans les fichiers de `data/config/`.
+
 ### Réglages saisis depuis l'interface
 
 Référence → **Réglages** (administrateurs) remplace, pour deux réglages du

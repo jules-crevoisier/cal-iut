@@ -396,3 +396,123 @@ def test_les_annulations_d_un_semestre_en_service_ne_se_modifient_pas(admin, gen
     assert admin.post("/generations/annulations/odd", json={"session_id": "WR104-S1-CM-1", "motif": "m"}).status_code == 409
     assert admin.delete("/generations/annulations/odd", params={"session_id": "WR104-S1-CM-5"}).status_code == 409
     assert load_seances_annulees(CONFIG) == avant
+
+
+# ── Règles de modules : séances longues et périodes ───────────────────
+
+
+def _seances(groupe: str, code: str) -> list:
+    import warnings
+
+    from cal_iut.ingestion.pipeline import run_ingestion
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return [s for s in run_ingestion(CONFIG, semestre_group=groupe).sessions if s.course_code == code]
+
+
+def test_des_seances_longues_saisies_a_l_ecran_fusionnent_les_seances():
+    from cal_iut.ingestion.config_loader import load_double_sessions
+
+    avant = [s for s in _seances("even", "WR203") if s.session_type.value == "TD"]
+    assert avant and all(s.duration_slots == 1 for s in avant)
+    livrees = len(load_double_sessions(CONFIG))
+
+    regle = reglages.ajouter_regle_de_module(
+        CONFIG, "doubles_seances",
+        {"course_code": "WR203", "session_type": "td", "slots_per_session": 2, "motif": "TD de 3 h demandés"}, "admin",
+    )
+    assert len(load_double_sessions(CONFIG)) == livrees + 1
+    apres = [s for s in _seances("even", "WR203") if s.session_type.value == "TD"]
+    assert len(apres) == len(avant) // 2 and all(s.duration_slots == 2 for s in apres)
+
+    assert reglages.retirer_regle_de_module(CONFIG, "doubles_seances", regle["id"]) is True
+    assert len(load_double_sessions(CONFIG)) == livrees
+    for mauvaise in (
+        {"course_code": "WR203", "session_type": "TD", "slots_per_session": 5, "motif": "m"},
+        {"course_code": "WR203", "session_type": "XX", "slots_per_session": 2, "motif": "m"},
+        {"course_code": "WR203", "session_type": "TD", "slots_per_session": 2, "motif": " "},
+        {"course_code": "", "session_type": "TD", "slots_per_session": 2, "motif": "m"},
+    ):
+        with pytest.raises(reglages.ReglageInvalide):
+            reglages.ajouter_regle_de_module(CONFIG, "doubles_seances", mauvaise, "admin")
+
+
+def test_une_periode_saisie_a_l_ecran_devient_une_fenetre_de_dates():
+    from cal_iut.ingestion.config_loader import load_session_date_windows
+
+    livrees = load_session_date_windows(CONFIG)
+    reglages.ajouter_regle_de_module(
+        CONFIG, "periodes_modules",
+        {"course_code": "WR203", "semestre": "S2", "session_type": None, "debut": "2027-03-01", "fin": None, "motif": "Après les vacances"},
+        "admin",
+    )
+    toutes = load_session_date_windows(CONFIG)
+    assert len(toutes) == len(livrees) + 1
+    assert load_session_date_windows(CONFIG, avec_saisies=False) == livrees
+    regle = toutes[-1]
+    assert (regle.course_code, regle.semestre, regle.session_type) == ("WR203", "S2", None)
+    assert (regle.start_date, regle.end_date, regle.note) == ("2027-03-01", None, "Après les vacances")
+    for mauvaise in (
+        {"course_code": "WR203", "semestre": "S2", "motif": "m"},
+        {"course_code": "WR203", "semestre": "S2", "debut": "2027-04-01", "fin": "2027-03-01", "motif": "m"},
+        {"course_code": "WR203", "semestre": "S2", "debut": "bientôt", "motif": "m"},
+    ):
+        with pytest.raises(reglages.ReglageInvalide):
+            reglages.ajouter_regle_de_module(CONFIG, "periodes_modules", mauvaise, "admin")
+
+
+def test_regler_les_modules_depuis_l_ecran_nouveau_semestre(admin, generations_isolees):
+    depart = admin.get("/generations/regles/even").json()
+    assert depart["verrouille"] is None
+    assert depart["seances_longues"] == [] and depart["periodes"] == []
+    module = next(m for m in depart["modules"] if m["code"] == "WR203")
+    assert module["semestre"] == "S2" and module["types"]["TD"] >= 2
+
+    corps = {"code": "WR203", "type": "TD", "creneaux": 2, "motif": "TD de 3 h demandés"}
+    reponse = admin.post("/generations/regles/even/seances-longues", json=corps)
+    assert reponse.status_code == 201, reponse.text
+    (longue,) = reponse.json()["seances_longues"]
+    assert (longue["code"], longue["type"], longue["duree"], longue["origine"]) == ("WR203", "TD", "3 h", "ajoutee")
+    assert admin.post("/generations/regles/even/seances-longues", json=corps).status_code == 409
+    assert admin.post("/generations/regles/even/seances-longues", json={**corps, "code": "WR104"}).status_code == 404
+    assert admin.post("/generations/regles/even/seances-longues", json={**corps, "type": "TP"}).status_code == 422
+    assert admin.post("/generations/regles/even/seances-longues", json={**corps, "type": "CM", "motif": ""}).status_code == 422
+
+    periode = {"code": "WR203", "type": None, "debut": "2027-03-01", "fin": "2027-04-02", "motif": "Après les vacances"}
+    reponse = admin.post("/generations/regles/even/periodes", json=periode)
+    assert reponse.status_code == 201, reponse.text
+    (saisie,) = reponse.json()["periodes"]
+    assert (saisie["debut"], saisie["fin"], saisie["type"], saisie["origine"]) == ("2027-03-01", "2027-04-02", None, "ajoutee")
+    assert admin.post("/generations/regles/even/periodes", json={**periode, "debut": None, "fin": None}).status_code == 422
+    assert admin.post("/generations/regles/even/periodes", json={**periode, "type": "TP"}).status_code == 422
+    assert admin.post("/generations/regles/even/periodes", json={**periode, "code": "WR104"}).status_code == 404
+
+    assert admin.delete(f"/generations/regles/even/periodes/{longue['id']}").status_code == 404
+    assert admin.delete(f"/generations/regles/even/autre/{longue['id']}").status_code == 404
+    assert admin.delete(f"/generations/regles/even/periodes/{saisie['id']}").status_code == 200
+    reponse = admin.delete(f"/generations/regles/even/seances-longues/{longue['id']}")
+    assert reponse.status_code == 200
+    assert reponse.json()["seances_longues"] == [] and reponse.json()["periodes"] == []
+
+
+def test_les_regles_d_un_semestre_en_service_ne_se_modifient_pas(admin, generations_isolees, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    impair = admin.get("/generations/regles/odd").json()
+    assert "déjà en service" in impair["verrouille"]
+    # Les règles livrées du semestre impair sont listées, sans pouvoir être retirées.
+    assert {(r["code"], r["type"]) for r in impair["seances_longues"]} >= {("WR110", "TP"), ("WR104", "TD")}
+    assert {r["code"] for r in impair["periodes"]} >= {"WR100BU", "WR308D"}
+    assert all(r["id"] is None and r["origine"] == "livree" for r in impair["seances_longues"] + impair["periodes"])
+    corps = {"code": "WR119", "type": "TD", "creneaux": 2, "motif": "m"}
+    assert admin.post("/generations/regles/odd/seances-longues", json=corps).status_code == 409
+    assert admin.post("/generations/regles/odd/periodes", json={"code": "WR119", "debut": "2026-10-01", "motif": "m"}).status_code == 409
+    assert reglages.regles_de_modules(CONFIG, "doubles_seances") == []
