@@ -1,4 +1,4 @@
-"""Brouillons d'emploi du temps — les relire avant de les publier (lot 3 du
+"""Brouillons d'emploi du temps — les relire, puis les publier (lot 3 du
 chantier « Nouveau semestre depuis l'interface », 16/11/2026).
 
 Un brouillon (`PlanningRun.etat == "brouillon"`, produit par l'écran
@@ -15,7 +15,7 @@ from __future__ import annotations
 import dataclasses
 import threading
 
-from cal_iut.api.state import AppState, get_repo, get_state
+from cal_iut.api.state import AppState, etat_principal, get_repo, get_state
 from cal_iut.db.models import PlanningRun
 from cal_iut.solver.rooms import PlacedSessionWithRoom
 
@@ -63,7 +63,13 @@ def lister() -> dict[str, object]:
     return {
         "brouillons": [_resume(run, nombre) for run, nombre in repo.brouillons()],
         "en_service": [
-            {**_resume(run, nombre), "affiche": run.id == service.current_run_id}
+            {
+                **_resume(run, nombre),
+                "affiche": run.id == service.current_run_id,
+                # Le planning du semestre en cours, servi par défaut : un
+                # brouillon de ce semestre ne se publie pas.
+                "en_cours": run.id == etat_principal().current_run_id,
+            }
             for run, nombre in repo.runs_en_service()
         ],
     }
@@ -167,6 +173,56 @@ def supprimer(run_id: int) -> None:
     oublier()
 
 
+class PublicationRefusee(ValueError):
+    pass
+
+
+def publier(run_id: int) -> dict[str, object]:
+    """Met un brouillon en service : il devient le planning de son groupe
+    de semestres, à côté de celui de l'autre groupe (`semestres_charges`).
+
+    Refusé pour le semestre EN COURS : son planning est celui que Celcat
+    suit séance par séance, le remplacer d'un coup y ferait partir des
+    centaines de créations et de suppressions. Un semestre déjà en service
+    se corrige dans les vues, pas en republiant.
+    """
+    from cal_iut.api import main as api
+    from cal_iut.api import revision, sauvegardes_db, semestres_charges
+    from cal_iut.api import state as etats
+
+    repo = get_repo()
+    run = repo.get_brouillon(run_id)
+    if run is None:
+        raise BrouillonIntrouvable(run_id)
+    groupe = groupe_du_run(run)
+    if groupe is None:
+        raise PublicationRefusee("Seul un brouillon de semestre impair ou pair se publie depuis l'interface.")
+    principal = etats.etat_principal()
+    en_service = semestres_charges.runs_par_groupe()
+    if en_service:
+        en_cours = semestres_charges.groupe_en_cours(
+            sorted({*en_service, groupe}), principal.calendar, api._today()
+        )
+        if groupe == en_cours:
+            raise PublicationRefusee(
+                f"Le {GROUPES[groupe]['libelle'].lower()} est le semestre en cours : son planning ne se remplace pas "
+                "depuis l'interface. Corrigez-le dans les vues."
+            )
+    sauvegardes_db.sauvegarder_avant_remplacement(principal.db_path)
+    remplace = en_service.get(groupe)
+    publie = repo.publier_run(run_id, {salle.id: salle.label for salle in principal.rooms})
+    oublier()
+    semestres_charges.restaurer(principal)
+    revision.incrementer("brouillon_publie")
+    return {
+        "publie": publie.id,
+        "groupe": groupe,
+        "libelle": libelle_du_run(publie),
+        "remplace": remplace.id if remplace is not None else None,
+        "semestres_charges": semestres_charges.pour_payload(),
+    }
+
+
 # ── Routes (administrateurs) ───────────────────────────────────────────
 
 from fastapi import APIRouter, Depends, HTTPException, Response  # noqa: E402
@@ -233,6 +289,19 @@ def doublons_du_brouillon(run_id: int, semaine: int | None = None) -> dict[str, 
     except BrouillonIntrouvable as exc:
         raise HTTPException(404, "Ce brouillon n'existe pas ou a déjà été publié.") from exc
     return {"doublons": doublons.doublons(a_part, semaine)}
+
+
+@router.post("/{run_id}/publier")
+def publier_brouillon(run_id: int) -> dict[str, object]:
+    """Met le brouillon en service (cf. `publier`)."""
+    try:
+        return publier(run_id)
+    except BrouillonIntrouvable as exc:
+        raise HTTPException(404, "Ce brouillon n'existe pas ou a déjà été publié.") from exc
+    except PublicationRefusee as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.delete("/{run_id}")

@@ -670,7 +670,8 @@ python -c "import sqlite3; print(sqlite3.connect('data/state/cal-iut.db').execut
 - Si le serveur redémarre pendant le calcul (un déploiement, par exemple), la génération **reprend seule** en quelques minutes, sans refaire les essais terminés. L'essai en cours, lui, recommence.
 - Les **Réglages** (nombre d'essais, durée maximale) n'ont en général pas besoin d'être touchés. Le calcul laisse un cœur du serveur libre pour l'application.
 - Sous le résultat, la carte **Brouillons** liste les brouillons enregistrés. **Relire** ouvre le brouillon dans les vues habituelles (Vue Promo, Vue Semaine, Vue Enseignant, À traiter…), avec un bandeau **Brouillon** en haut de l'écran. Vous seul le voyez. Rien n'est modifiable pendant la relecture : toute tentative est refusée avec un message. **Quitter la relecture** revient au planning en service. **Supprimer** efface le brouillon.
-- La publication d'un brouillon n'existe pas encore : l'application ne sait servir qu'un groupe de semestres à la fois, et publier le semestre pair ferait disparaître le semestre impair en cours.
+- **Publier** met le brouillon en service : il devient l'emploi du temps de son semestre, à côté de celui de l'autre semestre, et le sélecteur « Impair / Pair » apparaît. Une copie de la base est faite juste avant. Le semestre en cours ne se publie pas depuis l'interface : son planning se corrige dans les vues, parce que Celcat le suit séance par séance.
+- Celcat et le semestre pair : la comparaison avec Celcat ne sait pas encore lire le semestre pair. Tant que ce n'est pas fait, rien n'est comparé ni envoyé pour lui, même quand il devient le semestre en cours.
 - Les fichiers de travail sont dans `data/state/generations/` (les dix dernières générations sont gardées).
 
 ### Deux semestres en service en même temps

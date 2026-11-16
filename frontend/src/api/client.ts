@@ -721,11 +721,23 @@ export interface RunResume {
 
 export interface BrouillonsReponse {
   brouillons: RunResume[];
-  en_service: (RunResume & { affiche: boolean })[];
+  en_service: (RunResume & { affiche: boolean; en_cours?: boolean })[];
 }
 
 export function listBrouillons(): Promise<BrouillonsReponse> {
   return request<BrouillonsReponse>("/brouillons");
+}
+
+export interface PublicationReponse {
+  publie: number;
+  groupe: string;
+  libelle: string;
+  remplace: number | null;
+}
+
+/** Met un brouillon en service (`POST /brouillons/{id}/publier`). */
+export async function publierBrouillon(runId: number): Promise<PublicationReponse> {
+  return request<PublicationReponse>(`/brouillons/${runId}/publier`, { method: "POST" });
 }
 
 export async function supprimerBrouillon(runId: number): Promise<void> {

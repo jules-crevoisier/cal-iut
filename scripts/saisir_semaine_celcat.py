@@ -63,9 +63,13 @@ def _charger_entrees(lundi: dt.date):
 
     init_db()
     repo = PlanningRepository(get_db())
+    # Ce script ne sait saisir que le semestre impair (ingestion « odd »
+    # ci-dessus) : jamais le dernier run s'il est d'un autre semestre.
     run = repo.get_latest_run()
+    if run is not None and (run.semestre or "").upper() == "EVEN":
+        run = repo.get_latest_run(semestre="ODD")
     if run is None:
-        raise SystemExit("aucun planning en base (data/state/cal-iut.db)")
+        raise SystemExit("aucun planning du semestre impair en base (data/state/cal-iut.db)")
     rows = repo.db.query(CurrentPlacement).filter_by(run_id=run.id).all()
 
     groups = {g.id: g.label for g in load_groups(config_dir)}

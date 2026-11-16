@@ -197,6 +197,14 @@ def enfiler(job: dict[str, Any]) -> bool:
     if groupe_actif():
         logger.info("Celcat : job %s ignoré, il vient du semestre qui n'est pas en cours", job.get("action"))
         return False
+    # Ni pour un planning que la comparaison ne sait pas encore lire (le
+    # semestre pair, cf. `planification.comparaison_prise_en_charge`).
+    from cal_iut.api.state import get_state
+    from cal_iut.celcat.planification import comparaison_prise_en_charge
+
+    if not comparaison_prise_en_charge(get_state()):
+        logger.warning("Celcat : job %s ignoré, le semestre pair n'est pas encore pris en charge", job.get("action"))
+        return False
     _migrer()
     return _poser(job)
 

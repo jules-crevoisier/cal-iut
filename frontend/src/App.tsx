@@ -1109,7 +1109,7 @@ export function App() {
         )}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
-        {activeTab === "generation" && !readOnlyTarget && moi?.role === "admin" && <GenerationView onRelire={relireBrouillon} />}
+        {activeTab === "generation" && !readOnlyTarget && moi?.role === "admin" && <GenerationView onRelire={relireBrouillon} onPublie={() => void refreshAppState()} />}
         {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}
         {activeTab === "trafic" && !readOnlyTarget && moi?.role === "admin" && <TraficView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}
