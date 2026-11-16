@@ -119,3 +119,27 @@ describe("SideNav search and account", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Hors ligne");
   });
 });
+
+describe("SideNav : sélecteur de semestre", () => {
+  const semestres = [
+    { groupe: "odd", libelle: "Semestre impair", semestres: ["S1", "S3", "S5"], principal: true },
+    { groupe: "even", libelle: "Semestre pair", semestres: ["S2", "S4", "S6"], principal: false },
+  ];
+
+  it("n'apparaît pas quand un seul semestre est en service", () => {
+    render(<SideNav {...baseProps} semestres={semestres.slice(0, 1)} semestreAffiche="odd" onSemestre={vi.fn()} />);
+    expect(screen.queryByRole("group", { name: "Semestre affiché" })).not.toBeInTheDocument();
+  });
+
+  it("propose les deux semestres et signale celui qui est affiché", () => {
+    const onSemestre = vi.fn();
+    render(<SideNav {...baseProps} semestres={semestres} semestreAffiche="odd" onSemestre={onSemestre} />);
+
+    expect(screen.getByRole("button", { name: /impair/i })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /^pair/i }));
+    fireEvent.click(screen.getByRole("button", { name: /impair/i }));
+
+    expect(onSemestre).toHaveBeenCalledTimes(1);
+    expect(onSemestre).toHaveBeenCalledWith("even");
+  });
+});

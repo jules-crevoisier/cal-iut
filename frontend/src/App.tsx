@@ -9,6 +9,7 @@ import {
   extractTeachers,
   fetchAppState,
   setBrouillonEnRelecture,
+  setSemestreChoisi,
   fetchDiff,
   fetchDoublons,
   fetchFeedbackAnalysis,
@@ -290,6 +291,19 @@ export function App() {
       }
     }
   }, [brouillon]);
+
+  // Sélecteur impair / pair : le choix est posé sur toutes les requêtes
+  // (`api/client.ts`), puis la page est rechargée — chaque vue repart ainsi
+  // du bon semestre, sans rien garder de l'autre. Choisir le semestre en
+  // cours efface le choix : en février, le semestre pair s'affichera seul.
+  const changerSemestre = useCallback(
+    (groupe: string) => {
+      const principal = appPayload?.semestresCharges?.find((s) => s.principal)?.groupe;
+      setSemestreChoisi(groupe === principal ? null : groupe);
+      window.location.reload();
+    },
+    [appPayload],
+  );
 
   const refreshDiff = useCallback(async () => {
     if (lienPublic) return;
@@ -752,6 +766,9 @@ export function App() {
               panne={panne}
               onCle={() => setRoute({ vue: "mcp" })}
               onLogout={deconnecter}
+              semestres={brouillon === null ? appPayload?.semestresCharges : undefined}
+              semestreAffiche={appPayload?.semestreGroupe}
+              onSemestre={changerSemestre}
             />
           </>
         )}

@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 import type { RouteView } from "../hooks/useHashRoute";
+import type { SemestreCharge } from "../types/app";
 import { ecrireLocal, lireLocal } from "../utils/stockageLocal";
 import { MenuCompte } from "./MenuCompte";
 import "./SideNav.css";
@@ -130,6 +131,11 @@ interface SideNavProps {
   panne?: boolean;
   onCle?: () => void;
   onLogout?: () => void;
+  /** Groupes de semestres en service et celui qui est affiché. Le
+   *  sélecteur n'apparaît que s'il y en a deux. */
+  semestres?: SemestreCharge[];
+  semestreAffiche?: string | null;
+  onSemestre?: (groupe: string) => void;
 }
 
 /**
@@ -169,6 +175,9 @@ export function SideNav({
   panne = false,
   onCle,
   onLogout,
+  semestres,
+  semestreAffiche,
+  onSemestre,
 }: SideNavProps) {
   const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   const groupes = compteApi ? GROUPES_ACCES_API : estAdmin ? [...NAV_GROUPS, GROUPE_ADMIN] : NAV_GROUPS;
@@ -230,6 +239,26 @@ export function SideNav({
             <span className="navbtn-libelle">Rechercher…</span>
             <kbd>{mac ? "⌘K" : "Ctrl K"}</kbd>
           </button>
+        )}
+
+        {semestres && semestres.length > 1 && onSemestre && !compteApi && (
+          <div className="sidenav-semestre" role="group" aria-label="Semestre affiché">
+            {semestres.map((s) => (
+              <button
+                key={s.groupe}
+                type="button"
+                className={`sidenav-semestre-choix ${s.groupe === semestreAffiche ? "is-actif" : ""}`}
+                aria-pressed={s.groupe === semestreAffiche}
+                title={`${s.libelle} (${s.semestres.join(", ")})${s.principal ? ", en cours" : ""}`}
+                onClick={() => {
+                  if (s.groupe !== semestreAffiche) onSemestre(s.groupe);
+                }}
+              >
+                <span className="sidenav-semestre-nom">{s.groupe === "odd" ? "Impair" : "Pair"}</span>
+                <span className="sidenav-semestre-detail">{s.semestres.join(" · ")}</span>
+              </button>
+            ))}
+          </div>
         )}
 
         {/* Boutons de navigation (et non `role="tab"`) : `aria-current="page"`

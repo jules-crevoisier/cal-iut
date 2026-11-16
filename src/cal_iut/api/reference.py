@@ -245,7 +245,7 @@ def _usage(n: int) -> str:
 
 # ── La liste des manques ────────────────────────────────────────────────
 
-_memo: tuple[int, ManquesV1] | None = None
+_memo: tuple[tuple[int, str], ManquesV1] | None = None
 _verrou_memo = threading.Lock()
 
 
@@ -253,13 +253,17 @@ def manques() -> ManquesV1:
     """Tout ce qui manque, recalculé seulement quand la révision a avancé
     (≈ 0,2 s sur le planning réel, surtout la traduction Celcat)."""
     global _memo
+    from cal_iut.api.state import groupe_actif
+
     rev = revision.actuelle()
+    cle = (rev.numero, groupe_actif())
     memo = _memo
-    if memo is not None and memo[0] == rev.numero:
+    if memo is not None and memo[0] == cle:
         return memo[1]
     with _verrou_memo:
         rev = revision.actuelle()
-        if _memo is not None and _memo[0] == rev.numero:
+        cle = (rev.numero, groupe_actif())
+        if _memo is not None and _memo[0] == cle:
             return _memo[1]
         liste = _calculer_manques(_main().get_state())
         reponse = ManquesV1(
@@ -271,7 +275,7 @@ def manques() -> ManquesV1:
             manques=liste,
         )
         if revision.actuelle().numero == rev.numero:
-            _memo = (rev.numero, reponse)
+            _memo = (cle, reponse)
         return reponse
 
 

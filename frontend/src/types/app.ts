@@ -208,6 +208,12 @@ export interface SeanceNonPlacee {
 }
 
 export interface AppPayload {
+  /** Groupe de semestres de ce payload (« odd » / « even »), `null` pour
+   *  un planning historique d'un seul parcours. */
+  semestreGroupe?: string | null;
+  /** Les groupes de semestres en service, celui du semestre en cours
+   *  d'abord. Plus d'un : l'interface propose de basculer. */
+  semestresCharges?: SemestreCharge[];
   /** Présent seulement quand le payload est celui d'un brouillon en
    *  relecture (`GET /brouillons/{id}/app-state`). */
   brouillon?: { run_id: number; groupe: string | null; libelle: string; cree_le: string | null; placements: number };
@@ -377,4 +383,11 @@ export interface OccupationsExternesPayload {
   erreur: string | null;
   occupations: OccupationExterne[];
   conflits: ConflitOccupationExterne[];
+}
+
+export interface SemestreCharge {
+  groupe: string;
+  libelle: string;
+  semestres: string[];
+  principal: boolean;
 }

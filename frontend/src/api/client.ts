@@ -183,6 +183,38 @@ function estEcritureInterditeEnRelecture(url: string, init?: RequestInit): boole
   return !chemin.startsWith("/auth/") && !chemin.startsWith("/brouillons");
 }
 
+// ── Semestre affiché (16/11/2026, cf. api/semestres_charges.py) ──
+// Quand les deux groupes de semestres sont en service, le serveur sert par
+// défaut celui du semestre en cours ; l'en-tête `X-Semestre-Groupe` demande
+// l'autre. Le choix est gardé sur ce navigateur. `null` = le semestre en
+// cours, quel qu'il soit : en février, il devient le semestre pair tout seul.
+const CLE_SEMESTRE = "cal-iut:semestre-groupe";
+
+function lireSemestreChoisi(): string | null {
+  try {
+    const valeur = window.localStorage.getItem(CLE_SEMESTRE);
+    return valeur === "odd" || valeur === "even" ? valeur : null;
+  } catch {
+    return null;
+  }
+}
+
+let semestreChoisi: string | null = lireSemestreChoisi();
+
+export function getSemestreChoisi(): string | null {
+  return semestreChoisi;
+}
+
+export function setSemestreChoisi(groupe: string | null): void {
+  semestreChoisi = groupe;
+  try {
+    if (groupe) window.localStorage.setItem(CLE_SEMESTRE, groupe);
+    else window.localStorage.removeItem(CLE_SEMESTRE);
+  } catch {
+    // Stockage refusé (navigation privée) : le choix vaut pour cette page.
+  }
+}
+
 async function executer<T>(url: string, init?: RequestInit, delaiMs: number | null = null): Promise<T> {
   if (estEcritureInterditeEnRelecture(url, init)) {
     throw new ErreurApi(MESSAGE_RELECTURE, 409, "refus");
@@ -200,7 +232,10 @@ async function executer<T>(url: string, init?: RequestInit, delaiMs: number | nu
     let res: Response;
     try {
       res = await fetch(url, {
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(semestreChoisi ? { "X-Semestre-Groupe": semestreChoisi } : {}),
+        },
         ...init,
         ...(controleur ? { signal: controleur.signal } : {}),
       });

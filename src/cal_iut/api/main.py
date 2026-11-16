@@ -632,6 +632,43 @@ class _RevisionApresEcriture:
 app.add_middleware(_RevisionApresEcriture)
 
 
+class _GroupeDeLaRequete:
+    """Sert la requête depuis l'état du groupe de semestres demandé par
+    l'en-tête `X-Semestre-Groupe` (« odd » / « even », posé par le sélecteur
+    de l'interface). Sans en-tête, ou pour un groupe qui n'est pas en
+    service : l'état principal, comme avant.
+
+    ASGI pur : la variable de contexte doit être posée dans la tâche qui
+    exécute la route (`@app.middleware("http")` en lance une autre)."""
+
+    def __init__(self, app: object) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: object, send: object) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        from cal_iut.api import state as etats
+
+        demande = None
+        for nom, valeur in scope.get("headers") or []:
+            if nom == b"x-semestre-groupe":
+                demande = valeur.decode("latin-1")
+                break
+        if not demande or not etats._secondaires:
+            await self.app(scope, receive, send)
+            return
+        with etats.pour_le_groupe(demande):
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                if scope.get("method") not in ("GET", "HEAD", "OPTIONS"):
+                    etats.synchroniser_le_commun()
+
+
+app.add_middleware(_GroupeDeLaRequete)
+
+
 def _empreinte_etat() -> object:
     """Sonde de révision (cf. `api/revision.py`) : repère un état REMPLACÉ
     sans passer par une écriture de l'API — une liste réassignée (et non
@@ -1166,7 +1203,9 @@ def charger_etat_applicatif() -> None:
     yaml_weights = load_objective_weights(CONFIG_DIR)
     state.objective_weights = {**yaml_weights, **db_weights}
 
-    _try_restore_latest(state)
+    from cal_iut.api import semestres_charges
+
+    semestres_charges.restaurer(state)
     revision.incrementer("etat_applicatif_charge")
 
 
@@ -1208,9 +1247,12 @@ def _orphelins_a_purger(orphelins: list, total: int) -> list:
     return [c for c in orphelins if "-CUSTOM" not in c.session_id]
 
 
-def _try_restore_latest(state: object) -> None:
+def _try_restore_latest(state: object, run: object | None = None) -> None:
+    """Relit dans `state` le planning en service. `run` : celui d'un groupe
+    de semestres précis (`api/semestres_charges.py`) ; par défaut, le
+    dernier run en service."""
     repo = get_repo()
-    run = repo.get_latest_run()
+    run = run or repo.get_latest_run()
     if not run:
         return
     state.current_run_id = run.id
@@ -1445,7 +1487,7 @@ def expurger_payload(payload: dict[str, object]) -> dict[str, object]:
 # par les deux variantes de `/app-state` et par l'API v1 (`api/v1.py`) :
 # après une écriture, le premier lecteur paie les ≈ 150 ms, les suivants
 # (quelle que soit leur variante) repartent de ce calcul.
-_memo_payload: tuple[int, dict[str, object]] | None = None
+_memo_payload: tuple[tuple[int, str], dict[str, object]] | None = None
 _verrou_payload = threading.Lock()
 
 
@@ -1454,18 +1496,22 @@ def payload_app_state() -> dict[str, object]:
     a avancé (cf. `api/revision.py`). À ne jamais modifier en place : il est
     partagé entre les requêtes."""
     global _memo_payload
-    numero = revision.actuelle().numero
+    from cal_iut.api.state import groupe_actif
+
+    # Un payload par groupe de semestres ; un seul gardé, celui du dernier
+    # groupe lu (on consulte presque toujours le semestre en cours).
+    cle = (revision.actuelle().numero, groupe_actif())
     memo = _memo_payload
-    if memo is not None and memo[0] == numero:
+    if memo is not None and memo[0] == cle:
         return memo[1]
     with _verrou_payload:
-        numero = revision.actuelle().numero
+        cle = (revision.actuelle().numero, groupe_actif())
         memo = _memo_payload
-        if memo is not None and memo[0] == numero:
+        if memo is not None and memo[0] == cle:
             return memo[1]
         payload = _calculer_payload_app_state()
-        if revision.actuelle().numero == numero:
-            _memo_payload = (numero, payload)
+        if revision.actuelle().numero == cle[0]:
+            _memo_payload = (cle, payload)
         return payload
 
 
@@ -1560,6 +1606,12 @@ def _calculer_payload_app_state(state: object | None = None) -> dict[str, object
     # blocs « Occupé ailleurs » / « Réservé dans Celcat », fraîcheur du
     # relevé, et séances déjà placées en conflit (« À traiter »).
     payload["occupationsExternes"] = occupations_externes.pour_payload(state)
+    # Le groupe de semestres de ce payload, et ceux entre lesquels
+    # l'interface peut basculer (sélecteur impair / pair, 16/11/2026).
+    from cal_iut.api import semestres_charges
+
+    payload["semestreGroupe"] = state.semestre_group
+    payload["semestresCharges"] = semestres_charges.pour_payload()
     return payload
 
 
@@ -2705,18 +2757,39 @@ def _ics_versions(state: object) -> dict[str, list[dict[str, object]]]:
     return {"groupes": groupes, "enseignants": enseignants}
 
 
+def _ics_versions_tous_semestres() -> dict[str, list[dict[str, object]]]:
+    """`_ics_versions` sur tous les groupes de semestres en service : pour
+    chaque groupe d'étudiants ou enseignant, la modification la plus
+    récente des deux semestres (un flux .ics couvre l'année)."""
+    from cal_iut.api import semestres_charges
+
+    fusion: dict[str, dict[str, dict[str, object]]] = {"groupes": {}, "enseignants": {}}
+    for etat in semestres_charges.etats_pour_les_flux():
+        for famille, lignes in _ics_versions(etat).items():
+            for ligne in lignes:
+                cle = "id" if famille == "groupes" else "code"
+                connue = fusion[famille].get(str(ligne[cle]))
+                if connue is None:
+                    fusion[famille][str(ligne[cle])] = dict(ligne)
+                elif (ligne["derniere_modification"] or "") > (connue["derniere_modification"] or ""):
+                    connue["derniere_modification"] = ligne["derniere_modification"]
+    return {
+        "groupes": list(fusion["groupes"].values()),
+        "enseignants": sorted(fusion["enseignants"].values(), key=lambda e: str(e["code"])),
+    }
+
+
 @app.get("/ics/version")
 def ics_version(request: Request) -> Response:
     """Petit JSON — dernière modification par groupe/enseignant, et le lien
     `.ics` à réinterroger si elle a avancé (cf. `_ics_versions`). Pensé
     pour être sondé BEAUCOUP plus souvent que les flux `.ics` complets
     (aucun calcul de calendrier, juste des horodatages)."""
-    state = get_state()
     import json as _json
 
     return cache_http.repondre(
         request, _cache_lectures, ("ics-version",),
-        lambda: _json.dumps(_ics_versions(state), ensure_ascii=False).encode("utf-8"),
+        lambda: _json.dumps(_ics_versions_tous_semestres(), ensure_ascii=False).encode("utf-8"),
         media_type="application/json; charset=utf-8", cache_control=_ICS_CACHE_CONTROL,
     )
 
@@ -2727,10 +2800,17 @@ def ics_teacher(code: str, request: Request) -> Response:
     ETag + 304 : cf. `_ICS_CACHE_CONTROL`."""
 
     def _construire() -> bytes:
+        from cal_iut.api import semestres_charges
+
         state = get_state()
-        placements = [p for p in state.timetable if code in (p.teacher_codes or [])]
-        items = _ics_items_for_placements(state, placements)
-        noms = _noms_enseignants(state)
+        # Les deux semestres dans le même agenda, chacun daté par SON état.
+        items = []
+        noms: dict[str, str] = {}
+        for etat in semestres_charges.etats_pour_les_flux():
+            items += _ics_items_for_placements(
+                etat, [p for p in etat.timetable if code in (p.teacher_codes or [])]
+            )
+            noms = {**_noms_enseignants(etat), **noms}
         group_labels = {g.id: g.label for g in state.groups}
         from cal_iut.api.ics_feed import build_ics
 
@@ -2755,10 +2835,16 @@ def ics_groupe(group_id: str, request: Request) -> Response:
         raise HTTPException(404, f"Groupe {group_id} inconnu")
 
     def _construire() -> bytes:
+        from cal_iut.api import semestres_charges
+
         cohort = expand_group_filter(group_id, state.groups)
-        placements = [p for p in state.timetable if cohort.intersection(p.group_ids or [])]
-        items = _ics_items_for_placements(state, placements)
-        noms = _noms_enseignants(state)
+        items = []
+        noms: dict[str, str] = {}
+        for etat in semestres_charges.etats_pour_les_flux():
+            items += _ics_items_for_placements(
+                etat, [p for p in etat.timetable if cohort.intersection(p.group_ids or [])]
+            )
+            noms = {**_noms_enseignants(etat), **noms}
         group_labels = {g.id: g.label for g in state.groups}
         label = group_labels.get(group_id, group_id)
         parcours = next((g.parcours for g in state.groups if g.id == group_id), None)
