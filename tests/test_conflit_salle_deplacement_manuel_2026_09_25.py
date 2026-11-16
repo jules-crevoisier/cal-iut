@@ -47,6 +47,11 @@ from cal_iut.solver.rooms import (
     build_manual_conflict_map,
 )
 
+# Ces tests placent des séances sur des semaines de l'automne 2026 : « aujourd'hui »
+# est figé (cf. `conftest.date_du_jour_figee`), sinon ils échouent dès que ces
+# semaines deviennent passées ou en cours (CI rouge le 16/11/2026).
+pytestmark = pytest.mark.usefixtures("date_du_jour_figee")
+
 ROOT = Path(__file__).resolve().parents[1]
 GROUPES = load_groups(ROOT / "data" / "config")
 

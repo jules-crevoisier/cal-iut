@@ -1887,9 +1887,17 @@ def _solve_and_persist(body: SolveRequest) -> TimetableResponse:
         state.last_gap_penalty = result.gap_penalty
 
         repo = get_repo()
+        sauvegardes_db.sauvegarder_avant_remplacement(state.db_path)
         run = repo.save_run(
-            parcours=body.parcours or state.filter_parcours or "BUT1",
-            semestre=body.semestre or state.filter_semestre or "S1",
+            # Run de groupe (S1+S3+S5 ou S2+S4+S6) : enregistré sous le
+            # sentinelle ODD/EVEN, comme `cal-iut load-run`. Sous « S1 », un
+            # run du groupe pair aurait remplacé le planning du groupe
+            # impair (cf. `PlanningRepository.save_run`) et n'aurait pas été
+            # reconnu au redémarrage (`_try_restore_latest`).
+            parcours=body.parcours or state.filter_parcours or ("MMI" if semestre_group else "BUT1"),
+            semestre=body.semestre
+            or state.filter_semestre
+            or (semestre_group.upper() if semestre_group else "S1"),
             status=result.status,
             objective_value=result.objective_value,
             gap_penalty=result.gap_penalty,

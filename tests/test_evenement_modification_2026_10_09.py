@@ -13,6 +13,12 @@ from __future__ import annotations
 from test_evenement_horaire_libre_2026_09_23 import SEMAINE, _corps, _place, _seance, monter  # noqa: F401
 
 from cal_iut.api.state import get_state
+import pytest
+
+# Ces tests placent des séances sur des semaines de l'automne 2026 : « aujourd'hui »
+# est figé (cf. `conftest.date_du_jour_figee`), sinon ils échouent dès que ces
+# semaines deviennent passées ou en cours (CI rouge le 16/11/2026).
+pytestmark = pytest.mark.usefixtures("date_du_jour_figee")
 
 
 def _creer(client, **over) -> dict:

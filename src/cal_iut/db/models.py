@@ -25,6 +25,13 @@ class PlanningRun(Base):
     gap_penalty: Mapped[int] = mapped_column(Integer, default=0)
     weeks: Mapped[int] = mapped_column(Integer, default=16)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # « brouillon » : planning calculé mais pas encore en service — il n'a
+    # que ses `solver_placements`, aucun `current_placements`. « publie » :
+    # en service. `NULL` : run antérieur à cette colonne (16/11/2026), tous
+    # chargés directement en service, donc lus comme « publie ». Nullable
+    # exprès : `_ajouter_colonnes_manquantes` ne sait ajouter que cela à une
+    # base déjà déployée.
+    etat: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     solver_placements: Mapped[list["SolverPlacement"]] = relationship(back_populates="run")
     corrections: Mapped[list["Correction"]] = relationship(back_populates="run")
