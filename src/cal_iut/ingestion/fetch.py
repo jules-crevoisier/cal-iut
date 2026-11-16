@@ -4,13 +4,15 @@ from pathlib import Path
 
 import httpx
 
+from cal_iut.ingestion import mmi_previ
+
 MAQUETTE_URL = "https://mmi23x02.mmi-troyes.fr/export/maquette"
 PROGRESSION_URL = "https://mmi23x02.mmi-troyes.fr/export/progression"
 
 
 async def fetch_export(url: str) -> list[dict[str, object]]:
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(url)
+        response = await client.get(url, headers=mmi_previ.entetes())
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, list):
@@ -20,7 +22,7 @@ async def fetch_export(url: str) -> list[dict[str, object]]:
 
 def fetch_export_sync(url: str) -> list[dict[str, object]]:
     with httpx.Client(timeout=30.0) as client:
-        response = client.get(url)
+        response = client.get(url, headers=mmi_previ.entetes())
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, list):

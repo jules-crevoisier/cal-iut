@@ -472,11 +472,34 @@ export interface ParametresGeneration {
   num_workers: number;
 }
 
+/** D'où viennent la maquette et la progression d'un groupe de semestres. */
+export interface SourceMaquette {
+  origine: "copie_livree" | "mmi_previ";
+  recuperee_le?: string;
+  par?: string;
+  modules?: number;
+  avec_progression?: number;
+}
+
+export interface ModuleDeMaquette {
+  code: string;
+  nom: string;
+  semestre: string;
+  parcours: string;
+}
+
+export interface RecuperationMmiPrevi {
+  semestre_group: string;
+  source: SourceMaquette;
+  differences: { ajoutes: ModuleDeMaquette[]; retires: ModuleDeMaquette[]; modifies: ModuleDeMaquette[] };
+}
+
 export interface GroupeSemestres {
   cle: string;
   libelle: string;
   semestres: string[];
   parametres: ParametresGeneration;
+  source?: SourceMaquette;
 }
 
 export interface EtapeGeneration {
@@ -553,6 +576,8 @@ export interface GenerationDetail {
 
 export interface GenerationsReponse {
   groupes: GroupeSemestres[];
+  /** Le jeton d'accès à MMI Prévi est posé sur le serveur. */
+  mmi_previ_configure?: boolean;
   coeurs: number;
   active: GenerationDetail | null;
   generations: GenerationResume[];
@@ -572,6 +597,21 @@ export async function lancerGeneration(demande: {
   heures?: number;
 }): Promise<GenerationDetail> {
   return request<GenerationDetail>("/generations", { method: "POST", body: JSON.stringify(demande) });
+}
+
+/** Télécharge maquette et progression du groupe depuis MMI Prévi : elles
+ * deviennent la source des prochaines générations de ce semestre. */
+export async function recupererDepuisMmiPrevi(groupe: string): Promise<RecuperationMmiPrevi> {
+  return request<RecuperationMmiPrevi>("/generations/sources/mmi-previ", {
+    method: "POST",
+    body: JSON.stringify({ semestre_group: groupe }),
+  });
+}
+
+export async function revenirALaCopieLivree(groupe: string): Promise<{ source: SourceMaquette }> {
+  return request<{ source: SourceMaquette }>(`/generations/sources/mmi-previ/${encodeURIComponent(groupe)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function annulerGeneration(id: string): Promise<GenerationDetail> {

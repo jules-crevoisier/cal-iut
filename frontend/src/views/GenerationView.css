@@ -84,6 +84,74 @@ p.generation-duree {
   font-size: 12.5px;
 }
 
+/* ── Source de la maquette (MMI Prévi) ── */
+.generation-source {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 760px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.generation-source-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.generation-source-tete > div:first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.generation-source h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.generation-source p {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.generation-source p strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.generation-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.generation-source-bilan {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.generation-source-bilan p {
+  margin: 0;
+}
+
+.generation-modules {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .generation-reglages summary,
 .generation-journal summary,
 .generation-bloc summary {

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from cal_iut.api import accounts
 from cal_iut.generation import taches
+from cal_iut.ingestion import mmi_previ
 
 router = APIRouter(prefix="/generations", dependencies=[Depends(accounts.require_role("admin"))])
 
@@ -25,6 +26,39 @@ class GenerationRequest(BaseModel):
     weeks: int | None = None
     fi_max_week: int | None = None
     num_workers: int | None = None
+
+
+class SourceRequest(BaseModel):
+    semestre_group: str = Field(description="« odd » (S1, S3, S5) ou « even » (S2, S4, S6)")
+
+
+def _source(groupe: str) -> dict:
+    """D'où viennent la maquette et la progression de ce groupe : la copie
+    livrée avec l'application, ou ce qui a été récupéré depuis MMI Prévi.
+    Jamais le contenu (noms d'enseignants, commentaires internes)."""
+    copie = mmi_previ.etat_de_la_copie(taches.RACINE, groupe)
+    if copie is None:
+        return {"origine": "copie_livree"}
+    return {"origine": "mmi_previ", **copie}
+
+
+def _refuser_si_source_verrouillee(groupe: str) -> None:
+    """Changer la maquette d'un semestre déjà publié changerait ses séances
+    au prochain redémarrage du serveur, sans nouveau calcul. Et pendant une
+    génération, le solveur relit la progression en cours de route."""
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    if taches.active() is not None:
+        raise HTTPException(409, "Une génération est en cours. Attendez sa fin ou arrêtez-la avant de changer les sources.")
+    from cal_iut.api.brouillons import groupe_du_run
+    from cal_iut.api.state import get_repo
+
+    if any(groupe_du_run(run) == groupe for run, _ in get_repo().runs_en_service()):
+        raise HTTPException(
+            409,
+            f"Le {taches.GROUPES[groupe]['libelle'].lower()} est déjà en service : sa maquette ne se remplace pas "
+            "depuis cet écran, ses séances changeraient sans nouveau calcul.",
+        )
 
 
 def _resume(etat: dict) -> dict:
@@ -63,9 +97,10 @@ def lister_generations() -> dict:
     active = next((e for e in etats if e["statut"] in taches.STATUTS_ACTIFS), None)
     return {
         "groupes": [
-            {"cle": cle, **infos, "parametres": taches.parametres_par_defaut(cle)}
+            {"cle": cle, **infos, "parametres": taches.parametres_par_defaut(cle), "source": _source(cle)}
             for cle, infos in taches.GROUPES.items()
         ],
+        "mmi_previ_configure": mmi_previ.configure(),
         "coeurs": taches.coeurs_disponibles(),
         "active": _detail(active) if active else None,
         "generations": [_resume(e) for e in etats],
@@ -85,6 +120,29 @@ def lancer_generation(body: GenerationRequest, request: Request) -> dict:
         raise HTTPException(422, str(exc)) from exc
     taches.lancer(etat["id"])
     return _detail(etat)
+
+
+@router.post("/sources/mmi-previ")
+def recuperer_depuis_mmi_previ(body: SourceRequest, request: Request) -> dict:
+    """Télécharge la maquette et la progression du semestre choisi depuis
+    MMI Prévi et en fait la source des prochaines générations."""
+    _refuser_si_source_verrouillee(body.semestre_group)
+    utilisateur = getattr(request.state, "user", None)
+    par = getattr(utilisateur, "email", None) or "administrateur"
+    try:
+        resultat = mmi_previ.recuperer(taches.RACINE, body.semestre_group, par)
+    except mmi_previ.JetonAbsent as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except mmi_previ.ErreurMmiPrevi as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return {"semestre_group": body.semestre_group, **resultat, "source": _source(body.semestre_group)}
+
+
+@router.delete("/sources/mmi-previ/{groupe}")
+def revenir_a_la_copie_livree(groupe: str) -> dict:
+    _refuser_si_source_verrouillee(groupe)
+    mmi_previ.supprimer_copie(taches.RACINE, groupe)
+    return {"semestre_group": groupe, "source": _source(groupe)}
 
 
 @router.get("/{generation_id}")

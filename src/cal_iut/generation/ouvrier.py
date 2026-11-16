@@ -147,7 +147,16 @@ class Ouvrier:
             json.dumps(resultat.stats, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         self.etat["seances_total"] = len(resultat.sessions)
-        self.fin("preparation", f"{len(resultat.sessions)} séances, {len(resultat.courses)} modules")
+        # D'où vient la maquette de cette génération (cf. ingestion/mmi_previ.py).
+        from cal_iut.ingestion import mmi_previ
+
+        copie = mmi_previ.etat_de_la_copie(RACINE, self.groupe)
+        self.etat["source"] = {"origine": "copie_livree"} if copie is None else {"origine": "mmi_previ", **copie}
+        origine = "copie livrée avec l'application" if copie is None else "MMI Prévi"
+        self.fin(
+            "preparation",
+            f"{len(resultat.sessions)} séances, {len(resultat.courses)} modules (maquette : {origine})",
+        )
 
     # ── 2. Audit des données ──────────────────────────────────────────
 

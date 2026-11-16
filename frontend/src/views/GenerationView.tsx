@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CircleDashed, LoaderCircle, Sparkles, X } from "lucide-react";
+import { Check, CircleDashed, CloudDownload, LoaderCircle, Sparkles, X } from "lucide-react";
 
 import {
   annulerGeneration,
@@ -22,11 +22,16 @@ import {
   listBrouillons,
   listGenerations,
   publierBrouillon,
+  recupererDepuisMmiPrevi,
+  revenirALaCopieLivree,
   supprimerBrouillon,
   type EtapeGeneration,
   type GenerationDetail,
   type GenerationResume,
   type GenerationsReponse,
+  type GroupeSemestres,
+  type ModuleDeMaquette,
+  type RecuperationMmiPrevi,
   type BrouillonsReponse,
   type RunResume,
   type StatutGeneration,
@@ -265,6 +270,102 @@ function Resultat({ generation, libelleGroupe }: { generation: GenerationDetail;
   );
 }
 
+function ListeDeModules({ titre, modules }: { titre: string; modules: ModuleDeMaquette[] }) {
+  if (modules.length === 0) return null;
+  return (
+    <details className="generation-bloc">
+      <summary>{titre}</summary>
+      <ul className="generation-modules">
+        {modules.map((m) => (
+          <li key={`${m.code}-${m.semestre}-${m.parcours}`}>
+            <strong>{m.code}</strong> {m.nom} <span className="muted">{m.semestre}, {m.parcours}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** D'où viennent la maquette et la progression du semestre choisi, et de
+ * quoi les récupérer depuis MMI Prévi. Le navigateur ne voit jamais le
+ * jeton ni le contenu des flux : seulement des comptes et des codes. */
+function SourceMaquetteBloc({
+  groupe,
+  configure,
+  occupe,
+  recuperation,
+  onRecuperer,
+  onRevenir,
+}: {
+  groupe: GroupeSemestres;
+  configure: boolean;
+  occupe: boolean;
+  recuperation: RecuperationMmiPrevi | null;
+  onRecuperer: () => void;
+  onRevenir: () => void;
+}) {
+  const source = groupe.source;
+  if (!source) return null;
+  const depuisMmiPrevi = source.origine === "mmi_previ";
+  const differences = recuperation?.differences;
+  const aucunChangement =
+    differences && differences.ajoutes.length + differences.retires.length + differences.modifies.length === 0;
+  return (
+    <div className="generation-source">
+      <div className="generation-source-tete">
+        <div>
+          <h3>Maquette et progression</h3>
+          {depuisMmiPrevi ? (
+            <p>
+              Récupérées depuis <strong>MMI Prévi</strong> le {formatDateHeure(source.recuperee_le)}
+              {source.par ? ` par ${source.par}` : ""} : {pluriel(source.modules ?? 0, "module")}, dont{" "}
+              {NOMBRE.format(source.avec_progression ?? 0)} avec un ordre des séances défini.
+            </p>
+          ) : (
+            <p>
+              Copie livrée avec l’application. Récupérez la version à jour depuis MMI Prévi avant de générer.
+            </p>
+          )}
+        </div>
+        <div className="generation-source-actions">
+          <button type="button" className="btn" disabled={!configure || occupe} onClick={onRecuperer}>
+            <CloudDownload size={16} aria-hidden="true" />
+            {depuisMmiPrevi ? "Mettre à jour depuis MMI Prévi" : "Récupérer depuis MMI Prévi"}
+          </button>
+          {depuisMmiPrevi && (
+            <button type="button" className="btn btn--ghost" disabled={occupe} onClick={onRevenir}>
+              Revenir à la copie livrée
+            </button>
+          )}
+        </div>
+      </div>
+      {!configure && (
+        <p className="generation-reprise" role="note">
+          Le jeton d’accès à MMI Prévi n’est pas encore posé sur le serveur (variable CAL_IUT_MMI_PREVI_JETON).
+        </p>
+      )}
+      {differences && (
+        <div className="generation-source-bilan" role="status">
+          {aucunChangement ? (
+            <p>Aucun changement par rapport à la maquette utilisée jusqu’ici.</p>
+          ) : (
+            <>
+              <p>
+                Par rapport à la maquette utilisée jusqu’ici : {pluriel(differences.ajoutes.length, "module")} en
+                plus, {NOMBRE.format(differences.retires.length)} en moins,{" "}
+                {NOMBRE.format(differences.modifies.length)} dont les volumes ou le responsable changent.
+              </p>
+              <ListeDeModules titre={`En plus (${differences.ajoutes.length})`} modules={differences.ajoutes} />
+              <ListeDeModules titre={`En moins (${differences.retires.length})`} modules={differences.retires} />
+              <ListeDeModules titre={`Modifiés (${differences.modifies.length})`} modules={differences.modifies} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GenerationView({
   onRelire,
   onPublie,
@@ -284,6 +385,7 @@ export function GenerationView({
   const [heures, setHeures] = useState<string>("");
   const [choisie, setChoisie] = useState<string | null>(null);
   const [detail, setDetail] = useState<GenerationDetail | null>(null);
+  const [recuperation, setRecuperation] = useState<RecuperationMmiPrevi | null>(null);
   const etaitActive = useRef(false);
 
   const recharger = useCallback(async () => {
@@ -385,6 +487,43 @@ export function GenerationView({
       await recharger();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Le lancement a échoué");
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  const recuperer = async (g: GroupeSemestres) => {
+    setEnvoi(true);
+    setErreur(null);
+    setMessage(null);
+    try {
+      const r = await recupererDepuisMmiPrevi(g.cle);
+      setRecuperation(r);
+      setMessage(`${g.libelle} : maquette et progression récupérées depuis MMI Prévi.`);
+      await recharger();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "La récupération depuis MMI Prévi a échoué");
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  const revenir = async (g: GroupeSemestres) => {
+    if (
+      !window.confirm(
+        `Revenir à la copie livrée pour le ${g.libelle.toLowerCase()} ? Ce qui a été récupéré depuis MMI Prévi est effacé du serveur.`,
+      )
+    )
+      return;
+    setEnvoi(true);
+    setErreur(null);
+    try {
+      await revenirALaCopieLivree(g.cle);
+      setRecuperation(null);
+      setMessage(`${g.libelle} : retour à la copie livrée avec l’application.`);
+      await recharger();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Le retour à la copie livrée a échoué");
     } finally {
       setEnvoi(false);
     }
@@ -520,6 +659,14 @@ export function GenerationView({
           </fieldset>
           {groupeChoisi && (
             <>
+              <SourceMaquetteBloc
+                groupe={groupeChoisi}
+                configure={donnees.mmi_previ_configure === true}
+                occupe={envoi}
+                recuperation={recuperation?.semestre_group === groupeChoisi.cle ? recuperation : null}
+                onRecuperer={() => void recuperer(groupeChoisi)}
+                onRevenir={() => void revenir(groupeChoisi)}
+              />
               <p className="generation-duree">
                 Durée : jusqu’à{" "}
                 <strong>{formatDuree((heures.trim() ? Number(heures.replace(",", ".")) : groupeChoisi.parametres.heures) * 3600)}</strong>
