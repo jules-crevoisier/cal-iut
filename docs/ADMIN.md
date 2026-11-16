@@ -45,7 +45,7 @@ Chaque compte a un seul rôle. Un admin le choisit à l'activation (écran **Com
 - **Lecture seule** consulte tout : planning, Référence, Contraintes, À traiter, Tâches.
 - **Édition** peut aussi déplacer et placer des séances, gérer les tâches, compléter ou corriger un mail, un nom, un intitulé.
   Elle voit et modifie aussi le prénom, le nom, le téléphone et le type (enseignant ou vacataire) d'un enseignant.
-- **Admin** a en plus **Comptes**, **Celcat**, **Sauvegardes** et **Trafic**.
+- **Admin** a en plus **Nouveau semestre**, **Comptes**, **Celcat**, **Sauvegardes** et **Trafic**.
   Lui seul saisit les codes Celcat, ajoute un intervenant, bloque un client, lance un lissage.
   Lui seul envoie les liens par mail, règle les notifications, crée une salle, ouvre la page historique `/legacy` ([§ 7](#7-liens-par-mail-notifications-salles--les-autres-gestes-admin)).
 - **Accès API** n'a qu'une page, **Accès API**, pour créer et révoquer ses clés. Ni MCP, ni écriture.
@@ -651,3 +651,22 @@ Ne jamais committer la base modifiée par ce script (`git checkout data/state/ca
 ```bash
 python -c "import sqlite3; print(sqlite3.connect('data/state/cal-iut.db').execute('PRAGMA integrity_check').fetchone()[0])"
 ```
+
+---
+
+## Générer l'emploi du temps d'un nouveau semestre
+
+Écran **Administration → Nouveau semestre** (administrateurs seulement). Il remplace la suite de commandes utilisée à l'été 2026 (`cal-iut ingest`, `scripts/solve_until_ok.py`, `cal-iut completer`, `cal-iut load-run`).
+
+1. Choisir le semestre : **impair** (S1, S3, S5) ou **pair** (S2, S4, S6).
+2. Cliquer sur **Générer l'emploi du temps**. Le calcul tourne sur le serveur, plusieurs heures. La page peut être fermée.
+3. L'écran montre l'avancement : préparation des séances, vérification des données, calcul (plusieurs essais, le meilleur est gardé), attribution des salles et complétion, enregistrement.
+4. À la fin, le résultat est enregistré comme **brouillon** : nombre de séances placées, séances à placer à la main avec leur motif, points relevés dans les données.
+
+À savoir :
+
+- **Le planning en service ne change pas**, et rien ne part vers Celcat. Un brouillon ne remplace rien tant qu'il n'est pas publié.
+- Une seule génération à la fois. **Arrêter** l'interrompt ; le calcul déjà fait est perdu.
+- Si le serveur redémarre pendant le calcul (un déploiement, par exemple), la génération **reprend seule** en quelques minutes, sans refaire les essais terminés. L'essai en cours, lui, recommence.
+- Les **Réglages** (nombre d'essais, durée maximale) n'ont en général pas besoin d'être touchés. Le calcul laisse un cœur du serveur libre pour l'application.
+- Les fichiers de travail sont dans `data/state/generations/` (les dix dernières générations sont gardées).

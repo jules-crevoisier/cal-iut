@@ -46,6 +46,7 @@ import { SemaineAnnuaire } from "./components/SemaineAnnuaire";
 import { AdminCelcatView } from "./views/AdminCelcatView";
 import { AdminUsersView } from "./views/AdminUsersView";
 import { McpKeysView } from "./views/McpKeysView";
+import { GenerationView } from "./views/GenerationView";
 import { SauvegardesView } from "./views/SauvegardesView";
 import { TraficView } from "./views/TraficView";
 import { indexSemaineAujourdhui } from "./utils/semaineCourante";
@@ -957,6 +958,7 @@ export function App() {
           activeTab !== "comptes" &&
           activeTab !== "celcat" &&
           activeTab !== "sauvegardes" &&
+          activeTab !== "generation" &&
           activeTab !== "trafic" &&
           activeTab !== "mcp" &&
           !appPayload && <EtatPlanningVide etat={etatPlanning} />}
@@ -1050,6 +1052,7 @@ export function App() {
         )}
         {activeTab === "comptes" && !readOnlyTarget && moi?.role === "admin" && <AdminUsersView />}
         {activeTab === "celcat" && !readOnlyTarget && moi?.role === "admin" && <AdminCelcatView />}
+        {activeTab === "generation" && !readOnlyTarget && moi?.role === "admin" && <GenerationView />}
         {activeTab === "sauvegardes" && !readOnlyTarget && moi?.role === "admin" && <SauvegardesView />}
         {activeTab === "trafic" && !readOnlyTarget && moi?.role === "admin" && <TraficView />}
         {activeTab === "mcp" && !readOnlyTarget && moi?.status === "active" && <McpKeysView />}

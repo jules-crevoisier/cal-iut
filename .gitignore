@@ -30,6 +30,8 @@ data/state/sauvegardes_db/
 # Images jointes aux taches (30/09/2026) : captures d'ecran de l'equipe,
 # propres a chaque deploiement, jamais dans le depot.
 data/state/pieces_jointes/
+# Generations d'emploi du temps lancees depuis l'interface (16/11/2026).
+data/state/generations/
 # Fichiers de verrou inter-processus des etats Celcat (P1-14).
 data/state/*.lock
 data/state/mail_log.json

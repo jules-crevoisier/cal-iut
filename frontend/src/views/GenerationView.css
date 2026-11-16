@@ -1,0 +1,344 @@
+/* Nouveau semestre (GenerationView, 16/11/2026) : une carte pour lancer ou
+   suivre le calcul, une carte de résultat, l'historique en carte-tableau
+   (styles/outils.css). */
+
+.view.generation-view {
+  gap: 16px;
+}
+
+.panel.generation-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.generation-carte h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+p.generation-sous-titre,
+p.generation-duree {
+  margin: 4px 0 0;
+  max-width: 68ch;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.generation-sous-titre strong,
+.generation-duree strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ── Choix du semestre ── */
+.generation-groupes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  max-width: 560px;
+}
+
+.generation-groupes legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.generation-groupe {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.generation-groupe:hover {
+  border-color: var(--ink-faint);
+}
+
+.generation-groupe--choisi {
+  border-color: var(--pri-bg);
+  box-shadow: inset 0 0 0 1px var(--pri-bg);
+}
+
+.generation-groupe > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+}
+
+.generation-groupe .muted {
+  font-size: 12.5px;
+}
+
+.generation-reglages summary,
+.generation-journal summary,
+.generation-bloc summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.generation-reglages .muted {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+}
+
+.generation-champs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-top: 10px;
+}
+
+.generation-champs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.generation-champs input {
+  width: 140px;
+}
+
+.generation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/* ── Avancement ── */
+.generation-etapes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generation-etape {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  color: var(--ink-faint);
+}
+
+.generation-etape-icone {
+  display: inline-flex;
+  flex: none;
+  margin-top: 2px;
+}
+
+.generation-etape-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13.5px;
+}
+
+.generation-etape-detail {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.generation-etape--faite .generation-etape-nom {
+  color: var(--ink);
+}
+
+.generation-etape--faite .generation-etape-icone {
+  color: var(--good-text);
+}
+
+.generation-etape--en_cours {
+  color: var(--ink);
+}
+
+.generation-etape--en_cours .generation-etape-nom {
+  font-weight: 600;
+}
+
+.generation-etape--echec .generation-etape-icone,
+.generation-etape--annulee .generation-etape-icone {
+  color: var(--bad-text);
+}
+
+.generation-tourne {
+  animation: generation-tourne 1.1s linear infinite;
+}
+
+@keyframes generation-tourne {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-tourne {
+    animation: none;
+  }
+}
+
+p.generation-reprise {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: 8px;
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: 13px;
+}
+
+.generation-journal pre {
+  max-height: 260px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+/* ── Résultat ── */
+.generation-resultat .carte-tete h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.generation-chiffres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+  margin: 0;
+  padding: 16px;
+}
+
+.generation-chiffres dt {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.generation-chiffres dd {
+  margin: 2px 0 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.generation-chiffres dd .muted {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.generation-attention {
+  color: var(--warn-text);
+}
+
+.generation-bloc {
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+p.alerte.generation-bloc {
+  margin: 12px 16px;
+  border-top: 0;
+}
+
+p.generation-brouillon {
+  color: var(--ink-soft);
+}
+
+.generation-brouillon strong {
+  color: var(--ink);
+}
+
+.generation-bloc table.ref {
+  margin-top: 10px;
+}
+
+.generation-motifs,
+.generation-constats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-soft);
+}
+
+.generation-motifs strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.generation-id {
+  color: var(--ink-soft);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.generation-historique tbody th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.generation-col-action {
+  width: 1%;
+  text-align: right;
+}
+
+.generation-historique .btn[aria-pressed="true"] {
+  border-color: var(--pri-bg);
+}
+
+@media (max-width: 700px) {
+  .panel.generation-carte {
+    padding: 14px;
+  }
+
+  .generation-view .page-outils-actions,
+  .generation-view .page-outils-actions .btn,
+  .generation-actions .btn {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .generation-historique tbody th {
+    white-space: normal;
+  }
+}
+
+@media (pointer: coarse) {
+  .generation-view .btn {
+    min-height: 44px;
+  }
+}

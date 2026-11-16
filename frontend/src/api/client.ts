@@ -386,6 +386,127 @@ export function sauvegardeUrl(jour: string): string {
   return `${BASE}/sauvegardes/${encodeURIComponent(jour)}`;
 }
 
+// ── Nouveau semestre (16/11/2026, cf. api/generations_routes.py) ──
+// Génération d'un emploi du temps complet en tâche de fond. Réservé admin
+// côté serveur. Le résultat est un brouillon : rien ne change en service.
+
+export type StatutGeneration = "en_attente" | "en_cours" | "terminee" | "echec" | "annulee";
+
+export interface ParametresGeneration {
+  semestre_group: string;
+  tentatives: number;
+  heures: number;
+  weeks: number | null;
+  fi_max_week: number | null;
+  num_workers: number;
+}
+
+export interface GroupeSemestres {
+  cle: string;
+  libelle: string;
+  semestres: string[];
+  parametres: ParametresGeneration;
+}
+
+export interface EtapeGeneration {
+  cle: string;
+  libelle: string;
+  statut: "a_faire" | "en_cours" | "faite" | "echec" | "annulee";
+  debut?: string;
+  fin?: string;
+  detail?: string;
+}
+
+export interface TentativeGeneration {
+  numero: number;
+  graine: number;
+  secondes?: number;
+  placees?: number;
+  manquantes?: number;
+  gardee?: boolean;
+  erreur?: string;
+  causes?: string[];
+}
+
+export interface ConstatVerification {
+  severite: "erreur" | "alerte" | "info";
+  controle: string;
+  message: string;
+  quoi_faire?: string;
+  details?: string[];
+}
+
+export interface ResultatGeneration {
+  statut_solveur: string | null;
+  placees: number;
+  a_placer: number;
+  completees: number;
+  sans_salle: number;
+  non_placees: { session_id: string; course_code: string; raison: string }[];
+  motifs: { raison: string; nombre: number }[];
+}
+
+export interface GenerationResume {
+  id: string;
+  statut: StatutGeneration;
+  semestre_group: string;
+  cree_le: string | null;
+  cree_par: string | null;
+  termine_le: string | null;
+  run_id: number | null;
+  placees: number | null;
+  a_placer: number | null;
+  non_placees: number | null;
+}
+
+export interface GenerationDetail {
+  id: string;
+  statut: StatutGeneration;
+  parametres: ParametresGeneration;
+  cree_le: string;
+  cree_par: string | null;
+  termine_le?: string | null;
+  etapes: EtapeGeneration[];
+  tentatives: TentativeGeneration[];
+  tentative_en_cours?: { numero: number; graine: number; debut: string } | null;
+  meilleur: { numero: number; placees: number; manquantes: number } | null;
+  seances_total?: number;
+  verification?: { resume: { erreurs: number; alertes: number }; constats: ConstatVerification[] } | null;
+  resultat: ResultatGeneration | null;
+  run_id: number | null;
+  erreur: string | null;
+  annulation_demandee?: boolean;
+  vivante: boolean;
+  journal: string[];
+}
+
+export interface GenerationsReponse {
+  groupes: GroupeSemestres[];
+  coeurs: number;
+  active: GenerationDetail | null;
+  generations: GenerationResume[];
+}
+
+export async function listGenerations(): Promise<GenerationsReponse> {
+  return request<GenerationsReponse>("/generations");
+}
+
+export async function lireGeneration(id: string): Promise<GenerationDetail> {
+  return request<GenerationDetail>(`/generations/${encodeURIComponent(id)}`);
+}
+
+export async function lancerGeneration(demande: {
+  semestre_group: string;
+  tentatives?: number;
+  heures?: number;
+}): Promise<GenerationDetail> {
+  return request<GenerationDetail>("/generations", { method: "POST", body: JSON.stringify(demande) });
+}
+
+export async function annulerGeneration(id: string): Promise<GenerationDetail> {
+  return request<GenerationDetail>(`/generations/${encodeURIComponent(id)}/annuler`, { method: "POST" });
+}
+
 // ── Anti-aspiration (29/09/2026, cf. api/anti_aspiration.py et
 // docs/ANTI-ASPIRATION.md) — écran « Trafic », réservé admin côté serveur.
 

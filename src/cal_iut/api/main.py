@@ -357,7 +357,7 @@ app.add_middleware(
 # formulaire de mot de passe lui-même ne pourrait jamais s'afficher.
 _PROTECTED_PREFIXES = (
     "/admin", "/api", "/app-state", "/calendrier", "/celcat", "/controles", "/corrections", "/diff", "/exceptions", "/export",
-    "/feedback", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
+    "/feedback", "/generations", "/ics", "/ingest", "/legacy", "/mail", "/meta", "/notifications",
     "/placements",
     "/auth/mcp-keys",
     "/reference", "/regen", "/rooms", "/sauvegardes", "/sessions", "/solve", "/taches", "/timetable", "/weeks", "/weights",
@@ -587,7 +587,7 @@ app.middleware("http")(mcp_bearer_middleware)
 # (`/celcat/extras/{id}/ajouter`) passe par `creer_seance_personnalisee`,
 # donc par `_apres_ecriture_planning`, qui avance la révision lui-même.
 _ECRITURES_SANS_EFFET_VISIBLE = (
-    "/auth/", "/admin", "/celcat", "/mail", "/notifications", "/sauvegardes", "/controles",
+    "/auth/", "/admin", "/celcat", "/mail", "/notifications", "/sauvegardes", "/generations", "/controles",
 )
 
 
@@ -1092,6 +1092,11 @@ def startup() -> None:
     # encore rien modifié ne doit pas laisser passer la semaine sans
     # contrôle (cf. `api/controle_doublons_hebdo.py`).
     controle_doublons_hebdo.verifier_si_necessaire(get_state())
+    # Une génération interrompue par ce redémarrage reprend d'elle-même
+    # (cf. `generation/taches.py`) — après un délai, dans un fil à part.
+    from cal_iut.generation import taches as _generations
+
+    _generations.surveiller_reprises()
 
 
 def charger_etat_applicatif() -> None:
@@ -7586,6 +7591,13 @@ app.include_router(_router_reference)
 from cal_iut.api.occupations_externes_routes import router as _router_occupations_externes
 
 app.include_router(_router_occupations_externes)
+
+# Écran « Nouveau semestre » : génération d'un emploi du temps en tâche de
+# fond (16/11/2026, cf. `api/generations_routes.py`) — sous `/generations`,
+# réservé aux admins.
+from cal_iut.api.generations_routes import router as _router_generations
+
+app.include_router(_router_generations)
 
 # Onglet « Codes Celcat » de Référence (30/09/2026, cf. `api/codes_celcat.py`)
 # — même préfixe `/reference`, donc même protection.

@@ -42,6 +42,7 @@ export const TITRES_VUES: Record<RouteView, [string, string, string?]> = {
   taches: ["Tâches", "Le suivi de l'équipe : absences signalées, déplacements à faire, points à suivre.", "Le suivi de l'équipe"],
   comptes: ["Comptes", "Activer, changer le rôle ou désactiver les comptes."],
   celcat: ["Celcat", "Concordance entre ce planning et Celcat, et file des corrections envoyées."],
+  generation: ["Nouveau semestre", "Calculer l'emploi du temps complet d'un semestre, puis le relire avant de le publier.", "Générer un emploi du temps"],
   sauvegardes: ["Sauvegardes", "Une copie datée des séances placées, chaque jour où le planning change.", "Une copie par jour de changement"],
   trafic: ["Trafic", "Qui interroge le serveur et à quel rythme ; limiter et bloquer les aspirateurs.", "Clients et blocages"],
   mcp: ["Clé API", "Clés d'accès pour Claude (MCP) et les scripts qui lisent l'API.", "Accès pour Claude (MCP) et les scripts"],
