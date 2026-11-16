@@ -29,7 +29,9 @@ Les réglages :
   `teacher_availability.yaml` ;
 - `dates_sae`         : journées d'une SAE saisies à l'écran, ajoutées à
   celles de `contraintes/09_dates_sae.json` (le fichier officiel ne date
-  pas les SAE de S2, S4 et S6).
+  pas les SAE de S2, S4 et S6) ;
+- `seances_annulees`  : séances qui n'auront pas lieu, complète
+  `seances_annulees.yaml`.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ from pathlib import Path
 
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
-NOMS = ("salles_reservees", "indisponibilites", "dates_sae")
+NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees")
 NB_CRENEAUX = 6
 
 _verrou = threading.RLock()
@@ -241,3 +243,65 @@ def definir_dates_sae(config_dir: Path, code: str, dates: list[str], par: str) -
             })
         ecrire_json(_path(config_dir), tout)
     return propres
+
+
+# ── Séances annulées ──────────────────────────────────────────────────
+
+
+def seances_annulees(config_dir: Path, livrees: list[dict]) -> list[dict]:
+    """Les annulations en vigueur : celles livrées avec l'application, moins
+    celles rétablies à l'écran, plus celles saisies à l'écran."""
+    bloc = _lire(config_dir)["seances_annulees"]
+    retraits = set(bloc["retraits"])
+    sortie = [{**e, "origine": "livree"} for e in livrees if e["session_id"] not in retraits]
+    connues = {e["session_id"] for e in sortie}
+    for ajout in bloc["ajouts"]:
+        session_id = str(ajout.get("session_id") or "").strip()
+        if session_id and session_id not in connues:
+            connues.add(session_id)
+            sortie.append({
+                "session_id": session_id,
+                "motif": str(ajout.get("motif") or ""),
+                "demande_par": str(ajout.get("demande_par") or ""),
+                "le": str(ajout.get("le") or ""),
+                "origine": "ajoutee",
+            })
+    return sortie
+
+
+def annuler_seance(config_dir: Path, session_id: str, motif: str, par: str, *, livree: bool = False) -> None:
+    """Note qu'une séance n'aura pas lieu. `livree` : l'annulation figure
+    dans le fichier livré et avait été rétablie à l'écran, on lève ce
+    rétablissement."""
+    session_id = str(session_id or "").strip()
+    motif = str(motif or "").strip()
+    if not session_id:
+        raise ReglageInvalide("Choisissez une séance.")
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout["seances_annulees"]
+        if livree:
+            bloc["retraits"] = [r for r in bloc["retraits"] if r != session_id]
+        else:
+            if not motif:
+                raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+            bloc["ajouts"] = [a for a in bloc["ajouts"] if a.get("session_id") != session_id]
+            bloc["ajouts"].append({
+                "id": uuid.uuid4().hex[:12],
+                "session_id": session_id,
+                "motif": motif[:300],
+                "demande_par": par,
+                "le": datetime.now(timezone.utc).date().isoformat(),
+            })
+        ecrire_json(_path(config_dir), tout)
+
+
+def retablir_seance(config_dir: Path, session_id: str, *, livree: bool) -> None:
+    """La séance aura lieu de nouveau à la prochaine génération."""
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout["seances_annulees"]
+        bloc["ajouts"] = [a for a in bloc["ajouts"] if a.get("session_id") != session_id]
+        if livree and session_id not in bloc["retraits"]:
+            bloc["retraits"].append(session_id)
+        ecrire_json(_path(config_dir), tout)

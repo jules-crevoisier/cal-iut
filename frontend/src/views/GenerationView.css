@@ -613,3 +613,35 @@ p.generation-aregler--bon {
 .dates-sae-ajout input[type="date"] {
   width: 132px;
 }
+
+/* ── Séances annulées (lot 6) ── */
+.seances-annulees-ajout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.seances-annulees-ajout label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.seances-annulees-ajout select {
+  max-width: 260px;
+}
+
+.seances-annulees-motif {
+  flex: 1 1 220px;
+}
+
+.seances-annulees-motif input {
+  width: 100%;
+}

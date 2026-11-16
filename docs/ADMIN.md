@@ -704,6 +704,15 @@ la liste « À régler avant de générer » se met à jour. Une fois le semestr
 publié, elles ne se modifient plus depuis cet écran. Stockage :
 `data/state/reglages.json`, comme les réglages ci-dessous.
 
+### Séances annulées
+
+Sur le même écran, le bloc **Séances annulées** liste les séances qui ne
+seront pas placées (celles du fichier `data/config/seances_annulees.yaml` et
+celles saisies à l'écran) avec leur motif. Pour en annuler une : choisir le
+module, la séance, donner le motif (obligatoire). « Rétablir » la remet dans
+les séances à placer. Cela vaut pour la prochaine génération : une fois le
+semestre en service, la liste reste visible mais ne se modifie plus ici.
+
 ### Réglages saisis depuis l'interface
 
 Référence → **Réglages** (administrateurs) remplace, pour deux réglages du

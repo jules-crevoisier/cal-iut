@@ -224,11 +224,17 @@ def load_seances_annulees(config_dir: Path) -> set[str]:
     `motif` est OBLIGATOIRE : dans un an, une annulation sans justification
     est soit supprimée à tort, soit conservée à tort.
     """
+    return {e["session_id"] for e in load_seances_annulees_entries(config_dir)}
+
+
+def load_seances_annulees_entries(config_dir: Path) -> list[dict]:
+    """Les annulations en vigueur, avec leur motif : celles du fichier livré
+    et celles saisies à l'écran (cf. `reglages.seances_annulees`)."""
+    from cal_iut.ingestion import reglages
+
     path = config_dir / "seances_annulees.yaml"
-    if not path.exists():
-        return set()
-    data = load_yaml(path) or {}
-    annulees: set[str] = set()
+    data = (load_yaml(path) or {}) if path.exists() else {}
+    livrees: list[dict] = []
     for item in data.get("annulees") or []:
         session_id = str(item.get("session_id") or "").strip()
         if not session_id:
@@ -236,10 +242,16 @@ def load_seances_annulees(config_dir: Path) -> set[str]:
                 f"{path.name} : une entrée sans `session_id` — elle donnerait une "
                 "annulation qu'on croit faite et qui ne l'est pas."
             )
-        if not str(item.get("motif") or "").strip():
+        motif = str(item.get("motif") or "").strip()
+        if not motif:
             raise ValueError(f"{path.name} : `{session_id}` sans `motif`.")
-        annulees.add(session_id)
-    return annulees
+        livrees.append({
+            "session_id": session_id,
+            "motif": motif,
+            "demande_par": str(item.get("demande_par") or ""),
+            "le": str(item.get("le") or ""),
+        })
+    return reglages.seances_annulees(config_dir, livrees)
 
 
 def load_double_sessions(config_dir: Path) -> list[DoubleSessionRule]:
