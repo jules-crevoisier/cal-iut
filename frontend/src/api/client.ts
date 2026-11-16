@@ -645,6 +645,67 @@ export async function saisirDatesSae(groupe: string, code: string, dates: string
   });
 }
 
+// ── Séances annulées du prochain semestre (lot 6) ──
+
+export interface SeanceAnnulee {
+  session_id: string;
+  /** « TD 3 · TD AB », ou l'identifiant si la séance n'existe plus. */
+  libelle: string;
+  code: string;
+  nom: string;
+  motif: string;
+  demande_par: string;
+  le: string;
+  origine: "livree" | "ajoutee";
+  /** Faux : la maquette a changé, la séance n'existe plus. */
+  existe: boolean;
+}
+
+export interface ModuleDuSemestre {
+  code: string;
+  nom: string;
+  semestre: string;
+  seances: number;
+}
+
+export interface AnnulationsReponse {
+  semestre_group: string;
+  verrouille: string | null;
+  annulees: SeanceAnnulee[];
+  modules: ModuleDuSemestre[];
+}
+
+export interface SeanceDuModule {
+  id: string;
+  libelle: string;
+  annulee: boolean;
+}
+
+export async function lireAnnulations(groupe: string): Promise<AnnulationsReponse> {
+  return request<AnnulationsReponse>(`/generations/annulations/${encodeURIComponent(groupe)}`);
+}
+
+export async function lireSeancesDuModule(groupe: string, code: string): Promise<SeanceDuModule[]> {
+  const r = await request<{ seances: SeanceDuModule[] }>(
+    `/generations/annulations/${encodeURIComponent(groupe)}/seances?code=${encodeURIComponent(code)}`,
+  );
+  return Array.isArray(r?.seances) ? r.seances : [];
+}
+
+export async function annulerSeance(groupe: string, sessionId: string, motif: string): Promise<AnnulationsReponse> {
+  return request<AnnulationsReponse>(`/generations/annulations/${encodeURIComponent(groupe)}`, {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, motif }),
+  });
+}
+
+export async function retablirSeance(groupe: string, sessionId: string): Promise<AnnulationsReponse> {
+  return request<AnnulationsReponse>(
+    `/generations/annulations/${encodeURIComponent(groupe)}?session_id=${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
+  );
+}
+
 // ── Réglages du quotidien (16/11/2026, cf. api/reglages_routes.py) ──
 
 export interface ReglageDate {

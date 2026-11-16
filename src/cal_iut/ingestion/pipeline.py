@@ -105,7 +105,10 @@ def run_ingestion(
     parcours: str | None = None,
     semestre: str | None = None,
     semestre_group: str | None = None,
+    avec_annulees: bool = False,
 ) -> IngestionResult:
+    """`avec_annulees` : garde les séances annulées (uniquement pour l'écran
+    qui les liste et permet de les rétablir)."""
     if maquette is None or progression is None:
         maquette, progression = _load_cached_or_fetch(config_dir)
 
@@ -146,7 +149,8 @@ def run_ingestion(
     # l'inventaire « À placer » ou l'API ne les voient. Les retirer plus tard
     # les ferait réapparaître à chaque ré-ingestion (donc à chaque
     # redémarrage du serveur, cf. `api/main.py::_try_restore_latest`).
-    sessions = retirer_seances_annulees(sessions, load_seances_annulees(config_dir))
+    if not avec_annulees:
+        sessions = retirer_seances_annulees(sessions, load_seances_annulees(config_dir))
 
     requested = set(SEMESTRE_GROUPS[semestre_group]) if semestre_group else ({semestre} if semestre else set())
     out_of_scope = out_of_scope_semestres(requested)

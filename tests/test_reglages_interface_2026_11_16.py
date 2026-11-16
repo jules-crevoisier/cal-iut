@@ -297,3 +297,102 @@ def test_les_dates_sae_d_un_semestre_en_service_ne_se_modifient_pas(admin, gener
     assert admin.put("/generations/sae/odd/WS101", json={"dates": ["2026-12-01"]}).status_code == 409
     assert reglages.dates_sae(CONFIG) == {}
     assert admin.get("/generations/sae/even").json()["verrouille"] is None
+
+
+# ── Séances annulées ──────────────────────────────────────────────────
+
+
+def _ids(groupe: str, **kw) -> set[str]:
+    import warnings
+
+    from cal_iut.ingestion.pipeline import run_ingestion
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return {s.id for s in run_ingestion(CONFIG, semestre_group=groupe, **kw).sessions}
+
+
+def test_une_seance_annulee_a_l_ecran_disparait_de_l_ingestion():
+    from cal_iut.ingestion.config_loader import load_seances_annulees, load_seances_annulees_entries
+
+    cible = "WR203-S2-TD-1-but1-td-ab"
+    assert cible in _ids("even")
+    reglages.annuler_seance(CONFIG, cible, "Pont de l'Ascension", "admin")
+    assert cible in load_seances_annulees(CONFIG)
+    assert cible not in _ids("even")
+    assert cible in _ids("even", avec_annulees=True)
+    entree = next(e for e in load_seances_annulees_entries(CONFIG) if e["session_id"] == cible)
+    assert (entree["origine"], entree["motif"], entree["demande_par"]) == ("ajoutee", "Pont de l'Ascension", "admin")
+
+    reglages.retablir_seance(CONFIG, cible, livree=False)
+    assert cible in _ids("even")
+    with pytest.raises(reglages.ReglageInvalide):
+        reglages.annuler_seance(CONFIG, cible, "  ", "admin")
+
+
+def test_une_annulation_livree_se_retablit_puis_se_remet():
+    from cal_iut.ingestion.config_loader import load_seances_annulees
+
+    livree = "WR104-S1-CM-5"
+    assert livree in load_seances_annulees(CONFIG)
+    reglages.retablir_seance(CONFIG, livree, livree=True)
+    assert livree not in load_seances_annulees(CONFIG)
+    assert livree in _ids("odd")
+    reglages.annuler_seance(CONFIG, livree, "", "admin", livree=True)
+    assert livree in load_seances_annulees(CONFIG)
+
+
+def test_annuler_et_retablir_une_seance_depuis_l_ecran_nouveau_semestre(admin, generations_isolees):
+    depart = admin.get("/generations/annulations/even").json()
+    assert depart["verrouille"] is None
+    assert depart["annulees"] == []
+    module = next(m for m in depart["modules"] if m["code"] == "WR203")
+    assert module["semestre"] == "S2" and module["seances"] > 0
+
+    seances = admin.get("/generations/annulations/even/seances", params={"code": "WR203"}).json()["seances"]
+    assert len(seances) == module["seances"]
+    cible = next(s for s in seances if s["id"] == "WR203-S2-TD-1-but1-td-ab")
+    assert cible == {"id": "WR203-S2-TD-1-but1-td-ab", "libelle": "TD 1 · TD AB", "annulee": False}
+
+    corps = {"session_id": cible["id"], "motif": "Intervenant indisponible"}
+    reponse = admin.post("/generations/annulations/even", json=corps)
+    assert reponse.status_code == 201, reponse.text
+    (annulee,) = reponse.json()["annulees"]
+    assert annulee["libelle"] == "TD 1 · TD AB" and annulee["code"] == "WR203"
+    assert annulee["origine"] == "ajoutee" and annulee["existe"] is True
+    assert admin.post("/generations/annulations/even", json=corps).status_code == 409
+    assert admin.post("/generations/annulations/even", json={"session_id": cible["id"] + "x", "motif": "m"}).status_code == 404
+    assert admin.post("/generations/annulations/even", json={"session_id": "WR104-S1-CM-1", "motif": "m"}).status_code == 404
+    assert admin.post("/generations/annulations/tout", json=corps).status_code == 422
+    autre = next(s["id"] for s in seances if s["id"] != cible["id"])
+    assert admin.post("/generations/annulations/even", json={"session_id": autre, "motif": " "}).status_code == 422
+    seances = admin.get("/generations/annulations/even/seances", params={"code": "wr203"}).json()["seances"]
+    assert next(s for s in seances if s["id"] == cible["id"])["annulee"] is True
+
+    assert admin.delete("/generations/annulations/even", params={"session_id": autre}).status_code == 404
+    reponse = admin.delete("/generations/annulations/even", params={"session_id": cible["id"]})
+    assert reponse.status_code == 200 and reponse.json()["annulees"] == []
+    assert cible["id"] in _ids("even")
+
+
+def test_les_annulations_d_un_semestre_en_service_ne_se_modifient_pas(admin, generations_isolees, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+    from cal_iut.ingestion.config_loader import load_seances_annulees
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+
+    impair = admin.get("/generations/annulations/odd").json()
+    assert "déjà en service" in impair["verrouille"]
+    # Les annulations livrées du semestre impair sont listées, avec leur motif.
+    assert {a["session_id"] for a in impair["annulees"]} >= {"WR104-S1-CM-5", "WR303D-S3-CM-1"}
+    assert all(a["origine"] == "livree" and a["motif"] for a in impair["annulees"])
+    avant = load_seances_annulees(CONFIG)
+    assert admin.post("/generations/annulations/odd", json={"session_id": "WR104-S1-CM-1", "motif": "m"}).status_code == 409
+    assert admin.delete("/generations/annulations/odd", params={"session_id": "WR104-S1-CM-5"}).status_code == 409
+    assert load_seances_annulees(CONFIG) == avant

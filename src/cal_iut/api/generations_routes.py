@@ -257,6 +257,149 @@ def saisir_les_dates_d_une_sae(groupe: str, code: str, body: DatesSaeRequest, re
     return dates_des_sae(groupe)
 
 
+# ── Séances annulées (lot 6) ──────────────────────────────────────────
+
+
+class AnnulationRequest(BaseModel):
+    session_id: str
+    motif: str = ""
+
+
+def _annulations_verrouillees(groupe: str) -> str | None:
+    motif = _semestre_verrouille(groupe)
+    if motif and "en service" in motif:
+        return (
+            f"Le {taches.GROUPES[groupe]['libelle'].lower()} est déjà en service : ses séances annulées "
+            "ne se modifient pas depuis cet écran, son planning changerait sans nouveau calcul."
+        )
+    return motif
+
+
+def _seances_du_groupe(groupe: str) -> list:
+    """Toutes les séances du groupe, annulées comprises."""
+    import warnings
+
+    from cal_iut.ingestion.pipeline import run_ingestion
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return run_ingestion(taches.RACINE / "data" / "config", semestre_group=groupe, avec_annulees=True).sessions
+
+
+def _libelle_seance(seance, groupes: dict[str, str]) -> str:
+    """« TD 3 · TD AB » : le type, le rang dans le module, le groupe."""
+    import re
+
+    type_ = getattr(seance.session_type, "value", str(seance.session_type))
+    rang = re.match(rf"^{re.escape(seance.course_code)}-{re.escape(seance.semestre)}-[^-]+-(\d+)", seance.id)
+    texte = f"{type_} {rang.group(1)}" if rang else seance.id
+    qui = ", ".join(groupes.get(g, g) for g in seance.group_ids)
+    return f"{texte} · {qui}" if qui else texte
+
+
+def _libelles_des_groupes() -> dict[str, str]:
+    from cal_iut.ingestion.config_loader import load_groups
+
+    return {g.id: g.label for g in load_groups(taches.RACINE / "data" / "config")}
+
+
+def _annulations(groupe: str) -> dict:
+    from cal_iut.ingestion.config_loader import load_seances_annulees_entries
+
+    seances = _seances_du_groupe(groupe)
+    par_id = {s.id: s for s in seances}
+    groupes = _libelles_des_groupes()
+    semestres = set(taches.GROUPES[groupe]["semestres"])
+    annulees = []
+    for entree in load_seances_annulees_entries(taches.RACINE / "data" / "config"):
+        seance = par_id.get(entree["session_id"])
+        morceaux = entree["session_id"].split("-")
+        # Une annulation dont la séance n'existe plus (la maquette a changé)
+        # reste affichée dans son semestre, pour qu'on puisse la retirer.
+        if seance is None and not (len(morceaux) > 1 and morceaux[1] in semestres):
+            continue
+        annulees.append({
+            **entree,
+            "existe": seance is not None,
+            "code": seance.course_code if seance else morceaux[0],
+            "nom": seance.course_name if seance else "",
+            "libelle": _libelle_seance(seance, groupes) if seance else entree["session_id"],
+        })
+    modules: dict[str, dict] = {}
+    for s in seances:
+        m = modules.setdefault(s.course_code, {"code": s.course_code, "nom": s.course_name, "semestre": s.semestre, "seances": 0})
+        m["seances"] += 1
+    return {
+        "semestre_group": groupe,
+        "verrouille": _annulations_verrouillees(groupe),
+        "annulees": sorted(annulees, key=lambda a: a["session_id"]),
+        "modules": sorted(modules.values(), key=lambda m: (m["semestre"], m["code"])),
+    }
+
+
+@router.get("/annulations/{groupe}")
+def seances_annulees(groupe: str) -> dict:
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    return _annulations(groupe)
+
+
+@router.get("/annulations/{groupe}/seances")
+def seances_d_un_module(groupe: str, code: str) -> dict:
+    """Les séances d'un module, pour choisir celle qu'on annule."""
+    from cal_iut.ingestion.config_loader import load_seances_annulees
+
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    annulees = load_seances_annulees(taches.RACINE / "data" / "config")
+    groupes = _libelles_des_groupes()
+    return {
+        "code": code,
+        "seances": [
+            {"id": s.id, "libelle": _libelle_seance(s, groupes), "annulee": s.id in annulees}
+            for s in _seances_du_groupe(groupe)
+            if s.course_code.upper() == code.upper()
+        ],
+    }
+
+
+@router.post("/annulations/{groupe}", status_code=201)
+def annuler_une_seance(groupe: str, body: AnnulationRequest, request: Request) -> dict:
+    """La séance ne sera pas placée à la prochaine génération. Refusé si le
+    semestre est en service : son planning perdrait la séance au prochain
+    redémarrage, sans que personne l'ait décidé à cet écran."""
+    from cal_iut.ingestion import reglages
+    from cal_iut.ingestion.config_loader import load_seances_annulees
+
+    _refuser_si_source_verrouillee(groupe)
+    config = taches.RACINE / "data" / "config"
+    session_id = body.session_id.strip()
+    if session_id not in {s.id for s in _seances_du_groupe(groupe)}:
+        raise HTTPException(404, "Cette séance n'existe pas dans ce semestre.")
+    if session_id in load_seances_annulees(config):
+        raise HTTPException(409, "Cette séance est déjà annulée.")
+    utilisateur = getattr(request.state, "user", None)
+    par = getattr(utilisateur, "email", None) or "administrateur"
+    try:
+        reglages.annuler_seance(config, session_id, body.motif, par)
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _annulations(groupe)
+
+
+@router.delete("/annulations/{groupe}")
+def retablir_une_seance(groupe: str, session_id: str) -> dict:
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    config = taches.RACINE / "data" / "config"
+    entree = next((e for e in _annulations(groupe)["annulees"] if e["session_id"] == session_id), None)
+    if entree is None:
+        raise HTTPException(404, "Cette séance n'est pas annulée dans ce semestre.")
+    reglages.retablir_seance(config, session_id, livree=entree["origine"] == "livree")
+    return _annulations(groupe)
+
+
 @router.get("/verification/{groupe}")
 def a_regler_avant_de_generer(groupe: str) -> dict:
     """Ce qu'il reste à régler dans les données de ce semestre avant de
