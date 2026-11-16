@@ -222,6 +222,14 @@ def load_sae_windows(data_root: Path, semestres: Iterable[str] | None = None) ->
     if not data:
         return []
 
+    # Journées saisies depuis l'interface (volume persistant, cf.
+    # `ingestion/reglages.py`) : elles valent des dates officielles, avec le
+    # parcours et les référents de la SAE. Le fichier de l'établissement ne
+    # date pas les SAE de S2, S4 et S6.
+    from cal_iut.ingestion import reglages
+
+    saisies = reglages.dates_sae(data_root / "data" / "config")
+
     wanted = {s.upper() for s in semestres} if semestres is not None else None
     windows: list[SaeWindow] = []
     for entry in data.get("sae", []):
@@ -231,6 +239,9 @@ def load_sae_windows(data_root: Path, semestres: Iterable[str] | None = None) ->
             date.fromisoformat(d)
             for window in entry.get("fenetres", [])
             for d in window.get("dates", [])
+        } | {
+            date.fromisoformat(d)
+            for d in saisies.get(str(entry.get("code_matiere", "")).strip().upper(), [])
         })
         if not dates:
             continue

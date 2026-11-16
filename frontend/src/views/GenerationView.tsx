@@ -39,6 +39,7 @@ import {
   type StatutGeneration,
 } from "../api/client";
 import { ActionsDePage } from "../components/TopBar";
+import { DatesSae } from "./DatesSae";
 import "../styles/outils.css";
 import "./GenerationView.css";
 
@@ -522,7 +523,8 @@ export function GenerationView({
   // de source (maquette récupérée, retour à la copie livrée).
   const [verification, setVerification] = useState<Verification | null>(null);
   const sourceDuGroupe = donnees?.groupes.find((g) => g.cle === groupe)?.source;
-  const versionSource = sourceDuGroupe ? JSON.stringify(sourceDuGroupe) : "";
+  const [versionSae, setVersionSae] = useState(0);
+  const versionSource = (sourceDuGroupe ? JSON.stringify(sourceDuGroupe) : "") + `#${versionSae}`;
   useEffect(() => {
     if (!groupe || activeId) {
       setVerification(null);
@@ -771,6 +773,7 @@ export function GenerationView({
                 onRecuperer={() => void recuperer(groupeChoisi)}
                 onRevenir={() => void revenir(groupeChoisi)}
               />
+              <DatesSae groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               {verification && <ARegler verification={verification} />}
               <p className="generation-duree">
                 Durée : jusqu’à{" "}

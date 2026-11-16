@@ -508,3 +508,108 @@ p.generation-aregler--bon {
   margin: 4px 0 0;
   padding-left: 18px;
 }
+
+/* ── Dates des SAE (lot 6) ── */
+.dates-sae {
+  max-width: 760px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.dates-sae > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  cursor: pointer;
+}
+
+.dates-sae > summary h3 {
+  display: inline;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dates-sae > p {
+  margin: 8px 0 0;
+}
+
+.dates-sae > ul {
+  display: flex;
+  flex-direction: column;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dates-sae-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.dates-sae-titre {
+  color: var(--ink);
+}
+
+.dates-sae-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dates-sae-saisie {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dates-sae-saisie button {
+  display: inline-flex;
+  padding: 1px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dates-sae-saisie button:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.dates-sae-ajout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.dates-sae-ajout label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dates-sae-quoi {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dates-sae-ajout input[type="date"] {
+  width: 132px;
+}

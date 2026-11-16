@@ -198,3 +198,102 @@ def test_noter_une_indisponibilite_l_applique_au_planning_en_service(admin):
 
     assert admin.delete("/reglages/indisponibilites", params={"cle": ajoutee["cle"]}).status_code == 200
     assert "2027-03-04" not in _dates("FLI")
+
+
+# --------------------------------------------------------------------------
+# 3. Dates des SAE du prochain semestre
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def generations_isolees(tmp_path, monkeypatch):
+    from cal_iut.generation import taches
+
+    monkeypatch.setattr(taches, "STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr(taches, "GENERATIONS_DIR", tmp_path / "state" / "generations")
+    monkeypatch.setattr(taches, "lancer", lambda generation_id: 4242)
+
+
+def _fenetres(semestres: list[str]) -> dict[str, list[str]]:
+    from cal_iut.ingestion.planning_loader import load_mmi_planning_for_semestres
+
+    bundle = load_mmi_planning_for_semestres(CONFIG.parents[1], semestres)
+    return {f.course_codes[0]: [d.isoformat() for d in f.dates] for f in bundle.sae_windows}
+
+
+def test_des_dates_saisies_valent_des_dates_officielles():
+    from cal_iut.ingestion.planning_loader import load_sae_windows
+
+    assert "WS201" not in _fenetres(["S2", "S4", "S6"])
+    reglages.definir_dates_sae(CONFIG, "ws201", ["2027-03-09", "2027-03-08", "2027-03-09"], "admin")
+    assert _fenetres(["S2", "S4", "S6"])["WS201"] == ["2027-03-08", "2027-03-09"]
+    # Avec le parcours et les référents de la SAE, comme une date du fichier.
+    fenetre = next(f for f in load_sae_windows(CONFIG.parents[1], ["S2"]) if f.course_codes == ["WS201"])
+    assert fenetre.parcours == "BUT1" and fenetre.teachers
+    # Le semestre impair ne les voit pas.
+    assert "WS201" not in _fenetres(["S1", "S3", "S5"])
+    # Une liste vide retire tout.
+    assert reglages.definir_dates_sae(CONFIG, "WS201", [], "admin") == []
+    assert "WS201" not in _fenetres(["S2", "S4", "S6"])
+
+
+def test_des_dates_saisies_s_ajoutent_a_celles_du_fichier():
+    avant = _fenetres(["S1"])["WS101"]
+    reglages.definir_dates_sae(CONFIG, "WS101", ["2026-12-01"], "admin")
+    assert _fenetres(["S1"])["WS101"] == sorted([*avant, "2026-12-01"])
+
+
+def test_l_audit_ne_reclame_plus_les_dates_d_une_sae_saisie_ou_corrigee(admin, generations_isolees):
+    def _sans_dates() -> list[str]:
+        constats = admin.get("/generations/verification/even").json()["constats"]
+        return next((c["details"] for c in constats if c["controle"] == "donnees.sae_sans_dates"), [])
+
+    avant = _sans_dates()
+    assert any(d.startswith("WS201 ") for d in avant)
+    reglages.definir_dates_sae(CONFIG, "WS201", ["2027-03-08"], "admin")
+    apres = _sans_dates()
+    assert len(apres) == len(avant) - 1 and not any(d.startswith("WS201 ") for d in apres)
+    # Côté impair, WS110 est datée par `sae_corrections.yaml` : plus d'alerte.
+    impair = admin.get("/generations/verification/odd").json()["constats"]
+    details = next((c["details"] for c in impair if c["controle"] == "donnees.sae_sans_dates"), [])
+    assert not any(d.startswith("WS110 ") for d in details)
+
+
+def test_saisir_les_dates_d_une_sae_depuis_l_ecran_nouveau_semestre(admin, generations_isolees):
+    depart = admin.get("/generations/sae/even").json()
+    assert depart["verrouille"] is None
+    ws201 = next(s for s in depart["sae"] if s["code"] == "WS201")
+    assert (ws201["semestre"], ws201["dates_officielles"], ws201["dates_saisies"]) == ("S2", [], [])
+    assert ws201["seances"] > 0 and ws201["nom"]
+    assert {s["semestre"] for s in depart["sae"]} <= {"S2", "S4", "S6"}
+
+    reponse = admin.put("/generations/sae/even/WS201", json={"dates": ["2027-03-09", "2027-03-08"]})
+    assert reponse.status_code == 200, reponse.text
+    ws201 = next(s for s in reponse.json()["sae"] if s["code"] == "WS201")
+    assert ws201["dates_saisies"] == ["2027-03-08", "2027-03-09"]
+
+    # Un samedi, une date illisible, une SAE d'un autre semestre : refusés, rien n'est écrit.
+    assert admin.put("/generations/sae/even/WS201", json={"dates": ["2027-03-13"]}).status_code == 422
+    assert admin.put("/generations/sae/even/WS201", json={"dates": ["bientôt"]}).status_code == 422
+    assert admin.put("/generations/sae/even/WS101", json={"dates": ["2027-03-08"]}).status_code == 404
+    assert admin.put("/generations/sae/tout/WS201", json={"dates": []}).status_code == 422
+    assert reglages.dates_sae(CONFIG) == {"WS201": ["2027-03-08", "2027-03-09"]}
+
+    assert admin.put("/generations/sae/even/WS201", json={"dates": []}).status_code == 200
+    assert reglages.dates_sae(CONFIG) == {}
+
+
+def test_les_dates_sae_d_un_semestre_en_service_ne_se_modifient_pas(admin, generations_isolees, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    assert "déjà en service" in admin.get("/generations/sae/odd").json()["verrouille"]
+    assert admin.put("/generations/sae/odd/WS101", json={"dates": ["2026-12-01"]}).status_code == 409
+    assert reglages.dates_sae(CONFIG) == {}
+    assert admin.get("/generations/sae/even").json()["verrouille"] is None

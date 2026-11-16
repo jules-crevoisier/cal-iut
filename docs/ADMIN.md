@@ -689,6 +689,21 @@ qu'il a relevé :
 La liste est relue après chaque récupération depuis MMI Prévi. Pendant une
 génération, elle n'est pas affichée.
 
+### Dates des SAE
+
+Le fichier de l'établissement ne date pas les SAE de S2, S4 et S6. Sur l'écran
+« Nouveau semestre », une fois le semestre choisi, le bloc **Dates des SAE**
+liste chaque SAE et permet de saisir ses journées par périodes (du… au…, du
+lundi au vendredi). Elles valent des dates officielles : aucun cours classique
+de la promotion n'est placé ces jours-là, et les référents de la SAE sont
+considérés comme pris. Les dates du fichier de l'établissement restent
+affichées, sans pouvoir être retirées ici.
+
+Tant que le semestre n'est pas en service, les dates se modifient librement et
+la liste « À régler avant de générer » se met à jour. Une fois le semestre
+publié, elles ne se modifient plus depuis cet écran. Stockage :
+`data/state/reglages.json`, comme les réglages ci-dessous.
+
 ### Réglages saisis depuis l'interface
 
 Référence → **Réglages** (administrateurs) remplace, pour deux réglages du
