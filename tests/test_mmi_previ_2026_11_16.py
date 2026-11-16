@@ -323,7 +323,12 @@ def test_un_groupe_inconnu_est_refuse(admin, serveur):
     assert serveur.requetes == []
 
 
-def test_pas_de_changement_de_source_pendant_une_generation(admin, serveur):
+def test_pas_de_changement_de_source_pendant_une_generation(admin, serveur, monkeypatch):
+    # Le dépôt de ce test est vide : le contrôle « À régler avant de générer »
+    # (lot 5) y verrait une maquette sans séance. Ce n'est pas le sujet ici.
+    from cal_iut.generation import verification
+
+    monkeypatch.setattr(verification, "avant_de_generer", lambda groupe: {"constats": []})
     assert admin.post("/generations", json={"semestre_group": "even"}).status_code == 201
     reponse = admin.post("/generations/sources/mmi-previ", json={"semestre_group": "even"})
     assert reponse.status_code == 409
