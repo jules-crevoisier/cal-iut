@@ -43,7 +43,11 @@ from cal_iut.celcat.modification import ElementModification, modifier_manquants
 from cal_iut.celcat.navigateur import BASE_ENTRAINEMENT
 from cal_iut.celcat.ops import correspond_live
 from cal_iut.celcat.planification import contexte as contexte_comparaison
-from cal_iut.celcat.planification import jobs_depuis_lignes, journal_event_ids
+from cal_iut.celcat.planification import (
+    indice_celcat_de_semaine,
+    jobs_depuis_lignes,
+    journal_event_ids,
+)
 from cal_iut.celcat.planification import lignes as lignes_comparaison
 from cal_iut.celcat.rpc import masquer_semaine
 from cal_iut.celcat.rpc_config import charger_methodes
@@ -391,6 +395,12 @@ def _resoudre_evenement_disparu(
     séance est bloquée plutôt que retentée indéfiniment — c'est précisément
     la boucle stable du signalement.
     """
+    from cal_iut.celcat.planification import comparaison_prise_en_charge
+
+    if not comparaison_prise_en_charge(state):
+        # Garde-fou semestre pair : sans comparaison, « pas trouvé » voudrait
+        # dire « supprimer le journal et recréer ». Le job reste tel quel.
+        return
     session_id = str(job.get("session_id") or "")
     event_id_perdu = job.get("event_id")
     maintenant = datetime.now(UTC).isoformat()
@@ -1504,13 +1514,11 @@ def executer_job_nuit(
             )
         else:
             ctx = contexte_comparaison(state)
-            lundis = getattr(state.calendar, "teaching_mondays", []) or []
             for semaine in sorted(semaines):
-                if not 0 <= semaine < len(lundis):
+                # Semaine du PLANNING -> indice Celcat (décalage du semestre).
+                indice = indice_celcat_de_semaine(state, semaine)
+                if indice < 0:
                     continue
-                indice = indice_depuis_lundi(
-                    lundis[semaine], premiere_semaine_celcat=PREMIERE_SEMAINE_CELCAT
-                )
                 for job in jobs_depuis_lignes(
                     lignes_comparaison(
                         state,

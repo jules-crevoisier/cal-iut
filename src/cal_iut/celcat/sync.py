@@ -83,6 +83,9 @@ def marquer_saisi(
         "signature": entree.signature(),
         "saisi_le": datetime.now(UTC).isoformat(),
         "semaine": str(entree.semaine),
+        # Le semestre : la semaine est relative à SON début, donc la même
+        # valeur désigne des dates différentes en S1 et en S2.
+        "semestre": str(getattr(entree, "semestre", "") or ""),
     }
     if event_id is not None:
         ligne["event_id"] = str(event_id)
@@ -213,6 +216,13 @@ def construire_plan(entrees: list[EntreeCelcat], semaines: set[int]) -> PlanSync
     plan = PlanSync()
     deja = journal()
     vus: set[str] = set()
+    # Les semaines sont relatives au semestre : une ligne du journal ne se
+    # compare qu'aux entrées du MÊME semestre. Sans cela, une saisie du
+    # semestre pair (semaine 3) programmait la suppression des séances
+    # d'automne journalisées à leur semaine 3. Une ligne sans semestre date
+    # d'avant ce champ : elle est d'automne (seul semestre jamais écrit).
+    impairs = {"S1", "S3", "S5"}
+    semestres_courants = {str(e.semestre) for e in entrees if getattr(e, "semestre", "")}
 
     for e in entrees:
         if e.semaine not in semaines:
@@ -238,6 +248,12 @@ def construire_plan(entrees: list[EntreeCelcat], semaines: set[int]) -> PlanSync
         try:
             semaine = int(info.get("semaine", -1))
         except (TypeError, ValueError):
+            continue
+        sem_ligne = str(info.get("semestre") or "")
+        if sem_ligne:
+            if semestres_courants and sem_ligne not in semestres_courants:
+                continue
+        elif semestres_courants and not semestres_courants <= impairs:
             continue
         if semaine in semaines:
             plan.a_supprimer.append(session_id)

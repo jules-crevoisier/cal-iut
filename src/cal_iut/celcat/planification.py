@@ -40,7 +40,6 @@ from typing import Any
 from cal_iut.celcat.comparaison import comparer
 from cal_iut.celcat.mapping import libelle_groupe_celcat, load_celcat_config, regle_pour
 
-
 _SEMESTRE_DU_GROUPE = re.compile(r"\bS([1-6])\b")
 
 
@@ -76,23 +75,73 @@ def evenements_du_planning(state: Any, evenements: list[dict]) -> list[dict]:
     return gardes
 
 
-def comparaison_prise_en_charge(state: Any) -> bool:
-    """La comparaison avec Celcat sait-elle lire ce planning ?
+def _est_pair(state: Any) -> bool:
+    return any(s in {"S2", "S4", "S6"} for s in semestres_du_planning(state))
 
-    Elle prend la semaine d'une séance pour un indice du calendrier annuel
-    (`lundis[semaine]`, pastilles « Envoi par semaine »). C'est vrai pour
-    S1/S3/S5, dont la semaine 0 est la première de l'année. Les semaines de
-    S2/S4/S6 se comptent depuis LEUR début (février) : les comparer telles
-    quelles rapprocherait leurs séances des cours de septembre, et proposerait
-    de supprimer ceux qui ne correspondent pas. Tant que cette conversion
-    n'est pas écrite et vérifiée, rien n'est comparé ni envoyé pour elles."""
+
+def decalage_semaines(state: Any) -> int:
+    """Indice, dans le calendrier annuel, de la première semaine du planning.
+
+    Les `week` des placements sont RELATIVES au début de leur semestre : 0 pour
+    S1/S3/S5 (31/08/2026), 19 pour S2/S4/S6 (1er février 2027). C'est le seul
+    endroit où la couche Celcat passe d'une semaine du planning à un indice du
+    calendrier (`lundis[semaine + décalage]`)."""
     from cal_iut.calendar.academic import semester_week_offset
 
-    portes = semestres_du_planning(state)
     calendrier = getattr(state, "calendar", None)
-    if not portes or calendrier is None:
+    portes = semestres_du_planning(state)
+    if calendrier is None or not portes:
+        return 0
+    return max(semester_week_offset(calendrier, s) for s in portes)
+
+
+def lundi_de_semaine(state: Any, semaine: int):
+    """Le lundi de la semaine `semaine` DU PLANNING, ou None hors calendrier."""
+    lundis = getattr(getattr(state, "calendar", None), "teaching_mondays", None) or []
+    indice = int(semaine) + decalage_semaines(state)
+    return lundis[indice] if 0 <= int(semaine) and 0 <= indice < len(lundis) else None
+
+
+def indice_celcat_de_semaine(state: Any, semaine: int) -> int:
+    """Indice `weeks` de Celcat pour une semaine du planning, -1 si inconnue."""
+    from cal_iut.celcat.lecture import indice_depuis_lundi
+    from cal_iut.celcat.nuit import PREMIERE_SEMAINE_CELCAT
+
+    lundi = lundi_de_semaine(state, semaine)
+    if lundi is None:
+        return -1
+    return indice_depuis_lundi(lundi, premiere_semaine_celcat=PREMIERE_SEMAINE_CELCAT)
+
+
+def semestre_pair_autorise() -> bool:
+    """Interrupteur explicite pour comparer / envoyer S2/S4/S6 à Celcat.
+
+    GARDE-FOU : absent par défaut. Ne le poser qu'avec l'accord écrit de Jules
+    (`CAL_IUT_CELCAT_SEMESTRE_PAIR=on`), une fois la comparaison relue à
+    blanc : le lever rouvre les écritures (créations, modifications,
+    SUPPRESSIONS) dans le vrai Celcat pour le semestre pair."""
+    import os
+
+    return os.environ.get("CAL_IUT_CELCAT_SEMESTRE_PAIR", "").strip().lower() in {"on", "1", "true", "oui"}
+
+
+def comparaison_prise_en_charge(state: Any) -> bool:
+    """La comparaison avec Celcat peut-elle lire et envoyer ce planning ?
+
+    S1/S3/S5 : oui (semaine 0 = première de l'année). S2/S4/S6 : les semaines
+    sont maintenant converties en indices du calendrier (`decalage_semaines`),
+    mais le GARDE-FOU reste : rien n'est comparé ni envoyé tant que
+    `semestre_pair_autorise()` n'est pas vrai ET que le calendrier couvre bien
+    le début du semestre (un décalage nul pour un semestre pair signale un
+    calendrier trop court : `semester_week_offset` retombe alors sur 0 sans
+    rien dire, ce qui ouvrait l'ancien garde-fou par erreur)."""
+    portes = semestres_du_planning(state)
+    if getattr(state, "calendar", None) is None or not portes:
         return True
-    return all(semester_week_offset(calendrier, s) == 0 for s in portes)
+    decalage = decalage_semaines(state)
+    if _est_pair(state):
+        return semestre_pair_autorise() and decalage > 0
+    return decalage == 0
 
 
 class ContexteComparaison:

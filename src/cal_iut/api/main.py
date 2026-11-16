@@ -4731,6 +4731,14 @@ def celcat_saisie(body: CelcatSaisieRequest) -> CelcatSaisieResponse:
     from cal_iut.celcat.formulaire import charger_carte
 
     state = get_state()
+    from cal_iut.celcat.planification import comparaison_prise_en_charge
+
+    if not comparaison_prise_en_charge(state):
+        raise HTTPException(
+            409,
+            "Semestre pair : l'envoi vers Celcat est verrouillé tant que son activation "
+            "(CAL_IUT_CELCAT_SEMESTRE_PAIR) n'a pas été décidée.",
+        )
     plan = sync.construire_plan(_entrees_celcat(state), voulues)
     if plan.bloquees and not body.ignorer_bloquees:
         raise HTTPException(409, plan.resume())
@@ -5006,8 +5014,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     from cal_iut.celcat.comparaison import comparer
     from cal_iut.celcat.etat import charger as charger_celcat
     from cal_iut.celcat.instantane import lire
-    from cal_iut.celcat.lecture import indice_depuis_lundi
-    from cal_iut.celcat.nuit import PREMIERE_SEMAINE_CELCAT
+    from cal_iut.celcat import planification as _planification_celcat
     from cal_iut.celcat.planification import contexte, journal_event_ids
 
     state = get_state()
@@ -5022,12 +5029,11 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     # type pour la catégorie) sont dans `planification.contexte`.
     ctx = contexte(state)
 
-    lundis = state.calendar.teaching_mondays
-    semaine_celcat = (
-        indice_depuis_lundi(lundis[semaine], premiere_semaine_celcat=PREMIERE_SEMAINE_CELCAT)
-        if 0 <= semaine < len(lundis)
-        else -1
-    )
+    # `semaine` est une semaine DU PLANNING (relative au début du semestre) :
+    # `planification` y ajoute le décalage du semestre pour trouver le lundi
+    # et l'indice Celcat.
+    lundi_semaine = _planification_celcat.lundi_de_semaine(state, semaine)
+    semaine_celcat = _planification_celcat.indice_celcat_de_semaine(state, semaine)
 
     # Sans relevé, toutes les séances paraîtraient absentes de Celcat : un
     # écran qui hurlerait au désastre alors qu'on n'a simplement rien lu.
@@ -5057,7 +5063,7 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
     return CelcatComparaisonResponse(
         semaine=semaine,
         semaine_celcat=semaine_celcat,
-        lundi=lundis[semaine].isoformat() if 0 <= semaine < len(lundis) else None,
+        lundi=lundi_semaine.isoformat() if lundi_semaine is not None else None,
         releve_le=releve.releve_le,
         age_secondes=releve.age_secondes,
         perime=releve.perime,

@@ -196,16 +196,20 @@ NB_SEMAINES_LOT = 30
 
 
 def semaines_celcat_passees(*, today: date | None = None) -> list[int]:
-    """Chips 1..30 dont la semaine S1 est déjà terminée (`week_status` = past)."""
+    """Chips 1..30 dont la semaine du planning servi est déjà terminée
+    (`week_status` = past). Le semestre est celui du groupe en service : un
+    semestre pair compte ses semaines depuis février, pas depuis septembre."""
     from cal_iut.api.state import get_state
     from cal_iut.calendar.academic import week_status
 
     jour = today if today is not None else date.today()
-    calendrier = get_state().calendar
+    etat = get_state()
+    calendrier = etat.calendar
+    semestre = "S2" if getattr(etat, "semestre_group", None) == "even" else "S1"
     return [
         n
         for n in range(1, NB_SEMAINES_LOT + 1)
-        if week_status(calendrier, "S1", n - 1, jour) == "past"
+        if week_status(calendrier, semestre, n - 1, jour) == "past"
     ]
 
 
