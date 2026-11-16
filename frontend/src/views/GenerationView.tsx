@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CircleDashed, CloudDownload, LoaderCircle, Sparkles, X } from "lucide-react";
+import { Check, CircleDashed, CloudDownload, LoaderCircle, Sparkles, TriangleAlert, X } from "lucide-react";
 
 import {
   annulerGeneration,
@@ -25,6 +25,8 @@ import {
   recupererDepuisMmiPrevi,
   revenirALaCopieLivree,
   supprimerBrouillon,
+  verifierAvantDeGenerer,
+  type ConstatAvantDeGenerer,
   type EtapeGeneration,
   type GenerationDetail,
   type GenerationResume,
@@ -366,6 +368,81 @@ function SourceMaquetteBloc({
   );
 }
 
+/** Ce que l'audit des données a relevé pour le semestre choisi, avant tout
+ * calcul. `null` : pas encore vérifié, ou vérification impossible (le
+ * serveur refait de toute façon le contrôle au lancement). */
+type Verification =
+  | { etat: "chargement" }
+  | { etat: "indisponible" }
+  | { etat: "faite"; constats: ConstatAvantDeGenerer[] };
+
+function ARegler({ verification }: { verification: Verification }) {
+  if (verification.etat === "chargement") {
+    return (
+      <p className="generation-aregler generation-aregler--attente muted" role="status">
+        <LoaderCircle size={15} className="generation-tourne" aria-hidden="true" /> Vérification des données du
+        semestre…
+      </p>
+    );
+  }
+  if (verification.etat === "indisponible") return null;
+  const bloquants = verification.constats.filter((c) => c.bloquant);
+  const autres = verification.constats.filter((c) => !c.bloquant);
+  if (verification.constats.length === 0) {
+    return (
+      <p className="generation-aregler generation-aregler--bon" role="status">
+        <Check size={15} aria-hidden="true" /> Données vérifiées : rien à régler avant de générer.
+      </p>
+    );
+  }
+  const ligne = (c: ConstatAvantDeGenerer, i: number) => (
+    <li key={`${c.controle}-${i}`}>
+      <span className={`pill ${c.bloquant ? "bad" : "warn"}`}>{c.bloquant ? "À régler" : "À vérifier"}</span>
+      <div>
+        <p className="generation-aregler-message">{c.message}</p>
+        {c.quoi_faire && <p className="muted">{c.quoi_faire}</p>}
+        {c.details && c.details.length > 0 && (
+          <details>
+            <summary>{pluriel(c.details.length, "élément")} concernés</summary>
+            <ul>
+              {c.details.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </li>
+  );
+  return (
+    <section
+      className={`generation-aregler${bloquants.length > 0 ? " generation-aregler--bloquant" : ""}`}
+      aria-labelledby="generation-aregler-titre"
+    >
+      <h3 id="generation-aregler-titre">
+        {bloquants.length > 0 && <TriangleAlert size={16} aria-hidden="true" />}
+        {bloquants.length > 0 ? "À régler avant de générer" : "À vérifier avant de générer"}
+      </h3>
+      {bloquants.length > 0 ? (
+        <p className="generation-aregler-intro">
+          {pluriel(bloquants.length, "point")} {bloquants.length > 1 ? "empêchent" : "empêche"} le calcul d’aboutir :
+          la génération ne se lance pas tant qu’{bloquants.length > 1 ? "ils ne sont pas réglés" : "il n’est pas réglé"}.
+        </p>
+      ) : (
+        <p className="generation-aregler-intro">
+          Rien ne bloque la génération. {pluriel(autres.length, "point")}{" "}
+          {autres.length > 1 ? "méritent" : "mérite"} un coup d’œil : le calcul se fera avec les données telles
+          qu’elles sont.
+        </p>
+      )}
+      <ul className="generation-aregler-liste">
+        {bloquants.map(ligne)}
+        {autres.map(ligne)}
+      </ul>
+    </section>
+  );
+}
+
 export function GenerationView({
   onRelire,
   onPublie,
@@ -440,6 +517,33 @@ export function GenerationView({
       perime = true;
     };
   }, [aAfficher]);
+
+  // « À régler avant de générer » : relu à chaque changement de semestre ou
+  // de source (maquette récupérée, retour à la copie livrée).
+  const [verification, setVerification] = useState<Verification | null>(null);
+  const sourceDuGroupe = donnees?.groupes.find((g) => g.cle === groupe)?.source;
+  const versionSource = sourceDuGroupe ? JSON.stringify(sourceDuGroupe) : "";
+  useEffect(() => {
+    if (!groupe || activeId) {
+      setVerification(null);
+      return undefined;
+    }
+    let perime = false;
+    setVerification({ etat: "chargement" });
+    verifierAvantDeGenerer(groupe)
+      .then((v) => {
+        if (perime) return;
+        setVerification(Array.isArray(v?.constats) ? { etat: "faite", constats: v.constats } : { etat: "indisponible" });
+      })
+      .catch(() => {
+        if (!perime) setVerification({ etat: "indisponible" });
+      });
+    return () => {
+      perime = true;
+    };
+  }, [groupe, activeId, versionSource]);
+  const bloque = verification?.etat === "faite" && verification.constats.some((c) => c.bloquant);
+  const verificationEnCours = verification?.etat === "chargement";
 
   if (erreur && !donnees) {
     return (
@@ -667,6 +771,7 @@ export function GenerationView({
                 onRecuperer={() => void recuperer(groupeChoisi)}
                 onRevenir={() => void revenir(groupeChoisi)}
               />
+              {verification && <ARegler verification={verification} />}
               <p className="generation-duree">
                 Durée : jusqu’à{" "}
                 <strong>{formatDuree((heures.trim() ? Number(heures.replace(",", ".")) : groupeChoisi.parametres.heures) * 3600)}</strong>
@@ -708,11 +813,14 @@ export function GenerationView({
             </>
           )}
           <div className="generation-actions">
-            <button type="button" className="btn btn--primary" disabled={!groupeChoisi || envoi} onClick={() => void lancer()}>
+            <button type="button" className="btn btn--primary" disabled={!groupeChoisi || envoi || bloque || verificationEnCours}
+              onClick={() => void lancer()}
+            >
               <Sparkles size={16} aria-hidden="true" />
               {envoi ? "Lancement…" : "Générer l’emploi du temps"}
             </button>
             {!groupeChoisi && <span className="muted">Choisissez d’abord le semestre.</span>}
+            {groupeChoisi && bloque && <span className="muted">Réglez d’abord les points ci-dessus.</span>}
           </div>
         </section>
       )}

@@ -153,7 +153,7 @@ describe("GenerationView", () => {
     expect(screen.getByText("Aucune génération pour l’instant.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: /Semestre pair/ }));
-    expect(bouton).toBeEnabled();
+    await waitFor(() => expect(bouton).toBeEnabled());
     expect(screen.getByText(/jusqu’à/)).toHaveTextContent("4 h");
     fireEvent.click(bouton);
 

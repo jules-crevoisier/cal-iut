@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from cal_iut.api import accounts
-from cal_iut.generation import taches
+from cal_iut.generation import taches, verification
 from cal_iut.ingestion import mmi_previ
 
 router = APIRouter(prefix="/generations", dependencies=[Depends(accounts.require_role("admin"))])
@@ -112,6 +112,16 @@ def lancer_generation(body: GenerationRequest, request: Request) -> dict:
     demande = {cle: valeur for cle, valeur in body.model_dump().items() if valeur is not None}
     utilisateur = getattr(request.state, "user", None)
     par = getattr(utilisateur, "email", None) or "administrateur"
+    if body.semestre_group in taches.GROUPES and taches.active() is None:
+        # « À régler avant de générer » : même contrôle que celui affiché à
+        # l'écran, refait ici parce que les données ont pu changer depuis.
+        restants = [c for c in verification.avant_de_generer(body.semestre_group)["constats"] if c["bloquant"]]
+        if restants:
+            raise HTTPException(
+                409,
+                f"{len(restants)} point(s) à régler avant de générer : "
+                + " ; ".join(c["message"] for c in restants[:3]),
+            )
     try:
         etat = taches.creer(demande, par)
     except taches.GenerationDejaEnCours as exc:
@@ -143,6 +153,18 @@ def revenir_a_la_copie_livree(groupe: str) -> dict:
     _refuser_si_source_verrouillee(groupe)
     mmi_previ.supprimer_copie(taches.RACINE, groupe)
     return {"semestre_group": groupe, "source": _source(groupe)}
+
+
+@router.get("/verification/{groupe}")
+def a_regler_avant_de_generer(groupe: str) -> dict:
+    """Ce qu'il reste à régler dans les données de ce semestre avant de
+    lancer le calcul. Une seconde environ ; ne lance pas le solveur."""
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    try:
+        return verification.avant_de_generer(groupe)
+    except verification.GenerationEnCours as exc:
+        raise HTTPException(409, "Une génération est en cours : la vérification reprendra à sa fin.") from exc
 
 
 @router.get("/{generation_id}")
