@@ -87,7 +87,10 @@ def purger_anciennes(reference: date | None = None) -> list[str]:
     limite = (reference or _aujourdhui()) - timedelta(days=RETENTION_JOURS)
     supprimes: list[str] = []
     for f in SAUVEGARDES_DB_DIR.glob(f"{_PREFIXE}*{_SUFFIXE}"):
-        jour = f.name[len(_PREFIXE) : -len(_SUFFIXE)]
+        # Les 10 premiers caractères : la date. Les copies « avant
+        # remplacement » portent un suffixe après elle et suivent la même
+        # rétention.
+        jour = f.name[len(_PREFIXE) : -len(_SUFFIXE)][:10]
         try:
             date_fichier = datetime.strptime(jour, "%Y-%m-%d").date()  # noqa: DTZ007 — date calendaire
         except ValueError:
@@ -96,6 +99,27 @@ def purger_anciennes(reference: date | None = None) -> list[str]:
             f.unlink(missing_ok=True)
             supprimes.append(jour)
     return sorted(supprimes)
+
+
+def sauvegarder_avant_remplacement(source: Path | None) -> Path | None:
+    """Copie horodatée prise juste avant qu'un planning en remplace un autre
+    (chargement d'un run, résolution complète, publication d'un brouillon).
+    Distincte de la copie du jour, qui peut dater du matin. NE LÈVE JAMAIS :
+    l'échec est journalisé. Rien à copier si la base n'existe pas encore."""
+    if source is None or not Path(source).exists():
+        return None
+    try:
+        maintenant = datetime.now()  # noqa: DTZ005 — heure locale, pour un nom de fichier lisible
+        # À côté de la base copiée (en production : `SAUVEGARDES_DB_DIR`),
+        # pour qu'une base de test ou de travail n'écrive pas dans le
+        # dossier de la base réelle.
+        cible = Path(source).parent / SAUVEGARDES_DB_DIR.name / (
+            f"{_PREFIXE}{maintenant:%Y-%m-%d}-avant-remplacement-{maintenant:%H%M%S}{_SUFFIXE}"
+        )
+        return sauvegarder(Path(source), cible)
+    except Exception:
+        logger.exception("Sauvegarde avant remplacement du planning en échec (%s)", source)
+        return None
 
 
 def sauvegarder_si_necessaire(source: Path | None) -> Path | None:

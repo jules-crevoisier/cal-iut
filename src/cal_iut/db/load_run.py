@@ -39,6 +39,10 @@ def load_run_from_json(
     weeks = int(raw.get("weeks") or (max(int(p["week"]) for p in placements) + 1))
 
     path = db_path or DEFAULT_DB
+    # Import tardif : `api.sauvegardes_db` n'a besoin de rien d'autre de l'API.
+    from cal_iut.api import sauvegardes_db
+
+    sauvegardes_db.sauvegarder_avant_remplacement(path)
     init_db(path)
     db = get_db(path)
     try:

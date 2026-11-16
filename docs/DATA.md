@@ -1385,7 +1385,7 @@ Le calcul complet se lance hors du serveur, sur un poste. Les commandes, dans l'
 | `cal-iut solve --decomposed --semestre-group odd --weeks 24 --fi-max-week 18` | Calcule un planning : `data/generated/timetable.json`. |
 | `python scripts/solve_until_ok.py --max-runs 20 --max-hours 8` | Relance avec d'autres graines et garde le meilleur. |
 | `cal-iut completer --timetable data/generated/timetable_best.json` | Place ce qui reste, avec les mêmes contrôles que l'appli. |
-| `cal-iut load-run <timetable.json>` | Charge un planning calculé dans la base locale. |
+| `cal-iut load-run <timetable.json>` | Charge un planning calculé dans la base locale. Ne remplace que le planning des semestres du fichier (`--semestre-group odd` : S1/S3/S5, `even` : S2/S4/S6) ; celui de l'autre groupe reste en base. Une copie de la base est prise juste avant, dans `data/state/sauvegardes_db/` (`…-avant-remplacement-HHMMSS.db`). |
 | `cal-iut regles` | Liste en français les règles déclarées et leur raison. |
 
 **`cal-iut annee`** enchaîne tout en quatre étapes et s'arrête à la première qui coince :

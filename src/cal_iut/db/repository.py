@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from cal_iut.db.models import (
@@ -17,6 +18,33 @@ from cal_iut.db.models import (
     TacheImage,
     TeacherPreference,
 )
+
+
+ETAT_PUBLIE = "publie"
+ETAT_BROUILLON = "brouillon"
+
+# Même découpage que `ingestion/pipeline.py::SEMESTRE_GROUPS` (recopié ici
+# pour que la couche base n'importe pas toute l'ingestion ; un test vérifie
+# que les deux restent identiques). `PlanningRun.semestre` vaut « ODD » ou
+# « EVEN » pour un run de groupe, sinon un semestre seul (« S1 »).
+_SEMESTRES_PAR_GROUPE: dict[str, frozenset[str]] = {
+    "ODD": frozenset({"S1", "S3", "S5"}),
+    "EVEN": frozenset({"S2", "S4", "S6"}),
+}
+
+# SQLite plafonne le nombre de paramètres d'une requête : les `IN (...)`
+# sont découpés par paquets.
+_TAILLE_PAQUET = 500
+
+
+def perimetre_semestres(semestre: str) -> frozenset[str]:
+    """Semestres couverts par un run, d'après son champ `semestre`."""
+    cle = (semestre or "").strip().upper()
+    return _SEMESTRES_PAR_GROUPE.get(cle, frozenset({cle}))
+
+
+def _par_paquets(valeurs: list) -> list[list]:
+    return [valeurs[i : i + _TAILLE_PAQUET] for i in range(0, len(valeurs), _TAILLE_PAQUET)]
 
 
 @dataclass
@@ -87,7 +115,22 @@ class PlanningRepository:
         weeks: int,
         solver_placements: list[dict[str, object]],
         current_placements: list[dict[str, object]],
+        etat: str = ETAT_PUBLIE,
     ) -> PlanningRun:
+        """Enregistre un run.
+
+        `etat="publie"` (défaut, comportement historique) : le run entre en
+        service, ses placements remplacent ceux des runs qui couvrent les
+        MÊMES semestres — et seulement ceux-là. Avant le 16/11/2026, toute
+        la table `current_placements` était vidée : charger S2/S4/S6 aurait
+        effacé S1/S3/S5.
+
+        `etat="brouillon"` : seul l'instantané du solveur est écrit, le
+        planning en service n'est pas touché (`current_placements` ignoré).
+        Il entrera en service par `publier_run`.
+        """
+        if etat not in (ETAT_PUBLIE, ETAT_BROUILLON):
+            raise ValueError(f"État de run inconnu : {etat!r}")
         run = PlanningRun(
             parcours=parcours,
             semestre=semestre,
@@ -95,6 +138,7 @@ class PlanningRepository:
             objective_value=objective_value,
             gap_penalty=gap_penalty,
             weeks=weeks,
+            etat=etat,
         )
         self.db.add(run)
         self.db.flush()
@@ -112,8 +156,42 @@ class PlanningRepository:
                 )
             )
 
-        self.db.query(CurrentPlacement).delete()
-        for p in current_placements:
+        if etat == ETAT_PUBLIE:
+            self._remplacer_placements_courants(run, current_placements)
+
+        self.db.commit()
+        self.db.refresh(run)
+        return run
+
+    def _remplacer_placements_courants(
+        self, run: PlanningRun, placements: list[dict[str, object]]
+    ) -> None:
+        """Met `placements` en service pour `run`, sans commit.
+
+        Sont retirés : les placements courants des runs dont le périmètre
+        recoupe celui de `run` (l'ancien planning des mêmes semestres), et
+        toute ligne portant l'identifiant d'une séance à écrire
+        (`session_id` est la clé primaire de la table). Les placements des
+        autres semestres restent en base, intacts.
+        """
+        perimetre = perimetre_semestres(run.semestre)
+        runs_remplaces = [
+            run_id
+            for run_id, semestre in self.db.query(PlanningRun.id, PlanningRun.semestre)
+            if run_id != run.id and perimetre & perimetre_semestres(semestre)
+        ]
+        for paquet in _par_paquets(runs_remplaces):
+            self.db.query(CurrentPlacement).filter(CurrentPlacement.run_id.in_(paquet)).delete(
+                synchronize_session=False
+            )
+        identifiants = [str(p["session_id"]) for p in placements]
+        for paquet in _par_paquets(identifiants):
+            self.db.query(CurrentPlacement).filter(
+                CurrentPlacement.session_id.in_(paquet)
+            ).delete(synchronize_session=False)
+        self.db.flush()
+
+        for p in placements:
             self.db.add(
                 CurrentPlacement(
                     run_id=run.id,
@@ -128,12 +206,46 @@ class PlanningRepository:
                 )
             )
 
+    def publier_run(self, run_id: int) -> PlanningRun:
+        """Met un brouillon en service : ses placements calculés remplacent
+        le planning des mêmes semestres. Lève `ValueError` si le run
+        n'existe pas ou n'est pas un brouillon."""
+        run = self.db.get(PlanningRun, run_id)
+        if run is None:
+            raise ValueError(f"Run {run_id} introuvable")
+        if run.etat != ETAT_BROUILLON:
+            raise ValueError(f"Le run {run_id} n'est pas un brouillon (état : {run.etat or ETAT_PUBLIE})")
+        placements = [
+            {
+                "session_id": s.session_id,
+                "week": s.week,
+                "day": s.day,
+                "slot": s.slot,
+                "course_code": s.course_code,
+                "room_id": s.room_id,
+            }
+            for s in self.db.query(SolverPlacement).filter(SolverPlacement.run_id == run.id)
+        ]
+        if not placements:
+            raise ValueError(f"Le brouillon {run_id} ne contient aucun placement")
+        self._remplacer_placements_courants(run, placements)
+        run.etat = ETAT_PUBLIE
         self.db.commit()
         self.db.refresh(run)
         return run
 
-    def get_latest_run(self, parcours: str | None = None, semestre: str | None = None) -> PlanningRun | None:
+    def get_latest_run(
+        self,
+        parcours: str | None = None,
+        semestre: str | None = None,
+        inclure_brouillons: bool = False,
+    ) -> PlanningRun | None:
+        """Dernier run EN SERVICE (les brouillons sont ignorés, sauf demande
+        explicite) : c'est lui que le serveur restaure au démarrage et que
+        toute écriture de placement prend pour référence."""
         q = self.db.query(PlanningRun).order_by(PlanningRun.id.desc())
+        if not inclure_brouillons:
+            q = q.filter(or_(PlanningRun.etat.is_(None), PlanningRun.etat != ETAT_BROUILLON))
         if parcours:
             q = q.filter(PlanningRun.parcours == parcours)
         if semestre:
