@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types",
 )
 NB_CRENEAUX = 6
 
@@ -116,11 +116,16 @@ def indisponibilites_retirees(config_dir: Path) -> set[str]:
     return set(_lire(config_dir)["indisponibilites"]["retraits"])
 
 
-def appliquer_aux_enseignants(config_dir: Path, enseignants: list[dict]) -> list[dict]:
-    """Applique les indisponibilités saisies à l'écran aux entrées BRUTES de
-    `teacher_availability.yaml` (avant validation)."""
-    bloc = _lire(config_dir)["indisponibilites"]
-    if not bloc["ajouts"] and not bloc["retraits"]:
+def appliquer_aux_enseignants(
+    config_dir: Path, enseignants: list[dict], *, sans_semaine_type: bool = False
+) -> list[dict]:
+    """Applique les indisponibilités saisies à l'écran (datées, puis semaine
+    type) aux entrées BRUTES de `teacher_availability.yaml` (avant
+    validation)."""
+    tout = _lire(config_dir)
+    bloc = tout["indisponibilites"]
+    semaines = [] if sans_semaine_type else [a for a in tout["semaines_types"]["ajouts"] if a.get("teacher_code")]
+    if not bloc["ajouts"] and not bloc["retraits"] and not semaines:
         return enseignants
     retraits = set(bloc["retraits"])
     sortie = []
@@ -148,6 +153,32 @@ def appliquer_aux_enseignants(config_dir: Path, enseignants: list[dict]) -> list
             *(entree.get("forbidden_date_slots") or []),
             {"date": ajout["date"], "slots": _creneaux(ajout.get("slots")), "note": ajout.get("motif")},
         ]
+    for ajout in semaines:
+        code = str(ajout["teacher_code"])
+        entree = par_code.get(code)
+        if entree is None:
+            entree = {"teacher_code": code}
+            par_code[code] = entree
+            sortie.append(entree)
+        bloques, liberes = _cases(ajout.get("bloques")), _cases(ajout.get("liberes"))
+        # `merge_teacher_availability` : (fichier ∪ feuille des contraintes) − annulés.
+        interdits = {tuple(c) for c in entree.get("forbidden_slots") or []}
+        annules = {tuple(c) for c in entree.get("cancelled_forbidden_slots") or []}
+        entree["forbidden_slots"] = [list(c) for c in sorted((interdits | bloques) - liberes)]
+        entree["cancelled_forbidden_slots"] = [list(c) for c in sorted((annules | liberes) - bloques)]
+    return sortie
+
+
+def _cases(valeur: object) -> set[tuple[int, int]]:
+    """Des couples (jour 0-4, créneau 0-5) valides, sans doublon."""
+    sortie: set[tuple[int, int]] = set()
+    for case in valeur or []:
+        try:
+            jour, creneau = int(case[0]), int(case[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if 0 <= jour <= 4 and 0 <= creneau < NB_CRENEAUX:
+            sortie.add((jour, creneau))
     return sortie
 
 
@@ -504,6 +535,52 @@ def _remplacer(config_dir: Path, nom: str, groupe: str, entree: dict | None, par
                 "id": uuid.uuid4().hex[:12],
                 "groupe": groupe,
                 **entree,
+                "demande_par": par,
+                "le": datetime.now(timezone.utc).date().isoformat(),
+            })
+        ecrire_json(_path(config_dir), tout)
+
+
+# ── Semaine type d'un enseignant ──────────────────────────────────────
+
+
+def semaines_types(config_dir: Path) -> dict[str, dict]:
+    """`{code: {"bloques": [...], "liberes": [...], "motif", "demande_par"}}` :
+    ce que l'écran a changé à la semaine type de chaque enseignant."""
+    return {
+        str(a["teacher_code"]): {
+            "bloques": [list(c) for c in sorted(_cases(a.get("bloques")))],
+            "liberes": [list(c) for c in sorted(_cases(a.get("liberes")))],
+            "motif": str(a.get("motif") or ""),
+            "demande_par": str(a.get("demande_par") or ""),
+        }
+        for a in _lire(config_dir)["semaines_types"]["ajouts"]
+        if a.get("teacher_code")
+    }
+
+
+def definir_semaine_type(config_dir: Path, code: str, bloques: object, liberes: object, motif: str, par: str) -> None:
+    """Remplace ce que l'écran change à la semaine type de l'enseignant :
+    créneaux rendus indisponibles (`bloques`) et créneaux rendus disponibles
+    (`liberes`). Les deux vides : retour à la semaine d'origine."""
+    code = str(code or "").strip()
+    if not code:
+        raise ReglageInvalide("Choisissez un enseignant.")
+    bloques, liberes = _cases(bloques), _cases(liberes)
+    motif = str(motif or "").strip()
+    if (bloques or liberes) and not motif:
+        raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout["semaines_types"]
+        bloc["ajouts"] = [a for a in bloc["ajouts"] if a.get("teacher_code") != code]
+        if bloques or liberes:
+            bloc["ajouts"].append({
+                "id": uuid.uuid4().hex[:12],
+                "teacher_code": code,
+                "bloques": [list(c) for c in sorted(bloques)],
+                "liberes": [list(c) for c in sorted(liberes - bloques)],
+                "motif": motif[:300],
                 "demande_par": par,
                 "le": datetime.now(timezone.utc).date().isoformat(),
             })

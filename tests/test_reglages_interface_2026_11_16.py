@@ -805,3 +805,61 @@ def test_le_referent_de_sae_strict_est_un_choix_du_lancement(tmp_path, monkeypat
             pass
     assert "--no-sae-supervisor-hard" in commandes[0]
     assert "--no-sae-supervisor-hard" not in commandes[1]
+
+
+# ── Semaine type d'un enseignant ──────────────────────────────────────
+
+
+def _semaine(admin, code: str) -> dict:
+    return next((s for s in admin.get("/reglages").json()["semaines_types"] if s["teacher_code"] == code), None)
+
+
+def test_la_semaine_type_d_un_enseignant_se_regle_a_l_ecran(admin):
+    etat = get_state()
+    depart = admin.get("/reglages").json()
+    assert depart["jours"] == ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
+    # Kyllian Bresson : jamais à 8 h, c'est dans le fichier livré.
+    kbr = _semaine(admin, "KBR")
+    assert [0, 0] in kbr["origine"] and kbr["bloques"] == [] and kbr["liberes"] == [] and kbr["fixes"] == []
+
+    # On lui rend le lundi 8 h et on lui retire le vendredi après-midi.
+    voulue = [c for c in kbr["origine"] if c != [0, 0]] + [[4, 3], [4, 4], [4, 5]]
+    assert admin.put("/reglages/semaines-types/KBR", json={"indisponibles": voulue}).status_code == 422  # motif
+    reponse = admin.put("/reglages/semaines-types/KBR", json={"indisponibles": voulue, "motif": "Demande du 17/11"})
+    assert reponse.status_code == 200, reponse.text
+    kbr = next(s for s in reponse.json()["semaines_types"] if s["teacher_code"] == "KBR")
+    assert kbr["liberes"] == [[0, 0]] and kbr["bloques"] == [[4, 3], [4, 4], [4, 5]]
+    assert [0, 0] in kbr["origine"], "la semaine d'origine reste connue"
+    # Le planning en service et la prochaine génération lisent la nouvelle semaine.
+    en_service = {tuple(c) for c in next(t for t in etat.teacher_availability if t.teacher_code == "KBR").forbidden_slots}
+    assert (0, 0) not in en_service and {(4, 3), (4, 4), (4, 5)} <= en_service and (1, 0) in en_service
+    charge = next(t for t in load_teacher_availability(CONFIG) if t.teacher_code == "KBR")
+    assert (0, 0) in {tuple(c) for c in charge.cancelled_forbidden_slots}
+
+    # Un enseignant sans aucune contrainte connue.
+    assert _semaine(admin, "ZZZ") is None
+    assert admin.put("/reglages/semaines-types/ZZZ", json={"indisponibles": [[2, 5]], "motif": "m"}).status_code == 200
+    assert _semaine(admin, "ZZZ")["bloques"] == [[2, 5]]
+    assert admin.put("/reglages/semaines-types/ZZZ", json={"indisponibles": [[7, 0]], "motif": "m"}).status_code == 422
+    assert admin.put("/reglages/semaines-types/..x", json={"indisponibles": [], "motif": "m"}).status_code in (404, 422)
+
+    # Retour à la semaine d'origine.
+    assert admin.delete("/reglages/semaines-types/KBR").status_code == 200
+    assert admin.delete("/reglages/semaines-types/KBR").status_code == 404
+    assert admin.delete("/reglages/semaines-types/ZZZ").status_code == 200
+    en_service = {tuple(c) for c in next(t for t in etat.teacher_availability if t.teacher_code == "KBR").forbidden_slots}
+    assert (0, 0) in en_service and (4, 3) not in en_service
+    assert reglages.semaines_types(CONFIG) == {}
+
+
+def test_une_liste_de_creneaux_possibles_ne_s_elargit_pas_a_l_ecran(admin):
+    # Kévin Ngo déclare les créneaux où il PEUT venir : tout le reste est fixe.
+    kng = _semaine(admin, "KNG")
+    assert kng["fixes"] and all(c in kng["origine"] for c in kng["fixes"])
+    moins = [c for c in kng["origine"] if c != kng["fixes"][0]]
+    assert admin.put("/reglages/semaines-types/KNG", json={"indisponibles": moins, "motif": "m"}).status_code == 422
+    libre = next([j, c] for j in range(5) for c in range(6) if [j, c] not in kng["origine"])
+    plus = [*kng["origine"], libre]
+    assert admin.put("/reglages/semaines-types/KNG", json={"indisponibles": plus, "motif": "m"}).status_code == 200
+    assert _semaine(admin, "KNG")["bloques"] == [libre]
+    assert admin.delete("/reglages/semaines-types/KNG").status_code == 200

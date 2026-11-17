@@ -796,6 +796,14 @@ quotidien, le passage par un fichier du dépôt :
 - **Indisponibilités datées des enseignants** (complète les
   `forbidden_date_slots` de `teacher_availability.yaml`).
 
+Un troisième bloc, **Semaine type des enseignants**, règle les créneaux où un
+enseignant n'est jamais disponible, chaque semaine : on choisit l'enseignant,
+on coche ou décoche les cases de la grille (cinq jours, six créneaux), on
+donne le motif. La grille part de ce que disent `teacher_availability.yaml`
+et la feuille des contraintes (`contraintes/05`) ; seul l'écart est retenu, et
+« Revenir à la semaine d'origine » l'efface. Quand un enseignant a déclaré la
+liste des seuls créneaux où il peut venir, les autres cases restent grisées.
+
 Ce qui est saisi va dans `data/state/reglages.json` (volume persistant, donc
 conservé d'un déploiement à l'autre) : des ajouts, et les retraits d'entrées
 livrées avec l'application. Les fichiers du dépôt ne sont jamais modifiés, et

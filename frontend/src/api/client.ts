@@ -943,10 +943,41 @@ export interface IndisponibiliteDatee extends ReglageDate {
   teacher_code: string;
 }
 
+/** Ce que l'écran change à la semaine type d'un enseignant. Une case est
+ * un couple `[jour 0-4, créneau 0-5]`. */
+export interface SemaineType {
+  teacher_code: string;
+  /** Créneaux indisponibles avant tout changement à l'écran. */
+  origine: [number, number][];
+  /** Parmi eux, ceux que l'écran ne peut pas rendre disponibles. */
+  fixes: [number, number][];
+  bloques: [number, number][];
+  liberes: [number, number][];
+  motif: string;
+  demande_par: string;
+}
+
 export interface ReglagesReponse {
   creneaux: string[];
+  jours?: string[];
   salles_reservees: SalleReservee[];
   indisponibilites: IndisponibiliteDatee[];
+  semaines_types?: SemaineType[];
+}
+
+export async function reglerSemaineType(
+  code: string,
+  indisponibles: [number, number][],
+  motif: string,
+): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/semaines-types/${encodeURIComponent(code)}`, {
+    method: "PUT",
+    body: JSON.stringify({ indisponibles, motif }),
+  });
+}
+
+export async function retablirSemaineType(code: string): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/semaines-types/${encodeURIComponent(code)}`, { method: "DELETE" });
 }
 
 export type FamilleDeReglage = "salles-reservees" | "indisponibilites";
