@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants", "cours_hors_maquette",
 )
 NB_CRENEAUX = 6
 
@@ -864,5 +864,83 @@ def ajouter_presence_alternants(config_dir: Path, entree: dict, par: str) -> dic
     with _verrou:
         tout = _lire(config_dir)
         tout["presence_alternants"]["ajouts"].append(propre)
+        ecrire_json(_path(config_dir), tout)
+    return propre
+
+
+# ── Cours hors maquette ───────────────────────────────────────────────
+
+SEANCES_MAXI = 60
+
+
+def cours_hors_maquette(config_dir: Path) -> list[dict]:
+    """Les modules ajoutés à l'écran, absents de la maquette officielle."""
+    return [
+        dict(a) for a in _lire(config_dir)["cours_hors_maquette"]["ajouts"]
+        if a.get("id") and a.get("code") and a.get("semestre") and a.get("parcours") and a.get("teacher_code")
+    ]
+
+
+def ligne_de_maquette(cours: dict) -> dict:
+    """Le module saisi, sous la forme d'une ligne de l'export maquette
+    (cf. `additional_courses.yaml`) : un seul enseignant, qui voit tous les
+    groupes."""
+    groupes_td, groupes_tp = max(1, int(cours.get("groupes_td") or 1)), max(1, int(cours.get("groupes_tp") or 1))
+    cm, td, tp = (int(cours.get(t) or 0) for t in ("cm", "td", "tp"))
+    enseignant = {
+        "code": str(cours["teacher_code"]), "nom": str(cours.get("teacher_nom") or cours["teacher_code"]),
+        "prenom": str(cours.get("teacher_prenom") or ""),
+    }
+    return {
+        "code_matiere": str(cours["code"]), "nom_matiere": str(cours.get("nom") or cours["code"]),
+        "semestre": str(cours["semestre"]), "parcours": str(cours["parcours"]),
+        "lead": dict(enseignant),
+        "total": {"cm": cm, "td": td, "tp": tp},
+        "profs": [{
+            "block": "block1", **enseignant, "cm": cm, "td": td * groupes_td, "tp": tp * groupes_tp,
+            "nbGpTd": groupes_td if td else 0, "nbGpTp": groupes_tp if tp else 0,
+        }],
+        "maquette": {"groupes": {"td": groupes_td if td else 0, "tp": groupes_tp if tp else 0},
+                     "bloque": False, "hors_service": False},
+    }
+
+
+def ajouter_cours_hors_maquette(config_dir: Path, entree: dict, par: str) -> dict:
+    code = str(entree.get("code") or "").strip().upper()
+    if not 3 <= len(code) <= 12 or not code.isalnum():
+        raise ReglageInvalide("Le code du module fait 3 à 12 lettres ou chiffres, sans espace.")
+    nom = str(entree.get("nom") or "").strip()
+    if not nom:
+        raise ReglageInvalide("Donnez un intitulé au module.")
+    enseignant = str(entree.get("teacher_code") or "").strip().upper()
+    if not 2 <= len(enseignant) <= 8 or not enseignant.isalnum():
+        raise ReglageInvalide("Choisissez l'enseignant du module.")
+    volumes = {}
+    for type_ in ("cm", "td", "tp"):
+        try:
+            volumes[type_] = int(entree.get(type_) or 0)
+        except (TypeError, ValueError):
+            raise ReglageInvalide("Les nombres de séances sont des entiers.") from None
+        if not 0 <= volumes[type_] <= SEANCES_MAXI:
+            raise ReglageInvalide(f"Un module compte de 0 à {SEANCES_MAXI} séances par type.")
+    if not any(volumes.values()):
+        raise ReglageInvalide("Indiquez au moins une séance (CM, TD ou TP).")
+    propre = {
+        "id": uuid.uuid4().hex[:12], "code": code, "nom": nom[:120],
+        "semestre": str(entree.get("semestre") or ""), "parcours": str(entree.get("parcours") or ""),
+        "teacher_code": enseignant,
+        "teacher_nom": str(entree.get("teacher_nom") or "").strip().upper()[:60],
+        "teacher_prenom": str(entree.get("teacher_prenom") or "").strip().upper()[:60],
+        **volumes,
+        "groupes_td": max(1, int(entree.get("groupes_td") or 1)),
+        "groupes_tp": max(1, int(entree.get("groupes_tp") or 1)),
+        "demande_par": par, "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        if any(a.get("code") == code and a.get("parcours") == propre["parcours"]
+               for a in tout["cours_hors_maquette"]["ajouts"]):
+            raise ReglageInvalide(f"Le module {code} est déjà ajouté pour cette promotion.")
+        tout["cours_hors_maquette"]["ajouts"].append(propre)
         ecrire_json(_path(config_dir), tout)
     return propre

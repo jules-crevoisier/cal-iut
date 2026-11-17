@@ -484,11 +484,12 @@ def load_additional_courses(config_dir: Path) -> list[dict[str, object]]:
     `ingestion/pipeline.py`), donc traitées à l'identique d'une vraie ligne
     de l'export distant, survivent à un re-fetch.
     """
+    from cal_iut.ingestion import reglages
+
     path = config_dir / "additional_courses.yaml"
-    if not path.exists():
-        return []
-    data = load_yaml(path) or {}
-    return list(data.get("courses", []))
+    livres = list((load_yaml(path) or {}).get("courses", [])) if path.exists() else []
+    # Modules saisis à l'écran « Nouveau semestre » (`reglages.cours_hors_maquette`).
+    return livres + [reglages.ligne_de_maquette(c) for c in reglages.cours_hors_maquette(config_dir)]
 
 
 def load_teacher_contacts(config_dir: Path) -> dict[str, str]:

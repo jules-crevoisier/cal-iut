@@ -1224,3 +1224,74 @@ def test_regler_evenements_et_semaines_des_alternants_depuis_l_ecran(admin):
         assert admin.delete("/reglages/presences-alternants", params={"cle": periode["cle"]}).status_code == 404
     finally:
         etat.student_presences, etat.teacher_availability, etat.calendar = avant
+
+
+# ── Cours hors maquette (lot 6) ───────────────────────────────────────
+
+
+def test_un_cours_hors_maquette_saisi_devient_des_seances():
+    avant = _seances("even", "WX2ATEL")
+    assert avant == []
+    reglages.ajouter_cours_hors_maquette(
+        CONFIG,
+        {"code": "wx2atel", "nom": "Atelier sérigraphie", "semestre": "S2", "parcours": "BUT1",
+         "teacher_code": "VMA", "teacher_nom": "Mariot", "teacher_prenom": "Valérie",
+         "cm": 1, "td": 2, "tp": 0, "groupes_td": 4, "groupes_tp": 8},
+        "test",
+    )
+    seances = _seances("even", "WX2ATEL")
+    par_type: dict[str, int] = {}
+    for s in seances:
+        par_type[s.session_type.value] = par_type.get(s.session_type.value, 0) + 1
+    assert par_type == {"CM": 1, "TD": 8}
+    assert {e.code for s in seances for e in s.teachers} == {"VMA"}
+    assert {s.course_name for s in seances} == {"Atelier sérigraphie"}
+    with pytest.raises(reglages.ReglageInvalide):
+        reglages.ajouter_cours_hors_maquette(
+            CONFIG, {"code": "WX2ATEL", "nom": "Bis", "semestre": "S2", "parcours": "BUT1", "teacher_code": "VMA", "td": 1},
+            "test",
+        )
+    for mauvais in (
+        {"code": "A B", "nom": "x", "teacher_code": "VMA", "td": 1},
+        {"code": "WX2B", "nom": "", "teacher_code": "VMA", "td": 1},
+        {"code": "WX2B", "nom": "x", "teacher_code": "VMA"},
+        {"code": "WX2B", "nom": "x", "teacher_code": "", "td": 1},
+    ):
+        with pytest.raises(reglages.ReglageInvalide):
+            reglages.ajouter_cours_hors_maquette(CONFIG, {"semestre": "S2", "parcours": "BUT1", **mauvais}, "test")
+
+
+def test_ajouter_un_cours_hors_maquette_depuis_l_ecran(admin, generations_isolees, monkeypatch):
+    lu = admin.get("/generations/cours-hors-maquette/even").json()
+    assert lu["verrouille"] is None and lu["semestres"]["S2"] == ["BUT1"] and lu["enseignants"]
+    assert all(p.startswith("BUT2") for p in lu["semestres"]["S4"])
+    enseignant = lu["enseignants"][0]
+    corps = {
+        "code": "WX2ATEL", "nom": "Atelier sérigraphie", "semestre": "S2", "parcours": "BUT1",
+        "teacher_code": enseignant["code"], "teacher_nom": enseignant["nom"], "teacher_prenom": enseignant["prenom"],
+        "cm": 0, "td": 2, "tp": 0,
+    }
+    r = admin.post("/generations/cours-hors-maquette/even", json=corps)
+    assert r.status_code == 201, r.text
+    (ajoute,) = [c for c in r.json()["cours"] if c["origine"] == "ajoutee"]
+    assert (ajoute["code"], ajoute["td"]) == ("WX2ATEL", 2)
+    assert len(_seances("even", "WX2ATEL")) == 8  # 2 TD × 4 groupes de TD
+    assert admin.post("/generations/cours-hors-maquette/even", json=corps).status_code == 422
+    assert admin.post("/generations/cours-hors-maquette/even", json={**corps, "code": "WX2B", "parcours": "BUT2-DEV-FI"}).status_code == 422
+    assert admin.delete(f"/generations/cours-hors-maquette/even/{ajoute['id']}").status_code == 200
+    assert _seances("even", "WX2ATEL") == []
+    assert admin.delete(f"/generations/cours-hors-maquette/even/{ajoute['id']}").status_code == 404
+
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    lu = admin.get("/generations/cours-hors-maquette/odd").json()
+    assert "déjà en service" in lu["verrouille"]
+    assert any(c["code"] == "WR100BU" and c["origine"] == "livree" for c in lu["cours"])
+    assert admin.post("/generations/cours-hors-maquette/odd", json={**corps, "semestre": "S1"}).status_code == 409

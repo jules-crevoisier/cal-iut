@@ -804,6 +804,66 @@ export async function retablirPeriodeDesCours(groupe: string): Promise<PeriodeDe
   return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`, { method: "DELETE" });
 }
 
+// ── Cours hors maquette ──
+
+export interface CoursHorsMaquette {
+  /** Absent pour un module livré avec l'application (non retirable ici). */
+  id: string | null;
+  origine: "livree" | "ajoutee";
+  code: string;
+  nom: string;
+  semestre: string;
+  parcours: string;
+  teacher_code: string;
+  cm: number;
+  td: number;
+  tp: number;
+}
+
+export interface CoursHorsMaquetteReponse {
+  semestre_group: string;
+  verrouille: string | null;
+  /** Par semestre, les promotions possibles. */
+  semestres: Record<string, string[]>;
+  enseignants: { code: string; nom: string; prenom: string; libelle: string }[];
+  cours: CoursHorsMaquette[];
+  seances_maxi: number;
+}
+
+export interface NouveauCoursHorsMaquette {
+  code: string;
+  nom: string;
+  semestre: string;
+  parcours: string;
+  teacher_code: string;
+  teacher_nom: string;
+  teacher_prenom: string;
+  cm: number;
+  td: number;
+  tp: number;
+}
+
+export async function lireCoursHorsMaquette(groupe: string): Promise<CoursHorsMaquetteReponse> {
+  return request<CoursHorsMaquetteReponse>(`/generations/cours-hors-maquette/${encodeURIComponent(groupe)}`);
+}
+
+export async function ajouterCoursHorsMaquette(
+  groupe: string,
+  cours: NouveauCoursHorsMaquette,
+): Promise<CoursHorsMaquetteReponse> {
+  return request<CoursHorsMaquetteReponse>(`/generations/cours-hors-maquette/${encodeURIComponent(groupe)}`, {
+    method: "POST",
+    body: JSON.stringify(cours),
+  });
+}
+
+export async function retirerCoursHorsMaquette(groupe: string, id: string): Promise<CoursHorsMaquetteReponse> {
+  return request<CoursHorsMaquetteReponse>(
+    `/generations/cours-hors-maquette/${encodeURIComponent(groupe)}/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
 // ── Plafonds hebdomadaires du calcul ──
 
 export interface Plafonds {
