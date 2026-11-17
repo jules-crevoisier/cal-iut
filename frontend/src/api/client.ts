@@ -1048,6 +1048,30 @@ export interface ReglagesReponse {
   salles?: SalleReglable[];
   types_de_salle?: string[];
   effectifs?: EffectifDeGroupe[];
+  regles_salles?: RegleDeSalle[];
+}
+
+/** « Ce module va dans ce type de salle », saisi à l'écran. */
+export interface RegleDeSalle {
+  id: string;
+  course_code: string;
+  session_types: string[];
+  type_prefere: string;
+  type_repli: string;
+  demande_par: string;
+}
+
+export async function ajouterRegleDeSalle(regle: {
+  course_code: string;
+  session_types: string[];
+  type_prefere: string;
+  type_repli: string;
+}): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>("/reglages/regles-salles", { method: "POST", body: JSON.stringify(regle) });
+}
+
+export async function retirerRegleDeSalle(id: string): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/regles-salles/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 /** Une salle telle que le planning la connaît. `origine` est absent pour

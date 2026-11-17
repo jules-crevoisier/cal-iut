@@ -203,3 +203,18 @@
   font-weight: 600;
   padding: 0.3rem 0;
 }
+
+.reglages-regles-salles {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.reglages-regles-salles li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+}

@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles",
 )
 NB_CRENEAUX = 6
 
@@ -718,3 +718,55 @@ def definir_salle(config_dir: Path, room_id: str, valeurs: dict | None, par: str
     if valeurs and valeurs.get("room_type"):
         propres["room_type"] = str(valeurs["room_type"])
     _remplacer(config_dir, "salles", room_id, propres or None, par)
+
+
+# ── Type de salle d'un module ─────────────────────────────────────────
+
+TYPES_DE_SEANCE = ("CM", "TD", "TP")
+
+
+def regles_salles(config_dir: Path) -> list[dict]:
+    """Les règles « ce module va dans ce type de salle » saisies à l'écran."""
+    return [
+        dict(a) for a in _lire(config_dir)["regles_salles"]["ajouts"]
+        if a.get("id") and a.get("course_code") and a.get("type_prefere")
+    ]
+
+
+def ajouter_regle_salle(config_dir: Path, entree: dict, par: str) -> dict:
+    """Une règle par module et par type de séance : la nouvelle remplace
+    celle qui visait déjà les mêmes séances."""
+    code = str(entree.get("course_code") or "").strip().upper()
+    if not code or len(code) > 20 or not code.replace("-", "").replace("_", "").isalnum():
+        raise ReglageInvalide("Choisissez un module.")
+    types = [t for t in TYPES_DE_SEANCE if t in (entree.get("session_types") or [])]
+    if not types:
+        raise ReglageInvalide("Cochez au moins un type de séance (CM, TD ou TP).")
+    prefere = str(entree.get("type_prefere") or "").strip()
+    repli = str(entree.get("type_repli") or "").strip()
+    if not prefere:
+        raise ReglageInvalide("Choisissez le type de salle préféré.")
+    if repli == prefere:
+        repli = ""
+    propre = {
+        "id": uuid.uuid4().hex[:12], "course_code": code, "session_types": types,
+        "type_prefere": prefere, "type_repli": repli, "demande_par": par,
+        "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        gardees = []
+        for a in tout["regles_salles"]["ajouts"]:
+            if str(a.get("course_code")) == code:
+                restants = [t for t in a.get("session_types") or [] if t not in types]
+                if not restants:
+                    continue
+                a = {**a, "session_types": restants}
+            gardees.append(a)
+        tout["regles_salles"]["ajouts"] = [*gardees, propre]
+        ecrire_json(_path(config_dir), tout)
+    return propre
+
+
+def retirer_regle_salle(config_dir: Path, identifiant: str) -> bool:
+    return retirer(config_dir, "regles_salles", identifiant, livree=False)

@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ReglagesReponse } from "../api/client";
-import { EffectifsReglables, SallesReglables, parParcours } from "./SallesEtEffectifs";
+import { EffectifsReglables, SallesDesModules, SallesReglables, parParcours } from "./SallesEtEffectifs";
 
 const H005 = {
   id: "h005",
@@ -102,5 +102,54 @@ describe("Effectifs des groupes", () => {
     expect(JSON.parse(String(appel?.init?.body))).toEqual({ effectif: 33 });
     fireEvent.click(screen.getByRole("button", { name: "Revenir à l’origine" }));
     await waitFor(() => expect(appels.some((a) => a.init?.method === "DELETE")).toBe(true));
+  });
+});
+
+describe("Type de salle d’un module", () => {
+  const MODULES = [{ valeur: "WR104", libelle: "WR104 · Culture numérique" }];
+
+  it("ajoute une règle pour les séances cochées", async () => {
+    const appels = stubFetch();
+    const onChange = vi.fn();
+    render(<SallesDesModules modules={MODULES} donnees={DONNEES} onChange={onChange} />);
+    const ajouter = screen.getByRole("button", { name: "Ajouter la règle" });
+    expect(ajouter).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Module"), { target: { value: "WR104" } });
+    fireEvent.change(screen.getByLabelText("Type de salle préféré"), { target: { value: "amphi" } });
+    fireEvent.click(screen.getByLabelText("TP"));
+    fireEvent.click(ajouter);
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const appel = appels.find((a) => a.init?.method === "POST");
+    expect(appel?.url).toContain("/reglages/regles-salles");
+    expect(JSON.parse(String(appel?.init?.body))).toEqual({
+      course_code: "WR104",
+      session_types: ["TD"],
+      type_prefere: "amphi",
+      type_repli: "",
+    });
+  });
+
+  it("liste les règles saisies et permet de les retirer", async () => {
+    const appels = stubFetch();
+    const onChange = vi.fn();
+    const regle = {
+      id: "abc",
+      course_code: "WR104",
+      session_types: ["TD", "TP"],
+      type_prefere: "tp_standard",
+      type_repli: "standard",
+      demande_par: "",
+    };
+    render(
+      <SallesDesModules
+        modules={MODULES}
+        donnees={{ ...DONNEES, regles_salles: [regle] } as ReglagesReponse}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByText(/TD et TP : Salle de TP, sinon Salle banalisée/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retirer la règle de WR104 TD TP" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(appels.find((a) => a.init?.method === "DELETE")?.url).toContain("/reglages/regles-salles/abc");
   });
 });
