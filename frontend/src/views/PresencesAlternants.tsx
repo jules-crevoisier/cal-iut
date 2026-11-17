@@ -157,7 +157,7 @@ export function PresencesAlternants({
           </p>
         )}
         <div className="reglages-actions">
-          <button type="submit" className="primary" disabled={envoi || !pret}>
+          <button type="submit" className="btn btn--primary" disabled={envoi || !pret}>
             Ajouter la période
           </button>
         </div>

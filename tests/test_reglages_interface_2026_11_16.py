@@ -1295,3 +1295,184 @@ def test_ajouter_un_cours_hors_maquette_depuis_l_ecran(admin, generations_isolee
     assert "déjà en service" in lu["verrouille"]
     assert any(c["code"] == "WR100BU" and c["origine"] == "livree" for c in lu["cours"])
     assert admin.post("/generations/cours-hors-maquette/odd", json={**corps, "semestre": "S1"}).status_code == 409
+
+
+# ── Années universitaires (lot 7) ─────────────────────────────────────
+
+ANNEE_2027 = {
+    "rentree": "2027-08-30", "fin_impair": "2028-01-28", "debut_pair": "2028-01-31", "fin": "2028-06-30",
+    "vacances": [
+        {"nom": "Toussaint", "debut": "2027-10-25", "fin": "2027-10-29"},
+        {"nom": "Noël", "debut": "2027-12-20", "fin": "2027-12-31"},
+        {"nom": "Hiver", "debut": "", "fin": ""},
+    ],
+    "feries": [{"date": "2027-11-11", "nom": "Armistice 1918"}, {"date": "2028-05-01", "nom": ""}],
+}
+
+
+def test_l_annee_d_origine_redonne_exactement_le_calendrier_en_service():
+    from cal_iut.calendar import academic, annees
+
+    construit = annees.construire(annees.annee_d_origine())
+    en_service = academic.build_default_calendar_2026_2027()
+    assert construit.teaching_mondays == en_service.teaching_mondays
+    assert construit.blocked_dates == en_service.blocked_dates
+    assert construit.holidays == en_service.holidays
+
+
+def test_les_feries_d_une_annee_sont_calcules():
+    from datetime import date
+
+    from cal_iut.calendar import annees
+
+    assert annees._paques(2027) == date(2027, 3, 28) and annees._paques(2028) == date(2028, 4, 16)
+    proposes = {j["date"]: j["nom"] for j in annees.feries_proposes("2027-2028")}
+    assert proposes["2028-04-17"] == "Lundi de Pâques" and proposes["2028-05-25"] == "Ascension"
+    assert "2027-12-25" not in proposes  # un samedi
+    proposition = annees.proposition("2027-2028")
+    assert (proposition["rentree"], proposition["debut_pair"]) == ("2027-08-30", "2028-01-31")
+
+
+def test_une_annee_saisie_est_validee_puis_donne_son_calendrier():
+    from datetime import date
+
+    from cal_iut.calendar import annees
+
+    propre = annees.valider("2027-2028", ANNEE_2027)
+    assert [v["nom"] for v in propre["vacances"]] == ["Toussaint", "Noël"]
+    assert propre["feries"][1] == {"date": "2028-05-01", "nom": "Jour férié"}
+    calendrier = annees.construire(propre)
+    assert calendrier.teaching_mondays[0] == date(2027, 8, 30)
+    assert date(2027, 10, 25) not in calendrier.teaching_mondays  # Toussaint : semaine entière en vacances
+    assert date(2027, 11, 8) in calendrier.teaching_mondays and date(2027, 11, 11) in calendrier.holidays
+    for label, donnees, message in (
+        ("2026-2027", ANNEE_2027, "ne se modifient pas"),
+        ("2027-2029", ANNEE_2027, "s'écrit"),
+        ("2027-2028", {**ANNEE_2027, "fin_impair": "2028-02-15"}, "se suivre"),
+        ("2027-2028", {**ANNEE_2027, "rentree": "2027-06-01"}, "rentrée"),
+        ("2027-2028", {**ANNEE_2027, "vacances": [{"nom": "Noël", "debut": "2027-12-31", "fin": "2027-12-20"}]}, "après la fin"),
+        ("2027-2028", {**ANNEE_2027, "vacances": [
+            {"nom": "A", "debut": "2027-12-20", "fin": "2027-12-27"}, {"nom": "B", "debut": "2027-12-27", "fin": "2027-12-31"},
+        ]}, "se chevauchent"),
+        ("2027-2028", {**ANNEE_2027, "feries": [{"date": "2029-05-01"}]}, "n'est pas dans l'année"),
+    ):
+        with pytest.raises(annees.AnneeInvalide, match=message):
+            annees.valider(label, donnees)
+
+
+def test_preparer_une_annee_depuis_l_ecran(admin):
+    lu = admin.get("/reglages/annees").json()
+    assert [a["label"] for a in lu["annees"]] == ["2026-2027"] and lu["annees"][0]["origine"]
+    assert (lu["annees"][0]["semaines"], lu["proposition"]["label"]) == (38, "2027-2028")
+    assert admin.put("/reglages/annees/2026-2027", json=ANNEE_2027).status_code == 422
+    assert admin.put("/reglages/annees/2028-2029", json=ANNEE_2027).status_code == 422
+    r = admin.put("/reglages/annees/2027-2028", json=ANNEE_2027)
+    assert r.status_code == 200, r.text
+    preparee = r.json()["annees"][1]
+    assert (preparee["label"], preparee["origine"], preparee["rentree"]) == ("2027-2028", False, "2027-08-30")
+    assert preparee["semaines"] > 30 and preparee["semaines_impair"] + preparee["semaines_pair"] >= preparee["semaines"]
+    assert r.json()["proposition"]["label"] == "2028-2029"
+    # Rien ne change pour le planning en service.
+    from cal_iut.calendar import academic
+
+    assert academic.build_default_calendar_2026_2027().year_label == "2026-2027"
+    assert admin.delete("/reglages/annees/2027-2028").status_code == 200
+    assert admin.delete("/reglages/annees/2027-2028").status_code == 404
+
+
+def test_passer_a_une_autre_annee_change_le_calendrier_de_l_application(admin):
+    from datetime import date
+
+    from cal_iut.api import state
+    from cal_iut.calendar import academic
+
+    assert admin.post("/reglages/annees/2027-2028/utiliser").status_code == 404
+    assert admin.put("/reglages/annees/2027-2028", json=ANNEE_2027).status_code == 200
+    reglages.definir_dates_semestre(CONFIG, "even", "2027-02-08", "2027-06-25", "test")
+    assert admin.post("/reglages/annees/2026-2027/utiliser").status_code == 422  # déjà celle-là
+
+    r = admin.post("/reglages/annees/2027-2028/utiliser")
+    assert r.status_code == 200, r.text
+    assert r.json()["en_cours"] == "2027-2028"
+    assert [a["en_cours"] for a in r.json()["annees"]] == [False, True]
+
+    calendrier = academic.build_default_calendar_2026_2027()
+    assert calendrier.year_label == "2027-2028"
+    assert calendrier.teaching_mondays[0] == date(2027, 8, 30)
+    assert date(2027, 10, 25) not in calendrier.teaching_mondays  # Toussaint saisie
+    assert state.etat_principal().calendar.year_label == "2027-2028"
+    # La semaine de la rentrée reste la semaine 2 du département, comme en 2026.
+    assert academic.department_week_number(date(2027, 8, 30)) == 2
+    assert academic.periode_des_cours(calendrier, "odd") == (date(2027, 8, 30), date(2028, 1, 28))
+    assert academic.periode_des_cours(calendrier, "even") == (date(2028, 1, 31), date(2028, 6, 30))
+    # Les dates saisies pour l'année quittée ne suivent pas.
+    assert academic.periodes_saisies() == {}
+    assert academic.fin_des_alternants("odd") is None
+    periode = admin.get("/generations/periode/even").json()
+    assert (periode["debut"], periode["fin"]) == ("2028-01-31", "2028-06-30")
+
+    # L'année utilisée ne se retire pas ; on revient à celle d'origine.
+    assert admin.delete("/reglages/annees/2027-2028").status_code == 422
+    r = admin.post("/reglages/annees/2026-2027/utiliser")
+    assert r.status_code == 200 and r.json()["en_cours"] == "2026-2027"
+    retour = academic.build_default_calendar_2026_2027()
+    assert retour.year_label == "2026-2027" and retour.teaching_mondays[0] == date(2026, 8, 31)
+    assert academic.department_week_number(date(2026, 8, 31)) == 2
+    assert academic.fin_des_alternants("odd") == date(2027, 3, 12)
+
+
+def test_l_annee_ne_change_pas_tant_qu_un_planning_est_en_service(admin, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+    from cal_iut.calendar import academic
+
+    assert admin.put("/reglages/annees/2027-2028", json=ANNEE_2027).status_code == 200
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    assert "en service" in admin.get("/reglages/annees").json()["verrou"]
+    r = admin.post("/reglages/annees/2027-2028/utiliser")
+    assert r.status_code == 409 and "numéro de semaine" in r.json()["detail"]
+    assert academic.build_default_calendar_2026_2027().year_label == "2026-2027"
+    # Préparer ou corriger une année qui n'est pas utilisée reste permis.
+    assert admin.put("/reglages/annees/2027-2028", json=ANNEE_2027).status_code == 200
+
+
+def test_un_brouillon_d_avant_le_changement_d_annee_ne_se_publie_plus(admin):
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+
+    from cal_iut.api import brouillons
+
+    ancien = SimpleNamespace(created_at=datetime.now(timezone.utc) - timedelta(hours=1))
+    assert brouillons.calcule_avec_le_calendrier_actuel(ancien)  # jamais changé d'année
+    assert admin.put("/reglages/annees/2027-2028", json=ANNEE_2027).status_code == 200
+    assert admin.post("/reglages/annees/2027-2028/utiliser").status_code == 200
+    assert not brouillons.calcule_avec_le_calendrier_actuel(ancien)
+    recent = SimpleNamespace(created_at=datetime.now(timezone.utc) + timedelta(seconds=5))
+    assert brouillons.calcule_avec_le_calendrier_actuel(recent)
+    # Corriger l'année utilisée périme aussi les brouillons calculés avant.
+    assert admin.put("/reglages/annees/2027-2028", json=ANNEE_2027).status_code == 200
+    assert not brouillons.calcule_avec_le_calendrier_actuel(
+        SimpleNamespace(created_at=datetime.now(timezone.utc) - timedelta(seconds=5))
+    )
+    # Revenu à l'année d'origine, les brouillons d'avant restent périmés.
+    assert admin.post("/reglages/annees/2026-2027/utiliser").status_code == 200
+    assert not brouillons.calcule_avec_le_calendrier_actuel(ancien)
+
+
+def test_les_donnees_se_lisent_encore_avec_une_autre_annee(admin):
+    """Les fichiers livrés portent des dates de 2026-2027 : avec une autre
+    année, elles tombent hors calendrier et sont ignorées, sans erreur."""
+    assert admin.put("/reglages/annees/2027-2028", json=ANNEE_2027).status_code == 200
+    assert admin.post("/reglages/annees/2027-2028/utiliser").status_code == 200
+    from cal_iut.ingestion.pipeline import run_ingestion
+
+    resultat = run_ingestion(CONFIG, semestre_group="odd")
+    assert resultat.sessions
+    assert admin.get("/reglages").status_code == 200
+    assert admin.get("/generations/periode/odd").json()["debut"] == "2027-08-30"

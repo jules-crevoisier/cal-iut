@@ -26,6 +26,7 @@ import {
 import { useDroits } from "../contexts/Droits";
 import type { AppPayload } from "../types/app";
 import "./ReglagesReference.css";
+import { AnneesUniversitaires } from "./AnneesUniversitaires";
 import { PresencesAlternants } from "./PresencesAlternants";
 import { EffectifsReglables, SallesDesModules, SallesReglables } from "./SallesEtEffectifs";
 
@@ -574,6 +575,7 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
       <SallesReglables donnees={donnees} onChange={apres} />
       <SallesDesModules modules={modules} donnees={donnees} onChange={apres} />
       <EffectifsReglables donnees={donnees} onChange={apres} />
+      <AnneesUniversitaires />
     </div>
   );
 }

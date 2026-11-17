@@ -804,6 +804,69 @@ export async function retablirPeriodeDesCours(groupe: string): Promise<PeriodeDe
   return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`, { method: "DELETE" });
 }
 
+// ── Années universitaires (cf. calendar/annees.py) ──
+
+export interface Vacances {
+  nom: string;
+  debut: string;
+  fin: string;
+}
+
+export interface JourFerie {
+  date: string;
+  nom: string;
+}
+
+export interface AnneeSaisie {
+  /** Premier jour de cours du semestre impair. */
+  rentree: string;
+  fin_impair: string;
+  debut_pair: string;
+  /** Dernier jour de cours du semestre pair. */
+  fin: string;
+  vacances: Vacances[];
+  feries: JourFerie[];
+}
+
+export interface AnneeUniversitaire extends AnneeSaisie {
+  label: string;
+  /** L'année livrée avec l'application : elle ne se modifie pas. */
+  origine: boolean;
+  /** L'année que toute l'application utilise (calendrier, numéros de semaine). */
+  en_cours: boolean;
+  semaines: number;
+  semaines_impair: number;
+  semaines_pair: number;
+}
+
+export interface AnneesReponse {
+  annees: AnneeUniversitaire[];
+  en_cours: string;
+  /** Pourquoi l'année de l'application ne peut pas changer maintenant. */
+  verrou: string | null;
+  /** L'année suivante, à compléter : fériés calculés, vacances à saisir. */
+  proposition: AnneeSaisie & { label: string };
+}
+
+export async function lireAnnees(): Promise<AnneesReponse> {
+  return request<AnneesReponse>("/reglages/annees");
+}
+
+export async function preparerAnnee(label: string, annee: AnneeSaisie): Promise<AnneesReponse> {
+  return request<AnneesReponse>(`/reglages/annees/${encodeURIComponent(label)}`, {
+    method: "PUT",
+    body: JSON.stringify(annee),
+  });
+}
+
+export async function utiliserAnnee(label: string): Promise<AnneesReponse> {
+  return request<AnneesReponse>(`/reglages/annees/${encodeURIComponent(label)}/utiliser`, { method: "POST" });
+}
+
+export async function retirerAnnee(label: string): Promise<AnneesReponse> {
+  return request<AnneesReponse>(`/reglages/annees/${encodeURIComponent(label)}`, { method: "DELETE" });
+}
+
 // ── Cours hors maquette ──
 
 export interface CoursHorsMaquette {
