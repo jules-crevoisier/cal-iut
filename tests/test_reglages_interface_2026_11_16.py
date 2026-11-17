@@ -1132,3 +1132,95 @@ def test_regler_la_salle_d_un_module_depuis_l_ecran(admin):
         assert all(r.course_code_patterns != ["WR104"] or r.is_eval is None for r in get_state().room_rules)
     finally:
         etat.rooms, etat.groups, etat.room_rules = avant
+
+
+# ── Événements à date fixe et semaines des alternants (lot 6) ─────────
+
+
+def test_un_evenement_saisi_s_ajoute_a_ceux_du_fichier_et_un_livre_se_retire():
+    from cal_iut.ingestion.planning_loader import load_fixed_events
+
+    racine = CONFIG.parents[1]
+    avant = load_fixed_events(racine)
+    reglages.ajouter(
+        CONFIG, "evenements_fixes",
+        {"parcours": ["*"], "date": "2027-02-11", "slots": [3, 4], "motif": "Forum des métiers"}, "test",
+    )
+    reglages.ajouter(
+        CONFIG, "evenements_fixes",
+        {"parcours": ["BUT1"], "date": "2027-02-12", "slots": [0], "motif": "Photo de promo"}, "test",
+    )
+    apres = load_fixed_events(racine)
+    assert len(apres) == len(avant) + 2
+    forum = next(e for e in apres if e.label == "Forum des métiers")
+    assert forum.slots == [3, 4] and forum.day.isoformat() == "2027-02-11"
+    assert {"BUT1", "BUT3-DEV-FC"} <= set(forum.parcours_keys)
+    assert next(e for e in apres if e.label == "Photo de promo").parcours_keys == ["BUT1"]
+
+    import json
+
+    livre = json.loads((racine / "contraintes" / "10_dates_fixes.json").read_text(encoding="utf-8"))["evenements"][0]
+    assert reglages.retirer(CONFIG, "evenements_fixes", reglages.cle_evenement(livre), livree=True)
+    assert len(load_fixed_events(racine)) == len(avant) + 1
+
+
+def test_les_semaines_des_alternants_se_completent_et_se_retirent():
+    from cal_iut.ingestion.constraints_loader import load_alternance_presence_json, semaines_iut_livrees
+
+    chemin = CONFIG.parents[1] / "contraintes" / "03_calendrier_alternance_officiel.json"
+    origine = {tuple(p.parcours_keys): set(p.presence_dates) for p in load_alternance_presence_json(chemin)}
+    assert {tuple(p.parcours_keys): set(p.presence_dates) for p in load_alternance_presence_json(chemin, CONFIG)} == origine
+
+    reglages.ajouter_presence_alternants(CONFIG, {"annee": "BUT3", "debut": "2027-07-05", "fin": "2027-07-11"}, "test")
+    premiere = semaines_iut_livrees(chemin)["BUT2"][0]
+    assert reglages.retirer(CONFIG, "presence_alternants", reglages.cle_presence("BUT2", premiere["debut"]), livree=True)
+    lues = {tuple(p.parcours_keys): set(p.presence_dates) for p in load_alternance_presence_json(chemin, CONFIG)}
+    but3 = next(k for k in lues if k[0].startswith("BUT3"))
+    but2 = next(k for k in lues if k[0].startswith("BUT2"))
+    assert {d.isoformat() for d in lues[but3] - origine[but3]} == {
+        "2027-07-05", "2027-07-06", "2027-07-07", "2027-07-08", "2027-07-09"
+    }
+    assert {d.isoformat() for d in origine[but2] - lues[but2]} == set(premiere["dates"])
+    for mauvaise in (
+        {"annee": "BUT1", "debut": "2027-07-05", "fin": "2027-07-09"},
+        {"annee": "BUT2", "debut": "2027-07-09", "fin": "2027-07-05"},
+        {"annee": "BUT2", "debut": "2027-07-10", "fin": "2027-07-11"},
+    ):
+        with pytest.raises(reglages.ReglageInvalide):
+            reglages.ajouter_presence_alternants(CONFIG, mauvaise, "test")
+
+
+def test_regler_evenements_et_semaines_des_alternants_depuis_l_ecran(admin):
+    etat = get_state()
+    avant = etat.student_presences, etat.teacher_availability, etat.calendar
+    try:
+        lu = admin.get("/reglages").json()
+        assert "BUT1" in lu["parcours"] and lu["evenements_fixes"] and lu["presences_alternants"]
+
+        corps = {"parcours": "BUT1", "date": "2027-02-12", "slots": [0, 1], "motif": "Photo de promo"}
+        r = admin.post("/reglages/evenements-fixes", json=corps)
+        assert r.status_code == 201, r.text
+        saisi = next(e for e in r.json()["evenements_fixes"] if e["motif"] == "Photo de promo")
+        assert (saisi["origine"], saisi["parcours"], saisi["slots"]) == ("ajoutee", "BUT1", [0, 1])
+        assert admin.post("/reglages/evenements-fixes", json={**corps, "parcours": "BUT9"}).status_code == 422
+        assert admin.post("/reglages/evenements-fixes", json={**corps, "motif": ""}).status_code == 422
+        r = admin.delete("/reglages/evenements-fixes", params={"cle": saisi["cle"], "origine": "ajoutee"})
+        assert r.status_code == 200 and len(r.json()["evenements_fixes"]) == len(lu["evenements_fixes"])
+        livre = lu["evenements_fixes"][0]
+        r = admin.delete("/reglages/evenements-fixes", params={"cle": livre["cle"], "origine": "livree"})
+        assert r.status_code == 200 and len(r.json()["evenements_fixes"]) == len(lu["evenements_fixes"]) - 1
+
+        r = admin.post("/reglages/presences-alternants", json={"annee": "BUT3", "debut": "2027-07-05", "fin": "2027-07-09"})
+        assert r.status_code == 201, r.text
+        periode = next(p for p in r.json()["presences_alternants"] if p["debut"] == "2027-07-05")
+        assert (periode["origine"], periode["jours"]) == ("ajoutee", 5)
+        but3 = next(p for p in get_state().student_presences if p.parcours_keys[0].startswith("BUT3"))
+        assert "2027-07-07" in {d.isoformat() for d in but3.presence_dates}
+        assert admin.post(
+            "/reglages/presences-alternants", json={"annee": "BUT1", "debut": "2027-07-05", "fin": "2027-07-09"}
+        ).status_code == 422
+        r = admin.delete("/reglages/presences-alternants", params={"cle": periode["cle"]})
+        assert r.status_code == 200
+        assert admin.delete("/reglages/presences-alternants", params={"cle": periode["cle"]}).status_code == 404
+    finally:
+        etat.student_presences, etat.teacher_availability, etat.calendar = avant

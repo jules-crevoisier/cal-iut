@@ -1049,6 +1049,38 @@ export interface ReglagesReponse {
   types_de_salle?: string[];
   effectifs?: EffectifDeGroupe[];
   regles_salles?: RegleDeSalle[];
+  evenements_fixes?: EvenementFixe[];
+  parcours?: string[];
+  presences_alternants?: PresenceAlternants[];
+}
+
+/** Un événement à date fixe : la promotion n'a pas cours sur ces créneaux. */
+export interface EvenementFixe extends ReglageDate {
+  /** Promotions concernées, séparées par des virgules ; « * » : toutes. */
+  parcours: string;
+}
+
+/** Une période où les alternants d'une année sont à l'IUT. */
+export interface PresenceAlternants {
+  annee: string;
+  debut: string;
+  fin: string;
+  jours: number;
+  cle: string;
+  origine: "livree" | "ajoutee";
+}
+
+export async function ajouterPresenceAlternants(periode: {
+  annee: string;
+  debut: string;
+  fin: string;
+}): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>("/reglages/presences-alternants", { method: "POST", body: JSON.stringify(periode) });
+}
+
+export async function retirerPresenceAlternants(periode: PresenceAlternants): Promise<ReglagesReponse> {
+  const params = new URLSearchParams({ cle: periode.cle, origine: periode.origine });
+  return request<ReglagesReponse>(`/reglages/presences-alternants?${params.toString()}`, { method: "DELETE" });
 }
 
 /** « Ce module va dans ce type de salle », saisi à l'écran. */
@@ -1138,7 +1170,7 @@ export async function retablirSemaineType(code: string): Promise<ReglagesReponse
   return request<ReglagesReponse>(`/reglages/semaines-types/${encodeURIComponent(code)}`, { method: "DELETE" });
 }
 
-export type FamilleDeReglage = "salles-reservees" | "indisponibilites";
+export type FamilleDeReglage = "salles-reservees" | "indisponibilites" | "evenements-fixes";
 
 export async function lireReglages(): Promise<ReglagesReponse> {
   return request<ReglagesReponse>("/reglages");
@@ -1146,7 +1178,7 @@ export async function lireReglages(): Promise<ReglagesReponse> {
 
 export async function ajouterReglage(
   famille: FamilleDeReglage,
-  entree: { salle?: string; teacher_code?: string; date: string; slots: number[]; motif: string },
+  entree: { salle?: string; teacher_code?: string; parcours?: string; date: string; slots: number[]; motif: string },
 ): Promise<ReglagesReponse> {
   return request<ReglagesReponse>(`/reglages/${famille}`, { method: "POST", body: JSON.stringify(entree) });
 }

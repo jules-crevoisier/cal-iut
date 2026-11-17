@@ -389,12 +389,33 @@ def _parcours_code_from_label(label: str, but_prefix: str) -> str:
     return f"{but_prefix}-{suffix}"
 
 
-def load_alternance_presence_json(path: Path) -> list[StudentPresence]:
-    """Charge contraintes/03_calendrier_alternance_officiel.json (semaines IUT FC)."""
+def semaines_iut_livrees(path: Path) -> dict[str, list[dict]]:
+    """Par année (« BUT2 », « BUT3 »), les semaines à l'IUT du fichier officiel."""
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        but_prefix: list((data.get(block_key) or {}).get("semaines_iut", []))
+        for block_key, but_prefix in _ALTERNANCE_BLOCK_BUT_PREFIX.items()
+    }
+
+
+def load_alternance_presence_json(path: Path, config_dir: Path | None = None) -> list[StudentPresence]:
+    """Charge contraintes/03_calendrier_alternance_officiel.json (semaines IUT FC).
+
+    Avec `config_dir`, les semaines retirées ou ajoutées à l'écran
+    (`reglages.presences_alternants`) sont prises en compte."""
     if not path.exists():
         return []
 
     data = json.loads(path.read_text(encoding="utf-8"))
+    en_vigueur: dict[str, list[dict]] | None = None
+    if config_dir is not None:
+        from cal_iut.ingestion import reglages
+
+        en_vigueur = {}
+        for periode in reglages.presences_alternants(config_dir, semaines_iut_livrees(path)):
+            en_vigueur.setdefault(periode["annee"], []).append(periode)
     presences: list[StudentPresence] = []
     for block_key, but_prefix in _ALTERNANCE_BLOCK_BUT_PREFIX.items():
         block = data.get(block_key)
@@ -405,7 +426,8 @@ def load_alternance_presence_json(path: Path) -> list[StudentPresence]:
             {_parcours_code_from_label(p, but_prefix) for p in block.get("parcours_concernes", [])}
         )
         dates: set[date] = set()
-        for window in block.get("semaines_iut", []):
+        semaines = block.get("semaines_iut", []) if en_vigueur is None else en_vigueur.get(but_prefix, [])
+        for window in semaines:
             for raw in window.get("dates", []):
                 d = parse_iso_or_fr_date(raw)
                 if d:
@@ -445,7 +467,7 @@ def load_all_constraints(data_root: Path | None = None) -> ConstraintsBundle:
         )
 
     presence_path = contraintes_dir / "03_calendrier_alternance_officiel.json"
-    presences = load_alternance_presence_json(presence_path)
+    presences = load_alternance_presence_json(presence_path, root / "data" / "config")
 
     return ConstraintsBundle(
         calendar=calendar,

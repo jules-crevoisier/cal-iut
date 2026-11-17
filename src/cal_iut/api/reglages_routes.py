@@ -201,6 +201,47 @@ def _recharger_salles_et_groupes() -> None:
     revision.incrementer("reglages")
 
 
+def _racine():
+    return _config().parents[1]
+
+
+def _parcours() -> list[str]:
+    return sorted({g.parcours for g in load_groups(_config())})
+
+
+def _evenements() -> list[dict]:
+    """Les événements à date fixe en vigueur, tels que le calcul les lit."""
+    import json
+
+    from cal_iut.ingestion.planning_loader import _slots_for_interval
+
+    chemin = _racine() / "contraintes" / "10_dates_fixes.json"
+    livres = json.loads(chemin.read_text(encoding="utf-8")).get("evenements", []) if chemin.exists() else []
+    sortie = []
+    for e in reglages.evenements_fixes(_config(), livres):
+        if e["origine"] == "livree":
+            slots = _slots_for_interval(e.get("debut_minutes"), e.get("fin_minutes"))
+        else:
+            slots = reglages._creneaux(e.get("slots"))
+        parcours = [str(p) for p in e.get("parcours") or []]
+        sortie.append({
+            "cle": e["cle"], "origine": e["origine"], "parcours": ", ".join(parcours),
+            "date": str(e.get("date")), "slots": slots, "motif": str(e.get("motif") or ""),
+            "demande_par": str(e.get("demande_par") or ""),
+        })
+    return sorted(sortie, key=lambda e: (e["date"], e["parcours"]))
+
+
+def _presences() -> list[dict]:
+    from cal_iut.ingestion.constraints_loader import semaines_iut_livrees
+
+    livrees = semaines_iut_livrees(_racine() / "contraintes" / "03_calendrier_alternance_officiel.json")
+    return [
+        {k: p[k] for k in ("annee", "debut", "fin", "cle", "origine")} | {"jours": len(p["dates"])}
+        for p in reglages.presences_alternants(_config(), livrees)
+    ]
+
+
 def _tout() -> dict:
     return {
         "creneaux": [s.label for s in TimeSlot],
@@ -212,6 +253,9 @@ def _tout() -> dict:
         "types_de_salle": [t.value for t in RoomType if t not in _TYPES_NON_CHOISIS],
         "effectifs": _effectifs(),
         "regles_salles": reglages.regles_salles(_config()),
+        "evenements_fixes": _evenements(),
+        "parcours": _parcours(),
+        "presences_alternants": _presences(),
     }
 
 
@@ -227,6 +271,7 @@ def _appliquer_en_direct(*, disponibilites: bool) -> None:
         if etat is not principal:
             etat.room_reservations = principal.room_reservations
             etat.teacher_availability = principal.teacher_availability
+            etat.student_presences = principal.student_presences
     revision.incrementer("reglages")
 
 
@@ -435,4 +480,65 @@ def retirer_la_regle_de_salle(identifiant: str) -> dict:
     if not reglages.retirer_regle_salle(_config(), identifiant):
         raise HTTPException(404, "Règle introuvable.")
     _recharger_salles_et_groupes()
+    return _tout()
+
+
+class EvenementRequest(BaseModel):
+    parcours: str
+    date: str
+    slots: list[int] = Field(default_factory=list)
+    motif: str = ""
+
+
+@router.post("/evenements-fixes", status_code=201)
+def noter_un_evenement(body: EvenementRequest, request: Request) -> dict:
+    """Une rentrée, un forum, une journée banalisée : la promotion n'a pas
+    cours sur ces créneaux."""
+    if body.parcours != reglages.TOUTES_LES_PROMOTIONS and body.parcours not in _parcours():
+        raise HTTPException(422, "Promotion inconnue.")
+    try:
+        reglages.ajouter(
+            _config(), "evenements_fixes",
+            {"parcours": [body.parcours], "date": body.date, "slots": body.slots, "motif": body.motif},
+            _par(request),
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _appliquer_en_direct(disponibilites=False)
+    return _tout()
+
+
+@router.delete("/evenements-fixes")
+def retirer_un_evenement(cle: str, origine: str = "ajoutee") -> dict:
+    if origine == "livree" and cle not in {e["cle"] for e in _evenements()}:
+        raise HTTPException(404, "Événement introuvable.")
+    reponse = _retirer("evenements_fixes", cle, origine)
+    return reponse
+
+
+class PresenceRequest(BaseModel):
+    annee: str
+    debut: str
+    fin: str
+
+
+@router.post("/presences-alternants", status_code=201)
+def ajouter_une_periode_a_l_iut(body: PresenceRequest, request: Request) -> dict:
+    """Une période où les alternants de cette année sont à l'IUT : le
+    calcul ne place leurs cours que ces jours-là."""
+    try:
+        reglages.ajouter_presence_alternants(_config(), body.model_dump(), _par(request))
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _appliquer_en_direct(disponibilites=True)
+    return _tout()
+
+
+@router.delete("/presences-alternants")
+def retirer_une_periode_a_l_iut(cle: str, origine: str = "ajoutee") -> dict:
+    if origine == "livree" and cle not in {p["cle"] for p in _presences()}:
+        raise HTTPException(404, "Période introuvable.")
+    if not reglages.retirer(_config(), "presence_alternants", cle, livree=origine == "livree"):
+        raise HTTPException(404, "Période introuvable.")
+    _appliquer_en_direct(disponibilites=True)
     return _tout()
