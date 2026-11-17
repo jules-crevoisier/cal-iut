@@ -764,3 +764,14 @@ p.generation-aregler--bon {
 .periode-cours input[type="date"] {
   width: 140px;
 }
+
+/* ── Plafonds hebdomadaires ── */
+.plafonds-champ {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plafonds-champ input {
+  width: 72px;
+}

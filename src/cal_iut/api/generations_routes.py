@@ -1173,6 +1173,70 @@ def revenir_aux_dates_d_origine(groupe: str, request: Request) -> dict:
     return _periode(groupe)
 
 
+# ── Plafonds hebdomadaires du calcul ──────────────────────────────────
+
+
+class PlafondsRequest(BaseModel):
+    promo: int
+    alternants: int
+    enseignant: int
+
+
+def _plafonds(groupe: str) -> dict:
+    from cal_iut.ingestion import reglages
+    from cal_iut.solver import plafonds as source
+
+    motif = _semestre_verrouille(groupe)
+    if motif and "en service" in motif:
+        motif = (
+            f"Le {taches.GROUPES[groupe]['libelle'].lower()} est déjà en service : ses plafonds ne se modifient "
+            "plus, ils servent à contrôler son planning."
+        )
+    return {
+        "semestre_group": groupe,
+        "verrouille": motif,
+        "plafonds": source.plafonds(groupe),
+        "origine": dict(source.ORIGINE),
+        "personnalise": bool(reglages.plafonds_hebdo(taches.RACINE / "data" / "config").get(groupe)),
+        "mini": source.MINI,
+        "maxi": source.MAXI,
+    }
+
+
+@router.get("/plafonds/{groupe}")
+def plafonds_hebdomadaires(groupe: str) -> dict:
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    return _plafonds(groupe)
+
+
+@router.put("/plafonds/{groupe}")
+def regler_les_plafonds(groupe: str, body: PlafondsRequest, request: Request) -> dict:
+    """Nombre maximal de créneaux de 1 h 30 par semaine pour un groupe
+    d'étudiants, un groupe d'alternants, un enseignant. Vaut pour le calcul
+    de ce semestre et pour les contrôles de son planning."""
+    from cal_iut.ingestion import reglages
+    from cal_iut.solver import plafonds as source
+
+    _refuser_si_source_verrouillee(groupe)
+    try:
+        voulus = source.valider(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    ecart = {c: v for c, v in voulus.items() if v != source.ORIGINE[c]}
+    reglages.definir_plafonds_hebdo(taches.RACINE / "data" / "config", groupe, ecart, _auteur(request))
+    return _plafonds(groupe)
+
+
+@router.delete("/plafonds/{groupe}")
+def revenir_aux_plafonds_d_origine(groupe: str, request: Request) -> dict:
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    reglages.definir_plafonds_hebdo(taches.RACINE / "data" / "config", groupe, {}, _auteur(request))
+    return _plafonds(groupe)
+
+
 @router.get("/verification/{groupe}")
 def a_regler_avant_de_generer(groupe: str) -> dict:
     """Ce qu'il reste à régler dans les données de ce semestre avant de

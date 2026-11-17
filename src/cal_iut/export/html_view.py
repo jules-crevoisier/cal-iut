@@ -23,7 +23,7 @@ from cal_iut.calendar.academic import (
     week_status,
 )
 from cal_iut.ingestion.constraints_loader import allowed_week_days_for_parcours
-from cal_iut.solver.decomposed import FC_WEEKLY_CAP_SLOTS, FI_WEEKLY_CAP_SLOTS, _cours_avec_progression_declaree
+from cal_iut.solver.decomposed import _cours_avec_progression_declaree
 from cal_iut.models.entities import Group, Room, TeacherAvailability
 from cal_iut.models.group_scope import expand_group_filter, resolve_tp_ids_for_td
 from cal_iut.models.session import SessionToPlace
@@ -281,6 +281,10 @@ def _rule_checks(
 ) -> list[dict]:
     checks: list[dict] = []
     SLOTS_PER_DAY_LOCAL = 6
+    # Un run = un groupe de semestres : ses plafonds (cf. `solver/plafonds.py`).
+    from cal_iut.solver.plafonds import plafonds_du_semestre
+
+    plafonds_du_run = plafonds_du_semestre(next((s.semestre for s in sessions_by_id.values()), None))
 
     # -- Capacité salle vs effectif de la cohorte (ex. CM = toute la promo) --
     # Un CM doit contenir tous les étudiants de la promo (rappel utilisateur) :
@@ -344,7 +348,7 @@ def _rule_checks(
         # solveur n'applique pas produit des « violations » inexplicables — ce
         # qui est arrivé pendant dix jours (cf. le commentaire sur
         # `FI_WEEKLY_CAP_SLOTS`).
-        cap = FC_WEEKLY_CAP_SLOTS if is_fc.get(gid) else FI_WEEKLY_CAP_SLOTS
+        cap = plafonds_du_run["alternants" if is_fc.get(gid) else "promo"]
         # Les dérogations CIBLÉES au plafond (`weekly_cap_exceptions`) sont des
         # décisions documentées, pas des violations : sans les lire, ce contrôle
         # signalait « 8 cohortes au-dessus du plafond » alors que la seule

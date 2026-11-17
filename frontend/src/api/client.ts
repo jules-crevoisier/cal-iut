@@ -804,6 +804,40 @@ export async function retablirPeriodeDesCours(groupe: string): Promise<PeriodeDe
   return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`, { method: "DELETE" });
 }
 
+// ── Plafonds hebdomadaires du calcul ──
+
+export interface Plafonds {
+  /** Créneaux de 1 h 30 par semaine, pour un groupe d'étudiants. */
+  promo: number;
+  alternants: number;
+  enseignant: number;
+}
+
+export interface PlafondsReponse {
+  semestre_group: string;
+  verrouille: string | null;
+  plafonds: Plafonds;
+  origine: Plafonds;
+  personnalise: boolean;
+  mini: number;
+  maxi: number;
+}
+
+export async function lirePlafonds(groupe: string): Promise<PlafondsReponse> {
+  return request<PlafondsReponse>(`/generations/plafonds/${encodeURIComponent(groupe)}`);
+}
+
+export async function reglerPlafonds(groupe: string, plafonds: Plafonds): Promise<PlafondsReponse> {
+  return request<PlafondsReponse>(`/generations/plafonds/${encodeURIComponent(groupe)}`, {
+    method: "PUT",
+    body: JSON.stringify(plafonds),
+  });
+}
+
+export async function retablirPlafonds(groupe: string): Promise<PlafondsReponse> {
+  return request<PlafondsReponse>(`/generations/plafonds/${encodeURIComponent(groupe)}`, { method: "DELETE" });
+}
+
 // ── Règles de modules du prochain semestre (lot 6) ──
 
 export interface ModuleRegle {

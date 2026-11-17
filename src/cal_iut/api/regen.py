@@ -30,13 +30,13 @@ from cal_iut.solver.decomposed import (
     _movable_bounds,
     solve_week_detail,
 )
+from cal_iut.solver.plafonds import plafonds
 from cal_iut.solver.rooms import PlacedSession, PlacedSessionWithRoom, assign_rooms
 
-# Plafond hebdo enseignant repris de `assign_weeks` (decomposed.py, défaut
-# réel de l'étage 2) — source de vérité unique pour rester cohérent avec le
-# dernier run complet. Confirmé par Kyllian Bresson (05/08/2026) : 40h max
-# "devant étudiant" si un plafond doit exister, donc 26 créneaux (39h).
-_TEACHER_WEEKLY_CAP_SLOTS = 26
+# Plafond hebdo enseignant : celui du groupe de semestres (cf.
+# `solver/plafonds.py`), le même que l'étage 2 du dernier run complet.
+# D'origine 26 créneaux (39 h) — Kyllian Bresson (05/08/2026) : 40h max
+# "devant étudiant" si un plafond doit exister.
 
 
 class RegenError(Exception):
@@ -293,7 +293,9 @@ def regen_and_persist(state, repo: PlanningRepository, weeks: list[int]) -> Rege
         num_weeks=num_weeks,
         fixed=fixed,
         allowed_weeks=allowed_weeks,
-        teacher_weekly_cap_slots=_TEACHER_WEEKLY_CAP_SLOTS if num_weeks > 1 else None,
+        teacher_weekly_cap_slots=(
+            plafonds(state.semestre_group)["enseignant"] if num_weeks > 1 else None
+        ),
         time_limit_seconds=90 if num_weeks == 1 else 150,
     )
     if status not in ("OPTIMAL", "FEASIBLE"):

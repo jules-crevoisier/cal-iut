@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo",
 )
 NB_CRENEAUX = 6
 
@@ -643,3 +643,21 @@ def ajouter_phase_sae(config_dir: Path, entree: dict, par: str) -> dict:
 
 def retirer_phase_sae(config_dir: Path, identifiant: str) -> bool:
     return retirer(config_dir, "phases_sae", identifiant, livree=False)
+
+
+# ── Plafonds hebdomadaires du calcul ──────────────────────────────────
+
+
+def plafonds_hebdo(config_dir: Path) -> dict[str, dict]:
+    """Les plafonds saisis à l'écran, par groupe de semestres (cf.
+    `solver/plafonds.py`)."""
+    return {
+        str(a["groupe"]): dict(a.get("valeurs") or {})
+        for a in _lire(config_dir)["plafonds_hebdo"]["ajouts"]
+        if a.get("groupe")
+    }
+
+
+def definir_plafonds_hebdo(config_dir: Path, groupe: str, valeurs: dict, par: str) -> None:
+    """Remplace les plafonds saisis pour ce groupe ; vide : ceux d'origine."""
+    _remplacer(config_dir, "plafonds_hebdo", groupe, {"valeurs": dict(valeurs)} if valeurs else None, par)

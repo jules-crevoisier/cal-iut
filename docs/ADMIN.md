@@ -714,6 +714,19 @@ solveur et la dernière semaine de la formation initiale (`--weeks` et
 Les vacances et les jours fériés viennent toujours de
 `contraintes/02_calendrier_iut.json`.
 
+### Plafonds hebdomadaires
+
+Le bloc **Plafonds hebdomadaires** fixe, pour le semestre choisi, le nombre
+maximal de créneaux de 1 h 30 par semaine : pour un groupe d'étudiants (23
+d'origine, soit 34 h 30), pour un groupe d'alternants (23) et pour un
+enseignant (26, soit 39 h). Entre 12 et 30. Ces valeurs étaient écrites dans
+`solver/decomposed.py` ; elles passent maintenant par `solver/plafonds.py`,
+source unique du calcul, de la complétion, de la régénération d'une semaine et
+du contrôle « plafond hebdomadaire » du tableau de bord. Elles sont propres à
+chaque groupe de semestres et ne se modifient plus une fois le semestre en
+service. Les dérogations ciblées (`weekly_cap_exceptions`) restent dans
+`course_scheduling_rules.yaml`.
+
 ### Réglages du calcul
 
 Sous les blocs de réglage, le volet **Réglages** précède le bouton « Générer » :

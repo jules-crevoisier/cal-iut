@@ -165,6 +165,7 @@ from cal_iut.models.entities import Group, SessionType
 from cal_iut.models.group_scope import expand_group_filter, related_group_ids
 from cal_iut.models.session import SessionToPlace
 from cal_iut.solver.cpsat import PlacedSession, SolverConfig, TimetableSolver
+from cal_iut.solver.plafonds import plafonds as _plafonds_du_groupe
 from cal_iut.solver.quality import compute_quality
 from cal_iut.solver.rooms import (
     PlacedSessionWithRoom,
@@ -7124,6 +7125,7 @@ def completer() -> CompletionResponse:
         contexte_dur=lambda s: _hard_constraint_context(state, s),
         creneaux_candidats=_candidats,
         poser=_poser,
+        plafond_cohorte=_plafonds_du_groupe(state.semestre_group)["promo"],
     )
 
     return CompletionResponse(
