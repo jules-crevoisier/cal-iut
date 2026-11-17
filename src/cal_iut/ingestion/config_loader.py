@@ -99,13 +99,15 @@ def load_groups(config_dir: Path) -> list[Group]:
     return groups
 
 
-def load_teacher_availability(config_dir: Path) -> list[TeacherAvailability]:
+def load_teacher_availability(config_dir: Path, *, sans_semaine_type: bool = False) -> list[TeacherAvailability]:
     from cal_iut.ingestion import reglages
 
     data = load_yaml(config_dir / "teacher_availability.yaml")
-    # + les indisponibilités datées saisies depuis l'interface (volume
-    # persistant, cf. `ingestion/reglages.py`).
-    enseignants = reglages.appliquer_aux_enseignants(config_dir, data.get("teachers", []) or [])
+    # + les indisponibilités datées et la semaine type saisies depuis
+    # l'interface (volume persistant, cf. `ingestion/reglages.py`).
+    enseignants = reglages.appliquer_aux_enseignants(
+        config_dir, data.get("teachers", []) or [], sans_semaine_type=sans_semaine_type
+    )
     return [TeacherAvailability.model_validate(item) for item in enseignants]
 
 

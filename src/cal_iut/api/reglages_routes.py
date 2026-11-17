@@ -87,11 +87,63 @@ def _indisponibilites() -> list[dict]:
     return sorted(sortie, key=lambda e: (e["date"], e["teacher_code"]))
 
 
+class SemaineTypeRequest(BaseModel):
+    # La semaine voulue, en entier : les cases (jour 0-4, créneau 0-5) où
+    # l'enseignant n'est pas disponible.
+    indisponibles: list[tuple[int, int]] = Field(default_factory=list)
+    motif: str = ""
+
+
+_JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"]
+_TOUTES = {(j, c) for j in range(5) for c in range(len(TimeSlot))}
+
+
+def _semaines_d_origine() -> dict[str, dict]:
+    """La semaine type de chaque enseignant AVANT ce que l'écran y change :
+    le fichier livré et la feuille des contraintes. `liste_blanche` : ses
+    disponibilités sont déclarées comme une liste de créneaux possibles."""
+    from cal_iut.ingestion.config_loader import load_teacher_availability
+    from cal_iut.ingestion.constraints_loader import load_all_constraints, merge_teacher_availability
+
+    config = _config()
+    fusion = merge_teacher_availability(
+        load_teacher_availability(config, sans_semaine_type=True), load_all_constraints(config.parents[1]).teachers
+    )
+    sortie = {}
+    for t in fusion:
+        interdits = {tuple(c) for c in t.forbidden_slots}
+        hors_liste = (_TOUTES - {tuple(c) for c in t.allowed_slots}) if t.allowed_slots else set()
+        sortie[t.teacher_code] = {"interdits": interdits, "hors_liste": hors_liste}
+    return sortie
+
+
+def _semaines_types() -> list[dict]:
+    saisies = reglages.semaines_types(_config())
+    origines = _semaines_d_origine()
+    sortie = []
+    for code in sorted(set(origines) | set(saisies)):
+        origine = origines.get(code, {"interdits": set(), "hors_liste": set()})
+        saisie = saisies.get(code, {})
+        sortie.append({
+            "teacher_code": code,
+            "origine": [list(c) for c in sorted(origine["interdits"] | origine["hors_liste"])],
+            # Cases que l'écran ne peut pas rendre disponibles.
+            "fixes": [list(c) for c in sorted(origine["hors_liste"])],
+            "bloques": saisie.get("bloques", []),
+            "liberes": saisie.get("liberes", []),
+            "motif": saisie.get("motif", ""),
+            "demande_par": saisie.get("demande_par", ""),
+        })
+    return sortie
+
+
 def _tout() -> dict:
     return {
         "creneaux": [s.label for s in TimeSlot],
+        "jours": _JOURS,
         "salles_reservees": _reservations(),
         "indisponibilites": _indisponibilites(),
+        "semaines_types": _semaines_types(),
     }
 
 
@@ -168,3 +220,47 @@ def retirer_une_indisponibilite(cle: str, origine: str = "ajoutee") -> dict:
     if origine == "livree" and cle not in {r["cle"] for r in _indisponibilites() if r["origine"] == "livree"}:
         raise HTTPException(404, "Entrée introuvable, ou déjà retirée.")
     return _retirer("indisponibilites", cle, origine)
+
+
+def _code_enseignant(code: str) -> str:
+    code = code.strip()
+    if not code or len(code) > 12 or not code.replace("_", "").isalnum():
+        raise HTTPException(422, "Enseignant inconnu.")
+    return code
+
+
+@router.put("/semaines-types/{code}")
+def regler_la_semaine_type(code: str, body: SemaineTypeRequest, request: Request) -> dict:
+    """La semaine type d'un enseignant : les créneaux où il n'est jamais
+    disponible, quelle que soit la semaine. On envoie la semaine voulue en
+    entier ; seul l'écart avec la semaine d'origine est retenu."""
+    code = _code_enseignant(code)
+    voulue = {(int(j), int(c)) for j, c in body.indisponibles}
+    if not voulue <= _TOUTES:
+        raise HTTPException(422, "Créneau inconnu.")
+    origine = _semaines_d_origine().get(code, {"interdits": set(), "hors_liste": set()})
+    if origine["hors_liste"] - voulue:
+        raise HTTPException(
+            422,
+            "Les disponibilités de cet enseignant sont déclarées comme une liste de créneaux possibles : "
+            "les autres créneaux ne peuvent pas être rendus disponibles depuis cet écran.",
+        )
+    avant = origine["interdits"] | origine["hors_liste"]
+    try:
+        reglages.definir_semaine_type(
+            _config(), code, sorted(voulue - avant), sorted(origine["interdits"] - voulue), body.motif, _par(request)
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _appliquer_en_direct(disponibilites=True)
+    return _tout()
+
+
+@router.delete("/semaines-types/{code}")
+def revenir_a_la_semaine_d_origine(code: str, request: Request) -> dict:
+    code = _code_enseignant(code)
+    if code not in reglages.semaines_types(_config()):
+        raise HTTPException(404, "Rien n'a été changé à la semaine type de cet enseignant.")
+    reglages.definir_semaine_type(_config(), code, [], [], "", _par(request))
+    _appliquer_en_direct(disponibilites=True)
+    return _tout()

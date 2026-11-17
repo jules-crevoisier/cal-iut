@@ -12,12 +12,15 @@ import { Plus } from "lucide-react";
 import {
   ajouterReglage,
   lireReglages,
+  reglerSemaineType,
+  retablirSemaineType,
   retirerReglage,
   type FamilleDeReglage,
   type IndisponibiliteDatee,
   type ReglageDate,
   type ReglagesReponse,
   type SalleReservee,
+  type SemaineType,
 } from "../api/client";
 import { useDroits } from "../contexts/Droits";
 import type { AppPayload } from "../types/app";
@@ -241,6 +244,211 @@ function Famille<T extends ReglageDate>({
   );
 }
 
+const cle = (c: [number, number] | number[]) => `${c[0]}-${c[1]}`;
+
+/** Les cases indisponibles en vigueur : l'origine, plus ce que l'écran a
+ * bloqué, moins ce qu'il a libéré. */
+export function semaineEnVigueur(s: SemaineType | undefined): Set<string> {
+  const cases = new Set((s?.origine ?? []).map(cle));
+  for (const c of s?.liberes ?? []) cases.delete(cle(c));
+  for (const c of s?.bloques ?? []) cases.add(cle(c));
+  return cases;
+}
+
+function SemainesTypes({
+  enseignants,
+  donnees,
+  onChange,
+}: {
+  enseignants: Choix[];
+  donnees: ReglagesReponse;
+  onChange: (r: ReglagesReponse, message: string) => void;
+}) {
+  const jours = donnees.jours ?? [];
+  const semaines = donnees.semaines_types ?? [];
+  const [qui, setQui] = useState("");
+  const [cases, setCases] = useState<Set<string>>(new Set());
+  const [motif, setMotif] = useState("");
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const semaine = semaines.find((s) => s.teacher_code === qui);
+  const origine = useMemo(() => new Set((semaine?.origine ?? []).map(cle)), [semaine]);
+  const fixes = useMemo(() => new Set((semaine?.fixes ?? []).map(cle)), [semaine]);
+  const enVigueur = useMemo(() => semaineEnVigueur(semaine), [semaine]);
+  const modifiee = (semaine?.bloques.length ?? 0) + (semaine?.liberes.length ?? 0) > 0;
+
+  useEffect(() => {
+    setCases(new Set(enVigueur));
+    setMotif(semaine?.motif ?? "");
+    setErreur(null);
+  }, [qui, enVigueur, semaine?.motif]);
+
+  if (jours.length === 0) return null;
+
+  const change = cases.size !== enVigueur.size || [...cases].some((c) => !enVigueur.has(c));
+  const ecart = [...cases].some((c) => !origine.has(c)) || [...origine].some((c) => !cases.has(c));
+  const basculer = (c: string) =>
+    setCases((avant) => {
+      const apres = new Set(avant);
+      if (apres.has(c)) apres.delete(c);
+      else apres.add(c);
+      return apres;
+    });
+
+  const agir = async (action: () => Promise<ReglagesReponse>, message: string) => {
+    setEnvoi(true);
+    setErreur(null);
+    try {
+      onChange(await action(), message);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "L’enregistrement a échoué");
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  const changes = semaines.filter((s) => s.bloques.length + s.liberes.length > 0);
+  const nom = (code: string) => enseignants.find((c) => c.valeur === code)?.libelle ?? code;
+
+  return (
+    <section className="panel reglages-famille" aria-labelledby="reglages-semaines-types">
+      <header>
+        <h2 id="reglages-semaines-types">Semaine type des enseignants</h2>
+        <p className="muted">
+          Les créneaux où un enseignant n’est jamais disponible, chaque semaine. Cochez une case pour la rendre
+          indisponible, décochez-la pour la rendre disponible.
+        </p>
+      </header>
+      {changes.length > 0 && (
+        <p className="muted">
+          Semaine modifiée ici pour : {changes.map((s) => nom(s.teacher_code)).join(", ")}.
+        </p>
+      )}
+      <form
+        className="reglages-ajout"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!qui || !change) return;
+          const voulues = [...cases].map((c) => c.split("-").map(Number) as [number, number]);
+          void agir(
+            () => reglerSemaineType(qui, voulues, motif.trim()),
+            "Enregistré. Le planning en service en tient compte dès maintenant.",
+          );
+        }}
+      >
+        <label>
+          Enseignant
+          <select value={qui} aria-label="Enseignant de la semaine type" onChange={(e) => setQui(e.target.value)}>
+            <option value="">Choisir…</option>
+            {enseignants.map((c) => (
+              <option key={c.valeur} value={c.valeur}>
+                {c.libelle}
+              </option>
+            ))}
+          </select>
+        </label>
+        {qui && (
+          <>
+            <table className="ref reglages-semaine">
+              <thead>
+                <tr>
+                  <td />
+                  {jours.map((j) => (
+                    <th key={j} scope="col">
+                      {j}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {donnees.creneaux.map((libelle, creneau) => (
+                  <tr key={libelle}>
+                    <th scope="row">{libelle}</th>
+                    {jours.map((j, jour) => {
+                      const c = `${jour}-${creneau}`;
+                      const pris = cases.has(c);
+                      return (
+                        <td
+                          key={j}
+                          className={
+                            (pris ? "reglages-case-prise" : "") +
+                            (pris !== origine.has(c) ? " reglages-case-changee" : "")
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={pris}
+                            disabled={fixes.has(c)}
+                            aria-label={`${j} ${libelle} indisponible`}
+                            title={
+                              fixes.has(c)
+                                ? "Hors des créneaux que cet enseignant a déclarés possibles"
+                                : pris !== origine.has(c)
+                                  ? "Modifié ici"
+                                  : undefined
+                            }
+                            onChange={() => basculer(c)}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted">
+              {cases.size === 0
+                ? "Disponible toute la semaine."
+                : `${cases.size} créneau${cases.size > 1 ? "x" : ""} indisponible${cases.size > 1 ? "s" : ""} par semaine.`}
+              {fixes.size > 0 &&
+                " Cet enseignant a déclaré les seuls créneaux où il peut venir : les autres restent grisés."}
+              {ecart && " Les cases entourées diffèrent de sa semaine d’origine."}
+            </p>
+            <label>
+              Motif
+              <input
+                type="text"
+                value={motif}
+                maxLength={300}
+                aria-label="Motif de la semaine type"
+                placeholder="Qui le demande, et pourquoi"
+                onChange={(e) => setMotif(e.target.value)}
+              />
+            </label>
+          </>
+        )}
+        {erreur && (
+          <p className="alerte" role="alert">
+            {erreur}
+          </p>
+        )}
+        {qui && (
+          <div className="reglages-semaine-actions">
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={envoi || !change || (ecart && !motif.trim())}
+            >
+              {envoi ? "Enregistrement…" : "Enregistrer la semaine"}
+            </button>
+            {modifiee && (
+              <button
+                type="button"
+                className="btn"
+                disabled={envoi}
+                onClick={() => void agir(() => retablirSemaineType(qui), "Semaine d’origine rétablie.")}
+              >
+                Revenir à la semaine d’origine
+              </button>
+            )}
+          </div>
+        )}
+      </form>
+    </section>
+  );
+}
+
 export function ReglagesReference({ payload }: { payload: AppPayload }) {
   const { apresEnregistrement } = useDroits();
   const [donnees, setDonnees] = useState<ReglagesReponse | null>(null);
@@ -318,7 +526,7 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
       />
       <Famille<IndisponibiliteDatee>
         titre="Indisponibilités datées des enseignants"
-        aide="Un enseignant absent à une date et des horaires précis. Pour une indisponibilité qui revient chaque semaine, passez par ses contraintes."
+        aide="Un enseignant absent à une date et des horaires précis. Pour une indisponibilité qui revient chaque semaine, utilisez la semaine type ci-dessous."
         famille="indisponibilites"
         champ="teacher_code"
         libelleChamp="Enseignant"
@@ -328,6 +536,7 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
         creneaux={donnees.creneaux}
         onChange={apres}
       />
+      <SemainesTypes enseignants={enseignants} donnees={donnees} onChange={apres} />
     </div>
   );
 }
