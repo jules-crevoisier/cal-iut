@@ -41,6 +41,7 @@ import {
 import { ActionsDePage } from "../components/TopBar";
 import { DatesSae } from "./DatesSae";
 import { PeriodeDesCours } from "./PeriodeDesCours";
+import { EnseignantsModules } from "./EnseignantsModules";
 import { ReglesModules } from "./ReglesModules";
 import { SeancesAnnulees } from "./SeancesAnnulees";
 import "../styles/outils.css";
@@ -780,6 +781,7 @@ export function GenerationView({
               <DatesSae groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <SeancesAnnulees groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <ReglesModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
+              <EnseignantsModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               {verification && <ARegler verification={verification} />}
               <p className="generation-duree">
                 Durée : jusqu’à{" "}

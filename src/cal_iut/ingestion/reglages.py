@@ -49,7 +49,9 @@ from pathlib import Path
 
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
-NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres")
+NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
+    "repartitions", "ordres_enseignants", "duos",
+)
 NB_CRENEAUX = 6
 
 _verrou = threading.RLock()
@@ -315,7 +317,8 @@ def retablir_seance(config_dir: Path, session_id: str, *, livree: bool) -> None:
 
 # ── Règles de modules ─────────────────────────────────────────────────
 
-REGLES_DE_MODULES = ("doubles_seances", "periodes_modules", "dates_semestres")
+REGLES_DE_MODULES = ("doubles_seances", "periodes_modules", "repartitions", "ordres_enseignants", "duos")
+MODES_DE_REPARTITION = ("alterne", "par_groupes", "sequentiel")
 TYPES_DE_SEANCE = ("CM", "TD", "TP")
 
 
@@ -333,6 +336,10 @@ def _type_de_seance(valeur: object, *, obligatoire: bool) -> str | None:
     if texte not in TYPES_DE_SEANCE:
         raise ReglageInvalide("Choisissez le type de séance : CM, TD ou TP.")
     return texte
+
+
+def _codes(valeur: object) -> list[str]:
+    return [str(c).strip().upper() for c in (valeur or []) if str(c).strip()]
 
 
 def ajouter_regle_de_module(config_dir: Path, nom: str, entree: dict, par: str) -> dict:
@@ -359,6 +366,37 @@ def ajouter_regle_de_module(config_dir: Path, nom: str, entree: dict, par: str) 
         if creneaux not in (2, 3):
             raise ReglageInvalide("Une séance longue dure 3 h ou 4 h 30.")
         propre["slots_per_session"] = creneaux
+    elif nom == "repartitions":
+        propre["semestre"] = str(entree.get("semestre") or "").strip()
+        propre["session_type"] = _type_de_seance(entree.get("session_type"), obligatoire=False)
+        if propre["session_type"] == "CM":
+            raise ReglageInvalide("La répartition entre enseignants concerne les TD et les TP.")
+        mode = str(entree.get("mode") or "")
+        if mode not in MODES_DE_REPARTITION:
+            raise ReglageInvalide("Choisissez une façon de répartir les séances.")
+        propre["mode"] = mode
+        propre["teacher_order"] = _codes(entree.get("teacher_order"))
+    elif nom == "ordres_enseignants":
+        propre["semestre"] = str(entree.get("semestre") or "").strip()
+        ordre = _codes(entree.get("teacher_order"))
+        if len(ordre) < 2 or len(set(ordre)) != len(ordre):
+            raise ReglageInvalide("Choisissez deux enseignants différents.")
+        propre["teacher_order"] = ordre
+    elif nom == "duos":
+        propre["semestre"] = str(entree.get("semestre") or "").strip()
+        duo = _codes(entree.get("teacher_codes"))
+        if len(duo) != 2 or duo[0] == duo[1]:
+            raise ReglageInvalide("Un duo, ce sont deux enseignants différents.")
+        salles = [str(s).strip() for s in entree.get("rare_rooms") or [] if str(s).strip()]
+        if len(salles) != 2 or salles[0] == salles[1]:
+            raise ReglageInvalide("Choisissez deux salles différentes.")
+        propre["teacher_codes"], propre["rare_rooms"] = duo, salles
+        groupes = entree.get("group_overrides") or None
+        if groupes:
+            groupes = {str(c).upper(): sorted({str(g) for g in lettres}) for c, lettres in groupes.items()}
+            if set(groupes) != set(duo) or not all(groupes.values()) or set(groupes[duo[0]]) & set(groupes[duo[1]]):
+                raise ReglageInvalide("Chaque enseignant du duo doit avoir ses groupes de TP, sans groupe en commun.")
+        propre["group_overrides"] = groupes
     else:
         propre["semestre"] = str(entree.get("semestre") or "").strip()
         propre["session_type"] = _type_de_seance(entree.get("session_type"), obligatoire=False)

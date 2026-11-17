@@ -745,6 +745,49 @@ export interface ModuleRegle {
   semestre: string;
   /** Nombre de séances par type : `{ CM: 2, TD: 8 }`. */
   types: Record<string, number>;
+  /** `td_tp` : assure au moins un TD ou un TP du module. */
+  enseignants: { code: string; nom: string; td_tp: boolean }[];
+  /** Lettres des groupes de TP : `["A", "B"]`. */
+  groupes_tp: string[];
+}
+
+export interface EnseignantRegle {
+  code: string;
+  nom: string;
+}
+
+export interface RepartitionModule {
+  id: string | null;
+  origine: "livree" | "ajoutee";
+  code: string;
+  nom: string;
+  /** `null` : les TD et les TP. */
+  type: string | null;
+  mode: string;
+  libelle: string;
+  ordre: EnseignantRegle[];
+  motif: string;
+}
+
+export interface OrdreModule {
+  id: string | null;
+  origine: "livree" | "ajoutee";
+  code: string;
+  nom: string;
+  ordre: EnseignantRegle[];
+  motif: string;
+}
+
+export interface DuoModule {
+  id: string | null;
+  origine: "livree" | "ajoutee";
+  code: string;
+  nom: string;
+  enseignants: EnseignantRegle[];
+  salles: { id: string; label: string }[];
+  /** Groupes de TP de chacun : `{ KBR: ["A", "C"] }`. */
+  groupes: Record<string, string[]>;
+  motif: string;
 }
 
 export interface SeancesLongues {
@@ -782,6 +825,47 @@ export interface ReglesModulesReponse {
   modules: ModuleRegle[];
   seances_longues: SeancesLongues[];
   periodes: PeriodeModule[];
+  salles: { id: string; label: string }[];
+  modes: { mode: string; libelle: string }[];
+  repartitions: RepartitionModule[];
+  ordres: OrdreModule[];
+  duos: DuoModule[];
+}
+
+export async function ajouterRepartitionModule(
+  groupe: string,
+  corps: { code: string; type: string | null; mode: string; ordre: string[]; motif: string },
+): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(`/generations/regles/${encodeURIComponent(groupe)}/repartitions`, {
+    method: "POST",
+    body: JSON.stringify(corps),
+  });
+}
+
+export async function ajouterOrdreModule(
+  groupe: string,
+  corps: { code: string; ordre: string[]; motif: string },
+): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(`/generations/regles/${encodeURIComponent(groupe)}/ordres`, {
+    method: "POST",
+    body: JSON.stringify(corps),
+  });
+}
+
+export async function ajouterDuoModule(
+  groupe: string,
+  corps: {
+    code: string;
+    enseignants: string[];
+    salles: string[];
+    groupes: Record<string, string[]>;
+    motif: string;
+  },
+): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(`/generations/regles/${encodeURIComponent(groupe)}/duos`, {
+    method: "POST",
+    body: JSON.stringify(corps),
+  });
 }
 
 export async function lireReglesModules(groupe: string): Promise<ReglesModulesReponse> {
@@ -810,7 +894,7 @@ export async function ajouterPeriodeModule(
 
 export async function retirerRegleModule(
   groupe: string,
-  nom: "seances-longues" | "periodes",
+  nom: "seances-longues" | "periodes" | "repartitions" | "ordres" | "duos",
   id: string,
 ): Promise<ReglesModulesReponse> {
   return request<ReglesModulesReponse>(

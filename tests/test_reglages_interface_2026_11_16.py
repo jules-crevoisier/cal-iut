@@ -616,3 +616,107 @@ def test_les_dates_d_un_semestre_en_service_ne_se_modifient_pas(admin, generatio
     assert admin.put("/generations/periode/odd", json={"debut": "2026-09-07", "fin": "2027-01-29"}).status_code == 409
     assert admin.delete("/generations/periode/odd").status_code == 409
     assert reglages.dates_semestres(CONFIG) == {}
+
+
+# ── Enseignants d'un module : répartition, ordre, duos ────────────────
+
+
+def _enseignants_par_rang(code: str, type_: str) -> list[tuple[int, str, str]]:
+    from cal_iut.ingestion.pipeline import run_ingestion
+
+    seances = run_ingestion(CONFIG, semestre_group="even").sessions
+    return sorted(
+        (s.sequence_order, ",".join(s.group_ids), ",".join(s.teacher_codes))
+        for s in seances
+        if s.course_code == code and s.session_type.value == type_
+    )
+
+
+def test_repartition_ordre_et_duo_se_saisissent_a_l_ecran(admin, generations_isolees):
+    from cal_iut.ingestion.config_loader import (
+        load_course_teacher_orders,
+        load_teacher_distributions,
+        load_teacher_duos,
+    )
+
+    depart = admin.get("/generations/regles/even").json()
+    module = next(m for m in depart["modules"] if m["code"] == "WR208")
+    assert {e["code"] for e in module["enseignants"]} == {"ALO", "GLE"}
+    assert module["groupes_tp"] == list("ABCDEFGH")
+    assert depart["repartitions"] == [] and depart["ordres"] == [] and depart["duos"] == []
+    assert {s["id"] for s in depart["salles"]} >= {"h017", "h022", "h201", "h203"}
+    avant = _enseignants_par_rang("WR208", "TP")
+
+    # Répartition
+    rep = {"code": "WR208", "type": "TP", "mode": "alterne", "ordre": ["GLE", "ALO"], "motif": "Demande des enseignants"}
+    reponse = admin.post("/generations/regles/even/repartitions", json=rep)
+    assert reponse.status_code == 201, reponse.text
+    saisie = reponse.json()["repartitions"][0]
+    assert saisie["origine"] == "ajoutee" and saisie["id"] and saisie["libelle"].startswith("À tour de rôle")
+    assert [e["code"] for e in saisie["ordre"]] == ["GLE", "ALO"]
+    regle = next(r for r in load_teacher_distributions(CONFIG) if r.course_code == "WR208")
+    assert (regle.mode, regle.semestre, regle.session_type.value, regle.teacher_order) == ("alterne", "S2", "TP", ["GLE", "ALO"])
+    apres = _enseignants_par_rang("WR208", "TP")
+    assert apres != avant and len(apres) == len(avant)
+    assert admin.post("/generations/regles/even/repartitions", json=rep).status_code == 409
+    assert admin.post("/generations/regles/even/repartitions", json={**rep, "type": None}).status_code == 409
+    assert admin.post("/generations/regles/even/repartitions", json={**rep, "code": "WR201"}).status_code == 422
+    assert admin.post("/generations/regles/even/repartitions", json={**rep, "code": "WR104"}).status_code == 404
+    assert admin.delete(f"/generations/regles/even/repartitions/{saisie['id']}").status_code == 200
+    assert _enseignants_par_rang("WR208", "TP") == avant
+    for refus in ({"mode": "au hasard"}, {"type": "CM"}, {"motif": ""}, {"ordre": ["ZZZ"]}):
+        assert admin.post("/generations/regles/even/repartitions", json={**rep, **refus}).status_code == 422, refus
+
+    # Ordre dans le semestre
+    ordre = {"code": "WR208", "ordre": ["ALO", "GLE"], "motif": "Les bases d'abord"}
+    reponse = admin.post("/generations/regles/even/ordres", json=ordre)
+    assert reponse.status_code == 201, reponse.text
+    saisie = reponse.json()["ordres"][0]
+    assert [e["code"] for e in saisie["ordre"]] == ["ALO", "GLE"] and saisie["ordre"][0]["nom"] != "ALO"
+    assert [r.teacher_order for r in load_course_teacher_orders(CONFIG) if r.course_code == "WR208"] == [["ALO", "GLE"]]
+    assert admin.post("/generations/regles/even/ordres", json=ordre).status_code == 409
+    assert admin.delete(f"/generations/regles/even/ordres/{saisie['id']}").status_code == 200
+    assert admin.post("/generations/regles/even/ordres", json={**ordre, "ordre": ["ALO", "ALO"]}).status_code == 422
+    assert admin.post("/generations/regles/even/ordres", json={**ordre, "ordre": ["ALO", "ZZZ"]}).status_code == 422
+
+    # Duo en salles voisines
+    duo = {
+        "code": "WR208", "enseignants": ["ALO", "GLE"], "salles": ["h201", "h203"],
+        "groupes": {"ALO": ["A", "C"], "GLE": ["B", "D"]}, "motif": "Atelier commun",
+    }
+    reponse = admin.post("/generations/regles/even/duos", json=duo)
+    assert reponse.status_code == 201, reponse.text
+    saisie = reponse.json()["duos"][0]
+    assert saisie["groupes"] == {"ALO": ["A", "C"], "GLE": ["B", "D"]}
+    assert [s["label"] for s in saisie["salles"]] == ["H.201", "H.203"]
+    charge = next(d for d in load_teacher_duos(CONFIG) if "WR208" in d.course_codes)
+    assert charge.teacher_codes == ("ALO", "GLE") and charge.rare_rooms == ("h201", "h203")
+    tp = {groupes: qui for _, groupes, qui in _enseignants_par_rang("WR208", "TP")}
+    assert tp["but1-tp-a"] == tp["but1-tp-c"] == "ALO" and tp["but1-tp-b"] == tp["but1-tp-d"] == "GLE"
+    assert admin.post("/generations/regles/even/duos", json=duo).status_code == 409
+    assert admin.delete(f"/generations/regles/even/duos/{saisie['id']}").status_code == 200
+    for refus in (
+        {"salles": ["h201", "h201"]}, {"salles": ["h201", "nulle-part"]}, {"enseignants": ["ALO", "ALO"]},
+        {"groupes": {"ALO": ["A"], "GLE": ["A"]}}, {"groupes": {"ALO": ["Z"], "GLE": ["B"]}}, {"code": "WR203"},
+    ):
+        assert admin.post("/generations/regles/even/duos", json={**duo, **refus}).status_code == 422, refus
+    assert reglages.regles_de_modules(CONFIG, "duos") == []
+
+
+def test_les_enseignants_d_un_semestre_en_service_ne_se_reglent_pas(admin, generations_isolees, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    assert admin.get("/generations/regles/odd").json()["duos"]
+    for chemin, corps in (
+        ("repartitions", {"code": "WR108", "mode": "alterne", "motif": "m"}),
+        ("ordres", {"code": "WR108", "ordre": ["ALO", "GLE"], "motif": "m"}),
+        ("duos", {"code": "WR108", "enseignants": ["ALO", "GLE"], "salles": ["h201", "h203"], "motif": "m"}),
+    ):
+        assert admin.post(f"/generations/regles/odd/{chemin}", json=corps).status_code == 409, chemin

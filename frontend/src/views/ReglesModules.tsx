@@ -44,7 +44,7 @@ function cible(p: PeriodeModule): string {
   return p.rangs.length > 0 ? `${quoi} n° ${p.rangs.join(", ")}` : quoi;
 }
 
-function ChoixModule({
+export function ChoixModule({
   modules,
   valeur,
   onChange,
@@ -68,7 +68,7 @@ function ChoixModule({
   );
 }
 
-function Ligne({
+export function Ligne({
   titre,
   detail,
   motif,
