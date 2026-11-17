@@ -420,6 +420,37 @@ class PeriodeRequest(BaseModel):
     motif: str = ""
 
 
+class RepartitionRequest(BaseModel):
+    code: str
+    type: str | None = None
+    mode: str = "alterne"
+    ordre: list[str] = []
+    motif: str = ""
+
+
+class OrdreRequest(BaseModel):
+    code: str
+    ordre: list[str]
+    motif: str = ""
+
+
+class DuoRequest(BaseModel):
+    code: str
+    enseignants: list[str]
+    salles: list[str]
+    # Groupes de TP de chacun : `{code enseignant: [lettres]}`. Vide = le
+    # partage habituel de la maquette.
+    groupes: dict[str, list[str]] = {}
+    motif: str = ""
+
+
+_MODES = {
+    "alterne": "À tour de rôle, une séance chacun",
+    "par_groupes": "Par groupes entiers",
+    "sequentiel": "L'un après l'autre",
+}
+
+
 def _regles_verrouillees(groupe: str) -> str | None:
     motif = _semestre_verrouille(groupe)
     if motif and "en service" in motif:
@@ -432,7 +463,12 @@ def _regles_verrouillees(groupe: str) -> str | None:
 
 def _modules_du_groupe(groupe: str) -> dict[str, dict]:
     """Les modules du groupe, avec le nombre de séances de chaque type."""
+    import re
+
     modules: dict[str, dict] = {}
+    enseignants: dict[str, dict[str, str]] = {}
+    hors_cm: dict[str, set[str]] = {}
+    lettres: dict[str, set[str]] = {}
     for s in _seances_du_groupe(groupe):
         type_ = getattr(s.session_type, "value", str(s.session_type))
         m = modules.setdefault(s.course_code, {
@@ -440,9 +476,29 @@ def _modules_du_groupe(groupe: str) -> dict[str, dict]:
         })
         # Une séance par cohorte : on compte les rangs, pas les groupes.
         m["types"].setdefault(type_, set()).add(s.sequence_order)
-    for m in modules.values():
+        for e in s.teachers:
+            enseignants.setdefault(s.course_code, {})[e.code] = _nom_enseignant(e)
+            if type_ in ("TD", "TP"):
+                hors_cm.setdefault(s.course_code, set()).add(e.code)
+        if type_ == "TP":
+            for g in s.group_ids:
+                lettre = re.search(r"-tp-([a-z])$", g)
+                if lettre:
+                    lettres.setdefault(s.course_code, set()).add(lettre.group(1).upper())
+    for code, m in modules.items():
         m["types"] = {t: len(rangs) for t, rangs in sorted(m["types"].items())}
+        m["enseignants"] = [
+            {"code": c, "nom": n, "td_tp": c in hors_cm.get(code, set())}
+            for c, n in sorted(enseignants.get(code, {}).items(), key=lambda p: p[1])
+        ]
+        m["groupes_tp"] = sorted(lettres.get(code, set()))
     return modules
+
+
+def _nom_enseignant(e) -> str:
+    prenom = str(getattr(e, "prenom", "") or "").strip().title()
+    nom = str(getattr(e, "nom", "") or "").strip().upper()
+    return f"{prenom} {nom}".strip() or e.code
 
 
 def _regles(groupe: str) -> dict:
@@ -512,6 +568,90 @@ def _regles(groupe: str) -> dict:
         "modules": sorted(modules.values(), key=lambda m: (m["semestre"], m["code"])),
         "seances_longues": sorted(longues, key=lambda r: (r["code"], r["type"])),
         "periodes": sorted(periodes, key=lambda r: (r["code"], r["debut"] or "", r["fin"] or "")),
+        **_regles_des_enseignants(config, modules, semestres),
+    }
+
+
+def _regles_des_enseignants(config, modules: dict[str, dict], semestres: set[str]) -> dict:
+    """Répartitions, ordres et duos : les règles livrées et celles saisies à
+    l'écran, pour les modules de ce semestre."""
+    from cal_iut.ingestion import reglages
+    from cal_iut.ingestion.config_loader import (
+        load_course_teacher_orders,
+        load_rooms,
+        load_teacher_distributions,
+        load_teacher_duos,
+    )
+
+    def noms(code_module: str, codes) -> list[dict]:
+        connus = {e["code"]: e["nom"] for e in modules[code_module]["enseignants"]}
+        return [{"code": c, "nom": connus.get(c, c)} for c in codes]
+
+    salles = {r.id: r.label for r in load_rooms(config) if not r.combines}
+    saisies_rep = {
+        (a["course_code"], a.get("session_type")): a for a in reglages.regles_de_modules(config, "repartitions")
+    }
+    saisies_ordres = {a["course_code"]: a for a in reglages.regles_de_modules(config, "ordres_enseignants")}
+    saisies_duos = {
+        (a["course_code"], tuple(a.get("teacher_codes") or ())): a for a in reglages.regles_de_modules(config, "duos")
+    }
+
+    repartitions = []
+    for r in load_teacher_distributions(config):
+        if r.course_code not in modules or r.semestre not in semestres:
+            continue
+        type_ = r.session_type.value if r.session_type else None
+        saisie = saisies_rep.get((r.course_code, type_))
+        saisie = saisie if saisie and saisie.get("mode") == r.mode else None
+        repartitions.append({
+            "id": saisie["id"] if saisie else None,
+            "origine": "ajoutee" if saisie else "livree",
+            "code": r.course_code,
+            "nom": modules[r.course_code]["nom"],
+            "type": type_,
+            "mode": r.mode,
+            "libelle": _MODES.get(r.mode, r.mode),
+            "ordre": noms(r.course_code, r.teacher_order),
+            "motif": str(r.note or "").strip(),
+        })
+
+    ordres = []
+    for r in load_course_teacher_orders(config):
+        if r.course_code not in modules or r.semestre not in semestres:
+            continue
+        saisie = saisies_ordres.get(r.course_code)
+        saisie = saisie if saisie and list(saisie.get("teacher_order") or []) == list(r.teacher_order) else None
+        ordres.append({
+            "id": saisie["id"] if saisie else None,
+            "origine": "ajoutee" if saisie else "livree",
+            "code": r.course_code,
+            "nom": modules[r.course_code]["nom"],
+            "ordre": noms(r.course_code, r.teacher_order),
+            "motif": str(r.note or "").strip(),
+        })
+
+    duos = []
+    for d in load_teacher_duos(config):
+        for code in d.course_codes:
+            if code not in modules:
+                continue
+            saisie = saisies_duos.get((code, tuple(d.teacher_codes)))
+            duos.append({
+                "id": saisie["id"] if saisie else None,
+                "origine": "ajoutee" if saisie else "livree",
+                "code": code,
+                "nom": modules[code]["nom"],
+                "enseignants": noms(code, d.teacher_codes),
+                "salles": [{"id": s, "label": salles.get(s, s)} for s in d.rare_rooms],
+                "groupes": {c: list(g) for c, g in (d.group_overrides or {}).items()},
+                "motif": str(d.note or "").strip(),
+            })
+    return {
+        "salles": [{"id": i, "label": l} for i, l in sorted(salles.items(), key=lambda p: p[1])],
+        "modes": [{"mode": m, "libelle": l} for m, l in _MODES.items()],
+        "repartitions": sorted(repartitions, key=lambda r: (r["code"], r["type"] or "")),
+        "ordres": sorted(ordres, key=lambda r: r["code"]),
+        "duos": sorted(duos, key=lambda r: (r["code"], r["enseignants"][0]["code"])),
     }
 
 
@@ -596,19 +736,135 @@ def ajouter_une_periode(groupe: str, body: PeriodeRequest, request: Request) -> 
     return _regles(groupe)
 
 
+def _module_et_enseignants(etat: dict, code: str, codes: list[str], *, hors_cm: bool = False) -> dict:
+    module = next((m for m in etat["modules"] if m["code"] == code), None)
+    if module is None:
+        raise HTTPException(404, "Ce module n'appartient pas à ce semestre.")
+    connus = {e["code"] for e in module["enseignants"] if e["td_tp"] or not hors_cm}
+    inconnus = [c for c in codes if c not in connus]
+    if inconnus:
+        quoi = "n'assure aucun TD ni TP de" if hors_cm else "n'enseigne pas dans"
+        raise HTTPException(422, f"{', '.join(inconnus)} {quoi} {code}.")
+    return module
+
+
+def _enregistrer_regle(groupe: str, nom: str, entree: dict, request: Request) -> dict:
+    from cal_iut.ingestion import reglages
+
+    try:
+        reglages.ajouter_regle_de_module(taches.RACINE / "data" / "config", nom, entree, _auteur(request))
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _regles_changees()
+    return _regles(groupe)
+
+
+@router.post("/regles/{groupe}/repartitions", status_code=201)
+def ajouter_une_repartition(groupe: str, body: RepartitionRequest, request: Request) -> dict:
+    """Comment les TD et les TP d'un module se partagent entre ses
+    enseignants. Les volumes de chacun ne changent pas."""
+    _refuser_si_source_verrouillee(groupe)
+    etat = _regles(groupe)
+    ordre = [c.strip().upper() for c in body.ordre if c.strip()]
+    module = _module_et_enseignants(etat, body.code, ordre, hors_cm=True)
+    if sum(1 for e in module["enseignants"] if e["td_tp"]) < 2:
+        raise HTTPException(422, f"{body.code} n'a qu'un enseignant en TD et en TP : il n'y a rien à répartir.")
+    type_ = (body.type or "").strip().upper() or None
+    if type_ and type_ != "CM" and not module["types"].get(type_):
+        raise HTTPException(422, f"{body.code} n'a aucun {type_}.")
+    for r in etat["repartitions"]:
+        if r["code"] == body.code and (r["type"] is None or type_ is None or r["type"] == type_):
+            raise HTTPException(
+                409, f"La répartition de {body.code} est déjà réglée. Retirez la règle pour la changer."
+            )
+    return _enregistrer_regle(groupe, "repartitions", {
+        "course_code": body.code, "semestre": module["semestre"], "session_type": type_,
+        "mode": body.mode, "teacher_order": ordre, "motif": body.motif,
+    }, request)
+
+
+@router.post("/regles/{groupe}/ordres", status_code=201)
+def ajouter_un_ordre(groupe: str, body: OrdreRequest, request: Request) -> dict:
+    """Les séances du premier enseignant se placent plutôt avant celles du
+    suivant. C'est une préférence : le calcul la respecte quand il le peut."""
+    _refuser_si_source_verrouillee(groupe)
+    etat = _regles(groupe)
+    ordre = [c.strip().upper() for c in body.ordre if c.strip()]
+    module = _module_et_enseignants(etat, body.code, ordre)
+    if any(r["code"] == body.code for r in etat["ordres"]):
+        raise HTTPException(409, f"L'ordre des enseignants de {body.code} est déjà réglé. Retirez la règle pour la changer.")
+    return _enregistrer_regle(groupe, "ordres_enseignants", {
+        "course_code": body.code, "semestre": module["semestre"], "teacher_order": ordre, "motif": body.motif,
+    }, request)
+
+
+@router.post("/regles/{groupe}/duos", status_code=201)
+def ajouter_un_duo(groupe: str, body: DuoRequest, request: Request) -> dict:
+    """Deux enseignants font leurs TP en même temps, chacun dans une des
+    deux salles voisines."""
+    _refuser_si_source_verrouillee(groupe)
+    etat = _regles(groupe)
+    duo = [c.strip().upper() for c in body.enseignants if c.strip()]
+    module = _module_et_enseignants(etat, body.code, duo, hors_cm=True)
+    if not module["types"].get("TP"):
+        raise HTTPException(422, f"{body.code} n'a aucun TP : un duo ne concerne que les TP.")
+    connues = {s["id"] for s in etat["salles"]}
+    if any(s not in connues for s in body.salles):
+        raise HTTPException(422, "Salle inconnue.")
+    for r in etat["duos"]:
+        deja = {e["code"] for e in r["enseignants"]} & set(duo)
+        if r["code"] == body.code and deja:
+            raise HTTPException(409, f"{', '.join(sorted(deja))} fait déjà partie d'un duo sur {body.code}.")
+    groupes = {c.strip().upper(): sorted({g.strip().upper() for g in l if g.strip()}) for c, l in body.groupes.items()}
+    groupes = {c: l for c, l in groupes.items() if l} or None
+    if groupes:
+        # Les groupes déjà confiés à un autre duo du module ne sont plus à prendre.
+        pris = {g for r in etat["duos"] if r["code"] == body.code for lettres in r["groupes"].values() for g in lettres}
+        if any(g not in module["groupes_tp"] or g in pris for lettres in groupes.values() for g in lettres):
+            raise HTTPException(422, "Un de ces groupes de TP n'existe pas ou appartient déjà à un autre duo.")
+    etat = _enregistrer_regle(groupe, "duos", {
+        "course_code": body.code, "semestre": module["semestre"], "teacher_codes": duo,
+        "rare_rooms": body.salles, "group_overrides": groupes, "motif": body.motif,
+    }, request)
+    _duos_a_jour()
+    return etat
+
+
+def _duos_a_jour() -> None:
+    """Les plannings déjà chargés par le serveur connaissent le nouveau duo
+    sans redémarrage."""
+    from cal_iut.api import state as etats
+    from cal_iut.ingestion.config_loader import load_teacher_duos
+
+    duos = load_teacher_duos(taches.RACINE / "data" / "config")
+    for etat in etats.etats_charges():
+        etat.teacher_duos = list(duos)
+
+
+_LISTES = {
+    "seances-longues": ("doubles_seances", "seances_longues"),
+    "periodes": ("periodes_modules", "periodes"),
+    "repartitions": ("repartitions", "repartitions"),
+    "ordres": ("ordres_enseignants", "ordres"),
+    "duos": ("duos", "duos"),
+}
+
+
 @router.delete("/regles/{groupe}/{nom}/{identifiant}")
 def retirer_une_regle(groupe: str, nom: str, identifiant: str) -> dict:
     from cal_iut.ingestion import reglages
 
     _refuser_si_source_verrouillee(groupe)
-    reglage = {"seances-longues": "doubles_seances", "periodes": "periodes_modules"}.get(nom)
-    if reglage is None:
+    if nom not in _LISTES:
         raise HTTPException(404, "Règle inconnue.")
+    reglage, liste = _LISTES[nom]
     etat = _regles(groupe)
-    if not any(r["id"] == identifiant for r in etat["seances_longues" if nom == "seances-longues" else "periodes"]):
+    if not any(r["id"] == identifiant for r in etat[liste]):
         raise HTTPException(404, "Cette règle n'existe pas dans ce semestre.")
     reglages.retirer_regle_de_module(taches.RACINE / "data" / "config", reglage, identifiant)
     _regles_changees()
+    if nom == "duos":
+        _duos_a_jour()
     return _regles(groupe)
 
 

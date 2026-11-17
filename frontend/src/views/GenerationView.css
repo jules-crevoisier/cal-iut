@@ -667,6 +667,27 @@ p.generation-aregler--bon {
   width: 132px;
 }
 
+.regles-modules > h4 + .regles-modules-motif {
+  margin: 2px 0 6px;
+}
+
+.enseignants-modules-groupes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  flex-basis: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.enseignants-modules-groupes legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* ── Dates du semestre ── */
 .periode-cours-tete {
   display: flex;

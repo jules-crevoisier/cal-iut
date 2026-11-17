@@ -743,8 +743,27 @@ couvre deux demandes courantes des enseignants :
 Le motif est obligatoire. Les règles livrées avec l'application sont affichées
 avec la mention « D'origine » et ne se retirent pas ici. Comme les autres
 réglages de cet écran, tout se verrouille une fois le semestre en service.
-Les autres règles (duos d'enseignants, répartition entre enseignants, phases
-des SAE) restent dans les fichiers de `data/config/`.
+Les phases des SAE par enseignant restent dans `data/config/`.
+
+### Enseignants d'un module
+
+Juste en dessous, le bloc **Enseignants d'un module** ne propose que les
+modules assurés par plusieurs enseignants. Trois règles :
+
+- **Répartition des TD et des TP** : à tour de rôle (une séance chacun), par
+  groupes entiers (un enseignant garde ses groupes tout le semestre), ou l'un
+  après l'autre (le comportement sans règle). On peut dire qui commence. Le
+  nombre d'heures de chacun, fixé par la maquette, ne change jamais.
+- **Ordre dans le semestre** : les séances du premier enseignant se placent
+  plutôt avant celles du second. C'est une préférence, pas une obligation.
+- **Duos en salles voisines** : deux enseignants font leurs TP du module en
+  même temps, chacun dans une des deux salles choisies. On peut préciser les
+  groupes de TP de chacun ; sans cela, le partage de la maquette s'applique.
+
+Ces règles complètent `course_scheduling_rules.yaml` (`teacher_distribution`,
+`teacher_order_rules`) et `teacher_duos.yaml`. Motif obligatoire, règles
+d'origine affichées sans bouton, verrouillage une fois le semestre en service :
+comme pour les règles de modules.
 
 ### Réglages saisis depuis l'interface
 

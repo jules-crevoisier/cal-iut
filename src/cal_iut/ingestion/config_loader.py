@@ -188,7 +188,7 @@ def load_teacher_duos(config_dir: Path) -> list[TeacherDuo]:
     """Duos co-animant en simultané sur une salle rare (cf. teacher_duos.yaml)."""
     path = config_dir / "teacher_duos.yaml"
     if not path.exists():
-        return []
+        return _duos_saisis(config_dir)
     data = load_yaml(path) or {}
     duos: list[TeacherDuo] = []
     for item in data.get("duos", []):
@@ -208,7 +208,28 @@ def load_teacher_duos(config_dir: Path) -> list[TeacherDuo]:
                 for code, letters in item["group_overrides"].items()
             }
         duos.append(TeacherDuo.model_validate(kwargs))
-    return duos
+    return duos + _duos_saisis(config_dir)
+
+
+def _duos_saisis(config_dir: Path) -> list[TeacherDuo]:
+    """Les duos saisis à l'écran (cf. `reglages`)."""
+    from cal_iut.ingestion import reglages
+
+    sortie: list[TeacherDuo] = []
+    for ajout in reglages.regles_de_modules(config_dir, "duos"):
+        try:
+            kwargs: dict[str, object] = {
+                "teacher_codes": tuple(ajout["teacher_codes"]),
+                "course_codes": [str(ajout["course_code"])],
+                "rare_rooms": tuple(ajout["rare_rooms"]),
+                "note": ajout.get("motif"),
+            }
+            if ajout.get("group_overrides"):
+                kwargs["group_overrides"] = ajout["group_overrides"]
+            sortie.append(TeacherDuo.model_validate(kwargs))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return sortie
 
 
 def load_seances_annulees(config_dir: Path) -> set[str]:
@@ -347,7 +368,7 @@ def load_course_teacher_orders(config_dir: Path) -> list[CourseTeacherOrderRule]
     """Ordre souple entre enseignants d'un module (cf. course_scheduling_rules.yaml)."""
     path = config_dir / "course_scheduling_rules.yaml"
     if not path.exists():
-        return []
+        return _ordres_saisis(config_dir)
     data = load_yaml(path) or {}
     rules: list[CourseTeacherOrderRule] = []
     for item in data.get("teacher_order_rules", []):
@@ -363,7 +384,23 @@ def load_course_teacher_orders(config_dir: Path) -> list[CourseTeacherOrderRule]
                 note=item.get("note"),
             )
         )
-    return rules
+    return rules + _ordres_saisis(config_dir)
+
+
+def _ordres_saisis(config_dir: Path) -> list[CourseTeacherOrderRule]:
+    """Les ordres entre enseignants saisis à l'écran (cf. `reglages`)."""
+    from cal_iut.ingestion import reglages
+
+    return [
+        CourseTeacherOrderRule(
+            course_code=str(a["course_code"]),
+            semestre=str(a.get("semestre") or ""),
+            teacher_order=[str(c) for c in a.get("teacher_order") or []],
+            note=a.get("motif"),
+        )
+        for a in reglages.regles_de_modules(config_dir, "ordres_enseignants")
+        if len(a.get("teacher_order") or []) >= 2
+    ]
 
 
 def load_course_corrections(config_dir: Path) -> list[TeacherCorrection]:
@@ -515,7 +552,7 @@ def load_teacher_distributions(config_dir: Path) -> list[TeacherDistributionRule
     `course_scheduling_rules.yaml::teacher_distribution`)."""
     path = config_dir / "course_scheduling_rules.yaml"
     if not path.exists():
-        return []
+        return _repartitions_saisies(config_dir)
     data = load_yaml(path) or {}
     rules: list[TeacherDistributionRule] = []
     for item in data.get("teacher_distribution", []):
@@ -530,7 +567,28 @@ def load_teacher_distributions(config_dir: Path) -> list[TeacherDistributionRule
                 note=item.get("note"),
             )
         )
-    return rules
+    return rules + _repartitions_saisies(config_dir)
+
+
+def _repartitions_saisies(config_dir: Path) -> list[TeacherDistributionRule]:
+    """Les répartitions entre enseignants saisies à l'écran (cf. `reglages`)."""
+    from cal_iut.ingestion import reglages
+
+    sortie: list[TeacherDistributionRule] = []
+    for a in reglages.regles_de_modules(config_dir, "repartitions"):
+        try:
+            type_ = a.get("session_type")
+            sortie.append(TeacherDistributionRule(
+                course_code=str(a["course_code"]),
+                semestre=str(a.get("semestre") or ""),
+                mode=str(a.get("mode")),
+                session_type=SessionType(str(type_)) if type_ else None,
+                teacher_order=[str(c).upper() for c in a.get("teacher_order") or []],
+                note=a.get("motif"),
+            ))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return sortie
 
 
 def load_sae_teacher_phases(config_dir: Path) -> list[SaeTeacherPhase]:
