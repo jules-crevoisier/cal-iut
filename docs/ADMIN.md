@@ -858,3 +858,12 @@ Dans **Référence**, onglet **Réglages** :
 Ces valeurs s'appliquent tout de suite au planning en service (choix de salle, alerte de salle trop petite) et sont lues par la prochaine génération. Aucune séance déjà placée ne change de salle toute seule.
 
 Depuis le 17/11/2026, une génération tient aussi compte des salles ajoutées avec « Nouvelle salle » et de la case « placement automatique » : auparavant ces deux choix ne comptaient que pour les retouches à la main.
+
+## Événements à date fixe et semaines des alternants
+
+Dans **Référence**, onglet **Réglages** :
+
+- **Événements à date fixe.** Une rentrée, un forum, une journée banalisée : on choisit la promotion (ou toutes), la date, les créneaux et le motif. La promotion n'a pas cours sur ces créneaux et le calcul n'y place rien. Les événements livrés avec l'application (fichier des dates de l'établissement) figurent dans la même liste et se retirent de la même façon.
+- **Semaines des alternants à l'IUT.** Pour les alternants de BUT2 et de BUT3, les périodes passées à l'IUT. En dehors, ils sont en entreprise et aucun de leurs cours n'est placé. On ajoute une période par son premier et son dernier jour ; seuls les jours de semaine comptent. Chaque année, les périodes se ressaisissent à partir du calendrier d'alternance.
+
+Ces deux réglages comptent tout de suite pour le contrôle des déplacements et pour la prochaine génération. Aucune séance déjà placée n'est déplacée.

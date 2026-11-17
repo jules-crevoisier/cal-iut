@@ -20,11 +20,13 @@ import {
   type ReglageDate,
   type ReglagesReponse,
   type SalleReservee,
+  type EvenementFixe,
   type SemaineType,
 } from "../api/client";
 import { useDroits } from "../contexts/Droits";
 import type { AppPayload } from "../types/app";
 import "./ReglagesReference.css";
+import { PresencesAlternants } from "./PresencesAlternants";
 import { EffectifsReglables, SallesDesModules, SallesReglables } from "./SallesEtEffectifs";
 
 const JOUR = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
@@ -76,7 +78,7 @@ function Famille<T extends ReglageDate>({
   titre: string;
   aide: string;
   famille: FamilleDeReglage;
-  champ: "salle" | "teacher_code";
+  champ: "salle" | "teacher_code" | "parcours";
   libelleChamp: string;
   choix: Choix[];
   entrees: T[];
@@ -493,6 +495,14 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
       .sort((a, b) => a.valeur.localeCompare(b.valeur, "fr", { numeric: true }));
   }, [payload.courses]);
 
+  const promotions = useMemo<Choix[]>(
+    () => [
+      { valeur: "*", libelle: "Toutes les promotions" },
+      ...(donnees?.parcours ?? []).map((p) => ({ valeur: p, libelle: p })),
+    ],
+    [donnees?.parcours],
+  );
+
   if (erreur && !donnees) {
     return (
       <p className="alerte" role="alert">
@@ -546,6 +556,21 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
         onChange={apres}
       />
       <SemainesTypes enseignants={enseignants} donnees={donnees} onChange={apres} />
+      {donnees.evenements_fixes && (
+        <Famille<EvenementFixe>
+          titre="Événements à date fixe"
+          aide="Une rentrée, un forum, une journée banalisée : la promotion n’a pas cours sur ces créneaux, et le calcul n’y place rien."
+          famille="evenements-fixes"
+          champ="parcours"
+          libelleChamp="Promotion"
+          choix={promotions}
+          entrees={donnees.evenements_fixes}
+          libelleDe={(e) => (e.parcours === "*" ? "Toutes les promotions" : e.parcours || "Information seule")}
+          creneaux={donnees.creneaux}
+          onChange={apres}
+        />
+      )}
+      <PresencesAlternants donnees={donnees} onChange={apres} />
       <SallesReglables donnees={donnees} onChange={apres} />
       <SallesDesModules modules={modules} donnees={donnees} onChange={apres} />
       <EffectifsReglables donnees={donnees} onChange={apres} />

@@ -268,14 +268,36 @@ def load_sae_windows(data_root: Path, semestres: Iterable[str] | None = None) ->
 
 def load_fixed_events(data_root: Path) -> list[FixedEvent]:
     """Événements fixes de `contraintes/10_dates_fixes.json`."""
-    data = _load_json(data_root / "contraintes" / _FIXED_EVENTS_PATH)
-    if not data:
-        return []
+    from cal_iut.ingestion import reglages
+    from cal_iut.ingestion.config_loader import load_groups
 
+    data = _load_json(data_root / "contraintes" / _FIXED_EVENTS_PATH) or {}
+    config_dir = data_root / "data" / "config"
     events: list[FixedEvent] = []
-    for entry in data.get("evenements", []):
+    toutes: list[str] | None = None
+    for entry in reglages.evenements_fixes(config_dir, data.get("evenements", [])):
         raw_date = entry.get("date")
         if not raw_date:
+            continue
+        if entry["origine"] == "ajoutee":
+            # Saisi à l'écran : créneaux et promotions déjà explicites.
+            parcours = [str(p) for p in entry.get("parcours") or []]
+            if reglages.TOUTES_LES_PROMOTIONS in parcours:
+                if toutes is None:
+                    toutes = sorted({g.parcours for g in load_groups(config_dir)})
+                parcours = toutes
+            try:
+                jour = date.fromisoformat(str(raw_date))
+            except ValueError:
+                continue
+            events.append(
+                FixedEvent(
+                    day=jour,
+                    label=str(entry.get("motif") or "").strip(),
+                    slots=reglages._creneaux(entry.get("slots")),
+                    parcours_keys=parcours,
+                )
+            )
             continue
         slots = _slots_for_interval(entry.get("debut_minutes"), entry.get("fin_minutes"))
         horaire = ""

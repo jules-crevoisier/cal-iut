@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants",
 )
 NB_CRENEAUX = 6
 
@@ -770,3 +770,99 @@ def ajouter_regle_salle(config_dir: Path, entree: dict, par: str) -> dict:
 
 def retirer_regle_salle(config_dir: Path, identifiant: str) -> bool:
     return retirer(config_dir, "regles_salles", identifiant, livree=False)
+
+
+# ── Événements à date fixe ────────────────────────────────────────────
+
+TOUTES_LES_PROMOTIONS = "*"
+
+
+def cle_evenement(entree: dict) -> str:
+    parcours = ",".join(sorted(str(p) for p in entree.get("parcours") or []))
+    return f"{entree.get('date')}|{entree.get('debut') or ''}|{parcours}|{str(entree.get('motif') or '').strip()}"
+
+
+def evenements_fixes(config_dir: Path, livres: list[dict] | None) -> list[dict]:
+    """Les événements à date fixe en vigueur : ceux livrés (`contraintes/
+    10_dates_fixes.json`), moins ceux retirés à l'écran, plus ceux saisis.
+    Chaque entrée porte `cle` et `origine`."""
+    bloc = _lire(config_dir)["evenements_fixes"]
+    retraits = set(bloc["retraits"])
+    sortie = []
+    for entree in livres or []:
+        cle = cle_evenement(entree)
+        if cle not in retraits:
+            sortie.append({**entree, "cle": cle, "origine": "livree"})
+    sortie += [{**a, "cle": a["id"], "origine": "ajoutee"} for a in bloc["ajouts"] if a.get("id") and a.get("date")]
+    return sortie
+
+
+# ── Semaines des alternants à l'IUT ───────────────────────────────────
+
+ANNEES_D_ALTERNANCE = ("BUT2", "BUT3")
+
+
+def cle_presence(annee: str, debut: object) -> str:
+    return f"{annee}|{debut}"
+
+
+def _jours_ouvres(debut: str, fin: str) -> list[str]:
+    premier, dernier = date.fromisoformat(debut), date.fromisoformat(fin)
+    return [
+        date.fromordinal(n).isoformat()
+        for n in range(premier.toordinal(), dernier.toordinal() + 1)
+        if date.fromordinal(n).weekday() < 5
+    ]
+
+
+def presences_alternants(config_dir: Path, livrees: dict[str, list[dict]] | None) -> list[dict]:
+    """Les périodes où les alternants sont à l'IUT : `{annee, debut, fin,
+    dates, cle, origine}`. `livrees` : par année (« BUT2 », « BUT3 »), les
+    semaines du fichier officiel."""
+    bloc = _lire(config_dir)["presence_alternants"]
+    retraits = set(bloc["retraits"])
+    sortie = []
+    for annee, semaines in (livrees or {}).items():
+        for semaine in semaines:
+            cle = cle_presence(annee, semaine.get("debut"))
+            if cle not in retraits:
+                sortie.append({
+                    "annee": annee, "debut": str(semaine.get("debut")), "fin": str(semaine.get("fin")),
+                    "dates": [str(d) for d in semaine.get("dates") or []], "cle": cle, "origine": "livree",
+                })
+    for a in bloc["ajouts"]:
+        if not a.get("id") or a.get("annee") not in ANNEES_D_ALTERNANCE:
+            continue
+        try:
+            dates = _jours_ouvres(str(a.get("debut")), str(a.get("fin")))
+        except ValueError:
+            continue
+        sortie.append({
+            "annee": a["annee"], "debut": str(a["debut"]), "fin": str(a["fin"]), "dates": dates,
+            "cle": a["id"], "origine": "ajoutee", "demande_par": str(a.get("demande_par") or ""),
+        })
+    return sorted(sortie, key=lambda e: (e["annee"], e["debut"]))
+
+
+def ajouter_presence_alternants(config_dir: Path, entree: dict, par: str) -> dict:
+    annee = str(entree.get("annee") or "")
+    if annee not in ANNEES_D_ALTERNANCE:
+        raise ReglageInvalide("Choisissez l'année des alternants (BUT2 ou BUT3).")
+    if not entree.get("debut") or not entree.get("fin"):
+        raise ReglageInvalide("Indiquez le premier et le dernier jour à l'IUT.")
+    debut, fin = _valider_date(entree["debut"]), _valider_date(entree["fin"])
+    if debut > fin:
+        raise ReglageInvalide("Le premier jour est après le dernier.")
+    if (date.fromisoformat(fin) - date.fromisoformat(debut)).days > 60:
+        raise ReglageInvalide("Une période à l'IUT ne dépasse pas deux mois : saisissez-la en plusieurs fois.")
+    if not _jours_ouvres(debut, fin):
+        raise ReglageInvalide("La période ne contient aucun jour de semaine.")
+    propre = {
+        "id": uuid.uuid4().hex[:12], "annee": annee, "debut": debut, "fin": fin, "demande_par": par,
+        "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        tout["presence_alternants"]["ajouts"].append(propre)
+        ecrire_json(_path(config_dir), tout)
+    return propre
