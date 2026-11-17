@@ -534,11 +534,18 @@ def load_solver_scheduled_sae(config_dir: Path) -> set[tuple[str, str]]:
     est le plus souvent une donnée manquante à réclamer, pas une invitation à
     la planifier d'office.
     """
+    from cal_iut.ingestion import reglages
+
+    # + celles confiées au calcul depuis l'écran « Nouveau semestre ».
+    saisies = {
+        (str(a["course_code"]).upper(), str(a.get("semestre") or ""))
+        for a in reglages.sae_par_le_calcul(config_dir)
+    }
     path = config_dir / "course_scheduling_rules.yaml"
     if not path.exists():
-        return set()
+        return saisies
     data = load_yaml(path) or {}
-    return {
+    return saisies | {
         (str(item["course_code"]).upper(), str(item["semestre"]))
         for item in data.get("solver_scheduled_sae", [])
     }
@@ -596,11 +603,22 @@ def _repartitions_saisies(config_dir: Path) -> list[TeacherDistributionRule]:
 def load_sae_teacher_phases(config_dir: Path) -> list[SaeTeacherPhase]:
     """Répartition des jours d'une SAE entre ses enseignants (cf.
     `sae_teacher_phases.yaml`, modèle `SaeTeacherPhase`)."""
+    from cal_iut.ingestion import reglages
+
+    # Les périodes d'encadrement saisies à l'écran « Nouveau semestre ».
+    phases: list[SaeTeacherPhase] = [
+        SaeTeacherPhase(
+            course_code=str(a["course_code"]).upper(), semestre=str(a.get("semestre") or ""),
+            teacher_code=str(a["teacher_code"]).upper(), debut=str(a["debut"]), fin=str(a["fin"]),
+            note=a.get("motif") or None,
+        )
+        for a in reglages.phases_sae(config_dir)
+        if a.get("teacher_code") and a.get("debut") and a.get("fin")
+    ]
     path = config_dir / "sae_teacher_phases.yaml"
     if not path.exists():
-        return []
+        return phases
     data = load_yaml(path) or {}
-    phases: list[SaeTeacherPhase] = []
     for entry in data.get("phases", []):
         for teacher in entry.get("teachers", []):
             phases.append(

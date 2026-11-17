@@ -629,6 +629,46 @@ p.generation-aregler--bon {
   width: 132px;
 }
 
+.dates-sae-plus {
+  flex-basis: 100%;
+  font-size: 12.5px;
+}
+
+.dates-sae-plus > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.dates-sae-plus p {
+  margin: 6px 0;
+}
+
+.dates-sae-calcul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  margin-top: 6px;
+}
+
+.dates-sae-calcul p {
+  flex-basis: 100%;
+}
+
+.dates-sae-phases {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dates-sae-phases li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+
 /* ── Séances annulées (lot 6) ── */
 .seances-annulees-ajout {
   display: flex;

@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae",
 )
 NB_CRENEAUX = 6
 
@@ -585,3 +585,61 @@ def definir_semaine_type(config_dir: Path, code: str, bloques: object, liberes: 
                 "le": datetime.now(timezone.utc).date().isoformat(),
             })
         ecrire_json(_path(config_dir), tout)
+
+
+# ── SAE : placement par le calcul, phases par enseignant ──────────────
+
+
+def sae_par_le_calcul(config_dir: Path) -> list[dict]:
+    """Les SAE que l'écran confie au calcul (`course_code`, `semestre`)."""
+    return [dict(a) for a in _lire(config_dir)["sae_par_le_calcul"]["ajouts"] if a.get("course_code")]
+
+
+def confier_sae_au_calcul(config_dir: Path, code: str, semestre: str, oui: bool, motif: str, par: str) -> None:
+    code = str(code or "").strip().upper()
+    motif = str(motif or "").strip()
+    if oui and not motif:
+        raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout["sae_par_le_calcul"]
+        bloc["ajouts"] = [a for a in bloc["ajouts"] if str(a.get("course_code")).upper() != code]
+        if oui:
+            bloc["ajouts"].append({
+                "id": uuid.uuid4().hex[:12], "course_code": code, "semestre": str(semestre),
+                "motif": motif[:300], "demande_par": par, "le": datetime.now(timezone.utc).date().isoformat(),
+            })
+        ecrire_json(_path(config_dir), tout)
+
+
+def phases_sae(config_dir: Path) -> list[dict]:
+    """Les périodes d'encadrement saisies à l'écran : quel enseignant suit
+    quelle SAE, de quand à quand."""
+    return [dict(a) for a in _lire(config_dir)["phases_sae"]["ajouts"] if a.get("course_code") and a.get("id")]
+
+
+def ajouter_phase_sae(config_dir: Path, entree: dict, par: str) -> dict:
+    code = str(entree.get("course_code") or "").strip().upper()
+    enseignant = str(entree.get("teacher_code") or "").strip().upper()
+    if not code or not enseignant:
+        raise ReglageInvalide("Choisissez une SAE et un enseignant.")
+    if not entree.get("debut") or not entree.get("fin"):
+        raise ReglageInvalide("Indiquez le début et la fin de la période.")
+    debut, fin = _valider_date(entree["debut"]), _valider_date(entree["fin"])
+    if debut > fin:
+        raise ReglageInvalide("Le début de la période est après sa fin.")
+    propre = {
+        "id": uuid.uuid4().hex[:12], "course_code": code, "semestre": str(entree.get("semestre") or ""),
+        "teacher_code": enseignant, "debut": debut, "fin": fin,
+        "motif": str(entree.get("motif") or "").strip()[:300], "demande_par": par,
+        "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        tout["phases_sae"]["ajouts"].append(propre)
+        ecrire_json(_path(config_dir), tout)
+    return propre
+
+
+def retirer_phase_sae(config_dir: Path, identifiant: str) -> bool:
+    return retirer(config_dir, "phases_sae", identifiant, livree=False)
