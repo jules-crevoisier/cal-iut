@@ -447,8 +447,18 @@ def cmd_solve(args: argparse.Namespace) -> int:
         solver_config_kwargs["benders_rounds"] = args.benders_rounds
     if getattr(args, "spread_weight", None) is not None:
         solver_config_kwargs["spread_weight"] = args.spread_weight
-    solver = TimetableSolver(SolverConfig(**solver_config_kwargs))
     semestre_group = getattr(args, "semestre_group", None)
+    if semestre_group:
+        # Plafonds hebdomadaires réglés sur l'écran « Nouveau semestre ».
+        from cal_iut.solver.plafonds import plafonds
+
+        choisis = plafonds(semestre_group, config_dir)
+        solver_config_kwargs.update(
+            fi_weekly_cap_slots=choisis["promo"],
+            fc_weekly_cap_slots=choisis["alternants"],
+            teacher_weekly_cap_slots=choisis["enseignant"],
+        )
+    solver = TimetableSolver(SolverConfig(**solver_config_kwargs))
     if semestre_group:
         semestre = SEMESTRE_GROUP_ANCHOR[semestre_group]
         found = {s.semestre for s in sessions}

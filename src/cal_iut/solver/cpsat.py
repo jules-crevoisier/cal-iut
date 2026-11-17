@@ -138,6 +138,9 @@ class SolverConfig:
     # Avoir eu deux valeurs distinctes ici et là a masqué le problème dix jours.
     fi_weekly_cap_slots: int = 23
     fc_weekly_cap_slots: int = 23
+    # Plafond d'un enseignant (`solve_decomposed` seulement). Les trois se
+    # règlent par groupe de semestres, cf. `solver/plafonds.py`.
+    teacher_weekly_cap_slots: int = 26
     # Horizon étendu réservé aux alternants uniquement (`solve_decomposed`
     # seulement, cf. `decomposed.py::assign_weeks` pour le détail) — None =
     # comportement inchangé, tous les parcours bornés à `weeks`. Retour
@@ -957,6 +960,9 @@ class TimetableSolver:
                 sae_days_by_course=sae_days_by_course,
                 duos=duos,
                 weeks=self.config.weeks,
+                fi_cap_slots=self.config.fi_weekly_cap_slots,
+                fc_cap_slots=self.config.fc_weekly_cap_slots,
+                teacher_weekly_cap_slots=self.config.teacher_weekly_cap_slots,
                 week_assignment_time_limit=stage2_budget,
                 week_detail_time_limit=stage3_budget,
                 num_workers=self.config.num_workers,

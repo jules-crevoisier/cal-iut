@@ -927,3 +927,74 @@ def test_les_sae_d_un_semestre_en_service_gardent_leurs_reglages(admin, generati
     phase = {"teacher_code": "ALO", "debut": "2026-11-12", "fin": "2026-11-13", "motif": "m"}
     assert admin.post("/generations/sae/odd/WS501D/phases", json=phase).status_code == 409
     assert admin.put("/generations/sae/odd/WSA310M/placement", json={"par_le_calcul": True, "motif": "m"}).status_code == 409
+
+
+# ── Plafonds hebdomadaires ────────────────────────────────────────────
+
+
+def test_les_plafonds_hebdomadaires_se_reglent_par_semestre(admin, generations_isolees):
+    from cal_iut.solver.plafonds import ORIGINE, plafonds, plafonds_du_semestre
+
+    depart = admin.get("/generations/plafonds/even").json()
+    assert depart["plafonds"] == depart["origine"] == {"promo": 23, "alternants": 23, "enseignant": 26}
+    assert depart["personnalise"] is False and depart["verrouille"] is None
+
+    reponse = admin.put("/generations/plafonds/even", json={"promo": 22, "alternants": 23, "enseignant": 24})
+    assert reponse.status_code == 200, reponse.text
+    assert reponse.json()["plafonds"] == {"promo": 22, "alternants": 23, "enseignant": 24}
+    assert reponse.json()["personnalise"] is True
+    assert plafonds("even") == plafonds_du_semestre("S4") == {"promo": 22, "alternants": 23, "enseignant": 24}
+    # Le semestre en service garde les siens.
+    assert plafonds("odd") == plafonds_du_semestre("S1") == ORIGINE
+    assert reglages.plafonds_hebdo(CONFIG) == {"even": {"promo": 22, "enseignant": 24}}
+
+    for mauvais in ({"promo": 5}, {"enseignant": 31}, {"alternants": 0}):
+        corps = {"promo": 23, "alternants": 23, "enseignant": 26, **mauvais}
+        assert admin.put("/generations/plafonds/even", json=corps).status_code == 422, mauvais
+    assert admin.put("/generations/plafonds/tout", json={"promo": 23, "alternants": 23, "enseignant": 26}).status_code == 422
+
+    assert admin.delete("/generations/plafonds/even").json()["personnalise"] is False
+    assert plafonds("even") == ORIGINE
+
+
+def test_le_calcul_et_les_controles_lisent_les_plafonds_du_semestre(monkeypatch, tmp_path):
+    from cal_iut import cli
+    from cal_iut.solver import cpsat
+
+    reglages.definir_plafonds_hebdo(CONFIG, "even", {"promo": 21, "enseignant": 25}, "admin")
+    vus: dict = {}
+
+    class _Solveur(cpsat.TimetableSolver):
+        def __init__(self, config):
+            vus.update(promo=config.fi_weekly_cap_slots, alternants=config.fc_weekly_cap_slots,
+                       enseignant=config.teacher_weekly_cap_slots)
+            raise SystemExit(0)
+
+    monkeypatch.setattr(cli, "TimetableSolver", _Solveur)
+    seances = tmp_path / "sessions.json"
+    seances.write_text("[]", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        cli.main(["solve", "--decomposed", "--semestre-group", "even", "--sessions", str(seances)])
+    assert vus == {"promo": 21, "alternants": 23, "enseignant": 25}
+    # Le plafond enseignant arrive bien jusqu'au solveur décomposé.
+    import inspect
+
+    assert "teacher_weekly_cap_slots=self.config.teacher_weekly_cap_slots" in inspect.getsource(
+        cpsat.TimetableSolver.solve_decomposed
+    )
+
+
+def test_les_plafonds_d_un_semestre_en_service_ne_se_modifient_pas(admin, generations_isolees, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    assert "déjà en service" in admin.get("/generations/plafonds/odd").json()["verrouille"]
+    corps = {"promo": 22, "alternants": 22, "enseignant": 24}
+    assert admin.put("/generations/plafonds/odd", json=corps).status_code == 409
+    assert admin.delete("/generations/plafonds/odd").status_code == 409
