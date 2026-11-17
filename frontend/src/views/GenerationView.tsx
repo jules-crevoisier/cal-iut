@@ -41,6 +41,7 @@ import {
 import { ActionsDePage } from "../components/TopBar";
 import { DatesSae } from "./DatesSae";
 import { PeriodeDesCours } from "./PeriodeDesCours";
+import { CoursHorsMaquette } from "./CoursHorsMaquette";
 import { EnseignantsModules } from "./EnseignantsModules";
 import { PlafondsHebdo } from "./PlafondsHebdo";
 import { ReglesModules } from "./ReglesModules";
@@ -791,6 +792,7 @@ export function GenerationView({
               <ReglesModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <EnseignantsModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <PlafondsHebdo groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
+              <CoursHorsMaquette groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               {verification && <ARegler verification={verification} />}
               <p className="generation-duree">
                 Durée : jusqu’à{" "}

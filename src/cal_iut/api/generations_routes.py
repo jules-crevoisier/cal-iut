@@ -1237,6 +1237,129 @@ def revenir_aux_plafonds_d_origine(groupe: str, request: Request) -> dict:
     return _plafonds(groupe)
 
 
+class CoursHorsMaquetteRequest(BaseModel):
+    code: str
+    nom: str
+    semestre: str
+    parcours: str
+    teacher_code: str
+    teacher_nom: str = ""
+    teacher_prenom: str = ""
+    cm: int = 0
+    td: int = 0
+    tp: int = 0
+
+
+def _parcours_par_semestre(groupe: str) -> tuple[dict[str, list[str]], dict[str, dict[str, int]]]:
+    """Par semestre du groupe, les promotions possibles ; par promotion, le
+    nombre de groupes de TD et de TP."""
+    from cal_iut.ingestion.config_loader import load_groups
+
+    tailles: dict[str, dict[str, int]] = {}
+    for g in load_groups(taches.RACINE / "data" / "config"):
+        t = tailles.setdefault(g.parcours, {"td": 0, "tp": 0})
+        if g.kind in t:
+            t[g.kind] += 1
+    possibles = {
+        s: sorted(p for p in tailles if p.startswith(f"BUT{(int(s[1:]) + 1) // 2}"))
+        for s in taches.GROUPES[groupe]["semestres"]
+    }
+    return possibles, tailles
+
+
+def _cours_hors_maquette(groupe: str) -> dict:
+    from cal_iut.ingestion import reglages
+
+    config = taches.RACINE / "data" / "config"
+    semestres = set(taches.GROUPES[groupe]["semestres"])
+    possibles, _ = _parcours_par_semestre(groupe)
+    enseignants: dict[str, dict] = {}
+    for s in _seances_du_groupe(groupe):
+        for e in s.teachers:
+            enseignants.setdefault(e.code, {
+                "code": e.code, "nom": str(e.nom or ""), "prenom": str(e.prenom or ""), "libelle": _nom_enseignant(e),
+            })
+    saisis = {(c["code"], c["parcours"]): c for c in reglages.cours_hors_maquette(config)}
+    import yaml
+
+    chemin = config / "additional_courses.yaml"
+    livres = (yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}).get("courses", []) if chemin.exists() else []
+    cours = [
+        {
+            "id": None, "origine": "livree", "code": str(c.get("code_matiere")), "nom": str(c.get("nom_matiere") or ""),
+            "semestre": str(c.get("semestre")), "parcours": str(c.get("parcours")),
+            "teacher_code": str((c.get("lead") or {}).get("code") or ""),
+            **{t: int((c.get("total") or {}).get(t) or 0) for t in ("cm", "td", "tp")},
+        }
+        for c in livres if str(c.get("semestre")) in semestres
+    ] + [
+        {
+            "id": c["id"], "origine": "ajoutee", "code": c["code"], "nom": c.get("nom") or "",
+            "semestre": c["semestre"], "parcours": c["parcours"], "teacher_code": c["teacher_code"],
+            **{t: int(c.get(t) or 0) for t in ("cm", "td", "tp")},
+        }
+        for c in saisis.values() if c["semestre"] in semestres
+    ]
+    motif = _semestre_verrouille(groupe)
+    if motif and "en service" in motif:
+        motif = (
+            f"Le {taches.GROUPES[groupe]['libelle'].lower()} est déjà en service : on n'y ajoute plus de module "
+            "depuis cet écran, ses séances changeraient sans nouveau calcul. Pour une séance ponctuelle, utilisez "
+            "« Nouvel évènement » dans la vue d'une promotion."
+        )
+    return {
+        "semestre_group": groupe,
+        "verrouille": motif,
+        "semestres": possibles,
+        "enseignants": sorted(enseignants.values(), key=lambda e: e["libelle"]),
+        "cours": sorted(cours, key=lambda c: (c["semestre"], c["code"])),
+        "seances_maxi": reglages.SEANCES_MAXI,
+    }
+
+
+@router.get("/cours-hors-maquette/{groupe}")
+def cours_hors_maquette(groupe: str) -> dict:
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    return _cours_hors_maquette(groupe)
+
+
+@router.post("/cours-hors-maquette/{groupe}", status_code=201)
+def ajouter_un_cours_hors_maquette(groupe: str, body: CoursHorsMaquetteRequest, request: Request) -> dict:
+    """Un module absent de la maquette officielle (intervention, atelier) :
+    il est placé par le calcul comme les autres, avec un seul enseignant."""
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    possibles, tailles = _parcours_par_semestre(groupe)
+    if body.parcours not in possibles.get(body.semestre, []):
+        raise HTTPException(422, "Choisissez un semestre et une promotion de ce semestre.")
+    code = body.code.strip().upper()
+    if any(s.course_code == code and s.parcours == body.parcours for s in _seances_du_groupe(groupe)):
+        raise HTTPException(422, f"Le module {code} existe déjà pour cette promotion.")
+    try:
+        reglages.ajouter_cours_hors_maquette(
+            taches.RACINE / "data" / "config",
+            {**body.model_dump(), "groupes_td": tailles[body.parcours]["td"], "groupes_tp": tailles[body.parcours]["tp"]},
+            _auteur(request),
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _regles_changees()
+    return _cours_hors_maquette(groupe)
+
+
+@router.delete("/cours-hors-maquette/{groupe}/{identifiant}")
+def retirer_un_cours_hors_maquette(groupe: str, identifiant: str) -> dict:
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    if not reglages.retirer(taches.RACINE / "data" / "config", "cours_hors_maquette", identifiant, livree=False):
+        raise HTTPException(404, "Module introuvable.")
+    _regles_changees()
+    return _cours_hors_maquette(groupe)
+
+
 @router.get("/verification/{groupe}")
 def a_regler_avant_de_generer(groupe: str) -> dict:
     """Ce qu'il reste à régler dans les données de ce semestre avant de

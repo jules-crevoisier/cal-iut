@@ -867,3 +867,9 @@ Dans **Référence**, onglet **Réglages** :
 - **Semaines des alternants à l'IUT.** Pour les alternants de BUT2 et de BUT3, les périodes passées à l'IUT. En dehors, ils sont en entreprise et aucun de leurs cours n'est placé. On ajoute une période par son premier et son dernier jour ; seuls les jours de semaine comptent. Chaque année, les périodes se ressaisissent à partir du calendrier d'alternance.
 
 Ces deux réglages comptent tout de suite pour le contrôle des déplacements et pour la prochaine génération. Aucune séance déjà placée n'est déplacée.
+
+## Cours hors maquette
+
+Sur **Nouveau semestre**, le volet **Cours hors maquette** ajoute un module absent de la maquette officielle (intervention, atelier) : code, intitulé, semestre, promotion, enseignant et nombre de séances de CM, TD et TP par étudiant. Le module est placé par le calcul comme les autres, avec un seul enseignant qui voit tous les groupes de la promotion. Les modules livrés avec l'application (`additional_courses.yaml`) figurent dans la liste, sans retrait possible à l'écran.
+
+L'ajout et le retrait sont refusés pour un semestre déjà en service : pour une séance ponctuelle, utilisez « Nouvel évènement » dans la vue d'une promotion.

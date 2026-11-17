@@ -775,3 +775,8 @@ p.generation-aregler--bon {
 .plafonds-champ input {
   width: 72px;
 }
+
+/* ── Cours hors maquette ── */
+.regles-modules .seances-annulees-liste li > button {
+  margin-left: 8px;
+}
