@@ -28,9 +28,11 @@ def load_yaml(path: Path) -> dict[str, object]:
         return yaml.safe_load(handle)
 
 
-def load_rooms(config_dir: Path) -> list[Room]:
+def load_rooms(config_dir: Path, *, d_origine: bool = False) -> list[Room]:
+    """Les salles du bâtiment. Capacité et type saisis à l'écran
+    (`reglages.salles`) remplacent ceux du fichier, sauf `d_origine`."""
     data = load_yaml(config_dir / "rooms.yaml")
-    return [
+    salles = [
         Room(
             id=item["id"],
             label=item["label"],
@@ -44,6 +46,24 @@ def load_rooms(config_dir: Path) -> list[Room]:
         )
         for item in data.get("rooms", [])
     ]
+    if d_origine:
+        return salles
+    from cal_iut.ingestion import reglages
+
+    saisies = reglages.salles(config_dir)
+    sortie: list[Room] = []
+    for salle in salles:
+        maj: dict[str, object] = {}
+        saisie = saisies.get(salle.id) or {}
+        if "capacity" in saisie:
+            maj["capacity"] = saisie["capacity"]
+        if "room_type" in saisie:
+            try:
+                maj["room_type"] = RoomType(saisie["room_type"])
+            except ValueError:
+                pass
+        sortie.append(salle.model_copy(update=maj) if maj else salle)
+    return sortie
 
 
 def load_room_assignment_rules(config_dir: Path) -> list[dict[str, object]]:
@@ -51,7 +71,9 @@ def load_room_assignment_rules(config_dir: Path) -> list[dict[str, object]]:
     return list(data.get("room_assignment_rules", []))
 
 
-def load_groups(config_dir: Path) -> list[Group]:
+def load_groups(config_dir: Path, *, d_origine: bool = False) -> list[Group]:
+    """Les groupes d'étudiants. Les effectifs saisis à l'écran
+    (`reglages.effectifs`) remplacent ceux du fichier, sauf `d_origine`."""
     data = load_yaml(config_dir / "groups.yaml")
     groups: list[Group] = []
 
@@ -96,7 +118,14 @@ def load_groups(config_dir: Path) -> list[Group]:
                 )
             )
 
-    return groups
+    if d_origine:
+        return groups
+    from cal_iut.ingestion import reglages
+
+    saisis = reglages.effectifs(config_dir)
+    if not saisis:
+        return groups
+    return [g.model_copy(update={"headcount": saisis[g.id]}) if g.id in saisis else g for g in groups]
 
 
 def load_teacher_availability(config_dir: Path, *, sans_semaine_type: bool = False) -> list[TeacherAvailability]:

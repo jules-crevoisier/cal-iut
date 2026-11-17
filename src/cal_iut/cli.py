@@ -31,6 +31,22 @@ def _default_output_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "generated"
 
 
+def _salles_du_calcul(config_dir: Path) -> list:
+    """Les salles que la génération peut attribuer : celles du bâtiment,
+    plus celles ajoutées depuis l'interface, avec le choix « placement
+    automatique » fait à l'écran. Avant le 17/11/2026 le calcul ne lisait
+    que `rooms.yaml` : une salle ajoutée ou écartée à l'écran ne comptait
+    que pour les retouches, pas pour une nouvelle génération."""
+    from cal_iut.api import custom_rooms
+    from cal_iut.celcat.fichiers import FichierEtatIllisible
+
+    salles = load_rooms(config_dir)
+    try:
+        return custom_rooms.merge_into(salles)
+    except FichierEtatIllisible:
+        return salles
+
+
 def cmd_fetch(args: argparse.Namespace) -> int:
     output = Path(args.output)
     maquette, progression = fetch_all_exports_sync()
@@ -513,7 +529,7 @@ def cmd_solve(args: argparse.Namespace) -> int:
     room_data: list[dict[str, object]] = []
 
     if not args.no_rooms and result.status in ("OPTIMAL", "FEASIBLE"):
-        rooms = load_rooms(config_dir)
+        rooms = _salles_du_calcul(config_dir)
         rules = parse_room_rules(load_room_assignment_rules(config_dir))
         # Salles réservées par des tiers : le solveur ne modélise pas les
         # salles, l'attribution est le seul endroit où les honorer.
@@ -1333,7 +1349,7 @@ def cmd_export(args: argparse.Namespace) -> int:
         config_dir = Path(args.config_dir)
         project_root = config_dir.parents[1]
         groups = load_groups(config_dir)
-        rooms = load_rooms(config_dir)
+        rooms = _salles_du_calcul(config_dir)
         sessions_list = list(sessions_by_id.values())
         semestre = sessions_list[0].semestre if sessions_list else None
 

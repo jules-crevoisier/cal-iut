@@ -998,3 +998,86 @@ def test_les_plafonds_d_un_semestre_en_service_ne_se_modifient_pas(admin, genera
     corps = {"promo": 22, "alternants": 22, "enseignant": 24}
     assert admin.put("/generations/plafonds/odd", json=corps).status_code == 409
     assert admin.delete("/generations/plafonds/odd").status_code == 409
+
+
+# ── Effectifs des groupes, capacité et type des salles (lot 5) ────────
+
+
+def test_un_effectif_saisi_remplace_celui_du_fichier():
+    from cal_iut.ingestion.config_loader import load_groups
+
+    origine = {g.id: g.headcount for g in load_groups(CONFIG)}
+    reglages.definir_effectif(CONFIG, "but1-td-ab", 34, "test")
+    lus = {g.id: g.headcount for g in load_groups(CONFIG)}
+    assert lus["but1-td-ab"] == 34
+    assert {k: v for k, v in lus.items() if k != "but1-td-ab"} == {
+        k: v for k, v in origine.items() if k != "but1-td-ab"
+    }
+    assert {g.id: g.headcount for g in load_groups(CONFIG, d_origine=True)} == origine
+    with pytest.raises(reglages.ReglageInvalide):
+        reglages.definir_effectif(CONFIG, "but1-td-ab", 0, "test")
+    reglages.definir_effectif(CONFIG, "but1-td-ab", None, "test")
+    assert {g.id: g.headcount for g in load_groups(CONFIG)} == origine
+
+
+def test_la_capacite_et_le_type_saisis_remplacent_ceux_du_fichier():
+    from cal_iut.ingestion.config_loader import load_rooms
+
+    origine = {r.id: r for r in load_rooms(CONFIG)}
+    reglages.definir_salle(CONFIG, "h005", {"capacity": 18, "room_type": "standard"}, "test")
+    lues = {r.id: r for r in load_rooms(CONFIG)}
+    assert (lues["h005"].capacity, lues["h005"].room_type.value) == (18, "standard")
+    assert lues["h006"] == origine["h006"]
+    assert {r.id: r for r in load_rooms(CONFIG, d_origine=True)} == origine
+    reglages.definir_salle(CONFIG, "h005", None, "test")
+    assert {r.id: r for r in load_rooms(CONFIG)} == origine
+
+
+def test_regler_effectifs_et_salles_depuis_l_ecran(admin):
+    etat = get_state()
+    avant_salles, avant_groupes = etat.rooms, etat.groups
+    try:
+        lu = admin.get("/reglages").json()
+        td = next(e for e in lu["effectifs"] if e["id"] == "but1-td-ab")
+        assert td["effectif"] == td["origine"] and not td["modifie"]
+        assert "reserve" not in lu["types_de_salle"] and "standard" in lu["types_de_salle"]
+
+        r = admin.put("/reglages/effectifs/but1-td-ab", json={"effectif": 33})
+        assert r.status_code == 200, r.text
+        td = next(e for e in r.json()["effectifs"] if e["id"] == "but1-td-ab")
+        assert (td["effectif"], td["modifie"]) == (33, True)
+        assert next(g for g in get_state().groups if g.id == "but1-td-ab").headcount == 33
+        assert admin.put("/reglages/effectifs/inconnu", json={"effectif": 33}).status_code == 404
+        assert admin.put("/reglages/effectifs/but1-td-ab", json={"effectif": 0}).status_code == 422
+        assert admin.delete("/reglages/effectifs/but1-td-ab").status_code == 200
+        assert admin.delete("/reglages/effectifs/but1-td-ab").status_code == 404
+
+        salle = next(s for s in lu["salles"] if s["id"] == "h005")
+        r = admin.put("/reglages/salles/h005", json={"capacite": 20, "type": salle["type"], "placement_auto": False})
+        assert r.status_code == 200, r.text
+        apres = next(s for s in r.json()["salles"] if s["id"] == "h005")
+        assert (apres["capacite"], apres["modifiee"], apres["placement_auto"]) == (20, True, False)
+        assert apres["origine"]["capacite"] == salle["capacite"]
+        en_service = next(x for x in get_state().rooms if x.id == "h005")
+        assert (en_service.capacity, en_service.placement_auto) == (20, False)
+        assert admin.put("/reglages/salles/h005", json={"capacite": 20, "type": "reserve"}).status_code == 422
+        assert admin.put("/reglages/salles/h005", json={"capacite": 20, "type": "piscine"}).status_code == 422
+        assert admin.put("/reglages/salles/inconnue", json={"capacite": 20, "type": "standard"}).status_code == 404
+        assert admin.delete("/reglages/salles/h005").status_code == 200
+        assert next(x for x in get_state().rooms if x.id == "h005").capacity == salle["capacite"]
+        assert admin.delete("/reglages/salles/h005").status_code == 404
+    finally:
+        etat.rooms, etat.groups = avant_salles, avant_groupes
+
+
+def test_la_generation_attribue_aussi_les_salles_ajoutees_a_l_ecran():
+    from cal_iut import cli
+    from cal_iut.api import custom_rooms
+    from cal_iut.models.entities import Room, RoomType
+
+    assert "annexe" not in {r.id for r in cli._salles_du_calcul(CONFIG)}
+    custom_rooms.add_custom_room(Room(id="annexe", label="Annexe", capacity=40, room_type=RoomType.STANDARD))
+    custom_rooms.set_room_override("h005", placement_auto=False)
+    salles = {r.id: r for r in cli._salles_du_calcul(CONFIG)}
+    assert salles["annexe"].capacity == 40
+    assert salles["h005"].placement_auto is False
