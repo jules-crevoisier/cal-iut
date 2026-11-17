@@ -703,8 +703,30 @@ dernier fixe le nombre de semaines. Les deux doivent être des jours de cours du
 calendrier. Une fois le semestre en service, ces dates ne se modifient plus :
 toutes ses séances changeraient de date. Stockage : `data/state/reglages.json`.
 
+Un troisième champ, **Dernier jour des alternants**, sert quand les alternants
+ont cours après les autres étudiants (semestre impair : jusqu'au 12 mars). Le
+calcul s'étend alors jusqu'à ce jour, et les cours des étudiants en formation
+initiale s'arrêtent au dernier jour de cours. À laisser vide quand tout le
+monde finit en même temps. C'est de ces dates que se déduisent l'horizon du
+solveur et la dernière semaine de la formation initiale (`--weeks` et
+`--fi-max-week`, 24 et 18 avec les dates d'origine de l'impair).
+
 Les vacances et les jours fériés viennent toujours de
 `contraintes/02_calendrier_iut.json`.
+
+### Réglages du calcul
+
+Sous les blocs de réglage, le volet **Réglages** précède le bouton « Générer » :
+
+- **Nombre d'essais** et **durée maximale** ;
+- **Étalement des séances** (0 à 100, 8 d'origine) : plus le nombre est grand,
+  plus le calcul répartit les séances d'un module sur tout le semestre ;
+- **S'arrêter dès qu'un essai place toutes les séances** (coché d'origine) ;
+- **Interdire tout cours à un référent de SAE les jours de sa SAE** (décoché
+  d'origine, et déconseillé : sur un semestre complet le calcul n'aboutit plus).
+
+Les valeurs choisies au lancement sont retenues pour ce semestre et proposées la
+fois suivante. « Reprendre les réglages d'origine » remet celles de la recette.
 
 ### Dates des SAE
 

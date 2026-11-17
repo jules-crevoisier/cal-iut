@@ -582,7 +582,7 @@ def test_regler_les_dates_du_semestre_depuis_l_ecran_nouveau_semestre(admin, gen
     corps = reponse.json()
     assert (corps["debut"], corps["fin"], corps["semaines"], corps["personnalise"]) == ("2027-01-04", "2027-06-11", 20, True)
     assert corps["autre"]["chevauche"] is True
-    assert corps["origine"] == {"debut": "2027-02-01", "fin": "2027-06-30"}
+    assert corps["origine"] == {"debut": "2027-02-01", "fin": "2027-06-30", "fin_alternants": None}
     # Le serveur lit les nouvelles dates sans redémarrage.
     assert "even" in get_state().calendar.periodes
 
@@ -720,3 +720,88 @@ def test_les_enseignants_d_un_semestre_en_service_ne_se_reglent_pas(admin, gener
         ("duos", {"code": "WR108", "enseignants": ["ALO", "GLE"], "salles": ["h201", "h203"], "motif": "m"}),
     ):
         assert admin.post(f"/generations/regles/odd/{chemin}", json=corps).status_code == 409, chemin
+
+
+# ── Fin des cours des alternants, réglages du calcul ──────────────────
+
+
+def test_l_horizon_du_calcul_se_deduit_des_dates(admin, generations_isolees):
+    from cal_iut.generation import taches
+
+    # Dates d'origine : exactement la recette d'avant (24 semaines, FI jusqu'à la 18).
+    impair = admin.get("/generations/periode/odd").json()
+    assert (impair["fin_alternants"], impair["semaines"], impair["semaines_alternants"]) == ("2027-03-12", 19, 24)
+    assert impair["origine"]["fin_alternants"] == "2027-03-12"
+    origine = taches.parametres_par_defaut("odd")
+    assert (origine["weeks"], origine["fi_max_week"]) == (24, 18)
+    pair = taches.parametres_par_defaut("even")
+    assert (pair["weeks"], pair["fi_max_week"]) == (None, None)
+
+    # Les alternants du pair finissent deux semaines après les autres.
+    dates = {"debut": "2027-02-01", "fin": "2027-06-11"}
+    reponse = admin.put("/generations/periode/even", json={**dates, "fin_alternants": "2027-06-25"})
+    assert reponse.status_code == 200, reponse.text
+    corps = reponse.json()
+    assert (corps["fin_alternants"], corps["semaines"], corps["semaines_alternants"]) == ("2027-06-25", 16, 18)
+    pair = taches.parametres_par_defaut("even")
+    assert (pair["weeks"], pair["fi_max_week"]) == (18, 15)
+    # Sans le champ, la date des alternants ne bouge pas.
+    assert admin.put("/generations/periode/even", json=dates).json()["fin_alternants"] == "2027-06-25"
+    for mauvaise in ("2027-06-11", "2027-06-26", "2027-04-20", "un jour"):
+        refus = admin.put("/generations/periode/even", json={**dates, "fin_alternants": mauvaise})
+        assert refus.status_code == 422, mauvaise
+    # Vide : ils finissent avec les autres.
+    corps = admin.put("/generations/periode/even", json={**dates, "fin_alternants": None}).json()
+    assert (corps["fin_alternants"], corps["semaines_alternants"], corps["personnalise"]) == (None, None, True)
+    corps = admin.delete("/generations/periode/even").json()
+    assert (corps["fin_alternants"], corps["personnalise"]) == (None, False)
+
+
+def test_les_reglages_du_calcul_sont_retenus_pour_la_fois_suivante(admin, generations_isolees):
+    from cal_iut.generation import taches
+
+    accueil = admin.get("/generations").json()
+    pair = next(g for g in accueil["groupes"] if g["cle"] == "even")
+    assert pair["parametres"] == pair["parametres_d_origine"]
+    assert pair["parametres"]["referent_sae_strict"] is False and pair["parametres"]["spread_weight"] == 8
+
+    choix = {"semestre_group": "even", "tentatives": 3, "spread_weight": 12, "arret_si_complet": False}
+    reponse = admin.post("/generations", json=choix)
+    assert reponse.status_code == 201, reponse.text
+    lances = reponse.json()["parametres"]
+    assert (lances["tentatives"], lances["spread_weight"], lances["arret_si_complet"]) == (3, 12, False)
+    retenus = taches.parametres_par_defaut("even")
+    assert (retenus["tentatives"], retenus["spread_weight"], retenus["arret_si_complet"], retenus["heures"]) == (3, 12, False, 4.0)
+    # L'autre semestre garde ses réglages, et l'origine reste connue.
+    assert taches.parametres_par_defaut("odd")["tentatives"] == 6
+    assert taches.parametres_d_origine("even")["tentatives"] == 6
+    assert reglages.parametres_calcul(CONFIG)["even"] == {"tentatives": 3, "spread_weight": 12, "arret_si_complet": False}
+    with pytest.raises(ValueError):
+        taches.valider_parametres({"semestre_group": "even", "spread_weight": 500})
+
+
+def test_le_referent_de_sae_strict_est_un_choix_du_lancement(tmp_path, monkeypatch):
+    from cal_iut.generation import ouvrier
+
+    commandes: list[list[str]] = []
+
+    class _Processus:
+        pid = 1
+
+        def wait(self, *a, **k):
+            return 0
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(ouvrier.subprocess, "Popen", lambda commande, **k: commandes.append(commande) or _Processus())
+    for strict in (False, True):
+        o = ouvrier.Ouvrier.__new__(ouvrier.Ouvrier)
+        o.dossier, o.groupe = tmp_path, "even"
+        o.params = {"spread_weight": 8, "num_workers": 1, "weeks": None, "fi_max_week": None, "referent_sae_strict": strict}
+        try:
+            o._lancer_solveur(1, tmp_path / "sortie.json")
+        except Exception:  # noqa: BLE001 — seule la commande construite nous intéresse
+            pass
+    assert "--no-sae-supervisor-hard" in commandes[0]
+    assert "--no-sae-supervisor-hard" not in commandes[1]

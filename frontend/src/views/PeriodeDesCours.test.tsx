@@ -12,8 +12,10 @@ const PAIR = {
   debut: "2027-02-01",
   fin: "2027-06-30",
   personnalise: false,
-  origine: { debut: "2027-02-01", fin: "2027-06-30" },
+  fin_alternants: null,
+  origine: { debut: "2027-02-01", fin: "2027-06-30", fin_alternants: null },
   semaines: 19,
+  semaines_alternants: null,
   vacances: [{ debut: "2027-02-22", fin: "2027-02-26" }],
   autre: { libelle: "Semestre impair", debut: "2026-08-31", fin: "2027-01-29", chevauche: false },
 };
@@ -33,6 +35,22 @@ function stubFetch(reponse: Record<string, unknown>, apres?: Record<string, unkn
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Dates du semestre", () => {
+  it("règle le dernier jour de cours des alternants", async () => {
+    const apres = { ...PAIR, fin: "2027-06-11", fin_alternants: "2027-06-25", personnalise: true, semaines: 16 };
+    const appels = stubFetch(PAIR, apres);
+    render(<PeriodeDesCours groupe="even" onModifie={() => undefined} />);
+    fireEvent.change(await screen.findByLabelText("Dernier jour de cours"), { target: { value: "2027-06-11" } });
+    fireEvent.change(screen.getByLabelText("Dernier jour des alternants"), { target: { value: "2027-06-25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer ces dates" }));
+    expect(await screen.findByText(/alternants jusqu’au vendredi 25 juin 2027/)).toBeInTheDocument();
+    const envoi = appels.find((a) => a.init?.method === "PUT");
+    expect(JSON.parse(String(envoi?.init?.body))).toEqual({
+      debut: "2027-02-01",
+      fin: "2027-06-11",
+      fin_alternants: "2027-06-25",
+    });
+  });
+
   it("montre les dates proposées, la fin de l’autre semestre et les vacances", async () => {
     stubFetch(PAIR);
     render(<PeriodeDesCours groupe="even" onModifie={() => undefined} />);
@@ -63,7 +81,11 @@ describe("Dates du semestre", () => {
     await waitFor(() => expect(onModifie).toHaveBeenCalled());
     const envoi = appels.find((a) => a.init?.method === "PUT");
     expect(envoi?.url).toContain("/generations/periode/even");
-    expect(JSON.parse(String(envoi?.init?.body))).toEqual({ debut: "2027-01-04", fin: "2027-06-30" });
+    expect(JSON.parse(String(envoi?.init?.body))).toEqual({
+      debut: "2027-01-04",
+      fin: "2027-06-30",
+      fin_alternants: null,
+    });
     expect(screen.getByText(/Ces dates chevauchent le semestre impair/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revenir aux dates proposées" }));

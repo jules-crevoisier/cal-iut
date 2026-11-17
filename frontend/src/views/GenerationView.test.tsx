@@ -163,6 +163,31 @@ describe("GenerationView", () => {
     expect(JSON.parse(String(envoi?.init?.body))).toEqual({ semestre_group: "even" });
   });
 
+  it("envoie les réglages du calcul choisis, et seulement ceux-là", async () => {
+    const appels = stubFetch();
+    render(<GenerationView />);
+    const bouton = await screen.findByRole("button", { name: /Générer l’emploi du temps/ });
+    fireEvent.click(screen.getByRole("radio", { name: /Semestre pair/ }));
+    await waitFor(() => expect(bouton).toBeEnabled());
+    expect(screen.getByText(/jusqu’à/)).toHaveTextContent("s’arrête plus tôt");
+
+    fireEvent.change(screen.getByLabelText(/Étalement des séances/), { target: { value: "12" } });
+    const arret = screen.getByLabelText("S’arrêter dès qu’un essai place toutes les séances");
+    expect(arret).toBeChecked();
+    fireEvent.click(arret);
+    expect(screen.getByText(/jusqu’à/)).not.toHaveTextContent("s’arrête plus tôt");
+    expect(screen.getByLabelText(/Interdire tout cours à un référent de SAE/)).not.toBeChecked();
+    fireEvent.click(bouton);
+
+    await screen.findByRole("heading", { name: /Génération en cours/ });
+    const envoi = appels.find((a) => a.init?.method === "POST");
+    expect(JSON.parse(String(envoi?.init?.body))).toEqual({
+      semestre_group: "even",
+      spread_weight: 12,
+      arret_si_complet: false,
+    });
+  });
+
   it("montre l'avancement d'une génération en cours et permet de l'arrêter", async () => {
     const appels = stubFetch({ active: EN_COURS });
     vi.spyOn(window, "confirm").mockReturnValue(true);

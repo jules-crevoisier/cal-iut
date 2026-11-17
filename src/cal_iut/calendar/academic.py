@@ -352,6 +352,46 @@ PERIODES_D_ORIGINE: dict[str, tuple[date, date]] = {
 }
 
 
+# Dernier jour de cours des alternants, quand ils finissent après les
+# autres. Impair : les BUT3 en alternance ont cours jusqu'au 12 mars.
+FINS_ALTERNANTS_D_ORIGINE: dict[str, date | None] = {"odd": date(2027, 3, 12), "even": None}
+
+
+def fin_des_alternants(groupe: str) -> date | None:
+    """La date saisie sur l'écran « Nouveau semestre », sinon celle d'origine."""
+    try:
+        from cal_iut.ingestion import reglages
+
+        saisies = reglages.fins_alternants(_REPO_ROOT / "data" / "config")
+        if groupe in saisies:
+            return date.fromisoformat(saisies[groupe]) if saisies[groupe] else None
+    except Exception:  # noqa: BLE001 — un réglage illisible ne doit pas empêcher de calculer
+        pass
+    return FINS_ALTERNANTS_D_ORIGINE.get(groupe)
+
+
+def semaines_du_calcul(calendar: AcademicCalendar, groupe: str) -> tuple[int | None, int | None]:
+    """`(weeks, fi_max_week)` du solveur, déduits des dates du semestre.
+
+    Quand les alternants finissent après les autres, l'horizon va jusqu'à
+    leur dernier jour et la formation initiale s'arrête à la dernière semaine
+    de la période (dates d'origine de l'impair : 24 semaines, FI jusqu'à la
+    semaine 18). Sinon `(None, None)` : l'horizon est celui de la période.
+    """
+    debut, fin = periode_des_cours(calendar, groupe)
+    alternants = fin_des_alternants(groupe)
+    if alternants is None or alternants <= fin:
+        return None, None
+
+    def lundi_suivant(jour: date) -> date:
+        return jour - timedelta(days=jour.weekday()) + timedelta(days=7)
+
+    return (
+        teaching_weeks_until(calendar, debut, lundi_suivant(alternants)),
+        teaching_weeks_until(calendar, debut, lundi_suivant(fin)) - 1,
+    )
+
+
 def groupe_du_semestre(semestre: str | None) -> str:
     return "odd" if semestre in {"S1", "S3", "S5"} else "even"
 

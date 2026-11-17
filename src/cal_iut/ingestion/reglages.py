@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul",
 )
 NB_CRENEAUX = 6
 
@@ -454,6 +454,56 @@ def definir_dates_semestre(config_dir: Path, groupe: str, debut: str | None, fin
                 "groupe": groupe,
                 "debut": debut,
                 "fin": fin,
+                "demande_par": par,
+                "le": datetime.now(timezone.utc).date().isoformat(),
+            })
+        ecrire_json(_path(config_dir), tout)
+
+
+# ── Fin des cours des alternants, réglages du calcul ──────────────────
+
+
+def fins_alternants(config_dir: Path) -> dict[str, str | None]:
+    """`{groupe: date ISO ou None}` pour les groupes où la fin des cours des
+    alternants a été saisie. `None` : ils finissent avec les autres."""
+    return {
+        str(a["groupe"]): (str(a["fin"]) if a.get("fin") else None)
+        for a in _lire(config_dir)["fins_alternants"]["ajouts"]
+        if a.get("groupe")
+    }
+
+
+def definir_fin_alternants(config_dir: Path, groupe: str, fin: str | None, par: str, *, oublier: bool = False) -> None:
+    """Dernier jour de cours des alternants du groupe. `oublier` : retour à
+    la date d'origine."""
+    fin = _valider_date(fin) if fin else None
+    _remplacer(config_dir, "fins_alternants", groupe, None if oublier else {"fin": fin}, par)
+
+
+def parametres_calcul(config_dir: Path) -> dict[str, dict]:
+    """Les réglages du calcul retenus au dernier lancement, par groupe."""
+    return {
+        str(a["groupe"]): dict(a.get("valeurs") or {})
+        for a in _lire(config_dir)["parametres_calcul"]["ajouts"]
+        if a.get("groupe")
+    }
+
+
+def retenir_parametres_calcul(config_dir: Path, groupe: str, valeurs: dict, par: str) -> None:
+    _remplacer(config_dir, "parametres_calcul", groupe, {"valeurs": dict(valeurs)} if valeurs else None, par)
+
+
+def _remplacer(config_dir: Path, nom: str, groupe: str, entree: dict | None, par: str) -> None:
+    """Une seule entrée par groupe de semestres ; `None` la retire."""
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout[nom]
+        bloc["ajouts"] = [a for a in bloc["ajouts"] if a.get("groupe") != groupe]
+        if entree is not None:
+            bloc["ajouts"].append({
+                "id": uuid.uuid4().hex[:12],
+                "groupe": groupe,
+                **entree,
                 "demande_par": par,
                 "le": datetime.now(timezone.utc).date().isoformat(),
             })
