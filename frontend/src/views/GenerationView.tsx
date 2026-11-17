@@ -465,6 +465,10 @@ export function GenerationView({
   const [groupe, setGroupe] = useState<string | null>(null);
   const [essais, setEssais] = useState<string>("");
   const [heures, setHeures] = useState<string>("");
+  // Vide ou `null` : la valeur proposée pour ce semestre.
+  const [etalement, setEtalement] = useState<string>("");
+  const [arretSiComplet, setArretSiComplet] = useState<boolean | null>(null);
+  const [referentStrict, setReferentStrict] = useState<boolean | null>(null);
   const [choisie, setChoisie] = useState<string | null>(null);
   const [detail, setDetail] = useState<GenerationDetail | null>(null);
   const [recuperation, setRecuperation] = useState<RecuperationMmiPrevi | null>(null);
@@ -592,6 +596,9 @@ export function GenerationView({
         semestre_group: groupeChoisi.cle,
         ...(essais.trim() ? { tentatives: Number(essais) } : {}),
         ...(heures.trim() ? { heures: Number(heures.replace(",", ".")) } : {}),
+        ...(etalement.trim() ? { spread_weight: Number(etalement) } : {}),
+        ...(arretSiComplet !== null ? { arret_si_complet: arretSiComplet } : {}),
+        ...(referentStrict !== null ? { referent_sae_strict: referentStrict } : {}),
       });
       setMessage("Génération lancée. Vous pouvez fermer cette page : le calcul continue sur le serveur.");
       await recharger();
@@ -786,7 +793,9 @@ export function GenerationView({
               <p className="generation-duree">
                 Durée : jusqu’à{" "}
                 <strong>{formatDuree((heures.trim() ? Number(heures.replace(",", ".")) : groupeChoisi.parametres.heures) * 3600)}</strong>
-                . Le calcul s’arrête plus tôt dès qu’un essai place toutes les séances.
+                .
+                {(arretSiComplet ?? groupeChoisi.parametres.arret_si_complet ?? true) &&
+                  " Le calcul s’arrête plus tôt dès qu’un essai place toutes les séances."}
               </p>
               <details className="generation-reglages">
                 <summary>Réglages</summary>
@@ -814,12 +823,63 @@ export function GenerationView({
                       onChange={(e) => setHeures(e.target.value)}
                     />
                   </label>
+                  <label title="0 : les séances d’un module peuvent se regrouper sur quelques semaines. Plus le nombre est grand, plus le calcul les étale sur tout le semestre.">
+                    Étalement des séances (0 à 100)
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={etalement}
+                      placeholder={String(groupeChoisi.parametres.spread_weight ?? 8)}
+                      onChange={(e) => setEtalement(e.target.value)}
+                    />
+                  </label>
                 </div>
+                <label className="generation-case">
+                  <input
+                    type="checkbox"
+                    checked={arretSiComplet ?? groupeChoisi.parametres.arret_si_complet ?? true}
+                    onChange={(e) => setArretSiComplet(e.target.checked)}
+                  />
+                  S’arrêter dès qu’un essai place toutes les séances
+                </label>
+                <label className="generation-case">
+                  <input
+                    type="checkbox"
+                    checked={referentStrict ?? groupeChoisi.parametres.referent_sae_strict ?? false}
+                    onChange={(e) => setReferentStrict(e.target.checked)}
+                  />
+                  Interdire tout cours à un référent de SAE les jours de sa SAE
+                  <span className="muted">
+                    {" "}
+                    (déconseillé : sur un semestre complet, le calcul n’aboutit plus ; décoché, il
+                    l’évite quand il le peut)
+                  </span>
+                </label>
                 <p className="muted">
                   Chaque essai repart d’un tirage différent ; le meilleur est gardé. Le serveur y consacre{" "}
                   {groupeChoisi.parametres.num_workers} cœur{groupeChoisi.parametres.num_workers > 1 ? "s" : ""} sur{" "}
-                  {donnees.coeurs}.
+                  {donnees.coeurs}. Les réglages choisis sont proposés à nouveau la prochaine fois.
                 </p>
+                {groupeChoisi.parametres_d_origine &&
+                  (["tentatives", "heures", "spread_weight", "arret_si_complet", "referent_sae_strict"] as const).some(
+                    (c) => groupeChoisi.parametres[c] !== groupeChoisi.parametres_d_origine![c],
+                  ) && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => {
+                        const o = groupeChoisi.parametres_d_origine!;
+                        setEssais(String(o.tentatives));
+                        setHeures(String(o.heures));
+                        setEtalement(String(o.spread_weight));
+                        setArretSiComplet(o.arret_si_complet);
+                        setReferentStrict(o.referent_sae_strict);
+                      }}
+                    >
+                      Reprendre les réglages d’origine
+                    </button>
+                  )}
               </details>
             </>
           )}

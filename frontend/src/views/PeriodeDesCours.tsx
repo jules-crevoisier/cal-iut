@@ -41,6 +41,7 @@ export function PeriodeDesCours({
   const [donnees, setDonnees] = useState<Periode | null>(null);
   const [debut, setDebut] = useState("");
   const [fin, setFin] = useState("");
+  const [alternants, setAlternants] = useState("");
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -48,6 +49,7 @@ export function PeriodeDesCours({
     setDonnees(p);
     setDebut(p.debut);
     setFin(p.fin);
+    setAlternants(p.fin_alternants ?? "");
   };
 
   useEffect(() => {
@@ -67,7 +69,10 @@ export function PeriodeDesCours({
   if (!donnees) return null;
 
   const verrouille = donnees.verrouille !== null;
-  const change = debut !== donnees.debut || fin !== donnees.fin;
+  const change =
+    debut !== donnees.debut ||
+    fin !== donnees.fin ||
+    alternants !== (donnees.fin_alternants ?? "");
 
   const agir = async (action: () => Promise<Periode>) => {
     setOccupe(true);
@@ -90,6 +95,8 @@ export function PeriodeDesCours({
           Du {JOUR.format(versDate(donnees.debut))} au{" "}
           {JOUR.format(versDate(donnees.fin))}, {donnees.semaines} semaines de
           cours
+          {donnees.fin_alternants &&
+            ` ; alternants jusqu’au ${JOUR.format(versDate(donnees.fin_alternants))}`}
         </span>
         {!donnees.personnalise && <span className="pill">Dates proposées</span>}
       </div>
@@ -131,7 +138,9 @@ export function PeriodeDesCours({
           onSubmit={(e) => {
             e.preventDefault();
             if (!debut || !fin || !change) return;
-            void agir(() => fixerPeriodeDesCours(groupe, debut, fin));
+            void agir(() =>
+              fixerPeriodeDesCours(groupe, debut, fin, alternants || null),
+            );
           }}
         >
           <label>
@@ -149,6 +158,15 @@ export function PeriodeDesCours({
               value={fin}
               min={debut || undefined}
               onChange={(e) => setFin(e.target.value)}
+            />
+          </label>
+          <label title="À laisser vide si les alternants finissent en même temps que les autres">
+            Dernier jour des alternants
+            <input
+              type="date"
+              value={alternants}
+              min={fin || undefined}
+              onChange={(e) => setAlternants(e.target.value)}
             />
           </label>
           <button

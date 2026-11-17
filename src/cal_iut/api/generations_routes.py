@@ -26,6 +26,9 @@ class GenerationRequest(BaseModel):
     weeks: int | None = None
     fi_max_week: int | None = None
     num_workers: int | None = None
+    spread_weight: int | None = None
+    arret_si_complet: bool | None = None
+    referent_sae_strict: bool | None = None
 
 
 class SourceRequest(BaseModel):
@@ -97,7 +100,10 @@ def lister_generations() -> dict:
     active = next((e for e in etats if e["statut"] in taches.STATUTS_ACTIFS), None)
     return {
         "groupes": [
-            {"cle": cle, **infos, "parametres": taches.parametres_par_defaut(cle), "source": _source(cle)}
+            {
+                "cle": cle, **infos, "parametres": taches.parametres_par_defaut(cle),
+                "parametres_d_origine": taches.parametres_d_origine(cle), "source": _source(cle),
+            }
             for cle, infos in taches.GROUPES.items()
         ],
         "mmi_previ_configure": mmi_previ.configure(),
@@ -874,6 +880,9 @@ def retirer_une_regle(groupe: str, nom: str, identifiant: str) -> dict:
 class PeriodeDesCoursRequest(BaseModel):
     debut: str
     fin: str
+    # Dernier jour de cours des alternants. Absent : inchangé. `null` : ils
+    # finissent avec les autres.
+    fin_alternants: str | None = None
 
 
 def _vacances(calendrier, debut, fin) -> list[dict]:
@@ -900,14 +909,21 @@ def _periode(groupe: str) -> dict:
     from cal_iut.calendar.academic import (
         PERIODES_D_ORIGINE,
         build_default_calendar_2026_2027,
+        FINS_ALTERNANTS_D_ORIGINE,
         default_horizon_weeks,
+        fin_des_alternants,
         periode_des_cours,
+        semaines_du_calcul,
     )
+    from cal_iut.ingestion import reglages
     from cal_iut.ingestion.pipeline import SEMESTRE_GROUP_ANCHOR
 
     calendrier = build_default_calendar_2026_2027()
     debut, fin = periode_des_cours(calendrier, groupe)
     origine = PERIODES_D_ORIGINE[groupe]
+    alternants = fin_des_alternants(groupe)
+    alternants = alternants if alternants and alternants > fin else None
+    alternants_origine = FINS_ALTERNANTS_D_ORIGINE.get(groupe)
     autre = "even" if groupe == "odd" else "odd"
     autre_debut, autre_fin = periode_des_cours(calendrier, autre)
     motif = _semestre_verrouille(groupe)
@@ -921,9 +937,18 @@ def _periode(groupe: str) -> dict:
         "verrouille": motif,
         "debut": debut.isoformat(),
         "fin": fin.isoformat(),
-        "personnalise": groupe in calendrier.periodes,
-        "origine": {"debut": origine[0].isoformat(), "fin": origine[1].isoformat()},
+        "fin_alternants": alternants.isoformat() if alternants else None,
+        "personnalise": groupe in calendrier.periodes
+        or groupe in reglages.fins_alternants(taches.RACINE / "data" / "config"),
+        "origine": {
+            "debut": origine[0].isoformat(),
+            "fin": origine[1].isoformat(),
+            "fin_alternants": alternants_origine.isoformat() if alternants_origine else None,
+        },
         "semaines": default_horizon_weeks(calendrier, SEMESTRE_GROUP_ANCHOR[groupe]),
+        # Semaines de cours jusqu'au dernier jour des alternants, quand ils
+        # finissent après les autres.
+        "semaines_alternants": semaines_du_calcul(calendrier, groupe)[0],
         "vacances": _vacances(calendrier, debut, fin),
         "autre": {
             "libelle": taches.GROUPES[autre]["libelle"],
@@ -982,10 +1007,32 @@ def fixer_la_periode_des_cours(groupe: str, body: PeriodeDesCoursRequest, reques
     lundi_suivant = jours["dernier"].fromordinal(jours["dernier"].toordinal() - jours["dernier"].weekday() + 7)
     if teaching_weeks_until(calendrier, jours["premier"], lundi_suivant) < 4:
         raise HTTPException(422, "Un semestre compte au moins quatre semaines de cours.")
+    regler_alternants = "fin_alternants" in body.model_fields_set
+    if regler_alternants and body.fin_alternants:
+        try:
+            alternants = date.fromisoformat(body.fin_alternants)
+        except ValueError as exc:
+            raise HTTPException(422, "Le dernier jour de cours des alternants n'est pas une date valide.") from exc
+        if calendrier.date_to_week_day_any(alternants) is None or alternants in calendrier.blocked_dates:
+            raise HTTPException(
+                422,
+                f"Le {alternants.strftime('%d/%m/%Y')} n'est pas un jour de cours du calendrier "
+                "(week-end, férié, vacances ou hors de l'année).",
+            )
+        if alternants <= jours["dernier"]:
+            raise HTTPException(
+                422,
+                "Le dernier jour de cours des alternants doit être après celui des autres étudiants. "
+                "Laissez-le vide s'ils finissent en même temps.",
+            )
     try:
         reglages.definir_dates_semestre(
             taches.RACINE / "data" / "config", groupe, body.debut, body.fin, _auteur(request)
         )
+        if regler_alternants:
+            reglages.definir_fin_alternants(
+                taches.RACINE / "data" / "config", groupe, body.fin_alternants or None, _auteur(request)
+            )
     except reglages.ReglageInvalide as exc:
         raise HTTPException(422, str(exc)) from exc
     _calendriers_a_jour()
@@ -998,6 +1045,7 @@ def revenir_aux_dates_d_origine(groupe: str, request: Request) -> dict:
 
     _refuser_si_source_verrouillee(groupe)
     reglages.definir_dates_semestre(taches.RACINE / "data" / "config", groupe, None, None, _auteur(request))
+    reglages.definir_fin_alternants(taches.RACINE / "data" / "config", groupe, None, _auteur(request), oublier=True)
     _calendriers_a_jour()
     return _periode(groupe)
 

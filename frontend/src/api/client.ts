@@ -470,6 +470,11 @@ export interface ParametresGeneration {
   weeks: number | null;
   fi_max_week: number | null;
   num_workers: number;
+  /** Étalement des séances d'un module sur le semestre (0 à 100). */
+  spread_weight: number;
+  arret_si_complet: boolean;
+  /** Référent de SAE strictement indisponible les jours de sa SAE. */
+  referent_sae_strict: boolean;
 }
 
 /** D'où viennent la maquette et la progression d'un groupe de semestres. */
@@ -498,7 +503,9 @@ export interface GroupeSemestres {
   cle: string;
   libelle: string;
   semestres: string[];
+  /** Réglages proposés : ceux d'origine, ou ceux du dernier lancement. */
   parametres: ParametresGeneration;
+  parametres_d_origine?: ParametresGeneration;
   source?: SourceMaquette;
 }
 
@@ -595,6 +602,9 @@ export async function lancerGeneration(demande: {
   semestre_group: string;
   tentatives?: number;
   heures?: number;
+  spread_weight?: number;
+  arret_si_complet?: boolean;
+  referent_sae_strict?: boolean;
 }): Promise<GenerationDetail> {
   return request<GenerationDetail>("/generations", { method: "POST", body: JSON.stringify(demande) });
 }
@@ -715,9 +725,13 @@ export interface PeriodeDesCours {
   fin: string;
   /** Vrai : dates saisies à l'écran, faux : dates proposées d'origine. */
   personnalise: boolean;
-  origine: { debut: string; fin: string };
+  /** Dernier jour de cours des alternants, s'ils finissent après les autres. */
+  fin_alternants: string | null;
+  origine: { debut: string; fin: string; fin_alternants: string | null };
   /** Nombre de semaines de cours entre les deux dates. */
   semaines: number;
+  /** Semaines de cours jusqu'au dernier jour des alternants. */
+  semaines_alternants: number | null;
   vacances: { debut: string; fin: string }[];
   autre: { libelle: string; debut: string; fin: string; chevauche: boolean };
 }
@@ -726,10 +740,15 @@ export async function lirePeriodeDesCours(groupe: string): Promise<PeriodeDesCou
   return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`);
 }
 
-export async function fixerPeriodeDesCours(groupe: string, debut: string, fin: string): Promise<PeriodeDesCours> {
+export async function fixerPeriodeDesCours(
+  groupe: string,
+  debut: string,
+  fin: string,
+  finAlternants: string | null,
+): Promise<PeriodeDesCours> {
   return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`, {
     method: "PUT",
-    body: JSON.stringify({ debut, fin }),
+    body: JSON.stringify({ debut, fin, fin_alternants: finAlternants }),
   });
 }
 

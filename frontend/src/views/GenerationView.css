@@ -184,6 +184,21 @@ p.generation-duree {
   width: 140px;
 }
 
+.generation-case {
+  display: block;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+.generation-case input {
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+.generation-reglages .btn {
+  margin-top: 10px;
+}
+
 .generation-actions {
   display: flex;
   flex-wrap: wrap;

@@ -85,36 +85,68 @@ def coeurs_disponibles() -> int:
     return os.cpu_count() or 1
 
 
-def parametres_par_defaut(groupe: str) -> dict:
+# Ce que l'écran « Nouveau semestre » laisse régler au lancement ; les
+# valeurs choisies sont retenues pour les générations suivantes du groupe.
+REGLABLES = ("tentatives", "heures", "spread_weight", "arret_si_complet", "referent_sae_strict")
+
+
+def _semaines(groupe: str) -> tuple[int | None, int | None]:
+    from cal_iut.calendar.academic import build_default_calendar_2026_2027, semaines_du_calcul
+
+    return semaines_du_calcul(build_default_calendar_2026_2027(), groupe)
+
+
+def parametres_d_origine(groupe: str) -> dict:
     """Réglages de la recette, par groupe de semestres.
 
-    Impair : ceux de `scripts/solve_until_ok.py` et de `docs/DATA.md` (24
-    semaines pour laisser finir les alternants, formation initiale terminée
-    en semaine 18, soit le 1er février). Pair : l'horizon vient du
-    calendrier, sans date de fin anticipée pour la formation initiale.
+    Ceux de `scripts/solve_until_ok.py` et de `docs/DATA.md`. L'horizon et
+    la fin de la formation initiale se déduisent des dates du semestre (cf.
+    `semaines_du_calcul`) : avec les dates d'origine de l'impair, 24 semaines
+    pour laisser finir les alternants, formation initiale terminée en semaine
+    18. Pair : l'horizon vient du calendrier.
 
     Un cœur est laissé au serveur web, qui continue de servir le planning en
     cours pendant le calcul.
     """
     if groupe not in GROUPES:
         raise ValueError(f"Groupe de semestres inconnu : {groupe!r}")
-    commun = {
+    weeks, fi_max_week = _semaines(groupe)
+    return {
         "semestre_group": groupe,
         "tentatives": 6,
         "heures": 4.0,
         "spread_weight": 8,
         "num_workers": max(1, coeurs_disponibles() - 1),
         "arret_si_complet": True,
+        # Un référent de SAE strictement indisponible les jours de sa SAE :
+        # essayé, et le calcul n'aboutit plus sur un semestre complet (cf.
+        # docs/DATA.md §49). Par défaut, c'est une préférence.
+        "referent_sae_strict": False,
+        "weeks": weeks,
+        "fi_max_week": fi_max_week,
     }
-    if groupe == "odd":
-        return {**commun, "weeks": 24, "fi_max_week": 18}
-    return {**commun, "weeks": None, "fi_max_week": None}
+
+
+def parametres_par_defaut(groupe: str) -> dict:
+    """Les réglages d'origine, avec ceux retenus au dernier lancement."""
+    params = parametres_d_origine(groupe)
+    try:
+        from cal_iut.ingestion import reglages
+
+        retenus = reglages.parametres_calcul(RACINE / "data" / "config").get(groupe, {})
+        params = _appliquer(params, {c: v for c, v in retenus.items() if c in REGLABLES})
+    except Exception:  # noqa: BLE001 — un réglage retenu illisible ne doit pas empêcher de générer
+        pass
+    return params
 
 
 def valider_parametres(brut: dict) -> dict:
     """Paramètres complets et bornés, à partir d'une saisie partielle."""
-    groupe = str(brut.get("semestre_group") or "")
-    params = parametres_par_defaut(groupe)
+    return _appliquer(parametres_par_defaut(str(brut.get("semestre_group") or "")), brut)
+
+
+def _appliquer(base: dict, brut: dict) -> dict:
+    params = dict(base)
 
     def _entier(cle: str, mini: int, maxi: int, *, optionnel: bool = False) -> None:
         if cle not in brut:
@@ -141,8 +173,9 @@ def valider_parametres(brut: dict) -> dict:
         if isinstance(heures, bool) or not isinstance(heures, int | float) or not 0.1 <= heures <= 24:
             raise ValueError("« heures » doit être compris entre 0,1 et 24")
         params["heures"] = float(heures)
-    if "arret_si_complet" in brut:
-        params["arret_si_complet"] = bool(brut["arret_si_complet"])
+    for cle in ("arret_si_complet", "referent_sae_strict"):
+        if cle in brut:
+            params[cle] = bool(brut[cle])
     return params
 
 
@@ -225,6 +258,7 @@ def creer(parametres: dict, par: str) -> dict:
         en_cours = active()
         if en_cours is not None:
             raise GenerationDejaEnCours(en_cours)
+        _retenir(params, parametres, par)
         maintenant = datetime.now()
         generation_id = f"{maintenant:%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
         chemin = GENERATIONS_DIR / generation_id
@@ -247,6 +281,25 @@ def creer(parametres: dict, par: str) -> dict:
         ecrire(chemin, etat)
         _purger_anciennes()
         return etat
+
+
+def _retenir(params: dict, demande: dict, par: str) -> None:
+    """Les réglages choisis à ce lancement deviennent ceux proposés la
+    prochaine fois, pour ce groupe de semestres."""
+    choisis = {c for c in REGLABLES if c in demande}
+    if not choisis:
+        return
+    try:
+        from cal_iut.ingestion import reglages
+
+        config = RACINE / "data" / "config"
+        origine = parametres_d_origine(params["semestre_group"])
+        retenus = {**reglages.parametres_calcul(config).get(params["semestre_group"], {})}
+        retenus.update({c: params[c] for c in choisis})
+        retenus = {c: v for c, v in retenus.items() if c in REGLABLES and v != origine[c]}
+        reglages.retenir_parametres_calcul(config, params["semestre_group"], retenus, par)
+    except Exception:  # noqa: BLE001 — ne pas retenir un réglage n'empêche pas de générer
+        pass
 
 
 def _purger_anciennes() -> None:

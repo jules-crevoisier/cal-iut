@@ -280,9 +280,10 @@ class Ouvrier:
             "--last-resort-seconds", str(DERNIER_RECOURS_SECONDES),
             "--last-resort-seeds", str(DERNIER_RECOURS_GRAINES),
             "--num-workers", str(self.params["num_workers"]),
-            "--no-sae-supervisor-hard",
             "--output", str(sortie),
         ]
+        if not self.params.get("referent_sae_strict"):
+            commande.append("--no-sae-supervisor-hard")
         if self.params["weeks"]:
             commande += ["--weeks", str(self.params["weeks"])]
         if self.params["fi_max_week"] is not None:
