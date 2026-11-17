@@ -10,7 +10,10 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 import {
+  ajouterPhaseSae,
+  confierSaeAuCalcul,
   lireDatesSae,
+  retirerPhaseSae,
   saisirDatesSae,
   type DatesSaeReponse,
   type SaeDuSemestre,
@@ -83,14 +86,21 @@ function LigneSae({
   verrouille,
   occupe,
   onDates,
+  onAction,
 }: {
   sae: SaeDuSemestre;
   verrouille: boolean;
   occupe: boolean;
   onDates: (dates: string[]) => void;
+  onAction: (action: (groupe: string) => Promise<DatesSaeReponse>) => void;
 }) {
   const [debut, setDebut] = useState("");
   const [fin, setFin] = useState("");
+  const [motifCalcul, setMotifCalcul] = useState("");
+  const [phase, setPhase] = useState({ qui: "", debut: "", fin: "", motif: "" });
+  const enseignants = sae.enseignants ?? [];
+  const phases = sae.phases ?? [];
+  const datee = sae.dates_officielles.length + sae.dates_saisies.length > 0;
   const aucune = sae.dates_officielles.length + sae.dates_saisies.length === 0;
   const ajout = debut ? joursOuvres(debut, fin || debut) : [];
 
@@ -143,7 +153,7 @@ function LigneSae({
           ))}
         </div>
       </div>
-      {!verrouille && (
+      {!verrouille && !sae.placee_par_le_calcul && (
         <form
           className="dates-sae-ajout"
           onSubmit={(e) => {
@@ -181,6 +191,170 @@ function LigneSae({
             Ajouter{ajout.length > 0 ? ` ${nbJours(ajout.length)}` : ""}
           </button>
         </form>
+      )}
+      {(phases.length > 0 || (!verrouille && (datee ? enseignants.length > 1 : true))) && (
+        <details className="dates-sae-plus">
+          <summary>
+            {datee ? "Qui encadre, et quand" : "Placement par le calcul"}
+            {phases.length > 0 && (
+              <span className="muted">
+                {" "}
+                · {phases.length} période{phases.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </summary>
+          {!datee && !verrouille && (
+            <div className="dates-sae-calcul">
+              {sae.placee_par_le_calcul ? (
+                sae.placement_saisi ? (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={occupe}
+                    onClick={() => onAction((g) => confierSaeAuCalcul(g, sae.code, false, ""))}
+                  >
+                    Ne plus la faire placer par le calcul
+                  </button>
+                ) : (
+                  <span className="muted">Réglage d’origine : le calcul place ses séances.</span>
+                )
+              ) : (
+                <>
+                  <p className="muted">
+                    Sans journées réservées, le calcul peut placer les séances de cette SAE une par une,
+                    comme celles d’un module.
+                  </p>
+                  <label className="seances-annulees-motif">
+                    Motif
+                    <input
+                      type="text"
+                      value={motifCalcul}
+                      maxLength={300}
+                      aria-label={`${sae.code}, motif du placement par le calcul`}
+                      placeholder="Qui le demande, et pourquoi"
+                      onChange={(e) => setMotifCalcul(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={occupe || !motifCalcul.trim()}
+                    onClick={() =>
+                      onAction((g) => confierSaeAuCalcul(g, sae.code, true, motifCalcul.trim()))
+                    }
+                  >
+                    Faire placer cette SAE par le calcul
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {datee && (
+            <>
+              <p className="muted">
+                Sans période, chaque enseignant de la SAE est tenu pour pris toutes ses journées. Avec une
+                période, il ne l’est que ces jours-là et reste disponible pour ses cours le reste du temps.
+              </p>
+              {phases.length > 0 && (
+                <ul className="dates-sae-phases">
+                  {phases.map((p, i) => (
+                    <li key={p.id ?? `livree-${i}`}>
+                      <span>
+                        <strong>{p.nom}</strong> · {libellePeriode([p.debut, p.fin].slice(0, p.debut === p.fin ? 1 : 2))}
+                        {p.sauf.length > 0 && `, sauf ${nbJours(p.sauf.length)}`}
+                        {p.motif && <span className="muted"> · {p.motif}</span>}
+                      </span>
+                      {p.origine === "livree" ? (
+                        <span className="pill" title="Période livrée avec l’application">
+                          D’origine
+                        </span>
+                      ) : (
+                        !verrouille &&
+                        p.id && (
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            disabled={occupe}
+                            aria-label={`Retirer la période de ${p.nom} sur ${sae.code}`}
+                            onClick={() => onAction((g) => retirerPhaseSae(g, sae.code, p.id!))}
+                          >
+                            Retirer
+                          </button>
+                        )
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!verrouille && enseignants.length > 0 && (
+                <form
+                  className="dates-sae-ajout"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!phase.qui || !phase.debut) return;
+                    onAction((g) =>
+                      ajouterPhaseSae(g, sae.code, {
+                        teacher_code: phase.qui,
+                        debut: phase.debut,
+                        fin: phase.fin || phase.debut,
+                        motif: phase.motif.trim(),
+                      }),
+                    );
+                    setPhase({ qui: "", debut: "", fin: "", motif: "" });
+                  }}
+                >
+                  <label>
+                    Enseignant
+                    <select
+                      value={phase.qui}
+                      aria-label={`${sae.code}, enseignant de la période`}
+                      onChange={(e) => setPhase({ ...phase, qui: e.target.value })}
+                    >
+                      <option value="">Choisir…</option>
+                      {enseignants.map((x) => (
+                        <option key={x.code} value={x.code}>
+                          {x.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Du
+                    <input
+                      type="date"
+                      value={phase.debut}
+                      aria-label={`${sae.code}, période du`}
+                      onChange={(e) => setPhase({ ...phase, debut: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    au
+                    <input
+                      type="date"
+                      value={phase.fin}
+                      min={phase.debut || undefined}
+                      aria-label={`${sae.code}, période au`}
+                      onChange={(e) => setPhase({ ...phase, fin: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Note
+                    <input
+                      type="text"
+                      value={phase.motif}
+                      maxLength={300}
+                      aria-label={`${sae.code}, note de la période`}
+                      onChange={(e) => setPhase({ ...phase, motif: e.target.value })}
+                    />
+                  </label>
+                  <button type="submit" className="btn btn--sm" disabled={occupe || !phase.qui || !phase.debut}>
+                    Ajouter la période
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+        </details>
       )}
     </li>
   );
@@ -230,11 +404,14 @@ export function DatesSae({
       !s.placee_par_le_calcul,
   ).length;
 
-  const enregistrer = async (sae: SaeDuSemestre, dates: string[]) => {
+  const enregistrer = (sae: SaeDuSemestre, dates: string[]) =>
+    agir(() => saisirDatesSae(groupe, sae.code, dates));
+
+  const agir = async (action: () => Promise<DatesSaeReponse>) => {
     setOccupe(true);
     setErreur(null);
     try {
-      setDonnees(await saisirDatesSae(groupe, sae.code, dates));
+      setDonnees(await action());
       onModifie();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "L’enregistrement a échoué");
@@ -276,6 +453,7 @@ export function DatesSae({
             verrouille={donnees.verrouille !== null}
             occupe={occupe}
             onDates={(dates) => void enregistrer(s, dates)}
+            onAction={(action) => void agir(() => action(groupe))}
           />
         ))}
       </ul>

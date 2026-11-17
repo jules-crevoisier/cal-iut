@@ -635,6 +635,54 @@ export interface SaeDuSemestre {
   dates_officielles: string[];
   dates_saisies: string[];
   placee_par_le_calcul: boolean;
+  /** Vrai : choix fait à l'écran, qu'on peut y défaire. */
+  placement_saisi?: boolean;
+  enseignants?: { code: string; nom: string }[];
+  phases?: PhaseSae[];
+}
+
+/** Période pendant laquelle un enseignant encadre la SAE. */
+export interface PhaseSae {
+  /** `null` : période livrée avec l'application. */
+  id: string | null;
+  origine: "livree" | "ajoutee";
+  teacher_code: string;
+  nom: string;
+  debut: string;
+  fin: string;
+  /** Jours retirés de la période (périodes livrées). */
+  sauf: string[];
+  motif: string;
+}
+
+export async function confierSaeAuCalcul(
+  groupe: string,
+  code: string,
+  parLeCalcul: boolean,
+  motif: string,
+): Promise<DatesSaeReponse> {
+  return request<DatesSaeReponse>(
+    `/generations/sae/${encodeURIComponent(groupe)}/${encodeURIComponent(code)}/placement`,
+    { method: "PUT", body: JSON.stringify({ par_le_calcul: parLeCalcul, motif }) },
+  );
+}
+
+export async function ajouterPhaseSae(
+  groupe: string,
+  code: string,
+  phase: { teacher_code: string; debut: string; fin: string; motif: string },
+): Promise<DatesSaeReponse> {
+  return request<DatesSaeReponse>(
+    `/generations/sae/${encodeURIComponent(groupe)}/${encodeURIComponent(code)}/phases`,
+    { method: "POST", body: JSON.stringify(phase) },
+  );
+}
+
+export async function retirerPhaseSae(groupe: string, code: string, id: string): Promise<DatesSaeReponse> {
+  return request<DatesSaeReponse>(
+    `/generations/sae/${encodeURIComponent(groupe)}/${encodeURIComponent(code)}/phases/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
 }
 
 export interface DatesSaeReponse {

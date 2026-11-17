@@ -863,3 +863,67 @@ def test_une_liste_de_creneaux_possibles_ne_s_elargit_pas_a_l_ecran(admin):
     assert admin.put("/reglages/semaines-types/KNG", json={"indisponibles": plus, "motif": "m"}).status_code == 200
     assert _semaine(admin, "KNG")["bloques"] == [libre]
     assert admin.delete("/reglages/semaines-types/KNG").status_code == 200
+
+
+# ── SAE : placement par le calcul, périodes d'encadrement ─────────────
+
+
+def test_confier_une_sae_au_calcul_et_dire_qui_l_encadre_quand(admin, generations_isolees):
+    from cal_iut.ingestion.config_loader import load_sae_teacher_phases, load_solver_scheduled_sae
+
+    def _sae(code: str) -> dict:
+        return next(s for s in admin.get("/generations/sae/even").json()["sae"] if s["code"] == code)
+
+    depart = _sae("WS202")
+    assert depart["placee_par_le_calcul"] is False and depart["phases"] == []
+    assert {e["code"] for e in depart["enseignants"]} == {"ALO", "FLI", "JLE", "KBR"}
+
+    # Placement par le calcul : seulement sans journées réservées, et avec un motif.
+    assert admin.put("/generations/sae/even/WS202/placement", json={"par_le_calcul": True}).status_code == 422
+    reponse = admin.put("/generations/sae/even/WS202/placement", json={"par_le_calcul": True, "motif": "Pas de dates"})
+    assert reponse.status_code == 200, reponse.text
+    assert _sae("WS202")["placee_par_le_calcul"] is True and _sae("WS202")["placement_saisi"] is True
+    assert ("WS202", "S2") in load_solver_scheduled_sae(CONFIG)
+    assert admin.put("/generations/sae/even/WS202", json={"dates": ["2027-03-08"]}).status_code == 422
+    assert admin.put("/generations/sae/even/WS202/placement", json={"par_le_calcul": False}).status_code == 200
+    assert ("WS202", "S2") not in load_solver_scheduled_sae(CONFIG)
+    assert admin.put("/generations/sae/even/WS999/placement", json={"par_le_calcul": True, "motif": "m"}).status_code == 404
+
+    dates = ["2027-03-08", "2027-03-09", "2027-03-10", "2027-03-11", "2027-03-12"]
+    assert admin.put("/generations/sae/even/WS202", json={"dates": dates}).status_code == 200
+    refus = admin.put("/generations/sae/even/WS202/placement", json={"par_le_calcul": True, "motif": "m"})
+    assert refus.status_code == 422 and "journées réservées" in refus.json()["detail"]
+
+    # Kyllian Bresson n'encadre que les deux premiers jours.
+    phase = {"teacher_code": "KBR", "debut": "2027-03-08", "fin": "2027-03-09", "motif": "Lancement"}
+    reponse = admin.post("/generations/sae/even/WS202/phases", json=phase)
+    assert reponse.status_code == 201, reponse.text
+    saisie = _sae("WS202")["phases"][0]
+    assert (saisie["origine"], saisie["teacher_code"], saisie["debut"], saisie["fin"]) == ("ajoutee", "KBR", "2027-03-08", "2027-03-09")
+    assert saisie["nom"] != "KBR" and saisie["id"]
+    chargee = next(p for p in load_sae_teacher_phases(CONFIG) if p.course_code == "WS202")
+    assert (chargee.teacher_code, chargee.semestre, chargee.debut, chargee.fin) == ("KBR", "S2", "2027-03-08", "2027-03-09")
+    for refus in ({"teacher_code": "TPA"}, {"debut": "2027-03-10"}, {"fin": "bientôt"}):
+        assert admin.post("/generations/sae/even/WS202/phases", json={**phase, **refus}).status_code == 422, refus
+    assert admin.delete(f"/generations/sae/even/WS204/phases/{saisie['id']}").status_code == 404
+    assert admin.delete(f"/generations/sae/even/WS202/phases/{saisie['id']}").status_code == 200
+    assert _sae("WS202")["phases"] == []
+
+
+def test_les_sae_d_un_semestre_en_service_gardent_leurs_reglages(admin, generations_isolees, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    sae = {s["code"]: s for s in admin.get("/generations/sae/odd").json()["sae"]}
+    # Les réglages d'origine sont listés : WSA501D placée par le calcul, WS501D découpée.
+    assert sae["WSA501D"]["placee_par_le_calcul"] is True and sae["WSA501D"]["placement_saisi"] is False
+    assert len(sae["WS501D"]["phases"]) == 4 and all(p["origine"] == "livree" for p in sae["WS501D"]["phases"])
+    phase = {"teacher_code": "ALO", "debut": "2026-11-12", "fin": "2026-11-13", "motif": "m"}
+    assert admin.post("/generations/sae/odd/WS501D/phases", json=phase).status_code == 409
+    assert admin.put("/generations/sae/odd/WSA310M/placement", json={"par_le_calcul": True, "motif": "m"}).status_code == 409

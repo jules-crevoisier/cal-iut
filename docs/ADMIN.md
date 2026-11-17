@@ -743,6 +743,16 @@ la liste « À régler avant de générer » se met à jour. Une fois le semestr
 publié, elles ne se modifient plus depuis cet écran. Stockage :
 `data/state/reglages.json`, comme les réglages ci-dessous.
 
+Chaque SAE a aussi un volet repliable :
+
+- **Placement par le calcul**, pour une SAE sans journées réservées : le calcul
+  place alors ses séances une par une, comme celles d'un module (complète
+  `solver_scheduled_sae` de `course_scheduling_rules.yaml`). Motif obligatoire.
+- **Qui encadre, et quand**, pour une SAE datée : par défaut chaque enseignant
+  de la SAE est tenu pour pris toutes ses journées ; une période (enseignant,
+  du, au) le limite à ces jours-là et le laisse disponible pour ses cours le
+  reste du temps (complète `sae_teacher_phases.yaml`).
+
 ### Séances annulées
 
 Sur le même écran, le bloc **Séances annulées** liste les séances qui ne

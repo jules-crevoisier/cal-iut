@@ -200,6 +200,9 @@ def _sae_du_groupe(groupe: str) -> list[dict]:
     except ValueError:
         corrigees = {}
     par_solveur = load_solver_scheduled_sae(config)
+    confiees = {str(a["course_code"]).upper() for a in reglages.sae_par_le_calcul(config)}
+    modules = _modules_du_groupe(groupe)
+    phases = _phases_des_sae(config)
     sortie = []
     for entree in json.loads(chemin.read_text(encoding="utf-8")).get("sae", []):
         code, semestre = str(entree.get("code_matiere") or "").strip(), str(entree.get("semestre") or "")
@@ -220,8 +223,64 @@ def _sae_du_groupe(groupe: str) -> list[dict]:
             "dates_officielles": officielles,
             "dates_saisies": saisies.get(code.upper(), []),
             "placee_par_le_calcul": (code.upper(), semestre) in par_solveur,
+            # Vrai : choix fait à l'écran, qu'on peut y défaire.
+            "placement_saisi": code.upper() in confiees,
+            "enseignants": [
+                {"code": e["code"], "nom": e["nom"]} for e in modules.get(code, {}).get("enseignants", [])
+            ],
+            "phases": [
+                {**p, "nom": next((e["nom"] for e in modules.get(code, {}).get("enseignants", [])
+                                   if e["code"] == p["teacher_code"]), p["teacher_code"])}
+                for p in phases.get(code.upper(), [])
+            ],
         })
     return sorted(sortie, key=lambda s: (s["semestre"], s["code"]))
+
+
+def _phases_des_sae(config) -> dict[str, list[dict]]:
+    """Par SAE, les périodes d'encadrement : celles du fichier livré (sans
+    `id`) puis celles saisies à l'écran."""
+    from cal_iut.ingestion import reglages
+    from cal_iut.ingestion.config_loader import load_sae_teacher_phases
+
+    saisies = {
+        (str(a["course_code"]).upper(), str(a["teacher_code"]).upper(), a["debut"], a["fin"]): a
+        for a in reglages.phases_sae(config)
+    }
+    sortie: dict[str, list[dict]] = {}
+    for p in load_sae_teacher_phases(config):
+        saisie = saisies.get((p.course_code, p.teacher_code, p.debut, p.fin))
+        sortie.setdefault(p.course_code, []).append({
+            "id": saisie["id"] if saisie else None,
+            "origine": "ajoutee" if saisie else "livree",
+            "teacher_code": p.teacher_code,
+            "debut": p.debut,
+            "fin": p.fin,
+            "sauf": list(p.exclure),
+            "motif": " ".join(str(p.note or "").split()),
+        })
+    for liste in sortie.values():
+        liste.sort(key=lambda p: (p["debut"], p["teacher_code"]))
+    return sortie
+
+
+class PlacementSaeRequest(BaseModel):
+    par_le_calcul: bool
+    motif: str = ""
+
+
+class PhaseSaeRequest(BaseModel):
+    teacher_code: str
+    debut: str
+    fin: str
+    motif: str = ""
+
+
+def _sae(groupe: str, code: str) -> dict:
+    sae = next((s for s in _sae_du_groupe(groupe) if s["code"].upper() == code.upper()), None)
+    if sae is None:
+        raise HTTPException(404, "Cette SAE n'appartient pas à ce semestre.")
+    return sae
 
 
 @router.get("/sae/{groupe}")
@@ -242,8 +301,11 @@ def saisir_les_dates_d_une_sae(groupe: str, code: str, body: DatesSaeRequest, re
     from cal_iut.ingestion.constraints_loader import load_all_constraints
 
     _refuser_si_source_verrouillee(groupe)
-    if code.upper() not in {s["code"].upper() for s in _sae_du_groupe(groupe)}:
-        raise HTTPException(404, "Cette SAE n'appartient pas à ce semestre.")
+    sae = _sae(groupe, code)
+    if body.dates and sae["placee_par_le_calcul"]:
+        raise HTTPException(
+            422, "Cette SAE est placée par le calcul : elle n'a pas de journées réservées. Défaites d'abord ce choix."
+        )
     calendrier = load_all_constraints(taches.RACINE).calendar
     for brute in body.dates:
         try:
@@ -260,6 +322,67 @@ def saisir_les_dates_d_une_sae(groupe: str, code: str, body: DatesSaeRequest, re
         reglages.definir_dates_sae(taches.RACINE / "data" / "config", code, body.dates, par)
     except reglages.ReglageInvalide as exc:
         raise HTTPException(422, str(exc)) from exc
+    return dates_des_sae(groupe)
+
+
+@router.put("/sae/{groupe}/{code}/placement")
+def confier_une_sae_au_calcul(groupe: str, code: str, body: PlacementSaeRequest, request: Request) -> dict:
+    """Une SAE sans journées réservées peut être placée par le calcul,
+    séance par séance, comme un module ordinaire."""
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    sae = _sae(groupe, code)
+    if sae["placee_par_le_calcul"] and not sae["placement_saisi"]:
+        raise HTTPException(409, "Ce choix vient des réglages d'origine : il ne se modifie pas depuis cet écran.")
+    if body.par_le_calcul and (sae["dates_officielles"] or sae["dates_saisies"]):
+        raise HTTPException(
+            422,
+            "Cette SAE a des journées réservées : ses séances s'y tiennent. "
+            "Retirez d'abord ses dates pour la confier au calcul.",
+        )
+    try:
+        reglages.confier_sae_au_calcul(
+            taches.RACINE / "data" / "config", sae["code"], sae["semestre"], body.par_le_calcul, body.motif,
+            _auteur(request),
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return dates_des_sae(groupe)
+
+
+@router.post("/sae/{groupe}/{code}/phases", status_code=201)
+def ajouter_une_phase_de_sae(groupe: str, code: str, body: PhaseSaeRequest, request: Request) -> dict:
+    """Un enseignant n'encadre la SAE que pendant cette période : il reste
+    disponible pour ses cours les autres journées de la SAE. Sans période,
+    il est tenu pour pris toutes les journées de la SAE."""
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    sae = _sae(groupe, code)
+    enseignant = body.teacher_code.strip().upper()
+    if enseignant not in {e["code"] for e in sae["enseignants"]}:
+        raise HTTPException(422, f"{enseignant or 'Cet enseignant'} n'encadre pas {sae['code']}.")
+    try:
+        reglages.ajouter_phase_sae(
+            taches.RACINE / "data" / "config",
+            {"course_code": sae["code"], "semestre": sae["semestre"], "teacher_code": enseignant,
+             "debut": body.debut, "fin": body.fin, "motif": body.motif},
+            _auteur(request),
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return dates_des_sae(groupe)
+
+
+@router.delete("/sae/{groupe}/{code}/phases/{identifiant}")
+def retirer_une_phase_de_sae(groupe: str, code: str, identifiant: str) -> dict:
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    if not any(p["id"] == identifiant for p in _sae(groupe, code)["phases"]):
+        raise HTTPException(404, "Cette période n'existe pas pour cette SAE.")
+    reglages.retirer_phase_sae(taches.RACINE / "data" / "config", identifiant)
     return dates_des_sae(groupe)
 
 
