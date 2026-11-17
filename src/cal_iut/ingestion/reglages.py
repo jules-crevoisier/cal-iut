@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants", "cours_hors_maquette",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants", "cours_hors_maquette", "annees", "annee_en_cours",
 )
 NB_CRENEAUX = 6
 
@@ -944,3 +944,60 @@ def ajouter_cours_hors_maquette(config_dir: Path, entree: dict, par: str) -> dic
         tout["cours_hors_maquette"]["ajouts"].append(propre)
         ecrire_json(_path(config_dir), tout)
     return propre
+
+
+# ── Années universitaires ─────────────────────────────────────────────
+
+_CHAMPS_D_UNE_ANNEE = ("rentree", "fin_impair", "debut_pair", "fin", "vacances", "feries")
+
+
+def annees(config_dir: Path) -> dict[str, dict]:
+    """`{« 2027-2028 »: {rentree, fin_impair, debut_pair, fin, vacances,
+    feries}}` : les années préparées à l'écran (cf. `calendar/annees.py`)."""
+    return {
+        str(a["groupe"]): {c: a.get(c) for c in _CHAMPS_D_UNE_ANNEE}
+        for a in _lire(config_dir)["annees"]["ajouts"]
+        if a.get("groupe") and a.get("rentree") and a.get("fin")
+    }
+
+
+def definir_annee(config_dir: Path, label: str, annee: dict | None, par: str) -> None:
+    """Enregistre l'année (déjà validée) ; `None` la retire."""
+    _remplacer(
+        config_dir, "annees", label,
+        None if annee is None else {c: annee.get(c) for c in _CHAMPS_D_UNE_ANNEE}, par,
+    )
+
+
+def annee_en_cours(config_dir: Path) -> dict | None:
+    """`{"label", "depuis"}` : l'année que l'application utilise, quand ce
+    n'est plus celle d'origine, et l'instant où son calendrier a été fixé."""
+    for a in _lire(config_dir)["annee_en_cours"]["ajouts"]:
+        if a.get("groupe") == "application" and a.get("label"):
+            return {"label": str(a["label"]), "depuis": str(a.get("depuis") or "")}
+    return None
+
+
+def definir_annee_en_cours(config_dir: Path, label: str | None, par: str) -> None:
+    """Change l'année de l'application (`None` : celle d'origine) et oublie
+    les dates de semestres saisies pour l'année quittée."""
+    with _verrou:
+        _remplacer(
+            config_dir, "annee_en_cours", "application",
+            None if label is None else {"label": label, "depuis": datetime.now(timezone.utc).isoformat()}, par,
+        )
+        tout = _lire(config_dir)
+        tout["dates_semestres"]["ajouts"] = []
+        tout["fins_alternants"]["ajouts"] = []
+        ecrire_json(_path(config_dir), tout)
+
+
+def dater_l_annee_en_cours(config_dir: Path, par: str) -> None:
+    """Le calendrier de l'année en cours vient de changer : les brouillons
+    calculés avant ne se publient plus."""
+    en_cours = annee_en_cours(config_dir)
+    if en_cours is not None:
+        _remplacer(
+            config_dir, "annee_en_cours", "application",
+            {"label": en_cours["label"], "depuis": datetime.now(timezone.utc).isoformat()}, par,
+        )

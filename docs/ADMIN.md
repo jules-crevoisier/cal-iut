@@ -873,3 +873,33 @@ Ces deux réglages comptent tout de suite pour le contrôle des déplacements et
 Sur **Nouveau semestre**, le volet **Cours hors maquette** ajoute un module absent de la maquette officielle (intervention, atelier) : code, intitulé, semestre, promotion, enseignant et nombre de séances de CM, TD et TP par étudiant. Le module est placé par le calcul comme les autres, avec un seul enseignant qui voit tous les groupes de la promotion. Les modules livrés avec l'application (`additional_courses.yaml`) figurent dans la liste, sans retrait possible à l'écran.
 
 L'ajout et le retrait sont refusés pour un semestre déjà en service : pour une séance ponctuelle, utilisez « Nouvel évènement » dans la vue d'une promotion.
+
+## Années universitaires
+
+Référence → Réglages → « Années universitaires ». L'application utilise une
+seule année à la fois : son calendrier (semaines de cours, vacances, jours
+fériés), ses numéros de semaine et les dates par défaut des deux semestres.
+
+- **Préparer l'année suivante.** Le bloc « Préparer 2027-2028 » propose les
+  dates des semestres (même rythme que l'année en cours) et calcule les
+  jours fériés. Les vacances sont à saisir à partir du calendrier de
+  l'établissement. Une année préparée se corrige ou se retire tant que
+  l'application ne l'utilise pas ; cela ne change rien au planning en
+  service.
+- **Passer à cette année.** Le bouton « Passer à l'année … » change l'année
+  de toute l'application. Il est refusé tant qu'un planning est en service
+  ou qu'une génération tourne : les séances sont rangées par numéro de
+  semaine, un autre calendrier les décalerait toutes. Le passage se fait
+  donc une fois l'année terminée. Les dates de semestres saisies sur l'écran
+  « Nouveau semestre » pour l'année quittée sont oubliées, et les brouillons
+  calculés avant le changement ne se publient plus (il faut relancer une
+  génération).
+- **Revenir en arrière.** Le même bouton, sur l'année d'origine, tant
+  qu'aucun planning n'est en service.
+
+Ce que le changement d'année ne fait pas : les fichiers livrés qui portent
+des dates (dates des SAE, événements à date fixe, semaines des alternants,
+indisponibilités) restent ceux de 2026-2027 et sont à ressaisir pour la
+nouvelle année depuis les écrans correspondants ; les événements
+institutionnels de la vue imprimable et la correspondance des semaines avec
+Celcat restent ceux de 2026-2027.

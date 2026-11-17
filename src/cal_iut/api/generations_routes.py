@@ -1030,12 +1030,13 @@ def _vacances(calendrier, debut, fin) -> list[dict]:
 
 def _periode(groupe: str) -> dict:
     from cal_iut.calendar.academic import (
-        PERIODES_D_ORIGINE,
         build_default_calendar_2026_2027,
-        FINS_ALTERNANTS_D_ORIGINE,
         default_horizon_weeks,
         fin_des_alternants,
+        fin_des_alternants_de_reference,
         periode_des_cours,
+        periodes_de_reference,
+        periodes_saisies,
         semaines_du_calcul,
     )
     from cal_iut.ingestion import reglages
@@ -1043,10 +1044,10 @@ def _periode(groupe: str) -> dict:
 
     calendrier = build_default_calendar_2026_2027()
     debut, fin = periode_des_cours(calendrier, groupe)
-    origine = PERIODES_D_ORIGINE[groupe]
+    origine = periodes_de_reference()[groupe]
     alternants = fin_des_alternants(groupe)
     alternants = alternants if alternants and alternants > fin else None
-    alternants_origine = FINS_ALTERNANTS_D_ORIGINE.get(groupe)
+    alternants_origine = fin_des_alternants_de_reference(groupe)
     autre = "even" if groupe == "odd" else "odd"
     autre_debut, autre_fin = periode_des_cours(calendrier, autre)
     motif = _semestre_verrouille(groupe)
@@ -1061,7 +1062,7 @@ def _periode(groupe: str) -> dict:
         "debut": debut.isoformat(),
         "fin": fin.isoformat(),
         "fin_alternants": alternants.isoformat() if alternants else None,
-        "personnalise": groupe in calendrier.periodes
+        "personnalise": groupe in periodes_saisies()
         or groupe in reglages.fins_alternants(taches.RACINE / "data" / "config"),
         "origine": {
             "debut": origine[0].isoformat(),
@@ -1086,9 +1087,9 @@ def _calendriers_a_jour() -> None:
     """Les plannings déjà chargés par le serveur lisent les nouvelles dates
     sans redémarrage."""
     from cal_iut.api import state as etats
-    from cal_iut.calendar.academic import periodes_saisies
+    from cal_iut.calendar.academic import periodes_en_vigueur
 
-    saisies = periodes_saisies()
+    saisies = periodes_en_vigueur()
     for etat in etats.etats_charges():
         etat.calendar.periodes = dict(saisies)
 

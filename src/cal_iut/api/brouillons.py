@@ -177,6 +177,29 @@ class PublicationRefusee(ValueError):
     pass
 
 
+def calcule_avec_le_calendrier_actuel(run: object) -> bool:
+    """Faux pour un brouillon créé avant le dernier changement de calendrier
+    (changement d'année, ou correction de l'année en cours) : ses numéros de
+    semaine ne désignent plus les mêmes dates."""
+    from datetime import datetime, timezone
+
+    from cal_iut.api import state as etats
+    from cal_iut.ingestion import reglages
+
+    try:
+        en_cours = reglages.annee_en_cours(etats.etat_principal().config_dir)
+        depuis = datetime.fromisoformat(en_cours["depuis"]) if en_cours and en_cours["depuis"] else None
+    except (ValueError, TypeError):
+        return True
+    cree = getattr(run, "created_at", None)
+    if depuis is None or cree is None:
+        # Jamais changé d'année (ou retour à l'année d'origine sans trace).
+        return True
+    if cree.tzinfo is None:
+        cree = cree.replace(tzinfo=timezone.utc)
+    return cree >= depuis
+
+
 def publier(run_id: int) -> dict[str, object]:
     """Met un brouillon en service : il devient le planning de son groupe
     de semestres, à côté de celui de l'autre groupe (`semestres_charges`).
@@ -198,6 +221,11 @@ def publier(run_id: int) -> dict[str, object]:
     if groupe is None:
         raise PublicationRefusee("Seul un brouillon de semestre impair ou pair se publie depuis l'interface.")
     principal = etats.etat_principal()
+    if not calcule_avec_le_calendrier_actuel(run):
+        raise PublicationRefusee(
+            "Ce brouillon a été calculé avec un autre calendrier (l'année universitaire a changé depuis) : "
+            "ses séances tomberaient aux mauvaises dates. Relancez une génération."
+        )
     en_service = semestres_charges.runs_par_groupe()
     if en_service:
         en_cours = semestres_charges.groupe_en_cours(

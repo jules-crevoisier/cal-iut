@@ -218,3 +218,35 @@
   padding: 0.35rem 0;
   border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.25));
 }
+
+.reglages-annee-liste {
+  border: 0;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+
+.reglages-annee-liste legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 0.35rem;
+}
+
+.reglages-annee-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.reglages-annee-ligne input[type="text"] {
+  flex: 0 1 16rem;
+}
+
+.reglages-annee-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}

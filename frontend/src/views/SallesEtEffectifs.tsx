@@ -95,7 +95,7 @@ function LigneSalle({ salle, types, onChange }: { salle: SalleReglable; types: s
       <td className="reglages-table-actions">
         <button
           type="button"
-          className="primary"
+          className="btn btn--primary"
           disabled={envoi || !change || !valide}
           onClick={() =>
             agir(
@@ -190,7 +190,7 @@ function LigneEffectif({ groupe, onChange }: { groupe: EffectifDeGroupe; onChang
       <td className="reglages-table-actions">
         <button
           type="button"
-          className="primary"
+          className="btn btn--primary"
           disabled={envoi || !valide || effectif === groupe.effectif}
           onClick={() => agir(() => reglerEffectif(groupe.id, effectif), `Effectif de ${nom} enregistré.`)}
         >
@@ -401,7 +401,7 @@ export function SallesDesModules({
           </p>
         )}
         <div className="reglages-actions">
-          <button type="submit" className="primary" disabled={envoi || !pret}>
+          <button type="submit" className="btn btn--primary" disabled={envoi || !pret}>
             Ajouter la règle
           </button>
         </div>

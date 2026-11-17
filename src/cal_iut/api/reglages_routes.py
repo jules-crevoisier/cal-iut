@@ -542,3 +542,135 @@ def retirer_une_periode_a_l_iut(cle: str, origine: str = "ajoutee") -> dict:
         raise HTTPException(404, "Période introuvable.")
     _appliquer_en_direct(disponibilites=True)
     return _tout()
+
+
+# ── Années universitaires (cf. calendar/annees.py) ────────────────────
+
+
+class AnneeRequest(BaseModel):
+    rentree: str
+    fin_impair: str
+    debut_pair: str
+    fin: str
+    vacances: list[dict] = Field(default_factory=list)
+    feries: list[dict] = Field(default_factory=list)
+
+
+def _annee_utilisee() -> str:
+    from cal_iut.calendar import academic, annees
+
+    active = academic.annee_active()
+    return active["label"] if active is not None else annees.ORIGINE
+
+
+def _verrou_du_calendrier() -> str | None:
+    """Pourquoi le calendrier de l'application ne peut pas changer maintenant."""
+    from cal_iut.generation import taches
+
+    if taches.active() is not None:
+        return "Une génération est en cours : attendez sa fin ou arrêtez-la."
+    en_service = etats.get_repo().runs_en_service()
+    if en_service:
+        return (
+            "Un planning est en service : ses séances sont rangées par numéro de semaine, changer le calendrier "
+            "les décalerait toutes. Le changement d'année se fait une fois l'année terminée, quand plus aucun "
+            "planning n'est en service."
+        )
+    return None
+
+
+def _annees() -> dict:
+    from cal_iut.calendar import annees
+
+    connues = annees.toutes(_config())
+    utilisee = _annee_utilisee()
+    a_preparer = annees.suivante(connues[-1]["label"])
+    return {
+        "annees": [
+            annees.resume(a) | {"origine": a["origine"], "en_cours": a["label"] == utilisee} for a in connues
+        ],
+        "en_cours": utilisee,
+        "verrou": _verrou_du_calendrier(),
+        "proposition": annees.proposition(a_preparer),
+    }
+
+
+def _calendrier_change() -> None:
+    """Le serveur relit le calendrier, les disponibilités et les salles
+    réservées (leurs dates se traduisent en numéros de semaine)."""
+    try:
+        from cal_iut.solver import decomposed
+
+        decomposed._session_date_windows.cache_clear()
+    except Exception:  # noqa: BLE001 — un cache qu'on ne peut pas vider ne doit pas refuser la saisie
+        pass
+    _appliquer_en_direct(disponibilites=True)
+    principal = etats.etat_principal()
+    for etat in etats.etats_charges():
+        etat.calendar = principal.calendar
+
+
+@router.get("/annees")
+def annees_universitaires() -> dict:
+    return _annees()
+
+
+@router.put("/annees/{label}")
+def preparer_une_annee(label: str, body: AnneeRequest, request: Request) -> dict:
+    """Les dates d'une année : rentrée, semestres, vacances, fériés. L'année
+    que l'application utilise ne se corrige que si aucun planning n'est en
+    service."""
+    from cal_iut.calendar import annees
+
+    utilisee = label == _annee_utilisee()
+    try:
+        propre = annees.valider(label, body.model_dump())
+        connues = [a["label"] for a in annees.toutes(_config())]
+        if label not in connues and label != annees.suivante(connues[-1]):
+            raise annees.AnneeInvalide(f"L'année à préparer ensuite est {annees.suivante(connues[-1])}.")
+    except annees.AnneeInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if utilisee and (motif := _verrou_du_calendrier()):
+        raise HTTPException(409, motif)
+    reglages.definir_annee(_config(), label, propre, _par(request))
+    if utilisee:
+        reglages.dater_l_annee_en_cours(_config(), _par(request))
+        _calendrier_change()
+    return _annees()
+
+
+@router.delete("/annees/{label}")
+def retirer_une_annee(label: str, request: Request) -> dict:
+    from cal_iut.calendar import annees
+
+    connues = [a["label"] for a in annees.toutes(_config()) if not a["origine"]]
+    if label not in connues:
+        raise HTTPException(404, "Cette année n'a pas été préparée ici.")
+    if label != connues[-1]:
+        raise HTTPException(422, "Retirez d'abord l'année la plus lointaine.")
+    if label == _annee_utilisee():
+        raise HTTPException(422, "C'est l'année que l'application utilise : revenez d'abord à la précédente.")
+    reglages.definir_annee(_config(), label, None, _par(request))
+    return _annees()
+
+
+@router.post("/annees/{label}/utiliser")
+def passer_a_une_annee(label: str, request: Request) -> dict:
+    """Fait de cette année celle de toute l'application : calendrier, numéros
+    de semaine, dates des semestres. Refusé tant qu'un planning est en
+    service. Les dates de semestres saisies pour l'année quittée sont
+    oubliées ; les brouillons calculés avant ne se publient plus."""
+    from cal_iut.calendar import annees
+
+    connues = {a["label"] for a in annees.toutes(_config())}
+    if label not in connues:
+        raise HTTPException(404, "Cette année n'a pas été préparée.")
+    if label == _annee_utilisee():
+        raise HTTPException(422, f"L'application utilise déjà l'année {label}.")
+    if motif := _verrou_du_calendrier():
+        raise HTTPException(409, motif)
+    # L'année d'origine est notée elle aussi : la date du changement périme
+    # les brouillons calculés avec l'année quittée.
+    reglages.definir_annee_en_cours(_config(), label, _par(request))
+    _calendrier_change()
+    return _annees()

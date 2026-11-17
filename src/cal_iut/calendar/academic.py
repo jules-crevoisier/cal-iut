@@ -59,9 +59,27 @@ MONTH_FR = {
 DEPARTMENT_WEEK_ANCHOR = date(2026, 8, 24)
 
 
+def annee_active() -> dict | None:
+    """L'année préparée à l'écran que l'application utilise (cf.
+    `calendar/annees.py`), ou `None` tant que c'est 2026-2027. Un réglage
+    illisible ne doit pas empêcher de lire le calendrier d'origine."""
+    try:
+        from cal_iut.calendar import annees
+
+        return annees.active(_REPO_ROOT / "data" / "config")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def department_week_number(monday: date) -> int:
-    """Numéro de semaine "département" (semaine 1 = lundi ISO-week 35 2026)."""
-    delta_days = (monday - DEPARTMENT_WEEK_ANCHOR).days
+    """Numéro de semaine "département" (semaine 1 = lundi ISO-week 35 2026,
+    ou la semaine qui précède la rentrée pour une année préparée à l'écran)."""
+    ancre = DEPARTMENT_WEEK_ANCHOR
+    active = annee_active()
+    if active is not None:
+        rentree = date.fromisoformat(active["rentree"])
+        ancre = rentree - timedelta(days=rentree.weekday() + 7)
+    delta_days = (monday - ancre).days
     return delta_days // 7 + 1
 
 
@@ -300,6 +318,15 @@ def build_default_calendar_2026_2027() -> AcademicCalendar:
     # S1 : lundi 31 août 2026 → vacances Toussaint / Noël exclues
     # S2 théorique lundi 4 janvier 2027, réellement visé lundi 1er février 2027
     # (marge confirmée par l'utilisateur, cf. semester_week_offset)
+    active = annee_active()
+    if active is not None:
+        # Année préparée à l'écran et choisie comme année de l'application.
+        from cal_iut.calendar import annees
+
+        calendrier = annees.construire(active)
+        calendrier.periodes = periodes_en_vigueur()
+        return calendrier
+
     s1_start = date(2026, 8, 31)
     year_end = date(2027, 6, 30)
 
@@ -367,7 +394,33 @@ def fin_des_alternants(groupe: str) -> date | None:
             return date.fromisoformat(saisies[groupe]) if saisies[groupe] else None
     except Exception:  # noqa: BLE001 — un réglage illisible ne doit pas empêcher de calculer
         pass
-    return FINS_ALTERNANTS_D_ORIGINE.get(groupe)
+    return fin_des_alternants_de_reference(groupe)
+
+
+def fin_des_alternants_de_reference(groupe: str) -> date | None:
+    """Sans saisie : le 12 mars 2027 pour l'impair d'origine ; pour une année
+    préparée à l'écran, les alternants finissent avec les autres."""
+    return None if annee_active() is not None else FINS_ALTERNANTS_D_ORIGINE.get(groupe)
+
+
+def periodes_de_reference() -> dict[str, tuple[date, date]]:
+    """Début et fin des cours de chaque groupe quand rien n'est saisi sur
+    l'écran « Nouveau semestre » : les dates de l'année en cours."""
+    active = annee_active()
+    if active is None:
+        return dict(PERIODES_D_ORIGINE)
+    from cal_iut.calendar import annees
+
+    return annees.periodes(active)
+
+
+def periodes_en_vigueur() -> dict[str, tuple[date, date]]:
+    """Ce que porte `AcademicCalendar.periodes`. Année d'origine : les seules
+    dates saisies (les autres se déduisent des constantes, comme toujours).
+    Année préparée à l'écran : ses dates, puis celles saisies par semestre."""
+    if annee_active() is None:
+        return periodes_saisies()
+    return {**periodes_de_reference(), **periodes_saisies()}
 
 
 def semaines_du_calcul(calendar: AcademicCalendar, groupe: str) -> tuple[int | None, int | None]:
@@ -414,7 +467,7 @@ def periodes_saisies() -> dict[str, tuple[date, date]]:
 
 def periode_des_cours(calendar: AcademicCalendar, groupe: str) -> tuple[date, date]:
     """Premier et dernier jour de cours du groupe de semestres."""
-    return calendar.periodes.get(groupe) or PERIODES_D_ORIGINE[groupe]
+    return calendar.periodes.get(groupe) or periodes_de_reference()[groupe]
 
 
 def teaching_weeks_until(calendar: AcademicCalendar, start: date, target: date) -> int:
