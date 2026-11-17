@@ -164,3 +164,42 @@
   color: var(--ink-soft);
   font-size: 13px;
 }
+
+.reglages-table-defilante {
+  overflow-x: auto;
+}
+
+.reglages-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.reglages-table th,
+.reglages-table td {
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+}
+
+.reglages-table input[type="number"] {
+  width: 5.5rem;
+}
+
+.reglages-table-actions {
+  white-space: nowrap;
+}
+
+.reglages-table-actions > * + * {
+  margin-left: 0.4rem;
+}
+
+.reglages-parcours {
+  margin-top: 0.5rem;
+}
+
+.reglages-parcours > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.3rem 0;
+}

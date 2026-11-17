@@ -19,7 +19,8 @@ from pydantic import BaseModel, Field
 from cal_iut.api import accounts, revision
 from cal_iut.api import state as etats
 from cal_iut.ingestion import reglages
-from cal_iut.ingestion.config_loader import load_room_reservations
+from cal_iut.ingestion.config_loader import load_groups, load_room_reservations, load_rooms
+from cal_iut.models.entities import RoomType
 from cal_iut.models.timetable import TimeSlot
 
 router = APIRouter(prefix="/reglages", dependencies=[Depends(accounts.require_role("admin"))])
@@ -137,6 +138,60 @@ def _semaines_types() -> list[dict]:
     return sortie
 
 
+_TYPES_NON_CHOISIS = (RoomType.RESERVE, RoomType.COMBINED)
+
+
+def _salles() -> list[dict]:
+    """Toutes les salles, avec ce que l'écran a changé à celles du bâtiment."""
+    origine = {r.id: r for r in load_rooms(_config(), d_origine=True)}
+    saisies = reglages.salles(_config())
+    sortie = []
+    for r in etats.etat_principal().rooms:
+        d_origine = origine.get(r.id)
+        sortie.append({
+            "id": r.id,
+            "label": r.label,
+            "capacite": r.capacity,
+            "type": r.room_type.value,
+            "placement_auto": r.placement_auto,
+            "type_fixe": r.room_type in _TYPES_NON_CHOISIS,
+            "ajoutee": d_origine is None,
+            "origine": None if d_origine is None else {"capacite": d_origine.capacity, "type": d_origine.room_type.value},
+            "modifiee": r.id in saisies,
+        })
+    return sorted(sortie, key=lambda s: s["label"].lower())
+
+
+def _effectifs() -> list[dict]:
+    origine = {g.id: g.headcount for g in load_groups(_config(), d_origine=True)}
+    saisis = reglages.effectifs(_config())
+    return [
+        {
+            "id": g.id,
+            "label": g.label,
+            "parcours": g.parcours,
+            "kind": g.kind,
+            "effectif": g.headcount,
+            "origine": origine.get(g.id, g.headcount),
+            "modifie": g.id in saisis,
+        }
+        for g in load_groups(_config())
+    ]
+
+
+def _recharger_salles_et_groupes() -> None:
+    """Le planning en service suit sans redémarrage."""
+    from cal_iut.api import custom_rooms
+
+    principal = etats.etat_principal()
+    salles = custom_rooms.merge_into(load_rooms(principal.config_dir))
+    groupes = load_groups(principal.config_dir)
+    for etat in etats.etats_charges():
+        etat.rooms = salles
+        etat.groups = groupes
+    revision.incrementer("reglages")
+
+
 def _tout() -> dict:
     return {
         "creneaux": [s.label for s in TimeSlot],
@@ -144,6 +199,9 @@ def _tout() -> dict:
         "salles_reservees": _reservations(),
         "indisponibilites": _indisponibilites(),
         "semaines_types": _semaines_types(),
+        "salles": _salles(),
+        "types_de_salle": [t.value for t in RoomType if t not in _TYPES_NON_CHOISIS],
+        "effectifs": _effectifs(),
     }
 
 
@@ -263,4 +321,78 @@ def revenir_a_la_semaine_d_origine(code: str, request: Request) -> dict:
         raise HTTPException(404, "Rien n'a été changé à la semaine type de cet enseignant.")
     reglages.definir_semaine_type(_config(), code, [], [], "", _par(request))
     _appliquer_en_direct(disponibilites=True)
+    return _tout()
+
+
+class SalleRequest(BaseModel):
+    capacite: int = Field(ge=1, le=reglages.CAPACITE_MAXI)
+    type: str
+    placement_auto: bool | None = None
+
+
+@router.put("/salles/{room_id}")
+def regler_une_salle(room_id: str, body: SalleRequest, request: Request) -> dict:
+    """Capacité, type et placement automatique d'une salle. Pour une salle
+    du bâtiment, seul l'écart avec `rooms.yaml` est retenu ; une salle
+    ajoutée depuis l'interface est modifiée dans son propre fichier."""
+    from cal_iut.api import custom_rooms
+
+    salle = next((r for r in etats.etat_principal().rooms if r.id == room_id), None)
+    if salle is None:
+        raise HTTPException(404, "Salle inconnue.")
+    try:
+        type_voulu = RoomType(body.type)
+    except ValueError:
+        raise HTTPException(422, "Type de salle inconnu.") from None
+    if type_voulu != salle.room_type and (salle.room_type in _TYPES_NON_CHOISIS or type_voulu in _TYPES_NON_CHOISIS):
+        raise HTTPException(422, "Le type de cette salle ne se change pas depuis cet écran.")
+    origine = next((r for r in load_rooms(_config(), d_origine=True) if r.id == room_id), None)
+    if origine is None:
+        custom_rooms.completer_salle_personnalisee(room_id, capacity=body.capacite, room_type=type_voulu)
+    else:
+        ecart: dict[str, object] = {}
+        if body.capacite != origine.capacity:
+            ecart["capacity"] = body.capacite
+        if type_voulu != origine.room_type:
+            ecart["room_type"] = type_voulu.value
+        reglages.definir_salle(_config(), room_id, ecart, _par(request))
+    if body.placement_auto is not None and body.placement_auto != salle.placement_auto:
+        custom_rooms.set_room_override(room_id, placement_auto=body.placement_auto)
+    _recharger_salles_et_groupes()
+    return _tout()
+
+
+@router.delete("/salles/{room_id}")
+def revenir_a_la_salle_d_origine(room_id: str, request: Request) -> dict:
+    if room_id not in reglages.salles(_config()):
+        raise HTTPException(404, "Rien n'a été changé à cette salle.")
+    reglages.definir_salle(_config(), room_id, None, _par(request))
+    _recharger_salles_et_groupes()
+    return _tout()
+
+
+class EffectifRequest(BaseModel):
+    effectif: int = Field(ge=1, le=reglages.EFFECTIF_MAXI)
+
+
+@router.put("/effectifs/{groupe_id}")
+def regler_un_effectif(groupe_id: str, body: EffectifRequest, request: Request) -> dict:
+    """Le nombre d'étudiants d'un groupe : il sert au choix des salles et
+    au contrôle des capacités."""
+    origine = {g.id: g.headcount for g in load_groups(_config(), d_origine=True)}
+    if groupe_id not in origine:
+        raise HTTPException(404, "Groupe inconnu.")
+    reglages.definir_effectif(
+        _config(), groupe_id, None if body.effectif == origine[groupe_id] else body.effectif, _par(request)
+    )
+    _recharger_salles_et_groupes()
+    return _tout()
+
+
+@router.delete("/effectifs/{groupe_id}")
+def revenir_a_l_effectif_d_origine(groupe_id: str, request: Request) -> dict:
+    if groupe_id not in reglages.effectifs(_config()):
+        raise HTTPException(404, "Rien n'a été changé à l'effectif de ce groupe.")
+    reglages.definir_effectif(_config(), groupe_id, None, _par(request))
+    _recharger_salles_et_groupes()
     return _tout()

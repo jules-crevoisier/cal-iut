@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles",
 )
 NB_CRENEAUX = 6
 
@@ -661,3 +661,60 @@ def plafonds_hebdo(config_dir: Path) -> dict[str, dict]:
 def definir_plafonds_hebdo(config_dir: Path, groupe: str, valeurs: dict, par: str) -> None:
     """Remplace les plafonds saisis pour ce groupe ; vide : ceux d'origine."""
     _remplacer(config_dir, "plafonds_hebdo", groupe, {"valeurs": dict(valeurs)} if valeurs else None, par)
+
+
+# ── Effectifs des groupes, capacité et type des salles ────────────────
+
+EFFECTIF_MAXI = 500
+CAPACITE_MAXI = 1000
+
+
+def effectifs(config_dir: Path) -> dict[str, int]:
+    """`{id du groupe: effectif}` saisis à l'écran, à la place de ceux de
+    `groups.yaml`."""
+    sortie: dict[str, int] = {}
+    for a in _lire(config_dir)["effectifs"]["ajouts"]:
+        try:
+            effectif = int(a.get("effectif"))
+        except (TypeError, ValueError):
+            continue
+        if a.get("groupe") and 1 <= effectif <= EFFECTIF_MAXI:
+            sortie[str(a["groupe"])] = effectif
+    return sortie
+
+
+def definir_effectif(config_dir: Path, groupe_id: str, effectif: int | None, par: str) -> None:
+    """Remplace l'effectif saisi pour ce groupe ; `None` : celui d'origine."""
+    if effectif is not None and not 1 <= int(effectif) <= EFFECTIF_MAXI:
+        raise ReglageInvalide(f"Un effectif va de 1 à {EFFECTIF_MAXI} étudiants.")
+    _remplacer(config_dir, "effectifs", groupe_id, None if effectif is None else {"effectif": int(effectif)}, par)
+
+
+def salles(config_dir: Path) -> dict[str, dict]:
+    """`{id de la salle: {"capacity": int, "room_type": str}}` : ce que
+    l'écran a changé à une salle du bâtiment (`rooms.yaml`)."""
+    sortie: dict[str, dict] = {}
+    for a in _lire(config_dir)["salles"]["ajouts"]:
+        valeurs: dict[str, object] = {}
+        try:
+            if a.get("capacity") is not None and 1 <= int(a["capacity"]) <= CAPACITE_MAXI:
+                valeurs["capacity"] = int(a["capacity"])
+        except (TypeError, ValueError):
+            pass
+        if isinstance(a.get("room_type"), str) and a["room_type"]:
+            valeurs["room_type"] = a["room_type"]
+        if a.get("groupe") and valeurs:
+            sortie[str(a["groupe"])] = valeurs
+    return sortie
+
+
+def definir_salle(config_dir: Path, room_id: str, valeurs: dict | None, par: str) -> None:
+    """Remplace ce qui est saisi pour cette salle ; vide : la salle d'origine."""
+    propres: dict[str, object] = {}
+    if valeurs and valeurs.get("capacity") is not None:
+        if not 1 <= int(valeurs["capacity"]) <= CAPACITE_MAXI:
+            raise ReglageInvalide(f"Une capacité va de 1 à {CAPACITE_MAXI} places.")
+        propres["capacity"] = int(valeurs["capacity"])
+    if valeurs and valeurs.get("room_type"):
+        propres["room_type"] = str(valeurs["room_type"])
+    _remplacer(config_dir, "salles", room_id, propres or None, par)

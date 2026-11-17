@@ -25,6 +25,7 @@ import {
 import { useDroits } from "../contexts/Droits";
 import type { AppPayload } from "../types/app";
 import "./ReglagesReference.css";
+import { EffectifsReglables, SallesReglables } from "./SallesEtEffectifs";
 
 const JOUR = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
@@ -537,6 +538,8 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
         onChange={apres}
       />
       <SemainesTypes enseignants={enseignants} donnees={donnees} onChange={apres} />
+      <SallesReglables donnees={donnees} onChange={apres} />
+      <EffectifsReglables donnees={donnees} onChange={apres} />
     </div>
   );
 }

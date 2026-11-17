@@ -1045,6 +1045,58 @@ export interface ReglagesReponse {
   salles_reservees: SalleReservee[];
   indisponibilites: IndisponibiliteDatee[];
   semaines_types?: SemaineType[];
+  salles?: SalleReglable[];
+  types_de_salle?: string[];
+  effectifs?: EffectifDeGroupe[];
+}
+
+/** Une salle telle que le planning la connaît. `origine` est absent pour
+ * une salle ajoutée depuis l'interface. */
+export interface SalleReglable {
+  id: string;
+  label: string;
+  capacite: number;
+  type: string;
+  placement_auto: boolean;
+  type_fixe: boolean;
+  ajoutee: boolean;
+  origine: { capacite: number; type: string } | null;
+  modifiee: boolean;
+}
+
+export interface EffectifDeGroupe {
+  id: string;
+  label: string;
+  parcours: string;
+  kind: string;
+  effectif: number;
+  origine: number;
+  modifie: boolean;
+}
+
+export async function reglerSalle(
+  id: string,
+  valeurs: { capacite: number; type: string; placement_auto: boolean },
+): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/salles/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(valeurs),
+  });
+}
+
+export async function retablirSalle(id: string): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/salles/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function reglerEffectif(id: string, effectif: number): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/effectifs/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify({ effectif }),
+  });
+}
+
+export async function retablirEffectif(id: string): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/effectifs/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function reglerSemaineType(
