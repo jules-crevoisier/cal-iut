@@ -6,6 +6,8 @@
 import { useEffect, useState } from "react";
 
 import {
+  ajouterRegleDeSalle,
+  retirerRegleDeSalle,
   reglerEffectif,
   reglerSalle,
   retablirEffectif,
@@ -262,6 +264,148 @@ export function EffectifsReglables({ donnees, onChange }: { donnees: ReglagesRep
           </table>
         </details>
       ))}
+    </section>
+  );
+}
+
+const TYPES_DE_SEANCE = ["CM", "TD", "TP"];
+
+export function SallesDesModules({
+  modules,
+  donnees,
+  onChange,
+}: {
+  modules: { valeur: string; libelle: string }[];
+  donnees: ReglagesReponse;
+  onChange: ApresChangement;
+}) {
+  const types = donnees.types_de_salle ?? [];
+  const regles = donnees.regles_salles ?? [];
+  const [module, setModule] = useState("");
+  const [seances, setSeances] = useState<string[]>(["TD", "TP"]);
+  const [prefere, setPrefere] = useState("");
+  const [repli, setRepli] = useState("");
+  const { envoi, erreur, agir } = useEnvoi(onChange);
+
+  if (types.length === 0) return null;
+  const nom = (code: string) => modules.find((m) => m.valeur === code)?.libelle ?? code;
+  const pret = module !== "" && prefere !== "" && seances.length > 0;
+
+  return (
+    <section className="panel reglages-famille" aria-labelledby="reglages-salles-modules">
+      <header>
+        <h2 id="reglages-salles-modules">Type de salle d’un module</h2>
+        <p className="muted">
+          Pour envoyer les séances d’un module dans un type de salle précis. La règle saisie ici passe devant les
+          règles livrées avec l’application ; les évaluations gardent leur salle d’examen. Elle compte pour les
+          prochaines attributions de salle, pas pour les séances déjà placées.
+        </p>
+      </header>
+      {regles.length === 0 ? (
+        <p className="muted">Aucune règle saisie : les règles livrées avec l’application s’appliquent.</p>
+      ) : (
+        <ul className="reglages-regles-salles">
+          {regles.map((r) => (
+            <li key={r.id}>
+              <span>
+                <strong>{nom(r.course_code)}</strong>, {r.session_types.join(" et ")} : {libelleTypeSalle(r.type_prefere)}
+                {r.type_repli ? `, sinon ${libelleTypeSalle(r.type_repli)}` : ""}
+              </span>
+              <button
+                type="button"
+                disabled={envoi}
+                aria-label={`Retirer la règle de ${r.course_code} ${r.session_types.join(" ")}`}
+                onClick={() => agir(() => retirerRegleDeSalle(r.id), `Règle de ${r.course_code} retirée.`)}
+              >
+                Retirer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form
+        className="reglages-ajout"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!pret) return;
+          void agir(
+            () =>
+              ajouterRegleDeSalle({
+                course_code: module,
+                session_types: seances,
+                type_prefere: prefere,
+                type_repli: repli,
+              }),
+            `Règle de ${module} enregistrée.`,
+          );
+        }}
+      >
+        <h3>Ajouter</h3>
+        <div className="reglages-champs">
+          <label>
+            Module
+            <select value={module} onChange={(e) => setModule(e.target.value)}>
+              <option value="">Choisir…</option>
+              {modules.map((m) => (
+                <option key={m.valeur} value={m.valeur}>
+                  {m.libelle}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Type de salle préféré
+            <select value={prefere} onChange={(e) => setPrefere(e.target.value)}>
+              <option value="">Choisir…</option>
+              {types.map((t) => (
+                <option key={t} value={t}>
+                  {libelleTypeSalle(t)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sinon (facultatif)
+            <select value={repli} onChange={(e) => setRepli(e.target.value)}>
+              <option value="">Aucun</option>
+              {types
+                .filter((t) => t !== prefere)
+                .map((t) => (
+                  <option key={t} value={t}>
+                    {libelleTypeSalle(t)}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+        <fieldset className="reglages-creneaux">
+          <legend>Séances concernées</legend>
+          {TYPES_DE_SEANCE.map((t) => (
+            <label key={t}>
+              <input
+                type="checkbox"
+                checked={seances.includes(t)}
+                onChange={(e) =>
+                  setSeances((avant) =>
+                    TYPES_DE_SEANCE.filter((x) => (x === t ? e.target.checked : avant.includes(x))),
+                  )
+                }
+              />
+              {t}
+            </label>
+          ))}
+        </fieldset>
+        {erreur && (
+          <p className="alerte" role="alert">
+            {erreur}
+          </p>
+        )}
+        <div className="reglages-actions">
+          <button type="submit" className="primary" disabled={envoi || !pret}>
+            Ajouter la règle
+          </button>
+        </div>
+      </form>
     </section>
   );
 }

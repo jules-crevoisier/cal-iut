@@ -1081,3 +1081,54 @@ def test_la_generation_attribue_aussi_les_salles_ajoutees_a_l_ecran():
     salles = {r.id: r for r in cli._salles_du_calcul(CONFIG)}
     assert salles["annexe"].capacity == 40
     assert salles["h005"].placement_auto is False
+
+
+def test_une_regle_de_salle_saisie_passe_devant_celles_du_fichier():
+    from cal_iut.ingestion.config_loader import load_room_assignment_rules
+    from cal_iut.solver.rooms import _find_matching_rule, parse_room_rules
+
+    def regle(code, type_seance, is_eval=False):
+        return _find_matching_rule(parse_room_rules(load_room_assignment_rules(CONFIG)), code, type_seance, is_eval)
+
+    avant_td, avant_tp = regle("WR104", "TD"), regle("WR104", "TP")
+    avant_eval = regle("WR104", "TD", True)
+    reglages.ajouter_regle_salle(
+        CONFIG, {"course_code": "wr104", "session_types": ["TD"], "type_prefere": "tp_mac", "type_repli": "standard"}, "test"
+    )
+    apres = regle("WR104", "TD")
+    assert [t.value for t in apres.preferred_room_types] == ["tp_mac"]
+    assert [t.value for t in apres.fallback_room_types] == ["standard"]
+    assert regle("WR104", "TP") == avant_tp
+    assert regle("WR104", "TD", True) == avant_eval
+    # Une nouvelle règle pour les mêmes séances remplace la précédente.
+    reglages.ajouter_regle_salle(
+        CONFIG, {"course_code": "WR104", "session_types": ["TD", "TP"], "type_prefere": "studio_av"}, "test"
+    )
+    saisies = reglages.regles_salles(CONFIG)
+    assert [(s["course_code"], s["session_types"], s["type_prefere"]) for s in saisies] == [
+        ("WR104", ["TD", "TP"], "studio_av")
+    ]
+    assert load_room_assignment_rules(CONFIG, d_origine=True) == load_room_assignment_rules(CONFIG)[:-1]
+    assert reglages.retirer_regle_salle(CONFIG, saisies[0]["id"])
+    assert regle("WR104", "TD") == avant_td
+    with pytest.raises(reglages.ReglageInvalide):
+        reglages.ajouter_regle_salle(CONFIG, {"course_code": "WR104", "session_types": [], "type_prefere": "amphi"}, "t")
+
+
+def test_regler_la_salle_d_un_module_depuis_l_ecran(admin):
+    etat = get_state()
+    avant = etat.rooms, etat.groups, etat.room_rules
+    try:
+        corps = {"course_code": "WR104", "session_types": ["TD"], "type_prefere": "tp_mac", "type_repli": ""}
+        r = admin.post("/reglages/regles-salles", json=corps)
+        assert r.status_code == 201, r.text
+        (saisie,) = r.json()["regles_salles"]
+        assert (saisie["course_code"], saisie["type_prefere"]) == ("WR104", "tp_mac")
+        assert get_state().room_rules[-1].course_code_patterns == ["WR104"]
+        assert admin.post("/reglages/regles-salles", json={**corps, "type_prefere": "reserve"}).status_code == 422
+        assert admin.post("/reglages/regles-salles", json={**corps, "session_types": []}).status_code == 422
+        assert admin.delete(f"/reglages/regles-salles/{saisie['id']}").status_code == 200
+        assert admin.delete(f"/reglages/regles-salles/{saisie['id']}").status_code == 404
+        assert all(r.course_code_patterns != ["WR104"] or r.is_eval is None for r in get_state().room_rules)
+    finally:
+        etat.rooms, etat.groups, etat.room_rules = avant

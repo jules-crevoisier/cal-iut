@@ -66,9 +66,30 @@ def load_rooms(config_dir: Path, *, d_origine: bool = False) -> list[Room]:
     return sortie
 
 
-def load_room_assignment_rules(config_dir: Path) -> list[dict[str, object]]:
+def load_room_assignment_rules(config_dir: Path, *, d_origine: bool = False) -> list[dict[str, object]]:
+    """Les règles de choix de salle. Celles saisies à l'écran
+    (`reglages.regles_salles`) viennent en dernier : la dernière règle qui
+    correspond à une séance l'emporte (`solver/rooms.py`). Elles ne visent
+    pas les évaluations, qui gardent leur salle dédiée."""
     data = load_yaml(config_dir / "rooms.yaml")
-    return list(data.get("room_assignment_rules", []))
+    regles = list(data.get("room_assignment_rules", []))
+    if d_origine:
+        return regles
+    from cal_iut.ingestion import reglages
+
+    connus = {t.value for t in RoomType}
+    for saisie in reglages.regles_salles(config_dir):
+        if saisie["type_prefere"] not in connus:
+            continue
+        repli = saisie.get("type_repli")
+        regles.append({
+            "course_code_patterns": [saisie["course_code"]],
+            "session_types": list(saisie.get("session_types") or []),
+            "preferred_room_types": [saisie["type_prefere"]],
+            "fallback_room_types": [repli] if repli in connus else [],
+            "is_eval": False,
+        })
+    return regles
 
 
 def load_groups(config_dir: Path, *, d_origine: bool = False) -> list[Group]:

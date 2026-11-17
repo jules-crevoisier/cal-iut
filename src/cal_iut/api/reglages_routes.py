@@ -19,7 +19,12 @@ from pydantic import BaseModel, Field
 from cal_iut.api import accounts, revision
 from cal_iut.api import state as etats
 from cal_iut.ingestion import reglages
-from cal_iut.ingestion.config_loader import load_groups, load_room_reservations, load_rooms
+from cal_iut.ingestion.config_loader import (
+    load_groups,
+    load_room_assignment_rules,
+    load_room_reservations,
+    load_rooms,
+)
 from cal_iut.models.entities import RoomType
 from cal_iut.models.timetable import TimeSlot
 
@@ -186,9 +191,13 @@ def _recharger_salles_et_groupes() -> None:
     principal = etats.etat_principal()
     salles = custom_rooms.merge_into(load_rooms(principal.config_dir))
     groupes = load_groups(principal.config_dir)
+    from cal_iut.solver.rooms import parse_room_rules
+
+    regles = parse_room_rules(load_room_assignment_rules(principal.config_dir))
     for etat in etats.etats_charges():
         etat.rooms = salles
         etat.groups = groupes
+        etat.room_rules = regles
     revision.incrementer("reglages")
 
 
@@ -202,6 +211,7 @@ def _tout() -> dict:
         "salles": _salles(),
         "types_de_salle": [t.value for t in RoomType if t not in _TYPES_NON_CHOISIS],
         "effectifs": _effectifs(),
+        "regles_salles": reglages.regles_salles(_config()),
     }
 
 
@@ -394,5 +404,35 @@ def revenir_a_l_effectif_d_origine(groupe_id: str, request: Request) -> dict:
     if groupe_id not in reglages.effectifs(_config()):
         raise HTTPException(404, "Rien n'a été changé à l'effectif de ce groupe.")
     reglages.definir_effectif(_config(), groupe_id, None, _par(request))
+    _recharger_salles_et_groupes()
+    return _tout()
+
+
+class RegleSalleRequest(BaseModel):
+    course_code: str
+    session_types: list[str] = Field(default_factory=list)
+    type_prefere: str
+    type_repli: str = ""
+
+
+@router.post("/regles-salles", status_code=201)
+def regler_la_salle_d_un_module(body: RegleSalleRequest, request: Request) -> dict:
+    """« Ce module va dans ce type de salle » : la règle passe devant
+    celles livrées avec l'application, pour les séances qu'elle vise."""
+    choisis = {t.value for t in RoomType if t not in _TYPES_NON_CHOISIS}
+    if body.type_prefere not in choisis or (body.type_repli and body.type_repli not in choisis):
+        raise HTTPException(422, "Type de salle inconnu.")
+    try:
+        reglages.ajouter_regle_salle(_config(), body.model_dump(), _par(request))
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _recharger_salles_et_groupes()
+    return _tout()
+
+
+@router.delete("/regles-salles/{identifiant}")
+def retirer_la_regle_de_salle(identifiant: str) -> dict:
+    if not reglages.retirer_regle_salle(_config(), identifiant):
+        raise HTTPException(404, "Règle introuvable.")
     _recharger_salles_et_groupes()
     return _tout()

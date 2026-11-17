@@ -853,6 +853,8 @@ Dans **Référence**, onglet **Réglages** :
 - **Salles : capacité, type et placement automatique.** Une ligne par salle. Le type décide des cours que la salle reçoit en priorité, la capacité des groupes qu'elle peut accueillir. Pour une salle du bâtiment, « Revenir à l'origine » reprend la capacité et le type livrés avec l'application. Les types « Salles réunies » et « Réservée » ne se changent pas ici.
 - **Effectifs des groupes.** Le nombre d'étudiants de chaque promotion, TD et TP, rangé par parcours. À mettre à jour à chaque rentrée.
 
+- **Type de salle d'un module.** Pour envoyer les CM, TD ou TP d'un module dans un type de salle précis, avec un type de repli facultatif. La règle saisie passe devant celles livrées avec l'application ; une nouvelle règle pour les mêmes séances remplace la précédente. Les évaluations gardent leur salle d'examen.
+
 Ces valeurs s'appliquent tout de suite au planning en service (choix de salle, alerte de salle trop petite) et sont lues par la prochaine génération. Aucune séance déjà placée ne change de salle toute seule.
 
 Depuis le 17/11/2026, une génération tient aussi compte des salles ajoutées avec « Nouvelle salle » et de la case « placement automatique » : auparavant ces deux choix ne comptaient que pour les retouches à la main.

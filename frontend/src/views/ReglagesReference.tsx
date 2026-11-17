@@ -25,7 +25,7 @@ import {
 import { useDroits } from "../contexts/Droits";
 import type { AppPayload } from "../types/app";
 import "./ReglagesReference.css";
-import { EffectifsReglables, SallesReglables } from "./SallesEtEffectifs";
+import { EffectifsReglables, SallesDesModules, SallesReglables } from "./SallesEtEffectifs";
 
 const JOUR = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
@@ -485,6 +485,14 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
     [payload.teacherLabels],
   );
 
+  const modules = useMemo<Choix[]>(() => {
+    const vus = new Map<string, string>();
+    for (const c of payload.courses ?? []) if (!vus.has(c.code)) vus.set(c.code, c.name);
+    return [...vus.entries()]
+      .map(([code, nom]) => ({ valeur: code, libelle: nom && nom !== code ? `${code} · ${nom}` : code }))
+      .sort((a, b) => a.valeur.localeCompare(b.valeur, "fr", { numeric: true }));
+  }, [payload.courses]);
+
   if (erreur && !donnees) {
     return (
       <p className="alerte" role="alert">
@@ -539,6 +547,7 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
       />
       <SemainesTypes enseignants={enseignants} donnees={donnees} onChange={apres} />
       <SallesReglables donnees={donnees} onChange={apres} />
+      <SallesDesModules modules={modules} donnees={donnees} onChange={apres} />
       <EffectifsReglables donnees={donnees} onChange={apres} />
     </div>
   );
