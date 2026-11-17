@@ -689,6 +689,23 @@ qu'il a relevé :
 La liste est relue après chaque récupération depuis MMI Prévi. Pendant une
 génération, elle n'est pas affichée.
 
+### Dates du semestre
+
+Sur l'écran « Nouveau semestre », une fois le semestre choisi, le bloc **Dates
+du semestre** donne le premier et le dernier jour de cours. Tant que rien n'est
+saisi, ce sont les dates proposées : du 31 août au 29 janvier pour le semestre
+impair, du 1er février au 30 juin pour le semestre pair. Le bloc rappelle les
+dates de l'autre semestre et les vacances qui tombent dans la période, et
+prévient si les deux semestres se chevauchent.
+
+Le premier jour fixe la première semaine où le calcul peut placer un cours, le
+dernier fixe le nombre de semaines. Les deux doivent être des jours de cours du
+calendrier. Une fois le semestre en service, ces dates ne se modifient plus :
+toutes ses séances changeraient de date. Stockage : `data/state/reglages.json`.
+
+Les vacances et les jours fériés viennent toujours de
+`contraintes/02_calendrier_iut.json`.
+
 ### Dates des SAE
 
 Le fichier de l'établissement ne date pas les SAE de S2, S4 et S6. Sur l'écran

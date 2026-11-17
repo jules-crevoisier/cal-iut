@@ -40,6 +40,7 @@ import {
 } from "../api/client";
 import { ActionsDePage } from "../components/TopBar";
 import { DatesSae } from "./DatesSae";
+import { PeriodeDesCours } from "./PeriodeDesCours";
 import { ReglesModules } from "./ReglesModules";
 import { SeancesAnnulees } from "./SeancesAnnulees";
 import "../styles/outils.css";
@@ -775,6 +776,7 @@ export function GenerationView({
                 onRecuperer={() => void recuperer(groupeChoisi)}
                 onRevenir={() => void revenir(groupeChoisi)}
               />
+              <PeriodeDesCours groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <DatesSae groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <SeancesAnnulees groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <ReglesModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />

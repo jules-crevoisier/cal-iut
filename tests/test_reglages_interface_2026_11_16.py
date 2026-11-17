@@ -516,3 +516,103 @@ def test_les_regles_d_un_semestre_en_service_ne_se_modifient_pas(admin, generati
     assert admin.post("/generations/regles/odd/seances-longues", json=corps).status_code == 409
     assert admin.post("/generations/regles/odd/periodes", json={"code": "WR119", "debut": "2026-10-01", "motif": "m"}).status_code == 409
     assert reglages.regles_de_modules(CONFIG, "doubles_seances") == []
+
+
+# ── Début et fin des cours du semestre ────────────────────────────────
+
+
+def test_sans_saisie_les_dates_des_semestres_ne_changent_pas():
+    from datetime import date
+
+    from cal_iut.calendar.academic import (
+        build_default_calendar_2026_2027,
+        default_horizon_weeks,
+        periode_des_cours,
+        semester_week_offset,
+    )
+
+    calendrier = build_default_calendar_2026_2027()
+    assert calendrier.periodes == {}
+    assert (semester_week_offset(calendrier, "S1"), default_horizon_weeks(calendrier, "S1")) == (0, 19)
+    assert (semester_week_offset(calendrier, "S2"), default_horizon_weeks(calendrier, "S4")) == (19, 19)
+    assert calendrier.teaching_mondays[19] == date(2027, 2, 1)
+    assert periode_des_cours(calendrier, "even") == (date(2027, 2, 1), date(2027, 6, 30))
+    # Les dates d'origine décrivent bien l'horizon d'origine.
+    debut, fin = periode_des_cours(calendrier, "odd")
+    assert calendrier.date_to_week_day_any(fin)[0] - calendrier.date_to_week_day_any(debut)[0] + 1 == 19
+
+
+def test_les_dates_saisies_deplacent_le_debut_et_l_horizon_du_semestre():
+    from datetime import date
+
+    from cal_iut.calendar.academic import build_default_calendar_2026_2027, default_horizon_weeks, semester_week_offset
+    from cal_iut.generation import verification
+
+    reglages.definir_dates_semestre(CONFIG, "even", "2027-01-04", "2027-06-11", "admin")
+    calendrier = build_default_calendar_2026_2027()
+    assert calendrier.periodes == {"even": (date(2027, 1, 4), date(2027, 6, 11))}
+    assert semester_week_offset(calendrier, "S2") == semester_week_offset(calendrier, "S6") == 15
+    # Du 4 janvier (index 15) à la semaine du 7 juin (index 34) : 20 semaines.
+    assert default_horizon_weeks(calendrier, "S2") == 20
+    assert verification.horizon(CONFIG.parents[1], "even") == 20
+    # L'impair n'a pas bougé.
+    assert (semester_week_offset(calendrier, "S1"), default_horizon_weeks(calendrier, "S3")) == (0, 19)
+
+    reglages.definir_dates_semestre(CONFIG, "even", None, None, "admin")
+    assert build_default_calendar_2026_2027().periodes == {}
+    for debut, fin in (("2027-02-01", None), ("2027-06-01", "2027-02-01"), ("bientôt", "2027-06-01")):
+        with pytest.raises(reglages.ReglageInvalide):
+            reglages.definir_dates_semestre(CONFIG, "even", debut, fin, "admin")
+
+
+def test_regler_les_dates_du_semestre_depuis_l_ecran_nouveau_semestre(admin, generations_isolees):
+    from cal_iut.api.state import get_state
+
+    depart = admin.get("/generations/periode/even").json()
+    assert depart["verrouille"] is None and depart["personnalise"] is False
+    assert (depart["debut"], depart["fin"], depart["semaines"]) == ("2027-02-01", "2027-06-30", 19)
+    assert depart["vacances"] == [
+        {"debut": "2027-02-22", "fin": "2027-02-26"},
+        {"debut": "2027-04-19", "fin": "2027-04-30"},
+    ]
+    assert depart["autre"] == {"libelle": "Semestre impair", "debut": "2026-08-31", "fin": "2027-01-29", "chevauche": False}
+
+    reponse = admin.put("/generations/periode/even", json={"debut": "2027-01-04", "fin": "2027-06-11"})
+    assert reponse.status_code == 200, reponse.text
+    corps = reponse.json()
+    assert (corps["debut"], corps["fin"], corps["semaines"], corps["personnalise"]) == ("2027-01-04", "2027-06-11", 20, True)
+    assert corps["autre"]["chevauche"] is True
+    assert corps["origine"] == {"debut": "2027-02-01", "fin": "2027-06-30"}
+    # Le serveur lit les nouvelles dates sans redémarrage.
+    assert "even" in get_state().calendar.periodes
+
+    for debut, fin in (
+        ("2027-02-06", "2027-06-11"),  # samedi
+        ("2027-02-22", "2027-06-11"),  # vacances d'hiver
+        ("2027-02-01", "2027-08-02"),  # hors de l'année
+        ("2027-06-11", "2027-02-01"),
+        ("2027-02-01", "2027-02-12"),  # deux semaines
+        ("bientôt", "2027-06-11"),
+    ):
+        assert admin.put("/generations/periode/even", json={"debut": debut, "fin": fin}).status_code == 422, (debut, fin)
+    assert admin.put("/generations/periode/tout", json={"debut": "2027-02-01", "fin": "2027-06-11"}).status_code == 422
+
+    reponse = admin.delete("/generations/periode/even")
+    assert reponse.status_code == 200 and reponse.json()["personnalise"] is False
+    assert get_state().calendar.periodes == {}
+
+
+def test_les_dates_d_un_semestre_en_service_ne_se_modifient_pas(admin, generations_isolees, monkeypatch):
+    from types import SimpleNamespace
+
+    from cal_iut.api import state
+
+    class _Depot:
+        def runs_en_service(self):
+            return [(SimpleNamespace(id=1, semestre="ODD", parcours="MMI"), 3000)]
+
+    monkeypatch.setattr(state, "get_repo", lambda: _Depot())
+    assert "déjà en service" in admin.get("/generations/periode/odd").json()["verrouille"]
+    assert admin.put("/generations/periode/odd", json={"debut": "2026-09-07", "fin": "2027-01-29"}).status_code == 409
+    assert admin.delete("/generations/periode/odd").status_code == 409
+    assert reglages.dates_semestres(CONFIG) == {}

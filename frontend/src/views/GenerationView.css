@@ -666,3 +666,25 @@ p.generation-aregler--bon {
 .regles-modules input[type="date"] {
   width: 132px;
 }
+
+/* ── Dates du semestre ── */
+.periode-cours-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.periode-cours-tete h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.periode-cours-alerte {
+  margin: 8px 0 0;
+}
+
+.periode-cours input[type="date"] {
+  width: 140px;
+}

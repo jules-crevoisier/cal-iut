@@ -706,6 +706,37 @@ export async function retablirSeance(groupe: string, sessionId: string): Promise
   );
 }
 
+// ── Début et fin des cours du semestre ──
+
+export interface PeriodeDesCours {
+  semestre_group: string;
+  verrouille: string | null;
+  debut: string;
+  fin: string;
+  /** Vrai : dates saisies à l'écran, faux : dates proposées d'origine. */
+  personnalise: boolean;
+  origine: { debut: string; fin: string };
+  /** Nombre de semaines de cours entre les deux dates. */
+  semaines: number;
+  vacances: { debut: string; fin: string }[];
+  autre: { libelle: string; debut: string; fin: string; chevauche: boolean };
+}
+
+export async function lirePeriodeDesCours(groupe: string): Promise<PeriodeDesCours> {
+  return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`);
+}
+
+export async function fixerPeriodeDesCours(groupe: string, debut: string, fin: string): Promise<PeriodeDesCours> {
+  return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`, {
+    method: "PUT",
+    body: JSON.stringify({ debut, fin }),
+  });
+}
+
+export async function retablirPeriodeDesCours(groupe: string): Promise<PeriodeDesCours> {
+  return request<PeriodeDesCours>(`/generations/periode/${encodeURIComponent(groupe)}`, { method: "DELETE" });
+}
+
 // ── Règles de modules du prochain semestre (lot 6) ──
 
 export interface ModuleRegle {
