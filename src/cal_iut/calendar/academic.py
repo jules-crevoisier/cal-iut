@@ -74,6 +74,9 @@ class AcademicCalendar:
     blocked_dates: set[date] = field(default_factory=set)
     holidays: set[date] = field(default_factory=set)
     notes: list[str] = field(default_factory=list)
+    # Début et fin des cours saisis à l'écran pour un groupe de semestres
+    # (« odd », « even »), cf. `periode_des_cours`. Vide : dates d'origine.
+    periodes: dict[str, tuple[date, date]] = field(default_factory=dict)
 
     @property
     def weeks(self) -> int:
@@ -336,7 +339,42 @@ def build_default_calendar_2026_2027() -> AcademicCalendar:
         blocked_dates=blocked,
         holidays=holidays,
         notes=notes,
+        periodes=periodes_saisies(),
     )
+
+
+# Début et fin des cours de chaque groupe de semestres, tant que rien n'est
+# saisi à l'écran. Impair : du 31 août au 29 janvier (le 1er février est le
+# premier jour du pair). Pair : jusqu'à la fin des cours du calendrier IUT.
+PERIODES_D_ORIGINE: dict[str, tuple[date, date]] = {
+    "odd": (date(2026, 8, 31), date(2027, 1, 29)),
+    "even": (date(2027, 2, 1), date(2027, 6, 30)),
+}
+
+
+def groupe_du_semestre(semestre: str | None) -> str:
+    return "odd" if semestre in {"S1", "S3", "S5"} else "even"
+
+
+def periodes_saisies() -> dict[str, tuple[date, date]]:
+    """Les dates saisies sur l'écran « Nouveau semestre » (cf.
+    `ingestion/reglages.py`). Illisible ou absent : aucune."""
+    try:
+        from cal_iut.ingestion import reglages
+
+        brutes = reglages.dates_semestres(_REPO_ROOT / "data" / "config")
+        return {
+            groupe: (date.fromisoformat(debut), date.fromisoformat(fin))
+            for groupe, (debut, fin) in brutes.items()
+            if groupe in PERIODES_D_ORIGINE
+        }
+    except Exception:  # noqa: BLE001 — un réglage illisible ne doit pas empêcher de lire le calendrier
+        return {}
+
+
+def periode_des_cours(calendar: AcademicCalendar, groupe: str) -> tuple[date, date]:
+    """Premier et dernier jour de cours du groupe de semestres."""
+    return calendar.periodes.get(groupe) or PERIODES_D_ORIGINE[groupe]
 
 
 def teaching_weeks_until(calendar: AcademicCalendar, start: date, target: date) -> int:
@@ -376,6 +414,11 @@ def default_horizon_weeks(calendar: AcademicCalendar, semestre: str | None) -> i
     Pour les autres semestres : repli sur l'ancienne valeur fixe (19), hors
     périmètre de cette refonte centrée sur S1.
     """
+    saisie = calendar.periodes.get(groupe_du_semestre(semestre))
+    if saisie:
+        debut, fin = saisie
+        lundi_suivant = fin - timedelta(days=fin.weekday()) + timedelta(days=7)
+        return teaching_weeks_until(calendar, debut, lundi_suivant)
     if semestre in {"S1", "S3", "S5"}:
         return teaching_weeks_until(calendar, _S1_S3_S5_START, _S1_S3_S5_TARGET_END)
     return _FALLBACK_WEEKS_OTHER_SEMESTRES
@@ -392,11 +435,9 @@ def semester_week_offset(calendar: AcademicCalendar, semestre: str) -> int:
     ~4 semaines de marge), le S1 étant libre de dépasser 16 semaines
     (`--weeks`) puisque la fin de semestre n'est pas une contrainte dure.
     """
-    if semestre in {"S1", "S3", "S5"}:
-        # Semestre impair : début septembre
-        target = date(2026, 8, 31)
-    else:
-        target = date(2027, 2, 1)
+    # Début des cours : la date saisie sur l'écran « Nouveau semestre », ou à
+    # défaut le 31 août (impair) et le 1er février (pair).
+    target = periode_des_cours(calendar, groupe_du_semestre(semestre))[0]
     monday = target - timedelta(days=target.weekday())
     for i, m in enumerate(calendar.teaching_mondays):
         if m >= monday:

@@ -612,6 +612,140 @@ def retirer_une_regle(groupe: str, nom: str, identifiant: str) -> dict:
     return _regles(groupe)
 
 
+# ── Début et fin des cours du semestre ────────────────────────────────
+
+
+class PeriodeDesCoursRequest(BaseModel):
+    debut: str
+    fin: str
+
+
+def _vacances(calendrier, debut, fin) -> list[dict]:
+    """Les coupures d'au moins trois jours ouvrés entre `debut` et `fin`."""
+    from datetime import timedelta
+
+    sortie, courante = [], []
+    jour = debut
+    while jour <= fin:
+        if jour.weekday() < 5:
+            if jour in calendrier.blocked_dates:
+                courante.append(jour)
+            else:
+                if len(courante) >= 3:
+                    sortie.append({"debut": courante[0].isoformat(), "fin": courante[-1].isoformat()})
+                courante = []
+        jour += timedelta(days=1)
+    if len(courante) >= 3:
+        sortie.append({"debut": courante[0].isoformat(), "fin": courante[-1].isoformat()})
+    return sortie
+
+
+def _periode(groupe: str) -> dict:
+    from cal_iut.calendar.academic import (
+        PERIODES_D_ORIGINE,
+        build_default_calendar_2026_2027,
+        default_horizon_weeks,
+        periode_des_cours,
+    )
+    from cal_iut.ingestion.pipeline import SEMESTRE_GROUP_ANCHOR
+
+    calendrier = build_default_calendar_2026_2027()
+    debut, fin = periode_des_cours(calendrier, groupe)
+    origine = PERIODES_D_ORIGINE[groupe]
+    autre = "even" if groupe == "odd" else "odd"
+    autre_debut, autre_fin = periode_des_cours(calendrier, autre)
+    motif = _semestre_verrouille(groupe)
+    if motif and "en service" in motif:
+        motif = (
+            f"Le {taches.GROUPES[groupe]['libelle'].lower()} est déjà en service : ses dates ne se modifient "
+            "plus, tout son planning serait décalé."
+        )
+    return {
+        "semestre_group": groupe,
+        "verrouille": motif,
+        "debut": debut.isoformat(),
+        "fin": fin.isoformat(),
+        "personnalise": groupe in calendrier.periodes,
+        "origine": {"debut": origine[0].isoformat(), "fin": origine[1].isoformat()},
+        "semaines": default_horizon_weeks(calendrier, SEMESTRE_GROUP_ANCHOR[groupe]),
+        "vacances": _vacances(calendrier, debut, fin),
+        "autre": {
+            "libelle": taches.GROUPES[autre]["libelle"],
+            "debut": autre_debut.isoformat(),
+            "fin": autre_fin.isoformat(),
+            "chevauche": debut <= autre_fin and autre_debut <= fin,
+        },
+    }
+
+
+def _calendriers_a_jour() -> None:
+    """Les plannings déjà chargés par le serveur lisent les nouvelles dates
+    sans redémarrage."""
+    from cal_iut.api import state as etats
+    from cal_iut.calendar.academic import periodes_saisies
+
+    saisies = periodes_saisies()
+    for etat in etats.etats_charges():
+        etat.calendar.periodes = dict(saisies)
+
+
+@router.get("/periode/{groupe}")
+def periode_des_cours_du_semestre(groupe: str) -> dict:
+    if groupe not in taches.GROUPES:
+        raise HTTPException(422, f"Groupe de semestres inconnu : {groupe!r}")
+    return _periode(groupe)
+
+
+@router.put("/periode/{groupe}")
+def fixer_la_periode_des_cours(groupe: str, body: PeriodeDesCoursRequest, request: Request) -> dict:
+    """Premier et dernier jour de cours du semestre. Refusé si le semestre
+    est en service : ses séances sont rangées par numéro de semaine depuis
+    le début des cours, elles changeraient toutes de date."""
+    from datetime import date
+
+    from cal_iut.calendar.academic import build_default_calendar_2026_2027, teaching_weeks_until
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    calendrier = build_default_calendar_2026_2027()
+    jours = {}
+    for nom, brute in (("premier", body.debut), ("dernier", body.fin)):
+        try:
+            jour = date.fromisoformat(str(brute))
+        except ValueError as exc:
+            raise HTTPException(422, f"Le {nom} jour de cours n'est pas une date valide.") from exc
+        if calendrier.date_to_week_day_any(jour) is None or jour in calendrier.blocked_dates:
+            raise HTTPException(
+                422,
+                f"Le {jour.strftime('%d/%m/%Y')} n'est pas un jour de cours du calendrier "
+                "(week-end, férié, vacances ou hors de l'année).",
+            )
+        jours[nom] = jour
+    if jours["premier"] >= jours["dernier"]:
+        raise HTTPException(422, "Le dernier jour de cours doit être après le premier.")
+    lundi_suivant = jours["dernier"].fromordinal(jours["dernier"].toordinal() - jours["dernier"].weekday() + 7)
+    if teaching_weeks_until(calendrier, jours["premier"], lundi_suivant) < 4:
+        raise HTTPException(422, "Un semestre compte au moins quatre semaines de cours.")
+    try:
+        reglages.definir_dates_semestre(
+            taches.RACINE / "data" / "config", groupe, body.debut, body.fin, _auteur(request)
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _calendriers_a_jour()
+    return _periode(groupe)
+
+
+@router.delete("/periode/{groupe}")
+def revenir_aux_dates_d_origine(groupe: str, request: Request) -> dict:
+    from cal_iut.ingestion import reglages
+
+    _refuser_si_source_verrouillee(groupe)
+    reglages.definir_dates_semestre(taches.RACINE / "data" / "config", groupe, None, None, _auteur(request))
+    _calendriers_a_jour()
+    return _periode(groupe)
+
+
 @router.get("/verification/{groupe}")
 def a_regler_avant_de_generer(groupe: str) -> dict:
     """Ce qu'il reste à régler dans les données de ce semestre avant de

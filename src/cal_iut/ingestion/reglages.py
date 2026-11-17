@@ -35,7 +35,9 @@ Les réglages :
 - `doubles_seances`   : séances d'un module regroupées en blocs de 3 h ou
   4 h 30, complète `double_sessions.yaml` ;
 - `periodes_modules`  : période imposée aux séances d'un module, complète
-  les `session_date_windows` de `course_scheduling_rules.yaml`.
+  les `session_date_windows` de `course_scheduling_rules.yaml` ;
+- `dates_semestres`   : premier et dernier jour de cours d'un groupe de
+  semestres, à la place des dates d'origine de `calendar/academic.py`.
 """
 
 from __future__ import annotations
@@ -47,7 +49,7 @@ from pathlib import Path
 
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
-NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules")
+NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres")
 NB_CRENEAUX = 6
 
 _verrou = threading.RLock()
@@ -313,7 +315,7 @@ def retablir_seance(config_dir: Path, session_id: str, *, livree: bool) -> None:
 
 # ── Règles de modules ─────────────────────────────────────────────────
 
-REGLES_DE_MODULES = ("doubles_seances", "periodes_modules")
+REGLES_DE_MODULES = ("doubles_seances", "periodes_modules", "dates_semestres")
 TYPES_DE_SEANCE = ("CM", "TD", "TP")
 
 
@@ -379,3 +381,42 @@ def retirer_regle_de_module(config_dir: Path, nom: str, identifiant: str) -> boo
     if nom not in REGLES_DE_MODULES:
         raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
     return retirer(config_dir, nom, identifiant, livree=False)
+
+
+# ── Début et fin des cours d'un semestre ──────────────────────────────
+
+
+def dates_semestres(config_dir: Path) -> dict[str, tuple[str, str]]:
+    """`{groupe: (début ISO, fin ISO)}` pour les groupes dont les dates ont
+    été saisies à l'écran."""
+    sortie: dict[str, tuple[str, str]] = {}
+    for ajout in _lire(config_dir)["dates_semestres"]["ajouts"]:
+        groupe, debut, fin = ajout.get("groupe"), ajout.get("debut"), ajout.get("fin")
+        if groupe and debut and fin:
+            sortie[str(groupe)] = (str(debut), str(fin))
+    return sortie
+
+
+def definir_dates_semestre(config_dir: Path, groupe: str, debut: str | None, fin: str | None, par: str) -> None:
+    """Remplace les dates saisies pour ce groupe. Sans dates : retour aux
+    dates d'origine."""
+    if debut or fin:
+        if not (debut and fin):
+            raise ReglageInvalide("Indiquez le premier et le dernier jour de cours.")
+        debut, fin = _valider_date(debut), _valider_date(fin)
+        if debut >= fin:
+            raise ReglageInvalide("Le dernier jour de cours doit être après le premier.")
+    with _verrou:
+        tout = _lire(config_dir)
+        bloc = tout["dates_semestres"]
+        bloc["ajouts"] = [a for a in bloc["ajouts"] if a.get("groupe") != groupe]
+        if debut:
+            bloc["ajouts"].append({
+                "id": uuid.uuid4().hex[:12],
+                "groupe": groupe,
+                "debut": debut,
+                "fin": fin,
+                "demande_par": par,
+                "le": datetime.now(timezone.utc).date().isoformat(),
+            })
+        ecrire_json(_path(config_dir), tout)
