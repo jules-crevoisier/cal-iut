@@ -169,7 +169,7 @@ def test_annuaire_liste_les_enseignants_de_l_appli(edit, noms) -> None:  # noqa:
     libelles = edit.get("/app-state").json()["teacherLabels"]
     assert [l["code"] for l in corps["lignes"]] == sorted(libelles), "la liste de l'annuaire, rien d'autre"
     mri = next(l for l in corps["lignes"] if l["code"] == "MRI")
-    assert (mri["prenom"], mri["nom"], mri["nom_complet"]) == ("Marine", "RIGUET", "Marine Riguet")
+    assert (mri["prenom"], mri["nom"], mri["nom_complet"]) == ("Prenom", "MRI", "Prenom MRI")
     assert mri["email"] == "marine.riguet@univ.test"
     assert mri["type"] is None and mri["telephone"] is None, "aucune source : à préciser"
     assert mri["code_celcat"]["code"] == "111" and mri["code_celcat"]["origine"] == "fichier"
@@ -191,19 +191,19 @@ def test_corriger_le_prenom_recompose_le_nom_affiche_partout(edit, noms) -> None
     assert r.json()["valeurs"] == {"prenom": "Marine-Alice"} and r.json()["revision"] > avant
 
     etat_app = edit.get("/app-state").json()
-    assert etat_app["teacherLabels"]["MRI"] == "Marine-Alice RIGUET"
-    assert etat_app["teacherIdentites"]["MRI"] == {"prenom": "Marine-Alice", "nom": "RIGUET", "type": None}
+    assert etat_app["teacherLabels"]["MRI"] == "Marine-Alice MRI"
+    assert etat_app["teacherIdentites"]["MRI"] == {"prenom": "Marine-Alice", "nom": "MRI", "type": None}
     marque = etat_app["surchargesReference"]["enseignants"]["MRI"]["prenom"]
-    assert marque["valeur"] == "Marine-Alice" and marque["origine"] == "Marine"
+    assert marque["valeur"] == "Marine-Alice" and marque["origine"] == "Prenom"
     assert marque["modifie_par"].startswith("test-edit-")
     v1 = {e["code"]: e for e in edit.get("/api/v1/enseignants").json()}
-    assert (v1["MRI"]["nom"], v1["MRI"]["prenom"], v1["MRI"]["nom_famille"]) == ("Marine-Alice RIGUET", "Marine-Alice", "RIGUET")
+    assert (v1["MRI"]["nom"], v1["MRI"]["prenom"], v1["MRI"]["nom_famille"]) == ("Marine-Alice MRI", "Marine-Alice", "MRI")
     ligne = _ligne(edit, "MRI")
-    assert ligne["prenom"] == "Marine-Alice" and ligne["surcharges"]["prenom"]["origine"] == "Marine"
+    assert ligne["prenom"] == "Marine-Alice" and ligne["surcharges"]["prenom"]["origine"] == "Prenom"
 
     # Trace : qui, quand, valeur d'avant ET valeur du fichier.
     trace = [l for l in surcharges_reference.journal() if l["cle"] == "MRI" and l["champ"] == "prenom"][0]
-    assert trace["apres"] == "Marine-Alice" and trace["avant"] is None and trace["valeur_fichier"] == "Marine"
+    assert trace["apres"] == "Marine-Alice" and trace["avant"] is None and trace["valeur_fichier"] == "Prenom"
     assert trace["par"].startswith("test-edit-")
 
     # Le nom de famille, à part, rangé en capitales.
@@ -213,19 +213,19 @@ def test_corriger_le_prenom_recompose_le_nom_affiche_partout(edit, noms) -> None
     # « Revenir à la valeur du fichier », champ par champ.
     r = edit.delete("/reference/enseignants/MRI/prenom")
     assert r.status_code == 200, r.text
-    assert edit.get("/app-state").json()["teacherLabels"]["MRI"] == "Marine RIGUET-DURAND"
+    assert edit.get("/app-state").json()["teacherLabels"]["MRI"] == "Prenom RIGUET-DURAND"
     assert edit.delete("/reference/enseignants/MRI/nom_famille").status_code == 200
     etat_app = edit.get("/app-state").json()
-    assert etat_app["teacherLabels"]["MRI"] == "Marine Riguet", "sans correction : le nom du fichier, inchangé"
+    assert etat_app["teacherLabels"]["MRI"] == "Prenom MRI", "sans correction : le nom du fichier, inchangé"
     assert "MRI" not in etat_app["surchargesReference"]["enseignants"]
     assert edit.delete("/reference/enseignants/MRI/prenom").status_code == 404
 
 
 def test_ressaisir_la_valeur_du_fichier_ne_cree_pas_de_surcharge(edit, noms) -> None:  # noqa: F811
-    assert edit.put("/reference/enseignants/KBR", json={"prenom": "Kyllian", "nom_famille": "bresson"}).status_code == 200
+    assert edit.put("/reference/enseignants/KBR", json={"prenom": "Prenom", "nom_famille": "kbr"}).status_code == 200
     assert surcharges_reference.origine("enseignants", "KBR", "prenom") is None
     assert surcharges_reference.origine("enseignants", "KBR", "nom_famille") is None
-    assert edit.get("/app-state").json()["teacherLabels"]["KBR"] == "Kyllian Bresson"
+    assert edit.get("/app-state").json()["teacherLabels"]["KBR"] == "Prenom KBR"
 
 
 def test_le_nom_complet_ressaisi_passe_devant_prenom_et_nom(edit, noms) -> None:  # noqa: F811
@@ -333,13 +333,13 @@ def test_type_enregistre_visible_dans_v1(edit, noms) -> None:  # noqa: F811
 
     etat_app = edit.get("/app-state").json()
     assert etat_app["teacherIdentites"]["KBR"]["type"] == "vacataire"
-    assert etat_app["teacherLabels"]["KBR"] == "Kyllian Bresson", "le type ne touche pas au nom"
+    assert etat_app["teacherLabels"]["KBR"] == "Prenom KBR", "le type ne touche pas au nom"
     c = edit.get("/reference/enseignants").json()["compteurs"]
     assert (c["enseignants"], c["vacataires"], c["a_preciser"]) == (1, 1, c["total"] - 2)
 
     v1 = {e["code"]: e for e in edit.get("/api/v1/enseignants").json()}
     assert v1["KBR"]["type"] == "vacataire" and v1["MRI"]["type"] == "enseignant"
-    assert v1["KBR"]["prenom"] == "Kyllian" and v1["KBR"]["nom_famille"] == "BRESSON"
+    assert v1["KBR"]["prenom"] == "Prenom" and v1["KBR"]["nom_famille"] == "KBR"
     # Lien public : ni type ni identités dans le payload.
     public = TestClient(app)
     assert public.get("/app-state?t=KBR").json()["teacherIdentites"] == {}

@@ -1,38 +1,11 @@
-# Enseignants que la feuille officielle « CONTRAINTES ENSEIGNANTS MMI
-# 2026_2027 » ne connaît pas encore — typiquement une arrivée en cours
-# d'année.
-#
-# La feuille reste la référence : dès qu'un enseignant y figure, c'est son nom
-# à elle qui s'affiche, et l'entrée ci-dessous peut être retirée.
-#
-# Sans ces entrées, un enseignant qui n'a encore AUCUNE séance n'apparaît pas
-# dans la liste de « Nouvelle séance » — on ne peut donc pas lui créer sa
-# première séance (cf. `src/cal_iut/ingestion/enseignants.py`).
-#
-# Son code Celcat, lui, se renseigne dans `celcat.yaml` (section
-# `enseignants`), sans quoi ses séances resteraient bloquées à la recopie.
-#
-# Aussi faisable depuis l'appli, sans déploiement (30/09/2026) : un
-# administrateur clique « Nouvel intervenant » (Vue Enseignant, ou Référence >
-# Codes Celcat > Enseignants) — nom, code, code Celcat et mail. L'intervenant
-# est alors conservé dans `data/state/references.json` (le volume) et lu
-# exactement comme une entrée de ce fichier ; son code Celcat va dans
-# `data/state/celcat_mappings.json`. Cf. GUIDE.md, « Ajouter un intervenant ».
-# Une entrée ici (ou la feuille officielle) prend le pas sur lui.
-
 APH:
-  nom: "Alexia Petit-Halajko"
+  nom: "Prenom APH"
   ajoute_le: "2026-09-22"
-  demande_par: "Jules Crevoisier"
-  # APH et non APE : APE est déjà Anne-Laure Perrone. Choix de l'équipe,
-  # relayé avec la demande.
+  demande_par: ""
   code_celcat: "40584"
 
 AGT:
-  nom: "Anne Grenet"
+  nom: "Prenom AGT"
   ajoute_le: "2026-09-30"
-  demande_par: "Jules Crevoisier"
-  # Demandée sous « AGR », mais AGR est Gram AMBROISE dans Celcat (38321) et
-  # Anne Grenet y est déjà AGT (3233), code sous lequel le planning a ses
-  # séances : on garde AGT (décision du 30/09/2026).
+  demande_par: ""
   code_celcat: "3233"

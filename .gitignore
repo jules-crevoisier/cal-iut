@@ -77,3 +77,10 @@ data/state/blocages.json
 # Maquette et progression recuperees depuis MMI Previ (16/11/2026) : noms
 # d'enseignants et commentaires internes, jamais dans le depot.
 data/state/sources/
+# Données personnelles des enseignants (18/11/2026) : les vrais fichiers
+# (e-mails, contraintes, commentaires) vivent dans le volume de production,
+# sous data/state/prive/ — jamais dans le dépôt. Cf. docs/DONNEES-PRIVEES.md.
+data/state/prive/
+# Indisponibilités et réservations saisies dans l'interface.
+data/state/reglages.json
+contraintes_update/*.pdf
