@@ -276,6 +276,12 @@ def _ecarts(
     noms = ev.get("enseignants")
     if len(codes) > 1 or (isinstance(noms, list) and len(noms) > 1):
         ecarts.append("enseignants multiples")
+    # LA MATIÈRE, tâche 34 (Kyllian Bresson, 06/11/2026) : une matière
+    # changée dans cal-iut était AJOUTÉE dans Celcat à côté de l'ancienne.
+    # Champ absent des relevés antérieurs : on ne signale rien sans lui.
+    modules = ev.get("modules_codes") or ev.get("modules")
+    if isinstance(modules, list) and len({str(m).strip() for m in modules if str(m).strip()}) > 1:
+        ecarts.append("matières multiples")
     attendu = str((enseignants_celcat or {}).get(str(getattr(placement, "session_id", ""))) or "").strip()
     if attendu and codes and attendu not in codes:
         ecarts.append("enseignant")
@@ -317,6 +323,7 @@ def _vue_celcat(ev: dict) -> dict:
         "enseignants": ev.get("enseignants") if isinstance(ev.get("enseignants"), list) else None,
         "categorie": ev.get("categorie"),
         "module": ev.get("module"),
+        "modules": ev.get("modules") if isinstance(ev.get("modules"), list) else None,
         "groupe": ev.get("groupe"),
     }
 

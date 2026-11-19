@@ -123,6 +123,10 @@ def _relever(page) -> tuple[list[dict], list[str]]:
                     "enseignants": ev.enseignants,
                     "enseignants_codes": ev.enseignants_codes,
                     "module": ev.module_nom,
+                    # TOUTES les matières (tâche 34) : une séance à deux
+                    # matières doit pouvoir se voir et se lister.
+                    "modules": ev.modules,
+                    "modules_codes": ev.modules_codes,
                     "semaine": ev.indice_semaine,
                     "protected": ev.protected,
                 }

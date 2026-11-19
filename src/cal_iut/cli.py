@@ -1266,6 +1266,20 @@ def cmd_celcat_occupations(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_celcat_matieres_doubles(args: argparse.Namespace) -> int:
+    """Liste les séances Celcat à plusieurs matières, d'après le dernier
+    relevé du sidecar — LECTURE SEULE, aucun accès à Celcat (tâche 34)."""
+    from cal_iut.celcat import instantane, matieres_doubles
+
+    releve = instantane.lire()
+    if releve.releve_le is None:
+        print("Aucun relevé Celcat disponible.", file=sys.stderr)
+        return 3
+    print(f"Relevé du {releve.releve_le} ({len(releve.evenements)} évènements).")
+    print(matieres_doubles.rapport(matieres_doubles.lister(releve.evenements)))
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
     from dotenv import load_dotenv
@@ -1869,6 +1883,12 @@ def main(argv: list[str] | None = None) -> int:
     occ_parser.add_argument("--details", action="store_true", help="liste aussi les évènements ignorés et pourquoi")
     occ_parser.add_argument("--simulation", metavar="FICHIER", help="rejoue un relevé JSON, sans réseau")
     occ_parser.set_defaults(func=cmd_celcat_occupations)
+
+    md_parser = celcat_sub.add_parser(
+        "matieres-doubles",
+        help="Séances Celcat à plusieurs matières, d'après le dernier relevé (lecture seule)",
+    )
+    md_parser.set_defaults(func=cmd_celcat_matieres_doubles)
 
     serve_parser = sub.add_parser("serve", help="Démarrer l'API FastAPI")
     serve_parser.add_argument("--host", default="127.0.0.1")

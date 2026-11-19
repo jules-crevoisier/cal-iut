@@ -240,6 +240,24 @@ def _enseignants_fusionnes(
     )
 
 
+def _matieres_fusionnees(
+    page, brut_liste: object, *, valeur: int | None, event_id: int | None
+) -> list[dict]:
+    """Les matières de l'évènement fusionné, en RETIRANT les anciennes
+    (même convention que salles et enseignants, `_liste_remplacee`).
+
+    Relevé sans aucun identifiant de matière (seulement un nom) : rien à
+    retirer de façon sûre, on retombe sur l'ancien chemin."""
+    actuelles = [r for r in brut_liste if isinstance(r, dict)] if isinstance(brut_liste, list) else []
+    if valeur is not None and actuelles and all(_id_ressource(r, "module_id") is None for r in actuelles):
+        return _ressource_fusionnee(
+            page, brut_liste, cle_id="module_id", valeur=valeur, event_id=event_id
+        )
+    return _liste_remplacee(
+        page, brut_liste, cle_id="module_id", type_rpc="Module", valeur=valeur, event_id=event_id
+    )
+
+
 def _ressource_fusionnee(
     page, brut_liste: object, *, cle_id: str, valeur: int | None, event_id: int | None
 ) -> list[dict]:
@@ -330,9 +348,13 @@ def fusionner_deltas(
         # chaque composant de la clé.
         fusionne["modules"] = _modules_retires(brut.get("modules"), event_id=id_evenement)
     else:
-        fusionne["modules"] = _ressource_fusionnee(
-            page, brut.get("modules"), cle_id="module_id", valeur=_id(ids, "module_id"),
-            event_id=id_evenement,
+        # LA MATIÈRE SE REMPLACE DE MÊME (tâche 34, 06/11/2026) : `save`
+        # FUSIONNE aussi la liste `modules`. Poser `modules: [nouvelle]`
+        # ajoutait la nouvelle et gardait l'ancienne — la séance se retrouvait
+        # avec deux matières dans Celcat. Tout ce qui n'est pas la matière
+        # voulue est retiré, y compris un doublon déjà présent.
+        fusionne["modules"] = _matieres_fusionnees(
+            page, brut.get("modules"), valeur=_id(ids, "module_id"), event_id=id_evenement,
         )
     # LA SALLE SE REMPLACE EN RETIRANT L'ANCIENNE, jamais en posant seulement
     # la nouvelle : `save` FUSIONNE la liste des salles, il ne la remplace
