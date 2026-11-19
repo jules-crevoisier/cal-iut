@@ -18,6 +18,7 @@ from cal_iut.calendar.academic import (
 from cal_iut.ingestion.config_loader import (
     load_course_min_week_rules,
     load_course_teacher_orders,
+    load_projets_modules,
     load_session_date_windows,
 )
 from cal_iut.ingestion.constraints_loader import (
@@ -59,6 +60,7 @@ from cal_iut.solver.constraints import (
 from cal_iut.solver.objectives import (
     add_avoid_zone_penalties,
     add_course_teacher_order_penalties,
+    add_projet_modules_penalties,
     add_intra_day_gap_penalties,
     add_midday_fill_penalties,
     add_sae_supervisor_soft_penalties,
@@ -1016,6 +1018,10 @@ class TimetableSolver:
                     self.config.teacher_clustering_weight,
                 )
             )
+
+        projets = load_projets_modules(root / "data" / "config")
+        if projets:
+            terms.extend(add_projet_modules_penalties(model, built.unlocked, built.session_starts, projets))
 
         if self.config.optimize_teacher_order:
             terms.extend(

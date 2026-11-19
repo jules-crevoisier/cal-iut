@@ -780,3 +780,14 @@ p.generation-aregler--bon {
 .regles-modules .seances-annulees-liste li > button {
   margin-left: 8px;
 }
+
+.projet-etape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: end;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+}

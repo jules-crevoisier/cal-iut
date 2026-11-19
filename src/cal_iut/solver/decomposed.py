@@ -42,6 +42,7 @@ from cal_iut.ingestion.config_loader import (
     load_course_max_week_rules,
     load_course_min_week_rules,
     load_course_teacher_orders,
+    load_projets_modules,
     load_session_date_windows,
     load_solver_scheduled_sae,
     load_weekly_cap_exceptions,
@@ -83,6 +84,7 @@ from cal_iut.solver.objectives import (
     add_cm_spread_penalties,
     add_course_grouping_penalties,
     add_course_teacher_order_penalties,
+    add_projet_modules_penalties,
     add_edge_slot_penalties,
     add_intra_day_gap_penalties,
     add_midday_fill_penalties,
@@ -568,6 +570,7 @@ def assign_weeks(
 
     config_dir = Path(__file__).resolve().parents[3] / "data" / "config"
     teacher_order_rules = load_course_teacher_orders(config_dir)
+    projets_modules = load_projets_modules(config_dir)
     min_week_rules = load_course_min_week_rules(config_dir)
     if min_week_rules:
         by_key = {(r.course_code, r.semestre): r for r in min_week_rules}
@@ -1257,6 +1260,14 @@ def assign_weeks(
     if teacher_order_rules:
         objective_terms.extend(
             add_course_teacher_order_penalties(model, sessions, week_var, teacher_order_rules)
+        )
+
+    # -- Projets de modules : ordre des étapes et jours par semaine (molle) --
+    if projets_modules:
+        objective_terms.extend(
+            add_projet_modules_penalties(
+                model, sessions, week_var, projets_modules, week_vars=week_var, weeks=max_week + 1
+            )
         )
 
     # -- Regroupement des évaluations sur une même semaine (molle) --
