@@ -440,6 +440,40 @@ class SaeTeacherPhase(BaseModel):
     note: str | None = None
 
 
+class EtapeProjet(BaseModel):
+    """Une étape d'un projet : un module, ou une phase d'un module (séances de
+    rang `de` à `a` d'un type, rang compté par groupe à partir de 1)."""
+
+    course_code: str
+    session_type: str | None = None
+    de: int | None = None
+    a: int | None = None
+
+
+class ProjetModules(BaseModel):
+    """
+    Plusieurs modules qui se déroulent dans un ordre, en occupant au plus
+    `jours_par_semaine` jours par semaine (ex. S4 : SAE, back, front, retour
+    sur la SAE). Deux effets, tous deux SOUPLES :
+
+    - chaque étape se place plutôt avant la suivante (position moyenne des
+      séances, comme `CourseTeacherOrderRule`) ;
+    - par groupe et par semaine, les séances du projet ne dépassent pas
+      `jours_par_semaine` journées pleines de créneaux (approximation du
+      nombre de jours : le calcul ne regroupe pas lui-même les séances
+      sur des jours entiers).
+    """
+
+    id: str = ""
+    nom: str
+    semestre: str
+    etapes: list[EtapeProjet]
+    jours_par_semaine: int | None = None
+    ordre_weight: int = 300
+    volume_weight: int = 150
+    note: str | None = None
+
+
 class CourseTeacherOrderRule(BaseModel):
     """
     Ordre SOUPLE entre les enseignants d'un même module — ex. WRA505C (Ariane

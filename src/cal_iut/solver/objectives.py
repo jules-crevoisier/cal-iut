@@ -7,7 +7,7 @@ from collections import defaultdict
 from ortools.sat.python import cp_model
 
 from cal_iut.calendar.academic import AcademicCalendar
-from cal_iut.models.entities import CourseTeacherOrderRule, TeacherAvailability
+from cal_iut.models.entities import CourseTeacherOrderRule, ProjetModules, TeacherAvailability
 from cal_iut.models.session import SessionToPlace
 from cal_iut.models.timetable import DAYS_PER_WEEK, SLOTS_PER_DAY, TimeSlot, WeekDay
 
@@ -482,6 +482,94 @@ def add_course_teacher_order_penalties(
             model.add(pen == rule.weight).only_enforce_if(ok.Not())
             penalties.append(pen)
 
+    return penalties
+
+
+def _sessions_de_l_etape(sessions: list[SessionToPlace], semestre: str, etape) -> list[SessionToPlace]:
+    """Les séances d'une étape de projet : le module, restreint à un type de
+    séance et à des rangs (comptés par groupe, à partir de 1)."""
+    choisies = [
+        s for s in sessions
+        if s.course_code == etape.course_code
+        and (not semestre or s.semestre == semestre)
+        and (not etape.session_type or s.session_type.value == etape.session_type)
+    ]
+    if etape.de is None and etape.a is None:
+        return choisies
+    par_groupe: dict[tuple[str, str], list[SessionToPlace]] = defaultdict(list)
+    for s in choisies:
+        par_groupe[(s.session_type.value, s.group_ids[0] if s.group_ids else "")].append(s)
+    retenues: list[SessionToPlace] = []
+    for lot in par_groupe.values():
+        for rang, s in enumerate(sorted(lot, key=lambda x: (x.sequence_order, x.id)), start=1):
+            if (etape.de is None or rang >= etape.de) and (etape.a is None or rang <= etape.a):
+                retenues.append(s)
+    return retenues
+
+
+def add_projet_modules_penalties(
+    model: cp_model.CpModel,
+    sessions: list[SessionToPlace],
+    position_vars: dict[str, cp_model.IntVar],
+    projets: list[ProjetModules],
+    *,
+    week_vars: dict[str, cp_model.IntVar] | None = None,
+    weeks: int = 0,
+) -> list[cp_model.LinearExprT]:
+    """
+    Projets de modules (cf. `ProjetModules`), deux effets SOUPLES.
+
+    1. Ordre : la position MOYENNE (créneau ou semaine selon `position_vars`)
+       des séances d'une étape précède celle de l'étape suivante, par produit
+       croisé comme `add_course_teacher_order_penalties`.
+    2. Volume : si `jours_par_semaine` est posé et que `week_vars` est fourni
+       (semaine de chaque séance), chaque cohorte ne dépasse pas
+       `jours_par_semaine` journées pleines de créneaux sur les séances du
+       projet pour une même semaine. Le CM compte pour tous les groupes de la
+       cohorte. Les créneaux au-delà du plafond sont pénalisés.
+    """
+    penalties: list[cp_model.LinearExprT] = []
+    for projet in projets:
+        lots = [_sessions_de_l_etape(sessions, projet.semestre, e) for e in projet.etapes]
+        lots = [[s for s in lot if s.id in position_vars] for lot in lots]
+        for rang, (avant, apres) in enumerate(zip(lots, lots[1:])):
+            if not avant or not apres:
+                continue
+            lhs = cp_model.LinearExpr.sum([position_vars[s.id] for s in avant]) * len(apres)
+            rhs = cp_model.LinearExpr.sum([position_vars[s.id] for s in apres]) * len(avant)
+            etiquette = f"{projet.id or projet.nom}_{rang}".replace("-", "_").replace(" ", "_")
+            ok = model.new_bool_var(f"proj_ord_ok_{etiquette}")
+            model.add(lhs < rhs).only_enforce_if(ok)
+            pen = model.new_int_var(0, projet.ordre_weight, f"proj_ord_pen_{etiquette}")
+            model.add(pen == 0).only_enforce_if(ok)
+            model.add(pen == projet.ordre_weight).only_enforce_if(ok.Not())
+            penalties.append(pen)
+
+        if not projet.jours_par_semaine or not week_vars or weeks <= 0:
+            continue
+        du_projet = {s.id: s for lot in lots for s in lot if s.id in week_vars}
+        par_cohorte: dict[tuple[str, str], list[SessionToPlace]] = defaultdict(list)
+        for s in du_projet.values():
+            par_cohorte[(s.semestre, s.parcours)].append(s)
+        plafond = projet.jours_par_semaine * SLOTS_PER_DAY
+        for (semestre, parcours), membres in par_cohorte.items():
+            groupes = sorted({s.group_ids[0] for s in membres if s.session_type.value != "CM" and s.group_ids})
+            communs = [s for s in membres if s.session_type.value == "CM" or not s.group_ids]
+            for groupe in groupes or [""]:
+                siens = communs + [s for s in membres if s.session_type.value != "CM" and s.group_ids and s.group_ids[0] == groupe]
+                if sum(s.duration_slots for s in siens) <= plafond:
+                    continue
+                for semaine in range(weeks):
+                    termes = []
+                    for s in siens:
+                        dans = model.new_bool_var(f"proj_in_{projet.id}_{s.id}_{semaine}".replace("-", "_"))
+                        model.add(week_vars[s.id] == semaine).only_enforce_if(dans)
+                        model.add(week_vars[s.id] != semaine).only_enforce_if(dans.Not())
+                        termes.append(dans * s.duration_slots)
+                    total = sum(termes)
+                    exces = model.new_int_var(0, sum(s.duration_slots for s in siens), f"proj_exc_{projet.id}_{parcours}_{groupe}_{semaine}".replace("-", "_"))
+                    model.add(exces >= total - plafond)
+                    penalties.append(exces * projet.volume_weight)
     return penalties
 
 

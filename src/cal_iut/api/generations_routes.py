@@ -557,6 +557,20 @@ class RepartitionRequest(BaseModel):
     motif: str = ""
 
 
+class EtapeRequest(BaseModel):
+    code: str
+    type: str | None = None
+    de: int | None = None
+    a: int | None = None
+
+
+class ProjetRequest(BaseModel):
+    nom: str
+    etapes: list[EtapeRequest]
+    jours_par_semaine: int | None = None
+    motif: str = ""
+
+
 class OrdreRequest(BaseModel):
     code: str
     ordre: list[str]
@@ -698,6 +712,20 @@ def _regles(groupe: str) -> dict:
         "seances_longues": sorted(longues, key=lambda r: (r["code"], r["type"])),
         "periodes": sorted(periodes, key=lambda r: (r["code"], r["debut"] or "", r["fin"] or "")),
         **_regles_des_enseignants(config, modules, semestres),
+        "projets": [
+            {
+                "id": a["id"],
+                "nom": a.get("nom", ""),
+                "semestre": a.get("semestre"),
+                "jours_par_semaine": a.get("jours_par_semaine"),
+                "etapes": [
+                    {**e, "nom": modules.get(e["course_code"], {}).get("nom", "")} for e in a.get("etapes") or []
+                ],
+                "motif": str(a.get("motif") or ""),
+            }
+            for a in reglages.regles_de_modules(config, "projets_modules")
+            if a.get("semestre") in semestres
+        ],
     }
 
 
@@ -912,6 +940,27 @@ def ajouter_une_repartition(groupe: str, body: RepartitionRequest, request: Requ
     }, request)
 
 
+@router.post("/regles/{groupe}/projets", status_code=201)
+def ajouter_un_projet(groupe: str, body: ProjetRequest, request: Request) -> dict:
+    """Plusieurs modules qui se suivent dans l'ordre donné, sur au plus N jours
+    par semaine. Ce sont des préférences : le calcul les respecte quand il le peut."""
+    _refuser_si_source_verrouillee(groupe)
+    etat = _regles(groupe)
+    modules = {m["code"]: m for m in etat["modules"]}
+    codes = [e.code.strip().upper() for e in body.etapes]
+    inconnus = [c for c in codes if c not in modules]
+    if inconnus:
+        raise HTTPException(422, f"Module inconnu dans ce semestre : {', '.join(inconnus)}.")
+    semestres = {modules[c]["semestre"] for c in codes}
+    if len(semestres) != 1:
+        raise HTTPException(422, "Les étapes d'un projet appartiennent au même semestre.")
+    return _enregistrer_regle(groupe, "projets_modules", {
+        "nom": body.nom, "semestre": semestres.pop(), "jours_par_semaine": body.jours_par_semaine,
+        "etapes": [{"course_code": e.code, "session_type": e.type, "de": e.de, "a": e.a} for e in body.etapes],
+        "motif": body.motif,
+    }, request)
+
+
 @router.post("/regles/{groupe}/ordres", status_code=201)
 def ajouter_un_ordre(groupe: str, body: OrdreRequest, request: Request) -> dict:
     """Les séances du premier enseignant se placent plutôt avant celles du
@@ -976,6 +1025,7 @@ _LISTES = {
     "repartitions": ("repartitions", "repartitions"),
     "ordres": ("ordres_enseignants", "ordres"),
     "duos": ("duos", "duos"),
+    "projets": ("projets_modules", "projets"),
 }
 
 

@@ -1054,6 +1054,39 @@ export interface ReglesModulesReponse {
   repartitions: RepartitionModule[];
   ordres: OrdreModule[];
   duos: DuoModule[];
+  projets?: ProjetModules[];
+}
+
+export interface EtapeProjet {
+  course_code: string;
+  nom: string;
+  session_type: string | null;
+  de: number | null;
+  a: number | null;
+}
+
+export interface ProjetModules {
+  id: string;
+  nom: string;
+  semestre: string | null;
+  jours_par_semaine: number | null;
+  etapes: EtapeProjet[];
+  motif: string;
+}
+
+export async function ajouterProjetModules(
+  groupe: string,
+  corps: {
+    nom: string;
+    etapes: { code: string; type: string | null; de: number | null; a: number | null }[];
+    jours_par_semaine: number | null;
+    motif: string;
+  },
+): Promise<ReglesModulesReponse> {
+  return request<ReglesModulesReponse>(`/generations/regles/${encodeURIComponent(groupe)}/projets`, {
+    method: "POST",
+    body: JSON.stringify(corps),
+  });
 }
 
 export async function ajouterRepartitionModule(
@@ -1118,7 +1151,7 @@ export async function ajouterPeriodeModule(
 
 export async function retirerRegleModule(
   groupe: string,
-  nom: "seances-longues" | "periodes" | "repartitions" | "ordres" | "duos",
+  nom: "seances-longues" | "periodes" | "repartitions" | "ordres" | "duos" | "projets",
   id: string,
 ): Promise<ReglesModulesReponse> {
   return request<ReglesModulesReponse>(

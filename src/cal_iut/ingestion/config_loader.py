@@ -8,6 +8,8 @@ from cal_iut.models.entities import (
     CourseMaxWeekRule,
     CourseMinWeekRule,
     CourseTeacherOrderRule,
+    EtapeProjet,
+    ProjetModules,
     DoubleSessionRule,
     Group,
     Room,
@@ -452,6 +454,24 @@ def _ordres_saisis(config_dir: Path) -> list[CourseTeacherOrderRule]:
         )
         for a in reglages.regles_de_modules(config_dir, "ordres_enseignants")
         if len(a.get("teacher_order") or []) >= 2
+    ]
+
+
+def load_projets_modules(config_dir: Path) -> list[ProjetModules]:
+    """Les projets de modules saisis à l'écran (cf. `reglages`)."""
+    from cal_iut.ingestion import reglages
+
+    return [
+        ProjetModules(
+            id=str(a.get("id") or ""),
+            nom=str(a.get("nom") or ""),
+            semestre=str(a.get("semestre") or ""),
+            etapes=[EtapeProjet(**e) for e in a.get("etapes") or []],
+            jours_par_semaine=a.get("jours_par_semaine"),
+            note=a.get("motif"),
+        )
+        for a in reglages.regles_de_modules(config_dir, "projets_modules")
+        if len(a.get("etapes") or []) >= 2
     ]
 
 

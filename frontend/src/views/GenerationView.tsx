@@ -44,6 +44,7 @@ import { PeriodeDesCours } from "./PeriodeDesCours";
 import { CoursHorsMaquette } from "./CoursHorsMaquette";
 import { EnseignantsModules } from "./EnseignantsModules";
 import { PlafondsHebdo } from "./PlafondsHebdo";
+import { ProjetsModules } from "./ProjetsModules";
 import { ReglesModules } from "./ReglesModules";
 import { SeancesAnnulees } from "./SeancesAnnulees";
 import "../styles/outils.css";
@@ -791,6 +792,7 @@ export function GenerationView({
               <SeancesAnnulees groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <ReglesModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <EnseignantsModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
+              <ProjetsModules groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <PlafondsHebdo groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               <CoursHorsMaquette groupe={groupeChoisi.cle} onModifie={() => setVersionSae((v) => v + 1)} />
               {verification && <ARegler verification={verification} />}

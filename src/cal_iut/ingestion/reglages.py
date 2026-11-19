@@ -50,7 +50,7 @@ from pathlib import Path
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
-    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants", "cours_hors_maquette", "annees", "annee_en_cours",
+    "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants", "cours_hors_maquette", "annees", "annee_en_cours", "projets_modules",
 )
 NB_CRENEAUX = 6
 
@@ -348,7 +348,7 @@ def retablir_seance(config_dir: Path, session_id: str, *, livree: bool) -> None:
 
 # ── Règles de modules ─────────────────────────────────────────────────
 
-REGLES_DE_MODULES = ("doubles_seances", "periodes_modules", "repartitions", "ordres_enseignants", "duos")
+REGLES_DE_MODULES = ("doubles_seances", "periodes_modules", "repartitions", "ordres_enseignants", "duos", "projets_modules")
 MODES_DE_REPARTITION = ("alterne", "par_groupes", "sequentiel")
 TYPES_DE_SEANCE = ("CM", "TD", "TP")
 
@@ -357,7 +357,7 @@ def regles_de_modules(config_dir: Path, nom: str) -> list[dict]:
     """Les règles saisies à l'écran pour ce réglage."""
     if nom not in REGLES_DE_MODULES:
         raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
-    return [dict(a) for a in _lire(config_dir)[nom]["ajouts"] if a.get("course_code")]
+    return [dict(a) for a in _lire(config_dir)[nom]["ajouts"] if a.get("course_code") or a.get("etapes")]
 
 
 def _type_de_seance(valeur: object, *, obligatoire: bool) -> str | None:
@@ -381,10 +381,12 @@ def ajouter_regle_de_module(config_dir: Path, nom: str, entree: dict, par: str) 
     `session_type` (facultatif), `debut` et/ou `fin`."""
     if nom not in REGLES_DE_MODULES:
         raise ReglageInvalide(f"Réglage inconnu : {nom!r}")
+    motif = str(entree.get("motif") or "").strip()
+    if nom == "projets_modules":
+        return _ajouter_projet(config_dir, entree, par, motif)
     code = str(entree.get("course_code") or "").strip()
     if not code:
         raise ReglageInvalide("Choisissez un module.")
-    motif = str(entree.get("motif") or "").strip()
     if not motif:
         raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
     propre: dict = {"id": uuid.uuid4().hex[:12], "course_code": code}
@@ -442,6 +444,65 @@ def ajouter_regle_de_module(config_dir: Path, nom: str, entree: dict, par: str) 
     with _verrou:
         tout = _lire(config_dir)
         tout[nom]["ajouts"].append(propre)
+        ecrire_json(_path(config_dir), tout)
+    return propre
+
+
+MAX_JOURS_PROJET = 5
+
+
+def _ajouter_projet(config_dir: Path, entree: dict, par: str, motif: str) -> dict:
+    """Un projet : plusieurs modules qui se déroulent dans un ordre donné,
+    avec au plus N jours par semaine consacrés à l'ensemble.
+
+    `etapes` : liste ordonnée de `{course_code, session_type (facultatif),
+    de, a}` (`de` et `a` : rang des séances de ce type, à partir de 1, pour
+    isoler une phase d'un module, ex. les TD 5 à 7). `jours_par_semaine` est
+    facultatif."""
+    if not motif:
+        raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+    etapes = []
+    for brute in entree.get("etapes") or []:
+        code = str(brute.get("course_code") or "").strip().upper()
+        if not code:
+            raise ReglageInvalide("Chaque étape doit désigner un module.")
+        etape: dict = {"course_code": code, "session_type": _type_de_seance(brute.get("session_type"), obligatoire=False)}
+        for cle in ("de", "a"):
+            valeur = brute.get(cle)
+            try:
+                etape[cle] = int(valeur) if valeur not in (None, "") else None
+            except (TypeError, ValueError):
+                raise ReglageInvalide("Le rang d'une séance est un nombre entier.") from None
+            if etape[cle] is not None and etape[cle] < 1:
+                raise ReglageInvalide("Le rang d'une séance commence à 1.")
+        if etape["de"] and etape["a"] and etape["de"] > etape["a"]:
+            raise ReglageInvalide("Le rang de début d'une étape est après son rang de fin.")
+        etapes.append(etape)
+    if len(etapes) < 2:
+        raise ReglageInvalide("Un projet compte au moins deux étapes.")
+    jours = entree.get("jours_par_semaine")
+    try:
+        jours = int(jours) if jours not in (None, "") else None
+    except (TypeError, ValueError):
+        raise ReglageInvalide("Le nombre de jours par semaine est un nombre entier.") from None
+    if jours is not None and not 1 <= jours <= MAX_JOURS_PROJET:
+        raise ReglageInvalide("Un projet occupe entre 1 et 5 jours par semaine.")
+    nom_projet = str(entree.get("nom") or "").strip()
+    if not nom_projet:
+        raise ReglageInvalide("Donnez un nom au projet.")
+    propre = {
+        "id": uuid.uuid4().hex[:12],
+        "nom": nom_projet[:80],
+        "semestre": str(entree.get("semestre") or "").strip(),
+        "etapes": etapes,
+        "jours_par_semaine": jours,
+        "motif": motif[:300],
+        "demande_par": par,
+        "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        tout["projets_modules"]["ajouts"].append(propre)
         ecrire_json(_path(config_dir), tout)
     return propre
 
