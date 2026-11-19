@@ -1119,6 +1119,7 @@ def startup() -> None:
         )
 
     charger_etat_applicatif()
+    _dedoublonner_salles()
     # Sauvegarde du jour manquante (item B, 22/09/2026) : redémarrage un jour
     # où personne n'a encore rien modifié — `_apres_ecriture_planning` ne
     # tourne alors jamais, sans ce filet le jour n'aurait aucun instantané.
@@ -1135,6 +1136,24 @@ def startup() -> None:
     from cal_iut.generation import taches as _generations
 
     _generations.surveiller_reprises()
+
+
+def _dedoublonner_salles() -> None:
+    """Une salle ajoutée à la main sous le nom d'une salle qui existe déjà
+    (cf. `api/dedoublonnage_salles.py`) : rattachée à l'autre au démarrage."""
+    from cal_iut.api import dedoublonnage_salles
+
+    try:
+        state = get_state()
+        batiment = load_rooms(CONFIG_DIR)
+        if not dedoublonnage_salles.doublons(batiment):
+            return
+        get_repo()  # prépare le schéma
+        fait = dedoublonnage_salles.dedoublonner(batiment, get_db(state.db_path))
+        if fait:
+            state.rooms = custom_rooms.merge_into(batiment)
+    except Exception:
+        logger.exception("Dédoublonnage des salles impossible, démarrage sans")
 
 
 def charger_disponibilites(state: object) -> None:
@@ -4399,7 +4418,9 @@ def creer_salle(body: CreateRoomRequest) -> RoomMeta:
         room_id = f"{base}-{n}"
         n += 1
 
-    if any(r.label.strip().lower() == libelle.lower() for r in state.rooms):
+    from cal_iut.api.dedoublonnage_salles import cle_libelle
+
+    if any(cle_libelle(r.label) == cle_libelle(libelle) for r in state.rooms):
         raise HTTPException(409, f"Une salle nommée « {libelle} » existe déjà.")
 
     salle = Room(
