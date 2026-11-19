@@ -80,3 +80,4 @@ data/state/sources/
 # Fichiers privés des enseignants copiés dans le volume (voir docs/DONNEES-PRIVEES.md).
 data/state/prive/
 data/state/reglages.json
+contraintes_update/*.pdf
