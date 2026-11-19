@@ -36,3 +36,9 @@ démarrage :
 Éditer la copie du volume puis redémarrer, jamais le dépôt. À terme, ces
 contraintes seront saisies dans l'interface (chantier « tous les paramètres de
 génération dans l'interface »).
+
+## Versions du dépôt
+Les fichiers de la liste, dans le dépôt, sont des versions **anonymisées** (noms
+en « Prenom CODE », e-mails en `code@example.invalid`, commentaires et texte
+libre supprimés) qui servent aux tests et à la CI. Pour les régénérer :
+`python scripts/anonymiser_donnees_privees.py <dossier_prive>`.

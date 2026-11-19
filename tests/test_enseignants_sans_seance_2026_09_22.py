@@ -33,14 +33,14 @@ def test_marc_nino_est_proposable_sans_aucune_seance(etat_avec_seance) -> None: 
     """LE test de la demande : l'état ne contient qu'une séance, de KBR."""
     _login_admin()
     libelles = client.get("/app-state").json()["teacherLabels"]
-    assert libelles.get("MNI") == "Marc Nino", libelles
+    assert libelles.get("MNI") == "Prenom MNI", libelles
 
 
 def test_alexia_petit_halajko_est_aph_et_ne_prend_pas_la_place_d_ape(etat_avec_seance) -> None:  # noqa: F811
     _login_admin()
     libelles = client.get("/app-state").json()["teacherLabels"]
-    assert libelles.get("APH") == "Alexia Petit-Halajko", libelles
-    assert libelles.get("APE") != "Alexia Petit-Halajko"
+    assert libelles.get("APH") == "Prenom APH", libelles
+    assert libelles.get("APE") != "Prenom APH"
 
 
 def test_le_nom_tire_des_seances_reste_prioritaire(etat_avec_seance) -> None:  # noqa: F811
@@ -104,4 +104,4 @@ def test_une_seance_creee_ne_remplace_pas_le_nom_par_le_code(etat_avec_seance) -
                                course_code="WS103", group_ids=["but1-td-ab"], teacher_codes=["APH"]),
     ]
     _login_admin()
-    assert client.get("/app-state").json()["teacherLabels"]["APH"] == "Alexia Petit-Halajko"
+    assert client.get("/app-state").json()["teacherLabels"]["APH"] == "Prenom APH"
