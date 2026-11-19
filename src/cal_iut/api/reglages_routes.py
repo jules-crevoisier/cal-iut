@@ -45,6 +45,24 @@ class IndisponibiliteRequest(BaseModel):
     motif: str = ""
 
 
+class DisponibiliteExclusiveRequest(BaseModel):
+    teacher_code: str
+    debut: str
+    fin: str
+    dates: list[str] = Field(default_factory=list)
+    motif: str = ""
+
+
+class ModuleNonDispenseRequest(BaseModel):
+    course_code: str
+    motif: str = ""
+
+
+class CompacterJourneeRequest(BaseModel):
+    teacher_code: str
+    motif: str = ""
+
+
 def _config():
     return etats.etat_principal().config_dir
 
@@ -256,6 +274,24 @@ def _tout() -> dict:
         "evenements_fixes": _evenements(),
         "parcours": _parcours(),
         "presences_alternants": _presences(),
+        "disponibilites_exclusives": [
+            {
+                "cle": a["id"], "teacher_code": str(a["teacher_code"]), "debut": str(a["debut"]),
+                "fin": str(a["fin"]), "dates": [str(d) for d in a.get("dates") or []],
+                "motif": str(a.get("motif") or ""), "demande_par": str(a.get("demande_par") or ""),
+            }
+            for a in reglages.disponibilites_exclusives(_config())
+        ],
+        "modules_non_dispenses": [
+            {"cle": a["id"], "course_code": str(a["course_code"]), "motif": str(a.get("motif") or ""),
+             "demande_par": str(a.get("demande_par") or "")}
+            for a in reglages.modules_non_dispenses(_config()).values()
+        ],
+        "compacter_journee": [
+            {"cle": a["id"], "teacher_code": str(a["teacher_code"]), "motif": str(a.get("motif") or ""),
+             "demande_par": str(a.get("demande_par") or "")}
+            for a in reglages.compacter_journee(_config())
+        ],
     }
 
 
@@ -317,7 +353,7 @@ def _retirer(nom: str, cle: str, origine: str) -> dict:
         raise HTTPException(422, "Origine inconnue.")
     if not reglages.retirer(_config(), nom, cle, livree=origine == "livree"):
         raise HTTPException(404, "Entrée introuvable, ou déjà retirée.")
-    _appliquer_en_direct(disponibilites=nom == "indisponibilites")
+    _appliquer_en_direct(disponibilites=nom in ("indisponibilites", "disponibilites_exclusives", "compacter_journee"))
     return _tout()
 
 
@@ -333,6 +369,55 @@ def retirer_une_indisponibilite(cle: str, origine: str = "ajoutee") -> dict:
     if origine == "livree" and cle not in {r["cle"] for r in _indisponibilites() if r["origine"] == "livree"}:
         raise HTTPException(404, "Entrée introuvable, ou déjà retirée.")
     return _retirer("indisponibilites", cle, origine)
+
+
+@router.post("/disponibilites-exclusives", status_code=201)
+def noter_une_disponibilite_exclusive(body: DisponibiliteExclusiveRequest, request: Request) -> dict:
+    code = _code_enseignant(body.teacher_code)
+    try:
+        reglages.ajouter_disponibilite_exclusive(
+            _config(), code, body.debut, body.fin, body.dates, body.motif, _par(request)
+        )
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _appliquer_en_direct(disponibilites=True)
+    return _tout()
+
+
+@router.delete("/disponibilites-exclusives")
+def retirer_une_disponibilite_exclusive(cle: str, origine: str = "ajoutee") -> dict:
+    return _retirer("disponibilites_exclusives", cle, origine)
+
+
+@router.post("/modules-non-dispenses", status_code=201)
+def noter_un_module_non_dispense(body: ModuleNonDispenseRequest, request: Request) -> dict:
+    try:
+        reglages.ajouter_module_non_dispense(_config(), body.course_code, body.motif, _par(request))
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    revision.incrementer("reglages")
+    return _tout()
+
+
+@router.delete("/modules-non-dispenses")
+def retirer_un_module_non_dispense(cle: str, origine: str = "ajoutee") -> dict:
+    return _retirer("modules_non_dispenses", cle, origine)
+
+
+@router.post("/compacter-journee", status_code=201)
+def noter_compacter_journee(body: CompacterJourneeRequest, request: Request) -> dict:
+    code = _code_enseignant(body.teacher_code)
+    try:
+        reglages.ajouter_compacter_journee(_config(), code, body.motif, _par(request))
+    except reglages.ReglageInvalide as exc:
+        raise HTTPException(422, str(exc)) from exc
+    _appliquer_en_direct(disponibilites=True)
+    return _tout()
+
+
+@router.delete("/compacter-journee")
+def retirer_compacter_journee(cle: str, origine: str = "ajoutee") -> dict:
+    return _retirer("compacter_journee", cle, origine)
 
 
 def _code_enseignant(code: str) -> str:
