@@ -27,6 +27,7 @@ import { useDroits } from "../contexts/Droits";
 import type { AppPayload } from "../types/app";
 import "./ReglagesReference.css";
 import { AnneesUniversitaires } from "./AnneesUniversitaires";
+import { ReglesEnseignants } from "./ReglesEnseignants";
 import { PresencesAlternants } from "./PresencesAlternants";
 import { EffectifsReglables, SallesDesModules, SallesReglables } from "./SallesEtEffectifs";
 
@@ -556,6 +557,7 @@ export function ReglagesReference({ payload }: { payload: AppPayload }) {
         creneaux={donnees.creneaux}
         onChange={apres}
       />
+      <ReglesEnseignants enseignants={enseignants} modules={modules} donnees={donnees} onChange={apres} />
       <SemainesTypes enseignants={enseignants} donnees={donnees} onChange={apres} />
       {donnees.evenements_fixes && (
         <Famille<EvenementFixe>

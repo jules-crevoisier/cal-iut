@@ -230,6 +230,10 @@ class TeacherAvailability(BaseModel):
     # deux semaines successives par mois »). None = pas de regroupement demandé.
     monthly_cluster_max_weeks: int | None = None
     max_afternoons_per_week: int | None = None
+    # Objectif MOU : regrouper les séances de l'enseignant d'une même journée
+    # sans temps d'attente entre deux (la pause 12h30-14h n'est pas un trou).
+    # Réglé à l'écran (`reglages.compacter_journee`).
+    compacter_journee: bool = False
     notes: str | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 

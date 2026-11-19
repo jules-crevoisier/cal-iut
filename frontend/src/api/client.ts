@@ -1208,6 +1208,45 @@ export interface ReglagesReponse {
   evenements_fixes?: EvenementFixe[];
   parcours?: string[];
   presences_alternants?: PresenceAlternants[];
+  disponibilites_exclusives?: DisponibiliteExclusive[];
+  modules_non_dispenses?: ModuleNonDispense[];
+  compacter_journee?: CompacterJournee[];
+}
+
+/** « Disponible uniquement à ces dates » entre `debut` et `fin`. */
+export interface DisponibiliteExclusive {
+  cle: string;
+  teacher_code: string;
+  debut: string;
+  fin: string;
+  dates: string[];
+  motif: string;
+  demande_par: string;
+}
+
+export interface ModuleNonDispense {
+  cle: string;
+  course_code: string;
+  motif: string;
+  demande_par: string;
+}
+
+export interface CompacterJournee {
+  cle: string;
+  teacher_code: string;
+  motif: string;
+  demande_par: string;
+}
+
+export type FamilleDeRegleSimple = "disponibilites-exclusives" | "modules-non-dispenses" | "compacter-journee";
+
+export async function ajouterRegleSimple(famille: FamilleDeRegleSimple, corps: object): Promise<ReglagesReponse> {
+  return request<ReglagesReponse>(`/reglages/${famille}`, { method: "POST", body: JSON.stringify(corps) });
+}
+
+export async function retirerRegleSimple(famille: FamilleDeRegleSimple, cle: string): Promise<ReglagesReponse> {
+  const params = new URLSearchParams({ cle, origine: "ajoutee" });
+  return request<ReglagesReponse>(`/reglages/${famille}?${params.toString()}`, { method: "DELETE" });
 }
 
 /** Un événement à date fixe : la promotion n'a pas cours sur ces créneaux. */
