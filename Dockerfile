@@ -66,11 +66,6 @@ COPY data/state/cal-iut.db data/state/cal-iut.db
 COPY contraintes/ contraintes/
 COPY contraintes_update/ contraintes_update/
 
-# Les fichiers du dépôt sont des versions ANONYMISÉES (18/11/2026) ; les vrais
-# (volume data/state/prive/) sont recopiés par-dessus au démarrage.
-COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
 ENV PYTHONUNBUFFERED=1
 # IP réelle du client : uvicorn fait confiance à `X-Forwarded-For` posé par
 # nginx (conteneur frontend, réseau Docker interne) — sans ça, toutes les
@@ -92,5 +87,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 
 # --host 0.0.0.0 obligatoire : le défaut CLI (127.0.0.1) ne serait
 # joignable que depuis L'INTÉRIEUR du conteneur, pas par le frontend/nginx.
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["cal-iut", "serve", "--host", "0.0.0.0", "--port", "8000"]

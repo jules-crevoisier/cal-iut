@@ -1,738 +1,738 @@
 [
- {
-  "nom_complet": "Prenom TPA",
-  "trigramme": "TPA",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "vendredi après-midi",
-  "indisponibilites_tokens": [
-   {
-    "raw": "vendredi après-midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "apres_midi"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom MRI",
-  "trigramme": "MRI",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "vendredi matin - vendredi 20 novembre - mardi 8 décembre - lundi 14 décembre -",
-  "indisponibilites_tokens": [
-   {
-    "raw": "vendredi matin",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "matin"
-   },
-   {
-    "raw": "vendredi 20 novembre",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mardi 8 décembre",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "lundi 14 décembre",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom MMA",
-  "trigramme": "MMA",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "lundi toute la journée - mardi après midi - jeudi toute la journée - vendredi toute la journée",
-  "indisponibilites_tokens": [
-   {
-    "raw": "lundi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "mardi après midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "apres_midi"
-   },
-   {
-    "raw": "jeudi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "vendredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "toute_la_journee"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom BTO",
-  "trigramme": "BTO",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "lundi toute la journée - mardi après midi - mardi - jeudi après midi - vendredi toute la journée",
-  "indisponibilites_tokens": [
-   {
-    "raw": "lundi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "mardi après midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "apres_midi"
-   },
-   {
-    "raw": "mardi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "jeudi après midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "apres_midi"
-   },
-   {
-    "raw": "vendredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "toute_la_journee"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom RHU",
-  "trigramme": "RHU",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "jeudi toute la journée - vendredi toute la journée",
-  "indisponibilites_tokens": [
-   {
-    "raw": "jeudi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "vendredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "du lundi 19 octobre 2026 au vendredi 23 octobre 2026",
-    "type": "date_specifique",
-    "source": "EXPLICATIONS (conférence Marseille) + arbitrage utilisateur 10/08/2026"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom ARA",
-  "trigramme": "ARA",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "lundi 19 octobre 2026 - lundi 14 décembre - 1 ou 2 semaines /mois",
-  "indisponibilites_tokens": [
-   {
-    "raw": "lundi 19 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "lundi 14 décembre",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "1 ou 2 semaines /mois",
-    "type": "autre_a_interpreter"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null,
-  "regroupement_mensuel_max_semaines": 2
- },
- {
-  "nom_complet": "Prenom PVI",
-  "trigramme": "PVI",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "semaine du 31 août au 6 septembre 2026 - lundi matin - mardi toute la journée - mercredi toute la journée - jeudi toute la journée - vendredi après-midi",
-  "indisponibilites_tokens": [
-   {
-    "raw": "semaine du 31 août au 6 septembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "lundi matin",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "matin"
-   },
-   {
-    "raw": "mardi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "mercredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mercredi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "jeudi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "vendredi après-midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "apres_midi"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom FLI",
-  "trigramme": "FLI",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "vendredi après-midi - lundi matin de 8h00 à 9h30",
-  "indisponibilites_tokens": [
-   {
-    "raw": "vendredi après-midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "apres_midi"
-   },
-   {
-    "raw": "lundi matin de 8h00 à 9h30",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom MNI",
-  "trigramme": "MNI",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": null,
-  "indisponibilites_tokens": [],
-  "disponibilites_raw": "jeudi 24 septembre 2026 - vendredi 25 septembre 2026 - lundi 12 octobre 2026 - mardi 13 octobre 2026 - mercredi 14 octobre 2026 - lundi 2 novembre 2026 - mardi 3 novembre 2026 - mercredi 4 novembre 2026 - lundi 14 décembre 2026 - mardi 15 décembre 2026",
-  "disponibilites_tokens": [
-   {
-    "raw": "jeudi 24 septembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "vendredi 25 septembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "lundi 12 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mardi 13 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mercredi 14 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "lundi 2 novembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mardi 3 novembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mercredi 4 novembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "lundi 14 décembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mardi 15 décembre 2026",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_exclusives": true,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom VBU",
-  "trigramme": "VBU",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": null,
-  "indisponibilites_tokens": [],
-  "disponibilites_raw": "lundi toute la journée - mardi toute la journée - mercredi toute la journée",
-  "disponibilites_tokens": [
-   {
-    "raw": "lundi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "mardi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "mercredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mercredi",
-    "moment": "toute_la_journee"
-   }
-  ],
-  "disponibilites_exclusives": true,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom AFR",
-  "trigramme": "AFR",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "mardi après-midi - les jeudis après 17h00 - jeudi 19 novembre 2026 - vendredi 20 novembre 2026",
-  "indisponibilites_tokens": [
-   {
-    "raw": "mardi après-midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "apres_midi"
-   },
-   {
-    "raw": "les jeudis après 17h00",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   },
-   {
-    "raw": "jeudi 19 novembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "vendredi 20 novembre 2026",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom ALO",
-  "trigramme": "ALO",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "lundi matin",
-  "indisponibilites_tokens": [
-   {
-    "raw": "lundi matin",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "matin"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom TCA",
-  "trigramme": "TCA",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": null,
-  "indisponibilites_tokens": [],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null,
-  "regles_parite_semaine": [
-   {
-    "parite": "paire",
-    "jour": "mercredi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "parite": "paire",
-    "jour": "jeudi",
-    "moment": "apres_17h"
-   },
-   {
-    "parite": "impaire",
-    "jour": "lundi",
-    "moment": "apres_17h"
-   },
-   {
-    "parite": "impaire",
-    "jour": "mardi",
-    "moment": "apres_17h"
-   },
-   {
-    "parite": "impaire",
-    "jour": "vendredi",
-    "moment": "apres_17h"
-   }
-  ],
-  "parity_reference": "departement"
- },
- {
-  "nom_complet": "Prenom DAN",
-  "trigramme": "DAN",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "Lundi matin - mardi de 15h30 à 18h30 - vendredi après-midi - lundi 7 septembre 2026 - mardi 8 septembre 2026 - mercredi 9 septembre 2026 - jeudi 24 septembre 2026 après-midi - vendredi 25 septembre toute la journée - vendredi 2 octobre 2026 - mercredi 4 novembre 2026 après-midi - jeudi 5 novembre 2026 toute la journée - vendredi 6 novembre 2026",
-  "indisponibilites_tokens": [
-   {
-    "raw": "Lundi matin",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "matin"
-   },
-   {
-    "raw": "mardi de 15h30 à 18h30",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   },
-   {
-    "raw": "vendredi après-midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "apres_midi"
-   },
-   {
-    "raw": "lundi 7 septembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mardi 8 septembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mercredi 9 septembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "jeudi 24 septembre 2026 après-midi",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "vendredi 25 septembre toute la journée",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "vendredi 2 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mercredi 4 novembre 2026 après-midi",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "jeudi 5 novembre 2026 toute la journée",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "vendredi 6 novembre 2026",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_raw": "possible lundi 11h00 à 12h30 si besoin\r\npossible mardi 15h30 à 17h00 si besoin",
-  "disponibilites_tokens": [
-   {
-    "raw": "possible lundi 11h00 à 12h30 si besoin",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   },
-   {
-    "raw": "possible mardi 15h30 à 17h00 si besoin",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   }
-  ],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom EHU",
-  "trigramme": "EHU",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "lundi toute la journée - mardi toute la journée - jeudi toute la journée - vendredi toute la journée",
-  "indisponibilites_tokens": [
-   {
-    "raw": "lundi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "mardi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "jeudi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "vendredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "toute_la_journee"
-   }
-  ],
-  "disponibilites_raw": "les mercredis toute la journée",
-  "disponibilites_tokens": [
-   {
-    "raw": "les mercredis toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mercredi",
-    "moment": "toute_la_journee"
-   }
-  ],
-  "disponibilites_exclusives": true,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom KNG",
-  "trigramme": "KNG",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "vendredi toute la journée - du lundi 2 au vendredi 6 novembre 2026",
-  "indisponibilites_tokens": [
-   {
-    "raw": "vendredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "du lundi 2 au vendredi 6 novembre 2026",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_raw": "lundi toute la journée - mardi toute la journée - mercredi toute la journée - jeudi toute la journée",
-  "disponibilites_tokens": [
-   {
-    "raw": "lundi de 9h30 à 18h30",
-    "type": "recurrent_hebdomadaire",
-    "jour": "lundi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   },
-   {
-    "raw": "mardi de 8h00 à 18h30",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "mercredi de 8h00 à 18h30",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mercredi",
-    "moment": "toute_la_journee"
-   },
-   {
-    "raw": "jeudi à partir de 14h00",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   }
-  ],
-  "disponibilites_exclusives": true,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom VMA",
-  "trigramme": "VMA",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "mercredi 23/09/26 toute la journée - mercredi 7/10/26",
-  "indisponibilites_tokens": [
-   {
-    "raw": "mercredi 23/09/26 toute la journée",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mercredi 7/10/26",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom GLE",
-  "trigramme": "GLE",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "jeudi matin",
-  "indisponibilites_tokens": [
-   {
-    "raw": "jeudi matin",
-    "type": "recurrent_hebdomadaire",
-    "jour": "jeudi",
-    "moment": "matin"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom JLE",
-  "trigramme": "JLE",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "mercredi après-midi - lundi 02 novembre 2026 - vendredi 11 décembre 2026",
-  "indisponibilites_tokens": [
-   {
-    "raw": "mercredi après-midi",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mercredi",
-    "moment": "apres_midi"
-   },
-   {
-    "raw": "lundi 02 novembre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "vendredi 11 décembre 2026",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom RDE",
-  "trigramme": "RDE",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "mardi 6 octobre 2026 - mercredi 7 octobre 2026 - jeudi 8 octobre 2026\r\n\r\nmardi à partir de 15h30 (CODIR)\r\n\r\nvendredi toute la journée",
-  "indisponibilites_tokens": [
-   {
-    "raw": "mardi 6 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mercredi 7 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "jeudi 8 octobre 2026",
-    "type": "date_specifique"
-   },
-   {
-    "raw": "mardi à partir de 15h30 (CODIR)",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mardi",
-    "moment": "plage_horaire_precisee_dans_raw"
-   },
-   {
-    "raw": "vendredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "vendredi",
-    "moment": "toute_la_journee"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom JHU",
-  "trigramme": "JHU",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": null,
-  "indisponibilites_tokens": [],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null,
-  "regroupement_mensuel_max_semaines": 2
- },
- {
-  "nom_complet": "Prenom AHA",
-  "trigramme": "AHA",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "mercredi toute la journée",
-  "indisponibilites_tokens": [
-   {
-    "raw": "mercredi toute la journée",
-    "type": "recurrent_hebdomadaire",
-    "jour": "mercredi",
-    "moment": "toute_la_journee"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- },
- {
-  "nom_complet": "Prenom KBR",
-  "trigramme": "KBR",
-  "contraintes_pedagogiques_raw": null,
-  "indisponibilites_raw": "vendredi 20 novembre de 10h00 à 11h00",
-  "indisponibilites_tokens": [
-   {
-    "raw": "vendredi 20 novembre de 10h00 à 11h00",
-    "type": "date_specifique"
-   }
-  ],
-  "disponibilites_raw": null,
-  "disponibilites_tokens": [],
-  "disponibilites_exclusives": false,
-  "explications_raw": null
- }
+  {
+    "nom_complet": "Thomas Pavie",
+    "trigramme": "TPA",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "vendredi après-midi",
+    "indisponibilites_tokens": [
+      {
+        "raw": "vendredi après-midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "apres_midi"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "Dans l'idéal"
+  },
+  {
+    "nom_complet": "Marine Riguet",
+    "trigramme": "MRI",
+    "contraintes_pedagogiques_raw": "WR106, l'ordre idéal des cours est le suivant : TD1, TD2, TD3, TD4, TP1, TP2, TP3, TP4, CM1, TP5, TP6, TP7, CM2+3 (évaluation fin de semestre)\r\nSerait-il possible de prévoir les CM2 et 3 à la suite, en toute fin de module, afin que je puisse organiser une évaluation de 3h en amphi ?\r\n\r\nWRA308C, prévoir les 3 derniers TD à la suite (sur une matinée ou une après-midi) pour que je puisse proposer une activité notée aux étudiants sur 4h30",
+    "indisponibilites_raw": "vendredi matin - vendredi 20 novembre - mardi 8 décembre - lundi 14 décembre -",
+    "indisponibilites_tokens": [
+      {
+        "raw": "vendredi matin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "matin"
+      },
+      {
+        "raw": "vendredi 20 novembre",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mardi 8 décembre",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "lundi 14 décembre",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "Cela lui permettra, dans le prolongement du jeudi, d'avoir un créneau relativement fixe pour se consacrer à ses travaux de recherche et à ses déplacements ; mais ça n'est pas non plus inamovible si, certaines semaines, les contraintes d'EDT sont trop fortes."
+  },
+  {
+    "nom_complet": "Martial Martin",
+    "trigramme": "MMA",
+    "contraintes_pedagogiques_raw": "Dans l'organisation, sur le module \"culture numérique\", d'abord tous les cm puis les TD, si possible, en format 3h.",
+    "indisponibilites_raw": "lundi toute la journée - mardi après midi - jeudi toute la journée - vendredi toute la journée",
+    "indisponibilites_tokens": [
+      {
+        "raw": "lundi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "mardi après midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "apres_midi"
+      },
+      {
+        "raw": "jeudi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "vendredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "placer ses cours préférentiellement le mardi matin, le mercredi toute la journée et éventuellement le jeudi matin. Les lundis et les vendredis, il a des réunions à Reims ou à Paris qui ne sont pas encore toute calées."
+  },
+  {
+    "nom_complet": "Barthélémy Tomasina",
+    "trigramme": "BTO",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "lundi toute la journée - mardi après midi - mardi - jeudi après midi - vendredi toute la journée",
+    "indisponibilites_tokens": [
+      {
+        "raw": "lundi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "mardi après midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "apres_midi"
+      },
+      {
+        "raw": "mardi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "jeudi après midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "apres_midi"
+      },
+      {
+        "raw": "vendredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "À voir si c'est suffisant pour réaliser son planning.  Idéalement il préfère des cours de 3h (plutôt que 4h30) afin que les étudiants soient plus concentrés mais il me laisse faire au mieux."
+  },
+  {
+    "nom_complet": "Régis Huez",
+    "trigramme": "RHU",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "jeudi toute la journée - vendredi toute la journée",
+    "indisponibilites_tokens": [
+      {
+        "raw": "jeudi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "vendredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "du lundi 19 octobre 2026 au vendredi 23 octobre 2026",
+        "type": "date_specifique",
+        "source": "EXPLICATIONS (conférence Marseille) + arbitrage utilisateur 10/08/2026"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "Il préfère ses enseignements en début de semaine (lundi, mardi, mercredi) et plutôt regroupés, comme ça il fais moins de trajets. il est disponible de 8h00 à 18h30. Progression commencer par un cours CM et finir par un CM-éval, les td tp tu peux faire ce t'arrange.\r\nIndisponible du mardi 19 octobre 2026 au vendredi 22 octobre 2026 car conférence sur Marseille \"Machine Learning and Signal Processing on Graphs\"."
+  },
+  {
+    "nom_complet": "Anthony Rageul",
+    "trigramme": "ARA",
+    "contraintes_pedagogiques_raw": "regrouper ses cours sur une ou deux semaines successives par mois",
+    "indisponibilites_raw": "lundi 19 octobre 2026 - lundi 14 décembre - 1 ou 2 semaines /mois",
+    "indisponibilites_tokens": [
+      {
+        "raw": "lundi 19 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "lundi 14 décembre",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "1 ou 2 semaines /mois",
+        "type": "autre_a_interpreter"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "plutôt des aménagements mensuels qui lui sont nécessaires par rapport à sa contrainte géographique. Idéalement, regrouper ses cours sur une ou deux semaines successives par mois.",
+    "regroupement_mensuel_max_semaines": 2
+  },
+  {
+    "nom_complet": "Philippe Villain",
+    "trigramme": "PVI",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "semaine du 31 août au 6 septembre 2026 - lundi matin - mardi toute la journée - mercredi toute la journée - jeudi toute la journée - vendredi après-midi",
+    "indisponibilites_tokens": [
+      {
+        "raw": "semaine du 31 août au 6 septembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "lundi matin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "matin"
+      },
+      {
+        "raw": "mardi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "mercredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "jeudi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "vendredi après-midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "apres_midi"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Florent Libbrecht",
+    "trigramme": "FLI",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "vendredi après-midi - lundi matin de 8h00 à 9h30",
+    "indisponibilites_tokens": [
+      {
+        "raw": "vendredi après-midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "apres_midi"
+      },
+      {
+        "raw": "lundi matin de 8h00 à 9h30",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "Il dois conduire Paul à la crèche pour 8H30."
+  },
+  {
+    "nom_complet": "Marc Nino",
+    "trigramme": "MNI",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": null,
+    "indisponibilites_tokens": [],
+    "disponibilites_raw": "jeudi 24 septembre 2026 - vendredi 25 septembre 2026 - lundi 12 octobre 2026 - mardi 13 octobre 2026 - mercredi 14 octobre 2026 - lundi 2 novembre 2026 - mardi 3 novembre 2026 - mercredi 4 novembre 2026 - lundi 14 décembre 2026 - mardi 15 décembre 2026",
+    "disponibilites_tokens": [
+      {
+        "raw": "jeudi 24 septembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "vendredi 25 septembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "lundi 12 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mardi 13 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mercredi 14 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "lundi 2 novembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mardi 3 novembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mercredi 4 novembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "lundi 14 décembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mardi 15 décembre 2026",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_exclusives": true,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Valentin Burette",
+    "trigramme": "VBU",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": null,
+    "indisponibilites_tokens": [],
+    "disponibilites_raw": "lundi toute la journée - mardi toute la journée - mercredi toute la journée",
+    "disponibilites_tokens": [
+      {
+        "raw": "lundi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "mardi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "mercredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_exclusives": true,
+    "explications_raw": "ok pour faire le même module que l'année dernière et un peu plus si nécessaire."
+  },
+  {
+    "nom_complet": "Anthony Froli",
+    "trigramme": "AFR",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "mardi après-midi - les jeudis après 17h00 - jeudi 19 novembre 2026 - vendredi 20 novembre 2026",
+    "indisponibilites_tokens": [
+      {
+        "raw": "mardi après-midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "apres_midi"
+      },
+      {
+        "raw": "les jeudis après 17h00",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      },
+      {
+        "raw": "jeudi 19 novembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "vendredi 20 novembre 2026",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "Les jeudis après 17h00, lui permettrait d'aller chercher sa fille à la crèche. 44h d'enseignement en TC (le département MMI restant bien entendu prioritaire dans mon service). Contrainte ponctuelle : mobilisé pour les journées RPPP avec Martial et David les 18 et 19 novembre 2026 à Dijon."
+  },
+  {
+    "nom_complet": "Ariane Loizon",
+    "trigramme": "ALO",
+    "contraintes_pedagogiques_raw": "Mise en relation une SAE WS501D et une ressource WRA505C\r\n\r\nTOTAL WS501D 0 CM / 44 TD / 9 TP\r\n\r\n10 TD WS501D pour Fabrice (FME) avant le 23 octobre 2026\r\n9 TD WS501D pour Sébastien Loizon (SLO) entre le 26 et le 30 octobre 2026\r\n5 TD WS501D pour Fabrice (FME) après le 30 octobre 2026\r\n5 TD WS501D pour Ariane (ALO) après le 30 octobre 2026\r\n1TD WS501D pour Fabrice (FME) après les 5 TD, en parallèle en même temps 1TD WRA505C pour Ariane (ALO)\r\n\r\n Commencer la WRA505C (0 CM / 34 TD / 0 TP) avec essentiellement les créneaux de Ariane (ALO) au début de la ressource et plutôt ceux de Anthony Froli (AFR) à la fin.\r\n\r\nPrévoir une demie journée de PTUT par mois en commun entre les Dev et les Créa Comm pour qu'ils puissent travailler ensemble de temps et temps",
+    "indisponibilites_raw": "lundi matin",
+    "indisponibilites_tokens": [
+      {
+        "raw": "lundi matin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "matin"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Thomas Castellengo",
+    "trigramme": "TCA",
+    "contraintes_pedagogiques_raw": "Semaines paires :\r\n    - mercredi : pas dispo\r\n    - jeudi : max 17h\r\n\r\nSemaines impaires :\r\n    - lundi : max 17h\r\n    - mardi : max 17h\r\n    - vendredi : max 17h",
+    "indisponibilites_raw": null,
+    "indisponibilites_tokens": [],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "Enfant",
+    "regles_parite_semaine": [
+      {
+        "parite": "paire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "parite": "paire",
+        "jour": "jeudi",
+        "moment": "apres_17h"
+      },
+      {
+        "parite": "impaire",
+        "jour": "lundi",
+        "moment": "apres_17h"
+      },
+      {
+        "parite": "impaire",
+        "jour": "mardi",
+        "moment": "apres_17h"
+      },
+      {
+        "parite": "impaire",
+        "jour": "vendredi",
+        "moment": "apres_17h"
+      }
+    ],
+    "parity_reference": "departement"
+  },
+  {
+    "nom_complet": "David Annebicque",
+    "trigramme": "DAN",
+    "contraintes_pedagogiques_raw": "Pas dispo le matin, idéalement, mais si besoin, on peut lui mettre des cours à 11h00 de temps en temps.",
+    "indisponibilites_raw": "Lundi matin - mardi de 15h30 à 18h30 - vendredi après-midi - lundi 7 septembre 2026 - mardi 8 septembre 2026 - mercredi 9 septembre 2026 - jeudi 24 septembre 2026 après-midi - vendredi 25 septembre toute la journée - vendredi 2 octobre 2026 - mercredi 4 novembre 2026 après-midi - jeudi 5 novembre 2026 toute la journée - vendredi 6 novembre 2026",
+    "indisponibilites_tokens": [
+      {
+        "raw": "Lundi matin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "matin"
+      },
+      {
+        "raw": "mardi de 15h30 à 18h30",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      },
+      {
+        "raw": "vendredi après-midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "apres_midi"
+      },
+      {
+        "raw": "lundi 7 septembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mardi 8 septembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mercredi 9 septembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "jeudi 24 septembre 2026 après-midi",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "vendredi 25 septembre toute la journée",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "vendredi 2 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mercredi 4 novembre 2026 après-midi",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "jeudi 5 novembre 2026 toute la journée",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "vendredi 6 novembre 2026",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_raw": "possible lundi 11h00 à 12h30 si besoin\r\npossible mardi 15h30 à 17h00 si besoin",
+    "disponibilites_tokens": [
+      {
+        "raw": "possible lundi 11h00 à 12h30 si besoin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      },
+      {
+        "raw": "possible mardi 15h30 à 17h00 si besoin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      }
+    ],
+    "disponibilites_exclusives": false,
+    "explications_raw": "CODIR décalé à 17h00\r\nLundi matin (possible de prendre le créneau de 11h00 si besoin, réunion de direction)\r\nMardi à partir de 15h30 (comité de direction)\r\nVendredi après-midi (réunions DN)\r\n- 7, 8 et 9 septembre (présentations IA dans les départements)\r\n- jeudi 24 septembre après-midi et vendredi 25 septembre toute la journée\r\n- 4 novembre après-midi, 5 novembre journée et 6 novembre (journée IA à Paris)"
+  },
+  {
+    "nom_complet": "Emmanuelle Huguenot",
+    "trigramme": "EHU",
+    "contraintes_pedagogiques_raw": "éventuellement disponible les lundis après midi.",
+    "indisponibilites_raw": "lundi toute la journée - mardi toute la journée - jeudi toute la journée - vendredi toute la journée",
+    "indisponibilites_tokens": [
+      {
+        "raw": "lundi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "mardi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "jeudi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "vendredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_raw": "les mercredis toute la journée",
+    "disponibilites_tokens": [
+      {
+        "raw": "les mercredis toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_exclusives": true,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Kévin Ngo",
+    "trigramme": "KNG",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "vendredi toute la journée - du lundi 2 au vendredi 6 novembre 2026",
+    "indisponibilites_tokens": [
+      {
+        "raw": "vendredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "du lundi 2 au vendredi 6 novembre 2026",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_raw": "lundi toute la journée - mardi toute la journée - mercredi toute la journée - jeudi toute la journée",
+    "disponibilites_tokens": [
+      {
+        "raw": "lundi de 9h30 à 18h30",
+        "type": "recurrent_hebdomadaire",
+        "jour": "lundi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      },
+      {
+        "raw": "mardi de 8h00 à 18h30",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "mercredi de 8h00 à 18h30",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      },
+      {
+        "raw": "jeudi à partir de 14h00",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      }
+    ],
+    "disponibilites_exclusives": true,
+    "explications_raw": "Lundi : Disponible 9h30-18h30\r\nMardi : Disponible 8h-18h30\r\nMercredi : Disponible 8h-18h30\r\nJeudi : Disponible 14h (Projet Artistique et Culturel) Si KBR réitères l'atelier tournage\r\nVendredi : Pas dispo."
+  },
+  {
+    "nom_complet": "Valérie Mariot",
+    "trigramme": "VMA",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "mercredi 23/09/26 toute la journée - mercredi 7/10/26",
+    "indisponibilites_tokens": [
+      {
+        "raw": "mercredi 23/09/26 toute la journée",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mercredi 7/10/26",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "Mercredi 23/09 je suis à Charleville toute la journée, de même que mercredi 7 octobre (je suis à Reims)."
+  },
+  {
+    "nom_complet": "Guillaume Leullier",
+    "trigramme": "GLE",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "jeudi matin",
+    "indisponibilites_tokens": [
+      {
+        "raw": "jeudi matin",
+        "type": "recurrent_hebdomadaire",
+        "jour": "jeudi",
+        "moment": "matin"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Joan Lefèvre",
+    "trigramme": "JLE",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "mercredi après-midi - lundi 02 novembre 2026 - vendredi 11 décembre 2026",
+    "indisponibilites_tokens": [
+      {
+        "raw": "mercredi après-midi",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "apres_midi"
+      },
+      {
+        "raw": "lundi 02 novembre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "vendredi 11 décembre 2026",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Romain Delon",
+    "trigramme": "RDE",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "mardi 6 octobre 2026 - mercredi 7 octobre 2026 - jeudi 8 octobre 2026\r\n\r\nmardi à partir de 15h30 (CODIR)\r\n\r\nvendredi toute la journée",
+    "indisponibilites_tokens": [
+      {
+        "raw": "mardi 6 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mercredi 7 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "jeudi 8 octobre 2026",
+        "type": "date_specifique"
+      },
+      {
+        "raw": "mardi à partir de 15h30 (CODIR)",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mardi",
+        "moment": "plage_horaire_precisee_dans_raw"
+      },
+      {
+        "raw": "vendredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "vendredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": null
+  },
+  {
+    "nom_complet": "Justine Hussenet",
+    "trigramme": "JHU",
+    "contraintes_pedagogiques_raw": "pas de contraintes de jours ou d'horaires, cependant, condenser les interventions afin de faciliter ses déplacements depuis Paris",
+    "indisponibilites_raw": null,
+    "indisponibilites_tokens": [],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "n'étant aujourd'hui plus basée à Troyes, serait-il envisageable de condenser les interventions afin de faciliter mes déplacements ?",
+    "regroupement_mensuel_max_semaines": 2
+  },
+  {
+    "nom_complet": "Amine Haraoubia",
+    "trigramme": "AHA",
+    "contraintes_pedagogiques_raw": null,
+    "indisponibilites_raw": "mercredi toute la journée",
+    "indisponibilites_tokens": [
+      {
+        "raw": "mercredi toute la journée",
+        "type": "recurrent_hebdomadaire",
+        "jour": "mercredi",
+        "moment": "toute_la_journee"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": "raisons liées à ses enfants"
+  },
+  {
+    "nom_complet": "Kyllian Bresson",
+    "trigramme": "KBR",
+    "contraintes_pedagogiques_raw": "si possible débuter ses cours à partir de 9h30",
+    "indisponibilites_raw": "vendredi 20 novembre de 10h00 à 11h00",
+    "indisponibilites_tokens": [
+      {
+        "raw": "vendredi 20 novembre de 10h00 à 11h00",
+        "type": "date_specifique"
+      }
+    ],
+    "disponibilites_raw": null,
+    "disponibilites_tokens": [],
+    "disponibilites_exclusives": false,
+    "explications_raw": null
+  }
 ]

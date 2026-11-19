@@ -1,51 +1,98 @@
+# Disponibilités enseignants — extraites manuellement des commentaire_edt en V1
+# Format slot: [jour (0=lundi), créneau (0=8h-9h30)]
 teachers:
-  - teacher_code: JUL
+  - teacher_code: JUL  # Julie — WS301D, WS401D
     max_afternoons_per_week: 3
-    notes: ""
+    notes: "2 à 3 après-midis selon durée SAE"
 
-  - teacher_code: ALO
-    preferred_days: [3]
-    notes: ""
+  - teacher_code: ALO  # Ariane LOIZON
+    preferred_days: [3]  # jeudi
+    notes: "Préférence jeudi pour journées entières (WR403D)"
 
-  - teacher_code: KBR
-    forbidden_slots: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]
-    notes: ""
+  - teacher_code: KBR  # Kyllian Bresson
+    forbidden_slots: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]  # créneau 0 (8h-9h30), tous les jours
+    notes: "Retour utilisateur (06/08/2026) : ne débute ses cours qu'à partir de 9h30."
 
-  - teacher_code: FLI
+  # --- Pré-rentrée BUT2 FC alternants, jeudi 3 septembre 2026 ---------------
+  # Demande de Kyllian Bresson, 26/08/2026 : « FLI et AFR doivent être
+  # disponibles sur ce créneau, il ne faut pas leur mettre des cours ».
+  #
+  # 9h30-12h30 = créneaux 1 (9h30-11h) et 2 (11h-12h30). Leur après-midi reste
+  # libre : bloquer la journée entière les priverait de quatre créneaux sans
+  # raison.
+  #
+  # Le blocage de parcours déclaré dans `evenements_supplementaires.yaml` ne
+  # suffit PAS : il protège les étudiants de BUT2-CREACOM-FC, pas les
+  # enseignants — FLI et AFR interviennent aussi en BUT1 et BUT2-DEV-FI, et
+  # resteraient programmables devant ces promotions à la même heure.
+  - teacher_code: FLI  # Florent Libbrecht
     forbidden_date_slots:
       - date: "2026-09-03"
         slots: [1, 2]
-        note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Prenom KBR, 26/08/2026)"
+        note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Kyllian Bresson, 26/08/2026)"
 
-  - teacher_code: AFR
+  - teacher_code: AFR  # Anthony Froli
     forbidden_date_slots:
       - date: "2026-09-03"
         slots: [1, 2]
-        note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Prenom KBR, 26/08/2026)"
+        note: "Pré-rentrée BUT2 FC alternants 9h30-12h30 (Kyllian Bresson, 26/08/2026)"
 
-  - teacher_code: BTO
+  # --- Barthélémy TOMASINA : disponibilités réelles, semaines 2 à 9 -------
+  # Disponibilités transmises le 31/08/2026 par Kyllian Bresson, redonnées
+  # par Barthélémy lui-même après un premier passage raté (cf. ci-dessous) :
+  # code couleur bleu (idéal) / noir (acceptable) / rouge (impossible), du
+  # 31 août au 23 octobre 2026 (semaines 2 à 9).
+  #
+  # TROIS RÈGLES : aucun matin disponible avant le 5 octobre (sa formation
+  # bloque tout Sept.) ; le MERCREDI est impossible sur les huit semaines,
+  # matin ET après-midi, sans exception ; la semaine 2 (31 août-4 sept.) est
+  # entièrement exclue (rentrée / pré-rentrée).
+  #
+  # Remplace l'ancienne indisponibilité 'matins de septembre seulement'
+  # (mail du 28/08/2026) : elle sous-estimait le blocage — les après-midis
+  # de plusieurs journées de septembre sont EUX AUSSI impossibles, la
+  # semaine 2 doit être exclue en entier, et 22 octobre (jeudi) est un
+  # blocage complet distinct du mercredi habituel.
+  #
+  # Les créneaux IDÉAUX (bleu, 7 demi-journées, toutes des matinées
+  # d'octobre : lundi/mardi/jeudi/vendredi S7, mardi/jeudi S8, mardi S9) ne
+  # sont PAS codés ici : rien dans le solveur ne sait aujourd'hui distinguer
+  # une préférence datée d'une simple disponibilité (`preferred_slots` est
+  # récurrent par jour de semaine, pas par date, et n'est de toute façon
+  # câblé dans aucun objectif — vérifié le 31/08/2026). Elles restent donc
+  # de la PROSE, pour un humain qui départage deux placements également
+  # valides : à moyens égaux, préférer un des créneaux idéaux ci-dessus.
+  - teacher_code: BTO  # Barthélémy Tomasina (vacataire)
+    # Annule la (fausse) indisponibilité récurrente issue du questionnaire
+    # source : « lundi toute la journée - mardi après midi - mardi - jeudi
+    # après midi - vendredi toute la journée » — le CSV répète « mardi
+    # après-midi » puis « mardi » seul, que le parseur lit comme deux
+    # indisponibilités distinctes (mardi après-midi, PUIS mardi entier), ce
+    # qui bloquait par erreur tout le lundi et le vendredi toute l'année,
+    # bien au-delà de ce que Barthélémy a réellement déclaré. Les
+    # disponibilités précises ci-dessous les remplacent entièrement.
     cancelled_forbidden_slots:
       - [0, 0]
       - [0, 1]
       - [0, 2]
       - [0, 3]
       - [0, 4]
-      - [0, 5]
+      - [0, 5]  # lundi toute la journée (faux)
       - [1, 0]
       - [1, 1]
       - [1, 2]
       - [1, 3]
       - [1, 4]
-      - [1, 5]
+      - [1, 5]  # mardi toute la journée (faux, doublon du CSV)
       - [3, 3]
       - [3, 4]
-      - [3, 5]
+      - [3, 5]  # jeudi après-midi (faux)
       - [4, 0]
       - [4, 1]
       - [4, 2]
       - [4, 3]
       - [4, 4]
-      - [4, 5]
+      - [4, 5]  # vendredi toute la journée (faux)
     forbidden_date_slots:
       - date: "2026-08-31"
         slots: [0, 1, 2, 3, 4, 5]
@@ -135,97 +182,137 @@ teachers:
         slots: [0, 1, 2, 3, 4, 5]
         note: "S9 jeudi — journée entière impossible"
 
-  - teacher_code: JBA
+  # Julie Bastard (JBA), vacataire, relais Kyllian Bresson 31/08/2026
+  # 14h34 : « peut intervenir uniquement le vendredi après-midi par bloc de
+  # 3h donc 2 séances de 1h30 » — donc UNIQUEMENT vendredi 14h00-17h00
+  # (créneaux 3 et 4), jamais le reste de la semaine ni vendredi matin/17h.
+  # Absente de ce fichier jusqu'ici : aucune contrainte n'existait sur elle,
+  # d'où ses 32 séances WR312D dispersées sur toute la semaine avant
+  # correction.
+  - teacher_code: JBA  # Julie Bastard (vacataire)
+    # 31/08/2026 : recherche exhaustive sur les 23 vendredis du calendrier —
+    # seules 11 de ses 32 séances WR312D tiennent dans le seul bloc de 3h
+    # demandé (14h-17h), le reste des vendredis étant déjà occupé par
+    # d'autres cours sur les mêmes groupes (TP-C/TP-D/TD-CD) ou bloqué en
+    # fin de semestre. Décision utilisateur du 31/08/2026 : élargir à tout
+    # l'après-midi (14h-18h30, 3 séances max/vendredi) plutôt que d'ouvrir
+    # un second jour dans la semaine.
     allowed_slots:
-      - [4, 3]
-      - [4, 4]
-      - [4, 5]
+      - [4, 3]   # vendredi 14h00-15h30
+      - [4, 4]   # vendredi 15h30-17h00
+      - [4, 5]   # vendredi 17h00-18h30
     forbidden_date_slots:
       - date: "2026-10-16"
         slots: [3, 4, 5]
         note: "Indisponible toute la semaine 8 (12-16 oct. 2026)"
 
+  # HKO, relais Kyllian Bresson 02/09/2026 : « Disponibilités : les mercredis
+  # de 14h00 à 15h30 ; les semaines paires, les jeudis de 15h30 à 17h00 » +
+  # indisponibilité du 15 au 30 octobre 2026. Codé en liste blanche DURE
+  # (mercredi tous les jours, jeudi toutes les semaines) + une règle de
+  # parité qui RETIRE le jeudi les semaines IMPAIRES — seul moyen d'exprimer
+  # « disponible seulement les semaines paires » avec ce mécanisme
+  # (`week_parity_rules` ne fait que soustraire, jamais ajouter).
   - teacher_code: HKO
     allowed_slots:
-      - [2, 3]
-      - [3, 4]
+      - [2, 3]   # mercredi 14h00-15h30
+      - [3, 4]   # jeudi 15h30-17h00 (restreint aux semaines paires ci-dessous)
     week_parity_rules:
       - parity: impaire
-        day: 3
-        slots: [4]
+        day: 3      # jeudi
+        slots: [4]  # 15h30-17h00 retiré les semaines impaires
     forbidden_date_slots:
-      - date: "2026-10-15"
+      # Indisponible du 15 au 30 octobre 2026 : les seuls jours où il aurait
+      # normalement cours dans cette fenêtre (mercredis et jeudis).
+      - date: "2026-10-15"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible du 15 au 30 octobre 2026"
-      - date: "2026-10-21"
+      - date: "2026-10-21"   # mercredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible du 15 au 30 octobre 2026"
-      - date: "2026-10-22"
+      - date: "2026-10-22"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible du 15 au 30 octobre 2026"
-      - date: "2026-10-28"
+      - date: "2026-10-28"   # mercredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible du 15 au 30 octobre 2026"
-      - date: "2026-10-29"
+      - date: "2026-10-29"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible du 15 au 30 octobre 2026"
 
-  - teacher_code: RDE
+  # --- Romain Delon : indisponibilités FORTES, demande du 22/09/2026 --------
+  # « en contrainte forte les indisponibilités de Romain Delon […] il faut que
+  # dans l'interface on fasse en sorte que l'on ne puisse pas placer des
+  # séances de RDE à ces dates. »
+  #
+  # `stricte: true` : refusé au placement manuel, même avec « Forcer ». Ses
+  # autres indisponibilités (feuille officielle : 6-8 octobre, mardi dès
+  # 15h30, vendredis) restent forçables comme pour tout le monde.
+  - teacher_code: RDE  # Romain Delon
     forbidden_date_slots:
-      - date: "2026-11-04"
+      - date: "2026-11-04"   # mercredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
-      - date: "2026-11-05"
+      - date: "2026-11-05"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
-      - date: "2026-11-06"
+      - date: "2026-11-06"   # vendredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
-      - date: "2026-12-02"
+      - date: "2026-12-02"   # mercredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
-      - date: "2026-12-03"
+      - date: "2026-12-03"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
-      - date: "2026-12-04"
+      - date: "2026-12-04"   # vendredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
-      - date: "2027-06-24"
+      - date: "2027-06-24"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
-      - date: "2027-06-25"
+      - date: "2027-06-25"   # vendredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponibilité forte (demande du 22/09/2026)"
         stricte: true
 
-  - teacher_code: DAN
+  # --- David Annebicque : indisponibilités ajoutées le 09/10/2026 ----------
+  # Tâche #13 (Kyllian Bresson, 06/10/2026). S'AJOUTENT à ses contraintes de
+  # la feuille officielle (`contraintes/05_enseignants_contraintes.json`,
+  # inchangée) : la fusion fait l'union des deux sources.
+  #
+  # « À partir de 11h00 » = créneaux 2 (11h-12h30) à 5 (17h-18h30).
+  # Indisponibilité ordinaire (pas `stricte`) : le placement manuel signale
+  # le conflit et reste forçable, comme pour tout enseignant.
+  - teacher_code: DAN  # David Annebicque
     forbidden_date_slots:
-      - date: "2026-10-15"
+      - date: "2026-10-15"   # jeudi
         slots: [2, 3, 4, 5]
         note: "Indisponible à partir de 11h00 (tâche #13, 06/10/2026)"
-      - date: "2026-10-16"
+      - date: "2026-10-16"   # vendredi
         slots: [2, 3, 4, 5]
         note: "Indisponible à partir de 11h00 (tâche #13, 06/10/2026)"
-      - date: "2026-10-22"
+      - date: "2026-10-22"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
-      - date: "2026-10-23"
+      - date: "2026-10-23"   # vendredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
-      - date: "2026-12-02"
+      - date: "2026-12-02"   # mercredi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
-      - date: "2026-12-03"
+      - date: "2026-12-03"   # jeudi
         slots: [0, 1, 2, 3, 4, 5]
         note: "Indisponible toute la journée (tâche #13, 06/10/2026)"
 
+# Poids objectif solveur — ajustables via boucle de feedback (étape 5)
 objective_weights:
   gap_penalty: 100
   day_balance: 20

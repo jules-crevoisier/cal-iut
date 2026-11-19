@@ -346,11 +346,11 @@ def test_un_nom_connu_se_corrige_et_s_efface(edit, etat) -> None:
     assert reponse.status_code == 200, reponse.text
     assert edit.get("/app-state").json()["teacherLabels"]["APH"] == "Alexia Petit Halajko"
     ligne = surcharges_reference.journal()[0]
-    assert ligne["valeur_fichier"] == "Prenom APH"
+    assert ligne["valeur_fichier"] == "Alexia Petit-Halajko"
     surcharge = edit.get("/app-state").json()["surchargesReference"]["enseignants"]["APH"]["nom"]
-    assert surcharge["origine"] == "Prenom APH"
+    assert surcharge["origine"] == "Alexia Petit-Halajko"
     assert edit.delete("/reference/enseignants/APH/nom").status_code == 200
-    assert edit.get("/app-state").json()["teacherLabels"]["APH"] == "Prenom APH"
+    assert edit.get("/app-state").json()["teacherLabels"]["APH"] == "Alexia Petit-Halajko"
     assert edit.put("/reference/enseignants/JSA", json={"nom": "J"}).status_code == 400
 
 
