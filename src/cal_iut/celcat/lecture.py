@@ -43,6 +43,11 @@ class EvenementCelcat:
     # `celcat.yaml::enseignants` —, `enseignants` les noms lisibles.
     enseignants: list[str] = field(default_factory=list)
     enseignants_codes: list[str] = field(default_factory=list)
+    # TOUTES les matières (tâche 34, 06/11/2026) : une séance dont la matière
+    # a changé gardait l'ancienne à côté de la nouvelle. `module_nom` /
+    # `module_code` restent la première.
+    modules: list[str] = field(default_factory=list)
+    modules_codes: list[str] = field(default_factory=list)
 
     @property
     def indice_semaine(self) -> int | None:
@@ -205,6 +210,8 @@ def evenement_depuis_rpc(
         salles=_tous_les_noms(brut.get("rooms"), "name", "unique_name"),
         enseignants=_tous_les_noms(brut.get("staff"), "name", "unique_name"),
         enseignants_codes=_tous_les_noms(brut.get("staff"), "unique_name"),
+        modules=_tous_les_noms(brut.get("modules"), "name", "unique_name"),
+        modules_codes=_tous_les_noms(brut.get("modules"), "unique_name", "name"),
     )
 
 
