@@ -44,13 +44,14 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from cal_iut.celcat.fichiers import ecrire_json, lire_json_etat
 
 NOMS = ("salles_reservees", "indisponibilites", "dates_sae", "seances_annulees", "doubles_seances", "periodes_modules", "dates_semestres",
     "repartitions", "ordres_enseignants", "duos", "fins_alternants", "parametres_calcul", "semaines_types", "sae_par_le_calcul", "phases_sae", "plafonds_hebdo", "effectifs", "salles", "regles_salles", "evenements_fixes", "presence_alternants", "cours_hors_maquette", "annees", "annee_en_cours",
+    "disponibilites_exclusives", "modules_non_dispenses", "compacter_journee",
 )
 NB_CRENEAUX = 6
 
@@ -125,7 +126,9 @@ def appliquer_aux_enseignants(
     tout = _lire(config_dir)
     bloc = tout["indisponibilites"]
     semaines = [] if sans_semaine_type else [a for a in tout["semaines_types"]["ajouts"] if a.get("teacher_code")]
-    if not bloc["ajouts"] and not bloc["retraits"] and not semaines:
+    exclusives = [a for a in tout["disponibilites_exclusives"]["ajouts"] if a.get("teacher_code") and a.get("id")]
+    compacts = {str(a["teacher_code"]) for a in tout["compacter_journee"]["ajouts"] if a.get("teacher_code")}
+    if not bloc["ajouts"] and not bloc["retraits"] and not semaines and not exclusives and not compacts:
         return enseignants
     retraits = set(bloc["retraits"])
     sortie = []
@@ -153,6 +156,24 @@ def appliquer_aux_enseignants(
             *(entree.get("forbidden_date_slots") or []),
             {"date": ajout["date"], "slots": _creneaux(ajout.get("slots")), "note": ajout.get("motif")},
         ]
+    for ajout in exclusives:
+        code = str(ajout["teacher_code"])
+        entree = par_code.get(code)
+        if entree is None:
+            entree = {"teacher_code": code}
+            par_code[code] = entree
+            sortie.append(entree)
+        entree["forbidden_date_slots"] = [
+            *(entree.get("forbidden_date_slots") or []),
+            *dates_exclues(ajout),
+        ]
+    for code in sorted(compacts):
+        entree = par_code.get(code)
+        if entree is None:
+            entree = {"teacher_code": code}
+            par_code[code] = entree
+            sortie.append(entree)
+        entree["compacter_journee"] = True
     for ajout in semaines:
         code = str(ajout["teacher_code"])
         entree = par_code.get(code)
@@ -166,6 +187,25 @@ def appliquer_aux_enseignants(
         annules = {tuple(c) for c in entree.get("cancelled_forbidden_slots") or []}
         entree["forbidden_slots"] = [list(c) for c in sorted((interdits | bloques) - liberes)]
         entree["cancelled_forbidden_slots"] = [list(c) for c in sorted((annules | liberes) - bloques)]
+    return sortie
+
+
+def dates_exclues(regle: dict) -> list[dict]:
+    """Les indisponibilités (journée entière) que produit une règle « disponible
+    uniquement à ces dates » : chaque jour de cours, du lundi au vendredi, de
+    `debut` à `fin` inclus, qui ne figure pas dans `dates`."""
+    try:
+        debut, fin = date.fromisoformat(str(regle["debut"])), date.fromisoformat(str(regle["fin"]))
+    except (KeyError, ValueError):
+        return []
+    gardees = {str(d) for d in regle.get("dates") or []}
+    motif = str(regle.get("motif") or "")
+    sortie = []
+    jour = debut
+    while jour <= fin:
+        if jour.weekday() < 5 and jour.isoformat() not in gardees:
+            sortie.append({"date": jour.isoformat(), "slots": list(range(NB_CRENEAUX)), "note": motif})
+        jour += timedelta(days=1)
     return sortie
 
 
@@ -1001,3 +1041,89 @@ def dater_l_annee_en_cours(config_dir: Path, par: str) -> None:
             config_dir, "annee_en_cours", "application",
             {"label": en_cours["label"], "depuis": datetime.now(timezone.utc).isoformat()}, par,
         )
+
+
+# ── Règles d'enseignants et de modules (19/11) ────────────────────────
+
+MAX_DATES_EXCLUSIVES = 120
+
+
+def disponibilites_exclusives(config_dir: Path) -> list[dict]:
+    return [a for a in _lire(config_dir)["disponibilites_exclusives"]["ajouts"] if a.get("id")]
+
+
+def ajouter_disponibilite_exclusive(
+    config_dir: Path, teacher_code: str, debut: str, fin: str, dates: list[str], motif: str, par: str
+) -> dict:
+    """« Cet enseignant n'est disponible, entre `debut` et `fin`, que aux dates
+    listées. » Les autres jours de la période deviennent des indisponibilités
+    strictes pour la génération et le placement manuel."""
+    code = str(teacher_code or "").strip()
+    motif = str(motif or "").strip()
+    if not code:
+        raise ReglageInvalide("Choisissez un enseignant.")
+    if not motif:
+        raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+    debut, fin = _valider_date(debut), _valider_date(fin)
+    if fin < debut:
+        raise ReglageInvalide("La fin de la période précède son début.")
+    propres = sorted({_valider_date(d) for d in dates or []})
+    if not propres:
+        raise ReglageInvalide("Indiquez au moins une date de disponibilité.")
+    if len(propres) > MAX_DATES_EXCLUSIVES:
+        raise ReglageInvalide(f"Trop de dates (maximum {MAX_DATES_EXCLUSIVES}).")
+    hors = [d for d in propres if not debut <= d <= fin]
+    if hors:
+        raise ReglageInvalide(f"La date {hors[0]} est hors de la période.")
+    entree = {
+        "id": uuid.uuid4().hex[:12], "teacher_code": code, "debut": debut, "fin": fin, "dates": propres,
+        "motif": motif[:300], "demande_par": par, "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        tout["disponibilites_exclusives"]["ajouts"].append(entree)
+        ecrire_json(_path(config_dir), tout)
+    return entree
+
+
+def modules_non_dispenses(config_dir: Path) -> dict[str, dict]:
+    """`{CODE: entrée}` : les modules dont aucune séance n'est créée."""
+    return {
+        str(a["course_code"]).upper(): a
+        for a in _lire(config_dir)["modules_non_dispenses"]["ajouts"]
+        if a.get("course_code") and a.get("id")
+    }
+
+
+def _ajouter_simple(config_dir: Path, nom: str, cle: str, valeur: str, motif: str, par: str, unique: bool) -> dict:
+    valeur = str(valeur or "").strip()
+    motif = str(motif or "").strip()
+    if not valeur:
+        raise ReglageInvalide("Choisissez une valeur.")
+    if not motif:
+        raise ReglageInvalide("Le motif est obligatoire : dans un an, personne ne saura pourquoi sinon.")
+    if cle == "course_code":
+        valeur = valeur.upper()
+    entree = {
+        "id": uuid.uuid4().hex[:12], cle: valeur, "motif": motif[:300], "demande_par": par,
+        "le": datetime.now(timezone.utc).date().isoformat(),
+    }
+    with _verrou:
+        tout = _lire(config_dir)
+        if unique and any(a.get(cle) == valeur for a in tout[nom]["ajouts"]):
+            raise ReglageInvalide("Déjà enregistré.")
+        tout[nom]["ajouts"].append(entree)
+        ecrire_json(_path(config_dir), tout)
+    return entree
+
+
+def ajouter_module_non_dispense(config_dir: Path, code: str, motif: str, par: str) -> dict:
+    return _ajouter_simple(config_dir, "modules_non_dispenses", "course_code", code, motif, par, True)
+
+
+def ajouter_compacter_journee(config_dir: Path, teacher_code: str, motif: str, par: str) -> dict:
+    return _ajouter_simple(config_dir, "compacter_journee", "teacher_code", teacher_code, motif, par, True)
+
+
+def compacter_journee(config_dir: Path) -> list[dict]:
+    return [a for a in _lire(config_dir)["compacter_journee"]["ajouts"] if a.get("id")]

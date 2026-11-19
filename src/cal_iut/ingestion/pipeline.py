@@ -15,7 +15,7 @@ from cal_iut.ingestion.config_loader import (
     load_teacher_distributions,
     load_teacher_duos,
 )
-from cal_iut.ingestion import mmi_previ
+from cal_iut.ingestion import mmi_previ, reglages
 from cal_iut.ingestion.fetch import fetch_all_exports_sync
 from cal_iut.ingestion.merge import apply_teacher_corrections, merge_exports
 from cal_iut.ingestion.normalize import expand_all_sessions
@@ -126,6 +126,11 @@ def run_ingestion(
 
     courses = merge_exports(maquette, progression)
     courses = apply_teacher_corrections(courses, load_course_corrections(config_dir))
+    # Modules dont aucun enseignement n'est dispensé cette année (réglage
+    # « modules non dispensés », ex. WR220 Soutien) : aucune séance n'est créée.
+    non_dispenses = set(reglages.modules_non_dispenses(config_dir))
+    if non_dispenses:
+        courses = [c for c in courses if str(c.code).upper() not in non_dispenses]
     groups = load_groups(config_dir)
     rooms = load_rooms(config_dir)
     teachers_avail = load_teacher_availability(config_dir)

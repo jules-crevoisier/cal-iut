@@ -547,6 +547,7 @@ def merge_teacher_availability(
                 teacher.monthly_cluster_max_weeks or existing.monthly_cluster_max_weeks
             ),
             max_afternoons_per_week=existing.max_afternoons_per_week,
+            compacter_journee=existing.compacter_journee or teacher.compacter_journee,
             notes=teacher.notes or existing.notes,
             metadata=meta,
         )

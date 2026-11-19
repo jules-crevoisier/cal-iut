@@ -121,6 +121,8 @@ FC_WEEKLY_CAP_SLOTS = 23
 FI_MAX_WEEK_DEFAULT = 18
 
 
+POIDS_JOURNEE_COMPACTE = 150  # plus fort que les trous des groupes (100)
+
 @lru_cache(maxsize=4)
 def _session_date_windows(config_dir: Path) -> tuple:
     """Fenêtres de dates par séance, mises en cache : `solve_week_detail` est
@@ -1544,6 +1546,22 @@ def solve_week_detail(
             for gid in s.group_ids:
                 group_sessions[gid].append(s.id)
         objective_terms += add_intra_day_gap_penalties(model, session_starts, group_sessions, num_weeks, 100)
+
+    # Enseignants dont on veut une journée compacte (réglage « compacter la
+    # journée », ex. Olivier Lasnier) : pénalité de trous par enseignant, sans
+    # le plafond de 150 séances, car ne portant que sur ses propres séances. Le
+    # créneau 11h-12h30 et celui de 14h sont voisins dans l'index : la pause
+    # méridienne ne compte donc pas comme un trou.
+    compacts = {a.teacher_code for a in teacher_availability or [] if a.compacter_journee}
+    if compacts:
+        enseignant_sessions: dict[str, list[str]] = defaultdict(list)
+        for s in week_sessions:
+            for code in s.teacher_codes:
+                if code in compacts:
+                    enseignant_sessions[f"ENS:{code}"].append(s.id)
+        objective_terms += add_intra_day_gap_penalties(
+            model, session_starts, enseignant_sessions, num_weeks, POIDS_JOURNEE_COMPACTE
+        )
 
     if cm_spread_weight > 0:
         objective_terms += add_cm_spread_penalties(
