@@ -58,4 +58,7 @@ VOLUME ["/app/data/state"]
 # Repris à l'identique par le service exploration (`docker run ... bash`) :
 # un CMD par défaut ne gêne pas un `docker run` qui précise sa propre
 # commande, il ne sert que quand rien n'est précisé (service permanent).
+# Recopie les fichiers privés du volume (data/state/prive/) avant de démarrer :
+# voir docs/DONNEES-PRIVEES.md.
+ENTRYPOINT ["sh", "/app/scripts/docker-entrypoint.sh"]
 CMD ["bash", "deploy/celcat-sidecar/nuit-quotidienne.sh"]

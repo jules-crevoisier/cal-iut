@@ -1729,7 +1729,17 @@ def health() -> Response:
                 "detail": state.restauration_erreur or "Planning enregistré mais non chargé.",
             },
         )
-    return JSONResponse({"status": "ok", "version": "1.0.0"})
+    return JSONResponse({"status": "ok", "version": "1.0.0", "donnees_privees": _donnees_privees_en_place()})
+
+
+def _donnees_privees_en_place() -> bool:
+    """Vrai quand les fichiers privés des enseignants sont dans le volume
+    (repère posé par `scripts/docker-entrypoint.sh`). Ne révèle aucun contenu."""
+    import os
+    from pathlib import Path
+
+    prive = Path(os.environ.get("CAL_IUT_PRIVE_DIR") or Path(__file__).resolve().parents[3] / "data" / "state" / "prive")
+    return (prive / ".copie_ok").is_file()
 
 
 @app.get("/calendrier/sae", response_model=CalendrierSaeResponse)

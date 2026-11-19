@@ -77,3 +77,6 @@ data/state/blocages.json
 # Maquette et progression recuperees depuis MMI Previ (16/11/2026) : noms
 # d'enseignants et commentaires internes, jamais dans le depot.
 data/state/sources/
+# Fichiers privés des enseignants copiés dans le volume (voir docs/DONNEES-PRIVEES.md).
+data/state/prive/
+data/state/reglages.json
