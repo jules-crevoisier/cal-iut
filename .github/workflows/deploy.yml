@@ -88,6 +88,10 @@ jobs:
           DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
           DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
         run: |
+          # Retire espaces et retours chariot éventuels collés aux secrets.
+          DOKPLOY_URL=$(printf '%s' "$DOKPLOY_URL" | tr -d '[:space:]')
+          DOKPLOY_API_KEY=$(printf '%s' "$DOKPLOY_API_KEY" | tr -d '[:space:]')
+          DOKPLOY_COMPOSE_ID=$(printf '%s' "$DOKPLOY_COMPOSE_ID" | tr -d '[:space:]')
           if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$DOKPLOY_COMPOSE_ID" ]; then
             echo "::warning::Secrets Dokploy absents : images publiées, déploiement à lancer depuis Dokploy."
             exit 0
