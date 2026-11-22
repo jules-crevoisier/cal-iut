@@ -108,7 +108,7 @@ services:
     image: ${CAL_IUT_IMAGE:-ghcr.io/jules-crevoisier/cal-iut}-celcat:${CAL_IUT_TAG:-latest}
     pull_policy: always
     # Chromium (Playwright) tourne la nuit : 1 Go de marge, rien le jour.
-    mem_limit: 1g
+    mem_limit: 640m
     cap_add:
       - NET_ADMIN
     devices:
@@ -117,6 +117,8 @@ services:
       CELCAT_URL: ${CELCAT_URL}
       # Règles d'envoi Celcat : MÊME valeur que pour `backend` (`off` par défaut).
       CAL_IUT_REGLES_ENVOI: ${CAL_IUT_REGLES_ENVOI:-off}
+      # Pause entre deux tours de synchro Celcat (secondes).
+      CELCAT_RYTHME_SECONDES: ${CELCAT_RYTHME_SECONDES:-120}
       CELCAT_UTILISATEUR: ${CELCAT_UTILISATEUR}
       CELCAT_MOT_DE_PASSE: ${CELCAT_MOT_DE_PASSE}
       # Optionnels — sans eux, reseau.py retombe sur CELCAT_UTILISATEUR/

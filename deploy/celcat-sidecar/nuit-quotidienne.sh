@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Boucle de service : deux rythmes distincts.
-#   1) TEMPS RÉEL (~30s) : draine la file create/update/delete dès qu'elle
+#   1) TEMPS RÉEL (~2 min, CELCAT_RYTHME_SECONDES) : draine la file create/update/delete dès qu'elle
 #      n'est pas vide (retour utilisateur 07/09/2026 : « sur les update on
 #      veut tenter en temps réel, pas la nuit »). Vérification locale (JSON,
 #      sans VPN) à chaque tour ; connexion Live seulement s'il y a vraiment
@@ -43,7 +43,9 @@ set -euo pipefail
 cd /app
 
 MARQUEUR=/app/data/state/celcat_nuit_dernier_passage.txt
-RYTHME_TEMPS_REEL=30
+# Toutes les 2 min (22/11/2026) au lieu de 30 s : chaque tour rouvre le VPN et
+# un navigateur, ce qui coûtait ~560 Mo de RAM en continu. Réglable par variable.
+RYTHME_TEMPS_REEL=${CELCAT_RYTHME_SECONDES:-120}
 
 # RECUL PROGRESSIF SUR ÉCHEC (07/09/2026). Depuis que les scripts RENDENT le
 # VPN en sortant (`reseau.acces`), chaque tour qui a du travail rouvre une
