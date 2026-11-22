@@ -1,0 +1,14 @@
+# Construction locale des images (au lieu de les télécharger depuis ghcr.io) :
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+services:
+  backend:
+    build: .
+    pull_policy: build
+  frontend:
+    build: ./frontend
+    pull_policy: build
+  celcat-nuit:
+    build:
+      context: .
+      dockerfile: deploy/celcat-sidecar/Dockerfile
+    pull_policy: build

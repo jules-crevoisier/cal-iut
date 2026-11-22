@@ -12,9 +12,12 @@
 # ci-dessous, cap_add NET_ADMIN + device /dev/net/tun). À vérifier dans le
 # dashboard Dokploy avant de compter sur le déploiement automatique.
 #
+# Images : construites par GitHub Actions (.github/workflows/deploy.yml) et
+# publiées sur ghcr.io ; le serveur Dokploy ne compile plus rien.
+#
 # Local :
 #   cp .env.example .env   # puis remplir les valeurs
-#   docker compose up --build
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 #   → http://localhost:8080
 #
 # Dokploy : AUCUNE valeur ici, tout passe par `${VAR}` — Docker Compose lit
@@ -27,7 +30,10 @@
 
 services:
   backend:
-    build: .
+    image: ${CAL_IUT_IMAGE:-ghcr.io/jules-crevoisier/cal-iut}:${CAL_IUT_TAG:-latest}
+    pull_policy: always
+    # Plafond mémoire : évite qu'une résolution lourde fasse swapper tout le serveur.
+    mem_limit: 1g
     expose:
       - "8000"
     environment:
@@ -77,7 +83,9 @@ services:
       retries: 3
 
   frontend:
-    build: ./frontend
+    image: ${CAL_IUT_IMAGE:-ghcr.io/jules-crevoisier/cal-iut}-frontend:${CAL_IUT_TAG:-latest}
+    pull_policy: always
+    mem_limit: 64m
     ports:
       - "8080:80"
     environment:
@@ -97,9 +105,10 @@ services:
   # `NET_ADMIN`/`/dev/net/tun` : nécessaires à openconnect (client VPN) pour
   # créer l'interface tun — sans lien avec les privilèges de `backend`.
   celcat-nuit:
-    build:
-      context: .
-      dockerfile: deploy/celcat-sidecar/Dockerfile
+    image: ${CAL_IUT_IMAGE:-ghcr.io/jules-crevoisier/cal-iut}-celcat:${CAL_IUT_TAG:-latest}
+    pull_policy: always
+    # Chromium (Playwright) tourne la nuit : 1 Go de marge, rien le jour.
+    mem_limit: 1g
     cap_add:
       - NET_ADMIN
     devices:
