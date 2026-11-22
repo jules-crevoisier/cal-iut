@@ -20,7 +20,7 @@ Les codes Celcat (cours, salles, enseignants) se règlent dans **Référence →
 Quand on déplace, ajoute ou supprime une séance dans l'appli, la modification est **mise en file d'attente**.
 Un **robot d'envoi** la recopie ensuite dans Celcat, tout seul.
 
-- Le robot passe **toutes les 30 secondes environ**. Il ne se connecte que s'il a quelque chose à envoyer.
+- Le robot passe **toutes les 2 minutes environ (variable `CELCAT_RYTHME_SECONDES`)**. Il ne se connecte que s'il a quelque chose à envoyer.
 - **Chaque nuit**, il compare les semaines choisies (« balayage de nuit ») avec Celcat et met en file ce qui diffère.
   Il repère aussi les cours présents **seulement dans Celcat**.
 - Celcat n'est joignable que par le **VPN de l'université**. Le robot le monte lui-même, puis le rend.
@@ -140,13 +140,13 @@ Rien à faire à la main. Si le cas revient, **Activité récente** montre le m�
   Il tourne avec `--cap-add NET_ADMIN --device /dev/net/tun`.
 - **Il doit rester séparé du backend** : la passerelle de l'URCA pousse un tunnel complet. Monté dans le conteneur du site, il couperait tout son trafic sortant.
 - Sa boucle (`deploy/celcat-sidecar/nuit-quotidienne.sh`) :
-  1. toutes les 30 s : `scripts/celcat_immediat.py --ecrire --vpn --production --base URCA_2026` draine la file (sort sans réseau si elle est vide) ;
+  1. toutes les 2 min (`CELCAT_RYTHME_SECONDES`, 120 par défaut) : `scripts/celcat_immediat.py --ecrire --vpn --production --base URCA_2026` draine la file (sort sans réseau si elle est vide) ;
   2. `scripts/celcat_instantane.py --vpn` relit Celcat si le dernier relevé a plus de 2 h, ou si quelqu'un a demandé **Relire Celcat** ;
      dans la même session, il relit aussi les **occupations hors MMI** ([§ 6](#6-occupations-hors-mmi)) quand elles sont dues ;
   3. une fois par jour (UTC) : `scripts/celcat_nuit.py --ecrire --vpn --production --base URCA_2026` balaie les semaines validées, cherche les cours en trop, et draine aussi la file.
 - Le passage quotidien est noté dans `data/state/celcat_nuit_dernier_passage.txt` (dans le volume) : un redémarrage ne le fait ni sauter ni recommencer.
   Il peut donc tourner à n'importe quelle heure de la journée, au premier tour où il n'a pas encore été fait.
-- Sur échec, l'attente double à chaque tour, jusqu'à 30 min, puis revient à 30 s au premier succès.
+- Sur échec, l'attente double à chaque tour, jusqu'à 30 min, puis revient au rythme normal au premier succès.
 - Le robot dépose son compte rendu (`data/state/celcat_drainage.json`, avec son âge) : c'est ce qu'affiche l'écran.
 - La comparaison (`celcat/planification.py`) est la même pour l'écran et pour le robot. Seul ce qui diffère part : identique → rien ; écart → modifier ; absent de Celcat → créer ; en trop → supprimer (sur décision humaine).
 
