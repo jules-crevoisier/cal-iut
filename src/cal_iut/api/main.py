@@ -3081,7 +3081,10 @@ def _is_duo_synced(session: object, duos: list) -> bool:
     if not session or not duos:
         return False
     teacher_codes = set(session.teacher_codes or [])
+    type_ = getattr(getattr(session, "session_type", None), "value", None)
     for duo in duos:
+        if type_ is not None and type_ not in (getattr(duo, "session_types", None) or ["TP"]):
+            continue
         if session.course_code in (duo.course_codes or []) and teacher_codes & set(duo.teacher_codes or []):
             return True
     return False

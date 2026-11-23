@@ -550,7 +550,13 @@ class TeacherDuo(BaseModel):
     # (le Studio H.017/H.022 sert au tournage/montage en TP ; les TD peuvent
     # avoir lieu en salle classique, indépendamment pour chaque enseignant).
     session_types: list[str] = Field(default_factory=lambda: ["TP"])
-    rare_rooms: tuple[str, str] = ("h017", "h022")
+    # Un duo saisi à l'écran peut aussi viser les TD, sans salle dédiée
+    # (`rare_rooms` vide : seul le même instant est imposé) et pour une partie
+    # seulement des séances (rangs `rang_de` à `rang_a`, comptés en séances de
+    # 1 h 30 par groupe à partir de 1).
+    rare_rooms: tuple[str, ...] = ("h017", "h022")
+    rang_de: int | None = None
+    rang_a: int | None = None
     # Force l'affectation groupe TP -> enseignant pour ce duo, en écrasant la
     # logique par défaut (curseur séquentiel sur les blocs `profs` de la
     # maquette, cf. `ingestion/normalize.py::_teacher_for_group`) — celle-ci

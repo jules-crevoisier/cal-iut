@@ -216,6 +216,8 @@ def _duo_room_overrides(
 
     for duo in duos:
         t1, t2 = duo.teacher_codes
+        if len(duo.rare_rooms) < 2:
+            continue
         room1 = room_by_id.get(duo.rare_rooms[0])
         room2 = room_by_id.get(duo.rare_rooms[1])
         if room1 is None or room2 is None:

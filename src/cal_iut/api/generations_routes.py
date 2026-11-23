@@ -584,6 +584,11 @@ class DuoRequest(BaseModel):
     # Groupes de TP de chacun : `{code enseignant: [lettres]}`. Vide = le
     # partage habituel de la maquette.
     groupes: dict[str, list[str]] = {}
+    # TP (salles voisines) ou TD (même instant, salles habituelles) ; rangs en
+    # séances de 1 h 30 par groupe, à partir de 1.
+    type: str = "TP"
+    de: int | None = None
+    a: int | None = None
     motif: str = ""
 
 
@@ -612,6 +617,7 @@ def _modules_du_groupe(groupe: str) -> dict[str, dict]:
     enseignants: dict[str, dict[str, str]] = {}
     hors_cm: dict[str, set[str]] = {}
     lettres: dict[str, set[str]] = {}
+    lettres_td: dict[str, set[str]] = {}
     for s in _seances_du_groupe(groupe):
         type_ = getattr(s.session_type, "value", str(s.session_type))
         m = modules.setdefault(s.course_code, {
@@ -623,11 +629,12 @@ def _modules_du_groupe(groupe: str) -> dict[str, dict]:
             enseignants.setdefault(s.course_code, {})[e.code] = _nom_enseignant(e)
             if type_ in ("TD", "TP"):
                 hors_cm.setdefault(s.course_code, set()).add(e.code)
-        if type_ == "TP":
+        if type_ in ("TD", "TP"):
             for g in s.group_ids:
-                lettre = re.search(r"-tp-([a-z])$", g)
+                lettre = re.search(rf"-{type_.lower()}-([a-z]{'+' if type_ == 'TD' else ''})$", g)
                 if lettre:
-                    lettres.setdefault(s.course_code, set()).add(lettre.group(1).upper())
+                    cible = lettres if type_ == "TP" else lettres_td
+                    cible.setdefault(s.course_code, set()).add(lettre.group(1).upper())
     for code, m in modules.items():
         m["types"] = {t: len(rangs) for t, rangs in sorted(m["types"].items())}
         m["enseignants"] = [
@@ -635,6 +642,7 @@ def _modules_du_groupe(groupe: str) -> dict[str, dict]:
             for c, n in sorted(enseignants.get(code, {}).items(), key=lambda p: p[1])
         ]
         m["groupes_tp"] = sorted(lettres.get(code, set()))
+        m["groupes_td"] = sorted(lettres_td.get(code, set()))
     return modules
 
 
@@ -750,7 +758,8 @@ def _regles_des_enseignants(config, modules: dict[str, dict], semestres: set[str
     }
     saisies_ordres = {a["course_code"]: a for a in reglages.regles_de_modules(config, "ordres_enseignants")}
     saisies_duos = {
-        (a["course_code"], tuple(a.get("teacher_codes") or ())): a for a in reglages.regles_de_modules(config, "duos")
+        (a["course_code"], tuple(a.get("teacher_codes") or ()), a.get("session_type") or "TP"): a
+        for a in reglages.regles_de_modules(config, "duos")
     }
 
     repartitions = []
@@ -792,8 +801,12 @@ def _regles_des_enseignants(config, modules: dict[str, dict], semestres: set[str
         for code in d.course_codes:
             if code not in modules:
                 continue
-            saisie = saisies_duos.get((code, tuple(d.teacher_codes)))
+            type_duo = d.session_types[0] if d.session_types else "TP"
+            saisie = saisies_duos.get((code, tuple(d.teacher_codes), type_duo))
             duos.append({
+                "type": type_duo,
+                "de": d.rang_de,
+                "a": d.rang_a,
                 "id": saisie["id"] if saisie else None,
                 "origine": "ajoutee" if saisie else "livree",
                 "code": code,
@@ -808,7 +821,7 @@ def _regles_des_enseignants(config, modules: dict[str, dict], semestres: set[str
         "modes": [{"mode": m, "libelle": l} for m, l in _MODES.items()],
         "repartitions": sorted(repartitions, key=lambda r: (r["code"], r["type"] or "")),
         "ordres": sorted(ordres, key=lambda r: r["code"]),
-        "duos": sorted(duos, key=lambda r: (r["code"], r["enseignants"][0]["code"])),
+        "duos": sorted(duos, key=lambda r: (r["code"], r["type"], r["enseignants"][0]["code"])),
     }
 
 
@@ -978,31 +991,40 @@ def ajouter_un_ordre(groupe: str, body: OrdreRequest, request: Request) -> dict:
 
 @router.post("/regles/{groupe}/duos", status_code=201)
 def ajouter_un_duo(groupe: str, body: DuoRequest, request: Request) -> dict:
-    """Deux enseignants font leurs TP en même temps, chacun dans une des
-    deux salles voisines."""
+    """Deux enseignants font leurs séances en même temps, chacun avec ses
+    groupes : les TP dans deux salles voisines, les TD dans leurs salles
+    habituelles, éventuellement pour une partie seulement des séances."""
     _refuser_si_source_verrouillee(groupe)
     etat = _regles(groupe)
     duo = [c.strip().upper() for c in body.enseignants if c.strip()]
     module = _module_et_enseignants(etat, body.code, duo, hors_cm=True)
-    if not module["types"].get("TP"):
-        raise HTTPException(422, f"{body.code} n'a aucun TP : un duo ne concerne que les TP.")
+    type_ = (body.type or "TP").strip().upper()
+    if type_ not in ("TD", "TP"):
+        raise HTTPException(422, "Un duo concerne les TD ou les TP.")
+    if not module["types"].get(type_):
+        raise HTTPException(422, f"{body.code} n'a aucun {type_} : choisissez un autre type.")
     connues = {s["id"] for s in etat["salles"]}
     if any(s not in connues for s in body.salles):
         raise HTTPException(422, "Salle inconnue.")
     for r in etat["duos"]:
         deja = {e["code"] for e in r["enseignants"]} & set(duo)
-        if r["code"] == body.code and deja:
-            raise HTTPException(409, f"{', '.join(sorted(deja))} fait déjà partie d'un duo sur {body.code}.")
+        if r["code"] == body.code and r.get("type", "TP") == type_ and deja:
+            raise HTTPException(409, f"{', '.join(sorted(deja))} fait déjà partie d'un duo de {type_} sur {body.code}.")
     groupes = {c.strip().upper(): sorted({g.strip().upper() for g in l if g.strip()}) for c, l in body.groupes.items()}
     groupes = {c: l for c, l in groupes.items() if l} or None
     if groupes:
         # Les groupes déjà confiés à un autre duo du module ne sont plus à prendre.
-        pris = {g for r in etat["duos"] if r["code"] == body.code for lettres in r["groupes"].values() for g in lettres}
-        if any(g not in module["groupes_tp"] or g in pris for lettres in groupes.values() for g in lettres):
-            raise HTTPException(422, "Un de ces groupes de TP n'existe pas ou appartient déjà à un autre duo.")
+        pris = {
+            g for r in etat["duos"] if r["code"] == body.code and r.get("type", "TP") == type_
+            for lettres in r["groupes"].values() for g in lettres
+        }
+        existants = module["groupes_td"] if type_ == "TD" else module["groupes_tp"]
+        if any(g not in existants or g in pris for lettres in groupes.values() for g in lettres):
+            raise HTTPException(422, f"Un de ces groupes de {type_} n'existe pas ou appartient déjà à un autre duo.")
     etat = _enregistrer_regle(groupe, "duos", {
         "course_code": body.code, "semestre": module["semestre"], "teacher_codes": duo,
         "rare_rooms": body.salles, "group_overrides": groupes, "motif": body.motif,
+        "session_type": type_, "rang_de": body.de, "rang_a": body.a,
     }, request)
     _duos_a_jour()
     return etat
