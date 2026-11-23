@@ -501,9 +501,13 @@ def _sessions_de_l_etape(sessions: list[SessionToPlace], semestre: str, etape) -
         par_groupe[(s.session_type.value, s.group_ids[0] if s.group_ids else "")].append(s)
     retenues: list[SessionToPlace] = []
     for lot in par_groupe.values():
-        for rang, s in enumerate(sorted(lot, key=lambda x: (x.sequence_order, x.id)), start=1):
+        # Le rang se compte en séances de 1 h 30 : un bloc de 3 h (deux séances
+        # fusionnées) occupe deux rangs et est retenu par son premier.
+        rang = 1
+        for s in sorted(lot, key=lambda x: (x.sequence_order, x.id)):
             if (etape.de is None or rang >= etape.de) and (etape.a is None or rang <= etape.a):
                 retenues.append(s)
+            rang += max(1, s.duration_slots)
     return retenues
 
 

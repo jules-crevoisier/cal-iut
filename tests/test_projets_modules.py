@@ -102,3 +102,16 @@ def test_le_calcul_place_les_etapes_dans_l_ordre_et_limite_les_jours():
     a, b, c = (solveur.value(semaines[s.id]) for s in seances)
     assert a < b < c
     assert solveur.objective_value == 0
+
+
+def test_le_rang_d_une_etape_se_compte_en_seances_de_1h30():
+    from cal_iut.solver.objectives import _sessions_de_l_etape
+
+    # 7 TD dont les 6 premiers regroupés par deux : 3 blocs de 3 h puis 1 séance simple.
+    seances = [_seance("A", i) for i in (1, 3, 5)] + [
+        _seance("A", 7).model_copy(update={"duration_slots": 1})
+    ]
+    etape = EtapeProjet(course_code="A", session_type="TD", de=1, a=4)
+    assert [s.sequence_order for s in _sessions_de_l_etape(seances, "S4", etape)] == [1, 3]
+    suite = EtapeProjet(course_code="A", session_type="TD", de=5)
+    assert [s.sequence_order for s in _sessions_de_l_etape(seances, "S4", suite)] == [5, 7]
