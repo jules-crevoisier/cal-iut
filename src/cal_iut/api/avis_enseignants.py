@@ -2,12 +2,13 @@
 (tâche #32).
 
 Règles :
-- Désactivé par défaut : rien ne part tant que `CAL_IUT_MAIL_ENSEIGNANTS` n'est
-  pas posée à `on` (valeurs acceptées : on/1/true/oui/yes).
+- Envoi par Resend (le même que les autres mails de l'appli : `RESEND_API_KEY`
+  et `RESEND_FROM`). Actif automatiquement dès que Resend est configuré ;
+  `CAL_IUT_MAIL_ENSEIGNANTS=off` l'éteint, `on` le force. Sans Resend, repli
+  sur un serveur SMTP (`CAL_IUT_SMTP_*`) si `on` est posé.
 - Seul un changement de jour, de créneau ou d'horaire déclenche un mail : un
   changement de salle ou de note seul n'envoie RIEN.
 - Adresses : celles de la liste des enseignants (`load_teacher_contacts`).
-- Envoi par SMTP, réglé par variables d'environnement (voir `_config_smtp`).
 - Ne fait JAMAIS échouer l'enregistrement de la séance : tout est journalisé
   (logger `cal_iut.avis_enseignants`), rien ne remonte à l'appelant.
 """
@@ -21,10 +22,13 @@ import threading
 from datetime import timedelta
 from email.message import EmailMessage
 
+from cal_iut.api import mailer
+
 logger = logging.getLogger("cal_iut.avis_enseignants")
 
 VARIABLE_ACTIVATION = "CAL_IUT_MAIL_ENSEIGNANTS"
 _VALEURS_ON = {"on", "1", "true", "oui", "yes"}
+_VALEURS_OFF = {"off", "0", "false", "non", "no"}
 _JOURS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi")
 _CRENEAUX = (
     ("8h00", "9h30"), ("9h30", "11h00"), ("11h00", "12h30"),
@@ -35,8 +39,18 @@ _CRENEAUX = (
 ENVOI_EN_ARRIERE_PLAN = True
 
 
+def resend_pret() -> bool:
+    return bool(os.environ.get("RESEND_API_KEY", "").strip())
+
+
 def actif() -> bool:
-    return os.environ.get(VARIABLE_ACTIVATION, "off").strip().lower() in _VALEURS_ON
+    """Interrupteur explicite s'il est posé ; sinon actif dès que Resend est prêt."""
+    valeur = os.environ.get(VARIABLE_ACTIVATION, "").strip().lower()
+    if valeur in _VALEURS_ON:
+        return True
+    if valeur in _VALEURS_OFF:
+        return False
+    return resend_pret()
 
 
 def _config_smtp() -> dict | None:
@@ -59,6 +73,19 @@ def _config_smtp() -> dict | None:
         "expediteur": expediteur,
         "securite": os.environ.get("CAL_IUT_SMTP_SECURITE", "starttls").strip().lower(),
     }
+
+
+def _expediteur_resend() -> str:
+    return os.environ.get("RESEND_FROM", "").strip() or mailer._DEFAULT_FROM
+
+
+def _envoyer_resend(messages: list[EmailMessage]) -> None:
+    for msg in messages:
+        try:
+            mailer.send_email(msg["To"], msg["Subject"], msg.get_content())
+            logger.info("Avis de changement envoyé à %s (%s) via Resend", msg["To"], msg["Subject"])
+        except Exception:  # noqa: BLE001 — un échec n'arrête pas les suivants
+            logger.exception("Échec d'envoi de l'avis à %s", msg["To"])
 
 
 def _horaire_creneau(slot: int, duree: int, horaire: dict | None) -> str:
@@ -143,14 +170,19 @@ def prevenir(
         if session is None or not a_change(avant, apres):
             return 0
         if not actif():
-            logger.info("Séance %s déplacée : avis enseignants désactivé (%s=off).",
+            logger.info("Séance %s déplacée : avis enseignants désactivé (Resend absent ou %s=off).",
                         getattr(session, "session_id", "?"), VARIABLE_ACTIVATION)
             return 0
-        cfg = _config_smtp()
-        if cfg is None:
-            logger.warning("%s=on mais CAL_IUT_SMTP_HOST / CAL_IUT_SMTP_FROM absents : aucun avis envoyé.",
-                           VARIABLE_ACTIVATION)
-            return 0
+        cfg = None
+        if resend_pret():
+            expediteur = _expediteur_resend()
+        else:
+            cfg = _config_smtp()
+            if cfg is None:
+                logger.warning("Ni Resend (RESEND_API_KEY) ni SMTP (CAL_IUT_SMTP_HOST / CAL_IUT_SMTP_FROM) "
+                               "ne sont configurés : aucun avis envoyé.")
+                return 0
+            expediteur = cfg["expediteur"]
         from cal_iut.ingestion.config_loader import load_teacher_contacts
 
         contacts = load_teacher_contacts(state.config_dir)
@@ -166,14 +198,15 @@ def prevenir(
                 continue
             messages.append(construire_message(
                 adresse, (noms or {}).get(code, code), session.course_code,
-                getattr(session, "course_name", "") or "", ancien, nouveau, salle, cfg["expediteur"],
+                getattr(session, "course_name", "") or "", ancien, nouveau, salle, expediteur,
             ))
         if not messages:
             return 0
+        envoi, args = (_envoyer_resend, (messages,)) if cfg is None else (_envoyer, (messages, cfg))
         if ENVOI_EN_ARRIERE_PLAN:
-            threading.Thread(target=_envoyer, args=(messages, cfg), daemon=True).start()
+            threading.Thread(target=envoi, args=args, daemon=True).start()
         else:
-            _envoyer(messages, cfg)
+            envoi(*args)
         return len(messages)
     except Exception:  # noqa: BLE001 — jamais faire échouer l'enregistrement
         logger.exception("Préparation des avis enseignants impossible")
