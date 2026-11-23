@@ -439,6 +439,12 @@ def cmd_solve(args: argparse.Namespace) -> int:
     project_root = config_dir.parents[1]
     bundle = load_all_constraints(project_root)
     teacher_avail = merge_teacher_availability(teacher_avail, bundle.teachers)
+    # Occupation Celcat des enseignants (autres départements, cours restants) :
+    # contrainte dure, comme dans POST /solve. Fichier absent = rien à ajouter ;
+    # c'est « À régler avant de générer » qui refuse de lancer sans relevé.
+    from cal_iut.api.occupations_externes import disponibilites_avec_externes
+
+    teacher_avail = disponibilites_avec_externes(None, teacher_avail)
 
     groups = load_groups(config_dir)
     duos = load_teacher_duos(config_dir)
@@ -536,6 +542,14 @@ def cmd_solve(args: argparse.Namespace) -> int:
         from cal_iut.ingestion.config_loader import load_room_reservations
 
         reservees = load_room_reservations(config_dir, bundle.calendar)
+        # + salles prises dans Celcat (autres départements, cours restants).
+        from types import SimpleNamespace
+
+        from cal_iut.api.occupations_externes import reservations_effectives
+
+        reservees = reservations_effectives(
+            SimpleNamespace(calendar=bundle.calendar, room_reservations=reservees), semestre
+        )
         with_rooms = assign_rooms(
             placements, sessions_by_id, rooms, groups, rules, duos, reserved=reservees
         )

@@ -41,6 +41,7 @@ def finir_planning(donnees: dict, fichier_seances: Path, racine: Path, groupe: s
     `a_placer`, `completees`, `sans_salle`, `non_placees` (liste de
     `{session_id, course_code, raison}`)."""
     from cal_iut.api import main as api
+    from cal_iut.api.occupations_externes import reservations_effectives
     from cal_iut.cli import _construire_etat_pour_completion
     from cal_iut.generation.recherche import seances_a_placer
     from cal_iut.ingestion.config_loader import load_solver_scheduled_sae
@@ -75,7 +76,7 @@ def finir_planning(donnees: dict, fichier_seances: Path, racine: Path, groupe: s
                 for p in bruts
             ],
             par_id, etat.rooms, etat.groups, etat.room_rules, etat.teacher_duos,
-            reserved=etat.room_reservations,
+            reserved=reservations_effectives(etat),
         )
     else:
         etat.timetable = [

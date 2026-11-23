@@ -464,7 +464,7 @@ L'appli relève ces occupations et les traite **comme une séance déjà placée
 
 | Où | Effet |
 |---|---|
-| Génération (`/solve`, régénération de semaine), lissage, suggestions, complétion | Créneau interdit à l'enseignant ; salle jamais attribuée |
+| Génération (`/solve`, écran « Nouveau semestre » / `POST /generations`, régénération de semaine), lissage, suggestions, complétion | Créneau interdit à l'enseignant ; salle jamais attribuée |
 | Placement manuel (déplacer, échanger, placer, créer, modifier, changer de salle) | **Avertissement** avec le motif exact, le placement passe (un changement de salle seul demande confirmation) ; refus si `strict: true` |
 | Vue Enseignant, Vue Salle | Bloc gris hachuré **hors MMI** (qui, quoi, horaire) ; « Aussi pris ailleurs » sous une séance déjà posée |
 | Vue Promo (placement en cours) | « AFR déjà occupé ailleurs (TC) » dans la case |

@@ -16,6 +16,7 @@ fait l'ouvrier au début d'une génération.
 from __future__ import annotations
 
 import json
+import os
 import warnings
 from pathlib import Path
 
@@ -99,6 +100,51 @@ def _erreur(controle: str, message: str, quoi_faire: str) -> dict:
     return {"severite": "erreur", "controle": controle, "message": message, "quoi_faire": quoi_faire, "details": []}
 
 
+ECHAPPEMENT_CELCAT = "CAL_IUT_GENERATION_SANS_CELCAT"
+
+
+def controle_celcat(racine: Path | None = None) -> list[dict]:
+    """Celcat est obligatoire : la génération évite les salles et les
+    enseignants déjà pris dans Celcat (autres départements, cours restants).
+    Sans relevé sûr, elle les croirait libres. Lecture seule : ne lit que le
+    fichier déposé par le sidecar, ne joint jamais Celcat.
+
+    Issue de secours pour un administrateur qui sait ce qu'il fait :
+    `CAL_IUT_GENERATION_SANS_CELCAT=on` (l'absence de relevé n'est alors plus
+    bloquante, mais reste signalée comme alerte)."""
+    from cal_iut.api import occupations_externes as ext
+
+    racine = racine or taches.RACINE
+    cfg = ext.config(racine / "data" / "config")
+    releve = ext.index().releve
+    age = ext.occ.age_depuis(releve.releve_le)
+    quoi_faire = (
+        "Vérifier que le service « celcat-nuit » tourne et qu'il joint Celcat (VPN), "
+        "puis cliquer sur « Relire maintenant » dans l'écran Celcat."
+    )
+    probleme: str | None = None
+    details: list[str] = []
+    if not cfg.actif:
+        probleme = "La lecture des occupations Celcat est désactivée (réglage « actif »)."
+        quoi_faire = "Réactiver la lecture dans data/config/celcat_occupations.yaml (actif: true)."
+    elif releve.absent:
+        probleme = "Aucun relevé de l'occupation Celcat : la génération croirait toutes les salles et tous les enseignants libres."
+    elif releve.erreur:
+        probleme = f"La dernière lecture de Celcat a échoué ({releve.erreur})."
+    elif releve.erreurs:
+        probleme = f"Le relevé Celcat est incomplet : {len(releve.erreurs)} lot(s) de salles ou d'enseignants n'ont pas pu être lus."
+        details = [str(e) for e in releve.erreurs[:10]]
+    elif age is not None and age > cfg.fraicheur_heures * 3600:
+        probleme = f"Le relevé Celcat date de plus de {cfg.fraicheur_heures:g} h."
+    if probleme is None:
+        return []
+    constat = _erreur("celcat.releve", probleme, quoi_faire)
+    constat["details"] = details
+    if os.environ.get(ECHAPPEMENT_CELCAT, "").lower() in ("on", "1", "true", "oui"):
+        constat["severite"] = "alerte"
+    return [constat]
+
+
 def avant_de_generer(groupe: str, racine: Path | None = None) -> dict:
     """Ce qu'il reste à régler avant de générer ce groupe de semestres.
 
@@ -138,6 +184,7 @@ def avant_de_generer(groupe: str, racine: Path | None = None) -> dict:
                 racine, groupe, weeks=params["weeks"], fi_max_week=params["fi_max_week"]
             )
             constats = [c for c in rapport["constats"] if c["severite"] in ("erreur", "alerte")]
+    constats = controle_celcat(racine) + constats
     constats = [{**c, "bloquant": est_bloquant(c)} for c in constats]
     constats.sort(key=lambda c: (not c["bloquant"], c["severite"] != "erreur"))
     return {
