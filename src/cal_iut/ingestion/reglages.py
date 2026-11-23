@@ -461,8 +461,24 @@ def ajouter_regle_de_module(config_dir: Path, nom: str, entree: dict, par: str) 
         if len(duo) != 2 or duo[0] == duo[1]:
             raise ReglageInvalide("Un duo, ce sont deux enseignants différents.")
         salles = [str(s).strip() for s in entree.get("rare_rooms") or [] if str(s).strip()]
-        if len(salles) != 2 or salles[0] == salles[1]:
+        type_duo = _type_de_seance(entree.get("session_type") or "TP", obligatoire=True)
+        if type_duo == "CM":
+            raise ReglageInvalide("Un duo concerne les TD et les TP.")
+        # Les TP du Studio se font dans deux salles voisines ; les TD, dans les salles habituelles.
+        if (type_duo == "TP" and len(salles) != 2) or (salles and (len(salles) != 2 or salles[0] == salles[1])):
             raise ReglageInvalide("Choisissez deux salles différentes.")
+        rangs = []
+        for cle in ("rang_de", "rang_a"):
+            try:
+                rang = int(entree[cle]) if entree.get(cle) not in (None, "") else None
+            except (TypeError, ValueError):
+                raise ReglageInvalide("Le rang d'une séance est un nombre entier.") from None
+            if rang is not None and rang < 1:
+                raise ReglageInvalide("Le rang d'une séance commence à 1.")
+            rangs.append(rang)
+        if rangs[0] and rangs[1] and rangs[0] > rangs[1]:
+            raise ReglageInvalide("Le rang de début est après le rang de fin.")
+        propre["session_type"], propre["rang_de"], propre["rang_a"] = type_duo, rangs[0], rangs[1]
         propre["teacher_codes"], propre["rare_rooms"] = duo, salles
         groupes = entree.get("group_overrides") or None
         if groupes:

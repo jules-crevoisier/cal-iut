@@ -1417,6 +1417,12 @@ def duo_episode_pairs(
                     continue
                 if s.session_type.value not in duo.session_types:
                     continue
+                rang = (s.metadata or {}).get("rang_seance")
+                if rang is not None and (
+                    (duo.rang_de is not None and rang < duo.rang_de)
+                    or (duo.rang_a is not None and rang > duo.rang_a)
+                ):
+                    continue
                 if t1 in s.teacher_codes:
                     by_order_t1[s.sequence_order].append(s.id)
                 if t2 in s.teacher_codes:
@@ -1500,6 +1506,8 @@ def add_duo_synchronized_rare_room_constraints(
             model.add(session_starts[sid1] == session_starts[sid2])
             representative_ids.append(sid1)
 
-        if len(representative_ids) >= 2:
+        # Sans salles dédiées (duo de TD en salles ordinaires), le même instant
+        # suffit : les deux enseignants ont chacun leur salle habituelle.
+        if len(representative_ids) >= 2 and len(room_pair) == 2:
             resource_key = f"duo_rare_room_{'_'.join(room_pair)}"
             add_aliased_no_overlap(model, session_starts, representative_ids, resource_key, durations)

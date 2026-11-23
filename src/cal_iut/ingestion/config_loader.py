@@ -275,7 +275,10 @@ def _duos_saisis(config_dir: Path) -> list[TeacherDuo]:
             kwargs: dict[str, object] = {
                 "teacher_codes": tuple(ajout["teacher_codes"]),
                 "course_codes": [str(ajout["course_code"])],
-                "rare_rooms": tuple(ajout["rare_rooms"]),
+                "rare_rooms": tuple(ajout.get("rare_rooms") or ()),
+                "session_types": [str(ajout.get("session_type") or "TP")],
+                "rang_de": ajout.get("rang_de"),
+                "rang_a": ajout.get("rang_a"),
                 "note": ajout.get("motif"),
             }
             if ajout.get("group_overrides"):

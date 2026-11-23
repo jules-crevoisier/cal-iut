@@ -16,6 +16,7 @@ const MODULES = [
     types: { CM: 2, TD: 8, TP: 4 },
     enseignants: [ALO, GLE],
     groupes_tp: ["A", "B", "C", "D"],
+    groupes_td: ["AB", "CD"],
   },
   {
     code: "WR201",
@@ -167,7 +168,38 @@ describe("Enseignants d’un module", () => {
       enseignants: ["ALO", "GLE"],
       salles: ["h201", "h203"],
       groupes: { ALO: ["A"], GLE: ["B"] },
+      type: "TP",
+      de: null,
+      a: null,
       motif: "Atelier commun",
+    });
+  });
+
+  it("enregistre un duo de TD sans salle, pour une partie des séances", async () => {
+    const appels = stubFetch(BASE);
+    render(<EnseignantsModules groupe="even" onModifie={() => undefined} />);
+    await screen.findByText("Enseignants d’un module");
+    fireEvent.change(screen.getAllByLabelText("Module")[2], { target: { value: "WR208" } });
+    choisir("Type de séance du duo", "TD");
+    expect(screen.queryByLabelText("Salle du premier enseignant")).not.toBeInTheDocument();
+    choisir("Premier enseignant", "ALO");
+    choisir("Second enseignant", "GLE");
+    choisir("Enseignant du TD AB", "ALO");
+    choisir("Enseignant du TD CD", "GLE");
+    choisir("De la séance n° (facultatif)", "7");
+    choisir("Motif du duo", "TD en parallèle");
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter le duo" }));
+    await waitFor(() => expect(appels.some((a) => a.init?.method === "POST")).toBe(true));
+    const envoi = appels.find((a) => a.init?.method === "POST")!;
+    expect(JSON.parse(String(envoi.init?.body))).toEqual({
+      code: "WR208",
+      enseignants: ["ALO", "GLE"],
+      salles: [],
+      groupes: { ALO: ["AB"], GLE: ["CD"] },
+      type: "TD",
+      de: 7,
+      a: null,
+      motif: "TD en parallèle",
     });
   });
 

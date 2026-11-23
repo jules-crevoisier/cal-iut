@@ -72,11 +72,16 @@ def _teachers_for_type(course: Course, session_type: SessionType) -> list[Teache
     return [b.teacher for b in blocks]
 
 
+def _rang_dans(rang: int, de: int | None, a: int | None) -> bool:
+    return (de is None or rang >= de) and (a is None or rang <= a)
+
+
 def _duo_teacher_for_group(
     course: Course,
     session_type: SessionType,
     group_id: str,
     duos: list[TeacherDuo] | None,
+    rang: int | None = None,
 ) -> Teacher | None:
     """
     Cf. `TeacherDuo.group_overrides` : force l'affectation groupe -> enseignant
@@ -91,6 +96,8 @@ def _duo_teacher_for_group(
         if course.code not in duo.course_codes or not duo.group_overrides:
             continue
         if session_type.value not in duo.session_types:
+            continue
+        if rang is not None and not _rang_dans(rang, duo.rang_de, duo.rang_a):
             continue
         for teacher_code, letters in duo.group_overrides.items():
             suffixes = {f"-{session_type.value.lower()}-{str(letter).lower()}" for letter in letters}
@@ -179,7 +186,7 @@ def _teacher_for_group(
     n'apparaissait alors JAMAIS dans le planning réel — confirmé sur 10
     cours réels du semestre impair, cf. docs/DATA.md §32).
     """
-    override = _duo_teacher_for_group(course, session_type, group_id, duos)
+    override = _duo_teacher_for_group(course, session_type, group_id, duos, rang=slots_before + 1)
     if override is not None:
         return override
 
@@ -544,6 +551,7 @@ def expand_course_to_sessions(
                         "bloque_maquette": course.bloque,
                         "ordonnancement": [o.model_dump() for o in course.ordonnancement],
                         "commentaire_edt": course.commentaire_edt,
+                        "rang_seance": slots_before + 1,
                     },
                 )
             )

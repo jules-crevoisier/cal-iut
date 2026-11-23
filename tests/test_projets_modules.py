@@ -115,3 +115,38 @@ def test_le_rang_d_une_etape_se_compte_en_seances_de_1h30():
     assert [s.sequence_order for s in _sessions_de_l_etape(seances, "S4", etape)] == [1, 3]
     suite = EtapeProjet(course_code="A", session_type="TD", de=5)
     assert [s.sequence_order for s in _sessions_de_l_etape(seances, "S4", suite)] == [5, 7]
+
+
+def test_un_duo_de_td_se_saisit_et_synchronise_les_deux_enseignants(admin, generations_isolees):
+    from cal_iut.ingestion.config_loader import load_teacher_duos
+    from cal_iut.ingestion.pipeline import run_ingestion
+    from cal_iut.solver.constraints import duo_episode_pairs
+
+    etat = admin.get("/generations/regles/even").json()
+    module = next(m for m in etat["modules"] if m["code"] == "WR407D")
+    assert len(module["groupes_td"]) >= 2
+    t1, t2 = [e["code"] for e in module["enseignants"] if e["td_tp"]][:2]
+    a, b = module["groupes_td"][:2]
+
+    corps = {
+        "code": "WR407D", "enseignants": [t1, t2], "salles": [], "type": "TD", "de": 1, "a": 7,
+        "groupes": {t1: [a], t2: [b]}, "motif": "TD en parallèle (tâche #36)",
+    }
+    reponse = admin.post("/generations/regles/even/duos", json=corps)
+    assert reponse.status_code == 201, reponse.text
+    (duo_saisi,) = [d for d in reponse.json()["duos"] if d["type"] == "TD"]
+    assert (duo_saisi["de"], duo_saisi["a"], duo_saisi["salles"]) == (1, 7, [])
+    # Un second duo de TD pour les mêmes enseignants est refusé, un duo de TP reste possible.
+    assert admin.post("/generations/regles/even/duos", json=corps).status_code == 409
+
+    (duo,) = [d for d in load_teacher_duos(CONFIG) if d.course_codes == ["WR407D"]]
+    assert duo.session_types == ["TD"] and duo.rare_rooms == () and (duo.rang_de, duo.rang_a) == (1, 7)
+
+    seances = [s for s in run_ingestion(CONFIG, semestre_group="even").sessions if s.course_code == "WR407D"]
+    tds = [s for s in seances if s.session_type.value == "TD"]
+    assert {s.teacher_codes[0] for s in tds if s.group_ids[0].lower().endswith(f"-td-{a.lower()}")} == {t1}
+    assert {s.teacher_codes[0] for s in tds if s.group_ids[0].lower().endswith(f"-td-{b.lower()}")} == {t2}
+    paires = duo_episode_pairs(seances, [duo])
+    assert paires and all(
+        len(p) == 2 for p in paires
+    )

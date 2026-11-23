@@ -973,6 +973,7 @@ export interface ModuleRegle {
   enseignants: { code: string; nom: string; td_tp: boolean }[];
   /** Lettres des groupes de TP : `["A", "B"]`. */
   groupes_tp: string[];
+  groupes_td?: string[];
 }
 
 export interface EnseignantRegle {
@@ -1011,6 +1012,11 @@ export interface DuoModule {
   salles: { id: string; label: string }[];
   /** Groupes de TP de chacun : `{ KBR: ["A", "C"] }`. */
   groupes: Record<string, string[]>;
+  /** TP (salles voisines) ou TD (même instant) ; absent = TP. */
+  type?: "TD" | "TP";
+  /** Rangs concernés, en séances de 1 h 30 par groupe. */
+  de?: number | null;
+  a?: number | null;
   motif: string;
 }
 
@@ -1116,6 +1122,9 @@ export async function ajouterDuoModule(
     enseignants: string[];
     salles: string[];
     groupes: Record<string, string[]>;
+    type?: "TD" | "TP";
+    de?: number | null;
+    a?: number | null;
     motif: string;
   },
 ): Promise<ReglesModulesReponse> {
