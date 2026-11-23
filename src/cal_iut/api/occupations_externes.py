@@ -416,7 +416,7 @@ def disponibilites_avec_externes(state, base: list) -> list:
     return sortie
 
 
-def reservations_effectives(state) -> dict[str, set[int]]:
+def reservations_effectives(state, semestre: str | None = None) -> dict[str, set[int]]:
     """`state.room_reservations` (salles_reservees.yaml) + salles prises dans
     Celcat, au même format : {room_id: {index de créneau absolu}} — ce que
     `find_room_for_slot` / `assign_rooms` reçoivent en `reserved`."""
@@ -429,7 +429,7 @@ def reservations_effectives(state) -> dict[str, set[int]]:
     calendrier = getattr(state, "calendar", None)
     if calendrier is None:
         return base
-    decalage = _decalage(state)
+    decalage = _decalage(state, semestre)
     cle = ("resa", idx.signature, id(base), id(calendrier), decalage)
     with _verrou:
         if _cache.get("resa_cle") == cle:

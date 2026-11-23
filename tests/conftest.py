@@ -340,3 +340,15 @@ def _fichiers_etat_isoles(tmp_path, monkeypatch):
             continue
         if hasattr(module, "_path"):
             monkeypatch.setattr(module, "_path", lambda f=fichier: tmp_path / f)
+
+
+@pytest.fixture(autouse=True)
+def _celcat_releve_sain_par_defaut(request, monkeypatch):
+    """« À régler avant de générer » refuse sans relevé Celcat récent
+    (`verification.controle_celcat`). Les tests existants n'ont pas de relevé :
+    on neutralise ce contrôle, sauf pour `test_celcat_obligatoire_*`."""
+    if "celcat_obligatoire" in request.node.nodeid:
+        return
+    from cal_iut.generation import verification
+
+    monkeypatch.setattr(verification, "controle_celcat", lambda racine=None: [])

@@ -160,7 +160,9 @@ class Ouvrier:
         self.etat["verification"] = rapport
         # Lancer des heures de calcul sur des données que l'audit prouve
         # infaisables ne sert à rien : même refus qu'à l'écran.
-        restants = verification.bloquants(rapport)
+        restants = verification.bloquants(rapport) + [
+            c for c in verification.controle_celcat(RACINE) if verification.est_bloquant(c)
+        ]
         if restants:
             raise RuntimeError(
                 f"{len(restants)} point(s) à régler avant de générer : "
