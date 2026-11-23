@@ -464,8 +464,8 @@ def ajouter_regle_de_module(config_dir: Path, nom: str, entree: dict, par: str) 
         type_duo = _type_de_seance(entree.get("session_type") or "TP", obligatoire=True)
         if type_duo == "CM":
             raise ReglageInvalide("Un duo concerne les TD et les TP.")
-        # Les TP du Studio se font dans deux salles voisines ; les TD, dans les salles habituelles.
-        if (type_duo == "TP" and len(salles) != 2) or (salles and (len(salles) != 2 or salles[0] == salles[1])):
+        # Deux salles voisines (Studio) ou aucune : sans salle, chacun garde ses salles habituelles.
+        if salles and (len(salles) != 2 or salles[0] == salles[1]):
             raise ReglageInvalide("Choisissez deux salles différentes.")
         rangs = []
         for cle in ("rang_de", "rang_a"):

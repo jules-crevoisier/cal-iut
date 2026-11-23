@@ -256,14 +256,14 @@ export function EnseignantsModules({
       ? moduleDuo?.groupes_td
       : (moduleDuo?.groupes_tp ?? [])) ?? [];
   const groupesAPrendre = groupesLibres.filter((g) => !groupesPris.has(g));
-  // Les TP se font dans deux salles voisines ; les TD, dans les salles habituelles.
-  const sallesDuo = duo.type === "TP";
+  // Deux salles voisines (Studio) ou aucune : chacun garde alors ses salles habituelles.
+  const sallesChoisies = Boolean(duo.salleUn || duo.salleDeux);
   const duoPret =
     duo.code &&
     duo.un &&
     duo.deux &&
     duo.un !== duo.deux &&
-    (!sallesDuo ||
+    (!sallesChoisies ||
       (duo.salleUn && duo.salleDeux && duo.salleUn !== duo.salleDeux)) &&
     duo.motif.trim();
   const groupesDe = (code: string) =>
@@ -522,7 +522,7 @@ export function EnseignantsModules({
                 ajouterDuoModule(groupe, {
                   code: duo.code,
                   enseignants: [duo.un, duo.deux],
-                  salles: sallesDuo ? [duo.salleUn, duo.salleDeux] : [],
+                  salles: sallesChoisies ? [duo.salleUn, duo.salleDeux] : [],
                   groupes:
                     partage[duo.un].length > 0 && partage[duo.deux].length > 0
                       ? partage
@@ -598,23 +598,21 @@ export function EnseignantsModules({
             vide="Choisir…"
             onChange={(un) => setDuo({ ...duo, un, groupes: {} })}
           />
-          {sallesDuo && (
-            <label>
-              Sa salle
-              <select
-                value={duo.salleUn}
-                aria-label="Salle du premier enseignant"
-                onChange={(e) => setDuo({ ...duo, salleUn: e.target.value })}
-              >
-                <option value="">Choisir…</option>
-                {donnees.salles.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label>
+            Sa salle (facultatif)
+            <select
+              value={duo.salleUn}
+              aria-label="Salle du premier enseignant"
+              onChange={(e) => setDuo({ ...duo, salleUn: e.target.value })}
+            >
+              <option value="">Choisir…</option>
+              {donnees.salles.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <ChoixEnseignant
             titre="Second enseignant"
             enseignants={enseignantsDuo.filter((e) => e.code !== duo.un)}
@@ -622,25 +620,23 @@ export function EnseignantsModules({
             vide="Choisir…"
             onChange={(deux) => setDuo({ ...duo, deux, groupes: {} })}
           />
-          {sallesDuo && (
-            <label>
-              Sa salle
-              <select
-                value={duo.salleDeux}
-                aria-label="Salle du second enseignant"
-                onChange={(e) => setDuo({ ...duo, salleDeux: e.target.value })}
-              >
-                <option value="">Choisir…</option>
-                {donnees.salles
-                  .filter((s) => s.id !== duo.salleUn)
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
+          <label>
+            Sa salle (facultatif)
+            <select
+              value={duo.salleDeux}
+              aria-label="Salle du second enseignant"
+              onChange={(e) => setDuo({ ...duo, salleDeux: e.target.value })}
+            >
+              <option value="">Choisir…</option>
+              {donnees.salles
+                .filter((s) => s.id !== duo.salleUn)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+            </select>
+          </label>
           {duo.un && duo.deux && groupesAPrendre.length > 0 && (
             <fieldset className="enseignants-modules-groupes">
               <legend>

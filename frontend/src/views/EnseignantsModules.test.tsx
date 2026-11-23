@@ -181,7 +181,6 @@ describe("Enseignants d’un module", () => {
     await screen.findByText("Enseignants d’un module");
     fireEvent.change(screen.getAllByLabelText("Module")[2], { target: { value: "WR208" } });
     choisir("Type de séance du duo", "TD");
-    expect(screen.queryByLabelText("Salle du premier enseignant")).not.toBeInTheDocument();
     choisir("Premier enseignant", "ALO");
     choisir("Second enseignant", "GLE");
     choisir("Enseignant du TD AB", "ALO");
