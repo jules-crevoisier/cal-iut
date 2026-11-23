@@ -572,6 +572,10 @@
   font-weight: 600;
 }
 
+.celcat-seance-module {
+  font-size: 0.9em;
+}
+
 /* La valeur qui diffère entre les deux côtés. Soulignée ET en couleur :
    la couleur seule ne se voit pas partout. */
 .celcat-diff {

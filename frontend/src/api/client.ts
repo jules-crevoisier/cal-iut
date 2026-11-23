@@ -2093,7 +2093,15 @@ export interface LigneComparaison {
   statut: "identique" | "ecart" | "absente_celcat" | "en_trop_celcat" | "hors_celcat";
   session_id: string;
   course_code: string;
-  caliut: { jour: number | null; heure: string; salle: string | null; semaine: number | null } | null;
+  caliut: {
+    jour: number | null;
+    heure: string;
+    salle: string | null;
+    semaine: number | null;
+    /** Nom du module et enseignant(s) côté cal-iut (tâche #41). */
+    module_nom?: string | null;
+    enseignants?: string[];
+  } | null;
   celcat: {
     event_id: number | null;
     jour: number | null;
