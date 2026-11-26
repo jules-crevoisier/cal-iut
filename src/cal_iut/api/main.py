@@ -5040,6 +5040,22 @@ def celcat_instantane_rafraichir() -> CelcatInstantaneDemandeResponse:
     )
 
 
+def _infos_seance_comparaison(state: object, session_id: object) -> dict:
+    """Nom du module et enseignants d'une séance, pour l'écran des écarts Celcat."""
+    session = state.sessions_by_id.get(str(session_id or ""))
+    if session is None:
+        return {"module_nom": None, "enseignants": []}
+    noms = {}
+    for t in getattr(session, "teachers", None) or []:
+        complet = f"{getattr(t, 'prenom', '')} {getattr(t, 'nom', '')}".strip()
+        if getattr(t, "code", None):
+            noms[t.code] = complet or t.code
+    return {
+        "module_nom": getattr(session, "course_name", None) or None,
+        "enseignants": [noms.get(c, c) for c in (getattr(session, "teacher_codes", None) or []) if c and c != "0"],
+    }
+
+
 @app.get(
     "/celcat/comparaison",
     response_model=CelcatComparaisonResponse,
@@ -5101,6 +5117,12 @@ def celcat_comparaison(semaine: int = 0) -> CelcatComparaisonResponse:
         if releve.releve_le is not None
         else []
     )
+
+    # Nom du module et enseignant(s) de la séance côté cal-iut : le code seul
+    # (« WR101 ») oblige à chercher de quoi on parle (tâche #41).
+    for ligne in lignes:
+        if ligne.get("caliut"):
+            ligne["caliut"].update(_infos_seance_comparaison(state, ligne.get("session_id")))
 
     return CelcatComparaisonResponse(
         semaine=semaine,

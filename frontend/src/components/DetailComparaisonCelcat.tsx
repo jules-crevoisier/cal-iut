@@ -122,6 +122,12 @@ export function DetailComparaisonCelcat({ donnees }: { donnees: CelcatComparaiso
                     </td>
                     <th scope="row">
                       <span className="celcat-seance-code">{l.course_code || l.session_id}</span>
+                      {l.caliut?.module_nom || l.celcat?.module ? (
+                        <div className="celcat-seance-module">{l.caliut?.module_nom ?? l.celcat?.module}</div>
+                      ) : null}
+                      {l.caliut?.enseignants?.length ? (
+                        <div className="celcat-sous-texte">{l.caliut.enseignants.join(" + ")}</div>
+                      ) : null}
                       {l.celcat?.groupe ? <div className="celcat-sous-texte">{l.celcat.groupe}</div> : null}
                       {l.session_id ? <div className="celcat-seance-id">{l.session_id}</div> : null}
                     </th>
@@ -148,9 +154,11 @@ export function DetailComparaisonCelcat({ donnees }: { donnees: CelcatComparaiso
                             lundi={donnees.lundi}
                             ecarts={l.ecarts}
                           />
-                          {l.celcat.enseignants?.length && l.ecarts.some((e) => e.startsWith("enseignant")) ? (
+                          {l.celcat.enseignants?.length ? (
                             <div className="celcat-sous-texte">
-                              <span className="celcat-diff">{l.celcat.enseignants.join(" + ")}</span>
+                              <span className={l.ecarts.some((e) => e.startsWith("enseignant")) ? "celcat-diff" : undefined}>
+                                {l.celcat.enseignants.join(" + ")}
+                              </span>
                             </div>
                           ) : null}
                           {l.celcat.event_id ? (
