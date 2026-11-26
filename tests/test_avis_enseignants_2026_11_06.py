@@ -41,6 +41,7 @@ def smtp(monkeypatch):
     SmtpFactice.envoyes, SmtpFactice.connexions = [], []
     monkeypatch.setattr(smtplib, "SMTP", SmtpFactice)
     monkeypatch.setattr(avis, "ENVOI_EN_ARRIERE_PLAN", False)
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
     monkeypatch.setenv("CAL_IUT_SMTP_HOST", "smtp.test")
     monkeypatch.setenv("CAL_IUT_SMTP_FROM", "planning@test.fr")
     monkeypatch.setattr(
@@ -104,3 +105,42 @@ def test_changement_de_salle_seul_n_envoie_rien():
     pos = {"week": 0, "day": 0, "slot": 0, "horaire": None}
     assert avis.a_change(pos, dict(pos)) is False
     assert avis.a_change(pos, {**pos, "horaire": {"debut": "10:00", "fin": "11:00"}}) is True
+
+
+@pytest.fixture
+def resend(monkeypatch):
+    envoyes = []
+    monkeypatch.setattr(avis, "ENVOI_EN_ARRIERE_PLAN", False)
+    monkeypatch.setenv("RESEND_API_KEY", "cle-test")
+    monkeypatch.delenv("CAL_IUT_SMTP_HOST", raising=False)
+    monkeypatch.delenv(avis.VARIABLE_ACTIVATION, raising=False)
+    monkeypatch.setattr(avis.mailer, "send_email",
+                        lambda to, sujet, texte, html=None: envoyes.append((to, sujet, texte)) or "id")
+    monkeypatch.setattr(
+        "cal_iut.ingestion.config_loader.load_teacher_contacts",
+        lambda config_dir: {"KBR": "kbr@test.fr"},
+    )
+    return envoyes
+
+
+def test_resend_configure_envoie_sans_interrupteur(etat_avec_seance, session_admin, resend):
+    _deplacer(week=3, day=1, slot=1)
+    assert len(resend) == 1
+    to, sujet, texte = resend[0]
+    assert to == "kbr@test.fr" and "WR101" in sujet and "mardi" in texte
+
+
+def test_interrupteur_off_coupe_meme_avec_resend(etat_avec_seance, session_admin, resend, monkeypatch):
+    monkeypatch.setenv(avis.VARIABLE_ACTIVATION, "off")
+    _deplacer(week=3, day=1)
+    assert resend == []
+
+
+def test_echec_resend_ne_bloque_pas_le_deplacement(etat_avec_seance, session_admin, resend, monkeypatch):
+    def casse(*a, **k):
+        raise RuntimeError("Resend indisponible")
+
+    monkeypatch.setattr(avis.mailer, "send_email", casse)
+    _deplacer(week=3, day=1)
+    placement = next(p for p in get_state().timetable if p.session_id == "s1")
+    assert placement.day == 1
